@@ -8,10 +8,9 @@ import java.util.List;
 @Dao
 public interface VoiceDao {
     @Insert
-    void insertAll(List<Voice> voices);
+    void insertAll(List<VoiceItem> voices);
 
-    @Query("SELECT * FROM Voice")
-    List<Voice> getAllVoices();
-
-
+    @Query("SELECT * FROM VoiceItem ")
+    List<VoiceItem> getAllVoices();
 }
+

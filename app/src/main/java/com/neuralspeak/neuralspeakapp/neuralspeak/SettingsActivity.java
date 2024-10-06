@@ -33,6 +33,7 @@ import java.util.concurrent.Executors;
 import androidx.room.Room;
 
 public class SettingsActivity extends AppCompatActivity {
+    private List<String> voices = Collections.emptyList();
 
     private EditText subscriptionID;
     private EditText resourceLocale;
@@ -76,8 +77,9 @@ public class SettingsActivity extends AppCompatActivity {
             @Override
             public void onValueChange(@NonNull Slider slider, float value, boolean fromUser) {
                 editor = sharedPreferences.edit();
-                float valueInPercentage  = value*100;
-                editor.putFloat("pitch", valueInPercentage);
+
+                editor.putFloat("pitch", value);
+
                 editor.commit();
             }
 
@@ -85,9 +87,9 @@ public class SettingsActivity extends AppCompatActivity {
 
         String text1 = sharedPreferences.getString("sub_key", "");
         String text2 = sharedPreferences.getString("sub_locale", "");
-        selectedVoice = sharedPreferences.getString("voice", "");
+        sharedPreferences.getString("voice", "");
         float speed = sharedPreferences.getFloat("speed", 1f);
-        selectedVoiceIndex = sharedPreferences.getInt("selected_voice_index", 0);
+
 
         subscriptionID.setText(text1);
         resourceLocale.setText(text2);
@@ -98,25 +100,27 @@ public class SettingsActivity extends AppCompatActivity {
         restExecutor.execute(() -> {
             retrieveVoicesAndSetupVoiceSpinner();
             runOnUiThread(() -> {
-                voiceSpinner.setSelection(selectedVoiceIndex);
+                System.out.println("Selected voice index: " + selectedVoiceIndex);
             });
         });
     }
 
 
     private void retrieveVoicesAndSetupVoiceSpinner() {
-        AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").build();
+        AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
         VoiceDao voiceDao = db.voiceDao();
-        List<Voice> downloadedVoices = voiceDao.getAllVoices();
+        List<VoiceItem> downloadedVoices = voiceDao.getAllVoices();
+
         if (downloadedVoices.isEmpty()) {
 
-            List<String> voices = getVoices(); // Your API call and parsing logic
+            voices = getVoices(); // Your API call and parsing logic
         }
-        else{
-            List<String> voices = Collections.emptyList();
-            for (Voice voice : downloadedVoices) {
+        else {
+
+            for (VoiceItem voice : downloadedVoices) {
                 voices.add(voice.name);
             }
+        }
             runOnUiThread(() -> {
                 ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, voices);
                 voiceSpinner.setAdapter(adapter);
@@ -130,6 +134,7 @@ public class SettingsActivity extends AppCompatActivity {
                         editor.putString("voice", selectedVoice);
                         editor.commit();
 
+
                     }
 
                     @Override
@@ -139,8 +144,16 @@ public class SettingsActivity extends AppCompatActivity {
                 });
 
             });
-        }
+        selectedVoiceIndex = sharedPreferences.getInt("selected_voice_index", 0);
+
+        runOnUiThread(() -> {
+            voiceSpinner.setSelection(selectedVoiceIndex);
+        });
+
+
+
     }
+
 
     public void onSaveButtonClicked(View v) {
         String azureSubscriptionKey = subscriptionID.getText().toString();
@@ -152,8 +165,10 @@ public class SettingsActivity extends AppCompatActivity {
 
         editor.putString("sub_key", azureSubscriptionKey);
         editor.putString("sub_locale", azureSubscriptionLocale);
-        editor.putInt("seleected_voice_index", voiceSpinner.getSelectedItemPosition());
+        System.out.println("Sub_locale er sat ind " + voiceSpinner.getSelectedItemPosition());
+        editor.putInt("selected_voice_index", voiceSpinner.getSelectedItemPosition());
         editor.commit();
+
 
         // Optionally, display a toast message or navigate back to the previous activity.
         Toast.makeText(this, "Oplysninger opdateret!" + azureSubscriptionKey + azureSubscriptionLocale, Toast.LENGTH_SHORT).show();
