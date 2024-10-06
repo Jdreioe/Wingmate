@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">NeuralSpeak</string>
+    <string name="title_activity_test">Test</string>
+    <string name="tilf_j">Tilføj</string>
+    <string name="slet">Slet</string>
+    <string name="engelsk">Engelsk</string>
+    <string name="auto">Auto</string>
+    <string name="dansk">Dansk</string>
+    <string name="indstillinger">Indstillinger</string>
+    <string name="enter_text">Enter text</string>
+    <string name="save">Save</string>
+    <string name="subscription_key">Subscription Key</string>
+    <string name="resource_locale">Resource Locale</string>
+</resources>

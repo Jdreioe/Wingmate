@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/subscriptionKey"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/subscription_key" />
+
+    <EditText
+        android:id="@+id/resourceLocale"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/resource_locale" />
+
+    <com.google.android.material.slider.Slider
+        android:id="@+id/speed_slider"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:valueFrom="0.1"
+        android:valueTo="2.0"
+        android:stepSize="0.1" />
+
+    <com.google.android.material.slider.Slider
+        android:id="@+id/pitch_slider"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:valueFrom="0.0"
+        android:valueTo="2.0"
+        android:stepSize="0.1" />
+
+    <Spinner
+        android:id="@+id/voice_spinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/save"
+        android:onClick="onSaveButtonClicked" />
+
+</LinearLayout>

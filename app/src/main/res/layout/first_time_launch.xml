@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Welcome!"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Please enter your Azure subscription key and locale:" />
+
+    <EditText
+        android:id="@+id/subkey_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Subscription Key"
+        android:inputType="text" />
+
+    <EditText
+        android:id="@+id/sub_local_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Locale (e.g., en-US)"
+        android:inputType="text" />
+
+</LinearLayout>
