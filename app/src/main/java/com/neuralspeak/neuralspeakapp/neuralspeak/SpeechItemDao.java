@@ -28,5 +28,8 @@ public interface SpeechItemDao {
     @Delete
     void deleteItems(List<SpeechItem> items);
 
+    @Query("SELECT * FROM SpeechItem WHERE id = :id")
+    SpeechItem getItemById(int id);
+
     // ... other DAO methods
 }

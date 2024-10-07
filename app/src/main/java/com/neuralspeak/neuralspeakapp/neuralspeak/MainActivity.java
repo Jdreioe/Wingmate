@@ -36,6 +36,7 @@ import com.elvishew.xlog.printer.AndroidPrinter;
 import com.elvishew.xlog.printer.ConsolePrinter;
 import com.elvishew.xlog.printer.Printer;
 import com.example.neuralspeak.R;
+import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.switchmaterial.SwitchMaterial;
@@ -77,6 +78,23 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        MaterialToolbar topAppBar = findViewById(R.id.topAppBar);
+        setSupportActionBar(topAppBar);
+        topAppBar.setNavigationOnClickListener(v -> {
+            if (isSomeFolderSelected) {
+                databaseExecutor.execute(() -> {
+                    SpeechItem currentFolder = speechItemDao.getItemById(currentFolderId);
+                    if (currentFolder.parentId != null) {
+                        selectFolder(currentFolder.parentId);
+                    } else {
+                        selectRootFolder();
+                    }
+                });
+            }
+
+
+        });
 
         Printer consolePrinter = new ConsolePrinter();
         Printer androidPrinter = new AndroidPrinter();
@@ -111,7 +129,7 @@ public class MainActivity extends AppCompatActivity {
 
                     if (speechItem.isFolder) {
                         // Handle folder click
-                        selectFolder(speechItem);
+                        selectFolder(speechItem.id);
                     } else {
                         // Handle item click
                         playText(speechItem.text);
@@ -185,7 +203,7 @@ public class MainActivity extends AppCompatActivity {
         sharedPreferences = getSharedPreferences("MyPrefs", android.content.Context.MODE_PRIVATE);
         speechSubscriptionKey =  sharedPreferences.getString("sub_key", "");;
         serviceRegion = sharedPreferences.getString("sub_locale", "");
-        setContentView(R.layout.activity_main);
+
         languageToggle = this.findViewById(R.id.language_toggle);
 
         // Note: we need to request the permissions
@@ -203,22 +221,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @SuppressLint("NotifyDataSetChanged")
-    private void selectFolder(SpeechItem speechItem) {
-        assert speechItem != null;
+    private void selectFolder(int folderId) {
 
         isSomeFolderSelected = true;
-        currentFolderId = speechItem.id;
+        currentFolderId = folderId;
 
         //fjern fra recycler
-
         speechItemsInCurrentFolder.clear();
-
 
         // find alle speechItems fra mappen og sæt dem ind i  speechItemsInCurrentFolder listen
 
         databaseExecutor.execute(() -> {
-            speechItemsInCurrentFolder.addAll(speechItemDao.getAllItemsInFolder(speechItem.id));
-
+            speechItemsInCurrentFolder.addAll(speechItemDao.getAllItemsInFolder(folderId));
 
             //refresh recycler
             runOnUiThread(this::updateSpeechItems);
@@ -227,12 +241,19 @@ public class MainActivity extends AppCompatActivity {
             // isSomeFolderSelected = false
         });
 
-
         // vis tilbageknap
+    }
 
+    @SuppressLint("NotifyDataSetChanged")
+    private void selectRootFolder() {
+        isSomeFolderSelected = false;
+        currentFolderId = -1;
+        speechItemsInCurrentFolder.clear();
 
-
-
+        databaseExecutor.execute(() -> {
+            speechItemsInCurrentFolder.addAll(speechItemDao.getAllRootItems());
+            runOnUiThread(this::updateSpeechItems);
+        });
     }
 
     private void deleteItem(SpeechItem deletedItem) {

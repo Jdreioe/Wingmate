@@ -3,9 +3,9 @@
     <string name="title_activity_test">Test</string>
     <string name="tilf_j">Tilføj</string>
     <string name="slet">Slet</string>
-    <string name="engelsk">Engelsk</string>
-    <string name="auto">Auto</string>
-    <string name="dansk">Dansk</string>
+    <string name="engelsk">EN</string>
+    <string name="auto">?</string>
+    <string name="dansk">DK</string>
     <string name="indstillinger">Indstillinger</string>
     <string name="enter_text">Enter text</string>
     <string name="save">Save</string>

@@ -6,32 +6,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-        <androidx.appcompat.widget.Toolbar
-            android:id="@+id/toolbar"
-            android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/backButton"
-                style="?attr/materialIconButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text=""
-                app:icon="@drawable/ic_back">
-
-            </com.google.android.material.button.MaterialButton>
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/topBarTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Wingman"
-                style="attr/materialToolbarTextStyle">
-
-
-            </com.google.android.material.textview.MaterialTextView>
-        </androidx.appcompat.widget.Toolbar>
+    <com.google.android.material.appbar.MaterialToolbar
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:theme="@style/ThemeOverlay.Material3.DynamicColors.DayNight"
+        app:navigationIcon="?attr/homeAsUpIndicator"
+        app:title="Wingman"
+        android:id="@+id/topAppBar"
+        tools:ignore="MissingConstraints" />
 
 
     <EditText
@@ -39,14 +21,13 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
         android:layout_marginEnd="16dp"
         android:hint="@string/enter_text"
         android:padding="16dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/toolbar" />
+        app:layout_constraintTop_toBottomOf="@+id/topAppBar" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/speech_items_list"
@@ -101,7 +82,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:paddingLeft="@dimen/m3_btn_padding_left"
+            android:paddingLeft="20dp"
+            android:paddingRight="20dp"
             android:text="@string/dansk" />
 
         <com.google.android.material.button.MaterialButton
@@ -119,7 +101,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:paddingRight="0dp"
+            android:paddingLeft="20dp"
+            android:paddingRight="20dp"
             android:text="@string/engelsk" />
 
     </com.google.android.material.button.MaterialButtonToggleGroup>
@@ -145,11 +128,13 @@
         style="?attr/materialIconButtonFilledStyle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
         android:contentDescription="@string/tilf_j"
         android:onClick="onNewSpeechItemButtonClicked"
+
         android:padding="16dp"
         app:icon="@drawable/ic_add"
-
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:srcCompat="@drawable/ic_add"

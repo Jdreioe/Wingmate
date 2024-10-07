@@ -10,7 +10,8 @@
         android:id="@+id/item_icon"
         android:layout_width="48dp"
         android:layout_height="48dp"
-        android:src="@drawable/folder" />
+        android:src="@drawable/folder"
+        android:tint="?android:colorSecondary"/>
 
     <LinearLayout
         android:layout_width="0dp"

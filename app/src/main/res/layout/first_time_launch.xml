@@ -16,7 +16,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="Please enter your Azure subscription key and locale:" />
+        android:text="Her sætter du din Azure Subscription Key og Locale" />
 
     <EditText
         android:id="@+id/subkey_input"
