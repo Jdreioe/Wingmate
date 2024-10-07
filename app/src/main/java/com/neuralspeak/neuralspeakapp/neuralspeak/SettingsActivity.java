@@ -17,10 +17,8 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.elvishew.xlog.XLog;
@@ -42,10 +40,6 @@ public class SettingsActivity extends AppCompatActivity {
     private static final ExecutorService restExecutor = Executors.newSingleThreadExecutor();
     private Spinner voiceSpinner;
     private String selectedVoice;
-    private Integer azureWPM;
-    private Integer azurePitch;
-    private Slider pitchSlider;
-    private Slider speedSlider;
     private int selectedVoiceIndex;
     private SharedPreferences.Editor editor;
 
@@ -57,32 +51,24 @@ public class SettingsActivity extends AppCompatActivity {
         setContentView(R.layout.settings_activity);
         subscriptionID = this.findViewById(R.id.subscriptionKey);
         resourceLocale = this.findViewById(R.id.resourceLocale);
-        speedSlider = this.findViewById(R.id.speed_slider);
-        pitchSlider = this.findViewById(R.id.pitch_slider);
+        Slider speedSlider = this.findViewById(R.id.speed_slider);
+        Slider pitchSlider = this.findViewById(R.id.pitch_slider);
         sharedPreferences = getSharedPreferences("MyPrefs", Context.MODE_PRIVATE);
 
 
-        speedSlider.addOnChangeListener(new Slider.OnChangeListener() {
-            @Override
-            public void onValueChange(@NonNull Slider slider, float value, boolean fromUser) {
-            editor = sharedPreferences.edit();
-            editor.putFloat("speed", value);
-            editor.commit();
-            }
-
-            // ... other listener methods ...
+        // ... other listener methods ...
+        speedSlider.addOnChangeListener((slider, value, fromUser) -> {
+        editor = sharedPreferences.edit();
+        editor.putFloat("speed", value);
+        editor.commit();
         });
 
-        pitchSlider.addOnChangeListener(new Slider.OnChangeListener() {
-            @Override
-            public void onValueChange(@NonNull Slider slider, float value, boolean fromUser) {
-                editor = sharedPreferences.edit();
+        pitchSlider.addOnChangeListener((slider, value, fromUser) -> {
+            editor = sharedPreferences.edit();
 
-                editor.putFloat("pitch", value);
+            editor.putFloat("pitch", value);
 
-                editor.commit();
-            }
-
+            editor.commit();
         });
 
         String text1 = sharedPreferences.getString("sub_key", "");
@@ -143,9 +129,7 @@ public class SettingsActivity extends AppCompatActivity {
             });
         selectedVoiceIndex = sharedPreferences.getInt("selected_voice_index", 0);
 
-        runOnUiThread(() -> {
-            voiceSpinner.setSelection(selectedVoiceIndex);
-        });
+        runOnUiThread(() -> voiceSpinner.setSelection(selectedVoiceIndex));
 
 
 
@@ -236,12 +220,12 @@ public class SettingsActivity extends AppCompatActivity {
             } else {
 
                 // Handle error response
-                XLog.d("Fejl ved oprettelse af stemmer");
+                XLog.e("Fejl ved oprettelse af stemmer");
             }
             connection.disconnect();
         } catch (Exception e) {
             // Handle exceptions (e.g., network errors, JSON parsing errors)
-            e.printStackTrace();
+            XLog.e("Fejl ved oprettelse af stemmer", e);
         }
         return voices;
     }
