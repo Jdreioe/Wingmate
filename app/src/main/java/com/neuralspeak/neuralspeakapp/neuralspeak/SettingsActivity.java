@@ -33,7 +33,7 @@ import java.util.concurrent.Executors;
 import androidx.room.Room;
 
 public class SettingsActivity extends AppCompatActivity {
-    private List<String> voices = Collections.emptyList();
+    private List<String> voices = new ArrayList<>();
 
     private EditText subscriptionID;
     private EditText resourceLocale;
@@ -97,28 +97,25 @@ public class SettingsActivity extends AppCompatActivity {
 
         voiceSpinner = findViewById(R.id.voice_spinner);
 
-        restExecutor.execute(() -> {
-            retrieveVoicesAndSetupVoiceSpinner();
-            runOnUiThread(() -> {
-                System.out.println("Selected voice index: " + selectedVoiceIndex);
-            });
-        });
+        restExecutor.execute(this::retrieveVoicesAndSetupVoiceSpinner);
     }
 
 
     private void retrieveVoicesAndSetupVoiceSpinner() {
         AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
         VoiceDao voiceDao = db.voiceDao();
-        List<VoiceItem> downloadedVoices = voiceDao.getAllVoices();
 
-        if (downloadedVoices.isEmpty()) {
+        List<VoiceItem>downloadedVoiceItems = voiceDao.getAllVoices();
+
+        if (voiceDao.getAllVoices().isEmpty()) {
 
             voices = getVoices(); // Your API call and parsing logic
         }
         else {
 
-            for (VoiceItem voice : downloadedVoices) {
+            for (VoiceItem voice : downloadedVoiceItems ) {
                 voices.add(voice.name);
+
             }
         }
             runOnUiThread(() -> {
@@ -165,7 +162,6 @@ public class SettingsActivity extends AppCompatActivity {
 
         editor.putString("sub_key", azureSubscriptionKey);
         editor.putString("sub_locale", azureSubscriptionLocale);
-        System.out.println("Sub_locale er sat ind " + voiceSpinner.getSelectedItemPosition());
         editor.putInt("selected_voice_index", voiceSpinner.getSelectedItemPosition());
         editor.commit();
 
@@ -218,14 +214,24 @@ public class SettingsActivity extends AppCompatActivity {
 
                 // Parse the JSON response and extract voice names
                 JSONArray voicesArray = new JSONArray(response.toString());
-                System.out.println(voicesArray);
+
 
                 for (int i = 0; i < voicesArray.length(); i++) {
+
                     JSONObject voiceObject = voicesArray.getJSONObject(i);
                     String voiceName = voiceObject.getString("ShortName");
                     voices.add(voiceName);
+                    VoiceItem voiceItem = new VoiceItem();
+                    voiceItem.name = voiceName;
+
+
+                    AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
+                    VoiceDao voiceDao= db.voiceDao();
+
+                    voiceDao.insert(voiceItem);
 
                 }
+
 
             } else {
 

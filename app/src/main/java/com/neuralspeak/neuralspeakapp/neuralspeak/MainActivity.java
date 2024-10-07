@@ -173,8 +173,8 @@ public class MainActivity extends AppCompatActivity {
 
 
         sharedPreferences = getSharedPreferences("MyPrefs", android.content.Context.MODE_PRIVATE);
-        speechSubscriptionKey =  sharedPreferences.getString("sub_key", "530749e3a0ed46aeb57a5b294d6faab8");;
-        serviceRegion = sharedPreferences.getString("sub_locale", "swedencentral");
+        speechSubscriptionKey =  sharedPreferences.getString("sub_key", "");;
+        serviceRegion = sharedPreferences.getString("sub_locale", "");
         setContentView(R.layout.activity_main);
         languageToggle = this.findViewById(R.id.language_toggle);
 

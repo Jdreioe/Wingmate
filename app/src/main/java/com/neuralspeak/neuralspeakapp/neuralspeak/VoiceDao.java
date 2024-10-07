@@ -12,5 +12,7 @@ public interface VoiceDao {
 
     @Query("SELECT * FROM VoiceItem ")
     List<VoiceItem> getAllVoices();
+    @Insert
+    void insert(VoiceItem voiceItem);
 }
 
