@@ -7,9 +7,9 @@ import androidx.room.PrimaryKey;
 
 @Entity(foreignKeys = @ForeignKey(entity = SpeechItem.class,
         parentColumns = "id",
-        childColumns = "folderId",
+        childColumns = "parentId",
         onDelete = ForeignKey.CASCADE),
-        indices = {@Index("folderId")})
+        indices = {@Index("parentId")})
 public class SpeechItem {
     @PrimaryKey(autoGenerate = true)
     public int id;
@@ -20,5 +20,5 @@ public class SpeechItem {
 
     public boolean isFolder;
 
-    public Long folderId; // To distinguish folders from items
+    public Integer parentId; // To distinguish folders from items
 }

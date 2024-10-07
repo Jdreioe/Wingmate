@@ -75,11 +75,12 @@ public class SettingsActivity extends AppCompatActivity {
         String text2 = sharedPreferences.getString("sub_locale", "");
         sharedPreferences.getString("voice", "");
         float speed = sharedPreferences.getFloat("speed", 1f);
-
+        float pitch = sharedPreferences.getFloat("pitch", 1f);
 
         subscriptionID.setText(text1);
         resourceLocale.setText(text2);
         speedSlider.setValue(speed);
+        pitchSlider.setValue(pitch);
 
         voiceSpinner = findViewById(R.id.voice_spinner);
 

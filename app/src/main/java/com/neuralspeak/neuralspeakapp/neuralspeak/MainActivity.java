@@ -10,13 +10,13 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-import androidx.preference.Preference;
 import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.room.Room;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
@@ -67,8 +67,11 @@ public class MainActivity extends AppCompatActivity {
     private int deletedIndex = -1;
     private SpeechItemDao speechItemDao;
     private SpeechItemAdapter speechItemAdapter;
-    private List<SpeechItem> rootItems;
+    private List<SpeechItem> speechItemsInCurrentFolder;
 
+    // Keeps track of folder selection
+    private int currentFolderId = -1;
+    private boolean isSomeFolderSelected = false;
 
 
     @Override
@@ -98,14 +101,21 @@ public class MainActivity extends AppCompatActivity {
                     .build();
             speechItemDao = db.speechItemDao();
 
-            rootItems = speechItemDao.getAllRootItems();
+            speechItemsInCurrentFolder = speechItemDao.getAllRootItems();
 
             runOnUiThread(() -> {
 
                 RecyclerView recyclerView = findViewById(R.id.speech_items_list);
                 recyclerView.setLayoutManager(new LinearLayoutManager(this));
-                speechItemAdapter = new SpeechItemAdapter(rootItems, speechItem -> {
-                    playText(speechItem.text);
+                speechItemAdapter = new SpeechItemAdapter(speechItemsInCurrentFolder, speechItem -> {
+
+                    if (speechItem.isFolder) {
+                        // Handle folder click
+                        selectFolder(speechItem);
+                    } else {
+                        // Handle item click
+                        playText(speechItem.text);
+                    }
                 });
                 recyclerView.setAdapter(speechItemAdapter);
 
@@ -125,8 +135,8 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
                         deletedIndex = viewHolder.getAdapterPosition();
-                        deletedItem = rootItems.get(deletedIndex);
-                        rootItems.remove(deletedIndex);
+                        deletedItem = speechItemsInCurrentFolder.get(deletedIndex);
+                        speechItemsInCurrentFolder.remove(deletedIndex);
                         speechItemAdapter.notifyItemRemoved(deletedIndex);
                         deleteItem(deletedItem);
                         // showUndoSnackbar();
@@ -192,18 +202,57 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    @SuppressLint("NotifyDataSetChanged")
+    private void selectFolder(SpeechItem speechItem) {
+        assert speechItem != null;
+
+        isSomeFolderSelected = true;
+        currentFolderId = speechItem.id;
+
+        //fjern fra recycler
+
+        speechItemsInCurrentFolder.clear();
+
+
+        // find alle speechItems fra mappen og sæt dem ind i  speechItemsInCurrentFolder listen
+
+        databaseExecutor.execute(() -> {
+            speechItemsInCurrentFolder.addAll(speechItemDao.getAllItemsInFolder(speechItem.id));
+
+
+            //refresh recycler
+            runOnUiThread(this::updateSpeechItems);
+
+            // tilbageknap hvis isSomeFolderSelected == true:
+            // isSomeFolderSelected = false
+        });
+
+
+        // vis tilbageknap
+
+
+
+
+    }
+
     private void deleteItem(SpeechItem deletedItem) {
         databaseExecutor.execute(() -> {
             speechItemDao.deleteItems(List.of(deletedItem));
-            rootItems.remove(deletedItem);
+            speechItemsInCurrentFolder.remove(deletedItem);
             updateSpeechItems();
         });
     }
 
     private void insertItem(SpeechItem item) {
         databaseExecutor.execute(() -> {
+
             long ok = speechItemDao.insertItem(item);
-            rootItems.add(item);
+            speechItemsInCurrentFolder.clear();
+            if (isSomeFolderSelected) {
+                speechItemsInCurrentFolder.addAll(speechItemDao.getAllItemsInFolder(currentFolderId));
+            } else {
+                speechItemsInCurrentFolder.addAll(speechItemDao.getAllRootItems());
+            }
             updateSpeechItems();
         });
     }
@@ -269,6 +318,7 @@ public void onNewSpeechItemButtonClicked(View view) {
             .setView(R.layout.added_speech) // Inflate your custom layout
             .setPositiveButton("Save", (dialog, which) -> {
                 // Handle save action
+
                 EditText titleInput = ((AlertDialog) dialog).findViewById(R.id.title_input);
                 EditText textInput = ((AlertDialog) dialog).findViewById(R.id.text_input);
                 SwitchMaterial folderToggle = ((AlertDialog) dialog).findViewById(R.id.folder_toggle);
@@ -281,6 +331,14 @@ public void onNewSpeechItemButtonClicked(View view) {
                 speechItem.text = text;
                 speechItem.name = title;
                 speechItem.isFolder = isFolder;
+
+                if (isSomeFolderSelected) {
+                    speechItem.parentId = currentFolderId;
+                }
+                System.out.println("currentFolderId: " + currentFolderId);
+
+                // hvis man trykker på currentfolder, så skal den gemmes i currentfolder
+
                 insertItem(speechItem);
 
                 // Update the SpeechItem object with the new values
@@ -308,6 +366,8 @@ public void onSpeechButtonClicked(View v) {
             selectedVoice = sharedPreferences.getString("voice", "en-US-BrianMultilingualNeural");
             pitch = sharedPreferences.getFloat("pitch", 1f);
             speed = sharedPreferences.getFloat("speed", 1f);
+
+
 
 
             String ssml = getSsml(speakText, getSelectedLanguage(languageToggle),selectedVoice, pitch, speed);

@@ -16,10 +16,10 @@ public interface SpeechItemDao {
     @Insert
     long insertItem(SpeechItem speechItem);
 
-    @Query("SELECT * FROM SpeechItem WHERE folderId = :folderId")
-    List<SpeechItem> findChildren(int folderId);
+    @Query("SELECT * FROM SpeechItem WHERE parentId = :folderId")
+    List<SpeechItem> getAllItemsInFolder(int folderId);
 
-    @Query("SELECT * FROM SpeechItem WHERE folderId IS NULL")
+    @Query("SELECT * FROM SpeechItem WHERE parentId IS NULL")
     List<SpeechItem> getAllRootItems();
 
     @Query("SELECT * FROM SpeechItem")

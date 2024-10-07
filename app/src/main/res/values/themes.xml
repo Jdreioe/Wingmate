@@ -1,6 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
-    <style name="Theme.NeuralSpeak" parent="Theme.Material3.DynamicColors.DayNight.NoActionBar">
+    <style name="Theme.NeuralSpeak" parent="Theme.Material3.DynamicColors.DayNight">
+        <item name="android:statusBarColor">@android:color/transparent</item>
 
 
         <item name="textAppearanceHeadline1">@style/TextAppearance.MaterialComponents.Headline1</item>

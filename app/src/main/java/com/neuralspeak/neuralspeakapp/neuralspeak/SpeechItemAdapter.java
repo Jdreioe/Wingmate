@@ -22,6 +22,7 @@ public class SpeechItemAdapter extends RecyclerView.Adapter<SpeechItemAdapter.Vi
     public SpeechItemAdapter(List<SpeechItem> items, Consumer<SpeechItem> callback) {
         this.items = items;
         this.callback = callback;
+
     }
     @NonNull
     @Override
