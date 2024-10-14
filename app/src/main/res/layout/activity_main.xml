@@ -7,27 +7,27 @@
     android:layout_height="match_parent">
 
     <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/topAppBar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:theme="@style/ThemeOverlay.Material3.DynamicColors.DayNight"
-        app:navigationIcon="?attr/homeAsUpIndicator"
+        app:navigationIcon="@drawable/ic_launcher_monochrome"
         app:title="Wingman"
-        android:id="@+id/topAppBar"
         tools:ignore="MissingConstraints" />
 
 
-    <EditText
+    <com.google.android.material.textfield.TextInputEditText
         android:id="@+id/speak_text"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
+        android:capitalize="sentences"
         android:hint="@string/enter_text"
         android:padding="16dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintEnd_toStartOf="@+id/settimgsButton2"
+        app:layout_constraintHeight_max="200dp"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/topAppBar" />
+        app:layout_constraintTop_toBottomOf="@id/topAppBar" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/speech_items_list"
@@ -63,6 +63,19 @@
         android:padding="16dp"
         app:icon="@drawable/ic_settings"
         style="?attr/materialIconButtonFilledStyle"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/settimgsButton2"
+        style="?attr/materialIconButtonFilledStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:contentDescription="@string/indstillinger"
+        android:onClick="onFullscreenButronClicked"
+        android:padding="16dp"
+        app:icon="@drawable/ic_fullscreen"
+        app:layout_constraintBottom_toTopOf="@+id/speech_items_list"
+        app:layout_constraintEnd_toEndOf="parent" />
 
     <com.google.android.material.button.MaterialButtonToggleGroup
         android:id="@+id/language_toggle"
@@ -123,7 +136,7 @@
         app:tint="?attr/colorPrimary" />
 
 
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/addButton"
         style="?attr/materialIconButtonFilledStyle"
         android:layout_width="wrap_content"

@@ -24,6 +24,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.elvishew.xlog.XLog;
 import com.example.neuralspeak.R;
 import com.google.android.material.slider.Slider;
+import com.microsoft.cognitiveservices.speech.SpeechConfig;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -149,6 +150,7 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putString("sub_locale", azureSubscriptionLocale);
         editor.putInt("selected_voice_index", voiceSpinner.getSelectedItemPosition());
         editor.commit();
+
 
 
         // Optionally, display a toast message or navigate back to the previous activity.

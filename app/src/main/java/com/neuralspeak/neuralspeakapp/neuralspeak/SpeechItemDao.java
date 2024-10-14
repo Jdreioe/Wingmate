@@ -31,5 +31,6 @@ public interface SpeechItemDao {
     @Query("SELECT * FROM SpeechItem WHERE id = :id")
     SpeechItem getItemById(int id);
 
+
     // ... other DAO methods
 }

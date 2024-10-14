@@ -5,16 +5,7 @@
 // <code>
 package com.neuralspeak.neuralspeakapp.neuralspeak;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AlertDialog;
-import androidx.core.app.ActivityCompat;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
-import androidx.preference.PreferenceManager;
-import androidx.recyclerview.widget.ItemTouchHelper;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-import androidx.room.Room;
+import static android.Manifest.permission.INTERNET;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
@@ -25,13 +16,25 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.View;
 import android.widget.EditText;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.preference.PreferenceManager;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.room.Room;
+
 import com.elvishew.xlog.BuildConfig;
+import com.elvishew.xlog.LogConfiguration;
 import com.elvishew.xlog.LogLevel;
 import com.elvishew.xlog.XLog;
-import com.elvishew.xlog.LogConfiguration;
 import com.elvishew.xlog.printer.AndroidPrinter;
 import com.elvishew.xlog.printer.ConsolePrinter;
 import com.elvishew.xlog.printer.Printer;
@@ -42,13 +45,18 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.microsoft.cognitiveservices.speech.ResultReason;
 import com.microsoft.cognitiveservices.speech.SpeechConfig;
+import com.microsoft.cognitiveservices.speech.SpeechSynthesisOutputFormat;
 import com.microsoft.cognitiveservices.speech.SpeechSynthesisResult;
 import com.microsoft.cognitiveservices.speech.SpeechSynthesizer;
-import static android.Manifest.permission.*;
+import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
+import com.microsoft.cognitiveservices.speech.audio.PullAudioInputStreamCallback;
+import com.microsoft.cognitiveservices.speech.audio.PullAudioOutputStream;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -69,48 +77,49 @@ public class MainActivity extends AppCompatActivity {
     private SpeechItemDao speechItemDao;
     private SpeechItemAdapter speechItemAdapter;
     private List<SpeechItem> speechItemsInCurrentFolder;
-
+    private MaterialToolbar topAppBar;
     // Keeps track of folder selection
     private int currentFolderId = -1;
     private boolean isSomeFolderSelected = false;
 
+    private int colorTertiary;
+    private EditText speakText;
+    private AudioConfig audioConfig;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        MaterialToolbar topAppBar = findViewById(R.id.topAppBar);
-        setSupportActionBar(topAppBar);
+        topAppBar = findViewById(R.id.topAppBar);
+        topAppBar.setNavigationIconTint(getDynamicColor(android.R.attr.colorPrimary));
+
         topAppBar.setNavigationOnClickListener(v -> {
+
             if (isSomeFolderSelected) {
+                topAppBar.setNavigationIcon(R.drawable.ic_launcher_monochrome);
+                topAppBar.setNavigationContentDescription("Gå ud af kategorien");
+                topAppBar.setTitle("Wingman");
+
                 databaseExecutor.execute(() -> {
+
                     SpeechItem currentFolder = speechItemDao.getItemById(currentFolderId);
                     if (currentFolder.parentId != null) {
-                        selectFolder(currentFolder.parentId);
+                        selectFolder(currentFolder.parentId, currentFolder.name);
                     } else {
+
                         selectRootFolder();
+
+
                     }
                 });
+            } else {
+                selectRootFolder();
             }
 
 
         });
 
-        Printer consolePrinter = new ConsolePrinter();
-        Printer androidPrinter = new AndroidPrinter();
-        LogConfiguration config = new LogConfiguration.Builder()
-                .logLevel(BuildConfig.DEBUG ? LogLevel.ALL             // Specify log level, logs below this level won't be printed, default: LogLevel.ALL
-                        : LogLevel.NONE)
-                .tag("X-LOG")                                         // Specify TAG, default: "X-LOG"
-                .enableThreadInfo()                                    // Enable thread info, disabled by default
-                .enableStackTrace(2)                                   // Enable stack trace info with depth 2, disabled by default
-                .enableBorder()
-                .build();
-        XLog.init(config, consolePrinter, androidPrinter);
-
         FirstTimeLaunchDialog.showFirstTimeLaunchDialog(this);
-
-        XLog.d("Starting");
 
 
         databaseExecutor.execute(() -> {
@@ -129,7 +138,7 @@ public class MainActivity extends AppCompatActivity {
 
                     if (speechItem.isFolder) {
                         // Handle folder click
-                        selectFolder(speechItem.id);
+                        selectFolder(speechItem.id, speechItem.name);
                     } else {
                         // Handle item click
                         playText(speechItem.text);
@@ -192,16 +201,14 @@ public class MainActivity extends AppCompatActivity {
                 itemTouchHelper.attachToRecyclerView(recyclerView);
 
 
-                    });
-
-
+            });
 
 
         });
 
 
         sharedPreferences = getSharedPreferences("MyPrefs", android.content.Context.MODE_PRIVATE);
-        speechSubscriptionKey =  sharedPreferences.getString("sub_key", "");;
+        speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
         serviceRegion = sharedPreferences.getString("sub_locale", "");
 
         languageToggle = this.findViewById(R.id.language_toggle);
@@ -209,23 +216,24 @@ public class MainActivity extends AppCompatActivity {
         // Note: we need to request the permissions
         int requestCode = 5; // unique code for the permission request
         ActivityCompat.requestPermissions(MainActivity.this, new String[]{INTERNET}, requestCode);
-
-        // Initialize speech synthesizer and its dependencies
         speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
-        assert(speechConfig != null);
+        // Initialize speech synthesizer and its dependencies
+        assert (speechConfig != null);
 
         synthesizer = new SpeechSynthesizer(speechConfig);
-        assert(synthesizer != null);
+        assert (synthesizer != null);
 
 
     }
 
     @SuppressLint("NotifyDataSetChanged")
-    private void selectFolder(int folderId) {
+    private void selectFolder(int folderId, String folderName) {
 
         isSomeFolderSelected = true;
         currentFolderId = folderId;
-
+        topAppBar.setTitle(folderName);
+        topAppBar.setNavigationIcon(R.drawable.ic_back);
+        topAppBar.setNavigationIconTint(getDynamicColor(android.R.attr.colorPrimary));
         //fjern fra recycler
         speechItemsInCurrentFolder.clear();
 
@@ -278,12 +286,18 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private static @NonNull String getSsml(String text, Language language, String Voice, float pitch, float speed) throws Exception {
+    private int getDynamicColor(int colorAttribute) {
+        TypedValue typedValue = new TypedValue();
+        getTheme().resolveAttribute(colorAttribute, typedValue, true);
+        return typedValue.data;
+    }
 
-        if (language == Language.MULTI  ) {
+    public static @NonNull String getSsml(String text, Language language, String Voice, float pitch, float speed) throws Exception {
+
+        if (language == Language.MULTI) {
             return "<speak version='1.0' xml:lang='da-DK' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts'>"
                     .concat(String.format("<voice name='%s'>", Voice))
-                    .concat("<prosody rate='" + speed + "' pitch='" + pitch + "%'>" )
+                    .concat("<prosody rate='" + speed + "' pitch='" + pitch + "%'>")
                     .concat(text)
                     .concat("</prosody>")
                     .concat("</voice>")
@@ -291,8 +305,9 @@ public class MainActivity extends AppCompatActivity {
         } else {
             return "<speak version='1.0' xml:lang='da-DK' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts'>"
                     .concat(String.format("<voice name='%s'>", Voice))
-                    .concat("<prosody rate='" + speed + "' pitch='" + pitch + "%'>" )
-                    .concat("<lang xml='" +  getLanguageShortname(language) + "'>")
+
+                    .concat("<prosody rate='" + speed + "' pitch='" + pitch + "%'>")
+                    .concat("<lang xml='" + getLanguageShortname(language) + "'>")
 
                     .concat(text)
                     .concat("</lang>")
@@ -302,10 +317,13 @@ public class MainActivity extends AppCompatActivity {
         }
 
     }
+
     private static @NonNull String getLanguageShortname(Language language) throws Exception {
         switch (language) {
-            case DANISH: return "da-DK";
-            case ENGLISH: return "en-US";
+            case DANISH:
+                return "da-DK";
+            case ENGLISH:
+                return "en-US";
 
         }
         throw new IllegalArgumentException("Invalid language");
@@ -319,128 +337,167 @@ public class MainActivity extends AppCompatActivity {
         synthesizer.close();
         speechConfig.close();
     }
-public void omDeleteButtonClicked(View v) {
-        EditText speakText = this.findViewById(R.id.speak_text);
+
+    public void omDeleteButtonClicked(View v) {
+        speakText = this.findViewById(R.id.speak_text);
         speakText.setText("");
-    SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-    String text1 = sharedPreferences.getString("text1", "");
-    String text2 = sharedPreferences.getString("text2", "");
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        String text1 = sharedPreferences.getString("text1", "");
+        String text2 = sharedPreferences.getString("text2", "");
 
-}
-public void onSettingsButtonClicked(View v) {
-    Intent intent = new Intent(this, SettingsActivity.class);
-    startActivity(intent);
-}
+    }
 
-public void onNewSpeechItemButtonClicked(View view) {
+    public void onSettingsButtonClicked(View v) {
+        Intent intent = new Intent(this, SettingsActivity.class);
+        startActivity(intent);
+    }
 
-    new MaterialAlertDialogBuilder(this)
-            .setTitle("Tilføj ny")
-            .setView(R.layout.added_speech) // Inflate your custom layout
-            .setPositiveButton("Save", (dialog, which) -> {
-                // Handle save action
+    public void onNewSpeechItemButtonClicked(View view) {
 
-                EditText titleInput = ((AlertDialog) dialog).findViewById(R.id.title_input);
-                EditText textInput = ((AlertDialog) dialog).findViewById(R.id.text_input);
-                SwitchMaterial folderToggle = ((AlertDialog) dialog).findViewById(R.id.folder_toggle);
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Tilføj ny")
+                .setView(R.layout.added_speech) // Inflate your custom layout
+                .setPositiveButton("Save", (dialog, which) -> {
+                    // Handle save action
 
-                String title = titleInput.getText().toString();
-                String text = textInput.getText().toString();
-                boolean isFolder = folderToggle.isChecked();
+                    EditText titleInput = ((AlertDialog) dialog).findViewById(R.id.title_input);
+                    EditText textInput = ((AlertDialog) dialog).findViewById(R.id.text_input);
+                    SwitchMaterial folderToggle = ((AlertDialog) dialog).findViewById(R.id.folder_toggle);
 
-                SpeechItem speechItem = new SpeechItem();
-                speechItem.text = text;
-                speechItem.name = title;
-                speechItem.isFolder = isFolder;
+                    String title = titleInput.getText().toString();
+                    String text = textInput.getText().toString();
+                    boolean isFolder = folderToggle.isChecked();
 
-                if (isSomeFolderSelected) {
-                    speechItem.parentId = currentFolderId;
-                }
-                System.out.println("currentFolderId: " + currentFolderId);
+                    SpeechItem speechItem = new SpeechItem();
+                    speechItem.text = text;
+                    speechItem.name = title;
+                    speechItem.isFolder = isFolder;
 
-                // hvis man trykker på currentfolder, så skal den gemmes i currentfolder
+                    if (isSomeFolderSelected) {
+                        speechItem.parentId = currentFolderId;
+                    }
+                    System.out.println("currentFolderId: " + currentFolderId);
 
-                insertItem(speechItem);
+                    // hvis man trykker på currentfolder, så skal den gemmes i currentfolder
 
-                // Update the SpeechItem object with the new values
-                // ...
-            })
-            .setNegativeButton("Cancel", (dialog, which) -> {
-                // Handle cancel action (e.g., dismiss the dialog)
-            })
-            .show();
-}
+                    insertItem(speechItem);
+
+                    // Update the SpeechItem object with the new values
+                    // ...
+                })
+                .setNegativeButton("Cancel", (dialog, which) -> {
+                    // Handle cancel action (e.g., dismiss the dialog)
+                })
+                .show();
+    }
 
 
-
-public void onSpeechButtonClicked(View v) {
+    public void onSpeechButtonClicked(View v) {
         EditText speakText = this.findViewById(R.id.speak_text);
-        playText(speakText.getText().toString());
+        // Capitilizer det første bogstav i teksten
+        String s = speakText.getText().toString();
+        s = s.trim();
+        String s1 = s.substring(0,1).toUpperCase();
+        String s2 = s.substring(1);
+        String res =s1.toUpperCase() + s2;
+        playText(res);
 
 
+    }
 
-}
+    public void playText(String speakText) {
 
-    private void playText(String speakText) {
+        // Hvis der ikke er speakText.toLowercase
+
         try {
+
+
             // Note: this will block the UI thread, so eventually, you want to register for the event
             selectedVoice = sharedPreferences.getString("voice", "en-US-BrianMultilingualNeural");
             pitch = sharedPreferences.getFloat("pitch", 1f);
             speed = sharedPreferences.getFloat("speed", 1f);
 
 
-
-
-            String ssml = getSsml(speakText, getSelectedLanguage(languageToggle),selectedVoice, pitch, speed);
+            String ssml = getSsml(speakText, getSelectedLanguage(languageToggle), selectedVoice, pitch, speed);
 
 
             speechExecutor.execute(() -> {
-                SpeechSynthesisResult result = synthesizer.SpeakSsml(ssml);
-                // Use the SSML string for text-to-speech
 
-                assert(result != null);
 
-                if (result.getReason() == ResultReason.SynthesizingAudioCompleted) {
+                if (BluetoothSpeakerSoundChecker.isBluetoothSpeakerActive(this)) {
+                    System.out.println("Venter 1 sekund med at afspille lyden");
+                    BluetoothSpeakerSoundChecker.playSilentSound(); // Play silent sound for 1 second
+
+
                 }
-                result.close();
+                try {
+                    SpeechSynthesisResult result = synthesizer.SpeakSsmlAsync(ssml).get();
+                    byte[] data = result.getAudioData();;
+                    System.out.println(data);
+                    // Use the SSML string for text-to-speech
+                    assert (result != null);
+
+                    if (result.getReason() == ResultReason.SynthesizingAudioCompleted) {
+                        {
+                            System.out.println("Speech synthesis completed.");
+                            result.close();
+                        }
+                    }
+                } catch (ExecutionException e) {
+                    throw new RuntimeException(e);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+
             });
 
 
-        } catch (IllegalArgumentException ex) {
-            Log.e("Illegal argument exception", "Måske noget med multisprog " + ex.getMessage());
-            assert(false);
-        }
-        catch (Exception ex) {
-            Log.e("SpeechSDKDemo", "unexpected " + ex.getMessage());
-            assert(false);
+            } catch (IllegalArgumentException ex) {
+            System.err.println(ex.getMessage());
+            assert (false);
+
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
     public Language getSelectedLanguage(MaterialButtonToggleGroup toggleGroup) {
         int checkedId = toggleGroup.getCheckedButtonId();
-        if (checkedId == R.id.english_button){
-            return Language.ENGLISH;}
-        else if (checkedId == R.id.auto_button) {
+        if (checkedId == R.id.english_button) {
+            return Language.ENGLISH;
+        } else if (checkedId == R.id.auto_button) {
             return Language.MULTI;
-        }else if (checkedId == R.id.danish_button) {
-                return Language.DANISH;
-            }
-        else{
+        } else if (checkedId == R.id.danish_button) {
+            return Language.DANISH;
+        } else {
             return Language.MULTI;
         }
     }
 
     private void updateSpeechItems() {
         databaseExecutor.execute(() -> {
-            runOnUiThread(() -> speechItemAdapter.notifyDataSetChanged());                        }
+                    runOnUiThread(() -> speechItemAdapter.notifyDataSetChanged());
+                }
         );
     }
+    public void onFullscreenButronClicked(View v) {
+        Intent intent = new Intent(MainActivity.this, displayText.class);
+        sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
+        EditText speakText = this.findViewById(R.id.speak_text);
+
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+
+        System.out.println(speakText.getText().toString());
+        editor.putString("SPEAK_TEXT", speakText.getText().toString());
+        editor.apply();
+        startActivity(intent);
+    }
+
 
     enum Language {
         DANISH,
         ENGLISH,
-        MULTI;
+        MULTI
     }
 }
 
-// </code>

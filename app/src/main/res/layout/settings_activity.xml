@@ -5,17 +5,24 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <EditText
+    <com.google.android.material.textfield.TextInputEditText
         android:id="@+id/subscriptionKey"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="@string/subscription_key" />
 
-    <EditText
+    <com.google.android.material.textfield.TextInputEditText
         android:id="@+id/resourceLocale"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="@string/resource_locale" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/speed_TextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Hastighed"
+        android:textSize="18sp" />
 
     <com.google.android.material.slider.Slider
         android:id="@+id/speed_slider"
@@ -25,6 +32,13 @@
         android:valueFrom="0.2"
         android:valueTo="2.0" />
 
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/pitch_TextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Tonehøjde (pitch)"
+        android:textSize="18sp" />
+
     <com.google.android.material.slider.Slider
         android:id="@+id/pitch_slider"
         android:layout_width="match_parent"
@@ -32,6 +46,13 @@
         android:stepSize="0.1"
         android:valueFrom="0.5"
         android:valueTo="2.0" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/stemme_TextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Stemme"
+        android:textSize="18sp" />
 
     <Spinner
         android:id="@+id/voice_spinner"

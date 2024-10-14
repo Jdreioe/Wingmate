@@ -40,19 +40,19 @@ public class SpeechItemAdapter extends RecyclerView.Adapter<SpeechItemAdapter.Vi
         holder.supportTextView.setText(String.valueOf(item.id)); // Example support text
 
         holder.itemView.setOnClickListener(v -> {
-            System.out.println(v);
-            System.out.println(item);
             if (callback != null) {
                 if (position != RecyclerView.NO_POSITION) {
 
                     // listener.(position, items.get(position));
-                    System.out.println("sdfgsdfg");
+
                     callback.accept(item);
 
                 }
             }
         });
         // Set icon based on item.isFolder (using placeholder icons here)
+        holder.iconImageView.setImageResource(item.isFolder ? R.drawable.folder : R.drawable.outline_text_to_speech_24);
+
         // holder.iconImageView.setImageResource(item.isFolder ? R.drawable.ic_folder : R.drawable.ic_item);
     }
 
