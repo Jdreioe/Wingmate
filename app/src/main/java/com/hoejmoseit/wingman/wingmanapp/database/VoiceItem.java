@@ -1,4 +1,4 @@
-package com.hoejmoseit.wingman.wingmanapp;
+package com.hoejmoseit.wingman.wingmanapp.database;
 
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
@@ -12,4 +12,5 @@ public class VoiceItem {
     public String supportedLanguages; // comma separated list of languages
     public String gender;
     public String primarylanguage;
+
  }

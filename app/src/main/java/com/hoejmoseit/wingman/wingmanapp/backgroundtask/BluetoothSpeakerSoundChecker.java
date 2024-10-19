@@ -1,4 +1,4 @@
-package com.hoejmoseit.wingman.wingmanapp;
+package com.hoejmoseit.wingman.wingmanapp.backgroundtask;
 
 import android.content.Context;
 import android.media.AudioDeviceInfo;
@@ -17,24 +17,27 @@ public class BluetoothSpeakerSoundChecker {
         AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
 
         for (AudioDeviceInfo device : devices) {
-            if (device.getType() == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
-                    device.getType() == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
-                // Check if this Bluetooth device is the active output
-                if (audioManager.isBluetoothA2dpOn()) {
-                    // Use reflection to access getBluetoothA2dpDeviceId
-                    try {
-                        Method getBluetoothA2dpDeviceIdMethod = AudioManager.class.getMethod("getBluetoothA2dpDeviceId");
-                        int bluetoothA2dpDeviceId = (int) getBluetoothA2dpDeviceIdMethod.invoke(audioManager);
-                        if (device.getId() == bluetoothA2dpDeviceId) {
-                            return true;
-                        }
-                    } catch (NoSuchMethodException | IllegalAccessException |
-                             InvocationTargetException e) {
-                        // Method not available, use fallback
-                        // ... (Fallback logic, e.g., assume Bluetooth is active if isBluetoothA2dpOn is true)
-                        return audioManager.isBluetoothA2dpOn(); // Fallback: Assume active if A2DP is on
-                    }
+            if (device.getType() != AudioDeviceInfo.TYPE_BLUETOOTH_A2DP &&
+                    device.getType() != AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
+                continue;
+            }
+
+            // Check if this Bluetooth device is the active output
+            if (!audioManager.isBluetoothA2dpOn()) {
+                continue;
+            }
+            // Use reflection to access getBluetoothA2dpDeviceId
+            try {
+                Method getBluetoothA2dpDeviceIdMethod = AudioManager.class.getMethod("getBluetoothA2dpDeviceId");
+                int bluetoothA2dpDeviceId = (int) getBluetoothA2dpDeviceIdMethod.invoke(audioManager);
+                if (device.getId() == bluetoothA2dpDeviceId) {
+                    return true;
                 }
+            } catch (NoSuchMethodException | IllegalAccessException |
+                     InvocationTargetException e) {
+                // Method not available, use fallback
+                // ... (Fallback logic, e.g., assume Bluetooth is active if isBluetoothA2dpOn is true)
+                return audioManager.isBluetoothA2dpOn(); // Fallback: Assume active if A2DP is on
             }
         }
 

@@ -14,8 +14,8 @@
             android:id="@+id/title_input"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:capitalize="sentences"
-            android:hint="Title" />
+
+            android:hint="@string/title" />
     </com.google.android.material.textfield.TextInputLayout>
 
     <com.google.android.material.textfield.TextInputLayout
@@ -28,13 +28,13 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:capitalize="sentences"
-            android:hint="Text" />
+            android:hint="@string/text" />
     </com.google.android.material.textfield.TextInputLayout>
 
     <com.google.android.material.switchmaterial.SwitchMaterial
         android:id="@+id/folder_toggle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Is Folder" />
+        android:text="@string/is_folder" />
 
 </LinearLayout>

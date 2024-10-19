@@ -1,4 +1,4 @@
-package com.hoejmoseit.wingman.wingmanapp;
+package com.hoejmoseit.wingman.wingmanapp.database;
 
 import androidx.room.Entity;
 import androidx.room.Index;
@@ -15,4 +15,7 @@ public class SaidTextItem {
 
     public String voiceName;
     public String audioFilePath;
+    public String language;
+    public float pitch;
+    public float speed;
 }

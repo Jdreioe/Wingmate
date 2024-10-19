@@ -1,4 +1,4 @@
-package com.hoejmoseit.wingman.wingmanapp;
+package com.hoejmoseit.wingman.wingmanapp.database;
 
 import android.view.LayoutInflater;
 import android.view.View;

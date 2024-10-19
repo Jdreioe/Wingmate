@@ -28,6 +28,9 @@ import com.hoejmoseit.wingman.R;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.slider.Slider;
 import com.google.android.material.switchmaterial.SwitchMaterial;
+import com.hoejmoseit.wingman.wingmanapp.database.AppDatabase;
+import com.hoejmoseit.wingman.wingmanapp.database.VoiceDao;
+import com.hoejmoseit.wingman.wingmanapp.database.VoiceItem;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -49,11 +52,16 @@ public class SettingsActivity extends AppCompatActivity {
     private SharedPreferences.Editor editor;
     private final String SECONDARY_LOCALE_LIST = "SecondaryLocaleList";
     private List<VoiceItem> downloadedVoiceItems;
+    private boolean maleCheck;
+    private boolean multiCheck;
+    private boolean femaleCheck;
+    private boolean neutralCheck;
+    private AppDatabase db;
+    private VoiceDao voiceDao;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
 
         setContentView(R.layout.settings_activity);
         subscriptionID = this.findViewById(R.id.subscriptionKey);
@@ -97,35 +105,61 @@ public class SettingsActivity extends AppCompatActivity {
         resourceLocale.setText(text2);
         speedSlider.setValue(speed);
         pitchSlider.setValue(pitch);
-
-
-
     }
 
     private void showVoiceSelectionDialog() {
         // Create and show the voice selection dialog
         Dialog dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar_Fullscreen);
         dialog.setContentView(R.layout.voices); // Set content view
+        // Initialize views in the dialog
         CheckBox maleCheckbox = dialog.findViewById(R.id.maleCheckBox);
         CheckBox femaleCheckbox = dialog.findViewById(R.id.femaleCheckBox);
         CheckBox neutralCheckbox = dialog.findViewById(R.id.neutralCheckBox);
         SwitchMaterial multilingualSwitch = dialog.findViewById(R.id.multilingualSwitch);
 
-        maleCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
-        femaleCheckbox.setOnCheckedChangeListener((buttonView, isChecked) ->filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
-        neutralCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
-        multilingualSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
+        restExecutor.execute(() -> {
+            db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
+            voiceDao = db.voiceDao();
+            downloadedVoiceItems = voiceDao.getAllVoices();
+
+            sharedPreferences = getSharedPreferences("MyPrefs", Context.MODE_PRIVATE);
+            multiCheck = sharedPreferences.getBoolean("isMultilingualChecked", true);
+            maleCheck = sharedPreferences.getBoolean("isMaleChecked", false);
+            femaleCheck = sharedPreferences.getBoolean("isFemaleChecked", false);
+            neutralCheck = sharedPreferences.getBoolean("isNeutralChecked", false);
+
+            runOnUiThread(() -> {
+                // Set initial checked state
+                maleCheckbox.setChecked(maleCheck);
+                femaleCheckbox.setChecked(femaleCheck);
+                neutralCheckbox.setChecked(neutralCheck);
+                multilingualSwitch.setChecked(multiCheck);
+
+                filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch);
+            });
+        });
+
+        maleCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> updateFilter(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
+        femaleCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> updateFilter(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
+        neutralCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> updateFilter(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
+        multilingualSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> updateFilter(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
 
         voiceSpinner = dialog.findViewById(R.id.voice_spinner);
         restExecutor.execute(this::retrieveVoicesAndSetupVoiceSpinner);
-        dialog.setTitle("Vælg din stemme her");
+        dialog.setTitle(R.string.select_voice);
         dialog.show();
         dialog.findViewById(R.id.saveVoices).setOnClickListener(v -> {
-
             dialog.dismiss();
         });
 
 
+    }
+
+    private void updateFilter(CheckBox maleCheckbox, CheckBox femaleCheckbox, CheckBox neutralCheckbox, SwitchMaterial multilingualSwitch) {
+        filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch);
+        int position = voiceSpinner.getSelectedItemPosition();
+        editor.putInt("selected_voice_index", position);
+        editor.commit();
     }
 
     private void filterVoiceList(CheckBox maleCheckbox,
@@ -136,7 +170,10 @@ public class SettingsActivity extends AppCompatActivity {
         boolean isFemaleChecked = femaleCheckbox.isChecked();
         boolean isNeutralChecked = neutralCheckbox.isChecked();
         boolean isMultilingualChecked = multilingualSwitch.isChecked();
-
+        System.out.println(downloadedVoiceItems);
+        if(downloadedVoiceItems.isEmpty()){
+            return;
+        };
         List<String> filteredVoices = downloadedVoiceItems.stream().filter(voiceItem -> {
             boolean isVoiceMultilingual = voiceItem.supportedLanguages.contains(",");
             if (!isMaleChecked && !isFemaleChecked && !isNeutralChecked) {
@@ -148,6 +185,14 @@ public class SettingsActivity extends AppCompatActivity {
                 return hasOneOfSelectedGenders && (isMultilingualChecked ? isVoiceMultilingual : true);
             }
         }).map(voiceItem -> voiceItem.name).collect(Collectors.toList());
+
+        editor = sharedPreferences.edit();
+        editor.putBoolean("isMultilingualChecked", isMultilingualChecked);
+        editor.putBoolean("isMaleChecked", isMaleChecked);
+        editor.putBoolean("isFemaleChecked", isFemaleChecked);
+        editor.putBoolean("isNeutralChecked", isNeutralChecked);
+        editor.commit();
+
         voices.clear();
         voices.addAll(filteredVoices);
 
@@ -156,11 +201,8 @@ public class SettingsActivity extends AppCompatActivity {
 
 
     private void retrieveVoicesAndSetupVoiceSpinner() {
-        AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
-        VoiceDao voiceDao = db.voiceDao();
 
-        downloadedVoiceItems = voiceDao.getAllVoices();
-
+        // TODO: Update downloadedvoices
         if (voiceDao.getAllVoices().isEmpty()) {
 
             voices = getVoices(); // Your API call and parsing logic
@@ -183,6 +225,7 @@ public class SettingsActivity extends AppCompatActivity {
                         // Store selectedVoice in SharedPreferences or other storage
                         editor = sharedPreferences.edit();
                         editor.putString("voice", selectedVoice);
+                        editor.putInt("selected_voice_index", position);
                         editor.commit();
 
 
@@ -214,13 +257,13 @@ public class SettingsActivity extends AppCompatActivity {
 
         editor.putString("sub_key", azureSubscriptionKey);
         editor.putString("sub_locale", azureSubscriptionLocale);
-        editor.putInt("selected_voice_index", voiceSpinner.getSelectedItemPosition());
+
         editor.commit();
 
 
 
         // Optionally, display a toast message or navigate back to the previous activity.
-        Toast.makeText(this, "Oplysninger opdateret!" + azureSubscriptionKey + azureSubscriptionLocale, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show();
         finish();
 
         }
@@ -241,12 +284,12 @@ public class SettingsActivity extends AppCompatActivity {
 
 
 
-        String speechSubKey = subscriptionID.getText().toString();
-
+        String speechSubKey = subscriptionID.getText().toString().trim();
+        String speechRegion = resourceLocale.getText().toString().trim();
 
         List<String> voices = new ArrayList<>();
         try {
-            URL url = new URL("https://swedencentral.tts.speech.microsoft.com/cognitiveservices/voices/list");
+            URL url = new URL("https://" + speechRegion + ".tts.speech.microsoft.com/cognitiveservices/voices/list");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.setRequestProperty("Ocp-Apim-Subscription-Key", speechSubKey);
@@ -305,6 +348,8 @@ public class SettingsActivity extends AppCompatActivity {
 
             } else {
 
+
+                Toast.makeText(this, "Fejl ved oprettelse af stemmer", Toast.LENGTH_SHORT).show();
                 // Handle error response
 
             }
@@ -312,9 +357,12 @@ public class SettingsActivity extends AppCompatActivity {
         } catch (Exception e) {
             // Handle exceptions (e.g., network errors, JSON parsing errors)
             System.out.println("Fejl ved oprettelse af stemmer " + e.getMessage());
+            Toast.makeText(this, "Fejl ved oprettelse af stemmer", Toast.LENGTH_SHORT).show();
+
+
+
         }
         return voices;
     }
 
     }
-

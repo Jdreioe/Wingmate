@@ -1,4 +1,4 @@
-package com.hoejmoseit.wingman.wingmanapp;
+package com.hoejmoseit.wingman.wingmanapp.database;
 
 import androidx.room.Entity;
 import androidx.room.ForeignKey;
