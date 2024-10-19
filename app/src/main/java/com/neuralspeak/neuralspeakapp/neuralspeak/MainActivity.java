@@ -14,8 +14,8 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.media.MediaPlayer;
 import android.os.Bundle;
-import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
 import android.widget.EditText;
@@ -31,13 +31,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.room.Room;
 
-import com.elvishew.xlog.BuildConfig;
-import com.elvishew.xlog.LogConfiguration;
-import com.elvishew.xlog.LogLevel;
-import com.elvishew.xlog.XLog;
-import com.elvishew.xlog.printer.AndroidPrinter;
-import com.elvishew.xlog.printer.ConsolePrinter;
-import com.elvishew.xlog.printer.Printer;
 import com.example.neuralspeak.R;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButtonToggleGroup;
@@ -45,18 +38,17 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.microsoft.cognitiveservices.speech.ResultReason;
 import com.microsoft.cognitiveservices.speech.SpeechConfig;
-import com.microsoft.cognitiveservices.speech.SpeechSynthesisOutputFormat;
 import com.microsoft.cognitiveservices.speech.SpeechSynthesisResult;
 import com.microsoft.cognitiveservices.speech.SpeechSynthesizer;
 import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
-import com.microsoft.cognitiveservices.speech.audio.PullAudioInputStreamCallback;
-import com.microsoft.cognitiveservices.speech.audio.PullAudioOutputStream;
 
+import java.io.IOException;
+import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -75,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
     private SpeechItem deletedItem = null;
     private int deletedIndex = -1;
     private SpeechItemDao speechItemDao;
+    private SaidTextDao saidTextDao;
     private SpeechItemAdapter speechItemAdapter;
     private List<SpeechItem> speechItemsInCurrentFolder;
     private MaterialToolbar topAppBar;
@@ -85,7 +78,7 @@ public class MainActivity extends AppCompatActivity {
     private int colorTertiary;
     private EditText speakText;
     private AudioConfig audioConfig;
-
+    private String dynamicPath;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -127,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
                     .fallbackToDestructiveMigration() // Allow destructive migrations
                     .build();
             speechItemDao = db.speechItemDao();
+            saidTextDao = db.saidTextDao();
 
             speechItemsInCurrentFolder = speechItemDao.getAllRootItems();
 
@@ -208,20 +202,15 @@ public class MainActivity extends AppCompatActivity {
 
 
         sharedPreferences = getSharedPreferences("MyPrefs", android.content.Context.MODE_PRIVATE);
-        speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
-        serviceRegion = sharedPreferences.getString("sub_locale", "");
+        speechSubscriptionKey = sharedPreferences.getString("sub_key", "def");
+        serviceRegion = sharedPreferences.getString("sub_locale", "def");
 
         languageToggle = this.findViewById(R.id.language_toggle);
 
         // Note: we need to request the permissions
         int requestCode = 5; // unique code for the permission request
         ActivityCompat.requestPermissions(MainActivity.this, new String[]{INTERNET}, requestCode);
-        speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
-        // Initialize speech synthesizer and its dependencies
-        assert (speechConfig != null);
 
-        synthesizer = new SpeechSynthesizer(speechConfig);
-        assert (synthesizer != null);
 
 
     }
@@ -407,7 +396,9 @@ public class MainActivity extends AppCompatActivity {
 
     public void playText(String speakText) {
 
-        // Hvis der ikke er speakText.toLowercase
+
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+
 
         try {
 
@@ -416,15 +407,44 @@ public class MainActivity extends AppCompatActivity {
             selectedVoice = sharedPreferences.getString("voice", "en-US-BrianMultilingualNeural");
             pitch = sharedPreferences.getFloat("pitch", 1f);
             speed = sharedPreferences.getFloat("speed", 1f);
-
-
             String ssml = getSsml(speakText, getSelectedLanguage(languageToggle), selectedVoice, pitch, speed);
 
 
             speechExecutor.execute(() -> {
+                SaidTextItem saidTextItem = saidTextDao.getByText(speakText.trim());
+                if (saidTextItem != null &&
+                        Objects.equals(selectedVoice, saidTextItem.voiceName) &&
+                        saidTextItem.audioFilePath != null) {
+                    // Get the audio file from saidTextItem and play it
+                    MediaPlayer player = new MediaPlayer();
+                    try {
+                        player.setDataSource(saidTextItem.audioFilePath);
+                        player.prepare();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                    player.start();
+                    return;
+                }
+                saidTextItem = new SaidTextItem();
+                saidTextItem.saidText = speakText;
+                saidTextItem.date = new Date();
 
+                Long whatever = saidTextDao.insertHistorik(saidTextItem);
+                saidTextItem = saidTextDao.getByText(speakText);
+
+
+                speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
+                // Initialize speech synthesizer and its dependencies
+                assert (speechConfig != null);
+                audioConfig = AudioConfig.fromWavFileOutput(getFilesDir().getAbsolutePath() + "/" + saidTextItem.id + ".wav");
+
+                synthesizer = new SpeechSynthesizer(speechConfig);
+                assert (synthesizer != null);
+                synthesizer = new SpeechSynthesizer(speechConfig, audioConfig);
 
                 if (BluetoothSpeakerSoundChecker.isBluetoothSpeakerActive(this)) {
+
                     System.out.println("Venter 1 sekund med at afspille lyden");
                     BluetoothSpeakerSoundChecker.playSilentSound(); // Play silent sound for 1 second
 
@@ -432,8 +452,9 @@ public class MainActivity extends AppCompatActivity {
                 }
                 try {
                     SpeechSynthesisResult result = synthesizer.SpeakSsmlAsync(ssml).get();
-                    byte[] data = result.getAudioData();;
-                    System.out.println(data);
+                    byte[] data = result.getAudioData();
+
+
                     // Use the SSML string for text-to-speech
                     assert (result != null);
 
@@ -443,9 +464,23 @@ public class MainActivity extends AppCompatActivity {
                             result.close();
                         }
                     }
+                    saidTextItem.audioFilePath = getFilesDir().getAbsolutePath() + "/" + saidTextItem.id + ".wav";
+                    System.out.println("File path: " + saidTextItem.audioFilePath);
+                    saidTextItem.voiceName = selectedVoice;
+
+
+                    saidTextDao.updateHistorik(saidTextItem);
+
+                    MediaPlayer player = new MediaPlayer();
+                    player.setDataSource(saidTextItem.audioFilePath);
+                    player.prepare();
+                    player.start();
+
                 } catch (ExecutionException e) {
                     throw new RuntimeException(e);
                 } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
 

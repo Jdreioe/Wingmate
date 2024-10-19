@@ -32,9 +32,12 @@ public class FirstTimeLaunchDialog {
                         editor.putString("sub_locale", subLocal);
                         editor.putBoolean("has_launched_before", true);
                         editor.commit(); // Use apply() instead of commit()
+
                     })
                     .setNegativeButton("Cancel", (dialog, which) -> dialog.cancel())
                     .show();
+
         }
+
     }
 }

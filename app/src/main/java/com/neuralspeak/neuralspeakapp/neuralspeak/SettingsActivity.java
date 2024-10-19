@@ -1,4 +1,5 @@
 package com.neuralspeak.neuralspeakapp.neuralspeak;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -6,9 +7,11 @@ import android.os.Looper;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.Toast;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -21,13 +24,14 @@ import java.util.List;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.elvishew.xlog.XLog;
 import com.example.neuralspeak.R;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.slider.Slider;
-import com.microsoft.cognitiveservices.speech.SpeechConfig;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 import androidx.room.Room;
 
@@ -43,6 +47,8 @@ public class SettingsActivity extends AppCompatActivity {
     private String selectedVoice;
     private int selectedVoiceIndex;
     private SharedPreferences.Editor editor;
+    private final String SECONDARY_LOCALE_LIST = "SecondaryLocaleList";
+    private List<VoiceItem> downloadedVoiceItems;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +60,15 @@ public class SettingsActivity extends AppCompatActivity {
         resourceLocale = this.findViewById(R.id.resourceLocale);
         Slider speedSlider = this.findViewById(R.id.speed_slider);
         Slider pitchSlider = this.findViewById(R.id.pitch_slider);
+        MaterialButton selectVoiceButton = this.findViewById(R.id.selectVoiceButton);
+        selectVoiceButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showVoiceSelectionDialog();
+
+
+            }
+        });
         sharedPreferences = getSharedPreferences("MyPrefs", Context.MODE_PRIVATE);
 
 
@@ -83,9 +98,60 @@ public class SettingsActivity extends AppCompatActivity {
         speedSlider.setValue(speed);
         pitchSlider.setValue(pitch);
 
-        voiceSpinner = findViewById(R.id.voice_spinner);
 
+
+    }
+
+    private void showVoiceSelectionDialog() {
+        // Create and show the voice selection dialog
+        Dialog dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar_Fullscreen);
+        dialog.setContentView(R.layout.voices); // Set content view
+        CheckBox maleCheckbox = dialog.findViewById(R.id.maleCheckBox);
+        CheckBox femaleCheckbox = dialog.findViewById(R.id.femaleCheckBox);
+        CheckBox neutralCheckbox = dialog.findViewById(R.id.neutralCheckBox);
+        SwitchMaterial multilingualSwitch = dialog.findViewById(R.id.multilingualSwitch);
+
+        maleCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
+        femaleCheckbox.setOnCheckedChangeListener((buttonView, isChecked) ->filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
+        neutralCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
+        multilingualSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
+
+        voiceSpinner = dialog.findViewById(R.id.voice_spinner);
         restExecutor.execute(this::retrieveVoicesAndSetupVoiceSpinner);
+        dialog.setTitle("Vælg din stemme her");
+        dialog.show();
+        dialog.findViewById(R.id.saveVoices).setOnClickListener(v -> {
+
+            dialog.dismiss();
+        });
+
+
+    }
+
+    private void filterVoiceList(CheckBox maleCheckbox,
+                                 CheckBox femaleCheckbox,
+                                 CheckBox neutralCheckbox,
+                                 SwitchMaterial multilingualSwitch) {
+        boolean isMaleChecked = maleCheckbox.isChecked();
+        boolean isFemaleChecked = femaleCheckbox.isChecked();
+        boolean isNeutralChecked = neutralCheckbox.isChecked();
+        boolean isMultilingualChecked = multilingualSwitch.isChecked();
+
+        List<String> filteredVoices = downloadedVoiceItems.stream().filter(voiceItem -> {
+            boolean isVoiceMultilingual = voiceItem.supportedLanguages.contains(",");
+            if (!isMaleChecked && !isFemaleChecked && !isNeutralChecked) {
+                return isMultilingualChecked ? isVoiceMultilingual : true;
+            } else {
+                boolean hasOneOfSelectedGenders = voiceItem.gender.equals("Male") && isMaleChecked ||
+                        voiceItem.gender.equals("Female") && isFemaleChecked ||
+                        voiceItem.gender.equals("Neutral") && isNeutralChecked;
+                return hasOneOfSelectedGenders && (isMultilingualChecked ? isVoiceMultilingual : true);
+            }
+        }).map(voiceItem -> voiceItem.name).collect(Collectors.toList());
+        voices.clear();
+        voices.addAll(filteredVoices);
+
+
     }
 
 
@@ -93,7 +159,7 @@ public class SettingsActivity extends AppCompatActivity {
         AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
         VoiceDao voiceDao = db.voiceDao();
 
-        List<VoiceItem>downloadedVoiceItems = voiceDao.getAllVoices();
+        downloadedVoiceItems = voiceDao.getAllVoices();
 
         if (voiceDao.getAllVoices().isEmpty()) {
 
@@ -105,7 +171,7 @@ public class SettingsActivity extends AppCompatActivity {
                 voices.add(voice.name);
 
             }
-        }
+       }
             runOnUiThread(() -> {
                 ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, voices);
                 voiceSpinner.setAdapter(adapter);
@@ -207,10 +273,26 @@ public class SettingsActivity extends AppCompatActivity {
 
                     JSONObject voiceObject = voicesArray.getJSONObject(i);
                     String voiceName = voiceObject.getString("ShortName");
+                    String gender = voiceObject.getString("Gender");
+                    String primaryLanguage = voiceObject.getString("Locale");
                     voices.add(voiceName);
                     VoiceItem voiceItem = new VoiceItem();
                     voiceItem.name = voiceName;
+                    voiceItem.gender = gender;
+                    voiceItem.primarylanguage = primaryLanguage;
+                    List<String> supportedLanguagesList = new ArrayList<>();
 
+
+                    if (voiceObject.has(SECONDARY_LOCALE_LIST)) {
+                        JSONArray supportedLanguagesJson = voiceObject.getJSONArray(SECONDARY_LOCALE_LIST);
+                        for (int index = 0; index < supportedLanguagesJson.length(); index++) {
+                            String language = (String) supportedLanguagesJson.get(index);
+                            supportedLanguagesList.add(language);
+                        }
+
+                    }
+                    System.out.println(supportedLanguagesList);
+                    voiceItem.supportedLanguages = String.join("," ,supportedLanguagesList);
 
                     AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
                     VoiceDao voiceDao= db.voiceDao();
@@ -220,15 +302,16 @@ public class SettingsActivity extends AppCompatActivity {
                 }
 
 
+
             } else {
 
                 // Handle error response
-                XLog.e("Fejl ved oprettelse af stemmer");
+
             }
             connection.disconnect();
         } catch (Exception e) {
             // Handle exceptions (e.g., network errors, JSON parsing errors)
-            XLog.e("Fejl ved oprettelse af stemmer", e);
+            System.out.println("Fejl ved oprettelse af stemmer " + e.getMessage());
         }
         return voices;
     }

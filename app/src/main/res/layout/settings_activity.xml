@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -26,16 +27,19 @@
 
     <com.google.android.material.slider.Slider
         android:id="@+id/speed_slider"
+        style="@style/Widget.Material3.Slider"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:stepSize="0.1"
-        android:valueFrom="0.2"
+        android:value="1.0"
+        android:valueFrom="0"
         android:valueTo="2.0" />
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/pitch_TextView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:labelFor="@id/pitch_slider"
         android:text="Tonehøjde (pitch)"
         android:textSize="18sp" />
 
@@ -44,21 +48,16 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:stepSize="0.1"
-        android:valueFrom="0.5"
-        android:valueTo="2.0" />
+        android:value="1"
+        android:valueFrom="0"
+        android:valueTo="2.0"
+        app:labelBehavior="floating" />
 
-    <com.google.android.material.textview.MaterialTextView
-        android:id="@+id/stemme_TextView"
-        android:layout_width="match_parent"
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/selectVoiceButton"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Stemme"
-        android:textSize="18sp" />
-
-    <Spinner
-        android:id="@+id/voice_spinner"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
-
+        android:text="Vælg stemme" />
     <Button
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

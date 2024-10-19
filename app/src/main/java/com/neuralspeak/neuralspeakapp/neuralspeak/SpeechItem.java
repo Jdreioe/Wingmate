@@ -21,4 +21,6 @@ public class SpeechItem {
     public boolean isFolder;
 
     public Integer parentId;// To distinguish folders from items
+
+
 }
