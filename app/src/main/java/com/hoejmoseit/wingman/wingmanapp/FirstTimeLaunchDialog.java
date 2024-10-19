@@ -6,7 +6,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
 
-import com.example.neuralspeak.R;
+import com.hoejmoseit.wingman.R;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class FirstTimeLaunchDialog {
@@ -15,7 +15,7 @@ public class FirstTimeLaunchDialog {
         SharedPreferences sharedPrefs = context.getSharedPreferences("MyPrefs", Context.MODE_PRIVATE);
         boolean hasLaunchedBefore = sharedPrefs.getBoolean("has_launched_before", false);
 
-        if (!hasLaunchedBefore) {
+        if (!hasLaunchedBefore && sharedPrefs.getString("sub_key", "def") == "def") {
             MaterialAlertDialogBuilder materialDialogBuilder = new MaterialAlertDialogBuilder(context);
             LayoutInflater inflater = LayoutInflater.from(context);
             View dialogView = inflater.inflate(R.layout.first_time_launch, null);

@@ -12,7 +12,7 @@ import android.view.GestureDetector;
 import android.view.ScaleGestureDetector;
 import android.widget.TextView;
 import android.view.MotionEvent;
-import com.example.neuralspeak.R;
+import com.hoejmoseit.wingman.R;
 
 public class displayText extends AppCompatActivity {
     public ShapeableImageView backButton;

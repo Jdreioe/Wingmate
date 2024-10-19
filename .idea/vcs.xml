@@ -3,5 +3,7 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="/var/home/jdreioe/AndroidStudioProjects/NeuralSpeak" vcs="Git" />
+    <mapping directory="/var/home/jdreioe/AndroidStudioProjects/Wingman" vcs="Git" />
+    <mapping directory="/var/home/jdreioe/AndroidStudioProjects/Wingman/tmp/importer" vcs="Git" />
   </component>
 </project>
