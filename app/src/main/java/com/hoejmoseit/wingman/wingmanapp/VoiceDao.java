@@ -1,4 +1,4 @@
-package com.neuralspeak.neuralspeakapp.neuralspeak;
+package com.hoejmoseit.wingman.wingmanapp;
 import androidx.room.Dao;
 import androidx.room.Insert;
 import androidx.room.Query;

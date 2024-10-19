@@ -1,4 +1,4 @@
-package com.neuralspeak.neuralspeakapp.neuralspeak;
+package com.hoejmoseit.wingman.wingmanapp;
 
 import android.view.LayoutInflater;
 import android.view.View;

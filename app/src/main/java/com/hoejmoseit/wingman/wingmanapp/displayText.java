@@ -1,20 +1,15 @@
-package com.neuralspeak.neuralspeakapp.neuralspeak;
+package com.hoejmoseit.wingman.wingmanapp;
 
-import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
 
 import com.google.android.material.imageview.ShapeableImageView;
-import com.google.android.material.snackbar.Snackbar;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.util.TypedValue;
 import android.view.GestureDetector;
 import android.view.ScaleGestureDetector;
-import android.view.View;
-import android.view.animation.ScaleAnimation;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.view.MotionEvent;
 import com.example.neuralspeak.R;

@@ -13,12 +13,12 @@
         android:theme="@style/Theme.NeuralSpeak"
         tools:targetApi="34" >
         <activity
-            android:name="com.neuralspeak.neuralspeakapp.neuralspeak.displayText"
+            android:name="com.hoejmoseit.wingman.wingmanapp.displayText"
             android:exported="true"
             android:label="@string/title_activity_display_text"
             android:theme="@style/Theme.NeuralSpeak" />
         <activity
-            android:name="com.neuralspeak.neuralspeakapp.neuralspeak.MainActivity"
+            android:name="com.hoejmoseit.wingman.wingmanapp.MainActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize" >
             <intent-filter>
@@ -28,7 +28,7 @@
             </intent-filter>
         </activity>
         <activity
-            android:name="com.neuralspeak.neuralspeakapp.neuralspeak.SettingsActivity"
+            android:name="com.hoejmoseit.wingman.wingmanapp.SettingsActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize" />
     </application>
