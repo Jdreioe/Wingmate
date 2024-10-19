@@ -1,9 +1,9 @@
 //
-// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE.md file in the project root for full license information.
-//
+// Copyright (c) Jonas Højmose Dreiøe. All rights reserved.
+// Licensed under the GPL 3.0 license. See LICENSE.md file in the project root for full license information.
+
 // <code>
-package com.neuralspeak.neuralspeakapp.neuralspeak;
+package com.hoejmoseit.wingman.wingmanapp;
 
 import static android.Manifest.permission.INTERNET;
 
@@ -31,7 +31,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.room.Room;
 
-import com.example.neuralspeak.R;
+import com.hoejmoseit.wingman.R;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;

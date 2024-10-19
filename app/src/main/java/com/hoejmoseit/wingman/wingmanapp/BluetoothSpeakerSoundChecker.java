@@ -1,12 +1,10 @@
-package com.neuralspeak.neuralspeakapp.neuralspeak;
+package com.hoejmoseit.wingman.wingmanapp;
 
 import android.content.Context;
 import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
 import android.media.AudioManager;
-import android.media.AudioRecord;
 import android.media.AudioTrack;
-import android.media.MediaRecorder;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;

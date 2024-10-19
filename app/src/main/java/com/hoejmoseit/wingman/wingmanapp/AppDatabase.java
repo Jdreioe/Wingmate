@@ -1,8 +1,7 @@
-package com.neuralspeak.neuralspeakapp.neuralspeak;
+package com.hoejmoseit.wingman.wingmanapp;
 
 import androidx.room.Database;
 import androidx.room.RoomDatabase;
-import androidx.room.TypeConverter;
 import androidx.room.TypeConverters;
 
 @Database(entities = {SpeechItem.class, VoiceItem.class, SaidTextItem.class}, version = 7)

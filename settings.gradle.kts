@@ -20,6 +20,6 @@ dependencyResolutionManagement {
 
 }
 
-rootProject.name = "NeuralSpeak"
+rootProject.name = "Wingman"
 include(":app")
  

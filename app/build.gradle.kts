@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.neuralspeak"
+    namespace = "com.hoejmoseit.wingman"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.neuralspeak"
+        applicationId = "com.hoejmoseit.wingman"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

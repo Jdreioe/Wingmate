@@ -1,10 +1,8 @@
-package com.neuralspeak.neuralspeakapp.neuralspeak;
+package com.hoejmoseit.wingman.wingmanapp;
 
 import androidx.room.Entity;
-import androidx.room.ForeignKey;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
-import androidx.room.TypeConverter;
 
 import java.util.Date;
 @Entity(indices = {@Index("date")})

@@ -1,4 +1,4 @@
-package com.neuralspeak.neuralspeakapp.neuralspeak;
+package com.hoejmoseit.wingman.wingmanapp;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -24,7 +24,7 @@ import java.util.List;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.example.neuralspeak.R;
+import com.hoejmoseit.wingman.R;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.slider.Slider;
 import com.google.android.material.switchmaterial.SwitchMaterial;
