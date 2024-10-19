@@ -252,7 +252,7 @@ public class SettingsActivity extends AppCompatActivity {
             connection.setRequestProperty("Ocp-Apim-Subscription-Key", speechSubKey);
             connection.setRequestProperty("Content-Type", "ssml+xml");
             connection.setRequestProperty("X-Microsoft-OutputFormat", "riff-24khz-16bit-mono-pcm");
-            connection.setRequestProperty("User-Agent","NeuralSpeak 1.0");
+            connection.setRequestProperty("User-Agent","Wingman 1.0");
 
             connection.connect();
             int responseCode = connection.getResponseCode();
