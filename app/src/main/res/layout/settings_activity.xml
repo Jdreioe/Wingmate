@@ -22,7 +22,7 @@
         android:id="@+id/speed_TextView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Hastighed"
+        android:text="@string/hastighed"
         android:textSize="18sp" />
 
     <com.google.android.material.slider.Slider
@@ -40,7 +40,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:labelFor="@id/pitch_slider"
-        android:text="Tonehøjde (pitch)"
+        android:text="@string/toneh_jde_pitch"
         android:textSize="18sp" />
 
     <com.google.android.material.slider.Slider
@@ -57,7 +57,7 @@
         android:id="@+id/selectVoiceButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Vælg stemme" />
+        android:text="@string/v_lg_stemme" />
     <Button
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

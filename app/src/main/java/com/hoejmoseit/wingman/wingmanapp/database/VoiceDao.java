@@ -1,4 +1,4 @@
-package com.hoejmoseit.wingman.wingmanapp;
+package com.hoejmoseit.wingman.wingmanapp.database;
 import androidx.room.Dao;
 import androidx.room.Insert;
 import androidx.room.Query;

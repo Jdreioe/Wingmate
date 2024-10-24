@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Wingman</string>
+    <string name="title_activity_test">Test</string>
+    <string name="tilf_j">Tilføj</string>
+    <string name="slet">Slet</string>
+    <string name="engelsk">EN</string>
+    <string name="auto">\?</string>
+    <string name="dansk">DK</string>
+    <string name="indstillinger">Indstillinger</string>
+    <string name="enter_text">Enter text</string>
+    <string name="save">Gem</string>
+    <string name="subscription_key">Subscription Key</string>
+    <string name="resource_locale">Resource Locale</string>
+    <string name="title_activity_display_text">displayText</string>
+    <string name="first_fragment_label">First Fragment</string>
+    <string name="second_fragment_label">Second Fragment</string>
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+    <string name="afspil">Afspil</string>
+    <string name="title">Titel</string>
+    <string name="text">Text</string>
+    <string name="is_folder">Er det en mappe?</string>
+    <string name="f_r_du_kan_g_i_gang_med_at_snakke_med_din_wingman">Før du kan gå i gang med at snakke med din Wingman...</string>
+    <string name="skal_du_oprette_dig_inde_ved_microsoft_azure_og_lave_en_speech_resource_f0_gratis_og_inds_tte_din_subscription_key_og_din_resource_locale_her_det_er_meget_vigtigt_at_kopiere_direkte_fra_azure">Skal du oprette dig inde ved Microsoft Azure og lave en Speech resource (F0 = gratis) og indsætte din subscription key og din resource locale her. Det er meget vigtigt at kopiere direkte fra Azure</string>
+    <string name="hastighed">Hastighed</string>
+    <string name="toneh_jde_pitch">Pitch</string>
+    <string name="v_lg_stemme">Vælg stemme</string>
+    <string name="new_speech_item_title">Tilføj ny</string>
+    <string name="locale_e_g_swedencentral">Locale (fx swedencentral)</string>
+    <string name="settings_saved">Indstillinger er gemt!</string>
+    <string name="ingen_text_til_at_l_se_op">Ingen text til at læse op</string>
+    <string name="du_har_ikke_internet_afspil_en_af_dine_gemte_s_tninger_eller_pr_v_igen_senere">Du har ikke internet. Afspil en af dine gemte sætninger eller prøv igen senere</string>
+    <string name="select_voice">Vælg stemme</string>
+    <string name="du_skal_f_rst_inds_tte_dine_oplysninger_i_settings">Du skal først indsætte dine oplysninger i settings</string>
+    <string name="noVoiceSelected">Ingen stemme valgt. Vælg stemme før du afspiler tekst</string>
+    <string name="check_info">Fejl ved oprettelse af stemmer - prøv at checke om dine oplysninger er korrekt</string>
+
+</resources>

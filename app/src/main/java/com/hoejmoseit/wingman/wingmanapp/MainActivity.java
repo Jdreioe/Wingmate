@@ -19,13 +19,13 @@ import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -36,6 +36,14 @@ import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.switchmaterial.SwitchMaterial;
+import com.hoejmoseit.wingman.wingmanapp.backgroundtask.BluetoothSpeakerSoundChecker;
+import com.hoejmoseit.wingman.wingmanapp.backgroundtask.ConnectionCheck;
+import com.hoejmoseit.wingman.wingmanapp.database.AppDatabase;
+import com.hoejmoseit.wingman.wingmanapp.database.SaidTextDao;
+import com.hoejmoseit.wingman.wingmanapp.database.SaidTextItem;
+import com.hoejmoseit.wingman.wingmanapp.database.SpeechItem;
+import com.hoejmoseit.wingman.wingmanapp.database.SpeechItemAdapter;
+import com.hoejmoseit.wingman.wingmanapp.database.SpeechItemDao;
 import com.microsoft.cognitiveservices.speech.ResultReason;
 import com.microsoft.cognitiveservices.speech.SpeechConfig;
 import com.microsoft.cognitiveservices.speech.SpeechSynthesisResult;
@@ -83,39 +91,58 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        speakText = this.findViewById(R.id.speak_text);
         topAppBar = findViewById(R.id.topAppBar);
-        topAppBar.setNavigationIconTint(getDynamicColor(android.R.attr.colorPrimary));
-
+        topAppBar.setNavigationIcon(R.mipmap.ic_launcher);
         topAppBar.setNavigationOnClickListener(v -> {
 
+            // Hvis jeg er i en mappe,
             if (isSomeFolderSelected) {
-                topAppBar.setNavigationIcon(R.drawable.ic_launcher_monochrome);
-                topAppBar.setNavigationContentDescription("Gå ud af kategorien");
-                topAppBar.setTitle("Wingman");
+
 
                 databaseExecutor.execute(() -> {
 
-                    SpeechItem currentFolder = speechItemDao.getItemById(currentFolderId);
-                    if (currentFolder.parentId != null) {
-                        selectFolder(currentFolder.parentId, currentFolder.name);
-                    } else {
-
+                    // If currentFolderId == -1 we know that Historik was selected
+                    boolean wasHistorikSelected = currentFolderId == -1;
+                    if (wasHistorikSelected) {
                         selectRootFolder();
 
+                        return;
+                    }
+                    SpeechItem currentFolder = speechItemDao.getItemById(currentFolderId);
 
+                    if (currentFolder.parentId != null ) {
+                        selectFolder(currentFolder.parentId, currentFolder.name);
+                    } else {
+                        selectRootFolder();
                     }
                 });
             } else {
+
+                topAppBar.setNavigationIcon(R.mipmap.ic_launcher);
+
                 selectRootFolder();
+
+
             }
 
+            sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
+
+            speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
+            serviceRegion = sharedPreferences.getString("sub_locale", "");
 
         });
 
         FirstTimeLaunchDialog.showFirstTimeLaunchDialog(this);
 
 
+
+
+            // sets saidTextItems to id 0 as a folder  ;
+
+
         databaseExecutor.execute(() -> {
+
             AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database")
                     .fallbackToDestructiveMigration() // Allow destructive migrations
                     .build();
@@ -128,11 +155,17 @@ public class MainActivity extends AppCompatActivity {
 
                 RecyclerView recyclerView = findViewById(R.id.speech_items_list);
                 recyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+                // TODO: crashing whem trying to speak a history item
                 speechItemAdapter = new SpeechItemAdapter(speechItemsInCurrentFolder, speechItem -> {
+
+
+
+
 
                     if (speechItem.isFolder) {
                         // Handle folder click
-                        selectFolder(speechItem.id, speechItem.name);
+                        databaseExecutor.execute(() -> selectFolder(speechItem.id, speechItem.name));
                     } else {
                         // Handle item click
                         playText(speechItem.text);
@@ -142,6 +175,8 @@ public class MainActivity extends AppCompatActivity {
 
 
                 speechItemAdapter.notifyDataSetChanged();
+                updateSpeechItems();
+
 
 
                 ItemTouchHelper.SimpleCallback simpleCallback = new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT) {
@@ -201,9 +236,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
 
-        sharedPreferences = getSharedPreferences("MyPrefs", android.content.Context.MODE_PRIVATE);
-        speechSubscriptionKey = sharedPreferences.getString("sub_key", "def");
-        serviceRegion = sharedPreferences.getString("sub_locale", "def");
+
 
         languageToggle = this.findViewById(R.id.language_toggle);
 
@@ -217,14 +250,19 @@ public class MainActivity extends AppCompatActivity {
 
     @SuppressLint("NotifyDataSetChanged")
     private void selectFolder(int folderId, String folderName) {
-
-        isSomeFolderSelected = true;
+        runOnUiThread(() -> {
+            topAppBar.setTitle(folderName);
+            topAppBar.setNavigationIcon(R.drawable.ic_back);
+            // topAppBar.setNavigationIconTint(getDynamicColor(android.R.attr.colorPrimary));
+        });
         currentFolderId = folderId;
-        topAppBar.setTitle(folderName);
-        topAppBar.setNavigationIcon(R.drawable.ic_back);
-        topAppBar.setNavigationIconTint(getDynamicColor(android.R.attr.colorPrimary));
         //fjern fra recycler
         speechItemsInCurrentFolder.clear();
+        isSomeFolderSelected = true;
+        if (folderId == -1) {
+            onHistorikSelected();
+            return;
+        }
 
         // find alle speechItems fra mappen og sæt dem ind i  speechItemsInCurrentFolder listen
 
@@ -246,6 +284,11 @@ public class MainActivity extends AppCompatActivity {
         isSomeFolderSelected = false;
         currentFolderId = -1;
         speechItemsInCurrentFolder.clear();
+
+        runOnUiThread(() -> {
+            topAppBar.setNavigationIcon(R.mipmap.ic_launcher);
+            topAppBar.setTitle("Wingman");
+        });
 
         databaseExecutor.execute(() -> {
             speechItemsInCurrentFolder.addAll(speechItemDao.getAllRootItems());
@@ -328,11 +371,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void omDeleteButtonClicked(View v) {
-        speakText = this.findViewById(R.id.speak_text);
         speakText.setText("");
-        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-        String text1 = sharedPreferences.getString("text1", "");
-        String text2 = sharedPreferences.getString("text2", "");
+        //String text1 = sharedPreferences.getString("text1", "");
+        //String text2 = sharedPreferences.getString("text2", "");
 
     }
 
@@ -343,8 +384,8 @@ public class MainActivity extends AppCompatActivity {
 
     public void onNewSpeechItemButtonClicked(View view) {
 
-        new MaterialAlertDialogBuilder(this)
-                .setTitle("Tilføj ny")
+        AlertDialog alertDialog = new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.new_speech_item_title)
                 .setView(R.layout.added_speech) // Inflate your custom layout
                 .setPositiveButton("Save", (dialog, which) -> {
                     // Handle save action
@@ -352,7 +393,6 @@ public class MainActivity extends AppCompatActivity {
                     EditText titleInput = ((AlertDialog) dialog).findViewById(R.id.title_input);
                     EditText textInput = ((AlertDialog) dialog).findViewById(R.id.text_input);
                     SwitchMaterial folderToggle = ((AlertDialog) dialog).findViewById(R.id.folder_toggle);
-
                     String title = titleInput.getText().toString();
                     String text = textInput.getText().toString();
                     boolean isFolder = folderToggle.isChecked();
@@ -378,33 +418,42 @@ public class MainActivity extends AppCompatActivity {
                     // Handle cancel action (e.g., dismiss the dialog)
                 })
                 .show();
+        ((EditText)alertDialog.findViewById(R.id.text_input))
+                .setText(speakText.getText().toString());
+
     }
 
 
     public void onSpeechButtonClicked(View v) {
         EditText speakText = this.findViewById(R.id.speak_text);
-        // Capitilizer det første bogstav i teksten
-        String s = speakText.getText().toString();
-        s = s.trim();
-        String s1 = s.substring(0,1).toUpperCase();
-        String s2 = s.substring(1);
-        String res =s1.toUpperCase() + s2;
-        playText(res);
+
+        String s = speakText.getText().toString().trim();
+        playText(s);
 
 
     }
 
     public void playText(String speakText) {
+        sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
+        if (speakText.isEmpty()) {
+            System.out.println("DER ER INTET ");
+            Toast.makeText(this, R.string.ingen_text_til_at_l_se_op, Toast.LENGTH_SHORT).show();
+            return;
+        } else if (!ConnectionCheck.isInternetAvailable(this)) {
+            Toast.makeText(this, R.string.du_har_ikke_internet_afspil_en_af_dine_gemte_s_tninger_eller_pr_v_igen_senere, Toast.LENGTH_SHORT).show();
+            return;
 
+        }else if (sharedPreferences.getBoolean("noVoice",true)) {
+            Toast.makeText(this, R.string.noVoiceSelected, Toast.LENGTH_SHORT).show();
+            return;
 
-        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-
-
+        }
         try {
 
 
             // Note: this will block the UI thread, so eventually, you want to register for the event
             selectedVoice = sharedPreferences.getString("voice", "en-US-BrianMultilingualNeural");
+            System.out.println("Den valgte stemme er: " + selectedVoice);
             pitch = sharedPreferences.getFloat("pitch", 1f);
             speed = sharedPreferences.getFloat("speed", 1f);
             String ssml = getSsml(speakText, getSelectedLanguage(languageToggle), selectedVoice, pitch, speed);
@@ -414,14 +463,18 @@ public class MainActivity extends AppCompatActivity {
                 SaidTextItem saidTextItem = saidTextDao.getByText(speakText.trim());
                 if (saidTextItem != null &&
                         Objects.equals(selectedVoice, saidTextItem.voiceName) &&
-                        saidTextItem.audioFilePath != null) {
+                        saidTextItem.audioFilePath != null &&
+                        saidTextItem.pitch == pitch &&
+                        saidTextItem.speed == speed
+                ) {
                     // Get the audio file from saidTextItem and play it
                     MediaPlayer player = new MediaPlayer();
                     try {
                         player.setDataSource(saidTextItem.audioFilePath);
                         player.prepare();
                     } catch (IOException e) {
-                        throw new RuntimeException(e);
+
+
                     }
                     player.start();
                     return;
@@ -429,19 +482,22 @@ public class MainActivity extends AppCompatActivity {
                 saidTextItem = new SaidTextItem();
                 saidTextItem.saidText = speakText;
                 saidTextItem.date = new Date();
+                saidTextItem.voiceName = selectedVoice;
+                saidTextItem.pitch = pitch;
+                saidTextItem.speed = speed;
 
                 Long whatever = saidTextDao.insertHistorik(saidTextItem);
                 saidTextItem = saidTextDao.getByText(speakText);
 
-
+                speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
+                serviceRegion = sharedPreferences.getString("sub_locale", "");
                 speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
                 // Initialize speech synthesizer and its dependencies
                 assert (speechConfig != null);
                 audioConfig = AudioConfig.fromWavFileOutput(getFilesDir().getAbsolutePath() + "/" + saidTextItem.id + ".wav");
-
-                synthesizer = new SpeechSynthesizer(speechConfig);
-                assert (synthesizer != null);
                 synthesizer = new SpeechSynthesizer(speechConfig, audioConfig);
+
+                assert (synthesizer != null);
 
                 if (BluetoothSpeakerSoundChecker.isBluetoothSpeakerActive(this)) {
 
@@ -455,7 +511,7 @@ public class MainActivity extends AppCompatActivity {
                     byte[] data = result.getAudioData();
 
 
-                    // Use the SSML string for text-to-speech
+                    // Use the SSML string for saidText-to-speech
                     assert (result != null);
 
                     if (result.getReason() == ResultReason.SynthesizingAudioCompleted) {
@@ -473,26 +529,30 @@ public class MainActivity extends AppCompatActivity {
 
                     MediaPlayer player = new MediaPlayer();
                     player.setDataSource(saidTextItem.audioFilePath);
+                    System.out.println(saidTextItem.audioFilePath);
                     player.prepare();
                     player.start();
 
                 } catch (ExecutionException e) {
-                    throw new RuntimeException(e);
+                    Toast.makeText(this, e.getMessage() + " 1. catch", Toast.LENGTH_SHORT).show();
+
                 } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
+                    Toast.makeText(this, e.getMessage() + "2. catch", Toast.LENGTH_SHORT).show();
+
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    Toast.makeText(this, e.getMessage() + " IO exception", Toast.LENGTH_SHORT).show();
+
                 }
 
             });
 
 
-            } catch (IllegalArgumentException ex) {
-            System.err.println(ex.getMessage());
-            assert (false);
+        } catch (IllegalArgumentException ex) {
+            Toast.makeText(this, R.string.check_info, Toast.LENGTH_SHORT).show();
+
 
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            Toast.makeText(this, R.string.check_info, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -510,6 +570,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateSpeechItems() {
+        if (!isSomeFolderSelected) {
+            SpeechItem historik = new SpeechItem();
+            historik.name = "Historik";
+            historik.id = -1;
+            historik.isFolder = true;
+            historik.parentId = -1;
+            speechItemsInCurrentFolder.add(0, historik);
+        }
         databaseExecutor.execute(() -> {
                     runOnUiThread(() -> speechItemAdapter.notifyDataSetChanged());
                 }
@@ -528,11 +596,39 @@ public class MainActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
+    public void onHistorikSelected(){
 
+        List<SaidTextItem> historik = saidTextDao.getAll();
+        for (SaidTextItem item : historik) {
+            SpeechItem speechItem = new SpeechItem();
+
+            speechItem.text = item.saidText;;
+            speechItem.id = item.id;
+            speechItem.isFolder = false;
+            speechItemsInCurrentFolder.add(speechItem);
+
+        }
+        if (((RecyclerView) findViewById(R.id.speech_items_list)).isComputingLayout())
+        {
+            findViewById(R.id.speech_items_list).post(new Runnable()
+            {
+                @Override
+                public void run() {
+                    speechItemAdapter.notifyDataSetChanged();
+                }
+            });
+        } else {
+            runOnUiThread(() -> {
+                speechItemAdapter.notifyDataSetChanged();
+
+            });
+        }
+
+
+    }
     enum Language {
         DANISH,
         ENGLISH,
         MULTI
     }
 }
-
