@@ -58,6 +58,9 @@ public class SettingsActivity extends AppCompatActivity {
     private boolean neutralCheck;
     private AppDatabase db;
     private VoiceDao voiceDao;
+    private Dialog dialog;
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,6 +80,7 @@ public class SettingsActivity extends AppCompatActivity {
 
             }
         });
+
         sharedPreferences = getSharedPreferences("MyPrefs", Context.MODE_PRIVATE);
 
 
@@ -108,8 +112,13 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void showVoiceSelectionDialog() {
+
+        if (sharedPreferences.getString("sub_key", "").isEmpty() || sharedPreferences.getString("sub_locale", "").isEmpty()){
+            Toast.makeText(this, R.string.du_skal_f_rst_inds_tte_dine_oplysninger_i_settings, Toast.LENGTH_SHORT).show();
+            return;
+        }
         // Create and show the voice selection dialog
-        Dialog dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar_Fullscreen);
+        dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar_Fullscreen);
         dialog.setContentView(R.layout.voices); // Set content view
         // Initialize views in the dialog
         CheckBox maleCheckbox = dialog.findViewById(R.id.maleCheckBox);
@@ -156,10 +165,14 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void updateFilter(CheckBox maleCheckbox, CheckBox femaleCheckbox, CheckBox neutralCheckbox, SwitchMaterial multilingualSwitch) {
+
+
         filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch);
         int position = voiceSpinner.getSelectedItemPosition();
+        if (position >= voices.size()) {
         editor.putInt("selected_voice_index", position);
         editor.commit();
+    }
     }
 
     private void filterVoiceList(CheckBox maleCheckbox,
@@ -238,9 +251,16 @@ public class SettingsActivity extends AppCompatActivity {
                 });
 
             });
-        selectedVoiceIndex = sharedPreferences.getInt("selected_voice_index", 0);
+        try {
+            selectedVoiceIndex = sharedPreferences.getInt("selected_voice_index", 0);
 
-        runOnUiThread(() -> voiceSpinner.setSelection(selectedVoiceIndex));
+            runOnUiThread(() -> voiceSpinner.setSelection(selectedVoiceIndex));
+        }
+        catch (Exception e){
+            Toast.makeText(this, R.string.check_info, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
 
 
 
@@ -341,23 +361,35 @@ public class SettingsActivity extends AppCompatActivity {
                     VoiceDao voiceDao= db.voiceDao();
 
                     voiceDao.insert(voiceItem);
+                    editor = sharedPreferences.edit();
 
+                    editor.putBoolean("noVoice", false);
+                    editor.commit();
                 }
 
 
 
             } else {
+                runOnUiThread(()-> {
+                            dialog.dismiss();
 
+                            Toast.makeText(this, "Fejl ved oprettelse af stemmer - prøv at checke din internettilkobling", Toast.LENGTH_SHORT).show();
+                        });
 
-                Toast.makeText(this, "Fejl ved oprettelse af stemmer", Toast.LENGTH_SHORT).show();
                 // Handle error response
 
             }
             connection.disconnect();
         } catch (Exception e) {
             // Handle exceptions (e.g., network errors, JSON parsing errors)
-            System.out.println("Fejl ved oprettelse af stemmer " + e.getMessage());
-            Toast.makeText(this, "Fejl ved oprettelse af stemmer", Toast.LENGTH_SHORT).show();
+            runOnUiThread(()-> {
+                dialog.dismiss();
+
+                Toast.makeText(this, "Er du sikker på oplysningerme du har indtastet er korrekt og du har WiFi? ", Toast.LENGTH_LONG).show();
+                editor = sharedPreferences.edit();
+                editor.putBoolean("noVoice", true);
+                editor.commit();
+            });
 
 
 

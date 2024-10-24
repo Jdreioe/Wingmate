@@ -31,4 +31,9 @@
     <string name="new_speech_item_title">Add New</string>
     <string name="settings_saved">Settings saved!</string>
     <string name="select_voice">Select voice</string>
+    <string name="du_har_ikke_internet_afspil_en_af_dine_gemte_s_tninger_eller_pr_v_igen_senere">No wifi. Try again later or play one of the saved sentences</string>
+    <string name="ingen_text_til_at_l_se_op">No text to read aloud</string>
+    <string name="du_skal_f_rst_inds_tte_dine_oplysninger_i_settings">Please put your credentials from your Azure into the Settings</string>
+    <string name="noVoiceSelected">No voice selected. Set the voice before playing text</string>
+    <string name="check_info">Error when fetching voices. Check your information</string>
 </resources>

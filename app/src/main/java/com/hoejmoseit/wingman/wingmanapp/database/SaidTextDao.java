@@ -7,6 +7,8 @@ import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
 import androidx.room.Update;
 
+import java.util.List;
+
 @Dao
 public interface SaidTextDao {
     @Query("SELECT * FROM SaidTextItem WHERE saidText = :text LIMIT 1")
@@ -19,4 +21,6 @@ public interface SaidTextDao {
     void deleteHistorik(SaidTextItem SaidTextItem);
     @Update(onConflict = OnConflictStrategy.REPLACE)
     void updateHistorik(SaidTextItem SaidTextItem);
+    @Query("SELECT * FROM SaidTextItem")
+    List<SaidTextItem> getAll();
 }

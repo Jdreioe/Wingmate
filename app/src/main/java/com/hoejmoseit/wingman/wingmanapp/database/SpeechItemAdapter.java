@@ -34,10 +34,13 @@ public class SpeechItemAdapter extends RecyclerView.Adapter<SpeechItemAdapter.Vi
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+
+
         SpeechItem item = items.get(position);
         holder.titleTextView.setText(item.name);
         holder.textTextView.setText(item.text);
-        holder.supportTextView.setText(String.valueOf(item.id)); // Example support text
+        holder.supportTextView.setText("(DATO)"); // Example support saidText
+
 
         holder.itemView.setOnClickListener(v -> {
             if (callback != null) {

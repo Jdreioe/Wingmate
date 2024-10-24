@@ -64,8 +64,8 @@ public class displayText extends AppCompatActivity {
                 newTextSizeSp = Math.round(newTextSizeSp / stepSizeSp) * stepSizeSp; // Round to nearest step size
                 newTextSizeSp = Math.max(24f, Math.min(newTextSizeSp, 200f)); // Limit font size in sp
 
-                hugeTextView.setTextSize(TypedValue.COMPLEX_UNIT_SP, newTextSizeSp); // Set text size in sp
-                hugeTextView.requestLayout(); // Request a layout pass to recalculate the text size
+                hugeTextView.setTextSize(TypedValue.COMPLEX_UNIT_SP, newTextSizeSp); // Set saidText size in sp
+                hugeTextView.requestLayout(); // Request a layout pass to recalculate the saidText size
                 hugeTextView.invalidate();
 
                 return true;

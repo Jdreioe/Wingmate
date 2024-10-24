@@ -95,27 +95,26 @@ public class MainActivity extends AppCompatActivity {
         topAppBar = findViewById(R.id.topAppBar);
         topAppBar.setNavigationIcon(R.mipmap.ic_launcher);
         topAppBar.setNavigationOnClickListener(v -> {
+
             // Hvis jeg er i en mappe,
             if (isSomeFolderSelected) {
 
 
                 databaseExecutor.execute(() -> {
 
-                    SpeechItem currentFolder = speechItemDao.getItemById(currentFolderId);
-                    if (currentFolder.parentId != null) {
-
-
-                        selectFolder(currentFolder.parentId, currentFolder.name);
-                    } else {
-                        runOnUiThread(() -> {
-                                    topAppBar.setNavigationIcon(R.mipmap.ic_launcher);
-
-
-                        topAppBar.setTitle("Wingman");
-                        });
+                    // If currentFolderId == -1 we know that Historik was selected
+                    boolean wasHistorikSelected = currentFolderId == -1;
+                    if (wasHistorikSelected) {
                         selectRootFolder();
 
+                        return;
+                    }
+                    SpeechItem currentFolder = speechItemDao.getItemById(currentFolderId);
 
+                    if (currentFolder.parentId != null ) {
+                        selectFolder(currentFolder.parentId, currentFolder.name);
+                    } else {
+                        selectRootFolder();
                     }
                 });
             } else {
@@ -127,13 +126,23 @@ public class MainActivity extends AppCompatActivity {
 
             }
 
+            sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
+
+            speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
+            serviceRegion = sharedPreferences.getString("sub_locale", "");
 
         });
 
         FirstTimeLaunchDialog.showFirstTimeLaunchDialog(this);
 
 
+
+
+            // sets saidTextItems to id 0 as a folder  ;
+
+
         databaseExecutor.execute(() -> {
+
             AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database")
                     .fallbackToDestructiveMigration() // Allow destructive migrations
                     .build();
@@ -146,11 +155,17 @@ public class MainActivity extends AppCompatActivity {
 
                 RecyclerView recyclerView = findViewById(R.id.speech_items_list);
                 recyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+                // TODO: crashing whem trying to speak a history item
                 speechItemAdapter = new SpeechItemAdapter(speechItemsInCurrentFolder, speechItem -> {
+
+
+
+
 
                     if (speechItem.isFolder) {
                         // Handle folder click
-                        selectFolder(speechItem.id, speechItem.name);
+                        databaseExecutor.execute(() -> selectFolder(speechItem.id, speechItem.name));
                     } else {
                         // Handle item click
                         playText(speechItem.text);
@@ -160,6 +175,8 @@ public class MainActivity extends AppCompatActivity {
 
 
                 speechItemAdapter.notifyDataSetChanged();
+                updateSpeechItems();
+
 
 
                 ItemTouchHelper.SimpleCallback simpleCallback = new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT) {
@@ -219,9 +236,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
 
-        sharedPreferences = getSharedPreferences("MyPrefs", android.content.Context.MODE_PRIVATE);
-        speechSubscriptionKey = sharedPreferences.getString("sub_key", "def").trim();
-        serviceRegion = sharedPreferences.getString("sub_locale", "def").trim();
+
 
         languageToggle = this.findViewById(R.id.language_toggle);
 
@@ -235,16 +250,19 @@ public class MainActivity extends AppCompatActivity {
 
     @SuppressLint("NotifyDataSetChanged")
     private void selectFolder(int folderId, String folderName) {
-
-        isSomeFolderSelected = true;
-        currentFolderId = folderId;
         runOnUiThread(() -> {
-                    topAppBar.setTitle(folderName);
-                    topAppBar.setNavigationIcon(R.drawable.ic_back);
-                    // topAppBar.setNavigationIconTint(getDynamicColor(android.R.attr.colorPrimary));
-                });
+            topAppBar.setTitle(folderName);
+            topAppBar.setNavigationIcon(R.drawable.ic_back);
+            // topAppBar.setNavigationIconTint(getDynamicColor(android.R.attr.colorPrimary));
+        });
+        currentFolderId = folderId;
         //fjern fra recycler
         speechItemsInCurrentFolder.clear();
+        isSomeFolderSelected = true;
+        if (folderId == -1) {
+            onHistorikSelected();
+            return;
+        }
 
         // find alle speechItems fra mappen og sæt dem ind i  speechItemsInCurrentFolder listen
 
@@ -266,6 +284,11 @@ public class MainActivity extends AppCompatActivity {
         isSomeFolderSelected = false;
         currentFolderId = -1;
         speechItemsInCurrentFolder.clear();
+
+        runOnUiThread(() -> {
+            topAppBar.setNavigationIcon(R.mipmap.ic_launcher);
+            topAppBar.setTitle("Wingman");
+        });
 
         databaseExecutor.execute(() -> {
             speechItemsInCurrentFolder.addAll(speechItemDao.getAllRootItems());
@@ -349,8 +372,8 @@ public class MainActivity extends AppCompatActivity {
 
     public void omDeleteButtonClicked(View v) {
         speakText.setText("");
-        String text1 = sharedPreferences.getString("text1", "");
-        String text2 = sharedPreferences.getString("text2", "");
+        //String text1 = sharedPreferences.getString("text1", "");
+        //String text2 = sharedPreferences.getString("text2", "");
 
     }
 
@@ -411,13 +434,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void playText(String speakText) {
+        sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
         if (speakText.isEmpty()) {
             System.out.println("DER ER INTET ");
-            Toast.makeText(this, "Ingen text til at læse op", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.ingen_text_til_at_l_se_op, Toast.LENGTH_SHORT).show();
             return;
         } else if (!ConnectionCheck.isInternetAvailable(this)) {
-            Toast.makeText(this, "Du har ikke internet. Afspil en af dine gemte sætninger eller prøv igen senere", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.du_har_ikke_internet_afspil_en_af_dine_gemte_s_tninger_eller_pr_v_igen_senere, Toast.LENGTH_SHORT).show();
             return;
+
+        }else if (sharedPreferences.getBoolean("noVoice",true)) {
+            Toast.makeText(this, R.string.noVoiceSelected, Toast.LENGTH_SHORT).show();
+            return;
+
         }
         try {
 
@@ -460,7 +489,8 @@ public class MainActivity extends AppCompatActivity {
                 Long whatever = saidTextDao.insertHistorik(saidTextItem);
                 saidTextItem = saidTextDao.getByText(speakText);
 
-
+                speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
+                serviceRegion = sharedPreferences.getString("sub_locale", "");
                 speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
                 // Initialize speech synthesizer and its dependencies
                 assert (speechConfig != null);
@@ -481,7 +511,7 @@ public class MainActivity extends AppCompatActivity {
                     byte[] data = result.getAudioData();
 
 
-                    // Use the SSML string for text-to-speech
+                    // Use the SSML string for saidText-to-speech
                     assert (result != null);
 
                     if (result.getReason() == ResultReason.SynthesizingAudioCompleted) {
@@ -518,11 +548,11 @@ public class MainActivity extends AppCompatActivity {
 
 
         } catch (IllegalArgumentException ex) {
-            System.err.println(ex.getMessage());
-            assert (false);
+            Toast.makeText(this, R.string.check_info, Toast.LENGTH_SHORT).show();
+
 
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            Toast.makeText(this, R.string.check_info, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -540,6 +570,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateSpeechItems() {
+        if (!isSomeFolderSelected) {
+            SpeechItem historik = new SpeechItem();
+            historik.name = "Historik";
+            historik.id = -1;
+            historik.isFolder = true;
+            historik.parentId = -1;
+            speechItemsInCurrentFolder.add(0, historik);
+        }
         databaseExecutor.execute(() -> {
                     runOnUiThread(() -> speechItemAdapter.notifyDataSetChanged());
                 }
@@ -558,7 +596,36 @@ public class MainActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
+    public void onHistorikSelected(){
 
+        List<SaidTextItem> historik = saidTextDao.getAll();
+        for (SaidTextItem item : historik) {
+            SpeechItem speechItem = new SpeechItem();
+
+            speechItem.text = item.saidText;;
+            speechItem.id = item.id;
+            speechItem.isFolder = false;
+            speechItemsInCurrentFolder.add(speechItem);
+
+        }
+        if (((RecyclerView) findViewById(R.id.speech_items_list)).isComputingLayout())
+        {
+            findViewById(R.id.speech_items_list).post(new Runnable()
+            {
+                @Override
+                public void run() {
+                    speechItemAdapter.notifyDataSetChanged();
+                }
+            });
+        } else {
+            runOnUiThread(() -> {
+                speechItemAdapter.notifyDataSetChanged();
+
+            });
+        }
+
+
+    }
     enum Language {
         DANISH,
         ENGLISH,
