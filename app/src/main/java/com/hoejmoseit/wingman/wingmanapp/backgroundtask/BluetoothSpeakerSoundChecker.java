@@ -57,7 +57,7 @@ public class BluetoothSpeakerSoundChecker {
         audioTrack.play();
         audioTrack.write(silentBuffer, 0, bufferSize);
         try {
-            Thread.sleep(150); // Sleep for 150 ms to ensure the sound is played for 150 ms to make sure the entire sound from speechssmæl is played
+            Thread.sleep(100); // Sleep for 150 ms to ensure the sound is played for 150 ms to make sure the entire sound from speechssmæl is played
             } catch (InterruptedException e) {
             e.printStackTrace();
         }

@@ -34,6 +34,7 @@ import com.hoejmoseit.wingman.wingmanapp.database.VoiceItem;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import androidx.room.Room;
@@ -59,7 +60,7 @@ public class SettingsActivity extends AppCompatActivity {
     private AppDatabase db;
     private VoiceDao voiceDao;
     private Dialog dialog;
-
+    private boolean isDialogShowing = false;
 
 
     @Override
@@ -86,9 +87,9 @@ public class SettingsActivity extends AppCompatActivity {
 
         // ... other listener methods ...
         speedSlider.addOnChangeListener((slider, value, fromUser) -> {
-        editor = sharedPreferences.edit();
-        editor.putFloat("speed", value);
-        editor.commit();
+            editor = sharedPreferences.edit();
+            editor.putFloat("speed", value);
+            editor.commit();
         });
 
         pitchSlider.addOnChangeListener((slider, value, fromUser) -> {
@@ -113,54 +114,58 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void showVoiceSelectionDialog() {
 
-        if (sharedPreferences.getString("sub_key", "").isEmpty() || sharedPreferences.getString("sub_locale", "").isEmpty()){
+
+        if (sharedPreferences.getString("sub_key", "").isEmpty() || sharedPreferences.getString("sub_locale", "").isEmpty()) {
             Toast.makeText(this, R.string.du_skal_f_rst_inds_tte_dine_oplysninger_i_settings, Toast.LENGTH_SHORT).show();
             return;
         }
         // Create and show the voice selection dialog
-        dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar_Fullscreen);
-        dialog.setContentView(R.layout.voices); // Set content view
-        // Initialize views in the dialog
-        CheckBox maleCheckbox = dialog.findViewById(R.id.maleCheckBox);
-        CheckBox femaleCheckbox = dialog.findViewById(R.id.femaleCheckBox);
-        CheckBox neutralCheckbox = dialog.findViewById(R.id.neutralCheckBox);
-        SwitchMaterial multilingualSwitch = dialog.findViewById(R.id.multilingualSwitch);
+        if (!isDialogShowing) {
+            isDialogShowing = true;
 
-        restExecutor.execute(() -> {
-            db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
-            voiceDao = db.voiceDao();
-            downloadedVoiceItems = voiceDao.getAllVoices();
+            dialog = new Dialog(this, android.R.style.Theme_Material_NoActionBar_Fullscreen);
+            dialog.setContentView(R.layout.voices); // Set content view
+            // Initialize views in the dialog
+            CheckBox maleCheckbox = dialog.findViewById(R.id.maleCheckBox);
+            CheckBox femaleCheckbox = dialog.findViewById(R.id.femaleCheckBox);
+            CheckBox neutralCheckbox = dialog.findViewById(R.id.neutralCheckBox);
+            SwitchMaterial multilingualSwitch = dialog.findViewById(R.id.multilingualSwitch);
 
-            sharedPreferences = getSharedPreferences("MyPrefs", Context.MODE_PRIVATE);
-            multiCheck = sharedPreferences.getBoolean("isMultilingualChecked", true);
-            maleCheck = sharedPreferences.getBoolean("isMaleChecked", false);
-            femaleCheck = sharedPreferences.getBoolean("isFemaleChecked", false);
-            neutralCheck = sharedPreferences.getBoolean("isNeutralChecked", false);
+            restExecutor.execute(() -> {
+                db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
+                voiceDao = db.voiceDao();
+                downloadedVoiceItems = voiceDao.getAllVoices();
 
-            runOnUiThread(() -> {
-                // Set initial checked state
-                maleCheckbox.setChecked(maleCheck);
-                femaleCheckbox.setChecked(femaleCheck);
-                neutralCheckbox.setChecked(neutralCheck);
-                multilingualSwitch.setChecked(multiCheck);
+                sharedPreferences = getSharedPreferences("MyPrefs", Context.MODE_PRIVATE);
+                multiCheck = sharedPreferences.getBoolean("isMultilingualChecked", true);
+                maleCheck = sharedPreferences.getBoolean("isMaleChecked", false);
+                femaleCheck = sharedPreferences.getBoolean("isFemaleChecked", false);
+                neutralCheck = sharedPreferences.getBoolean("isNeutralChecked", false);
 
-                filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch);
+                runOnUiThread(() -> {
+                    // Set initial checked state
+                    maleCheckbox.setChecked(maleCheck);
+                    femaleCheckbox.setChecked(femaleCheck);
+                    neutralCheckbox.setChecked(neutralCheck);
+                    multilingualSwitch.setChecked(multiCheck);
+
+                    filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch);
+                });
             });
-        });
 
-        maleCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> updateFilter(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
-        femaleCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> updateFilter(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
-        neutralCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> updateFilter(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
-        multilingualSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> updateFilter(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
+            maleCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> updateFilter(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
+            femaleCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> updateFilter(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
+            neutralCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> updateFilter(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
+            multilingualSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> updateFilter(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch));
 
-        voiceSpinner = dialog.findViewById(R.id.voice_spinner);
-        restExecutor.execute(this::retrieveVoicesAndSetupVoiceSpinner);
-        dialog.setTitle(R.string.select_voice);
-        dialog.show();
-        dialog.findViewById(R.id.saveVoices).setOnClickListener(v -> {
-            dialog.dismiss();
-        });
-
+            voiceSpinner = dialog.findViewById(R.id.voice_spinner);
+            restExecutor.execute(this::retrieveVoicesAndSetupVoiceSpinner);
+            dialog.setTitle(R.string.select_voice);
+            dialog.show();
+            dialog.findViewById(R.id.saveVoices).setOnClickListener(v -> {
+                dialog.dismiss();
+            });
+        }
 
     }
 
@@ -170,9 +175,9 @@ public class SettingsActivity extends AppCompatActivity {
         filterVoiceList(maleCheckbox, femaleCheckbox, neutralCheckbox, multilingualSwitch);
         int position = voiceSpinner.getSelectedItemPosition();
         if (position >= voices.size()) {
-        editor.putInt("selected_voice_index", position);
-        editor.commit();
-    }
+            editor.putInt("selected_voice_index", position);
+            editor.commit();
+        }
     }
 
     private void filterVoiceList(CheckBox maleCheckbox,
@@ -184,9 +189,10 @@ public class SettingsActivity extends AppCompatActivity {
         boolean isNeutralChecked = neutralCheckbox.isChecked();
         boolean isMultilingualChecked = multilingualSwitch.isChecked();
         System.out.println(downloadedVoiceItems);
-        if(downloadedVoiceItems.isEmpty()){
+        if (downloadedVoiceItems.isEmpty()) {
             return;
-        };
+        }
+        ;
         List<String> filteredVoices = downloadedVoiceItems.stream().filter(voiceItem -> {
             boolean isVoiceMultilingual = voiceItem.supportedLanguages.contains(",");
             if (!isMaleChecked && !isFemaleChecked && !isNeutralChecked) {
@@ -213,80 +219,91 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (dialog != null && dialog.isShowing()) {
+            dialog.dismiss();
+            isDialogShowing = false;
+        }
+        dialog = null; // Release the reference
+    }
+
+
     private void retrieveVoicesAndSetupVoiceSpinner() {
 
         // TODO: Update downloadedvoices
         if (voiceDao.getAllVoices().isEmpty()) {
 
             voices = getVoices(); // Your API call and parsing logic
-        }
-        else {
+        } else {
 
-            for (VoiceItem voice : downloadedVoiceItems ) {
+            for (VoiceItem voice : downloadedVoiceItems) {
                 voices.add(voice.name);
 
             }
-       }
-            runOnUiThread(() -> {
-                ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, voices);
-                voiceSpinner.setAdapter(adapter);
-                voiceSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                    @Override
-                    public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+        }
+        runOnUiThread(() -> {
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, voices);
+            voiceSpinner.setAdapter(adapter);
+            voiceSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                @Override
+                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
 
-                        selectedVoice = voices.get(position);
-                        // Store selectedVoice in SharedPreferences or other storage
-                        editor = sharedPreferences.edit();
-                        editor.putString("voice", selectedVoice);
-                        editor.putInt("selected_voice_index", position);
-                        editor.commit();
+                    selectedVoice = voices.get(position);
+                    // Store selectedVoice in SharedPreferences or other storage
+                    editor = sharedPreferences.edit();
+                    editor.putString("voice", selectedVoice);
+                    editor.putInt("selected_voice_index", position);
+                    editor.commit();
 
 
-                    }
+                }
 
-                    @Override
-                    public void onNothingSelected(AdapterView<?> parent) {
-                        // Handle case where nothing is selected
-                    }
-                });
-
+                @Override
+                public void onNothingSelected(AdapterView<?> parent) {
+                    // Handle case where nothing is selected
+                }
             });
+
+        });
         try {
             selectedVoiceIndex = sharedPreferences.getInt("selected_voice_index", 0);
 
             runOnUiThread(() -> voiceSpinner.setSelection(selectedVoiceIndex));
-        }
-        catch (Exception e){
+        } catch (Exception e) {
             Toast.makeText(this, R.string.check_info, Toast.LENGTH_SHORT).show();
             return;
         }
-
-
 
 
     }
 
 
     public void onSaveButtonClicked(View v) {
+
         String azureSubscriptionKey = subscriptionID.getText().toString();
         String azureSubscriptionLocale = resourceLocale.getText().toString();
-        // Save the values.
-        // You can use SharedPreferences, a database, or any other suitable method.
-        // Example using SharedPreferences:
-        editor = sharedPreferences.edit();
 
-        editor.putString("sub_key", azureSubscriptionKey);
-        editor.putString("sub_locale", azureSubscriptionLocale);
+        restExecutor.execute(() -> {
+        if (verifyAzureCredentials(azureSubscriptionKey, azureSubscriptionLocale)) {
 
-        editor.commit();
+            editor = sharedPreferences.edit();
+
+            editor.putString("sub_key", azureSubscriptionKey);
+            editor.putString("sub_locale", azureSubscriptionLocale);
+            runOnUiThread(() -> Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show());
 
 
-
-        // Optionally, display a toast message or navigate back to the previous activity.
-        Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show();
-        finish();
-
+            editor.commit();
+            finish();
+            return;
+        } else {
+            runOnUiThread(() -> Toast.makeText(this, R.string.check_info, Toast.LENGTH_SHORT).show());
         }
+    });
+    }
+
 
 
     /**
@@ -302,8 +319,6 @@ public class SettingsActivity extends AppCompatActivity {
         }
 
 
-
-
         String speechSubKey = subscriptionID.getText().toString().trim();
         String speechRegion = resourceLocale.getText().toString().trim();
 
@@ -315,7 +330,7 @@ public class SettingsActivity extends AppCompatActivity {
             connection.setRequestProperty("Ocp-Apim-Subscription-Key", speechSubKey);
             connection.setRequestProperty("Content-Type", "ssml+xml");
             connection.setRequestProperty("X-Microsoft-OutputFormat", "riff-24khz-16bit-mono-pcm");
-            connection.setRequestProperty("User-Agent","Wingman 1.0");
+            connection.setRequestProperty("User-Agent", "Wingman 1.0");
 
             connection.connect();
             int responseCode = connection.getResponseCode();
@@ -355,10 +370,10 @@ public class SettingsActivity extends AppCompatActivity {
 
                     }
                     System.out.println(supportedLanguagesList);
-                    voiceItem.supportedLanguages = String.join("," ,supportedLanguagesList);
+                    voiceItem.supportedLanguages = String.join(",", supportedLanguagesList);
 
                     AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
-                    VoiceDao voiceDao= db.voiceDao();
+                    VoiceDao voiceDao = db.voiceDao();
 
                     voiceDao.insert(voiceItem);
                     editor = sharedPreferences.edit();
@@ -368,13 +383,12 @@ public class SettingsActivity extends AppCompatActivity {
                 }
 
 
-
             } else {
-                runOnUiThread(()-> {
-                            dialog.dismiss();
+                runOnUiThread(() -> {
+                    dialog.dismiss();
 
-                            Toast.makeText(this, "Fejl ved oprettelse af stemmer - prøv at checke din internettilkobling", Toast.LENGTH_SHORT).show();
-                        });
+                    Toast.makeText(this, "Fejl ved oprettelse af stemmer - prøv at checke din internettilkobling", Toast.LENGTH_SHORT).show();
+                });
 
                 // Handle error response
 
@@ -382,7 +396,7 @@ public class SettingsActivity extends AppCompatActivity {
             connection.disconnect();
         } catch (Exception e) {
             // Handle exceptions (e.g., network errors, JSON parsing errors)
-            runOnUiThread(()-> {
+            runOnUiThread(() -> {
                 dialog.dismiss();
 
                 Toast.makeText(this, "Er du sikker på oplysningerme du har indtastet er korrekt og du har WiFi? ", Toast.LENGTH_LONG).show();
@@ -392,9 +406,45 @@ public class SettingsActivity extends AppCompatActivity {
             });
 
 
-
         }
         return voices;
     }
 
+    public boolean isVSubKeyAndRegionTheSame(String SavedSubKey, String SavedRegion, String subKey, String region) {
+        return SavedSubKey.equals(subKey) && SavedRegion.equals(region);
+
     }
+
+    public boolean verifyAzureCredentials(String subKey, String region) {
+        AtomicBoolean ok = new AtomicBoolean(false);
+
+        try {
+            // Construct the URL for the Azure TTS voices/list endpoint
+            String url = String.format("https://%s.tts.speech.microsoft.com/cognitiveservices/voices/list", region);
+
+            // Create a URL object
+            URL azureUrl = new URL(url);
+
+            // Open a connection
+            HttpURLConnection connection = (HttpURLConnection) azureUrl.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("Ocp-Apim-Subscription-Key", subKey); // Set the subscription key
+            connection.setConnectTimeout(5000); // Set a timeout (5 seconds)
+
+            // Get the response code
+
+            int responseCode = connection.getResponseCode();
+
+            // Check if the response code indicates success (e.g., 200 OK)
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                return true;
+            }
+            else {
+                return false;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+}

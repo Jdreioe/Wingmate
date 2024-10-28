@@ -16,6 +16,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.MediaPlayer;
 import android.os.Bundle;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
 import android.widget.EditText;
@@ -51,6 +52,8 @@ import com.microsoft.cognitiveservices.speech.SpeechSynthesizer;
 import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
 
 import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
@@ -326,21 +329,19 @@ public class MainActivity extends AppCompatActivity {
 
     public static @NonNull String getSsml(String text, Language language, String Voice, float pitch, float speed) throws Exception {
 
+
+        String startSSML = "<speak version='1.0' xml:lang='da-DK' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts'>"
+                .concat(String.format("<voice name='%s'>", Voice))
+                .concat("<prosody rate='" + speed + "' pitch='" + pitch + "%'>");
         if (language == Language.MULTI) {
-            return "<speak version='1.0' xml:lang='da-DK' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts'>"
-                    .concat(String.format("<voice name='%s'>", Voice))
-                    .concat("<prosody rate='" + speed + "' pitch='" + pitch + "%'>")
+            return startSSML
                     .concat(text)
                     .concat("</prosody>")
                     .concat("</voice>")
                     .concat("</speak>");
         } else {
-            return "<speak version='1.0' xml:lang='da-DK' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts'>"
-                    .concat(String.format("<voice name='%s'>", Voice))
-
-                    .concat("<prosody rate='" + speed + "' pitch='" + pitch + "%'>")
+            return startSSML
                     .concat("<lang xml='" + getLanguageShortname(language) + "'>")
-
                     .concat(text)
                     .concat("</lang>")
                     .concat("</prosody>")
@@ -366,8 +367,8 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
 
         // Release speech synthesizer and its dependencies
-        synthesizer.close();
-        speechConfig.close();
+//        synthesizer.close();
+//        speechConfig.close();
     }
 
     public void omDeleteButtonClicked(View v) {
@@ -435,6 +436,8 @@ public class MainActivity extends AppCompatActivity {
 
     public void playText(String speakText) {
         sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
+        speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
+        serviceRegion = sharedPreferences.getString("sub_locale", "");
         if (speakText.isEmpty()) {
             System.out.println("DER ER INTET ");
             Toast.makeText(this, R.string.ingen_text_til_at_l_se_op, Toast.LENGTH_SHORT).show();
@@ -452,8 +455,7 @@ public class MainActivity extends AppCompatActivity {
 
 
             // Note: this will block the UI thread, so eventually, you want to register for the event
-            selectedVoice = sharedPreferences.getString("voice", "en-US-BrianMultilingualNeural");
-            System.out.println("Den valgte stemme er: " + selectedVoice);
+            selectedVoice = sharedPreferences.getString("voice", "");
             pitch = sharedPreferences.getFloat("pitch", 1f);
             speed = sharedPreferences.getFloat("speed", 1f);
             String ssml = getSsml(speakText, getSelectedLanguage(languageToggle), selectedVoice, pitch, speed);
@@ -472,14 +474,16 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         player.setDataSource(saidTextItem.audioFilePath);
                         player.prepare();
-                    } catch (IOException e) {
-
+                    } catch (Exception e) {
+                        runOnUiThread(() ->Toast.makeText(this, R.string.check_connection, Toast.LENGTH_SHORT).show());
+                        saidTextDao.deleteHistorik(saidTextItem);
 
                     }
                     player.start();
                     return;
                 }
-                saidTextItem = new SaidTextItem();
+
+                 saidTextItem = new SaidTextItem();
                 saidTextItem.saidText = speakText;
                 saidTextItem.date = new Date();
                 saidTextItem.voiceName = selectedVoice;
@@ -489,8 +493,7 @@ public class MainActivity extends AppCompatActivity {
                 Long whatever = saidTextDao.insertHistorik(saidTextItem);
                 saidTextItem = saidTextDao.getByText(speakText);
 
-                speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
-                serviceRegion = sharedPreferences.getString("sub_locale", "");
+
                 speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
                 // Initialize speech synthesizer and its dependencies
                 assert (speechConfig != null);
@@ -501,7 +504,6 @@ public class MainActivity extends AppCompatActivity {
 
                 if (BluetoothSpeakerSoundChecker.isBluetoothSpeakerActive(this)) {
 
-                    System.out.println("Venter 1 sekund med at afspille lyden");
                     BluetoothSpeakerSoundChecker.playSilentSound(); // Play silent sound for 1 second
 
 
@@ -512,7 +514,13 @@ public class MainActivity extends AppCompatActivity {
 
 
                     // Use the SSML string for saidText-to-speech
-                    assert (result != null);
+	                if ((result == null)) {
+                        runOnUiThread(() -> {Toast.makeText(this, R.string.check_connection, Toast.LENGTH_SHORT).show();});
+
+                        saidTextDao.deleteHistorik(saidTextItem);
+                        return;
+                    }
+
 
                     if (result.getReason() == ResultReason.SynthesizingAudioCompleted) {
                         {
@@ -526,21 +534,14 @@ public class MainActivity extends AppCompatActivity {
 
 
                     saidTextDao.updateHistorik(saidTextItem);
-
                     MediaPlayer player = new MediaPlayer();
                     player.setDataSource(saidTextItem.audioFilePath);
                     System.out.println(saidTextItem.audioFilePath);
                     player.prepare();
                     player.start();
 
-                } catch (ExecutionException e) {
-                    Toast.makeText(this, e.getMessage() + " 1. catch", Toast.LENGTH_SHORT).show();
-
-                } catch (InterruptedException e) {
-                    Toast.makeText(this, e.getMessage() + "2. catch", Toast.LENGTH_SHORT).show();
-
-                } catch (IOException e) {
-                    Toast.makeText(this, e.getMessage() + " IO exception", Toast.LENGTH_SHORT).show();
+                } catch (Exception e){
+                    runOnUiThread(() -> {Toast.makeText(this, R.string.check_connection, Toast.LENGTH_SHORT).show();});
 
                 }
 
@@ -555,6 +556,7 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.check_info, Toast.LENGTH_SHORT).show();
         }
     }
+
 
     public Language getSelectedLanguage(MaterialButtonToggleGroup toggleGroup) {
         int checkedId = toggleGroup.getCheckedButtonId();

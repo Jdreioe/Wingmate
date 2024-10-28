@@ -36,4 +36,6 @@
     <string name="du_skal_f_rst_inds_tte_dine_oplysninger_i_settings">Please put your credentials from your Azure into the Settings</string>
     <string name="noVoiceSelected">No voice selected. Set the voice before playing text</string>
     <string name="check_info">Error when fetching voices. Check your information</string>
+    <string name="check_info_ping">Check your connection and your information</string>
+    <string name="check_connection">Error when synthesizing the text. Please check your connection</string>
 </resources>
