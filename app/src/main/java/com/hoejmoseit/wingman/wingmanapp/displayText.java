@@ -3,9 +3,12 @@ package com.hoejmoseit.wingman.wingmanapp;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
 
+import com.hoejmoseit.wingman.wingmanapp.backgroundtask.PlayText;
+import com.hoejmoseit.wingman.wingmanapp.database.*;
 import com.google.android.material.imageview.ShapeableImageView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.room.Room;
 
 import android.util.TypedValue;
 import android.view.GestureDetector;
@@ -13,6 +16,7 @@ import android.view.ScaleGestureDetector;
 import android.widget.TextView;
 import android.view.MotionEvent;
 import com.hoejmoseit.wingman.R;
+import com.microsoft.cognitiveservices.speech.SpeechConfig;
 
 public class displayText extends AppCompatActivity {
     public ShapeableImageView backButton;
@@ -24,12 +28,30 @@ public class displayText extends AppCompatActivity {
     private ScaleGestureDetector scaleGestureDetector;
     private float dampingFactor = 0.3f; // Adjust this value to control sensitivity
     private float scaleFactor = 1;
+    private AppDatabase db;
+    private SaidTextDao saidTextDao;
+    private String path;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_display_text);
 
         String textToDisplay = getSharedPreferences("MyPrefs", MODE_PRIVATE).getString("SPEAK_TEXT", "");
+        db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database")// Allow destructive migrations
+                .build();
+        saidTextDao = db.saidTextDao();
+        path = getFilesDir().getAbsolutePath();
+        boolean noVoice = getSharedPreferences("MyPrefs", MODE_PRIVATE).getBoolean("noVoice", false);
+        String speechSubscriptionKey = getSharedPreferences("MyPrefs", MODE_PRIVATE).getString("sub_key", "");
+        String serviceRegion = getSharedPreferences("MyPrefs", MODE_PRIVATE).getString("sub_locale", "");
+        String selectedVoice = getSharedPreferences("MyPrefs", MODE_PRIVATE).getString("voice", "");
+        float pitch = getSharedPreferences("MyPrefs", MODE_PRIVATE).getFloat("pitch", 1f);
+        float speed = getSharedPreferences("MyPrefs", MODE_PRIVATE).getFloat("speed", 1f);
+        int languageToggleId = getSharedPreferences("MyPrefs", MODE_PRIVATE).getInt("LanguageToggle", 0);
+        SpeechConfig speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
+
+
         backButton = findViewById(R.id.backButton);
         playTextButton = findViewById(R.id.playTextButton);
 
@@ -44,10 +66,29 @@ public class displayText extends AppCompatActivity {
         hugeTextView = findViewById(R.id.hugeText);
         hugeTextView.setText(textToDisplay);
 
+
         ShapeableImageView backButton = findViewById(R.id.backButton);
         backButton.setOnClickListener(v -> finish());
 
         ShapeableImageView playTextButton = findViewById(R.id.playTextButton);
+
+        playTextButton.setOnClickListener(v -> {
+            String text = hugeTextView.getText().toString();
+
+
+            PlayText.playText(this,
+                    text,
+                    saidTextDao,
+                    path,
+                    speechSubscriptionKey,
+                    serviceRegion,
+                    selectedVoice,
+                    pitch,
+                    speed,
+                    noVoice,
+                    speechConfig,
+                    languageToggleId);
+        });
 
 
 

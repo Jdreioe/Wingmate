@@ -72,10 +72,10 @@ public class SpeechItemAdapter extends RecyclerView.Adapter<SpeechItemAdapter.Vi
 
         public ViewHolder(View itemView) {
             super(itemView);
-            titleTextView = itemView.findViewById(R.id.item_title);
+            titleTextView = itemView.findViewById(R.id.language_name);
             textTextView = itemView.findViewById(R.id.item_text);
             supportTextView = itemView.findViewById(R.id.item_support_text);
-            iconImageView = itemView.findViewById(R.id.item_icon);
+            iconImageView = itemView.findViewById(R.id.checkmark_icon);
         }
     }
 }

@@ -32,8 +32,9 @@
     <string name="ingen_text_til_at_l_se_op">Ingen text til at læse op</string>
     <string name="du_har_ikke_internet_afspil_en_af_dine_gemte_s_tninger_eller_pr_v_igen_senere">Du har ikke internet. Afspil en af dine gemte sætninger eller prøv igen senere</string>
     <string name="select_voice">Vælg stemme</string>
-    <string name="du_skal_f_rst_inds_tte_dine_oplysninger_i_settings">Du skal først indsætte dine oplysninger i settings</string>
+    <string name="du_skal_f_rst_inds_tte_dine_oplysninger_i_settings">Du skal først indsætte dine oplysninger i indstillinge</string>
     <string name="noVoiceSelected">Ingen stemme valgt. Vælg stemme før du afspiler tekst</string>
     <string name="check_info">Fejl ved oprettelse af stemmer - prøv at checke om dine oplysninger er korrekt</string>
+    <string name="check_connection">Fejl ved oprettelse af lyd, Check din forbindelse</string>
 
 </resources>

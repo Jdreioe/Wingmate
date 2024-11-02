@@ -13,4 +13,10 @@ public class VoiceItem {
     public String gender;
     public String primarylanguage;
 
+    public long createdAt;
+    public VoiceItem() {
+        this.createdAt = System.currentTimeMillis();
+
+    }
+
  }
