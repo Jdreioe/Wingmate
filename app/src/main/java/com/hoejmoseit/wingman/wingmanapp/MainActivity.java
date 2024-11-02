@@ -9,7 +9,6 @@ import static android.Manifest.permission.INTERNET;
 
 import static com.hoejmoseit.wingman.wingmanapp.backgroundtask.PlayText.playText;
 import static com.hoejmoseit.wingman.wingmanapp.database.AppDatabase.MIGRATION_9_10;
-
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -17,21 +16,28 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowInsetsController;
 import android.widget.EditText;
-
+import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.room.Room;
 
+import com.google.android.material.button.MaterialButton;
 import com.hoejmoseit.wingman.R;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButtonToggleGroup;
@@ -89,6 +95,24 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API level 34
+            WindowInsetsController insetsController = getWindow().getInsetsController();
+            View rootView = findViewById(android.R.id.content);
+            ViewCompat.setOnApplyWindowInsetsListener(rootView, (view, windowInsets) -> {
+                Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.ime() | WindowInsetsCompat.Type.systemBars());
+                view.setPadding(insets.left, insets.top, insets.right, insets.bottom);
+
+                return WindowInsetsCompat.CONSUMED;
+            });
+
+
+            if (insetsController != null) {
+                insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+
+            // Handle WindowInsets to adjust layout
+
+        }
         sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
         speakText = this.findViewById(R.id.speak_text);
         topAppBar = findViewById(R.id.topAppBar);

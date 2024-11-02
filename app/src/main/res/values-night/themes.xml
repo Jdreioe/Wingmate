@@ -2,7 +2,6 @@
     <!-- Base application theme. -->
     <style name="Theme.Wingman" parent="Theme.Material3.DynamicColors.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">true</item>
 
 
         <item name="textAppearanceHeadline1">@style/TextAppearance.MaterialComponents.Headline1

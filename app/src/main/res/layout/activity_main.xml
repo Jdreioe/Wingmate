@@ -10,7 +10,9 @@
         android:id="@+id/topAppBar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
+        android:layout_marginTop="24dp"
         android:theme="@style/ThemeOverlay.Material3.DynamicColors.DayNight"
+        app:layout_constraintTop_toTopOf="parent"
         app:navigationIcon="@drawable/ic_launcher_monochrome"
         app:title="Wingman"
         tools:ignore="MissingConstraints" />
@@ -163,6 +165,7 @@
         android:text="locale"
         app:layout_constraintBottom_toTopOf="@+id/speakButton"
         app:layout_constraintEnd_toStartOf="@+id/deleteButton"
-        app:layout_constraintStart_toEndOf="@+id/settimgsButton" />
+        app:layout_constraintStart_toEndOf="@+id/settimgsButton"
+        android:visibility="gone"/>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
