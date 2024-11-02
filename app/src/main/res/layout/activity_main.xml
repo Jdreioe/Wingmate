@@ -33,6 +33,7 @@
         android:id="@+id/speech_items_list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:layout_marginBottom="16dp"
         app:layout_constraintBottom_toTopOf="@+id/settimgsButton"
         app:layout_constraintTop_toBottomOf="@+id/speak_text" />
 
@@ -152,5 +153,16 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:srcCompat="@drawable/ic_add"
         app:tint="?attr/colorPrimary" />
+
+    <Button
+        android:id="@+id/change_Language_Button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:onClick="onChangeLanguageButtonClicked"
+        android:text="locale"
+        app:layout_constraintBottom_toTopOf="@+id/speakButton"
+        app:layout_constraintEnd_toStartOf="@+id/deleteButton"
+        app:layout_constraintStart_toEndOf="@+id/settimgsButton" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

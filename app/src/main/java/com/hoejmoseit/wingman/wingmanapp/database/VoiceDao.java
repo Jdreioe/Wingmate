@@ -10,9 +10,11 @@ public interface VoiceDao {
     @Insert
     void insertAll(List<VoiceItem> voices);
 
-    @Query("SELECT * FROM VoiceItem ")
-    List<VoiceItem> getAllVoices();
+    @Query("SELECT * FROM VoiceItem WHERE createdAt >= :expirationTime")
+    List<VoiceItem> getAllVoices(long expirationTime);
     @Insert
     void insert(VoiceItem voiceItem);
+    @Query("DELETE FROM VoiceItem")
+    void deleteAll();
 }
 

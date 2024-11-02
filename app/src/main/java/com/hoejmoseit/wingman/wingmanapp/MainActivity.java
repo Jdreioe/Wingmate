@@ -7,6 +7,9 @@ package com.hoejmoseit.wingman.wingmanapp;
 
 import static android.Manifest.permission.INTERNET;
 
+import static com.hoejmoseit.wingman.wingmanapp.backgroundtask.PlayText.playText;
+import static com.hoejmoseit.wingman.wingmanapp.database.AppDatabase.MIGRATION_9_10;
+
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -14,13 +17,10 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
-import android.media.MediaPlayer;
 import android.os.Bundle;
-import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
 import android.widget.EditText;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
@@ -37,44 +37,30 @@ import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.switchmaterial.SwitchMaterial;
-import com.hoejmoseit.wingman.wingmanapp.backgroundtask.BluetoothSpeakerSoundChecker;
-import com.hoejmoseit.wingman.wingmanapp.backgroundtask.ConnectionCheck;
 import com.hoejmoseit.wingman.wingmanapp.database.AppDatabase;
+import com.hoejmoseit.wingman.wingmanapp.database.LanguageAdapter;
 import com.hoejmoseit.wingman.wingmanapp.database.SaidTextDao;
 import com.hoejmoseit.wingman.wingmanapp.database.SaidTextItem;
 import com.hoejmoseit.wingman.wingmanapp.database.SpeechItem;
 import com.hoejmoseit.wingman.wingmanapp.database.SpeechItemAdapter;
 import com.hoejmoseit.wingman.wingmanapp.database.SpeechItemDao;
-import com.microsoft.cognitiveservices.speech.ResultReason;
+import com.hoejmoseit.wingman.wingmanapp.database.VoiceDao;
+import com.hoejmoseit.wingman.wingmanapp.database.VoiceItem;
 import com.microsoft.cognitiveservices.speech.SpeechConfig;
-import com.microsoft.cognitiveservices.speech.SpeechSynthesisResult;
-import com.microsoft.cognitiveservices.speech.SpeechSynthesizer;
 import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
-
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.Date;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
-    private static final ExecutorService speechExecutor = Executors.newSingleThreadExecutor();
-
-    private SpeechConfig speechConfig;
-    private SpeechSynthesizer synthesizer;
-    private MaterialButtonToggleGroup languageToggle;
     private SharedPreferences sharedPreferences;
-    private String speechSubscriptionKey;
-    private String serviceRegion;
-    private String selectedVoice = "BrianMultiLingual";
-    private float pitch;
-    private float speed;
+
+    private String selectedVoice;
+
     private SpeechItem deletedItem = null;
     private int deletedIndex = -1;
     private SpeechItemDao speechItemDao;
@@ -82,23 +68,33 @@ public class MainActivity extends AppCompatActivity {
     private SpeechItemAdapter speechItemAdapter;
     private List<SpeechItem> speechItemsInCurrentFolder;
     private MaterialToolbar topAppBar;
+    private MaterialButtonToggleGroup languageToggle;
     // Keeps track of folder selection
     private int currentFolderId = -1;
     private boolean isSomeFolderSelected = false;
+    private long expirationTime = System.currentTimeMillis() - (1000*60*60*24*7);
 
-    private int colorTertiary;
     private EditText speakText;
-    private AudioConfig audioConfig;
     private String dynamicPath;
+    private String currentSupportedLanguages;
+    private String speechSubscriptionKey;
+    private String serviceRegion;
+    private float pitch;
+    private float speed;
+    private boolean noVoice;
+    private SpeechConfig speechConfig;
+    private AudioConfig audioConfig;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
         speakText = this.findViewById(R.id.speak_text);
         topAppBar = findViewById(R.id.topAppBar);
         topAppBar.setNavigationIcon(R.mipmap.ic_launcher);
         topAppBar.setNavigationOnClickListener(v -> {
-
+        dynamicPath = getFilesDir().getAbsolutePath();
             // Hvis jeg er i en mappe,
             if (isSomeFolderSelected) {
 
@@ -131,9 +127,14 @@ public class MainActivity extends AppCompatActivity {
 
             sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
 
+            selectedVoice = sharedPreferences.getString("voice", "");
             speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
             serviceRegion = sharedPreferences.getString("sub_locale", "");
-
+            pitch = sharedPreferences.getFloat("pitch", 1f);
+            speed = sharedPreferences.getFloat("speed", 1f);
+            noVoice = sharedPreferences.getBoolean("noVoice", false);
+            System.out.println(serviceRegion + " er regionen " + speechSubscriptionKey);
+            speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
         });
 
         FirstTimeLaunchDialog.showFirstTimeLaunchDialog(this);
@@ -147,7 +148,7 @@ public class MainActivity extends AppCompatActivity {
         databaseExecutor.execute(() -> {
 
             AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database")
-                    .fallbackToDestructiveMigration() // Allow destructive migrations
+                    .addMigrations(MIGRATION_9_10) // Allow destructive migrations
                     .build();
             speechItemDao = db.speechItemDao();
             saidTextDao = db.saidTextDao();
@@ -159,7 +160,7 @@ public class MainActivity extends AppCompatActivity {
                 RecyclerView recyclerView = findViewById(R.id.speech_items_list);
                 recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-                // TODO: crashing whem trying to speak a history item
+
                 speechItemAdapter = new SpeechItemAdapter(speechItemsInCurrentFolder, speechItem -> {
 
 
@@ -171,7 +172,8 @@ public class MainActivity extends AppCompatActivity {
                         databaseExecutor.execute(() -> selectFolder(speechItem.id, speechItem.name));
                     } else {
                         // Handle item click
-                        playText(speechItem.text);
+
+                        playText(this, speechItem.text, saidTextDao, dynamicPath, speechSubscriptionKey, serviceRegion, selectedVoice, pitch, speed, noVoice, speechConfig, languageToggle.getCheckedButtonId());
                     }
                 });
                 recyclerView.setAdapter(speechItemAdapter);
@@ -239,13 +241,11 @@ public class MainActivity extends AppCompatActivity {
         });
 
 
-
-
         languageToggle = this.findViewById(R.id.language_toggle);
 
         // Note: we need to request the permissions
         int requestCode = 5; // unique code for the permission request
-        ActivityCompat.requestPermissions(MainActivity.this, new String[]{INTERNET}, requestCode);
+        ActivityCompat.requestPermissions(this, new String[]{INTERNET}, requestCode);
 
 
 
@@ -354,7 +354,9 @@ public class MainActivity extends AppCompatActivity {
     private static @NonNull String getLanguageShortname(Language language) throws Exception {
         switch (language) {
             case DANISH:
-                return "da-DK";
+
+
+        return "da-DK";
             case ENGLISH:
                 return "en-US";
 
@@ -426,150 +428,53 @@ public class MainActivity extends AppCompatActivity {
 
 
     public void onSpeechButtonClicked(View v) {
+
         EditText speakText = this.findViewById(R.id.speak_text);
-
+        
         String s = speakText.getText().toString().trim();
-        playText(s);
-
-
-    }
-
-    public void playText(String speakText) {
+        System.out.println(s);
+        if (s.isEmpty()) {
+            return;
+        }
         sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
+        selectedVoice = sharedPreferences.getString("voice", "");
         speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
         serviceRegion = sharedPreferences.getString("sub_locale", "");
-        if (speakText.isEmpty()) {
-            System.out.println("DER ER INTET ");
-            Toast.makeText(this, R.string.ingen_text_til_at_l_se_op, Toast.LENGTH_SHORT).show();
-            return;
-        } else if (!ConnectionCheck.isInternetAvailable(this)) {
-            Toast.makeText(this, R.string.du_har_ikke_internet_afspil_en_af_dine_gemte_s_tninger_eller_pr_v_igen_senere, Toast.LENGTH_SHORT).show();
-            return;
-
-        }else if (sharedPreferences.getBoolean("noVoice",true)) {
-            Toast.makeText(this, R.string.noVoiceSelected, Toast.LENGTH_SHORT).show();
-            return;
-
-        }
-        try {
+        pitch = sharedPreferences.getFloat("pitch", 1f);
+        speed = sharedPreferences.getFloat("speed", 1f);
+        noVoice = sharedPreferences.getBoolean("noVoice", false);
+        // FIX PLS
+        speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
+        dynamicPath = getFilesDir().getAbsolutePath();
 
 
-            // Note: this will block the UI thread, so eventually, you want to register for the event
-            selectedVoice = sharedPreferences.getString("voice", "");
-            pitch = sharedPreferences.getFloat("pitch", 1f);
-            speed = sharedPreferences.getFloat("speed", 1f);
-            String ssml = getSsml(speakText, getSelectedLanguage(languageToggle), selectedVoice, pitch, speed);
+        System.out.println(s + " er text \n"
+                + saidTextDao + " er SaidTextDao"
+                + dynamicPath + " er path \n" +
+                speechSubscriptionKey + " er SubKey \n" +
+                serviceRegion + "  er region \n" +
+                pitch + " er pitch \n" +
+
+                speed + " er speed \n" +
+                noVoice +
+                " er noVoice");
+        playText(this, s,
+                saidTextDao,
+                dynamicPath,
+                speechSubscriptionKey,
+                serviceRegion,
+                selectedVoice,
+                pitch,
+                speed,
+                noVoice,
+                speechConfig,
+        languageToggle.getCheckedButtonId());
 
 
-            speechExecutor.execute(() -> {
-                SaidTextItem saidTextItem = saidTextDao.getByText(speakText.trim());
-                if (saidTextItem != null &&
-                        Objects.equals(selectedVoice, saidTextItem.voiceName) &&
-                        saidTextItem.audioFilePath != null &&
-                        saidTextItem.pitch == pitch &&
-                        saidTextItem.speed == speed
-                ) {
-                    // Get the audio file from saidTextItem and play it
-                    MediaPlayer player = new MediaPlayer();
-                    try {
-                        player.setDataSource(saidTextItem.audioFilePath);
-                        player.prepare();
-                    } catch (Exception e) {
-                        runOnUiThread(() ->Toast.makeText(this, R.string.check_connection, Toast.LENGTH_SHORT).show());
-                        saidTextDao.deleteHistorik(saidTextItem);
-
-                    }
-                    player.start();
-                    return;
-                }
-
-                 saidTextItem = new SaidTextItem();
-                saidTextItem.saidText = speakText;
-                saidTextItem.date = new Date();
-                saidTextItem.voiceName = selectedVoice;
-                saidTextItem.pitch = pitch;
-                saidTextItem.speed = speed;
-
-                Long whatever = saidTextDao.insertHistorik(saidTextItem);
-                saidTextItem = saidTextDao.getByText(speakText);
-
-
-                speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
-                // Initialize speech synthesizer and its dependencies
-                assert (speechConfig != null);
-                audioConfig = AudioConfig.fromWavFileOutput(getFilesDir().getAbsolutePath() + "/" + saidTextItem.id + ".wav");
-                synthesizer = new SpeechSynthesizer(speechConfig, audioConfig);
-
-                assert (synthesizer != null);
-
-                if (BluetoothSpeakerSoundChecker.isBluetoothSpeakerActive(this)) {
-
-                    BluetoothSpeakerSoundChecker.playSilentSound(); // Play silent sound for 1 second
-
-
-                }
-                try {
-                    SpeechSynthesisResult result = synthesizer.SpeakSsmlAsync(ssml).get();
-                    byte[] data = result.getAudioData();
-
-
-                    // Use the SSML string for saidText-to-speech
-	                if ((result == null)) {
-                        runOnUiThread(() -> {Toast.makeText(this, R.string.check_connection, Toast.LENGTH_SHORT).show();});
-
-                        saidTextDao.deleteHistorik(saidTextItem);
-                        return;
-                    }
-
-
-                    if (result.getReason() == ResultReason.SynthesizingAudioCompleted) {
-                        {
-                            System.out.println("Speech synthesis completed.");
-                            result.close();
-                        }
-                    }
-                    saidTextItem.audioFilePath = getFilesDir().getAbsolutePath() + "/" + saidTextItem.id + ".wav";
-                    System.out.println("File path: " + saidTextItem.audioFilePath);
-                    saidTextItem.voiceName = selectedVoice;
-
-
-                    saidTextDao.updateHistorik(saidTextItem);
-                    MediaPlayer player = new MediaPlayer();
-                    player.setDataSource(saidTextItem.audioFilePath);
-                    System.out.println(saidTextItem.audioFilePath);
-                    player.prepare();
-                    player.start();
-
-                } catch (Exception e){
-                    runOnUiThread(() -> {Toast.makeText(this, R.string.check_connection, Toast.LENGTH_SHORT).show();});
-
-                }
-
-            });
-
-
-        } catch (IllegalArgumentException ex) {
-            Toast.makeText(this, R.string.check_info, Toast.LENGTH_SHORT).show();
-
-
-        } catch (Exception e) {
-            Toast.makeText(this, R.string.check_info, Toast.LENGTH_SHORT).show();
-        }
     }
 
 
-    public Language getSelectedLanguage(MaterialButtonToggleGroup toggleGroup) {
-        int checkedId = toggleGroup.getCheckedButtonId();
-        if (checkedId == R.id.english_button) {
-            return Language.ENGLISH;
-        } else if (checkedId == R.id.auto_button) {
-            return Language.MULTI;
-        } else if (checkedId == R.id.danish_button) {
-            return Language.DANISH;
-        } else {
-            return Language.MULTI;
-        }
-    }
+
 
     private void updateSpeechItems() {
         if (!isSomeFolderSelected) {
@@ -586,11 +491,13 @@ public class MainActivity extends AppCompatActivity {
         );
     }
     public void onFullscreenButronClicked(View v) {
-        Intent intent = new Intent(MainActivity.this, displayText.class);
+        Intent intent = new Intent(this, displayText.class);
         sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
         EditText speakText = this.findViewById(R.id.speak_text);
 
         SharedPreferences.Editor editor = sharedPreferences.edit();
+        System.out.println(languageToggle.getCheckedButtonId());
+        editor.putInt("languageToggle", languageToggle.getCheckedButtonId());
 
         System.out.println(speakText.getText().toString());
         editor.putString("SPEAK_TEXT", speakText.getText().toString());
@@ -628,9 +535,62 @@ public class MainActivity extends AppCompatActivity {
 
 
     }
-    enum Language {
+    public enum Language {
         DANISH,
         ENGLISH,
         MULTI
     }
+
+    public void onChangeLanguageButtonClicked(View view) {
+        final List<String>[] languageList = new List[1];
+        databaseExecutor.execute(() -> {
+
+                    AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database")
+                            .build();
+                    VoiceDao voiceDao = db.voiceDao();
+                    sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
+                    selectedVoice = sharedPreferences.getString("voice", "");
+
+                    List<VoiceItem> voices = voiceDao.getAllVoices(expirationTime);
+                    for (VoiceItem voice : voices) {
+
+                        if (Objects.equals(voice.name, selectedVoice)) {
+                            currentSupportedLanguages = voice.supportedLanguages;
+                            String[] languages = currentSupportedLanguages.split(",");
+                            languageList[0] = Arrays.asList(languages);
+                            runOnUiThread(() -> {
+                                MaterialAlertDialogBuilder dialog = new MaterialAlertDialogBuilder(this)
+                                        .setTitle("Select language")
+                                        .setView(R.layout.language_selector)
+                                        .setPositiveButton("OK", (dialog1, which) -> {
+                                            // Handle OK button click
+                                            RecyclerView recyclerView = findViewById(R.id.languageRecyclerView);
+                                            recyclerView.setLayoutManager(new LinearLayoutManager(this));
+                                            LanguageAdapter languageAdapter = new LanguageAdapter(languageList[0]);
+                                            recyclerView.setAdapter(languageAdapter);
+                                            recyclerView.getAdapter().notifyDataSetChanged();
+
+                                            for (String item :languageList[0]) {
+                                                languageAdapter.addItem(item);
+                                            }
+                                        })
+                                        .setNegativeButton("Cancel", (dialog12, which) -> {
+                                            // Handle Cancel button click
+
+                                        });
+                                dialog.show();
+                            });
+
+                        }
+                    }
+                });
+
+
+
+
+
+
+//        List<String> listOfSupportedLanguages = currentSupportedLanguages.split(",".map;
+    }
+
 }

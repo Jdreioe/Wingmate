@@ -61,6 +61,7 @@ public class SettingsActivity extends AppCompatActivity {
     private VoiceDao voiceDao;
     private Dialog dialog;
     private boolean isDialogShowing = false;
+    private long expirationTime;
 
 
     @Override
@@ -134,7 +135,8 @@ public class SettingsActivity extends AppCompatActivity {
             restExecutor.execute(() -> {
                 db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
                 voiceDao = db.voiceDao();
-                downloadedVoiceItems = voiceDao.getAllVoices();
+                expirationTime = System.currentTimeMillis() - (1000 * 60 * 60 * 24 * 7);
+                downloadedVoiceItems = voiceDao.getAllVoices(expirationTime);
 
                 sharedPreferences = getSharedPreferences("MyPrefs", Context.MODE_PRIVATE);
                 multiCheck = sharedPreferences.getBoolean("isMultilingualChecked", true);
@@ -164,6 +166,7 @@ public class SettingsActivity extends AppCompatActivity {
             dialog.show();
             dialog.findViewById(R.id.saveVoices).setOnClickListener(v -> {
                 dialog.dismiss();
+                isDialogShowing = false;
             });
         }
 
@@ -231,9 +234,9 @@ public class SettingsActivity extends AppCompatActivity {
 
 
     private void retrieveVoicesAndSetupVoiceSpinner() {
-
-        // TODO: Update downloadedvoices
-        if (voiceDao.getAllVoices().isEmpty()) {
+        expirationTime = System.currentTimeMillis() - (1000 * 60 * 60 * 24 * 7);
+        // TODO: delete old voices
+        if (voiceDao.getAllVoices(expirationTime).isEmpty()) {
 
             voices = getVoices(); // Your API call and parsing logic
         } else {
@@ -273,7 +276,7 @@ public class SettingsActivity extends AppCompatActivity {
             runOnUiThread(() -> voiceSpinner.setSelection(selectedVoiceIndex));
         } catch (Exception e) {
             Toast.makeText(this, R.string.check_info, Toast.LENGTH_SHORT).show();
-            return;
+
         }
 
 
@@ -372,9 +375,9 @@ public class SettingsActivity extends AppCompatActivity {
                     System.out.println(supportedLanguagesList);
                     voiceItem.supportedLanguages = String.join(",", supportedLanguagesList);
 
-                    AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
-                    VoiceDao voiceDao = db.voiceDao();
+                    AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").build();
 
+                    VoiceDao voiceDao = db.voiceDao();
                     voiceDao.insert(voiceItem);
                     editor = sharedPreferences.edit();
 
@@ -445,6 +448,24 @@ public class SettingsActivity extends AppCompatActivity {
         } catch (Exception e) {
             return false;
         }
+    }
+    public void onUpdateVoicesClicked(View view){
+        db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database").fallbackToDestructiveMigration().build();
+
+        editor = sharedPreferences.edit();
+        editor.putBoolean("noVoice", true);
+        editor.putInt("selected_voice_index", 0);
+        editor.putString("voice", "");
+        editor.commit();
+        dialog.dismiss();
+        Toast.makeText(this, R.string.update_voices, Toast.LENGTH_SHORT).show();
+        restExecutor.execute(() -> {
+                voiceDao = db.voiceDao();
+        voiceDao.deleteAll();
+            retrieveVoicesAndSetupVoiceSpinner();
+        });
+
+        isDialogShowing = false;
     }
 
 }

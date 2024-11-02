@@ -13,8 +13,8 @@ android {
         applicationId = "com.hoejmoseit.wingman"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -65,6 +65,8 @@ dependencies {
     implementation(libs.navigation.ui)
     implementation(libs.work.runtime)
     implementation(libs.play.services.basement)
+    implementation(libs.recyclerview)
+    implementation(libs.annotations)
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
