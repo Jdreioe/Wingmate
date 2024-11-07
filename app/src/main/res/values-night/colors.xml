@@ -8,6 +8,7 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="your_color">#FF0000</color>
+    <color name="contrast">#FFFFFFFF</color>
 
     <color name="colorTertiary">@color/material_dynamic_tertiary50</color>
     <color name="colorPrimaryQ">#4D374E</color>

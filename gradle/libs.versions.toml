@@ -5,6 +5,7 @@ billing = "7.1.1"
 clientSdk = "1.41.1"
 compiler = "3.1.4"
 constraintlayoutVersion = "2.2.0"
+guava = "31.1-android"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
@@ -27,6 +28,7 @@ firebaseCrashlytics = "19.2.1"
 googleGmsGoogleServices = "4.4.2"
 googleFirebaseCrashlytics = "3.0.2"
 xlog = "1.11.1"
+playServicesPhenotype = "17.0.0"
 
 [libraries]
 androidx-material3 = { module = "androidx.compose.material3:material3" }
@@ -39,6 +41,7 @@ billing = { module = "com.android.billingclient:billing", version.ref = "billing
 client-sdk = { module = "com.microsoft.cognitiveservices.speech:client-sdk", version.ref = "clientSdk" }
 compiler = { module = "com.android.databinding:compiler", version.ref = "compiler" }
 constraintlayout-v220 = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayoutVersion" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -70,6 +73,7 @@ recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version
 annotations = { group = "org.jetbrains", name = "annotations", version.ref = "annotations" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics", version.ref = "firebaseCrashlytics" }
 xlog = { module = "com.elvishew:xlog", version.ref = "xlog" }
+play-services-phenotype = { group = "com.google.android.gms", name = "play-services-phenotype", version.ref = "playServicesPhenotype" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

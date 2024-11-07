@@ -1,10 +1,12 @@
 package com.hoejmoseit.wingman.wingmanapp;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
@@ -12,12 +14,18 @@ import com.android.billingclient.api.BillingClient;
 import com.android.billingclient.api.BillingClientStateListener;
 import com.android.billingclient.api.BillingFlowParams;
 import com.android.billingclient.api.BillingResult;
+import com.android.billingclient.api.ProductDetails;
+import com.android.billingclient.api.QueryProductDetailsParams;
 import com.android.billingclient.api.SkuDetails;
 import com.android.billingclient.api.SkuDetailsParams;
 import com.hoejmoseit.wingman.R;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.common.collect.ImmutableList;
+import com.hoejmoseit.wingman.wingmanapp.backgroundtask.InAppPurchaseManager;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 
@@ -33,8 +41,7 @@ public class FirstTimeLaunchDialog {
 		boolean hasLaunchedBefore = sharedPrefs.getBoolean("has_launched_before", false);
 
 
-
-		if (!hasLaunchedBefore && sharedPrefs.getString("sub_key", "def") == "def") {
+		if (sharedPrefs.getString("sub_key", "") == "") {
 			MaterialAlertDialogBuilder materialDialogBuilder = new MaterialAlertDialogBuilder(context);
 			LayoutInflater inflater = LayoutInflater.from(context);
 			View dialogView = inflater.inflate(R.layout.first_time_launch, null);
@@ -54,79 +61,14 @@ public class FirstTimeLaunchDialog {
 
 					})
 					.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel())
+					.setCancelable(false)
 					.show();
 			dialogView.findViewById(R.id.subButton).setOnClickListener(v -> {
-				BillingFlowParams billingFlowParams = BillingFlowParams.newBuilder()
-
-						.build();
-				BillingClient billingClient  = BillingClient.newBuilder(context)
-						.enablePendingPurchases()
-						.build();
-				billingClient.startConnection(new BillingClientStateListener() {
-					@Override
-					public void onBillingSetupFinished(@NonNull BillingResult billingResult) {
-						if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK) {
-							// Billing client is ready, query for SKU details
-							querySkuDetails(billingClient);
-						} else {
-							// Handle billing setup failure
-							// ...
-						}
-					}
-					@Override
-					public void onBillingServiceDisconnected() {
-						// Handle billing service disconnection
-						// ...
-					}
-				});
-
-
-
-
-				billingClient.startConnection(new BillingClientStateListener() {
-					@Override
-					public void onBillingSetupFinished(@NonNull BillingResult billingResult) {
-						if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK) {
-							// Billing client is ready, query for SKU details
-							querySkuDetails(billingClient);
-						} else {
-							// Handle billing setup failure
-							// ...
-						}
-					}
-
-					@Override
-					public void onBillingServiceDisconnected() {
-						// Handle billing service disconnection
-						// ...
-					}
-				});
+				Toast.makeText(context, R.string.not_yet_implemented_will_cost_5_99_usd_49_dkk_it_will_hopefully_be_cheap_enough, Toast.LENGTH_SHORT).show();
+				InAppPurchaseManager purchaseManager = new InAppPurchaseManager();
+				List<String> productIds = Arrays.asList("azuremanager");
 			});
 		}
 
 	}
-	private static void querySkuDetails(BillingClient billingClient) {
-
-
-		SkuDetailsParams.Builder params = SkuDetailsParams.newBuilder();
-
-
-		billingClient.querySkuDetailsAsync(params.build(), (billingResult, skuDetailsList) -> {
-			if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK && skuDetailsList != null) {
-				// SKU details retrieved successfully, store them or use them as needed
-				// ...
-			} else {
-				// Handle SKU details query failure
-				// ...
-			}
-		});
-
-	}
-
-	public static BillingClient getBillingClient() {return billingClient;}
-	public static List<SkuDetails> getSkuDetailsList() {return skuDetailsList;}
-	public static void purchasesUpdatedListener () {
-
-	}
 }
-

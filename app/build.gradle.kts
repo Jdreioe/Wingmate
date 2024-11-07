@@ -15,8 +15,8 @@ android {
         applicationId = "com.hoejmoseit.wingman"
         minSdk = 24
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.2.2"
+        versionCode = 6
+        versionName = "1.2.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -55,6 +55,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.play.services.phenotype)
     val activity_version = "1.9.3"
 
     implementation("androidx.activity:activity:$activity_version")
@@ -70,6 +71,7 @@ dependencies {
     // UI Tests
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.test.manifest)
+    implementation(libs.guava)
 
     implementation(libs.appcompat)
     implementation(libs.lifecycle.runtime.ktx)

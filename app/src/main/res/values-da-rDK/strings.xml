@@ -35,6 +35,11 @@
     <string name="du_skal_f_rst_inds_tte_dine_oplysninger_i_settings">Du skal først indsætte dine oplysninger i indstillinge</string>
     <string name="noVoiceSelected">Ingen stemme valgt. Vælg stemme før du afspiler tekst</string>
     <string name="check_info">Fejl ved oprettelse af stemmer - prøv at checke om dine oplysninger er korrekt</string>
+    <string name="check_info_ping">Check din info og din info</string>
     <string name="check_connection">Fejl ved oprettelse af lyd, Check din forbindelse</string>
+    <string name="bring_your_own_subscription">Bring dit eget abonnoment</string>
+    <string name="select_language">Vælg sprog</string>
+    <string name="update_voices">Opdaterer stemmer... Vent venligst</string>
+    <string name="not_yet_implemented_will_cost_5_99_usd_49_dkk_it_will_hopefully_be_cheap_enough">Denne funktion er ikke implementeret, men vil koste 49 kr.</string>
 
 </resources>

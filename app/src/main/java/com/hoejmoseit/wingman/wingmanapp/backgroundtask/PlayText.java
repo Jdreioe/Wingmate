@@ -48,6 +48,8 @@ public class PlayText {
 
 			String ssml = MainActivity.getSsml(speakText, getSelectedLanguage(languageToggle), selectedVoice, pitch, speed);
 
+			String selectedLanguage = MainActivity.getLanguageShortname(getSelectedLanguage(languageToggle)).toString();
+			System.out.println(selectedLanguage);
 
 			speechExecutor.execute(() -> {
 				SaidTextItem saidTextItem = saidTextDao.getByText(speakText.trim());
@@ -55,7 +57,9 @@ public class PlayText {
 						Objects.equals(selectedVoice, saidTextItem.voiceName) &&
 						saidTextItem.pitch == pitch &&
 						saidTextItem.audioFilePath != null &&
-						saidTextItem.speed == speed
+						saidTextItem.speed == speed &&
+						saidTextItem.language.equals(selectedLanguage)
+
 				) {
 					// Get the audio file from saidTextItem and play it
 					MediaPlayer player = new MediaPlayer();
@@ -79,6 +83,7 @@ public class PlayText {
 				saidTextItem.voiceName = selectedVoice;
 				saidTextItem.pitch = pitch;
 				saidTextItem.speed = speed;
+				saidTextItem.language = selectedLanguage;
 
 				Long whatever = saidTextDao.insertHistorik(saidTextItem);
 				saidTextItem = saidTextDao.getByText(speakText);

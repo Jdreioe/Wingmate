@@ -18,6 +18,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
@@ -31,6 +32,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -96,15 +98,40 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API level 34
+            WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
             WindowInsetsController insetsController = getWindow().getInsetsController();
             View rootView = findViewById(android.R.id.content);
             ViewCompat.setOnApplyWindowInsetsListener(rootView, (view, windowInsets) -> {
-                Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.ime() | WindowInsetsCompat.Type.systemBars());
-                view.setPadding(insets.left, insets.top, insets.right, insets.bottom);
+                Insets imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
+                Insets systemBarsInsets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+                Insets displayCutoutInsets = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout());
 
-                return WindowInsetsCompat.CONSUMED;
+
+                view.setPadding(
+                        systemBarsInsets.left,
+                        systemBarsInsets.top,
+                        systemBarsInsets.right,
+                        imeInsets.bottom
+                );
+                        if (displayCutoutInsets.left > 0 || displayCutoutInsets.top > 0 ||
+                                displayCutoutInsets.right > 0 || displayCutoutInsets.bottom > 0) {
+                            view.setPadding(
+                                    displayCutoutInsets.left,
+                                    systemBarsInsets.top,
+                                    displayCutoutInsets.right,
+                                    imeInsets.bottom
+                            );
+                        }
+
+                if (insetsController != null) {
+                    insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                }
+
+                // Handle WindowInsets to adjust layout
+
+                return windowInsets.CONSUMED;
             });
-
 
             if (insetsController != null) {
                 insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
@@ -113,10 +140,11 @@ public class MainActivity extends AppCompatActivity {
             // Handle WindowInsets to adjust layout
 
         }
+
         sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
         speakText = this.findViewById(R.id.speak_text);
         topAppBar = findViewById(R.id.topAppBar);
-        topAppBar.setNavigationIcon(R.mipmap.ic_launcher);
+        topAppBar.setNavigationIcon(R.mipmap.ic_launcher_foreground);
         topAppBar.setNavigationOnClickListener(v -> {
         dynamicPath = getFilesDir().getAbsolutePath();
             // Hvis jeg er i en mappe,
@@ -375,16 +403,19 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private static @NonNull String getLanguageShortname(Language language) throws Exception {
+    public static @NonNull String getLanguageShortname(Language language) throws Exception {
         switch (language) {
             case DANISH:
 
 
-        return "da-DK";
+                return "da-DK";
             case ENGLISH:
                 return "en-US";
+            case MULTI:
+                return "multi";
 
         }
+
         throw new IllegalArgumentException("Invalid language");
     }
 
