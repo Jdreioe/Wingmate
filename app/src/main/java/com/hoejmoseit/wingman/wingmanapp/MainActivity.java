@@ -147,6 +147,8 @@ public class MainActivity extends AppCompatActivity {
         topAppBar.setNavigationIcon(R.mipmap.ic_launcher_foreground);
         topAppBar.setNavigationOnClickListener(v -> {
         dynamicPath = getFilesDir().getAbsolutePath();
+
+
             // Hvis jeg er i en mappe,
             if (isSomeFolderSelected) {
 
@@ -170,26 +172,48 @@ public class MainActivity extends AppCompatActivity {
                 });
             } else {
 
-                topAppBar.setNavigationIcon(R.mipmap.ic_launcher);
+                topAppBar.setNavigationIcon(R.mipmap.ic_launcher_foreground);
 
                 selectRootFolder();
 
 
             }
 
-            sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
 
-            selectedVoice = sharedPreferences.getString("voice", "");
-            speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
-            serviceRegion = sharedPreferences.getString("sub_locale", "");
-            pitch = sharedPreferences.getFloat("pitch", 1f);
-            speed = sharedPreferences.getFloat("speed", 1f);
-            noVoice = sharedPreferences.getBoolean("noVoice", false);
-            System.out.println(serviceRegion + " er regionen " + speechSubscriptionKey);
-            speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
+
         });
+        sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
 
+        selectedVoice = sharedPreferences.getString("voice", "");
+        speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
+        serviceRegion = sharedPreferences.getString("sub_locale", "");
+        pitch = sharedPreferences.getFloat("pitch", 1f);
+        speed = sharedPreferences.getFloat("speed", 1f);
+        noVoice = sharedPreferences.getBoolean("noVoice", true);
+        System.out.println(noVoice);
+        if (noVoice) {
+            findViewById(R.id.language_toggle).setEnabled(false);
+            findViewById(R.id.fullscreenButton).setEnabled(false);;
+            findViewById(R.id.change_Language_Button).setEnabled(false);
+            findViewById(R.id.speakButton).setEnabled(false);
+            findViewById(R.id.addButton).setEnabled(false);
+            findViewById(R.id.deleteButton).setEnabled(false);
+            findViewById(R.id.speak_text).setEnabled(false);
+            speakText.setText(R.string.noVoiceSelected);
+
+        } else{
+            findViewById(R.id.language_toggle).setEnabled(true);
+            findViewById(R.id.fullscreenButton).setEnabled(true);;
+            findViewById(R.id.change_Language_Button).setEnabled(true);
+            findViewById(R.id.speakButton).setEnabled(true);
+            findViewById(R.id.addButton).setEnabled(true);
+            findViewById(R.id.deleteButton).setEnabled(true);
+            findViewById(R.id.speak_text).setEnabled(true);
+            speakText.setText("");
+
+        }
         FirstTimeLaunchDialog.showFirstTimeLaunchDialog(this);
+
 
 
 
@@ -497,22 +521,13 @@ public class MainActivity extends AppCompatActivity {
         serviceRegion = sharedPreferences.getString("sub_locale", "");
         pitch = sharedPreferences.getFloat("pitch", 1f);
         speed = sharedPreferences.getFloat("speed", 1f);
-        noVoice = sharedPreferences.getBoolean("noVoice", false);
-        // FIX PLS
+        noVoice = sharedPreferences.getBoolean("noVoice", true);
+
         speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
         dynamicPath = getFilesDir().getAbsolutePath();
 
 
-        System.out.println(s + " er text \n"
-                + saidTextDao + " er SaidTextDao"
-                + dynamicPath + " er path \n" +
-                speechSubscriptionKey + " er SubKey \n" +
-                serviceRegion + "  er region \n" +
-                pitch + " er pitch \n" +
 
-                speed + " er speed \n" +
-                noVoice +
-                " er noVoice");
         playText(this, s,
                 saidTextDao,
                 dynamicPath,
@@ -534,7 +549,7 @@ public class MainActivity extends AppCompatActivity {
     private void updateSpeechItems() {
         if (!isSomeFolderSelected) {
             SpeechItem historik = new SpeechItem();
-            historik.name = "Historik";
+            historik.name = getString(R.string.historyitem);
             historik.id = -1;
             historik.isFolder = true;
             historik.parentId = -1;

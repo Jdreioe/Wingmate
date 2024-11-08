@@ -26,7 +26,7 @@
         android:capitalize="sentences"
         android:hint="@string/enter_text"
         android:padding="16dp"
-        app:layout_constraintEnd_toStartOf="@+id/settimgsButton2"
+        app:layout_constraintEnd_toStartOf="@+id/fullscreenButton"
         app:layout_constraintHeight_max="200dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/topAppBar" />
@@ -68,7 +68,7 @@
         style="?attr/materialIconButtonFilledStyle"/>
 
     <com.google.android.material.button.MaterialButton
-        android:id="@+id/settimgsButton2"
+        android:id="@+id/fullscreenButton"
         style="?attr/materialIconButtonFilledStyle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
