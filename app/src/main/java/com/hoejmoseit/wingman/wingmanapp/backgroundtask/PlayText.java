@@ -47,20 +47,29 @@ public class PlayText {
 			// Note: this will block the UI thread, so eventually, you want to register for the event
 
 			String ssml = MainActivity.getSsml(speakText, getSelectedLanguage(languageToggle), selectedVoice, pitch, speed);
+			System.out.println(ssml);
 
 			String selectedLanguage = MainActivity.getLanguageShortname(getSelectedLanguage(languageToggle)).toString();
 			System.out.println(selectedLanguage);
 
 			speechExecutor.execute(() -> {
 				SaidTextItem saidTextItem = saidTextDao.getByText(speakText.trim());
-				if (saidTextItem != null &&
+
+
+				if(saidTextItem != null &&
+
 						Objects.equals(selectedVoice, saidTextItem.voiceName) &&
 						saidTextItem.pitch == pitch &&
 						saidTextItem.audioFilePath != null &&
 						saidTextItem.speed == speed &&
 						saidTextItem.language.equals(selectedLanguage)
-
 				) {
+					System.out.println(saidTextItem.voiceName + selectedVoice);
+					System.out.println(saidTextItem.pitch + pitch);
+					System.out.println(saidTextItem.speed + speed);
+					System.out.println(saidTextItem.language + selectedLanguage);
+					System.out.println(saidTextItem.audioFilePath);
+
 					// Get the audio file from saidTextItem and play it
 					MediaPlayer player = new MediaPlayer();
 					try {
@@ -69,6 +78,7 @@ public class PlayText {
 					} catch (Exception e) {
 						((Activity) context).runOnUiThread(() -> Toast.makeText(context, R.string.check_connection, Toast.LENGTH_SHORT).show());
 						saidTextDao.deleteHistorik(saidTextItem);
+						return;
 
 					}
 					player.start();
@@ -153,6 +163,11 @@ public class PlayText {
 
 		} catch (Exception e) {
 			Toast.makeText(context, R.string.check_info, Toast.LENGTH_SHORT).show();
+
+			e.printStackTrace();
+			System.out.println(e.getMessage());
+			System.out.println(e.getStackTrace());
+
 		}
 	}
 }
