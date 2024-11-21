@@ -224,7 +224,6 @@ public class MainActivity extends AppCompatActivity {
             pitch = sharedPreferences.getFloat("pitch", 1f);
             speed = sharedPreferences.getFloat("speed", 1f);
             noVoice = sharedPreferences.getBoolean("noVoice", true);
-            speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
             dynamicPath = getFilesDir().getAbsolutePath();
 
             AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database")
@@ -256,6 +255,7 @@ public class MainActivity extends AppCompatActivity {
                         // Handle item click
 
                         System.out.println(selectedVoice);
+                        speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
 
                         playText(this, speechItem.text, saidTextDao, dynamicPath, speechSubscriptionKey, serviceRegion, selectedVoice, pitch, speed, noVoice, speechConfig, languageToggle.getCheckedButtonId());
                     }
@@ -539,6 +539,7 @@ public class MainActivity extends AppCompatActivity {
         selectedVoice = sharedPreferences.getString("voice", "");
         pitch = sharedPreferences.getFloat("pitch", 1f);
         speed = sharedPreferences.getFloat("speed", 1f);
+        speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
 
         playText(this, s,
                 saidTextDao,

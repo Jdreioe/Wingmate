@@ -11,6 +11,7 @@ import com.android.billingclient.api.BillingClient;
 import com.android.billingclient.api.BillingClientStateListener;
 import com.android.billingclient.api.BillingFlowParams;
 import com.android.billingclient.api.BillingResult;
+import com.android.billingclient.api.PendingPurchasesParams;
 import com.android.billingclient.api.ProductDetails;
 import com.android.billingclient.api.ProductDetailsResponseListener;
 import com.android.billingclient.api.Purchase;
@@ -28,12 +29,30 @@ public class InAppPurchaseManager {
 
 	private BillingClient billingClient;
 
+	private final PurchasesUpdatedListener purchasesUpdatedListener = new PurchasesUpdatedListener() {
+		@Override
+		public void onPurchasesUpdated(@NonNull BillingResult billingResult, @Nullable List<Purchase> purchases) {
+			System.out.println(billingResult);
+			if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK && purchases != null) {
+				for (Purchase purchase : purchases) {
+					// Handle the purchase
+					// ... (e.g., acknowledge purchase, grant entitlement) ...
+				}
+			} else if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.USER_CANCELED) {
+				// Handle user cancellation
+				// ...
+			} else {
+				// Handle other error codes
+				// ...
+			}
+		}
+	};
+
 	// ... other methods ...
 	public void initializeBillingClient(Context context) {
 		billingClient = BillingClient.newBuilder(context)
-
-				.enablePendingPurchases()
-				.build();
+				.enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts()  .build())
+				.setListener(purchasesUpdatedListener).build();
 
 		billingClient.startConnection(new BillingClientStateListener() {
 			@Override
@@ -80,6 +99,7 @@ public class InAppPurchaseManager {
 				new ProductDetailsResponseListener() {
 					public void onProductDetailsResponse(BillingResult billingResult,
 					                                     List<ProductDetails> productDetailsList) {
+						System.out.println(productDetailsList.get(0).getOneTimePurchaseOfferDetails());
 						// check billingResult
 						// process returned productDetailsList
 
@@ -116,23 +136,6 @@ public class InAppPurchaseManager {
 						);
 					}
 
-					private final PurchasesUpdatedListener purchasesUpdatedListener = new PurchasesUpdatedListener() {
-						@Override
-						public void onPurchasesUpdated(@NonNull BillingResult billingResult, @Nullable List<Purchase> purchases) {
-							if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK && purchases != null) {
-								for (Purchase purchase : purchases) {
-									// Handle the purchase
-									// ... (e.g., acknowledge purchase, grant entitlement) ...
-								}
-							} else if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.USER_CANCELED) {
-								// Handle user cancellation
-								// ...
-							} else {
-								// Handle other error codes
-								// ...
-							}
-						}
-					};
 
 					// ... other methods ...
 

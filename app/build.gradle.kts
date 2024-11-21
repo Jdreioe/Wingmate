@@ -15,8 +15,8 @@ android {
         applicationId = "com.hoejmoseit.wingman"
         minSdk = 24
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.1.2.3.1"
+        versionCode = 9
+        versionName = "0.1.2.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -57,6 +57,8 @@ android {
 dependencies {
     implementation(libs.play.services.phenotype)
     val activity_version = "1.9.3"
+
+
 
     implementation("androidx.activity:activity:$activity_version")
     val composeBom = platform("androidx.compose:compose-bom:2024.09.03")

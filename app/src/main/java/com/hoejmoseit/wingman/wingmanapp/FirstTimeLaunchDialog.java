@@ -64,9 +64,9 @@ public class FirstTimeLaunchDialog {
 					.setCancelable(false)
 					.show();
 			dialogView.findViewById(R.id.subButton).setOnClickListener(v -> {
-				Toast.makeText(context, R.string.not_yet_implemented_will_cost_5_99_usd_49_dkk_it_will_hopefully_be_cheap_enough, Toast.LENGTH_SHORT).show();
 				InAppPurchaseManager purchaseManager = new InAppPurchaseManager();
-				List<String> productIds = Arrays.asList("azuremanager");
+				purchaseManager.initializeBillingClient(context);
+
 			});
 		}
 
