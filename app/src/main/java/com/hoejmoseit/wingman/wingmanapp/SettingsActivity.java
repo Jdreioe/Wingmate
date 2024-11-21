@@ -1,10 +1,14 @@
 package com.hoejmoseit.wingman.wingmanapp;
+
 import android.app.Dialog;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
+import android.util.DisplayMetrics;
 import android.view.View;
+import android.view.WindowInsetsController;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
@@ -24,6 +28,7 @@ import java.util.List;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.gms.phenotype.Configuration;
 import com.hoejmoseit.wingman.R;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.slider.Slider;
@@ -37,6 +42,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.room.Room;
 
 public class SettingsActivity extends AppCompatActivity {
@@ -67,8 +75,44 @@ public class SettingsActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         setContentView(R.layout.settings_activity);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API level 34
+            WindowInsetsController insetsController = getWindow().getInsetsController();
+            View rootView = findViewById(android.R.id.content);
+            ViewCompat.setOnApplyWindowInsetsListener(rootView, (view, windowInsets) -> {
+
+                Insets systemBarsInsets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+                Insets displayCutoutInsets = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout());
+
+
+                view.setPadding(
+                        systemBarsInsets.left,
+                        systemBarsInsets.top,
+                        systemBarsInsets.right,
+                        systemBarsInsets.bottom
+
+                );
+                if (displayCutoutInsets.left > 0 || displayCutoutInsets.top > 0 ||
+                        displayCutoutInsets.right > 0 || displayCutoutInsets.bottom > 0) {
+                    view.setPadding(
+                            displayCutoutInsets.left,
+                            systemBarsInsets.top,
+                            displayCutoutInsets.right,
+                            systemBarsInsets.bottom
+                    );
+            // Adjust layout to avoid overlapping with display cutouts
+                }
+
+
+                if (insetsController != null) {
+                    insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                }
+
+                // Handle WindowInsets to adjust layout
+
+                return windowInsets.CONSUMED;
+            });
+        };
         subscriptionID = this.findViewById(R.id.subscriptionKey);
         resourceLocale = this.findViewById(R.id.resourceLocale);
         Slider speedSlider = this.findViewById(R.id.speed_slider);

@@ -9,7 +9,6 @@ import static android.Manifest.permission.INTERNET;
 
 import static com.hoejmoseit.wingman.wingmanapp.backgroundtask.PlayText.playText;
 import static com.hoejmoseit.wingman.wingmanapp.database.AppDatabase.MIGRATION_9_10;
-
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -17,9 +16,11 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.View;
+import android.view.WindowInsetsController;
 import android.widget.EditText;
 
 import androidx.annotation.NonNull;
@@ -27,6 +28,10 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -67,6 +72,8 @@ public class MainActivity extends AppCompatActivity {
     private SaidTextDao saidTextDao;
     private SpeechItemAdapter speechItemAdapter;
     private List<SpeechItem> speechItemsInCurrentFolder;
+    private final Object lock = new Object();
+
     private MaterialToolbar topAppBar;
     private MaterialButtonToggleGroup languageToggle;
     // Keeps track of folder selection
@@ -84,22 +91,72 @@ public class MainActivity extends AppCompatActivity {
     private boolean noVoice;
     private SpeechConfig speechConfig;
     private AudioConfig audioConfig;
+    private RecyclerView speechItemRecyclerView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API level 34
+            WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
+            WindowInsetsController insetsController = getWindow().getInsetsController();
+            View rootView = findViewById(android.R.id.content);
+            ViewCompat.setOnApplyWindowInsetsListener(rootView, (view, windowInsets) -> {
+                Insets imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
+                Insets systemBarsInsets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+                Insets displayCutoutInsets = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout());
+
+
+                view.setPadding(
+                        systemBarsInsets.left,
+                        systemBarsInsets.top,
+                        systemBarsInsets.right,
+                        imeInsets.bottom
+                );
+                        if (displayCutoutInsets.left > 0 || displayCutoutInsets.top > 0 ||
+                                displayCutoutInsets.right > 0 || displayCutoutInsets.bottom > 0) {
+                            view.setPadding(
+                                    displayCutoutInsets.left,
+                                    systemBarsInsets.top,
+                                    displayCutoutInsets.right,
+                                    imeInsets.bottom
+                            );
+                        }
+
+                if (insetsController != null) {
+                    insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                }
+
+                // Handle WindowInsets to adjust layout
+
+                return windowInsets.CONSUMED;
+            });
+
+            if (insetsController != null) {
+                insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+
+            // Handle WindowInsets to adjust layout
+
+        }
+
+
         speakText = this.findViewById(R.id.speak_text);
         topAppBar = findViewById(R.id.topAppBar);
-        topAppBar.setNavigationIcon(R.mipmap.ic_launcher);
+        topAppBar.setNavigationIcon(R.mipmap.ic_launcher_foreground);
         topAppBar.setNavigationOnClickListener(v -> {
-        dynamicPath = getFilesDir().getAbsolutePath();
+
+
+
+
             // Hvis jeg er i en mappe,
             if (isSomeFolderSelected) {
 
 
                 databaseExecutor.execute(() -> {
+
 
                     // If currentFolderId == -1 we know that Historik was selected
                     boolean wasHistorikSelected = currentFolderId == -1;
@@ -118,26 +175,40 @@ public class MainActivity extends AppCompatActivity {
                 });
             } else {
 
-                topAppBar.setNavigationIcon(R.mipmap.ic_launcher);
+                topAppBar.setNavigationIcon(R.mipmap.ic_launcher_foreground);
 
-                selectRootFolder();
+                databaseExecutor.execute(this::selectRootFolder);
 
 
             }
 
-            sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
 
-            selectedVoice = sharedPreferences.getString("voice", "");
-            speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
-            serviceRegion = sharedPreferences.getString("sub_locale", "");
-            pitch = sharedPreferences.getFloat("pitch", 1f);
-            speed = sharedPreferences.getFloat("speed", 1f);
-            noVoice = sharedPreferences.getBoolean("noVoice", false);
-            System.out.println(serviceRegion + " er regionen " + speechSubscriptionKey);
-            speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
+
         });
 
+        if (noVoice) {
+            findViewById(R.id.language_toggle).setEnabled(false);
+            findViewById(R.id.fullscreenButton).setEnabled(false);;
+            findViewById(R.id.change_Language_Button).setEnabled(false);
+            findViewById(R.id.speakButton).setEnabled(false);
+            findViewById(R.id.addButton).setEnabled(false);
+            findViewById(R.id.deleteButton).setEnabled(false);
+            findViewById(R.id.speak_text).setEnabled(false);
+            speakText.setText(R.string.noVoiceSelected);
+
+        } else{
+            findViewById(R.id.language_toggle).setEnabled(true);
+            findViewById(R.id.fullscreenButton).setEnabled(true);;
+            findViewById(R.id.change_Language_Button).setEnabled(true);
+            findViewById(R.id.speakButton).setEnabled(true);
+            findViewById(R.id.addButton).setEnabled(true);
+            findViewById(R.id.deleteButton).setEnabled(true);
+            findViewById(R.id.speak_text).setEnabled(true);
+            speakText.setText("");
+
+        }
         FirstTimeLaunchDialog.showFirstTimeLaunchDialog(this);
+
 
 
 
@@ -146,6 +217,14 @@ public class MainActivity extends AppCompatActivity {
 
 
         databaseExecutor.execute(() -> {
+            sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
+            selectedVoice = sharedPreferences.getString("voice", "");
+            speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
+            serviceRegion = sharedPreferences.getString("sub_locale", "");
+            pitch = sharedPreferences.getFloat("pitch", 1f);
+            speed = sharedPreferences.getFloat("speed", 1f);
+            noVoice = sharedPreferences.getBoolean("noVoice", true);
+            dynamicPath = getFilesDir().getAbsolutePath();
 
             AppDatabase db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database")
                     .addMigrations(MIGRATION_9_10) // Allow destructive migrations
@@ -157,8 +236,10 @@ public class MainActivity extends AppCompatActivity {
 
             runOnUiThread(() -> {
 
-                RecyclerView recyclerView = findViewById(R.id.speech_items_list);
-                recyclerView.setLayoutManager(new LinearLayoutManager(this));
+                speechItemRecyclerView = findViewById(R.id.speech_items_list);
+                speechItemRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+
 
 
                 speechItemAdapter = new SpeechItemAdapter(speechItemsInCurrentFolder, speechItem -> {
@@ -173,10 +254,13 @@ public class MainActivity extends AppCompatActivity {
                     } else {
                         // Handle item click
 
+                        System.out.println(selectedVoice);
+                        speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
+
                         playText(this, speechItem.text, saidTextDao, dynamicPath, speechSubscriptionKey, serviceRegion, selectedVoice, pitch, speed, noVoice, speechConfig, languageToggle.getCheckedButtonId());
                     }
                 });
-                recyclerView.setAdapter(speechItemAdapter);
+                speechItemRecyclerView.setAdapter(speechItemAdapter);
 
 
                 speechItemAdapter.notifyDataSetChanged();
@@ -232,7 +316,7 @@ public class MainActivity extends AppCompatActivity {
                 };
 
                 ItemTouchHelper itemTouchHelper = new ItemTouchHelper(simpleCallback);
-                itemTouchHelper.attachToRecyclerView(recyclerView);
+                itemTouchHelper.attachToRecyclerView(speechItemRecyclerView);
 
 
             });
@@ -260,8 +344,8 @@ public class MainActivity extends AppCompatActivity {
         });
         currentFolderId = folderId;
         //fjern fra recycler
-        speechItemsInCurrentFolder.clear();
-        isSomeFolderSelected = true;
+       runOnUiThread(()-> speechItemsInCurrentFolder.clear());
+       isSomeFolderSelected = true;
         if (folderId == -1) {
             onHistorikSelected();
             return;
@@ -270,7 +354,8 @@ public class MainActivity extends AppCompatActivity {
         // find alle speechItems fra mappen og sæt dem ind i  speechItemsInCurrentFolder listen
 
         databaseExecutor.execute(() -> {
-            speechItemsInCurrentFolder.addAll(speechItemDao.getAllItemsInFolder(folderId));
+            List<SpeechItem> currentItems = speechItemDao.getAllItemsInFolder(folderId);
+            runOnUiThread(()-> speechItemsInCurrentFolder.addAll(currentItems));
 
             //refresh recycler
             runOnUiThread(this::updateSpeechItems);
@@ -286,18 +371,29 @@ public class MainActivity extends AppCompatActivity {
     private void selectRootFolder() {
         isSomeFolderSelected = false;
         currentFolderId = -1;
-        speechItemsInCurrentFolder.clear();
+        List<SpeechItem> rootItems = speechItemDao.getAllRootItems();;
 
-        runOnUiThread(() -> {
-            topAppBar.setNavigationIcon(R.mipmap.ic_launcher);
-            topAppBar.setTitle("Wingman");
-        });
+        synchronized (lock) { // Synchronize on the list itself
+            runOnUiThread(() -> speechItemsInCurrentFolder.clear());
 
-        databaseExecutor.execute(() -> {
-            speechItemsInCurrentFolder.addAll(speechItemDao.getAllRootItems());
-            runOnUiThread(this::updateSpeechItems);
-        });
+
+        }
+        synchronized (lock) { // Synchronize on the list itself
+            runOnUiThread(() -> {
+                speechItemsInCurrentFolder.addAll(rootItems);
+
+
+                updateSpeechItems();
+                topAppBar.setNavigationIcon(R.mipmap.ic_launcher_foreground);
+                topAppBar.setTitle("Wingman");
+            });
+
+
+
+        }
+
     }
+
 
     private void deleteItem(SpeechItem deletedItem) {
         databaseExecutor.execute(() -> {
@@ -351,16 +447,19 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private static @NonNull String getLanguageShortname(Language language) throws Exception {
+    public static @NonNull String getLanguageShortname(Language language) throws Exception {
         switch (language) {
             case DANISH:
 
 
-        return "da-DK";
+                return "da-DK";
             case ENGLISH:
                 return "en-US";
+            case MULTI:
+                return "multi";
 
         }
+
         throw new IllegalArgumentException("Invalid language");
     }
 
@@ -438,26 +537,10 @@ public class MainActivity extends AppCompatActivity {
         }
         sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
         selectedVoice = sharedPreferences.getString("voice", "");
-        speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
-        serviceRegion = sharedPreferences.getString("sub_locale", "");
         pitch = sharedPreferences.getFloat("pitch", 1f);
         speed = sharedPreferences.getFloat("speed", 1f);
-        noVoice = sharedPreferences.getBoolean("noVoice", false);
-        // FIX PLS
         speechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
-        dynamicPath = getFilesDir().getAbsolutePath();
 
-
-        System.out.println(s + " er text \n"
-                + saidTextDao + " er SaidTextDao"
-                + dynamicPath + " er path \n" +
-                speechSubscriptionKey + " er SubKey \n" +
-                serviceRegion + "  er region \n" +
-                pitch + " er pitch \n" +
-
-                speed + " er speed \n" +
-                noVoice +
-                " er noVoice");
         playText(this, s,
                 saidTextDao,
                 dynamicPath,
@@ -468,7 +551,7 @@ public class MainActivity extends AppCompatActivity {
                 speed,
                 noVoice,
                 speechConfig,
-        languageToggle.getCheckedButtonId());
+                languageToggle.getCheckedButtonId());
 
 
     }
@@ -479,16 +562,16 @@ public class MainActivity extends AppCompatActivity {
     private void updateSpeechItems() {
         if (!isSomeFolderSelected) {
             SpeechItem historik = new SpeechItem();
-            historik.name = "Historik";
+            historik.name = getString(R.string.historyitem);
             historik.id = -1;
             historik.isFolder = true;
             historik.parentId = -1;
+
+
             speechItemsInCurrentFolder.add(0, historik);
         }
-        databaseExecutor.execute(() -> {
-                    runOnUiThread(() -> speechItemAdapter.notifyDataSetChanged());
-                }
-        );
+        runOnUiThread(() -> speechItemAdapter.notifyDataSetChanged());
+
     }
     public void onFullscreenButronClicked(View v) {
         Intent intent = new Intent(this, displayText.class);

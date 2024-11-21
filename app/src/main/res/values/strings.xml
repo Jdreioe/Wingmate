@@ -41,4 +41,6 @@
     <string name="bring_your_own_subscription">Bring Your Own Subscription</string>
     <string name="select_language">Select Language</string>
     <string name="update_voices">Updating voices... Please wait</string>
+    <string name="not_yet_implemented_will_cost_5_99_usd_49_dkk_it_will_hopefully_be_cheap_enough">Not yet implemented, will cost 5.99 USD (49 DKK)</string>
+    <string name="historyitem">History</string>
 </resources>

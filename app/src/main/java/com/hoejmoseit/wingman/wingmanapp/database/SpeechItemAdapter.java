@@ -18,10 +18,27 @@ public class SpeechItemAdapter extends RecyclerView.Adapter<SpeechItemAdapter.Vi
 
     private final Consumer<SpeechItem> callback;
     private List<SpeechItem> items;
+    private RecyclerView attachedRecyclerView;
+    @Override
+    public void onAttachedToRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onAttachedToRecyclerView(recyclerView);
+        attachedRecyclerView = recyclerView; // Store the attached RecyclerView
+    }
+    @Override
+    public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView);
+        attachedRecyclerView = null; // Clear the reference when detached
+    }
+
+    public RecyclerView getAttachedRecyclerView() {
+        return attachedRecyclerView;
+    }
+
 
     public SpeechItemAdapter(List<SpeechItem> items, Consumer<SpeechItem> callback) {
         this.items = items;
         this.callback = callback;
+
 
     }
     @NonNull
@@ -36,7 +53,16 @@ public class SpeechItemAdapter extends RecyclerView.Adapter<SpeechItemAdapter.Vi
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
 
 
-        SpeechItem item = items.get(position);
+        SpeechItem item;
+        synchronized (items) { // Synchronize access to the items list
+            if (position < items.size()) { // Check if position is valid
+                item = items.get(position);
+            } else {
+                // Handle invalid position (e.g., return or show a placeholder)
+                return;
+            }
+        }
+
         holder.titleTextView.setText(item.name);
         holder.textTextView.setText(item.text);
         holder.supportTextView.setText("(DATO)"); // Example support saidText

@@ -1,6 +1,7 @@
 package com.hoejmoseit.wingman.wingmanapp;
 
 import android.content.res.ColorStateList;
+import android.os.Build;
 import android.os.Bundle;
 
 import com.hoejmoseit.wingman.wingmanapp.backgroundtask.PlayText;
@@ -8,14 +9,21 @@ import com.hoejmoseit.wingman.wingmanapp.database.*;
 import com.google.android.material.imageview.ShapeableImageView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.compose.ui.platform.ComposeView;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.room.Room;
 
 import android.util.TypedValue;
 import android.view.GestureDetector;
 import android.view.ScaleGestureDetector;
+import android.view.View;
+import android.view.WindowInsetsController;
 import android.widget.TextView;
 import android.view.MotionEvent;
 import com.hoejmoseit.wingman.R;
+
 import com.microsoft.cognitiveservices.speech.SpeechConfig;
 
 public class displayText extends AppCompatActivity {
@@ -36,7 +44,24 @@ public class displayText extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_display_text);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API level 34
+            WindowInsetsController insetsController = getWindow().getInsetsController();
+            View rootView = findViewById(android.R.id.content);
+            ViewCompat.setOnApplyWindowInsetsListener(rootView, (view, windowInsets) -> {
+                Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.ime() | WindowInsetsCompat.Type.systemBars());
+                view.setPadding(insets.left, insets.top, insets.right, insets.bottom);
 
+                return WindowInsetsCompat.CONSUMED;
+            });
+
+
+            if (insetsController != null) {
+                insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+
+            // Handle WindowInsets to adjust layout
+
+        }
         String textToDisplay = getSharedPreferences("MyPrefs", MODE_PRIVATE).getString("SPEAK_TEXT", "");
         db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "speech_database")// Allow destructive migrations
                 .build();
@@ -54,8 +79,14 @@ public class displayText extends AppCompatActivity {
 
         backButton = findViewById(R.id.backButton);
         playTextButton = findViewById(R.id.playTextButton);
-
-        ColorStateList iconTint = ColorStateList.valueOf(getResources().getColor(R.color.colorTertiary, getTheme()));
+        ColorStateList iconTint;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // For Android 6.0 (API level 23) and above
+            iconTint = ColorStateList.valueOf(getResources().getColor(R.color.colorTertiary, getTheme()));
+        } else {
+            // For older Android versions
+            iconTint = ColorStateList.valueOf(getResources().getColor(R.color.colorTertiaryQ));
+        }
         backButton.setImageTintList(iconTint);
         playTextButton.setImageTintList(iconTint);
 

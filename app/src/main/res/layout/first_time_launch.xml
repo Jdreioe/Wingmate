@@ -32,4 +32,16 @@
         android:hint="@string/locale_e_g_swedencentral"
         android:inputType="text" />
 
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="If you don't want the hassle of Azure, you can also pay me 2 cups of coffee a month" />
+
+    <Button
+        android:id="@+id/subButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Subscribe" />
+
 </LinearLayout>
