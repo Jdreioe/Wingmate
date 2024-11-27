@@ -13,6 +13,8 @@ import java.util.List;
 public interface SaidTextDao {
     @Query("SELECT * FROM SaidTextItem WHERE saidText = :text LIMIT 1")
     SaidTextItem getByText(String text);
+    @Query("SELECT * FROM SaidTextItem WHERE saidText = :text ")
+    List<SaidTextItem> getAllByText(String text);
 
 
     @Insert
