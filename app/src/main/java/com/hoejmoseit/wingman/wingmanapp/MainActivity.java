@@ -186,7 +186,8 @@ public class MainActivity extends AppCompatActivity {
 
 
         });
-
+        sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
+        noVoice = sharedPreferences.getBoolean("noVoice", true);
         if (noVoice) {
             findViewById(R.id.language_toggle).setEnabled(false);
             findViewById(R.id.fullscreenButton).setEnabled(false);;
@@ -195,6 +196,7 @@ public class MainActivity extends AppCompatActivity {
             findViewById(R.id.addButton).setEnabled(false);
             findViewById(R.id.deleteButton).setEnabled(false);
             findViewById(R.id.speak_text).setEnabled(false);
+
             speakText.setText(R.string.noVoiceSelected);
 
         } else{
@@ -375,6 +377,7 @@ public class MainActivity extends AppCompatActivity {
     private void selectRootFolder() {
         isSomeFolderSelected = false;
         currentFolderId = -1;
+        runOnUiThread(() -> findViewById(R.id.addButton).setVisibility(View.VISIBLE));
         List<SpeechItem> rootItems = speechItemDao.getAllRootItems();;
 
         synchronized (lock) { // Synchronize on the list itself
@@ -606,7 +609,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void onHistorikSelected(){
-
+        runOnUiThread(()-> findViewById(R.id.addButton).setVisibility(View.INVISIBLE));
         List<SaidTextItem> historik = saidTextDao.getAll();
         for (SaidTextItem item : historik) {
             SpeechItem speechItem = new SpeechItem();

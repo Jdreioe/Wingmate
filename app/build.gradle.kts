@@ -15,8 +15,8 @@ android {
         applicationId = "com.hoejmoseit.wingman"
         minSdk = 24
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.1.2.4"
+        versionCode = 10
+        versionName = "0.1.2.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
