@@ -36,6 +36,8 @@
     <string name="du_skal_f_rst_inds_tte_dine_oplysninger_i_settings">Please put your credentials from your Azure into the Settings</string>
     <string name="noVoiceSelected">No voice selected. Set the voice before playing text</string>
     <string name="check_info">Error when fetching voices. Check your information</string>
+    <string name="check_info_saved">Not saved. Wrong credentials</string>
+
     <string name="check_info_ping">Check your connection and your information</string>
     <string name="check_connection">Error when synthesizing the text. Please check your connection</string>
     <string name="bring_your_own_subscription">Bring Your Own Subscription</string>
@@ -43,4 +45,5 @@
     <string name="update_voices">Updating voices... Please wait</string>
     <string name="not_yet_implemented_will_cost_5_99_usd_49_dkk_it_will_hopefully_be_cheap_enough">Not yet implemented, will cost 5.99 USD (49 DKK)</string>
     <string name="historyitem">History</string>
+    <string name="no_voice_selected">No voice selected</string>
 </resources>

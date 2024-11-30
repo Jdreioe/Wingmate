@@ -18,7 +18,9 @@ import com.microsoft.cognitiveservices.speech.SpeechSynthesizer;
 import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -31,11 +33,7 @@ public class PlayText {
 			System.out.println("DER ER INTET ");
 			Toast.makeText(context, R.string.ingen_text_til_at_l_se_op, Toast.LENGTH_SHORT).show();
 			return;
-		} else if (!ConnectionCheck.isInternetAvailable(context)) {
-			Toast.makeText(context, R.string.du_har_ikke_internet_afspil_en_af_dine_gemte_s_tninger_eller_pr_v_igen_senere, Toast.LENGTH_SHORT).show();
-			return;
-
-		} else if (noVoice) {
+			} else if (noVoice) {
 			Toast.makeText(context, R.string.noVoiceSelected, Toast.LENGTH_SHORT).show();
 			return;
 
@@ -50,26 +48,50 @@ public class PlayText {
 			System.out.println(ssml);
 
 			String selectedLanguage = MainActivity.getLanguageShortname(getSelectedLanguage(languageToggle)).toString();
-			System.out.println(selectedLanguage);
 
 			speechExecutor.execute(() -> {
-				SaidTextItem saidTextItem = saidTextDao.getByText(speakText.trim());
+				List<SaidTextItem> saidTextItems = saidTextDao.getAllByText(speakText.trim());
+				System.out.println(saidTextItems.size());
+				SaidTextItem saidTextItem = null;
+
+				for (SaidTextItem item : saidTextItems) {
+					System.out.println(item);
+
+					if (item.voiceName.equals(selectedVoice) &&
+							item.pitch == pitch &&
+							item.speed == speed &&
+							item.audioFilePath != null && // Check if audioFilePath is not null
+							item.language.equals(selectedLanguage)) {
+						saidTextItem = item;
+						break; // Exit loop once a match is found
+					}
+				}
 
 
-				if(saidTextItem != null &&
+				if (!ConnectionCheck.isInternetAvailable(context)) {
+					if (saidTextItem != null) {
+						MediaPlayer player = new MediaPlayer();
+						try {
+							player.setDataSource(saidTextItem.audioFilePath);
+							player.prepare();
+						} catch (Exception e) {
 
-						Objects.equals(selectedVoice, saidTextItem.voiceName) &&
-						saidTextItem.pitch == pitch &&
-						saidTextItem.audioFilePath != null &&
-						saidTextItem.speed == speed &&
-						saidTextItem.language.equals(selectedLanguage)
-				) {
-					System.out.println(saidTextItem.voiceName + selectedVoice);
-					System.out.println(saidTextItem.pitch + pitch);
-					System.out.println(saidTextItem.speed + speed);
-					System.out.println(saidTextItem.language + selectedLanguage);
-					System.out.println(saidTextItem.audioFilePath);
+							saidTextDao.deleteHistorik(saidTextItem);
+							return;
 
+						}
+						player.start();
+					}
+					else {
+						((Activity) context).runOnUiThread(() -> Toast.makeText(context, R.string.check_connection, Toast.LENGTH_SHORT).show());
+					}
+					return;
+				}
+
+
+				if(saidTextItem != null) {
+
+					System.out.println("Det er gemt - afspiller den gemte text nu");
 					// Get the audio file from saidTextItem and play it
 					MediaPlayer player = new MediaPlayer();
 					try {
@@ -84,9 +106,16 @@ public class PlayText {
 					player.start();
 
 
+
+					return;
+				}
+				if (!ConnectionCheck.isInternetAvailable(context)) {
+					((Activity) context).runOnUiThread(() -> 				Toast.makeText(context, R.string.du_har_ikke_internet_afspil_en_af_dine_gemte_s_tninger_eller_pr_v_igen_senere, Toast.LENGTH_SHORT).show());
+
 					return;
 				}
 
+				System.out.println(pitch);
 				saidTextItem = new SaidTextItem();
 				saidTextItem.saidText = speakText;
 				saidTextItem.date = new Date();
@@ -96,7 +125,9 @@ public class PlayText {
 				saidTextItem.language = selectedLanguage;
 
 				Long whatever = saidTextDao.insertHistorik(saidTextItem);
-				saidTextItem = saidTextDao.getByText(speakText);
+				saidTextItem = saidTextDao.getAllByText(speakText).get(saidTextDao.getAllByText(speakText).size() - 1);
+				System.out.println(saidTextItem.id);
+
 
 
 				// Initialize speech synthesizer and its dependencies
@@ -154,7 +185,7 @@ public class PlayText {
 
 				}
 
-			});
+	});
 
 
 		} catch (IllegalArgumentException ex) {

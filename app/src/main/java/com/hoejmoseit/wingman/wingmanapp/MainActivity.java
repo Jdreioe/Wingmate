@@ -54,6 +54,7 @@ import com.hoejmoseit.wingman.wingmanapp.database.VoiceItem;
 import com.microsoft.cognitiveservices.speech.SpeechConfig;
 import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
@@ -185,7 +186,8 @@ public class MainActivity extends AppCompatActivity {
 
 
         });
-
+        sharedPreferences = getSharedPreferences("MyPrefs", MODE_PRIVATE);
+        noVoice = sharedPreferences.getBoolean("noVoice", true);
         if (noVoice) {
             findViewById(R.id.language_toggle).setEnabled(false);
             findViewById(R.id.fullscreenButton).setEnabled(false);;
@@ -194,6 +196,7 @@ public class MainActivity extends AppCompatActivity {
             findViewById(R.id.addButton).setEnabled(false);
             findViewById(R.id.deleteButton).setEnabled(false);
             findViewById(R.id.speak_text).setEnabled(false);
+
             speakText.setText(R.string.noVoiceSelected);
 
         } else{
@@ -221,7 +224,7 @@ public class MainActivity extends AppCompatActivity {
             selectedVoice = sharedPreferences.getString("voice", "");
             speechSubscriptionKey = sharedPreferences.getString("sub_key", "");
             serviceRegion = sharedPreferences.getString("sub_locale", "");
-            pitch = sharedPreferences.getFloat("pitch", 1f);
+            pitch = sharedPreferences.getFloat("pitch", 0f);
             speed = sharedPreferences.getFloat("speed", 1f);
             noVoice = sharedPreferences.getBoolean("noVoice", true);
             dynamicPath = getFilesDir().getAbsolutePath();
@@ -281,9 +284,12 @@ public class MainActivity extends AppCompatActivity {
                     public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
                         deletedIndex = viewHolder.getAdapterPosition();
                         deletedItem = speechItemsInCurrentFolder.get(deletedIndex);
+
                         speechItemsInCurrentFolder.remove(deletedIndex);
                         speechItemAdapter.notifyItemRemoved(deletedIndex);
-                        deleteItem(deletedItem);
+
+                            deleteItem(deletedItem);
+
                         // showUndoSnackbar();
                     }
 
@@ -371,6 +377,7 @@ public class MainActivity extends AppCompatActivity {
     private void selectRootFolder() {
         isSomeFolderSelected = false;
         currentFolderId = -1;
+        runOnUiThread(() -> findViewById(R.id.addButton).setVisibility(View.VISIBLE));
         List<SpeechItem> rootItems = speechItemDao.getAllRootItems();;
 
         synchronized (lock) { // Synchronize on the list itself
@@ -397,9 +404,22 @@ public class MainActivity extends AppCompatActivity {
 
     private void deleteItem(SpeechItem deletedItem) {
         databaseExecutor.execute(() -> {
+            if (currentFolderId == -1) {
+                databaseExecutor.execute(() -> {
+                    if (saidTextDao.getByText(deletedItem.text) != null) {
+                        SaidTextItem deletedHistoric = saidTextDao.getByText(deletedItem.text);
+                    long ok = deletedHistoric.id;
+                    saidTextDao.deleteHistorik(deletedHistoric);
+                }
+            });
+            }
+
+
             speechItemDao.deleteItems(List.of(deletedItem));
             speechItemsInCurrentFolder.remove(deletedItem);
+
             updateSpeechItems();
+
         });
     }
 
@@ -589,7 +609,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void onHistorikSelected(){
-
+        runOnUiThread(()-> findViewById(R.id.addButton).setVisibility(View.INVISIBLE));
         List<SaidTextItem> historik = saidTextDao.getAll();
         for (SaidTextItem item : historik) {
             SpeechItem speechItem = new SpeechItem();
@@ -600,6 +620,7 @@ public class MainActivity extends AppCompatActivity {
             speechItemsInCurrentFolder.add(speechItem);
 
         }
+        Collections.reverse(speechItemsInCurrentFolder);
         if (((RecyclerView) findViewById(R.id.speech_items_list)).isComputingLayout())
         {
             findViewById(R.id.speech_items_list).post(new Runnable()

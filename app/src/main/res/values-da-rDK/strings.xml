@@ -41,6 +41,8 @@
     <string name="select_language">Vælg sprog</string>
     <string name="update_voices">Opdaterer stemmer... Vent venligst</string>
     <string name="not_yet_implemented_will_cost_5_99_usd_49_dkk_it_will_hopefully_be_cheap_enough">Denne funktion er ikke implementeret, men vil koste 49 kr.</string>
+    <string name="historyitem">Historik</string>
+    <string name="check_info_saved">Not saved. Forkerte credentials</string>
     <string name="no_voice_selected">Ingen stemme valgt</string>
 
 </resources>
