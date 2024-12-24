@@ -3,7 +3,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hive/hive.dart';
 import 'package:wingmancrossplatform/utils/app_database.dart';
 
-import '../models/string_list.dart';
+import '../models/voice_model.dart';
 import '../services/voice_service.dart';
 import '../utils/voice_dao.dart';
 import '../utils/voice_item.dart';
@@ -41,7 +41,6 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
       subscriptionKey: widget.subscriptionKey,
     );
     _loadVoices();
-    _openHiveBox();
   }
 
   Future<void> _loadVoices() async {
@@ -77,15 +76,12 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
     }
   }
 
-  Future<void> _openHiveBox() async {
-    await Hive.openBox<StringList>('selectedVoice');
-  }
-
   Future<void> _fetchVoices() async {
     setState(() => _isLoading = true);
 
     try {
       final fetchedVoices = await _voiceService.fetchVoicesFromApi();
+      print(fetchedVoices);
 
       setState(() {
         _voices = fetchedVoices;
@@ -127,14 +123,10 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
   }
 
   Future<void> _saveSelectedVoice(
-      String shortName, List<String> supportedLanguages) async {
-    final box = Hive.box<StringList>('selectedVoice');
-    await box.put(
-      'currentVoice',
-      StringList(strings: [shortName, ...supportedLanguages]),
-    );
-    final storedValue = box.get('currentVoice');
-    debugPrint(storedValue?.strings.toString() ?? "no value stored");
+      String shortName, List<String> supportedLanguages, String name) async {
+    final box = Hive.box('selectedVoice');
+    final voice = Voice(name: name, supportedLanguages: supportedLanguages);
+    await box.put('currentVoice', voice);
   }
 
   Future<void> _saveVoicesToDatabase(List<Map<String, dynamic>> voices) async {
@@ -149,13 +141,12 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
         name: voice['name'],
         supportedLanguages: (voice['supportedLanguages'] as String),
         gender: voice['gender'],
-        primaryLanguage: voice[
-            'locale'], // Assuming 'locale' is equivalent to the primary language
+        primaryLanguage: voice['locale'],
         createdAt: DateTime.now().millisecondsSinceEpoch,
         displayName: voice['displayName'],
       );
 
-      // Insert voice into the database
+      // Insert voice into the database using the DAO
       await voiceDao.insert(voiceItem);
     }
   }
@@ -164,9 +155,9 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Available Voices'),
+        title: const Text('Available Voices'), // Set the title
       ),
-      body: _isLoading
+      body: _isLoading // Loading state
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
@@ -231,11 +222,13 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
                                           .split(",")
                                           .map((e) => e.trim())
                                           .toList();
-                                  _saveSelectedVoice(
-                                      shortName, supportedLanguages);
+                                  _saveSelectedVoice(shortName,
+                                      supportedLanguages, voice["name"]);
 
-                                  Fluttertoast.showToast(
-                                      msg: "Selected: ${voice["name"]}");
+                                  SnackBar snackBar = SnackBar(
+                                    content: Text(
+                                        "Selected voice: ${voice["displayName"]}"),
+                                  );
                                 },
                               ),
                             );

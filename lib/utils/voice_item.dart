@@ -23,7 +23,7 @@ class VoiceItem {
       'name': name,
       'supportedLanguages': supportedLanguages,
       'gender': gender,
-      'primaryLanguage': primaryLanguage,
+      'locale': primaryLanguage,
       'createdAt': createdAt,
       'displayName': displayName,
     };
@@ -35,7 +35,7 @@ class VoiceItem {
       name: map['name'],
       supportedLanguages: map['supportedLanguages'],
       gender: map['gender'],
-      primaryLanguage: map['primaryLanguage'],
+      primaryLanguage: map['locale'],
       createdAt: map['createdAt'],
       displayName: map['displayName'],
     );

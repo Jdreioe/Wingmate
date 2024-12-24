@@ -46,20 +46,20 @@ class AppDatabase {
         isFolder INTEGER, 
         parentId INTEGER,
         createdAt INTEGER
-      )
+      );
     ''');
 
     await db.execute('''
-      CREATE TABLE VoiceItem (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        supportedLanguages TEXT,
-        gender TEXT,
-        primarylanguage TEXT,
-        createdAt INTEGER
-        displayName TEXT,
-      )
-    ''');
+        CREATE TABLE VoiceItem (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT,
+          supportedLanguages TEXT,
+          gender TEXT,
+          locale TEXT,
+          createdAt INTEGER,
+          displayName TEXT
+        )
+        ''');
 
     await db.execute('''
       CREATE TABLE SaidTextItem (
@@ -79,15 +79,11 @@ class AppDatabase {
     print(
         'Upgrading database from version $oldVersion to $newVersion'); // Add this line
     if (oldVersion < 2) {
-      print(
-          'Applying migration to add displayName and locale'); // Add this line
+      print('Applying migration to add displayName'); // Add this line
       // Add the displayName and locale columns
       try {
         await db.execute('''
         ALTER TABLE VoiceItem ADD COLUMN displayName TEXT;
-      ''');
-        await db.execute('''
-        ALTER TABLE VoiceItem ADD COLUMN locale TEXT;
       ''');
       } catch (e) {
         print('Migration error: $e'); // Log any errors during migration

@@ -6,6 +6,7 @@ void showProfileDialog(
   String speechServiceKey,
   Future<void> Function(String endpoint, String key) onSaveSettings,
 ) {
+  debugPrint('Showing profile dialog');
   final endpointController = TextEditingController(text: speechServiceEndpoint);
   final keyController = TextEditingController(text: speechServiceKey);
 
