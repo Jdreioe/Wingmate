@@ -19,17 +19,26 @@ class VoiceAdapter extends TypeAdapter<Voice> {
     return Voice(
       name: fields[0] as String,
       supportedLanguages: (fields[1] as List).cast<String>(),
+      selectedLanguage: fields[2] as String,
+      pitch: fields[3] as double,
+      rate: fields[4] as double,
     );
   }
 
   @override
   void write(BinaryWriter writer, Voice obj) {
     writer
-      ..writeByte(2)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
-      ..write(obj.supportedLanguages);
+      ..write(obj.supportedLanguages)
+      ..writeByte(2)
+      ..write(obj.selectedLanguage)
+      ..writeByte(3)
+      ..write(obj.pitch)
+      ..writeByte(4)
+      ..write(obj.rate);
   }
 
   @override

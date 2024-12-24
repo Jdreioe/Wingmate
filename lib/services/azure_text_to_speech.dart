@@ -10,6 +10,7 @@ import 'package:wingmancrossplatform/utils/said_text_dao.dart';
 import 'package:wingmancrossplatform/utils/said_text_item.dart';
 import 'package:hive/hive.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:wingmancrossplatform/utils/speech_service_config.dart';
 
 class AzureTts {
   final String subscriptionKey;
@@ -26,7 +27,11 @@ class AzureTts {
 
   Future<void> speakText(String text) async {
     Voice voice = voiceBox.get('currentVoice');
-    debugPrint("Den valgte stemme er: " + voice.name);
+    SpeechServiceConfig settings = settingsBox.get('voiceSettings');
+    debugPrint("Den valgte stemme er: " +
+        voice.name +
+        " og sproget den skal tale er: " +
+        voice.selectedLanguage);
     final selectedVoice = voice.name; // 'the selected voice name';
     final url = Uri.parse(
         'https://$region.tts.speech.microsoft.com/cognitiveservices/v1');

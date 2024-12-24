@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:wingmancrossplatform/models/voice_model.dart';
 import 'package:wingmancrossplatform/screens/fetch_voices_page.dart';
 import 'package:wingmancrossplatform/services/azure_text_to_speech.dart';
-import 'package:wingmancrossplatform/screens/profile_dialog.dart';
+import 'package:wingmancrossplatform/dialogs/profile_dialog.dart';
 import 'package:hive/hive.dart';
 import 'package:wingmancrossplatform/utils/speech_service_config.dart';
 
@@ -40,6 +40,7 @@ class _MainPageState extends State<MainPage> {
     final voiceBox = Hive.box('selectedVoice');
     final config = settingsBox.get('config') as SpeechServiceConfig?;
     final voice = voiceBox.get('voice') as VoiceAdapter?;
+
     if (config != null) {
       setState(() {
         azureTts = AzureTts(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hive/hive.dart';
+import 'package:wingmancrossplatform/services/voice_settings.dart';
 import 'package:wingmancrossplatform/utils/app_database.dart';
 
 import '../models/voice_model.dart';
@@ -41,6 +42,35 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
       subscriptionKey: widget.subscriptionKey,
     );
     _loadVoices();
+  }
+
+  void _showVoiceSettingsDialog(
+      String displayName, String shortName, List<String> supportedLanguages) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return VoiceSettingsDialog(
+          shortName: shortName,
+          displayName: displayName,
+          supportedLanguages: supportedLanguages,
+          onSave: (String language, double pitch, double rate) {
+            _saveSelectedVoiceSettings(shortName, language, pitch, rate);
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _saveSelectedVoiceSettings(
+      String shortName, String language, double pitch, double rate) async {
+    final box = await Hive.box('');
+    final config = {
+      'voice': shortName,
+      'language': language,
+      'pitch': pitch,
+      'rate': rate,
+    };
+    await box.put('voiceSettings', config);
   }
 
   Future<void> _loadVoices() async {
@@ -120,13 +150,6 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
 
   void _sortVoices() {
     _filteredVoices.sort((a, b) => a["locale"].compareTo(b["locale"]));
-  }
-
-  Future<void> _saveSelectedVoice(
-      String shortName, List<String> supportedLanguages, String name) async {
-    final box = Hive.box('selectedVoice');
-    final voice = Voice(name: name, supportedLanguages: supportedLanguages);
-    await box.put('currentVoice', voice);
   }
 
   Future<void> _saveVoicesToDatabase(List<Map<String, dynamic>> voices) async {
@@ -222,9 +245,8 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
                                           .split(",")
                                           .map((e) => e.trim())
                                           .toList();
-                                  _saveSelectedVoice(shortName,
-                                      supportedLanguages, voice["name"]);
-
+                                  _showVoiceSettingsDialog(voice["displayName"],
+                                      shortName, supportedLanguages);
                                   SnackBar snackBar = SnackBar(
                                     content: Text(
                                         "Selected voice: ${voice["displayName"]}"),

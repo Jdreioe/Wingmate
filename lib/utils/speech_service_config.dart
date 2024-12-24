@@ -8,5 +8,8 @@ class SpeechServiceConfig {
   @HiveField(1)
   final String key;
 
-  SpeechServiceConfig({required this.endpoint, required this.key});
+  SpeechServiceConfig({
+    required this.endpoint,
+    required this.key,
+  });
 }
