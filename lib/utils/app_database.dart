@@ -57,6 +57,7 @@ class AppDatabase {
         gender TEXT,
         primarylanguage TEXT,
         createdAt INTEGER
+        displayName TEXT,
       )
     ''');
 
