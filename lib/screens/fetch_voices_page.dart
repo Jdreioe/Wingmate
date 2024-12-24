@@ -54,7 +54,8 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
           displayName: displayName,
           supportedLanguages: supportedLanguages,
           onSave: (String language, double pitch, double rate) {
-            _saveSelectedVoiceSettings(shortName, language, pitch, rate);
+            _saveSelectedVoiceSettings(
+                shortName, supportedLanguages, language, pitch, rate);
           },
         );
       },
@@ -62,15 +63,19 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
   }
 
   Future<void> _saveSelectedVoiceSettings(
-      String shortName, String language, double pitch, double rate) async {
-    final box = await Hive.box('');
-    final config = {
-      'voice': shortName,
-      'language': language,
-      'pitch': pitch,
-      'rate': rate,
-    };
-    await box.put('voiceSettings', config);
+      String shortName,
+      List<String> supportedLanguages,
+      String language,
+      double pitch,
+      double rate) async {
+    final box = await Hive.box('selectedVoice');
+    final Voice voice = new Voice(
+        name: shortName,
+        supportedLanguages: supportedLanguages,
+        selectedLanguage: language,
+        pitch: pitch,
+        rate: rate);
+    await box.put('currentVoice', voice);
   }
 
   Future<void> _loadVoices() async {

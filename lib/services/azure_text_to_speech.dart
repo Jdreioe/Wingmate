@@ -27,7 +27,6 @@ class AzureTts {
 
   Future<void> speakText(String text) async {
     Voice voice = voiceBox.get('currentVoice');
-    SpeechServiceConfig settings = settingsBox.get('voiceSettings');
     debugPrint("Den valgte stemme er: " +
         voice.name +
         " og sproget den skal tale er: " +
@@ -44,7 +43,7 @@ class AzureTts {
     };
 
     final ssml =
-        '<speak version="1.0" xml:lang="en-US"><voice name="$selectedVoice">$text</voice></speak>';
+        '<speak version="1.0" xml:lang="en-US"><voice xml: name="$selectedVoice">$text</voice></speak>';
 
     debugPrint('URL: $url');
     debugPrint('Headers: $headers');

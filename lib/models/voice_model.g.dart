@@ -11,17 +11,20 @@ class VoiceAdapter extends TypeAdapter<Voice> {
   final int typeId = 1;
 
   @override
+  @override
   Voice read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return Voice(
-      name: fields[0] as String,
-      supportedLanguages: (fields[1] as List).cast<String>(),
-      selectedLanguage: fields[2] as String,
-      pitch: fields[3] as double,
-      rate: fields[4] as double,
+      name: fields[0] as String? ?? '', // Provide a default value if null
+      supportedLanguages: (fields[1] as List?)?.cast<String>() ??
+          [], // Provide a default empty list if null
+      selectedLanguage:
+          fields[2] as String? ?? '', // Provide a default value if null
+      pitch: fields[3] as double? ?? 1.0, // Provide a default value if null
+      rate: fields[4] as double? ?? 1.0, // Provide a default value if null
     );
   }
 
