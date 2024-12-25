@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
+import 'package:wingmancrossplatform/models/voice_model.dart';
 
 class VoiceSettingsDialog extends StatefulWidget {
   final String displayName;
@@ -25,7 +27,15 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
   @override
   void initState() {
     super.initState();
-    _selectedLanguage = widget.supportedLanguages.first;
+    final voiceBox = Hive.box('selectedVoice');
+    final currentVoice = voiceBox.get('currentVoice') as Voice?;
+    if (currentVoice != null && currentVoice.name == widget.shortName) {
+      _selectedLanguage = currentVoice.selectedLanguage;
+      _pitch = currentVoice.pitch;
+      _rate = currentVoice.rate;
+    } else {
+      _selectedLanguage = widget.supportedLanguages.first;
+    }
   }
 
   @override

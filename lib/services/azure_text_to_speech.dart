@@ -32,6 +32,7 @@ class AzureTts {
         " og sproget den skal tale er: " +
         voice.selectedLanguage);
     final selectedVoice = voice.name; // 'the selected voice name';
+    final selectedLanguage = voice.selectedLanguage; // 'the selected language';
     final url = Uri.parse(
         'https://$region.tts.speech.microsoft.com/cognitiveservices/v1');
 
@@ -43,7 +44,7 @@ class AzureTts {
     };
 
     final ssml =
-        '<speak version="1.0" xml:lang="en-US"><voice xml: name="$selectedVoice">$text</voice></speak>';
+        '<speak version="1.0" xml:lang="en-US"> <voice name="$selectedVoice"><lang xml:lang="$selectedLanguage">$text</lang > </voice> </speak>';
 
     debugPrint('URL: $url');
     debugPrint('Headers: $headers');
