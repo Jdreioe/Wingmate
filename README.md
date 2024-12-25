@@ -1,3 +1,3 @@
-# wingmancrossplatform
+# Wingmate
 
 A new Flutter project.

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -18,12 +19,18 @@ class AzureTts {
   final Box<dynamic> settingsBox;
   final TextEditingController messageController;
   final Box<dynamic> voiceBox;
+  final player = AudioPlayer();
+  final BuildContext context;
   AzureTts(
       {required this.subscriptionKey,
       required this.region,
       required this.settingsBox,
       required this.messageController,
-      required this.voiceBox});
+      required this.voiceBox,
+      required this.context});
+  Future<void> pause() async {
+    player.pause();
+  }
 
   Future<void> speakText(String text) async {
     Voice voice = voiceBox.get('currentVoice');
@@ -54,12 +61,15 @@ class AzureTts {
       final response = await http.post(url, headers: headers, body: ssml);
 
       if (response.statusCode == 200) {
-        final player = AudioPlayer();
         final directory = await getApplicationDocumentsDirectory();
         final file = File('${directory.path}/temp_audio.mp3');
         await file.writeAsBytes(response.bodyBytes);
         await player.play(DeviceFileSource(file.path));
+        player.onPlayerComplete.listen((event) {
+          // Send isPlaying back to the main page with isPlaying = false
+        });
         saveAudioFile(text, file.readAsBytesSync(), selectedVoice);
+        ;
       } else {
         debugPrint('Error: ${response.statusCode}, ${response.body}');
       }

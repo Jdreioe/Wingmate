@@ -1,3 +1,4 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:wingmancrossplatform/models/voice_model.dart';
 import 'package:wingmancrossplatform/screens/fetch_voices_page.dart';
@@ -49,6 +50,7 @@ class _MainPageState extends State<MainPage> {
           settingsBox: settingsBox,
           voiceBox: voiceBox,
           messageController: _messageController,
+          context: context,
         );
       });
     } else {
@@ -59,7 +61,6 @@ class _MainPageState extends State<MainPage> {
   void _addMessage() {
     setState(() {
       _saidTextItems.add(_messageController.text);
-      _messageController.clear();
     });
   }
 
@@ -71,7 +72,10 @@ class _MainPageState extends State<MainPage> {
       if (isPlaying) {
         await azureTts!.speakText(_messageController.text);
       } else {
-        // Handle pause functionality if needed
+        await azureTts!.pause();
+        setState(() {
+          isPlaying = false; // Ensure the icon is set to play when paused
+        });
       }
     } else {
       debugPrint('AzureTts is not initialized or message is empty');
@@ -152,10 +156,6 @@ class _MainPageState extends State<MainPage> {
                       ),
                     ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.send),
-                  onPressed: _addMessage,
                 ),
                 IconButton(
                   icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
