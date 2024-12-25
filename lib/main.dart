@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:wingmancrossplatform/models/voice_model.dart';
-import 'package:wingmancrossplatform/screens/main_page.dart';
-import 'package:wingmancrossplatform/utils/speech_service_config.dart';
+import 'package:wingmate/models/voice_model.dart';
+import 'package:wingmate/screens/main_page.dart';
+import 'package:wingmate/utils/speech_service_config.dart';
 import 'package:dynamic_color/dynamic_color.dart';
-import 'package:wingmancrossplatform/utils/speech_service_config_adapter.dart'; // Ensure this package is added to your pubspec.yaml
+import 'package:wingmate/utils/speech_service_config_adapter.dart'; // Ensure this package is added to your pubspec.yaml
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,7 +56,7 @@ class MyApp extends StatelessWidget {
         final darkColorScheme = darkDynamic ?? _defaultDarkColorScheme;
 
         return MaterialApp(
-          title: 'Wingman',
+          title: 'Wingmate',
           theme: ThemeData(
             colorScheme: lightColorScheme,
             useMaterial3: true,

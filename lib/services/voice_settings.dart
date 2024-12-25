@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
-import 'package:wingmancrossplatform/models/voice_model.dart';
+import 'package:wingmate/models/voice_model.dart';
 
 class VoiceSettingsDialog extends StatefulWidget {
   final String displayName;

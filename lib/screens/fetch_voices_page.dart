@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hive/hive.dart';
-import 'package:wingmancrossplatform/services/voice_settings.dart';
-import 'package:wingmancrossplatform/utils/app_database.dart';
+import 'package:wingmate/services/voice_settings.dart';
+import 'package:wingmate/utils/app_database.dart';
 
 import '../models/voice_model.dart';
 import '../services/voice_service.dart';

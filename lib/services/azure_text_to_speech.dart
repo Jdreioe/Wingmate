@@ -5,13 +5,13 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:wingmancrossplatform/models/voice_model.dart';
-import 'package:wingmancrossplatform/utils/app_database.dart';
-import 'package:wingmancrossplatform/utils/said_text_dao.dart';
-import 'package:wingmancrossplatform/utils/said_text_item.dart';
+import 'package:wingmate/models/voice_model.dart';
+import 'package:wingmate/utils/app_database.dart';
+import 'package:wingmate/utils/said_text_dao.dart';
+import 'package:wingmate/utils/said_text_item.dart';
 import 'package:hive/hive.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:wingmancrossplatform/utils/speech_service_config.dart';
+import 'package:wingmate/utils/speech_service_config.dart';
 
 class AzureTts {
   final String subscriptionKey;

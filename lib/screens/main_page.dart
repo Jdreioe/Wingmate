@@ -1,11 +1,11 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import 'package:wingmancrossplatform/models/voice_model.dart';
-import 'package:wingmancrossplatform/screens/fetch_voices_page.dart';
-import 'package:wingmancrossplatform/services/azure_text_to_speech.dart';
-import 'package:wingmancrossplatform/dialogs/profile_dialog.dart';
+import 'package:wingmate/models/voice_model.dart';
+import 'package:wingmate/screens/fetch_voices_page.dart';
+import 'package:wingmate/services/azure_text_to_speech.dart';
+import 'package:wingmate/dialogs/profile_dialog.dart';
 import 'package:hive/hive.dart';
-import 'package:wingmancrossplatform/utils/speech_service_config.dart';
+import 'package:wingmate/utils/speech_service_config.dart';
 
 class MainPage extends StatefulWidget {
   final String speechServiceEndpoint;

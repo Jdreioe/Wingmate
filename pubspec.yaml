@@ -1,7 +1,7 @@
-name: wingmancrossplatform
-description: "A new Flutter project."
+name: wingmate
+description: "TTS with actual great synthesis."
 publish_to: 'none'
-version: 0.1.0
+version: 0.1.5
 
 environment:
   sdk: ^3.5.4

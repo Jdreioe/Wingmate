@@ -1,5 +1,5 @@
 import 'package:hive/hive.dart';
-import 'package:wingmancrossplatform/utils/speech_service_config.dart';
+import 'package:wingmate/utils/speech_service_config.dart';
 
 class SpeechServiceConfigAdapter extends TypeAdapter<SpeechServiceConfig> {
   @override
