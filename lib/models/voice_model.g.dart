@@ -7,10 +7,10 @@ part of 'voice_model.dart';
 // **************************************************************************
 
 class VoiceAdapter extends TypeAdapter<Voice> {
+  // Reads a Voice object from binary, applying default values if any field is missing.
   @override
   final int typeId = 1;
 
-  @override
   @override
   Voice read(BinaryReader reader) {
     final numOfFields = reader.readByte();
@@ -28,6 +28,7 @@ class VoiceAdapter extends TypeAdapter<Voice> {
     );
   }
 
+  // Writes a Voice object to binary using hive fields.
   @override
   void write(BinaryWriter writer, Voice obj) {
     writer

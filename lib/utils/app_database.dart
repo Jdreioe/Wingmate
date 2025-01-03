@@ -10,6 +10,7 @@ class AppDatabase {
   static final AppDatabase _instance = AppDatabase._internal();
   static Database? _database;
 
+  // Singleton pattern for a shared database instance.
   factory AppDatabase() {
     return _instance;
   }
@@ -23,6 +24,7 @@ class AppDatabase {
     return _database!;
   }
 
+  // Initializes the database, including FFI for desktop/web platforms.
   Future<Database> _initDatabase() async {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS || kIsWeb) {
       // Initialize FFI for desktop/web
@@ -37,6 +39,7 @@ class AppDatabase {
         version: 2, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
+  // Creates necessary tables for storing speech items, voices, and said texts.
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE SpeechItem (
@@ -75,6 +78,7 @@ class AppDatabase {
     ''');
   }
 
+  // Handles database schema upgrades (e.g., adding new columns).
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     print(
         'Upgrading database from version $oldVersion to $newVersion'); // Add this line

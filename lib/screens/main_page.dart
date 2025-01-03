@@ -24,6 +24,7 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
+  // Controller for user-entered text and list to display said texts.
   final TextEditingController _messageController = TextEditingController();
   final List<String> _saidTextItems = [];
   bool isPlaying = false;
@@ -33,9 +34,11 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
+    // Initialize the Azure TTS service when the MainPage is ready.
     _initializeAzureTts();
   }
 
+  // Creates a new instance of AzureTts with the stored config and voice.
   Future<void> _initializeAzureTts() async {
     final settingsBox = Hive.box('settings');
     final voiceBox = Hive.box('selectedVoice');
@@ -58,12 +61,14 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
+  // Adds the typed message to a local list for display.
   void _addMessage() {
     setState(() {
       _saidTextItems.add(_messageController.text);
     });
   }
 
+  // Toggles between playing and pausing the TTS audio.
   void _togglePlayPause() async {
     if (_messageController.text.isNotEmpty && azureTts != null) {
       setState(() {
@@ -90,6 +95,7 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Builds the main UI with an AppBar and text input area.
     return Scaffold(
       appBar: AppBar(
         title: const Text('Wingman'),

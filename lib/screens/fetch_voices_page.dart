@@ -24,6 +24,7 @@ class FetchVoicesPage extends StatefulWidget {
 }
 
 class _FetchVoicesPageState extends State<FetchVoicesPage> {
+  // Holds all voices and the filtered subset based on user selection.
   late final VoiceService _voiceService;
   List<Map<String, dynamic>> _voices = [];
   List<Map<String, dynamic>> _filteredVoices = [];
@@ -37,6 +38,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
   @override
   void initState() {
     super.initState();
+    // Initialize service and load voices on creation.
     _voiceService = VoiceService(
       endpoint: widget.endpoint,
       subscriptionKey: widget.subscriptionKey,
@@ -44,6 +46,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
     _loadVoices();
   }
 
+  // Opens a dialog to customize voice settings (pitch, rate, language).
   void _showVoiceSettingsDialog(
       String displayName, String shortName, List<String> supportedLanguages) {
     showDialog(
@@ -62,6 +65,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
     );
   }
 
+  // Saves the user's selected voice to Hive.
   Future<void> _saveSelectedVoiceSettings(
       String shortName,
       List<String> supportedLanguages,
@@ -78,6 +82,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
     await box.put('currentVoice', voice);
   }
 
+  // Loads voices from the database or fetches them from the API if needed.
   Future<void> _loadVoices() async {
     setState(() => _isLoading = true);
     try {
@@ -132,6 +137,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
     }
   }
 
+  // Filters voices based on user search and applied gender/language filters.
   void _filterVoices(String query) {
     setState(() {
       _filteredVoices = _voices.where((voice) {
@@ -153,10 +159,12 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
     });
   }
 
+  // Sorts voices by locale for consistency in the list display.
   void _sortVoices() {
     _filteredVoices.sort((a, b) => a["locale"].compareTo(b["locale"]));
   }
 
+  // Persists the fetched voices into the local database for offline use.
   Future<void> _saveVoicesToDatabase(List<Map<String, dynamic>> voices) async {
     final database = AppDatabase(); // Get the database instance
     final voiceDao = VoiceDao(database);
@@ -181,6 +189,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Renders a search bar, filter options, and a list of available voices.
     return Scaffold(
       appBar: AppBar(
         title: const Text('Available Voices'), // Set the title

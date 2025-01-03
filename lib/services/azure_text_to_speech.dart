@@ -28,10 +28,12 @@ class AzureTts {
       required this.messageController,
       required this.voiceBox,
       required this.context});
+  // Pauses the audio playback if it's active.
   Future<void> pause() async {
     player.pause();
   }
 
+  // Converts given text to speech using the selected Voice and Azure TTS service.
   Future<void> speakText(String text) async {
     Voice voice = voiceBox.get('currentVoice');
     debugPrint("Den valgte stemme er: " +
@@ -57,6 +59,7 @@ class AzureTts {
     debugPrint('Headers: $headers');
     debugPrint('SSML: $ssml');
 
+    // Attempt to post the SSML body to Azure TTS endpoint
     try {
       final response = await http.post(url, headers: headers, body: ssml);
 
@@ -64,12 +67,13 @@ class AzureTts {
         final directory = await getApplicationDocumentsDirectory();
         final file = File('${directory.path}/temp_audio.mp3');
         await file.writeAsBytes(response.bodyBytes);
+        // Play the generated audio file
         await player.play(DeviceFileSource(file.path));
         player.onPlayerComplete.listen((event) {
           // Send isPlaying back to the main page with isPlaying = false
         });
+        // Save the audio file to the device and database
         saveAudioFile(text, file.readAsBytesSync(), selectedVoice);
-        ;
       } else {
         debugPrint('Error: ${response.statusCode}, ${response.body}');
       }
@@ -78,6 +82,7 @@ class AzureTts {
     }
   }
 
+  // Persists the audio file and text record in the local database.
   Future<void> saveAudioFile(
     String text,
     List<int> audioData,

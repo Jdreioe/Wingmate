@@ -4,6 +4,7 @@ part 'voice_model.g.dart';
 
 @HiveType(typeId: 1)
 class Voice {
+  // Represents a voice configuration, including language options and playback tuning.
   @HiveField(0)
   final String name;
 
