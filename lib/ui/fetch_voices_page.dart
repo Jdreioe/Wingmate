@@ -40,7 +40,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
     super.initState();
     // Initialize service and load voices on creation.
     _voiceService = VoiceService(
-      endpoint: widget.endpoint,
+      endpoint: widget.endpoint.toLowerCase().trim(),
       subscriptionKey: widget.subscriptionKey,
     );
     _loadVoices();
@@ -117,16 +117,20 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
   }
 
   Future<void> _fetchVoices() async {
+    debugPrint('_fetchVoices invoked');
     setState(() => _isLoading = true);
 
     try {
       final fetchedVoices = await _voiceService.fetchVoicesFromApi();
-      print(fetchedVoices);
 
       setState(() {
         _voices = fetchedVoices;
         _filteredVoices = fetchedVoices;
       });
+
+      if (fetchedVoices.isNotEmpty) {
+        debugPrint('Fetched voices count: ${fetchedVoices.length}');
+      }
 
       // Save voices to the database
       await _saveVoicesToDatabase(fetchedVoices);
@@ -139,6 +143,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
 
   // Filters voices based on user search and applied gender/language filters.
   void _filterVoices(String query) {
+    debugPrint('_filterVoices called with query: $query');
     setState(() {
       _filteredVoices = _voices.where((voice) {
         final nameMatches =
@@ -297,6 +302,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
   }
 
   @override
+
   void dispose() {
     _searchController.dispose();
     super.dispose();

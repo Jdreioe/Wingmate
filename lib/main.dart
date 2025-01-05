@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:wingmate/models/voice_model.dart';
-import 'package:wingmate/screens/main_page.dart';
+import 'package:wingmate/ui/main_page.dart';
 import 'package:wingmate/utils/speech_service_config.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:wingmate/utils/speech_service_config_adapter.dart'; // Ensure this package is added to your pubspec.yaml
 
 void main() async {
+  debugPrint('App main started');
   // Ensure Flutter is properly initialized before any async operation
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -28,24 +29,30 @@ void main() async {
   final box = Hive.box('settings');
   final config = box.get('config') as SpeechServiceConfig?;
   if (config != null) {
+    debugPrint('Config found, launching app');
     final apiKey = config.key;
     final endpoint = config.endpoint;
 
-    if (apiKey.isEmpty || endpoint.isEmpty) {
-      debugPrint('API key or endpoint not found in Hive box');
+    if (apiKey.isEmpty || endpoint.isEmpty) {      
       return;
+    } else {
     }
 
     // If config exists and is valid, run the app with the saved settings
     runApp(MyApp(speechServiceEndpoint: endpoint, speechServiceKey: apiKey));
-  } else {
-    debugPrint(
-        'TtsMicrosoft initialization failed: API key or endpoint not found.');
+  }
+  else 
+  {
+    // If no config is found, run the app with default settings
+    runApp(MyApp(
+      speechServiceEndpoint: '',
+      speechServiceKey: ' ',
+    ));
   }
 }
 
 // This widget holds the main MaterialApp and uses dynamic color theming
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final String speechServiceEndpoint;
   final String speechServiceKey;
 
@@ -55,8 +62,22 @@ class MyApp extends StatelessWidget {
   });
 
   @override
+  _MyAppState createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late String speechServiceEndpoint;
+  late String speechServiceKey;
+
+  @override
+  void initState() {
+    super.initState();
+    speechServiceEndpoint = widget.speechServiceEndpoint;
+    speechServiceKey = widget.speechServiceKey;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Build color schemes dynamically if possible, otherwise use defaults
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
         final lightColorScheme = lightDynamic ?? _defaultLightColorScheme;
@@ -83,7 +104,6 @@ class MyApp extends StatelessWidget {
     );
   }
 
-  // Define default light and dark color schemes
   static final ColorScheme _defaultLightColorScheme = ColorScheme.fromSeed(
     seedColor: Colors.blue,
     brightness: Brightness.light,
@@ -94,10 +114,14 @@ class MyApp extends StatelessWidget {
     brightness: Brightness.dark,
   );
 
-  // Saves user settings (endpoint and key) into local storage
   Future<void> _saveSettings(String endpoint, String key) async {
     final box = Hive.box('settings');
     final config = SpeechServiceConfig(endpoint: endpoint, key: key);
     await box.put('config', config);
+
+    setState(() {
+      speechServiceEndpoint = endpoint;
+      speechServiceKey = key;
+    });
   }
 }

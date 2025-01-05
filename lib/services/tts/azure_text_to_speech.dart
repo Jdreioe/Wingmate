@@ -34,12 +34,9 @@ class AzureTts {
   }
 
   // Converts given text to speech using the selected Voice and Azure TTS service.
-  Future<void> speakText(String text) async {
+  Future<void> generateSSML(String text) async {
+    debugPrint('generateSSML called with text: $text');
     Voice voice = voiceBox.get('currentVoice');
-    debugPrint("Den valgte stemme er: " +
-        voice.name +
-        " og sproget den skal tale er: " +
-        voice.selectedLanguage);
     final selectedVoice = voice.name; // 'the selected voice name';
     final selectedLanguage = voice.selectedLanguage; // 'the selected language';
     final url = Uri.parse(
@@ -55,23 +52,17 @@ class AzureTts {
     final ssml =
         '<speak version="1.0" xml:lang="en-US"> <voice name="$selectedVoice"><lang xml:lang="$selectedLanguage">$text</lang > </voice> </speak>';
 
-    debugPrint('URL: $url');
-    debugPrint('Headers: $headers');
-    debugPrint('SSML: $ssml');
-
     // Attempt to post the SSML body to Azure TTS endpoint
     try {
       final response = await http.post(url, headers: headers, body: ssml);
+            
 
       if (response.statusCode == 200) {
+        settingsBox.put('isPlaying', true);
+        debugPrint('Azure TTS request succeeded ');
         final directory = await getApplicationDocumentsDirectory();
         final file = File('${directory.path}/temp_audio.mp3');
         await file.writeAsBytes(response.bodyBytes);
-        // Play the generated audio file
-        await player.play(DeviceFileSource(file.path));
-        player.onPlayerComplete.listen((event) {
-          // Send isPlaying back to the main page with isPlaying = false
-        });
         // Save the audio file to the device and database
         saveAudioFile(text, file.readAsBytesSync(), selectedVoice);
       } else {
@@ -88,6 +79,7 @@ class AzureTts {
     List<int> audioData,
     String voice,
   ) async {
+    debugPrint('saveAudioFile called with voice: $voice');
     final SaidTextDao saidTextDao = SaidTextDao(AppDatabase());
     try {
       final Directory directory = await getApplicationDocumentsDirectory();
@@ -103,8 +95,62 @@ class AzureTts {
           voiceName: voice);
       saidTextDao.insertHistorik(saidTextItem);
       debugPrint('Audio file saved at: $filePath');
+      await playText(DeviceFileSource(filePath));
     } catch (e) {
       print('Error saving audio file: $e');
+    }
+
+  }
+  Future <void> playText(
+    DeviceFileSource filePath
+  ) async {
+    
+    await player.play(filePath);
+    
+    player.onPlayerComplete.listen((event) {
+      // Send isPlaying back to the main page with isPlaying = false
+          
+      settingsBox.put('isPlaying', false);
+      });
+
+  }
+
+  Future<void> generateSSMLForItem(SaidTextItem saidTextItem) async {
+    debugPrint('generateSSMLForItem called with text: ${saidTextItem.saidText}');
+    Voice voice = voiceBox.get('currentVoice');
+    final selectedVoice = voice.name;
+    final selectedLanguage = voice.selectedLanguage;
+    final url = Uri.parse(
+        'https://$region.tts.speech.microsoft.com/cognitiveservices/v1');
+
+    final headers = {
+      'Ocp-Apim-Subscription-Key': subscriptionKey,
+      'Content-Type': 'application/ssml+xml',
+      'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3',
+      'User-Agent': 'WingmateCrossPlatform',
+    };
+
+    final ssml =
+        '<speak version="1.0" xml:lang="en-US"> <voice name="$selectedVoice"><lang xml:lang="$selectedLanguage">${saidTextItem.saidText}</lang > </voice> </speak>';
+
+    try {
+      final response = await http.post(url, headers: headers, body: ssml);
+
+      if (response.statusCode == 200) {
+        debugPrint('Azure TTS request succeeded');
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('${directory.path}/audio_${DateTime.now().millisecondsSinceEpoch}.mp3');
+        await file.writeAsBytes(response.bodyBytes);
+
+        saidTextItem.audioFilePath = file.path;
+        final SaidTextDao saidTextDao = SaidTextDao(AppDatabase());
+        saidTextDao.insertHistorik(saidTextItem);
+        debugPrint('Audio file saved at: ${file.path}');
+      } else {
+        debugPrint('Error: ${response.statusCode}, ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('Exception: $e');
     }
   }
 }
