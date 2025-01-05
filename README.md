@@ -21,7 +21,7 @@ The app is in _VERY_ early stages
 - Make a free Microsoft Azure account (portal.azure.com) 
 - Create a Speech Resource (F0 = 500k free characters a month - that's enough for me)
 - Add the region & key to the "Profile" dialog in the app
-- Choose your voice & selected language if it'a a multilingual voice. 
+- Choose your voice in the Settings-page & select your primary language if it'a a multilingual voice. 
 
 License: GPL 3.0
 
