@@ -7,6 +7,7 @@ class SaidTextItem {
   double? speed;
   String? audioFilePath;
   int? createdAt;
+  int? position; // new field to track item order
 
   SaidTextItem(
       {this.id,
@@ -16,7 +17,8 @@ class SaidTextItem {
       this.pitch,
       this.speed,
       this.audioFilePath,
-      this.createdAt});
+      this.createdAt,
+      this.position});
 
   Map<String, dynamic> toMap() {
     return {
@@ -28,6 +30,7 @@ class SaidTextItem {
       'speed': speed,
       'audioFilePath': audioFilePath,
       'createdAt': createdAt,
+      'position': position,
     };
   }
 
@@ -41,6 +44,7 @@ class SaidTextItem {
       speed: map['speed']?.toDouble(), // Ensure correct type conversion
       audioFilePath: map['audioFilePath'],
       createdAt: map['createdAt'],
+      position: map['position'],
     );
   }
 }

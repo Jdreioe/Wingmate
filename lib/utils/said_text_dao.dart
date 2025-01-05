@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:sqflite/sqflite.dart';
 import 'app_database.dart';
 import 'said_text_item.dart';
@@ -21,9 +23,31 @@ class SaidTextDao {
     return await db.insert('SaidTextItem', saidTextItem.toMap());
   }
 
+  Future<int> delete(int id) async {
+    final db = await _database.database;
+    return await db.delete(
+      'SaidTextItem',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> updateItem(SaidTextItem item) async {
+    final db = await _database.database;
+    return await db.update(
+      'SaidTextItem',
+      item.toMap(),
+      where: 'id = ?',
+      whereArgs: [item.id],
+    );
+  }
+
   Future<List<SaidTextItem>> getAll() async {
     final db = await _database.database;
-    final List<Map<String, dynamic>> maps = await db.query('SaidTextItem');
+    final List<Map<String, dynamic>> maps = await db.query(
+      'SaidTextItem',
+      orderBy: 'position ASC', // sort by position
+    );
     return List.generate(maps.length, (i) {
       return SaidTextItem.fromMap(maps[i]);
     });

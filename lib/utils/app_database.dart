@@ -35,8 +35,12 @@ class AppDatabase {
     final databasesPath = await getDatabasesPath();
     final path = join(databasesPath, 'wingman_database.db');
 
-    return await openDatabase(path,
-        version: 2, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return await openDatabase(
+      path,
+      version: 3, // incremented database version
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
   }
 
   // Creates necessary tables for storing speech items, voices, and said texts.
@@ -92,7 +96,11 @@ class AppDatabase {
       } catch (e) {
         print('Migration error: $e'); // Log any errors during migration
       }
-    } // Add other migration blocks for future versions here. For example:
+    } 
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE SaidTextItem ADD COLUMN position INTEGER;');
+    }
+    // Add other migration blocks for future versions here. For example:
     // if (oldVersion < 3) {
     //   // Add another column or table
     // }

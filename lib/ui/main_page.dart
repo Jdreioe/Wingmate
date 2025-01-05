@@ -1,3 +1,5 @@
+import 'dart:ffi';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:wingmate/models/voice_model.dart';
@@ -40,7 +42,7 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> {
   // Controller for user-entered text and list to display said texts.
   final TextEditingController _messageController = TextEditingController();
-  final List<String> _saidTextItems = [];
+  final List<SaidTextItem> _saidTextItems = []; // store items instead of just text
   bool isPlaying = false;
   
   AzureTts? azureTts;
@@ -88,16 +90,18 @@ class _MainPageState extends State<MainPage> {
 
   Future<void> _loadSaidTextItems() async {
     final items = await _saidTextDao.getAll();
+    items.reversed;
     setState(() {
       _saidTextItems.clear();
-      _saidTextItems.addAll(items.map((item) => item.saidText ?? ''));
+      _saidTextItems.addAll(items);
+
     });
   }
 
   // Adds the typed message to a local list for display.
   void _addMessage() {
     setState(() {
-      _saidTextItems.add(_messageController.text);
+      _saidTextItems.add(SaidTextItem(saidText: _messageController.text));
     });
   }
 
@@ -137,6 +141,36 @@ class _MainPageState extends State<MainPage> {
         );
       },
     );
+  }
+
+  Future<bool> _deleteSaidTextItem(int index) async {
+    final text = _saidTextItems[index];
+    final items = await _saidTextDao.getAll();
+    if (items.isNotEmpty && index < items.length) {
+      final result = await _saidTextDao.delete(items[index].id!);
+      if (result > 0) {
+        setState(() {
+          _saidTextItems.removeAt(index);
+        });
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<void> _reorderItems(int oldIndex, int newIndex) async {
+    setState(() {
+      if (newIndex > oldIndex) {
+        newIndex -= 1;
+      }
+      final item = _saidTextItems.removeAt(oldIndex);
+      _saidTextItems.insert(newIndex, item);
+    });
+    // update positions in the DB
+    for (int i = 0; i < _saidTextItems.length; i++) {
+      _saidTextItems[i].position = i;
+      await _saidTextDao.updateItem(_saidTextItems[i]);
+    }
   }
 
   @override
@@ -187,14 +221,44 @@ class _MainPageState extends State<MainPage> {
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
+            child: ReorderableListView.builder(
+              onReorder: _reorderItems,
               itemCount: _saidTextItems.length,
               itemBuilder: (context, index) {
                 final item = _saidTextItems[index];
-                final isCategory = item.contains('Category:');
-                return ListTile(
-                  leading: Icon(isCategory ? Icons.folder : Icons.speaker_phone),
-                  title: Text(item),
+                final dateString = DateTime.fromMillisecondsSinceEpoch(item.date ?? 0)
+                    .toLocal()
+                    .toString()
+                    .substring(0, 16) // e.g. "YYYY-MM-DD HH:MM"
+                    .replaceRange(0, 5, item.date == null ? '' : ''); // minor format tweak
+                return Dismissible(
+                  key: ValueKey(item.saidText! + DateTime.now().toString()), // Unique key
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    color: Colors.red,
+                    child: const Icon(
+                      Icons.delete,
+                      color: Colors.white,
+                    ),
+                  ),
+                  confirmDismiss: (direction) async {
+                    return await _deleteSaidTextItem(index);
+                  },
+                  child: ListTile(
+                    key: ValueKey(item),
+                    leading: Icon(item.saidText!.contains('Category:') ? Icons.folder : Icons.speaker_phone),
+                    title: Text(item.saidText ?? ''),
+                    subtitle: Text(dateString),
+                    onTap: item.audioFilePath != null
+                        ? () async {
+                            await azureTts?.playText(
+                              DeviceFileSource(item.audioFilePath!),
+                            );
+                          }
+                        : null,
+                  ),
                 );
               },
             ),
