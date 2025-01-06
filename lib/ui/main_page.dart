@@ -1,6 +1,7 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:math' as math;
 
 import 'package:wingmate/ui/fetch_voices_page.dart';
 import 'package:wingmate/services/tts/azure_text_to_speech.dart';
@@ -96,14 +97,36 @@ class _MainPageState extends State<MainPage> {
   });
 
   }
-  TextSelection _previousSelection = TextSelection.collapsed(offset: 0);
 
 String convertToUserFriendlyTags(String text) {
-  _messageController.selection = _previousSelection;
-  return text
+
+  final newText = text
       .replaceAll('<lang xml:lang="en-US">', '<en>')
-      .replaceAll('</lang>', '</en>');
+      .replaceAll('</lang>', '</en>')
+      .replaceAll('<break time="2s"/>', "<2s>");
+      
   
+  int newOffset = newText.indexOf("<en>") >= 0
+      ? newText.indexOf("<en>") + "<en>".length
+      : 0;
+
+  _messageController.text = newText;
+  _messageController.selection = TextSelection.collapsed(offset: newOffset);
+
+  return newText;
+  
+}
+void _onTextChanged(String text) {
+  setState(() {
+    final oldValue = _messageController.value;
+    final newText = convertToUserFriendlyTags(text);
+    final newOffset = math.min(oldValue.selection.baseOffset, newText.length);
+    final newExtentOffset = math.min(oldValue.selection.extentOffset, newText.length);
+    _messageController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection(baseOffset: newOffset, extentOffset: newExtentOffset),
+    );
+  });
 }
 
 String convertToXmlTags(String text) {
@@ -181,25 +204,29 @@ void _showSaveMessageDialog() {
 
   // Adds the selected XML tag to the message field at the current cursor position.
   void _addXmlTag(String tag) {
-    String newText;
-    final text = _messageController.text;
-    final selection = _messageController.selection;
-    if (selection.start == -1) {
-      newText = tag;
-    } else {
-      newText = text.replaceRange(selection.start, selection.end, tag);
-    }
 
-    _messageController.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(offset: selection.start + tag.length),
-    );
-    
-    // Set the cursor position inside the tag
+  final text = _messageController.text;
+  final selection = _messageController.selection;
+  final userFriendlyTag = convertToUserFriendlyTags(tag);
 
-    final cursorPosition = selection.start + tag.indexOf('>') + 1;
-    _messageController.selection = TextSelection.collapsed(offset: cursorPosition);
-    _messageFocusNode.requestFocus();
+  String newText;
+  if (text.isEmpty) {
+    newText = userFriendlyTag;
+  } else {
+    newText = text.replaceRange(selection.start, selection.end, userFriendlyTag);
+  }
+
+  int newOffset = selection.start + userFriendlyTag.indexOf('>') + 1;
+  if (newOffset > newText.length) {
+    newOffset = newText.length;
+  }
+
+  _messageController.value = TextEditingValue(
+    text: newText,
+    selection: TextSelection.collapsed(offset: newOffset),
+  );
+
+  _messageFocusNode.requestFocus();
   }
 
   @override
@@ -341,10 +368,15 @@ void _showSaveMessageDialog() {
                     ),
                     onChanged: (text) {
                       setState(() {
-                        _previousSelection = _messageController.selection;
-                      _messageController.text = convertToUserFriendlyTags(text);
-                      _messageController.selection = _previousSelection;
-                      });
+  final oldValue = _messageController.value;
+  final newText = convertToUserFriendlyTags(text);
+  final newOffset = math.min(oldValue.selection.baseOffset, newText.length);
+  final newExtentOffset = math.min(oldValue.selection.extentOffset, newText.length);
+  _messageController.value = TextEditingValue(
+    text: newText,
+    selection: TextSelection(baseOffset: newOffset, extentOffset: newExtentOffset),
+  );
+});
                     },
 
                   ),
@@ -361,3 +393,4 @@ void _showSaveMessageDialog() {
     );
   }
 }
+
