@@ -132,7 +132,9 @@ void _onTextChanged(String text) {
 String convertToXmlTags(String text) {
   return text
       .replaceAll('<en>', '<lang xml:lang="en-US">')
-      .replaceAll('</en>', '</lang>');
+      .replaceAll('</en>', '</lang>')
+      .replaceAll("<2s>", '<break time="2s"/>');
+
 }
 
   // Toggles between playing and pausing the TTS audio.
