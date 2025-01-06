@@ -1,19 +1,28 @@
 # Wingmate
+Wingmate is a Free and Open Source Software (FOSS) project aimed at providing an exceptional voice for people who cannot speak, using Azure Neural Voices.
 
-Wingmate is an FOSS project that lets people who cannot speak, get an actually great voice via Azure Neural Voices.
 
-Wingmate is currently developed by me, Jonas, who has CP and used to have a Rolltalk, then a GridPad, then a Tobii i-13 speech device. The current Tobii Windows PC cost ~50k DKK (for touch only), has a 7. gen intel processor, is so slow and has a program UI that feels like it was from Vista-era. GridPad was constantly crashing due to their program being 32-bit (in 2023) and was super slow, but felt more modern in its UX (more like Windows 7). Rolltalk stopped development in 2020, had a XP-era UI and was super buggy. So, in September of 2024, I decided to make my own AAC-program. I wanted to make it open source, so we can develop a better user-experience together!
+## About the project
+Wingmate is developed by Jonas, who has Cerebral Palsy (CP) and extensive experience with various speech devices. The current goal is to offer a high-quality, affordable communication solution that can be built cross platform using Flutter.
 
-Since it's now using Flutter, the app is able to be built cross platform.
+## Features:
 
-The app is in _VERY_ early stages
+- Select voice
+- Select primary language
+- Some XML tags
+- Speak
+- Bring your own Speech Resource or;
+- The easy way - a subscription (a cup of coffee a month: Planned for early 2025 
+- Save Sentences & Categories: Planned for early 2025
+- Cache Sentences
+- Offline Backup Voices: Planned for mid 2025
+- Hand Gesture Recognition: Long-term goal
+- Eye tracking support: Long-term goal
 
-## Planned features:
-- Save sentences & categories - early 2025
-- Cache sentences - early 2025
-- Offline (backup) voices - mid 2025
-- Recgonition of hand gestures (LONG TERM PLAN)
-- Subscription in addition to DYI setup 
+## Goals before I can launch on Play Store:
+- Subscription
+- Offline voices
+- Testers!!!
 
 ## How to setup (the DYI version):
 
