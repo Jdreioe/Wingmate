@@ -19,10 +19,16 @@ class Voice {
 
   @HiveField(4)
   final double rate;
+  @HiveField(5)
+  final String pitchForSSML;
+  @HiveField(6)
+  final String rateForSSML;
   Voice(
       {required this.name,
       required this.supportedLanguages,
       required this.selectedLanguage,
       required this.pitch,
-      required this.rate});
+      required this.rate,
+      required this.pitchForSSML,
+      required this.rateForSSML});
 }

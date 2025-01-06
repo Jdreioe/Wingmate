@@ -33,10 +33,7 @@ void main() async {
     final apiKey = config.key;
     final endpoint = config.endpoint;
 
-    if (apiKey.isEmpty || endpoint.isEmpty) {      
-      return;
-    } else {
-    }
+
 
     // If config exists and is valid, run the app with the saved settings
     runApp(MyApp(speechServiceEndpoint: endpoint, speechServiceKey: apiKey));

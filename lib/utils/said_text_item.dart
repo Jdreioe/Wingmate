@@ -8,7 +8,7 @@ class SaidTextItem {
   String? audioFilePath;
   int? createdAt;
   int? position; // new field to track item order
-
+  String? primaryLanguage;
   SaidTextItem(
       {this.id,
       this.date,
@@ -18,7 +18,8 @@ class SaidTextItem {
       this.speed,
       this.audioFilePath,
       this.createdAt,
-      this.position});
+      this.position,
+      this.primaryLanguage});
 
   Map<String, dynamic> toMap() {
     return {
@@ -31,6 +32,7 @@ class SaidTextItem {
       'audioFilePath': audioFilePath,
       'createdAt': createdAt,
       'position': position,
+      'primaryLanguage': primaryLanguage,
     };
   }
 
@@ -45,6 +47,7 @@ class SaidTextItem {
       audioFilePath: map['audioFilePath'],
       createdAt: map['createdAt'],
       position: map['position'],
+      primaryLanguage: map['primaryLanguage']
     );
   }
 }

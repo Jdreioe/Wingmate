@@ -1,7 +1,6 @@
-import 'dart:convert';
-import 'dart:ffi';
 import 'dart:io';
 import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -11,7 +10,6 @@ import 'package:wingmate/utils/said_text_dao.dart';
 import 'package:wingmate/utils/said_text_item.dart';
 import 'package:hive/hive.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:wingmate/utils/speech_service_config.dart';
 
 class AzureTts {
   final String subscriptionKey;
@@ -39,6 +37,12 @@ class AzureTts {
     Voice voice = voiceBox.get('currentVoice');
     final selectedVoice = voice.name; // 'the selected voice name';
     final selectedLanguage = voice.selectedLanguage; // 'the selected language';
+    final pitch = voice.pitch;
+    final rate = voice.rate;
+    final pitchForSSML= voice.pitchForSSML;
+    
+    final rateForSSML = voice.rateForSSML;
+    
     final url = Uri.parse(
         'https://$region.tts.speech.microsoft.com/cognitiveservices/v1');
 
@@ -48,10 +52,24 @@ class AzureTts {
       'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3',
       'User-Agent': 'WingmateCrossPlatform',
     };
+    String rateTag = '<prosody rate ="$rateForSSML">';
+    String endRate = '</prosody>';
+    String pitchTag 
+    = '<prosody pitch="$pitchForSSML">';
+    String endPitch = '</prosody>';
+    String langTag = '<lang xml:lang="$selectedLanguage">';
+    String endLang = '</lang>';
 
-    final ssml =
-        '<speak version="1.0" xml:lang="en-US"> <voice name="$selectedVoice"><lang xml:lang="$selectedLanguage">$text</lang > </voice> </speak>';
+    String ssml;
+    if (selectedLanguage.isEmpty) {
+    ssml =
+        '<speak version="1.0" xml:lang="en-US"> <voice name="$selectedVoice"> $pitchTag $rateTag  $text $endPitch $endRate </voice> </speak>';
 
+    }
+    else{
+    ssml =
+        '<speak version="1.0" xml:lang="en-US"> <voice name="$selectedVoice">  $langTag $text $endLang </voice> </speak>';
+    }
     // Attempt to post the SSML body to Azure TTS endpoint
     try {
       final response = await http.post(url, headers: headers, body: ssml);
@@ -64,7 +82,7 @@ class AzureTts {
         final file = File('${directory.path}/temp_audio.mp3');
         await file.writeAsBytes(response.bodyBytes);
         // Save the audio file to the device and database
-        saveAudioFile(text, file.readAsBytesSync(), selectedVoice);
+        saveAudioFile(text, file.readAsBytesSync(), selectedVoice, rate, pitch);
       } else {
         debugPrint('Error: ${response.statusCode}, ${response.body}');
       }
@@ -78,6 +96,8 @@ class AzureTts {
     String text,
     List<int> audioData,
     String voice,
+    double rate,
+    double pitch,
   ) async {
     debugPrint('saveAudioFile called with voice: $voice');
     final SaidTextDao saidTextDao = SaidTextDao(AppDatabase());
@@ -92,7 +112,11 @@ class AzureTts {
           saidText: text,
           audioFilePath: filePath,
           date: DateTime.now().millisecondsSinceEpoch,
-          voiceName: voice);
+          voiceName: voice,
+          pitch: pitch,
+          speed: rate,
+      );
+
       saidTextDao.insertHistorik(saidTextItem);
       debugPrint('Audio file saved at: $filePath');
       await playText(DeviceFileSource(filePath));

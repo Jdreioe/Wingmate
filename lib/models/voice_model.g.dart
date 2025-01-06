@@ -7,7 +7,6 @@ part of 'voice_model.dart';
 // **************************************************************************
 
 class VoiceAdapter extends TypeAdapter<Voice> {
-  // Reads a Voice object from binary, applying default values if any field is missing.
   @override
   final int typeId = 1;
 
@@ -18,21 +17,20 @@ class VoiceAdapter extends TypeAdapter<Voice> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return Voice(
-      name: fields[0] as String? ?? '', // Provide a default value if null
-      supportedLanguages: (fields[1] as List?)?.cast<String>() ??
-          [], // Provide a default empty list if null
-      selectedLanguage:
-          fields[2] as String? ?? '', // Provide a default value if null
-      pitch: fields[3] as double? ?? 1.0, // Provide a default value if null
-      rate: fields[4] as double? ?? 1.0, // Provide a default value if null
+      name: fields[0] as String,
+      supportedLanguages: (fields[1] as List).cast<String>(),
+      selectedLanguage: fields[2] as String,
+      pitch: fields[3] as double,
+      rate: fields[4] as double,
+      pitchForSSML: fields[5] as String,
+      rateForSSML: fields[6] as String,
     );
   }
 
-  // Writes a Voice object to binary using hive fields.
   @override
   void write(BinaryWriter writer, Voice obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -42,7 +40,11 @@ class VoiceAdapter extends TypeAdapter<Voice> {
       ..writeByte(3)
       ..write(obj.pitch)
       ..writeByte(4)
-      ..write(obj.rate);
+      ..write(obj.rate)
+      ..writeByte(5)
+      ..write(obj.pitchForSSML)
+      ..writeByte(6)
+      ..write(obj.rateForSSML);
   }
 
   @override

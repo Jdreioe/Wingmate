@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hive/hive.dart';
@@ -56,9 +58,9 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
           shortName: shortName,
           displayName: displayName,
           supportedLanguages: supportedLanguages,
-          onSave: (String language, double pitch, double rate) {
+          onSave: (String language, double pitch, double rate, String pitchForSSML, String rateForSSML) {
             _saveSelectedVoiceSettings(
-                shortName, supportedLanguages, language, pitch, rate);
+                shortName, supportedLanguages, language, pitch, rate, pitchForSSML, rateForSSML);
           },
         );
       },
@@ -71,14 +73,19 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
       List<String> supportedLanguages,
       String language,
       double pitch,
-      double rate) async {
+      double rate,
+      String pitchForSSML,
+      String rateForSSML) async {
     final box = await Hive.box('selectedVoice');
     final Voice voice = new Voice(
         name: shortName,
         supportedLanguages: supportedLanguages,
         selectedLanguage: language,
         pitch: pitch,
-        rate: rate);
+        rate: rate,
+        pitchForSSML: pitchForSSML,
+        rateForSSML: rateForSSML,
+        );
     await box.put('currentVoice', voice);
   }
 
@@ -266,10 +273,6 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
                                           .toList();
                                   _showVoiceSettingsDialog(voice["displayName"],
                                       shortName, supportedLanguages);
-                                  SnackBar snackBar = SnackBar(
-                                    content: Text(
-                                        "Selected voice: ${voice["displayName"]}"),
-                                  );
                                 },
                               ),
                             );

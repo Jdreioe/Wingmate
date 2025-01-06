@@ -6,7 +6,7 @@ class VoiceSettingsDialog extends StatefulWidget {
   final String displayName;
   final List<String> supportedLanguages;
   final String shortName;
-  final Function(String, double, double) onSave;
+  final Function(String, double, double, String, String) onSave;
 
   VoiceSettingsDialog({
     required this.displayName,
@@ -23,6 +23,22 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
   late String _selectedLanguage;
   double _pitch = 1.0;
   double _rate = 1.0;
+  final Map<double, String> _pitchLabels = {
+    0.5: 'x-low',
+    0.875: 'low',
+    1.25: 'medium',
+    1.625: 'high',
+    2.0: 'x-high',
+  };
+  final Map<double, String> _rateLabels = {
+    0.5: 'x-slow',
+    0.875: 'slow',
+    1.25: 'medium',
+    1.625: 'high',
+    2.0: 'x-high',
+  };
+
+
 
   @override
   void initState() {
@@ -45,6 +61,9 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          SizedBox(height: 16.0),
+
+          const Text("Select Language: "),
           DropdownButton<String>(
             value: _selectedLanguage,
             onChanged: (String? newValue) {
@@ -54,7 +73,9 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
                 });
               }
             },
+            
             items: widget.supportedLanguages
+            
                 .map<DropdownMenuItem<String>>((String value) {
               return DropdownMenuItem<String>(
                 value: value,
@@ -62,27 +83,35 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
               );
             }).toList(),
           ),
+          SizedBox(height: 16.0),
+          const Text("Select pitch: " ),
           Slider(
             value: _pitch,
+
             min: 0.5,
             max: 2.0,
-            divisions: 10,
-            label: "Pitch: $_pitch",
+            divisions: 4,
+            label: _pitchLabels[_pitch] ?? "medium",
             onChanged: (double value) {
               setState(() {
+                debugPrint("$value");
                 _pitch = value;
               });
             },
           ),
+                  SizedBox(height: 16.0),
+
+          const Text("Rate"),
           Slider(
             value: _rate,
             min: 0.5,
             max: 2.0,
-            divisions: 10,
-            label: "Rate: $_rate",
+            divisions: 4,
+            label: _rateLabels[_rate],
             onChanged: (double value) {
               setState(() {
                 _rate = value;
+
               });
             },
           ),
@@ -97,7 +126,7 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
         ),
         TextButton(
           onPressed: () {
-            widget.onSave(_selectedLanguage, _pitch, _rate);
+            widget.onSave(_selectedLanguage, _pitch, _rate, _pitchLabels[_pitch].toString(), _rateLabels[_rate].toString());
             Navigator.pop(context);
           },
           child: Text('Save'),

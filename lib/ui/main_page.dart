@@ -1,8 +1,7 @@
-import 'dart:ffi';
-
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import 'package:wingmate/models/voice_model.dart';
+import 'package:flutter/services.dart';
+
 import 'package:wingmate/ui/fetch_voices_page.dart';
 import 'package:wingmate/services/tts/azure_text_to_speech.dart';
 import 'package:wingmate/dialogs/profile_dialog.dart';
@@ -11,18 +10,10 @@ import 'package:wingmate/utils/app_database.dart';
 import 'package:wingmate/utils/said_text_item.dart';
 import 'package:wingmate/utils/speech_service_config.dart';
 import 'package:wingmate/ui/save_message_dialog.dart';
-import 'dart:convert';
+
 import 'package:wingmate/utils/said_text_dao.dart';
 
-void handleApiResponse(String response) {
-  debugPrint('API Response: $response');
-  try {
-    final jsonResponse = jsonDecode(response);
-    // Process the JSON response
-  } catch (e) {
-    debugPrint('Error parsing JSON: $e');
-  }
-}
+
 class MainPage extends StatefulWidget {
   final String speechServiceEndpoint;
   final String speechServiceKey;
@@ -42,6 +33,7 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> {
   // Controller for user-entered text and list to display said texts.
   final TextEditingController _messageController = TextEditingController();
+  final FocusNode _messageFocusNode = FocusNode();
   final List<SaidTextItem> _saidTextItems = []; // store items instead of just text
   bool isPlaying = false;
   
@@ -55,15 +47,16 @@ class _MainPageState extends State<MainPage> {
     _loadSaidTextItems();
     Hive.box('settings').watch(key: 'isPlaying').listen((event) {
       debugPrint('isPlaying changed to: ${event.value}');
-      if (!isPlaying) {
-        debugPrint("Reloading saidTextItems");
-        _loadSaidTextItems();
-      }
 
       
       setState(() {
         isPlaying = event.value as bool;
       });
+      if (!isPlaying) {
+        debugPrint("Reloading saidTextItems");
+        _loadSaidTextItems();
+      }
+
     });
   }
 
@@ -72,7 +65,6 @@ class _MainPageState extends State<MainPage> {
     final settingsBox = Hive.box('settings');
     final voiceBox = Hive.box('selectedVoice');
     final config = settingsBox.get('config') as SpeechServiceConfig?;
-    final voice = voiceBox.get('voice') as VoiceAdapter?;
 
     if (config != null) {
       setState(() {
@@ -89,62 +81,76 @@ class _MainPageState extends State<MainPage> {
   }
 
   Future<void> _loadSaidTextItems() async {
-    final items = await _saidTextDao.getAll();
-    items.reversed;
+    final selectedVoice = azureTts!.voiceBox.get('currentVoice').name;
+    final selectedLanguage = azureTts!.voiceBox.get('currentVoice').selectedLanguage;
+    final pitch = azureTts!.voiceBox.get('currentVoice').pitch;
+    final speed = azureTts!.voiceBox.get('currentVoice').rate;
+    
+    final items = await _saidTextDao.getFilteredItems(selectedLanguage, speed, selectedVoice, pitch);
     setState(() {
-      _saidTextItems.clear();
-      _saidTextItems.addAll(items);
+          _saidTextItems.clear();
+    _saidTextItems.addAll(items.map((item) {
+      item.saidText = convertToUserFriendlyTags(item.saidText!);
+      return item;
+    }).toList());
+  });
 
-    });
   }
+  TextSelection _previousSelection = TextSelection.collapsed(offset: 0);
 
-  // Adds the typed message to a local list for display.
-  void _addMessage() {
-    setState(() {
-      _saidTextItems.add(SaidTextItem(saidText: _messageController.text));
-    });
-  }
+String convertToUserFriendlyTags(String text) {
+  _messageController.selection = _previousSelection;
+  return text
+      .replaceAll('<lang xml:lang="en-US">', '<en>')
+      .replaceAll('</lang>', '</en>');
+  
+}
+
+String convertToXmlTags(String text) {
+  return text
+      .replaceAll('<en>', '<lang xml:lang="en-US">')
+      .replaceAll('</en>', '</lang>');
+}
 
   // Toggles between playing and pausing the TTS audio.
-  void _togglePlayPause() async {
-    debugPrint('_togglePlayPause triggered. Current isPlaying: $isPlaying');
+void _togglePlayPause() async {
+  debugPrint('_togglePlayPause triggered. Current isPlaying: $isPlaying');
 
-    if (_messageController.text.isNotEmpty && azureTts != null) {
-      if (!isPlaying) {
-
-        
-        await azureTts!.generateSSML(_messageController.text);
-      } else {
-        debugPrint('Pausing playback...');
-        await azureTts!.pause();
-        isPlaying = false;
-      }
+  if (_messageController.text.isNotEmpty && azureTts != null) {
+    if (!isPlaying) {
+      String userFriendlyText = _messageController.text;
+      String xmlText = convertToXmlTags(userFriendlyText);
+      await azureTts!.generateSSML(xmlText);
+    } else {
+      debugPrint('Pausing playback...');
+      await azureTts!.pause();
+      isPlaying = false;
     }
   }
-
-  void _showSaveMessageDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return SaveMessageDialog(
-          onSave: (message, category) async {
-            // Handle saving the message and category
-            debugPrint('Message: $message, Category: $category');
-            final saidTextItem = SaidTextItem(
-              saidText: message,
-              date: DateTime.now().millisecondsSinceEpoch,
-              voiceName: azureTts!.voiceBox.get('currentVoice').name,
-              createdAt: DateTime.now().millisecondsSinceEpoch,
-            );
-            await azureTts!.generateSSMLForItem(saidTextItem);
-          },
-        );
-      },
-    );
-  }
-
+}
+void _showSaveMessageDialog() {
+  showDialog(
+    context: context,
+    builder: (context) {
+      return SaveMessageDialog(
+        onSave: (message, category) async {
+          // Handle saving the message and category
+          debugPrint('Message: $message, Category: $category');
+          String xmlMessage = convertToXmlTags(message);
+          final saidTextItem = SaidTextItem(
+            saidText: xmlMessage,
+            date: DateTime.now().millisecondsSinceEpoch,
+            voiceName: azureTts!.voiceBox.get('currentVoice').name,
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+          );
+          await azureTts!.generateSSMLForItem(saidTextItem);
+        },
+      );
+    },
+  );
+}
   Future<bool> _deleteSaidTextItem(int index) async {
-    final text = _saidTextItems[index];
+
     final items = await _saidTextDao.getAll();
     if (items.isNotEmpty && index < items.length) {
       final result = await _saidTextDao.delete(items[index].id!);
@@ -173,6 +179,29 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
+  // Adds the selected XML tag to the message field at the current cursor position.
+  void _addXmlTag(String tag) {
+    String newText;
+    final text = _messageController.text;
+    final selection = _messageController.selection;
+    if (selection.start == -1) {
+      newText = tag;
+    } else {
+      newText = text.replaceRange(selection.start, selection.end, tag);
+    }
+
+    _messageController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: selection.start + tag.length),
+    );
+    
+    // Set the cursor position inside the tag
+
+    final cursorPosition = selection.start + tag.indexOf('>') + 1;
+    _messageController.selection = TextSelection.collapsed(offset: cursorPosition);
+    _messageFocusNode.requestFocus();
+  }
+
   @override
   void dispose() {
     _messageController.dispose();
@@ -184,7 +213,7 @@ class _MainPageState extends State<MainPage> {
     // Builds the main UI with an AppBar and text input area.
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Wingman'),
+        title: const Text('Wingmate'),
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.person),
@@ -213,7 +242,7 @@ class _MainPageState extends State<MainPage> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.save),
+            icon: const Icon(Icons.add),
             onPressed: _showSaveMessageDialog,
           ),
         ],
@@ -263,6 +292,28 @@ class _MainPageState extends State<MainPage> {
               },
             ),
           ),
+                    // Add XML shortcuts row
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  ElevatedButton(
+                    onPressed: () => _addXmlTag('<lang xml:lang="en-US"> </lang>'),
+                    child: Text('English'),
+                  ),
+                  SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () => _addXmlTag('<break time="2s"/>'),
+                    child: Text('2 sec break mid sentence'),
+                  ),
+                  // Add more buttons for other XML tags as needed
+                ],
+              ),
+            ),
+          ),
+
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
@@ -270,20 +321,32 @@ class _MainPageState extends State<MainPage> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
+                    focusNode: _messageFocusNode,
                     minLines: 1,
                     maxLines: 5,
                     decoration: InputDecoration(
-                      labelText: 'Enter your message',
+                      labelText: 'Enter text',
+                      
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(5.0),
                       ),
+
+                      
                       focusedBorder: const OutlineInputBorder(
                         borderSide: BorderSide(color: Colors.blue, width: 2.0),
                       ),
-                      enabledBorder: OutlineInputBorder(
+                      enabledBorder: const OutlineInputBorder(
                         borderSide: BorderSide(color: Colors.grey, width: 1.0),
                       ),
                     ),
+                    onChanged: (text) {
+                      setState(() {
+                        _previousSelection = _messageController.selection;
+                      _messageController.text = convertToUserFriendlyTags(text);
+                      _messageController.selection = _previousSelection;
+                      });
+                    },
+
                   ),
                 ),
                 IconButton(

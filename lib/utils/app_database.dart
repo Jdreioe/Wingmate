@@ -37,7 +37,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 3, // incremented database version
+      version: 5, // incremented database version
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -52,7 +52,9 @@ class AppDatabase {
         text TEXT,
         isFolder INTEGER, 
         parentId INTEGER,
-        createdAt INTEGER
+        createdAt INTEGER,
+        position INTEGER
+
       );
     ''');
 
@@ -65,6 +67,8 @@ class AppDatabase {
           locale TEXT,
           createdAt INTEGER,
           displayName TEXT
+            rateForSSML TEXT,
+            pitchForSSML TEXT
         )
         ''');
 
@@ -77,7 +81,9 @@ class AppDatabase {
         pitch REAL,
         speed REAL,
         audioFilePath TEXT,
-        createdAt INTEGER
+        createdAt INTEGER,
+        position INTEGER
+        primaryLanguage TEXT
       )
     ''');
   }
@@ -100,6 +106,13 @@ class AppDatabase {
     if (oldVersion < 3) {
       await db.execute('ALTER TABLE SaidTextItem ADD COLUMN position INTEGER;');
     }
+    if (oldVersion < 4) {
+      await db.execute('ALTER TABLE SaidTextItem ADD COLUMN         primaryLanguage TEXT');
+  }
+  if (oldVersion < 5) {
+    await db.execute('ALTER TABLE VoiceItem ADD COLUMN rateForSSML TEXT;');
+    await db.execute('ALTER TABLE VoiceItem ADD COLUMN pitchForSSML TEXT;');
+  }
     // Add other migration blocks for future versions here. For example:
     // if (oldVersion < 3) {
     //   // Add another column or table

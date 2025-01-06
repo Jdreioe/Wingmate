@@ -52,5 +52,19 @@ class SaidTextDao {
       return SaidTextItem.fromMap(maps[i]);
     });
   }
+    Future<List<SaidTextItem>> getFilteredItems(String selectedLanguage, double speed, String selectedVoice, double pitch) async {
+    final db = await _database.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'SaidTextItem',
+      where: 'voiceName = ? AND speed = ? AND pitch = ?',
+      whereArgs: [selectedVoice, speed, pitch],
+      orderBy: 'position ASC', // sort by position
+    );
+    return List.generate(maps.length, (i) {
+      return SaidTextItem.fromMap(maps[i]);
+    });
+  }
+
+
   // ... other methods
 }
