@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:sqflite/sqflite.dart';
 import 'app_database.dart';
 import 'said_text_item.dart';
 

@@ -116,18 +116,6 @@ String convertToUserFriendlyTags(String text) {
   return newText;
   
 }
-void _onTextChanged(String text) {
-  setState(() {
-    final oldValue = _messageController.value;
-    final newText = convertToUserFriendlyTags(text);
-    final newOffset = math.min(oldValue.selection.baseOffset, newText.length);
-    final newExtentOffset = math.min(oldValue.selection.extentOffset, newText.length);
-    _messageController.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection(baseOffset: newOffset, extentOffset: newExtentOffset),
-    );
-  });
-}
 
 String convertToXmlTags(String text) {
   return text
