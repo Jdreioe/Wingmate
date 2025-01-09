@@ -1,19 +1,24 @@
-## **Privacy Policy**
+# Privacy Policy
 
-**Effective Date:** Jan 5, 2025
+** Effective Date:** Jan 9, 2025
 
-**As an independent developer, I am committed to protecting your privacy.** I do not collect any personal information from you when you use my services.
+As an independent developer, I am committed to protecting your privacy. This privacy policy explains how I collect, use, and disclose information when you use my services.
 
-This means I do not collect or store any data that could be used to personally identify you, such as your name, email address, phone number, or IP address.
+Information Collected
 
-**How I Use Information**
+    **Non-personal information:** I may collect non-personal information, such as analytics data, to improve the app. This data is aggregated and does not contain any personally identifiable information.
+    Firebase Analytics:** I use Firebase Analytics to collect information about how you interact with my app. This information may include the pages you visit, the features you use, and your device information. Firebase Analytics does not collect any personally identifiable information. You can learn more about how Google uses data collected through Firebase Analytics here: How Google uses information collected through Firebase 
 
-I may use non-personal information, such as analytics data, to improve the app. This data is aggregated and does not contain any personally identifiable information.
+## How I Use Information
 
+**I use the information I collect to:**
+
+    Improve the app: I use analytics data to understand how users interact with my app and to identify areas for improvement.
+    personalize your experience: I may use non-personal information to personalize your experience with the app.
 
 **Your Rights**
 
-As I do not collect any personal information from you, you do not have any rights related to your data.
+You can opt out of the collection of analytics data by following the instructions for your device. For example, on Android devices, you can opt out of interest-based advertising by going to Settings > Google > Ads > Opt out of interest-based ads.
 
 **Changes to This Policy**
 
@@ -25,3 +30,28 @@ If you have any questions about this Privacy Policy or my practices, please cont
 
 **Jonas**
 **Independent Developer**
+
+    Non-personal information: I may collect non-personal information, such as analytics data, to improve the app. This data is aggregated and does not contain any personally identifiable information.
+    Firebase Analytics: I use Firebase Analytics to collect information about how you interact with my app. This information may include the pages you visit, the features you use, and your device information. Firebase Analytics does not collect any personally identifiable information. You can learn more about how Google uses data collected through Firebase Analytics here: How Google uses information collected through Firebase [invalid URL removed]
+
+How I Use Information
+
+I use the information I collect to:
+
+    Improve the app: I use analytics data to understand how users interact with my app and to identify areas for improvement.
+    personalize your experience: I may use non-personal information to personalize your experience with the app.
+
+Your Rights
+
+You can opt out of the collection of analytics data by following the instructions for your device. For example, on Android devices, you can opt out of interest-based advertising by going to Settings > Google > Ads > Opt out of interest-based ads.
+
+Changes to This Policy
+
+I may update this Privacy Policy from time to time. Any changes will be posted on my website or communicated to you directly.
+
+Contact Me
+
+If you have any questions about this Privacy Policy or my practices, please contact me at wingmandevel@gmail.com.
+
+Jonas
+Independent Developer
