@@ -13,7 +13,7 @@ import 'package:wingmate/utils/speech_service_config.dart';
 import 'package:wingmate/ui/save_message_dialog.dart';
 
 import 'package:wingmate/utils/said_text_dao.dart';
-
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 class MainPage extends StatefulWidget {
   final String speechServiceEndpoint;
@@ -115,6 +115,18 @@ String convertToUserFriendlyTags(String text) {
 
   return newText;
   
+}
+void _onTextChanged(String text) {
+  setState(() {
+    final oldValue = _messageController.value;
+    final newText = convertToUserFriendlyTags(text);
+    final newOffset = math.min(oldValue.selection.baseOffset, newText.length);
+    final newExtentOffset = math.min(oldValue.selection.extentOffset, newText.length);
+    _messageController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection(baseOffset: newOffset, extentOffset: newExtentOffset),
+    );
+  });
 }
 
 String convertToXmlTags(String text) {
@@ -230,7 +242,7 @@ void _showSaveMessageDialog() {
     // Builds the main UI with an AppBar and text input area.
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Wingmate'),
+        title: Text(AppLocalizations.of(context)?.appTitle ?? 'Title'),
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.person),
@@ -332,7 +344,10 @@ void _showSaveMessageDialog() {
           ),
 
           Padding(
-            padding: const EdgeInsets.all(8.0),
+            padding: const EdgeInsets.only(bottom: 16.0, left: 16.0, right: 16.0), // Add bottom padding here
+
+            
+
             child: Row(
               children: [
                 Expanded(

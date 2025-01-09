@@ -2,25 +2,26 @@
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
+    "version": "0.2.0.0",
     "configurations": [
         
         {
-            "name": "wingmancrossplatform",
+            "name": "wingmate",
             "request": "launch",
             "type": "dart"
         },
         {
-            "name": "wingmancrossplatform (profile mode)",
+            "name": "wingmate (profile mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "profile"
         },
         {
-            "name": "wingmancrossplatform (release mode)",
+            "name": "wingmate (release mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "release"
+            
         }
     ]
 }

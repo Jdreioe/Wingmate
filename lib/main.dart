@@ -1,4 +1,7 @@
 // Import necessary packages for Flutter, local database, and dynamic theming
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
@@ -7,12 +10,20 @@ import 'package:wingmate/ui/main_page.dart';
 import 'package:wingmate/utils/speech_service_config.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:wingmate/utils/speech_service_config_adapter.dart'; // Ensure this package is added to your pubspec.yaml
-
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 void main() async {
-  debugPrint('App main started');
   // Ensure Flutter is properly initialized before any async operation
   WidgetsFlutterBinding.ensureInitialized();
-
+    await Firebase.initializeApp();
+    FlutterError.onError = (errorDetails) {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+    };
+    // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
   // Initialize local storage with the app's document directory
   final appDocumentDir = await getApplicationDocumentsDirectory();
   Hive.init(appDocumentDir.path);
@@ -29,7 +40,6 @@ void main() async {
   final box = Hive.box('settings');
   final config = box.get('config') as SpeechServiceConfig?;
   if (config != null) {
-    debugPrint('Config found, launching app');
     final apiKey = config.key;
     final endpoint = config.endpoint;
 
@@ -87,10 +97,18 @@ class _MyAppState extends State<MyApp> {
             useMaterial3: true,
           ),
           darkTheme: ThemeData(
-            colorScheme: darkColorScheme,
-            useMaterial3: true,
+            colorScheme: darkColorScheme,            useMaterial3: true,
           ),
           themeMode: ThemeMode.system,
+            localizationsDelegates: const [
+    GlobalMaterialLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+  ],
+  supportedLocales: [
+    Locale('en'), // English
+    Locale('da'), // Danish
+  ],
           home: MainPage(
             speechServiceEndpoint: speechServiceEndpoint,
             speechServiceKey: speechServiceKey,

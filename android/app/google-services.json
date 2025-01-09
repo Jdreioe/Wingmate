@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "266436383894",
+    "project_id": "wingmate-2a420",
+    "storage_bucket": "wingmate-2a420.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:266436383894:android:1539493bcbc00f5dd0deb7",
+        "android_client_info": {
+          "package_name": "com.hoejmoseit.wingman"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC5Dhs95v2TjWv3OvFQ_jOtDHtB-svSO1U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:266436383894:android:a8e5f35a8fc34117d0deb7",
+        "android_client_info": {
+          "package_name": "com.hojmoseit.wingman"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC5Dhs95v2TjWv3OvFQ_jOtDHtB-svSO1U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
