@@ -7,13 +7,17 @@ import 'package:wingmate/ui/fetch_voices_page.dart';
 import 'package:wingmate/services/tts/azure_text_to_speech.dart';
 import 'package:wingmate/dialogs/profile_dialog.dart';
 import 'package:hive/hive.dart';
+import 'package:wingmate/ui/folder_page.dart';
 import 'package:wingmate/utils/app_database.dart';
 import 'package:wingmate/utils/said_text_item.dart';
 import 'package:wingmate/utils/speech_service_config.dart';
 import 'package:wingmate/ui/save_message_dialog.dart';
-
-import 'package:wingmate/utils/said_text_dao.dart';
+import 'package:wingmate/utils/speech_item.dart';
+import 'package:wingmate/utils/speech_item_dao.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:wingmate/ui/history_page.dart';
+
+import '../utils/said_text_dao.dart';
 
 class MainPage extends StatefulWidget {
   final String speechServiceEndpoint;
@@ -35,29 +39,28 @@ class _MainPageState extends State<MainPage> {
   // Controller for user-entered text and list to display said texts.
   final TextEditingController _messageController = TextEditingController();
   final FocusNode _messageFocusNode = FocusNode();
-  final List<SaidTextItem> _saidTextItems = []; // store items instead of just text
+  final List<dynamic> _items = []; // Store both folders and speech items
   bool isPlaying = false;
-  
+
   AzureTts? azureTts;
   final SaidTextDao _saidTextDao = SaidTextDao(AppDatabase());
+  final SpeechItemDao _speechItemDao = SpeechItemDao(AppDatabase());
 
   @override
   void initState() {
     super.initState();
     _initializeAzureTts();
-    _loadSaidTextItems();
+    _loadItems();
     Hive.box('settings').watch(key: 'isPlaying').listen((event) {
       debugPrint('isPlaying changed to: ${event.value}');
 
-      
       setState(() {
         isPlaying = event.value as bool;
       });
       if (!isPlaying) {
-        debugPrint("Reloading saidTextItems");
-        _loadSaidTextItems();
+        debugPrint("Reloading items");
+        _loadItems();
       }
-
     });
   }
 
@@ -81,107 +84,85 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  Future<void> _loadSaidTextItems() async {
-    final selectedVoice = azureTts!.voiceBox.get('currentVoice').name;
-    final selectedLanguage = azureTts!.voiceBox.get('currentVoice').selectedLanguage;
-    final pitch = azureTts!.voiceBox.get('currentVoice').pitch;
-    final speed = azureTts!.voiceBox.get('currentVoice').rate;
-    
-    final items = await _saidTextDao.getFilteredItems(selectedLanguage, speed, selectedVoice, pitch);
+  Future<void> _loadItems() async {
+    final items = await _speechItemDao.getAllRootItems();
     setState(() {
-          _saidTextItems.clear();
-    _saidTextItems.addAll(items.map((item) {
-      item.saidText = convertToUserFriendlyTags(item.saidText!);
-      return item;
-    }).toList());
-  });
-
+      _items.clear();
+      _items.add('History'); // Add History folder
+      _items.addAll(items);
+    });
   }
 
-String convertToUserFriendlyTags(String text) {
+  String convertToUserFriendlyTags(String text) {
+    final newText = text
+        .replaceAll('<lang xml:lang="en-US">', '<en>')
+        .replaceAll('</lang>', '</en>')
+        .replaceAll('<break time="2s"/>', "<2s>");
 
-  final newText = text
-      .replaceAll('<lang xml:lang="en-US">', '<en>')
-      .replaceAll('</lang>', '</en>')
-      .replaceAll('<break time="2s"/>', "<2s>");
-      
-  
-  int newOffset = newText.indexOf("<en>") >= 0
-      ? newText.indexOf("<en>") + "<en>".length
-      : 0;
+    int newOffset = newText.indexOf("<en>") >= 0
+        ? newText.indexOf("<en>") + "<en>".length
+        : 0;
 
-  _messageController.text = newText;
-  _messageController.selection = TextSelection.collapsed(offset: newOffset);
+    _messageController.text = newText;
+    _messageController.selection = TextSelection.collapsed(offset: newOffset);
 
-  return newText;
-  
-}
-void _onTextChanged(String text) {
-  setState(() {
-    final oldValue = _messageController.value;
-    final newText = convertToUserFriendlyTags(text);
-    final newOffset = math.min(oldValue.selection.baseOffset, newText.length);
-    final newExtentOffset = math.min(oldValue.selection.extentOffset, newText.length);
-    _messageController.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection(baseOffset: newOffset, extentOffset: newExtentOffset),
-    );
-  });
-}
+    return newText;
+  }
 
-String convertToXmlTags(String text) {
-  return text
-      .replaceAll('<en>', '<lang xml:lang="en-US">')
-      .replaceAll('</en>', '</lang>')
-      .replaceAll("<2s>", '<break time="2s"/>');
 
-}
+  String convertToXmlTags(String text) {
+    return text
+        .replaceAll('<en>', '<lang xml:lang="en-US">')
+        .replaceAll('</en>', '</lang>')
+        .replaceAll("<2s>", '<break time="2s"/>');
+  }
 
   // Toggles between playing and pausing the TTS audio.
-void _togglePlayPause() async {
-  debugPrint('_togglePlayPause triggered. Current isPlaying: $isPlaying');
+  void _togglePlayPause() async {
+    debugPrint('_togglePlayPause triggered. Current isPlaying: $isPlaying');
 
-  if (_messageController.text.isNotEmpty && azureTts != null) {
-    if (!isPlaying) {
-      String userFriendlyText = _messageController.text;
-      String xmlText = convertToXmlTags(userFriendlyText);
-      await azureTts!.generateSSML(xmlText);
-    } else {
-      debugPrint('Pausing playback...');
-      await azureTts!.pause();
-      isPlaying = false;
+    if (_messageController.text.isNotEmpty && azureTts != null) {
+      if (!isPlaying) {
+        String userFriendlyText = _messageController.text;
+        String xmlText = convertToXmlTags(userFriendlyText);
+        await azureTts!.generateSSML(xmlText);
+      } else {
+        debugPrint('Pausing playback...');
+        await azureTts!.pause();
+        isPlaying = false;
+      }
     }
   }
-}
-void _showSaveMessageDialog() {
-  showDialog(
-    context: context,
-    builder: (context) {
-      return SaveMessageDialog(
-        onSave: (message, category) async {
-          // Handle saving the message and category
-          debugPrint('Message: $message, Category: $category');
-          String xmlMessage = convertToXmlTags(message);
-          final saidTextItem = SaidTextItem(
-            saidText: xmlMessage,
-            date: DateTime.now().millisecondsSinceEpoch,
-            voiceName: azureTts!.voiceBox.get('currentVoice').name,
-            createdAt: DateTime.now().millisecondsSinceEpoch,
-          );
-          await azureTts!.generateSSMLForItem(saidTextItem);
-        },
-      );
-    },
-  );
-}
-  Future<bool> _deleteSaidTextItem(int index) async {
 
-    final items = await _saidTextDao.getAll();
-    if (items.isNotEmpty && index < items.length) {
-      final result = await _saidTextDao.delete(items[index].id!);
+  void _showSaveMessageDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return SaveMessageDialog(
+          onSave: (message, category) async {
+            // Handle saving the message and category
+            debugPrint('Message: $message, Category: $category');
+            final speechItem = SpeechItem(
+              name: category,
+              text: message,
+              isFolder: false,
+              createdAt: DateTime.now().millisecondsSinceEpoch,
+            );
+            await _speechItemDao.insertItem(speechItem);
+            _loadItems(); // Reload items to reflect the new addition
+          },
+        );
+      },
+    );
+  }
+
+  Future<bool> _deleteItem(int index) async {
+    final item = _items[index];
+    if (item is SpeechItem) {
+      final result = await _speechItemDao.deleteItem(item.id!);
       if (result > 0) {
         setState(() {
-          _saidTextItems.removeAt(index);
+          _items.removeAt(index);
         });
         return true;
       }
@@ -190,45 +171,50 @@ void _showSaveMessageDialog() {
   }
 
   Future<void> _reorderItems(int oldIndex, int newIndex) async {
+    if (_items[oldIndex] == 'History' || _items[newIndex] == 'History') {
+      return; // Do not allow reordering the History folder
+    }
     setState(() {
       if (newIndex > oldIndex) {
         newIndex -= 1;
       }
-      final item = _saidTextItems.removeAt(oldIndex);
-      _saidTextItems.insert(newIndex, item);
+      final item = _items.removeAt(oldIndex);
+      _items.insert(newIndex, item);
     });
     // update positions in the DB
-    for (int i = 0; i < _saidTextItems.length; i++) {
-      _saidTextItems[i].position = i;
-      await _saidTextDao.updateItem(_saidTextItems[i]);
+    for (int i = 0; i < _items.length; i++) {
+      if (_items[i] is SpeechItem) {
+        (_items[i] as SpeechItem).position = i;
+        await _speechItemDao.updateItem(_items[i] as SpeechItem);
+      }
     }
   }
 
   // Adds the selected XML tag to the message field at the current cursor position.
   void _addXmlTag(String tag) {
+    final text = _messageController.text;
+    final selection = _messageController.selection;
+    final userFriendlyTag = convertToUserFriendlyTags(tag);
 
-  final text = _messageController.text;
-  final selection = _messageController.selection;
-  final userFriendlyTag = convertToUserFriendlyTags(tag);
+    String newText;
+    if (text.isEmpty) {
+      newText = userFriendlyTag;
+    } else {
+      newText =
+          text.replaceRange(selection.start, selection.end, userFriendlyTag);
+    }
 
-  String newText;
-  if (text.isEmpty) {
-    newText = userFriendlyTag;
-  } else {
-    newText = text.replaceRange(selection.start, selection.end, userFriendlyTag);
-  }
+    int newOffset = selection.start + userFriendlyTag.indexOf('>') + 1;
+    if (newOffset > newText.length) {
+      newOffset = newText.length;
+    }
 
-  int newOffset = selection.start + userFriendlyTag.indexOf('>') + 1;
-  if (newOffset > newText.length) {
-    newOffset = newText.length;
-  }
+    _messageController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newOffset),
+    );
 
-  _messageController.value = TextEditingValue(
-    text: newText,
-    selection: TextSelection.collapsed(offset: newOffset),
-  );
-
-  _messageFocusNode.requestFocus();
+    _messageFocusNode.requestFocus();
   }
 
   @override
@@ -279,49 +265,63 @@ void _showSaveMessageDialog() {
       body: Column(
         children: [
           Expanded(
-            child: ReorderableListView.builder(
+            child: ReorderableListView(
               onReorder: _reorderItems,
-              itemCount: _saidTextItems.length,
-              itemBuilder: (context, index) {
-                final item = _saidTextItems[index];
-                final dateString = DateTime.fromMillisecondsSinceEpoch(item.date ?? 0)
-                    .toLocal()
-                    .toString()
-                    .substring(0, 16) // e.g. "YYYY-MM-DD HH:MM"
-                    .replaceRange(0, 5, item.date == null ? '' : ''); // minor format tweak
-                return Dismissible(
-                  key: ValueKey(item.saidText! + DateTime.now().toString()), // Unique key
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.symmetric(horizontal: 40),
-                    color: Colors.red,
-                    child: const Icon(
-                      Icons.delete,
-                      color: Colors.white,
-                    ),
-                  ),
-                  confirmDismiss: (direction) async {
-                    return await _deleteSaidTextItem(index);
-                  },
-                  child: ListTile(
+              children: _items.map((item) {
+                if (item is String && item == 'History') {
+                  return ListTile(
                     key: ValueKey(item),
-                    leading: Icon(item.saidText!.contains('Category:') ? Icons.folder : Icons.speaker_phone),
-                    title: Text(item.saidText ?? ''),
-                    subtitle: Text(dateString),
-                    onTap: item.audioFilePath != null
-                        ? () async {
-                            await azureTts?.playText(
-                              DeviceFileSource(item.audioFilePath!),
-                            );
-                          }
-                        : null,
-                  ),
-                );
-              },
+                    leading: Icon(Icons.folder),
+                    title: Text(item),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => HistoryPage(),
+                        ),
+                      );
+                    },
+                  );
+                } else if (item is SpeechItem) {
+                  return Dismissible(
+                    key: ValueKey(item.id),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.symmetric(horizontal: 40),
+                      color: Colors.red,
+                      child: const Icon(
+                        Icons.delete,
+                        color: Colors.white,
+                      ),
+                    ),
+                    confirmDismiss: (direction) async {
+                      return await _deleteItem(_items.indexOf(item));
+                    },
+                    child: ListTile(
+                      key: ValueKey(item),
+                      leading: Icon(item.isFolder! ? Icons.folder : Icons.speaker_phone),
+                      title: Text(item.name ?? ''),
+                      subtitle: item.isFolder! ? null : Text(item.text ?? ''),
+                      onTap: item.isFolder!
+                          ? () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => FolderPage(folderId: item.id!),
+                                ),
+                              );
+                            }
+                          : null,
+                    ),
+                  );
+                } else {
+                  return Container();
+                }
+              }).toList(),
             ),
           ),
-                    // Add XML shortcuts row
+          // Add XML shortcuts row
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: SingleChildScrollView(
@@ -329,7 +329,8 @@ void _showSaveMessageDialog() {
               child: Row(
                 children: [
                   ElevatedButton(
-                    onPressed: () => _addXmlTag('<lang xml:lang="en-US"> </lang>'),
+                    onPressed: () =>
+                        _addXmlTag('<lang xml:lang="en-US"> </lang>'),
                     child: Text('English'),
                   ),
                   SizedBox(width: 8),
@@ -344,48 +345,35 @@ void _showSaveMessageDialog() {
           ),
 
           Padding(
-            padding: const EdgeInsets.only(bottom: 16.0, left: 16.0, right: 16.0), // Add bottom padding here
-
-            
+            padding: const EdgeInsets.only(
+                bottom: 16.0,
+                left: 16.0,
+                right: 16.0), // Add bottom padding here
 
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    focusNode: _messageFocusNode,
-                    minLines: 1,
-                    maxLines: 5,
-                    decoration: InputDecoration(
-                      labelText: 'Enter text',
-                      
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(5.0),
-                      ),
-
-                      
-                      focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.blue, width: 2.0),
-                      ),
-                      enabledBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.grey, width: 1.0),
-                      ),
+                    child: TextField(
+                  controller: _messageController,
+                  focusNode: _messageFocusNode,
+                  minLines: 1,
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    labelText: 'Enter text',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(5.0),
                     ),
-                    onChanged: (text) {
-                      setState(() {
-  final oldValue = _messageController.value;
-  final newText = convertToUserFriendlyTags(text);
-  final newOffset = math.min(oldValue.selection.baseOffset, newText.length);
-  final newExtentOffset = math.min(oldValue.selection.extentOffset, newText.length);
-  _messageController.value = TextEditingValue(
-    text: newText,
-    selection: TextSelection(baseOffset: newOffset, extentOffset: newExtentOffset),
-  );
-});
-                    },
-
+                    focusedBorder: const OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.blue, width: 2.0),
+                    ),
+                    enabledBorder: const OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.grey, width: 1.0),
+                    ),
                   ),
-                ),
+                  textInputAction:
+                      TextInputAction.done, // Set the text input action
+                  keyboardType: TextInputType.text, // Set the keyboard type
+                )),
                 IconButton(
                   icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
                   onPressed: _togglePlayPause,
@@ -398,4 +386,3 @@ void _showSaveMessageDialog() {
     );
   }
 }
-

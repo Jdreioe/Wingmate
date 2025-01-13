@@ -36,5 +36,18 @@ class SpeechItemDao {
     final db = await _database.database;
     return await db.insert('SpeechItem', speechItem.toMap());
   }
+  Future<int> deleteItem(int id) async {
+    final db = await _database.database;
+    return await db.delete('SpeechItem', where: 'id = ?', whereArgs: [id]);
+  }
   // Add other methods as needed (insert, update, delete, etc.)
+  Future<int> updateItem(SpeechItem speechItem) async {
+    final db = await _database.database;
+    return await db.update(
+      'SpeechItem',
+      speechItem.toMap(),
+      where: 'id = ?',
+      whereArgs: [speechItem.id],
+    );
+  }
 }

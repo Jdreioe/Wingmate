@@ -24,5 +24,9 @@ class VoiceDao {
     final db = await _database.database;
     await db.delete('VoiceItem');
   }
+  Future<void> deleteVoice(int id) async {
+    final db = await _database.database;
+    await db.delete('VoiceItem', where: 'id = ?', whereArgs: [id]);
+  }
   // ... other methods
 }

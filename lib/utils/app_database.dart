@@ -1,4 +1,3 @@
-
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -7,6 +6,7 @@ import 'package:path/path.dart';
 
 class AppDatabase {
   static final AppDatabase _instance = AppDatabase._internal();
+  static const int _databaseVersion = 2; // Update the version number
   static Database? _database;
 
   // Singleton pattern for a shared database instance.
@@ -36,7 +36,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 5, // incremented database version
+      version: 9, // incremented database version
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -66,8 +66,6 @@ class AppDatabase {
           locale TEXT,
           createdAt INTEGER,
           displayName TEXT
-            rateForSSML TEXT,
-            pitchForSSML TEXT
         )
         ''');
 
@@ -81,7 +79,7 @@ class AppDatabase {
         speed REAL,
         audioFilePath TEXT,
         createdAt INTEGER,
-        position INTEGER
+        position INTEGER,
         primaryLanguage TEXT
       )
     ''');
@@ -105,13 +103,7 @@ class AppDatabase {
     if (oldVersion < 3) {
       await db.execute('ALTER TABLE SaidTextItem ADD COLUMN position INTEGER;');
     }
-    if (oldVersion < 4) {
-      await db.execute('ALTER TABLE SaidTextItem ADD COLUMN         primaryLanguage TEXT');
-  }
-  if (oldVersion < 5) {
-    await db.execute('ALTER TABLE VoiceItem ADD COLUMN rateForSSML TEXT;');
-    await db.execute('ALTER TABLE VoiceItem ADD COLUMN pitchForSSML TEXT;');
-  }
+
     // Add other migration blocks for future versions here. For example:
     // if (oldVersion < 3) {
     //   // Add another column or table

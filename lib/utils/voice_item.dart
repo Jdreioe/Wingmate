@@ -7,8 +7,7 @@ class VoiceItem {
   String? locale;
   int? createdAt;
   String? displayName;
-  String? rateForSSML;
-  String? pitchForSSML;
+
 
   VoiceItem(
       {this.id,
@@ -18,8 +17,7 @@ class VoiceItem {
       this.primaryLanguage,
       this.createdAt,
       this.displayName,
-      this.rateForSSML,
-      this.pitchForSSML});
+});
 
 
   Map<String, dynamic> toMap() {
@@ -31,8 +29,6 @@ class VoiceItem {
       'locale': primaryLanguage,
       'createdAt': createdAt,
       'displayName': displayName,
-      'rateForSSML': rateForSSML,
-      'pitchForSSML': pitchForSSML,
     };
   }
 
@@ -45,8 +41,6 @@ class VoiceItem {
       primaryLanguage: map['locale'],
       createdAt: map['createdAt'],
       displayName: map['displayName'],
-      rateForSSML: map['rateForSSML'],
-      pitchForSSML: map['pitchForSSML'],
     );
   }
 }

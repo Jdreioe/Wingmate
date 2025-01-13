@@ -70,6 +70,8 @@ class AzureTts {
     ssml =
         '<speak version="1.0" xml:lang="en-US"> <voice name="$selectedVoice">  $langTag $text $endLang </voice> </speak>';
     }
+
+    debugPrint('SSML: $ssml');
     // Attempt to post the SSML body to Azure TTS endpoint
     try {
       final response = await http.post(url, headers: headers, body: ssml);
@@ -82,7 +84,8 @@ class AzureTts {
         final file = File('${directory.path}/temp_audio.mp3');
         await file.writeAsBytes(response.bodyBytes);
         // Save the audio file to the device and database
-        saveAudioFile(text, file.readAsBytesSync(), selectedVoice, rate, pitch);
+        
+        saveAudioFile(text, file.readAsBytesSync(), selectedVoice, rate, pitch,  selectedLanguage);
       } else {
         debugPrint('Error: ${response.statusCode}, ${response.body}');
       }
@@ -98,6 +101,7 @@ class AzureTts {
     String voice,
     double rate,
     double pitch,
+    String? selectedLanguage,
   ) async {
     debugPrint('saveAudioFile called with voice: $voice');
     final SaidTextDao saidTextDao = SaidTextDao(AppDatabase());
@@ -115,6 +119,10 @@ class AzureTts {
           voiceName: voice,
           pitch: pitch,
           speed: rate,
+          position: 0, // Add position property
+          primaryLanguage: selectedLanguage ?? '',
+          createdAt: DateTime.now().millisecondsSinceEpoch
+
       );
 
       saidTextDao.insertHistorik(saidTextItem);

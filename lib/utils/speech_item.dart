@@ -5,14 +5,16 @@ class SpeechItem {
   bool? isFolder;
   int? parentId;
   int? createdAt;
-
+  int? position;
   SpeechItem(
       {this.id,
       this.name,
       this.text,
       this.isFolder,
       this.parentId,
-      this.createdAt});
+      this.createdAt,
+      this.position
+      });
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -21,6 +23,7 @@ class SpeechItem {
       'isFolder': isFolder == true ? 1 : 0,
       'parentId': parentId,
       'createdAt': createdAt,
+      'position': position,
     };
   }
 
@@ -32,6 +35,7 @@ class SpeechItem {
       isFolder: map['isFolder'] == 1,
       parentId: map['parentId'],
       createdAt: map['createdAt'],
+      position: map['position'],
     );
   }
 }

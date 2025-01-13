@@ -179,8 +179,8 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
     final database = AppDatabase(); // Get the database instance
     final voiceDao = VoiceDao(database);
 
-    // Delete all previous entries if needed (optional)
-    await voiceDao.deleteAll(); // Optional if you want to clear old data
+    // Delete all previous entries if needed
+    await voiceDao.deleteAll(); 
 
     for (var voice in voices) {
       final voiceItem = VoiceItem(
