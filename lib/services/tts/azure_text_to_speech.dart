@@ -10,6 +10,8 @@ import 'package:wingmate/utils/said_text_dao.dart';
 import 'package:wingmate/utils/said_text_item.dart';
 import 'package:hive/hive.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:wingmate/utils/speech_item.dart';
+import 'package:wingmate/utils/speech_item_dao.dart';
 
 class AzureTts {
   final String subscriptionKey;
@@ -147,8 +149,8 @@ class AzureTts {
 
   }
 
-  Future<void> generateSSMLForItem(SaidTextItem saidTextItem) async {
-    debugPrint('generateSSMLForItem called with text: ${saidTextItem.saidText}');
+  Future<void> generateSSMLForItem(SpeechItem speechItem) async {
+    debugPrint('generateSSMLForItem called with text: ${speechItem.text}');
     Voice voice = voiceBox.get('currentVoice');
     final selectedVoice = voice.name;
     final selectedLanguage = voice.selectedLanguage;
@@ -163,7 +165,7 @@ class AzureTts {
     };
 
     final ssml =
-        '<speak version="1.0" xml:lang="en-US"> <voice name="$selectedVoice"><lang xml:lang="$selectedLanguage">${saidTextItem.saidText}</lang > </voice> </speak>';
+        '<speak version="1.0" xml:lang="en-US"> <voice name="$selectedVoice"><lang xml:lang="$selectedLanguage">${speechItem.text}</lang > </voice> </speak>';
 
     try {
       final response = await http.post(url, headers: headers, body: ssml);
@@ -174,9 +176,9 @@ class AzureTts {
         final file = File('${directory.path}/audio_${DateTime.now().millisecondsSinceEpoch}.mp3');
         await file.writeAsBytes(response.bodyBytes);
 
-        saidTextItem.audioFilePath = file.path;
-        final SaidTextDao saidTextDao = SaidTextDao(AppDatabase());
-        saidTextDao.insertHistorik(saidTextItem);
+        speechItem.filePath = file.path;
+        final SpeechItemDao speechItemDao = SpeechItemDao(AppDatabase());
+        await speechItemDao.updateItem(speechItem);
         debugPrint('Audio file saved at: ${file.path}');
       } else {
         debugPrint('Error: ${response.statusCode}, ${response.body}');

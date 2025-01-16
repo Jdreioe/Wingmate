@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +19,7 @@ import 'package:wingmate/utils/speech_item.dart';
 import 'package:wingmate/utils/speech_item_dao.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:wingmate/ui/history_page.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../utils/said_text_dao.dart';
 
@@ -41,10 +45,13 @@ class _MainPageState extends State<MainPage> {
   final FocusNode _messageFocusNode = FocusNode();
   final List<dynamic> _items = []; // Store both folders and speech items
   bool isPlaying = false;
+  bool isSomeFolderSelected = false;
+  int currentFolderId = -1;
 
   AzureTts? azureTts;
   final SaidTextDao _saidTextDao = SaidTextDao(AppDatabase());
   final SpeechItemDao _speechItemDao = SpeechItemDao(AppDatabase());
+  
 
   @override
   void initState() {
@@ -57,10 +64,7 @@ class _MainPageState extends State<MainPage> {
       setState(() {
         isPlaying = event.value as bool;
       });
-      if (!isPlaying) {
-        debugPrint("Reloading items");
-        _loadItems();
-      }
+
     });
   }
 
@@ -109,7 +113,6 @@ class _MainPageState extends State<MainPage> {
     return newText;
   }
 
-
   String convertToXmlTags(String text) {
     return text
         .replaceAll('<en>', '<lang xml:lang="en-US">')
@@ -135,21 +138,28 @@ class _MainPageState extends State<MainPage> {
   }
 
   void _showSaveMessageDialog() {
+    final message = _messageController.text;
     showDialog(
       context: context,
       builder: (context) {
         return SaveMessageDialog(
-          onSave: (message, category) async {
+          initialMessage: message,
+          onSave: (message, category, categoryChecked) async {
             // Handle saving the message and category
             debugPrint('Message: $message, Category: $category');
             final speechItem = SpeechItem(
               name: category,
               text: message,
-              isFolder: false,
+              isFolder: categoryChecked,
+              parentId: isSomeFolderSelected ? currentFolderId : null,
               createdAt: DateTime.now().millisecondsSinceEpoch,
             );
-            await _speechItemDao.insertItem(speechItem);
-            _loadItems(); // Reload items to reflect the new addition
+            final id = await _speechItemDao.insertItem(speechItem);
+            speechItem.id = id;
+            await azureTts!.generateSSMLForItem(speechItem);
+            setState(() {
+              _items.add(speechItem);
+            });
           },
         );
       },
@@ -161,6 +171,12 @@ class _MainPageState extends State<MainPage> {
     if (item is SpeechItem) {
       final result = await _speechItemDao.deleteItem(item.id!);
       if (result > 0) {
+        if (item.filePath != null) {
+          final file = File(item.filePath!);
+          if (await file.exists()) {
+            await file.delete();
+          }
+        }
         setState(() {
           _items.removeAt(index);
         });
@@ -217,6 +233,51 @@ class _MainPageState extends State<MainPage> {
     _messageFocusNode.requestFocus();
   }
 
+  void selectFolder(int folderId, String folderName) async {
+    setState(() {
+      isSomeFolderSelected = true;
+      currentFolderId = folderId;
+      _items.clear();
+    });
+
+    if (folderId == -1) {
+      _loadItems();
+      return;
+    }
+
+    final items = await _speechItemDao.getAllItemsInFolder(folderId);
+    setState(() {
+      _items.addAll(items);
+    });
+  }
+
+  void selectRootFolder() async {
+    setState(() {
+      isSomeFolderSelected = false;
+      currentFolderId = -1;
+      _items.clear();
+    });
+
+    final rootItems = await _speechItemDao.getAllRootItems();
+    setState(() {
+      _items.add('History');
+      _items.addAll(rootItems);
+    });
+  }
+
+  Future<void> _shareFile(String filePath) async {
+    try {
+      await Share.shareXFiles([XFile(filePath)]);
+    } catch (e) {
+      final file = File(filePath);
+      final bytes = await file.readAsBytes();
+      await Clipboard.setData(ClipboardData(text: base64Encode(bytes)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('File copied to clipboard')),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _messageController.dispose();
@@ -228,17 +289,31 @@ class _MainPageState extends State<MainPage> {
     // Builds the main UI with an AppBar and text input area.
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context)?.appTitle ?? 'Title'),
+        title: Text(isSomeFolderSelected ? 'Folder' : (AppLocalizations.of(context)?.appTitle ?? 'Title')),
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.person),
+          icon: Icon(isSomeFolderSelected ? Icons.arrow_back : Icons.person),
           onPressed: () {
-            showProfileDialog(
-              context,
-              widget.speechServiceEndpoint,
-              widget.speechServiceKey,
-              widget.onSaveSettings,
-            );
+            if (isSomeFolderSelected) {
+              if (currentFolderId == -1) {
+                selectRootFolder();
+              } else {
+                _speechItemDao.getItemById(currentFolderId).then((currentFolder) {
+                  if (currentFolder != null && currentFolder.parentId != null) {
+                    selectFolder(currentFolder.parentId!, currentFolder.name!);
+                  } else {
+                    selectRootFolder();
+                  }
+                });
+              }
+            } else {
+              showProfileDialog(
+                context,
+                widget.speechServiceEndpoint,
+                widget.speechServiceKey,
+                widget.onSaveSettings,
+              );
+            }
           },
         ),
         actions: [
@@ -285,8 +360,17 @@ class _MainPageState extends State<MainPage> {
                 } else if (item is SpeechItem) {
                   return Dismissible(
                     key: ValueKey(item.id),
-                    direction: DismissDirection.endToStart,
+                    direction: DismissDirection.horizontal,
                     background: Container(
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(horizontal: 40),
+                      color: Colors.blue,
+                      child: const Icon(
+                        Icons.share,
+                        color: Colors.white,
+                      ),
+                    ),
+                    secondaryBackground: Container(
                       alignment: Alignment.centerRight,
                       padding: const EdgeInsets.symmetric(horizontal: 40),
                       color: Colors.red,
@@ -296,7 +380,14 @@ class _MainPageState extends State<MainPage> {
                       ),
                     ),
                     confirmDismiss: (direction) async {
-                      return await _deleteItem(_items.indexOf(item));
+                      if (direction == DismissDirection.startToEnd) {
+                        if (item.filePath != null) {
+                          await _shareFile(item.filePath!);
+                        }
+                        return false;
+                      } else {
+                        return await _deleteItem(_items.indexOf(item));
+                      }
                     },
                     child: ListTile(
                       key: ValueKey(item),
@@ -305,14 +396,16 @@ class _MainPageState extends State<MainPage> {
                       subtitle: item.isFolder! ? null : Text(item.text ?? ''),
                       onTap: item.isFolder!
                           ? () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => FolderPage(folderId: item.id!),
-                                ),
-                              );
+                              selectFolder(item.id!, item.name!);
                             }
-                          : null,
+                          : () async {
+                              if (item.text != null) {
+                                final speechItem = await _speechItemDao.getItemByText(item.text!);
+                                if (speechItem?.filePath != null) {
+                                  await azureTts!.playText(DeviceFileSource(speechItem!.filePath!));
+                                }
+                              }
+                            },
                     ),
                   );
                 } else {

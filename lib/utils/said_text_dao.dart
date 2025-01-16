@@ -63,7 +63,19 @@ class SaidTextDao {
       return SaidTextItem.fromMap(maps[i]);
     });
   }
-
+  Future<SaidTextItem?> getItemByText(String text) async {
+    final db = await _database.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'SaidTextItem',
+      where: 'saidText = ?',
+      whereArgs: [text],
+      limit: 1,
+    );
+    if (maps.isNotEmpty) {
+      return SaidTextItem.fromMap(maps.first);
+    }
+    return null;
+  }
 
   // ... other methods
 }

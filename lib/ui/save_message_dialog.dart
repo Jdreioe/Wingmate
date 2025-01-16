@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
 
 class SaveMessageDialog extends StatefulWidget {
-  final Function(String message, String category) onSave;
+  final Function(String message, String category, bool categoryChecked) onSave;
+  final String initialMessage;
 
-  const SaveMessageDialog({Key? key, required this.onSave}) : super(key: key);
+  const SaveMessageDialog({Key? key, required this.onSave, this.initialMessage = ''}) : super(key: key);
 
   @override
   _SaveMessageDialogState createState() => _SaveMessageDialogState();
 }
 
 class _SaveMessageDialogState extends State<SaveMessageDialog> {
-  final TextEditingController _messageController = TextEditingController();
+  late TextEditingController _messageController;
   final TextEditingController _categoryController = TextEditingController();
+  bool _isCategoryChecked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _messageController = TextEditingController(text: widget.initialMessage);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +36,20 @@ class _SaveMessageDialogState extends State<SaveMessageDialog> {
             controller: _categoryController,
             decoration: InputDecoration(labelText: 'Category'),
           ),
+            Row(
+            children: [
+              Checkbox(
+              value: _isCategoryChecked,
+              onChanged: (bool? value) {
+                setState(() {
+
+                _isCategoryChecked = value ?? false;
+                });
+              },
+              ),
+              Text('Category'),
+            ],
+            ),
         ],
       ),
       actions: [
@@ -42,6 +64,7 @@ class _SaveMessageDialogState extends State<SaveMessageDialog> {
             widget.onSave(
               _messageController.text,
               _categoryController.text,
+              _isCategoryChecked
             );
             Navigator.of(context).pop();
           },

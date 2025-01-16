@@ -3,6 +3,10 @@ import 'package:wingmate/utils/said_text_dao.dart';
 import 'package:wingmate/utils/app_database.dart';
 import 'package:wingmate/utils/said_text_item.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'dart:io';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter/services.dart';
+import 'dart:convert';
 
 class HistoryPage extends StatefulWidget {
   @override
@@ -25,18 +29,47 @@ class _HistoryPageState extends State<HistoryPage> {
     setState(() {
       _saidTextItems.clear();
       _saidTextItems.addAll(items);
+      _saidTextItems.sort((a, b) => (b.date ?? 0).compareTo(a.date ?? 0));
     });
   }
 
   Future<bool> _deleteSaidTextItem(int index) async {
-    final result = await _saidTextDao.delete(_saidTextItems[index].id!);
+    final item = _saidTextItems[index];
+    final result = await _saidTextDao.delete(item.id!);
     if (result > 0) {
+      if (item.audioFilePath != null) {
+        final file = File(item.audioFilePath!);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      }
       setState(() {
         _saidTextItems.removeAt(index);
       });
       return true;
     }
     return false;
+  }
+
+  Future<void> _shareFile(String filePath) async {
+    try {
+      await Share.shareXFiles([XFile(filePath)]);
+    } catch (e) {
+      final file = File(filePath);
+      final bytes = await file.readAsBytes();
+      await Clipboard.setData(ClipboardData(text: base64Encode(bytes)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('File copied to clipboard')),
+      );
+    }
+  }
+
+  String convertToUserFriendlyTags(String text) {
+    final newText = text
+        .replaceAll('<lang xml:lang="en-US">', '<en>')
+        .replaceAll('</lang>', '</en>')
+        .replaceAll('<break time="2s"/>', "<2s>");
+    return newText;
   }
 
   @override
@@ -56,8 +89,17 @@ class _HistoryPageState extends State<HistoryPage> {
                   .substring(0, 16); // e.g. "YYYY-MM-DD HH:MM"
           return Dismissible(
             key: ValueKey(item.saidText! + DateTime.now().toString()), // Unique key
-            direction: DismissDirection.endToStart,
+            direction: DismissDirection.horizontal,
             background: Container(
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              color: Colors.blue,
+              child: const Icon(
+                Icons.share,
+                color: Colors.white,
+              ),
+            ),
+            secondaryBackground: Container(
               alignment: Alignment.centerRight,
               padding: const EdgeInsets.symmetric(horizontal: 40),
               color: Colors.red,
@@ -67,12 +109,19 @@ class _HistoryPageState extends State<HistoryPage> {
               ),
             ),
             confirmDismiss: (direction) async {
-              return await _deleteSaidTextItem(index);
+              if (direction == DismissDirection.startToEnd) {
+                if (item.audioFilePath != null) {
+                  await _shareFile(item.audioFilePath!);
+                }
+                return false;
+              } else {
+                return await _deleteSaidTextItem(index);
+              }
             },
             child: ListTile(
               key: ValueKey(item),
               leading: Icon(Icons.speaker_phone),
-              title: Text(item.saidText ?? ''),
+              title: Text(convertToUserFriendlyTags(item.saidText ?? '')),
               subtitle: Text(dateString),
               onTap: item.audioFilePath != null
                   ? () async {

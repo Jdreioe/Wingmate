@@ -36,11 +36,12 @@ class SpeechItemDao {
     final db = await _database.database;
     return await db.insert('SpeechItem', speechItem.toMap());
   }
+
   Future<int> deleteItem(int id) async {
     final db = await _database.database;
     return await db.delete('SpeechItem', where: 'id = ?', whereArgs: [id]);
   }
-  // Add other methods as needed (insert, update, delete, etc.)
+
   Future<int> updateItem(SpeechItem speechItem) async {
     final db = await _database.database;
     return await db.update(
@@ -49,5 +50,24 @@ class SpeechItemDao {
       where: 'id = ?',
       whereArgs: [speechItem.id],
     );
+  }
+
+  Future<SpeechItem?> getItemById(int id) async {
+    final db = await _database.database;
+    final List<Map<String, dynamic>> maps =
+        await db.query('SpeechItem', where: 'id = ?', whereArgs: [id]);
+    if (maps.isNotEmpty) {
+      return SpeechItem.fromMap(maps.first);
+    }
+    return null;
+  }
+  Future<SpeechItem?> getItemByText(String text) async {
+    final db = await _database.database;
+    final List<Map<String, dynamic>> maps =
+        await db.query('SpeechItem', where: 'text = ?', whereArgs: [text]);
+    if (maps.isNotEmpty) {
+      return SpeechItem.fromMap(maps.first);
+    }
+    return null;
   }
 }

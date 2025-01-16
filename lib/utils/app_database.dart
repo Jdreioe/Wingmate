@@ -36,7 +36,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 9, // incremented database version
+      version: 11, // incremented database version
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -52,8 +52,13 @@ class AppDatabase {
         isFolder INTEGER, 
         parentId INTEGER,
         createdAt INTEGER,
-        position INTEGER
-
+        position INTEGER,
+        filePath TEXT
+        voiceName TEXT,
+        pitch REAL,
+        selectedLanguage TEXT,
+        rateForSsml REAL,
+        pitchForSsml REAL
       );
     ''');
 
@@ -102,6 +107,16 @@ class AppDatabase {
     } 
     if (oldVersion < 3) {
       await db.execute('ALTER TABLE SaidTextItem ADD COLUMN position INTEGER;');
+    }
+    if (oldVersion < 10) {
+      await db.execute('ALTER TABLE SpeechItem ADD COLUMN filePath TEXT;');
+    }
+    if (oldVersion < 11) {
+      await db.execute('ALTER TABLE SpeechItem ADD COLUMN voiceName TEXT;');
+      await db.execute('ALTER TABLE SpeechItem ADD COLUMN pitch REAL;');
+      await db.execute('ALTER TABLE SpeechItem ADD COLUMN selectedLanguage TEXT;');
+      await db.execute('ALTER TABLE SpeechItem ADD COLUMN rateForSsml REAL;');
+      await db.execute('ALTER TABLE SpeechItem ADD COLUMN pitchForSsml REAL;');
     }
 
     // Add other migration blocks for future versions here. For example:
