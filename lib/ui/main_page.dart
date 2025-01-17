@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -10,9 +11,8 @@ import 'package:wingmate/ui/fetch_voices_page.dart';
 import 'package:wingmate/services/tts/azure_text_to_speech.dart';
 import 'package:wingmate/dialogs/profile_dialog.dart';
 import 'package:hive/hive.dart';
-import 'package:wingmate/ui/folder_page.dart';
 import 'package:wingmate/utils/app_database.dart';
-import 'package:wingmate/utils/said_text_item.dart';
+
 import 'package:wingmate/utils/speech_service_config.dart';
 import 'package:wingmate/ui/save_message_dialog.dart';
 import 'package:wingmate/utils/speech_item.dart';
@@ -22,6 +22,13 @@ import 'package:wingmate/ui/history_page.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../utils/said_text_dao.dart';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:wingmate/utils/subscription_manager.dart';
+import 'package:wingmate/utils/save_message_dialog_helper.dart';
+import 'package:wingmate/utils/full_screen_text_view.dart';
+import 'package:http/http.dart' as http;
 
 class MainPage extends StatefulWidget {
   final String speechServiceEndpoint;
@@ -49,23 +56,60 @@ class _MainPageState extends State<MainPage> {
   int currentFolderId = -1;
 
   AzureTts? azureTts;
-  final SaidTextDao _saidTextDao = SaidTextDao(AppDatabase());
   final SpeechItemDao _speechItemDao = SpeechItemDao(AppDatabase());
-  
+  bool _isSubscribed = false;
+  late final SubscriptionManager _subscriptionManager;
 
   @override
   void initState() {
     super.initState();
+    if (_isMobilePlatform()) {
+      _subscriptionManager = SubscriptionManager(
+        onSubscriptionStatusChanged: (isSubscribed) async {
+          setState(() {
+            _isSubscribed = isSubscribed;
+          });
+          if (isSubscribed) {
+            await _fetchAzureSubscriptionDetails();
+          }
+        },
+      );
+      _subscriptionManager.initialize();
+    }
     _initializeAzureTts();
     _loadItems();
+    _watchIsPlaying();
+  }
+
+  bool _isMobilePlatform() {
+    return !kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
+  }
+
+  void _watchIsPlaying() {
     Hive.box('settings').watch(key: 'isPlaying').listen((event) {
       debugPrint('isPlaying changed to: ${event.value}');
-
       setState(() {
         isPlaying = event.value as bool;
       });
-
     });
+  }
+
+  Future<void> _fetchAzureSubscriptionDetails() async {
+    final response = await http.post(
+      Uri.parse('https://your-server-url/verify-subscription'),
+      body: jsonEncode({'purchaseToken': 'your-purchase-token'}),
+      headers: {'Content-Type': 'application/json'},
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final subscriptionKey = data['subscriptionKey'];
+      final region = data['region'];
+      await widget.onSaveSettings(region, subscriptionKey);
+    } else {
+      // Handle error
+      debugPrint('Failed to fetch subscription details');
+    }
   }
 
   // Creates a new instance of AzureTts with the stored config and voice.
@@ -98,15 +142,17 @@ class _MainPageState extends State<MainPage> {
   }
 
   String convertToUserFriendlyTags(String text) {
+ 
+ // converting the SSML tags to user-friendly tags
     final newText = text
         .replaceAll('<lang xml:lang="en-US">', '<en>')
         .replaceAll('</lang>', '</en>')
         .replaceAll('<break time="2s"/>', "<2s>");
-
+    // Set the cursor position after the <en> tag
     int newOffset = newText.indexOf("<en>") >= 0
         ? newText.indexOf("<en>") + "<en>".length
         : 0;
-
+    // Update the text and cursor position in the controller
     _messageController.text = newText;
     _messageController.selection = TextSelection.collapsed(offset: newOffset);
 
@@ -114,6 +160,7 @@ class _MainPageState extends State<MainPage> {
   }
 
   String convertToXmlTags(String text) {
+    // Convert user-friendly tags to SSML tags
     return text
         .replaceAll('<en>', '<lang xml:lang="en-US">')
         .replaceAll('</en>', '</lang>')
@@ -137,33 +184,22 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  void _showSaveMessageDialog() {
-    final message = _messageController.text;
-    showDialog(
-      context: context,
-      builder: (context) {
-        return SaveMessageDialog(
-          initialMessage: message,
-          onSave: (message, category, categoryChecked) async {
-            // Handle saving the message and category
-            debugPrint('Message: $message, Category: $category');
-            final speechItem = SpeechItem(
-              name: category,
-              text: message,
-              isFolder: categoryChecked,
-              parentId: isSomeFolderSelected ? currentFolderId : null,
-              createdAt: DateTime.now().millisecondsSinceEpoch,
-            );
-            final id = await _speechItemDao.insertItem(speechItem);
-            speechItem.id = id;
-            await azureTts!.generateSSMLForItem(speechItem);
-            setState(() {
-              _items.add(speechItem);
-            });
-          },
-        );
-      },
+
+  Future<void> _handleSaveMessage(String message, String category, bool categoryChecked) async {
+    debugPrint('Message: $message, Category: $category');
+    final speechItem = SpeechItem(
+      name: category,
+      text: message,
+      isFolder: categoryChecked,
+      parentId: isSomeFolderSelected ? currentFolderId : null,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
     );
+    final id = await _speechItemDao.insertItem(speechItem);
+    speechItem.id = id;
+    await azureTts!.generateSSMLForItem(speechItem);
+    setState(() {
+      _items.add(speechItem);
+    });
   }
 
   Future<bool> _deleteItem(int index) async {
@@ -280,201 +316,253 @@ class _MainPageState extends State<MainPage> {
 
   @override
   void dispose() {
+    _subscriptionManager.dispose();
     _messageController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Builds the main UI with an AppBar and text input area.
     return Scaffold(
       appBar: AppBar(
         title: Text(isSomeFolderSelected ? 'Folder' : (AppLocalizations.of(context)?.appTitle ?? 'Title')),
         centerTitle: true,
         leading: IconButton(
           icon: Icon(isSomeFolderSelected ? Icons.arrow_back : Icons.person),
-          onPressed: () {
-            if (isSomeFolderSelected) {
-              if (currentFolderId == -1) {
-                selectRootFolder();
-              } else {
-                _speechItemDao.getItemById(currentFolderId).then((currentFolder) {
-                  if (currentFolder != null && currentFolder.parentId != null) {
-                    selectFolder(currentFolder.parentId!, currentFolder.name!);
-                  } else {
-                    selectRootFolder();
-                  }
-                });
-              }
-            } else {
-              showProfileDialog(
-                context,
-                widget.speechServiceEndpoint,
-                widget.speechServiceKey,
-                widget.onSaveSettings,
-              );
-            }
-          },
+          onPressed: _handleLeadingIconPressed,
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => FetchVoicesPage(
-                    endpoint: widget.speechServiceEndpoint,
-                    subscriptionKey: widget.speechServiceKey,
-                  ),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _showSaveMessageDialog,
-          ),
-        ],
+        actions: _buildAppBarActions(),
       ),
       body: Column(
         children: [
-          Expanded(
-            child: ReorderableListView(
-              onReorder: _reorderItems,
-              children: _items.map((item) {
-                if (item is String && item == 'History') {
-                  return ListTile(
-                    key: ValueKey(item),
-                    leading: Icon(Icons.folder),
-                    title: Text(item),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => HistoryPage(),
-                        ),
-                      );
-                    },
-                  );
-                } else if (item is SpeechItem) {
-                  return Dismissible(
-                    key: ValueKey(item.id),
-                    direction: DismissDirection.horizontal,
-                    background: Container(
-                      alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.symmetric(horizontal: 40),
-                      color: Colors.blue,
-                      child: const Icon(
-                        Icons.share,
-                        color: Colors.white,
-                      ),
-                    ),
-                    secondaryBackground: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.symmetric(horizontal: 40),
-                      color: Colors.red,
-                      child: const Icon(
-                        Icons.delete,
-                        color: Colors.white,
-                      ),
-                    ),
-                    confirmDismiss: (direction) async {
-                      if (direction == DismissDirection.startToEnd) {
-                        if (item.filePath != null) {
-                          await _shareFile(item.filePath!);
-                        }
-                        return false;
-                      } else {
-                        return await _deleteItem(_items.indexOf(item));
-                      }
-                    },
-                    child: ListTile(
-                      key: ValueKey(item),
-                      leading: Icon(item.isFolder! ? Icons.folder : Icons.speaker_phone),
-                      title: Text(item.name ?? ''),
-                      subtitle: item.isFolder! ? null : Text(item.text ?? ''),
-                      onTap: item.isFolder!
-                          ? () {
-                              selectFolder(item.id!, item.name!);
-                            }
-                          : () async {
-                              if (item.text != null) {
-                                final speechItem = await _speechItemDao.getItemByText(item.text!);
-                                if (speechItem?.filePath != null) {
-                                  await azureTts!.playText(DeviceFileSource(speechItem!.filePath!));
-                                }
-                              }
-                            },
-                    ),
-                  );
-                } else {
-                  return Container();
-                }
-              }).toList(),
-            ),
-          ),
-          // Add XML shortcuts row
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  ElevatedButton(
-                    onPressed: () =>
-                        _addXmlTag('<lang xml:lang="en-US"> </lang>'),
-                    child: Text('English'),
-                  ),
-                  SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () => _addXmlTag('<break time="2s"/>'),
-                    child: Text('2 sec break mid sentence'),
-                  ),
-                  // Add more buttons for other XML tags as needed
-                ],
+          Expanded(child: _buildReorderableListView()),
+          _buildXmlShortcutsRow(),
+          _buildMessageInputRow(),
+        ],
+      ),
+    );
+  }
+
+  void _handleLeadingIconPressed() {
+    if (isSomeFolderSelected) {
+      if (currentFolderId == -1) {
+        selectRootFolder();
+      } else {
+        _speechItemDao.getItemById(currentFolderId).then((currentFolder) {
+          if (currentFolder != null && currentFolder.parentId != null) {
+            selectFolder(currentFolder.parentId!, currentFolder.name!);
+          } else {
+            selectRootFolder();
+          }
+        });
+      }
+    } else {
+      showProfileDialog(
+        context,
+        widget.speechServiceEndpoint,
+        widget.speechServiceKey,
+        widget.onSaveSettings,
+      );
+    }
+  }
+
+  List<Widget> _buildAppBarActions() {
+    return [
+      if (!_isSubscribed && _isMobilePlatform())
+        IconButton(
+          icon: const Icon(Icons.lock),
+          onPressed: () => _subscriptionManager.showSubscriptionDialog(context),
+        ),
+      IconButton(
+        icon: const Icon(Icons.settings),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => FetchVoicesPage(
+                endpoint: widget.speechServiceEndpoint,
+                subscriptionKey: widget.speechServiceKey,
               ),
             ),
-          ),
+          );
+        },
+      ),
+      IconButton(
+        icon: const Icon(Icons.add),
+        onPressed: () => showSaveMessageDialog(context, _messageController.text, _handleSaveMessage),
+      ),
+      IconButton(
+        icon: const Icon(Icons.fullscreen),
+        onPressed: () => showFullScreenText(context, _messageController.text),
+      ),
+    ];
+  }
 
-          Padding(
-            padding: const EdgeInsets.only(
-                bottom: 16.0,
-                left: 16.0,
-                right: 16.0), // Add bottom padding here
+  ReorderableListView _buildReorderableListView() {
+    return ReorderableListView(
+      onReorder: _reorderItems,
+      children: _items.map((item) => _buildListItem(item)).toList(),
+    );
+  }
 
-            child: Row(
-              children: [
-                Expanded(
-                    child: TextField(
-                  controller: _messageController,
-                  focusNode: _messageFocusNode,
-                  minLines: 1,
-                  maxLines: 5,
-                  decoration: InputDecoration(
-                    labelText: 'Enter text',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(5.0),
-                    ),
-                    focusedBorder: const OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.blue, width: 2.0),
-                    ),
-                    enabledBorder: const OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.grey, width: 1.0),
-                    ),
-                  ),
-                  textInputAction:
-                      TextInputAction.done, // Set the text input action
-                  keyboardType: TextInputType.text, // Set the keyboard type
-                )),
-                IconButton(
-                  icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-                  onPressed: _togglePlayPause,
+  Widget _buildListItem(dynamic item) {
+    if (item is String && item == 'History') {
+      return ListTile(
+        key: ValueKey(item),
+        leading: Icon(Icons.folder),
+        title: Text(item),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HistoryPage(),
+            ),
+          );
+        },
+      );
+    } else if (item is SpeechItem) {
+      return Dismissible(
+        key: ValueKey(item.id),
+        direction: DismissDirection.horizontal,
+        background: _buildDismissibleBackground(Alignment.centerLeft, Colors.blue, Icons.share),
+        secondaryBackground: _buildDismissibleBackground(Alignment.centerRight, Colors.red, Icons.delete),
+        confirmDismiss: (direction) => _handleDismiss(direction, item),
+        child: ListTile(
+          key: ValueKey(item),
+          leading: Icon(item.isFolder! ? Icons.folder : Icons.speaker_phone),
+          title: Text(item.name ?? ''),
+          subtitle: item.isFolder! ? null : Text(item.text ?? ''),
+          onTap: item.isFolder! ? () => selectFolder(item.id!, item.name!) : () => _playSpeechItem(item),
+        ),
+      );
+    } else {
+      return Container();
+    }
+  }
+
+  Container _buildDismissibleBackground(Alignment alignment, Color color, IconData icon) {
+    return Container(
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: 40),
+      color: color,
+      child: Icon(icon, color: Colors.white),
+    );
+  }
+
+  Future<bool> _handleDismiss(DismissDirection direction, SpeechItem item) async {
+    if (direction == DismissDirection.startToEnd) {
+      if (item.filePath != null) {
+        await _shareFile(item.filePath!);
+      }
+      return false;
+    } else {
+      return await _deleteItem(_items.indexOf(item));
+    }
+  }
+
+  Future<void> _playSpeechItem(SpeechItem item) async {
+    if (item.text != null) {
+      final speechItem = await _speechItemDao.getItemByText(item.text!);
+      if (speechItem?.filePath != null) {
+        await azureTts!.playText(DeviceFileSource(speechItem!.filePath!));
+      }
+    }
+  }
+
+  Padding _buildXmlShortcutsRow() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            ElevatedButton(
+              onPressed: () => _addXmlTag('<lang xml:lang="en-US"> </lang>'),
+              child: Text('English'),
+            ),
+            SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () => _addXmlTag('<break time="2s"/>'),
+              child: Text('2 sec break mid sentence'),
+            ),
+            // Add more buttons for other XML tags as needed
+          ],
+        ),
+      ),
+    );
+  }
+
+  Padding _buildMessageInputRow() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0, left: 16.0, right: 16.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _messageController,
+              focusNode: _messageFocusNode,
+              minLines: 1,
+              maxLines: 5,
+              decoration: InputDecoration(
+                labelText: 'Enter text',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(5.0),
                 ),
-              ],
+                focusedBorder: const OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.blue, width: 2.0),
+                ),
+                enabledBorder: const OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.grey, width: 1.0),
+                ),
+              ),
+              textInputAction: TextInputAction.done,
+              keyboardType: TextInputType.text,
             ),
           ),
+          IconButton(
+            icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+            onPressed: _togglePlayPause,
+          ),
         ],
+      ),
+    );
+  }
+
+  void _showFullScreenText() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FullScreenTextView(text: _messageController.text),
+      ),
+    );
+  }
+}
+
+class FullScreenTextView extends StatelessWidget {
+  final String text;
+
+  const FullScreenTextView({Key? key, required this.text}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Full Screen Text'),
+      ),
+      body: InteractiveViewer(
+        panEnabled: true,
+        scaleEnabled: true,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                text,
+                style: TextStyle(fontSize: constraints.maxWidth / 10), // Adjust the font size based on the width
+              ),
+            );
+          },
+        ),
       ),
     );
   }
