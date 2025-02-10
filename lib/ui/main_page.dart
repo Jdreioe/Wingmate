@@ -523,6 +523,12 @@ class _MainPageState extends State<MainPage> {
             icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
             onPressed: _togglePlayPause,
           ),
+          IconButton(
+            icon: Icon(Icons.delete),
+            onPressed: () {
+              _messageController.clear();
+            },
+          ),
         ],
       ),
     );
