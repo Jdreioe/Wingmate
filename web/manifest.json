@@ -1,6 +1,6 @@
 {
-    "name": "wingmancrossplatform",
-    "short_name": "wingmancrossplatform",
+    "name": "wingmate",
+    "short_name": "wingmate",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -90,10 +90,26 @@ class AzureTts {
         saveAudioFile(text, file.readAsBytesSync(), selectedVoice, rate, pitch,  selectedLanguage);
       } else {
         debugPrint('Error: ${response.statusCode}, ${response.body}');
+//        _showErrorNotification('Error: ${response.statusCode}', response.body);
       }
     } catch (e) {
       debugPrint('Exception: $e');
+      if (e.toString().contains("Connection closed while receiving data")) {
+        _showErrorNotification('Message too long', 'Please try a shorter message');
+      } else {
+        _showErrorNotification('Connection error', "Please check your connection to the internet");
+      }
+   
     }
+  }
+
+  void _showErrorNotification(String title, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$title: $message'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 
   // Persists the audio file and text record in the local database.
