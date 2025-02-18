@@ -24,7 +24,8 @@ import 'package:share_plus/share_plus.dart';
 import '../utils/said_text_dao.dart';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:wingmate/utils/subscription_manager.dart';
 import 'package:wingmate/utils/save_message_dialog_helper.dart';
 import 'package:wingmate/utils/full_screen_text_view.dart';
@@ -59,6 +60,8 @@ class _MainPageState extends State<MainPage> {
   final SpeechItemDao _speechItemDao = SpeechItemDao(AppDatabase());
   bool _isSubscribed = false;
   late final SubscriptionManager _subscriptionManager;
+  final SaidTextDao _saidTextDao = SaidTextDao(AppDatabase());
+  String _previousText = '';
 
   @override
   void initState() {
@@ -82,7 +85,9 @@ class _MainPageState extends State<MainPage> {
   }
 
   bool _isMobilePlatform() {
-    return !kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
+    return !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.android);
   }
 
   void _watchIsPlaying() {
@@ -142,8 +147,7 @@ class _MainPageState extends State<MainPage> {
   }
 
   String convertToUserFriendlyTags(String text) {
- 
- // converting the SSML tags to user-friendly tags
+    // converting the SSML tags to user-friendly tags
     final newText = text
         .replaceAll('<lang xml:lang="en-US">', '<en>')
         .replaceAll('</lang>', '</en>')
@@ -184,8 +188,8 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-
-  Future<void> _handleSaveMessage(String message, String category, bool categoryChecked) async {
+  Future<void> _handleSaveMessage(
+      String message, String category, bool categoryChecked) async {
     debugPrint('Message: $message, Category: $category');
     final speechItem = SpeechItem(
       name: category,
@@ -314,6 +318,60 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
+  // Function to fetch said texts and use LLM to complete the sentence
+  Future<void> _finishSentence() async {
+    final saidTexts = await _saidTextDao.getAllSaidTexts();
+    final currentText = _messageController.text;
+
+    // Save the current text before calling the LLM service
+    _previousText = currentText;
+
+    // Call your LLM service here with the saidTexts and currentText
+    final completedText = await _callLLMService(saidTexts, currentText);
+
+    setState(() {
+      _messageController.text = completedText;
+    });
+  }
+
+  final Box voiceBox = Hive.box('selectedVoice');
+
+  Future<String> _callLLMService(
+      List<String> saidTexts, String currentText) async {
+    final response = await http.post(
+      Uri.parse(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=YOUR_API__KEY'),
+      body: jsonEncode({
+        'contents': [
+          {
+            'parts': [
+              {
+                'text': 'In the language of ,' + voiceBox.get('selectedLanguage') + ', Improve the following text without translating it. See the meaning and avoid adding extra information. Focus on formulating basic needs clearly and distinctly. If there are words in a language other than the main body of the text, e.g. English if the main body is in Danish, wrap the word in "<lang xml:lang="en-US"> words </lang>". If there is a natural pause somewhere, write <break time="2s"/>. Assume that the person has a disability, e.g. a cognitive disability, and do as little as possible. is: "$currentText"'
+                }
+            ]
+          }
+        ]
+      }),
+      headers: {'Content-Type': 'application/json'},
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      debugPrint('LLM service response: $data');
+      return data['candidates'][0]['content']['parts'][0]['text'];
+    } else {
+      debugPrint('Failed to call LLM service');
+      return currentText; // Return the original text if the service call fails
+    }
+  }
+
+  // Function to undo the LLM changes
+  void _undoLLMChanges() {
+    setState(() {
+      _messageController.text = _previousText;
+    });
+  }
+
   @override
   void dispose() {
     _subscriptionManager.dispose();
@@ -325,7 +383,9 @@ class _MainPageState extends State<MainPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(isSomeFolderSelected ? 'Folder' : (AppLocalizations.of(context)?.appTitle ?? 'Title')),
+        title: Text(isSomeFolderSelected
+            ? 'Folder'
+            : (AppLocalizations.of(context)?.appTitle ?? 'Title')),
         centerTitle: true,
         leading: IconButton(
           icon: Icon(isSomeFolderSelected ? Icons.arrow_back : Icons.person),
@@ -338,6 +398,8 @@ class _MainPageState extends State<MainPage> {
           Expanded(child: _buildReorderableListView()),
           _buildXmlShortcutsRow(),
           _buildMessageInputRow(),
+          _buildFinishSentenceButton(), // Add the new button here
+          _buildUndoButton(), // Add the undo button here
         ],
       ),
     );
@@ -389,7 +451,8 @@ class _MainPageState extends State<MainPage> {
       ),
       IconButton(
         icon: const Icon(Icons.add),
-        onPressed: () => showSaveMessageDialog(context, _messageController.text, _handleSaveMessage),
+        onPressed: () => showSaveMessageDialog(
+            context, _messageController.text, _handleSaveMessage),
       ),
       IconButton(
         icon: const Icon(Icons.fullscreen),
@@ -424,15 +487,19 @@ class _MainPageState extends State<MainPage> {
       return Dismissible(
         key: ValueKey(item.id),
         direction: DismissDirection.horizontal,
-        background: _buildDismissibleBackground(Alignment.centerLeft, Colors.blue, Icons.share),
-        secondaryBackground: _buildDismissibleBackground(Alignment.centerRight, Colors.red, Icons.delete),
+        background: _buildDismissibleBackground(
+            Alignment.centerLeft, Colors.blue, Icons.share),
+        secondaryBackground: _buildDismissibleBackground(
+            Alignment.centerRight, Colors.red, Icons.delete),
         confirmDismiss: (direction) => _handleDismiss(direction, item),
         child: ListTile(
           key: ValueKey(item),
           leading: Icon(item.isFolder! ? Icons.folder : Icons.speaker_phone),
           title: Text(item.name ?? ''),
           subtitle: item.isFolder! ? null : Text(item.text ?? ''),
-          onTap: item.isFolder! ? () => selectFolder(item.id!, item.name!) : () => _playSpeechItem(item),
+          onTap: item.isFolder!
+              ? () => selectFolder(item.id!, item.name!)
+              : () => _playSpeechItem(item),
         ),
       );
     } else {
@@ -440,7 +507,8 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  Container _buildDismissibleBackground(Alignment alignment, Color color, IconData icon) {
+  Container _buildDismissibleBackground(
+      Alignment alignment, Color color, IconData icon) {
     return Container(
       alignment: alignment,
       padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -449,7 +517,8 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  Future<bool> _handleDismiss(DismissDirection direction, SpeechItem item) async {
+  Future<bool> _handleDismiss(
+      DismissDirection direction, SpeechItem item) async {
     if (direction == DismissDirection.startToEnd) {
       if (item.filePath != null) {
         await _shareFile(item.filePath!);
@@ -497,6 +566,12 @@ class _MainPageState extends State<MainPage> {
       padding: const EdgeInsets.only(bottom: 16.0, left: 16.0, right: 16.0),
       child: Row(
         children: [
+          IconButton(
+            icon: Icon(Icons.delete),
+            onPressed: () {
+              _messageController.clear();
+            },
+          ),
           Expanded(
             child: TextField(
               controller: _messageController,
@@ -523,13 +598,27 @@ class _MainPageState extends State<MainPage> {
             icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
             onPressed: _togglePlayPause,
           ),
-          IconButton(
-            icon: Icon(Icons.delete),
-            onPressed: () {
-              _messageController.clear();
-            },
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFinishSentenceButton() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: ElevatedButton(
+        onPressed: _finishSentence,
+        child: Text('Finish Sentence'),
+      ),
+    );
+  }
+
+  Widget _buildUndoButton() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: ElevatedButton(
+        onPressed: _undoLLMChanges,
+        child: Text('Undo'),
       ),
     );
   }
@@ -564,7 +653,9 @@ class FullScreenTextView extends StatelessWidget {
               padding: const EdgeInsets.all(16.0),
               child: Text(
                 text,
-                style: TextStyle(fontSize: constraints.maxWidth / 10), // Adjust the font size based on the width
+                style: TextStyle(
+                    fontSize: constraints.maxWidth /
+                        10), // Adjust the font size based on the width
               ),
             );
           },

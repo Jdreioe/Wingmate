@@ -77,5 +77,15 @@ class SaidTextDao {
     return null;
   }
 
+  Future<List<String>> getAllSaidTexts() async {
+    final db = await _database.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'SaidTextItem',
+      columns: ['saidText'],
+      orderBy: 'position ASC', // sort by position
+    );
+    return maps.map((map) => map['saidText'] as String).toList();
+  }
+
   // ... other methods
 }
