@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:wingmate/models/voice_model.dart';
 import 'dart:math' as math;
 
 import 'package:wingmate/ui/fetch_voices_page.dart';
@@ -55,6 +56,7 @@ class _MainPageState extends State<MainPage> {
   bool isPlaying = false;
   bool isSomeFolderSelected = false;
   int currentFolderId = -1;
+  
 
   AzureTts? azureTts;
   final SpeechItemDao _speechItemDao = SpeechItemDao(AppDatabase());
@@ -320,6 +322,10 @@ class _MainPageState extends State<MainPage> {
 
   // Function to fetch said texts and use LLM to complete the sentence
   Future<void> _finishSentence() async {
+        final voiceBox = Hive.box('selectedVoice');
+    Voice voice = voiceBox.get('currentVoice');
+    String selectedLanguage = voice.selectedLanguage;
+
     final saidTexts = await _saidTextDao.getAllSaidTexts();
     final currentText = _messageController.text;
 
@@ -327,17 +333,16 @@ class _MainPageState extends State<MainPage> {
     _previousText = currentText;
 
     // Call your LLM service here with the saidTexts and currentText
-    final completedText = await _callLLMService(saidTexts, currentText);
+    final completedText = await _callLLMService(saidTexts, currentText, selectedLanguage);
 
     setState(() {
       _messageController.text = completedText;
     });
   }
 
-  final Box voiceBox = Hive.box('selectedVoice');
 
   Future<String> _callLLMService(
-      List<String> saidTexts, String currentText) async {
+      List<String> saidTexts, String currentText, String selectedLanguage) async {
     final response = await http.post(
       Uri.parse(
           'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=YOUR_API__KEY'),
@@ -346,7 +351,7 @@ class _MainPageState extends State<MainPage> {
           {
             'parts': [
               {
-                'text': 'In the language of ,' + voiceBox.get('selectedLanguage') + ', Improve the following text without translating it. See the meaning and avoid adding extra information. Focus on formulating basic needs clearly and distinctly. If there are words in a language other than the main body of the text, e.g. English if the main body is in Danish, wrap the word in "<lang xml:lang="en-US"> words </lang>". If there is a natural pause somewhere, write <break time="2s"/>. Assume that the person has a disability, e.g. a cognitive disability, and do as little as possible. is: "$currentText"'
+                'text': 'In the language of ,$selectedLanguage, Improve the following text without translating it. See the meaning and avoid adding extra information. Focus on formulating basic needs clearly and distinctly. If there are words in a language other than the main body of the text, e.g. English if the main body is in Danish, wrap the word in "<lang xml:lang="en-US"> words </lang>". If there is a natural pause somewhere, write <break time="2s"/>. Assume that the person has a disability, e.g. a cognitive disability, and do as little as possible. is: "$currentText"'
                 }
             ]
           }
