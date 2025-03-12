@@ -1,3 +1,10 @@
 {
-  "appTitle": "Wingmate"
+  "appTitle": "Wingmate",
+  "folder": "Folder",
+  "enterText": "Enter text",
+  "english": "English",
+  "breakTime": "2 sec break mid sentence",
+  "finishSentence": "Finish Sentence",
+  "undo": "Undo",
+  "fullScreenText": "Full Screen Text"
 }

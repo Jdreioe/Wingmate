@@ -403,12 +403,25 @@ class _MainPageState extends State<MainPage> {
           Expanded(child: _buildReorderableListView()),
           _buildXmlShortcutsRow(),
           _buildMessageInputRow(),
-          _buildFinishSentenceButton(), // Add the new button here
-          _buildUndoButton(), // Add the undo button here
+          // _buildFinishSentenceButton(), // Add the new button here
+          // _buildUndoButton(), // Add the undo button here
+//          _buildSpeechToTextButton(), // Add the new button here
         ],
       ),
     );
   }
+
+/*  Widget _buildSpeechToTextButton() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: ElevatedButton(
+        onPressed: () {
+          Navigator.pushNamed(context, '/speech_to_text');
+        },
+        child: Text('Speech to Text'),
+      ),
+    );
+  }*/
 
   void _handleLeadingIconPressed() {
     if (isSomeFolderSelected) {

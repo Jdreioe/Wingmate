@@ -13,6 +13,7 @@ import 'package:wingmate/utils/speech_service_config_adapter.dart'; // Ensure th
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'dart:io'; // Add this import
+import 'package:wingmate/ui/speech_to_text_page.dart';
 
 void main() async {
   // Ensure Flutter is properly initialized before any async operation
@@ -105,20 +106,24 @@ class _MyAppState extends State<MyApp> {
             colorScheme: darkColorScheme,            useMaterial3: true,
           ),
           themeMode: ThemeMode.system,
-            localizationsDelegates: const [
-    GlobalMaterialLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
-  ],
-  supportedLocales: [
-    Locale('en'), // English
-    Locale('da'), // Danish
-  ],
-          home: MainPage(
-            speechServiceEndpoint: speechServiceEndpoint,
-            speechServiceKey: speechServiceKey,
-            onSaveSettings: _saveSettings,
-          ),
+          localizationsDelegates: [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: [
+            const Locale('en', ''), // English
+            const Locale('da'), // Danish
+          ],
+          routes: {
+            '/': (context) => MainPage(
+              speechServiceEndpoint: speechServiceEndpoint,
+              speechServiceKey: speechServiceKey,
+              onSaveSettings: _saveSettings,
+            ),
+            '/speech_to_text': (context) => SpeechToTextPage(),
+          },
         );
       },
     );

@@ -1,4 +1,10 @@
 {
-  "appTitle": "Wingmate"
-  
+  "appTitle": "Wingmate",
+  "folder": "Mappe",
+  "enterText": "Indtast tekst",
+  "english": "Engelsk",
+  "breakTime": "2 sek pause midt i sætningen",
+  "finishSentence": "Afslut sætning",
+  "undo": "Fortryd",
+  "fullScreenText": "Fuldskærmstekst"
 }

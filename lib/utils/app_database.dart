@@ -6,7 +6,7 @@ import 'package:path/path.dart';
 
 class AppDatabase {
   static final AppDatabase _instance = AppDatabase._internal();
-  static const int _databaseVersion = 2; // Update the version number
+  static const int _databaseVersion = 12; // Update the version number
   static Database? _database;
 
   // Singleton pattern for a shared database instance.
@@ -36,7 +36,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 11, // incremented database version
+      version: 12, // incremented database version
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -53,7 +53,7 @@ class AppDatabase {
         parentId INTEGER,
         createdAt INTEGER,
         position INTEGER,
-        filePath TEXT
+        filePath TEXT,
         voiceName TEXT,
         pitch REAL,
         selectedLanguage TEXT,
