@@ -1,7 +1,7 @@
 name: wingmate
 description: "TTS with actual great synthesis."
 publish_to: 'none'
-version: 0.2.22+16
+version: 0.2.22+17
 
 environment:
   sdk: ^3.5.4
