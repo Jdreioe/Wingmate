@@ -5,7 +5,6 @@ import 'package:wingmate/utils/speech_service_config_adapter.dart'; // Ensure th
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'dart:io'; // Add this import
-import 'package:wingmate/ui/speech_to_text_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -110,7 +109,7 @@ class _MyAppState extends State<MyApp> {
             speechServiceKey: speechServiceKey,
             onSaveSettings: _saveSettings,
           ),
-          '/speech_to_text': (context) => SpeechToTextPage(),
+
         },
       );
     } else {
@@ -146,7 +145,6 @@ class _MyAppState extends State<MyApp> {
                 speechServiceKey: speechServiceKey,
                 onSaveSettings: _saveSettings,
               ),
-              '/speech_to_text': (context) => SpeechToTextPage(),
             },
           );
         },
