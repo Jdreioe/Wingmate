@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wingmate/models/voice_model.dart';
@@ -386,6 +387,42 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
+    return Platform.isIOS
+        ? _buildCupertinoScaffold() // Use Cupertino for iOS
+        : _buildMaterialScaffold(); // Use Material for Android
+  }
+
+  Widget _buildCupertinoScaffold() {
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(isSomeFolderSelected
+            ? 'Folder'
+            : (AppLocalizations.of(context)?.appTitle ?? 'Title')),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: _handleLeadingIconPressed,
+          child: Icon(isSomeFolderSelected ? CupertinoIcons.back : CupertinoIcons.person),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: _buildCupertinoAppBarActions(),
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Expanded(child: _buildCupertinoReorderableListView()),
+            _buildCupertinoXmlShortcutsRow(),
+            _buildCupertinoMessageInputRow(),
+            // _buildFinishSentenceButton(), // Add the new button here
+            // _buildUndoButton(), // Add the undo button here
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMaterialScaffold() {
     return Scaffold(
       appBar: AppBar(
         title: Text(isSomeFolderSelected
@@ -396,7 +433,7 @@ class _MainPageState extends State<MainPage> {
           icon: Icon(isSomeFolderSelected ? Icons.arrow_back : Icons.person),
           onPressed: _handleLeadingIconPressed,
         ),
-        actions: _buildAppBarActions(),
+        actions: _buildMaterialAppBarActions(),
       ),
       body: Column(
         children: [
@@ -405,48 +442,49 @@ class _MainPageState extends State<MainPage> {
           _buildMessageInputRow(),
           // _buildFinishSentenceButton(), // Add the new button here
           // _buildUndoButton(), // Add the undo button here
-//          _buildSpeechToTextButton(), // Add the new button here
         ],
       ),
     );
   }
 
-/*  Widget _buildSpeechToTextButton() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: ElevatedButton(
+  List<Widget> _buildCupertinoAppBarActions() {
+    return [
+      if (!_isSubscribed && _isMobilePlatform())
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => _subscriptionManager.showSubscriptionDialog(context),
+          child: const Icon(CupertinoIcons.lock),
+        ),
+      CupertinoButton(
+        padding: EdgeInsets.zero,
         onPressed: () {
-          Navigator.pushNamed(context, '/speech_to_text');
+          Navigator.push(
+            context,
+            CupertinoPageRoute( // Use CupertinoPageRoute
+              builder: (context) => FetchVoicesPage(
+                endpoint: widget.speechServiceEndpoint,
+                subscriptionKey: widget.speechServiceKey,
+              ),
+            ),
+          );
         },
-        child: Text('Speech to Text'),
+        child: const Icon(CupertinoIcons.settings),
       ),
-    );
-  }*/
-
-  void _handleLeadingIconPressed() {
-    if (isSomeFolderSelected) {
-      if (currentFolderId == -1) {
-        selectRootFolder();
-      } else {
-        _speechItemDao.getItemById(currentFolderId).then((currentFolder) {
-          if (currentFolder != null && currentFolder.parentId != null) {
-            selectFolder(currentFolder.parentId!, currentFolder.name!);
-          } else {
-            selectRootFolder();
-          }
-        });
-      }
-    } else {
-      showProfileDialog(
-        context,
-        widget.speechServiceEndpoint,
-        widget.speechServiceKey,
-        widget.onSaveSettings,
-      );
-    }
+      CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: () => showSaveMessageDialog(
+            context, _messageController.text, _handleSaveMessage),
+        child: const Icon(CupertinoIcons.add),
+      ),
+      CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: () => showFullScreenText(context, _messageController.text),
+        child: const Icon(CupertinoIcons.fullscreen),
+      ),
+    ];
   }
 
-  List<Widget> _buildAppBarActions() {
+  List<Widget> _buildMaterialAppBarActions() {
     return [
       if (!_isSubscribed && _isMobilePlatform())
         IconButton(
@@ -471,6 +509,7 @@ class _MainPageState extends State<MainPage> {
         icon: const Icon(Icons.add),
         onPressed: () => showSaveMessageDialog(
             context, _messageController.text, _handleSaveMessage),
+
       ),
       IconButton(
         icon: const Icon(Icons.fullscreen),
@@ -479,11 +518,85 @@ class _MainPageState extends State<MainPage> {
     ];
   }
 
+  void _handleLeadingIconPressed() {
+    if (isSomeFolderSelected) {
+      if (currentFolderId == -1) {
+        selectRootFolder();
+      } else {
+        _speechItemDao.getItemById(currentFolderId).then((currentFolder) {
+          if (currentFolder != null && currentFolder.parentId != null) {
+            selectFolder(currentFolder.parentId!, currentFolder.name!);
+          } else {
+            selectRootFolder();
+          }
+        });
+      }
+    } else {
+      showProfileDialog(
+        context,
+        widget.speechServiceEndpoint,
+        widget.speechServiceKey,
+        widget.onSaveSettings,
+      );
+    }
+  }
+
+  ReorderableListView _buildCupertinoReorderableListView() {
+    return ReorderableListView.builder(
+      onReorder: _reorderItems,
+      itemBuilder: (context, index) => _buildCupertinoListItem(_items[index], index),
+      itemCount: _items.length,
+    );
+  }
+
   ReorderableListView _buildReorderableListView() {
     return ReorderableListView(
       onReorder: _reorderItems,
       children: _items.map((item) => _buildListItem(item)).toList(),
     );
+  }
+
+  Widget _buildCupertinoListItem(dynamic item, int index) {
+    if (item is String && item == 'History') {
+      return CupertinoListTile(
+        key: ValueKey(item),
+        leading: Icon(CupertinoIcons.folder),
+        title: Text(item),
+        onTap: () {
+          Navigator.push(
+            context,
+            CupertinoPageRoute( // Use CupertinoPageRoute
+              builder: (context) => HistoryPage(),
+            ),
+          );
+        },
+      );
+    } else if (item is SpeechItem) {
+      return Dismissible(
+        key: ValueKey(item.id),
+        direction: DismissDirection.horizontal,
+        background: _buildDismissibleBackground(
+            Alignment.centerLeft, Colors.blue,
+            Platform.isIOS ? CupertinoIcons.share : Icons.share),
+        secondaryBackground: _buildDismissibleBackground(
+            Alignment.centerRight, Colors.red,
+            Platform.isIOS ? CupertinoIcons.delete : Icons.delete),
+        confirmDismiss: (direction) => _handleDismiss(direction, item),
+        child: CupertinoListTile(
+          key: ValueKey(item),
+          leading: Icon(item.isFolder!
+              ? CupertinoIcons.folder
+              : CupertinoIcons.speaker_2),
+          title: Text(item.name ?? ''),
+          subtitle: item.isFolder! ? null : Text(item.text ?? ''),
+          onTap: item.isFolder!
+              ? () => selectFolder(item.id!, item.name!)
+              : () => _playSpeechItem(item),
+        ),
+      );
+    } else {
+      return Container();
+    }
   }
 
   Widget _buildListItem(dynamic item) {
@@ -556,6 +669,29 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
+  Padding _buildCupertinoXmlShortcutsRow() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            CupertinoButton.filled(
+              onPressed: () => _addXmlTag('<lang xml:lang="en-US"> </lang>'),
+              child: Text('English'),
+            ),
+            SizedBox(width: 8),
+            CupertinoButton.filled(
+              onPressed: () => _addXmlTag('<break time="2s"/>'),
+              child: Text('2 sec break'),
+            ),
+            // Add more buttons for other XML tags as needed
+          ],
+        ),
+      ),
+    );
+  }
+
   Padding _buildXmlShortcutsRow() {
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -570,11 +706,46 @@ class _MainPageState extends State<MainPage> {
             SizedBox(width: 8),
             ElevatedButton(
               onPressed: () => _addXmlTag('<break time="2s"/>'),
-              child: Text('2 sec break mid sentence'),
+              child: Text('2 sec break'),
             ),
             // Add more buttons for other XML tags as needed
           ],
         ),
+      ),
+    );
+}
+
+  Padding _buildCupertinoMessageInputRow(){
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0, left: 16.0, right: 16.0),
+      child: Row(
+        children: [
+          CupertinoButton(
+            onPressed: () {
+              _messageController.clear();
+            },
+            child: const Icon(CupertinoIcons.delete),
+          ),
+          Expanded(
+            child: CupertinoTextField(
+              controller: _messageController,
+              focusNode: _messageFocusNode,
+              minLines: 1,
+              maxLines: 5,
+              placeholder: 'Enter text',
+              decoration: BoxDecoration(
+                border: Border.all(color: CupertinoColors.lightBackgroundGray),
+                borderRadius: BorderRadius.circular(5.0),
+              ),
+              textInputAction: TextInputAction.done,
+              keyboardType: TextInputType.text,
+            ),
+          ),
+          CupertinoButton(
+            onPressed: _togglePlayPause,
+            child: Icon(isPlaying ? CupertinoIcons.pause : CupertinoIcons.play_arrow),
+          ),
+        ],
       ),
     );
   }
@@ -621,32 +792,19 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  Widget _buildFinishSentenceButton() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: ElevatedButton(
-        onPressed: _finishSentence,
-        child: Text('Finish Sentence'),
-      ),
-    );
-  }
-
-  Widget _buildUndoButton() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: ElevatedButton(
-        onPressed: _undoLLMChanges,
-        child: Text('Undo'),
-      ),
-    );
-  }
 
   void _showFullScreenText() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => FullScreenTextView(text: _messageController.text),
-      ),
+      Platform.isIOS
+          ? CupertinoPageRoute( // Use CupertinoPageRoute
+              builder: (context) =>
+                  FullScreenTextView(text: _messageController.text),
+            )
+          : MaterialPageRoute(
+              builder: (context) =>
+                  FullScreenTextView(text: _messageController.text),
+            ),
     );
   }
 }
@@ -658,26 +816,47 @@ class FullScreenTextView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Platform.isIOS
+        ? _buildCupertinoFullScreen(context)
+        : _buildMaterialFullScreen(context);
+  }
+
+  Widget _buildCupertinoFullScreen(BuildContext context) {
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text('Full Screen Text'),
+      ),
+      child: SafeArea(
+        child: _buildFullScreenContent(context),
+      ),
+    );
+  }
+
+  Widget _buildMaterialFullScreen(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Full Screen Text'),
       ),
-      body: InteractiveViewer(
-        panEnabled: true,
-        scaleEnabled: true,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                text,
-                style: TextStyle(
-                    fontSize: constraints.maxWidth /
-                        10), // Adjust the font size based on the width
-              ),
-            );
-          },
-        ),
+      body: _buildFullScreenContent(context),
+    );
+  }
+
+  Widget _buildFullScreenContent(BuildContext context) {
+    return InteractiveViewer(
+      panEnabled: true,
+      scaleEnabled: true,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              text,
+              style: TextStyle(
+                  fontSize: constraints.maxWidth /
+                      10), // Adjust the font size based on the width
+            ),
+          );
+        },
       ),
     );
   }

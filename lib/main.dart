@@ -1,19 +1,20 @@
-// Import necessary packages for Flutter, local database, and dynamic theming
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:wingmate/models/voice_model.dart';
-import 'package:wingmate/ui/main_page.dart';
-import 'package:wingmate/utils/speech_service_config.dart';
+import 'dart:ui';
+
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:wingmate/utils/speech_service_config_adapter.dart'; // Ensure this package is added to your pubspec.yaml
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'dart:io'; // Add this import
 import 'package:wingmate/ui/speech_to_text_page.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:hive/hive.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:wingmate/models/voice_model.dart';
+import 'package:wingmate/ui/main_page.dart';
+import 'package:wingmate/utils/speech_service_config.dart';
 
 void main() async {
   // Ensure Flutter is properly initialized before any async operation
@@ -49,13 +50,9 @@ void main() async {
     final apiKey = config.key;
     final endpoint = config.endpoint;
 
-
-
     // If config exists and is valid, run the app with the saved settings
     runApp(MyApp(speechServiceEndpoint: endpoint, speechServiceKey: apiKey));
-  }
-  else 
-  {
+  } else {
     // If no config is found, run the app with default settings
     runApp(MyApp(
       speechServiceEndpoint: '',
@@ -64,7 +61,7 @@ void main() async {
   }
 }
 
-// This widget holds the main MaterialApp and uses dynamic color theming
+// This widget holds the main CupertinoApp or MaterialApp based on the platform
 class MyApp extends StatefulWidget {
   final String speechServiceEndpoint;
   final String speechServiceKey;
@@ -91,42 +88,70 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return DynamicColorBuilder(
-      builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        final lightColorScheme = lightDynamic ?? _defaultLightColorScheme;
-        final darkColorScheme = darkDynamic ?? _defaultDarkColorScheme;
+    if (Platform.isIOS) {
+      return CupertinoApp(
+        title: 'Wingmate',
+        theme: CupertinoThemeData(
+          primaryColor: CupertinoColors.systemBlue,
+        ),
+        localizationsDelegates: [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: [
+          const Locale('en', ''), // English
+          const Locale('da'), // Danish
+        ],
+        routes: {
+          '/': (context) => MainPage(
+            speechServiceEndpoint: speechServiceEndpoint,
+            speechServiceKey: speechServiceKey,
+            onSaveSettings: _saveSettings,
+          ),
+          '/speech_to_text': (context) => SpeechToTextPage(),
+        },
+      );
+    } else {
+      return DynamicColorBuilder(
+        builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+          final lightColorScheme = lightDynamic ?? _defaultLightColorScheme;
+          final darkColorScheme = darkDynamic ?? _defaultDarkColorScheme;
 
-        return MaterialApp(
-          title: 'Wingmate',
-          theme: ThemeData(
-            colorScheme: lightColorScheme,
-            useMaterial3: true,
-          ),
-          darkTheme: ThemeData(
-            colorScheme: darkColorScheme,            useMaterial3: true,
-          ),
-          themeMode: ThemeMode.system,
-          localizationsDelegates: [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: [
-            const Locale('en', ''), // English
-            const Locale('da'), // Danish
-          ],
-          routes: {
-            '/': (context) => MainPage(
-              speechServiceEndpoint: speechServiceEndpoint,
-              speechServiceKey: speechServiceKey,
-              onSaveSettings: _saveSettings,
+          return MaterialApp(
+            title: 'Wingmate',
+            theme: ThemeData(
+              colorScheme: lightColorScheme,
+              useMaterial3: true,
             ),
-            '/speech_to_text': (context) => SpeechToTextPage(),
-          },
-        );
-      },
-    );
+            darkTheme: ThemeData(
+              colorScheme: darkColorScheme,
+              useMaterial3: true,
+            ),
+            themeMode: ThemeMode.system,
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: [
+              const Locale('en', ''), // English
+              const Locale('da'), // Danish
+            ],
+            routes: {
+              '/': (context) => MainPage(
+                speechServiceEndpoint: speechServiceEndpoint,
+                speechServiceKey: speechServiceKey,
+                onSaveSettings: _saveSettings,
+              ),
+              '/speech_to_text': (context) => SpeechToTextPage(),
+            },
+          );
+        },
+      );
+    }
   }
 
   static final ColorScheme _defaultLightColorScheme = ColorScheme.fromSeed(

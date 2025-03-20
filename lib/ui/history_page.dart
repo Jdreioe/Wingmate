@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart'; // Keep for Scaffold on Android
 import 'package:wingmate/utils/said_text_dao.dart';
 import 'package:wingmate/utils/app_database.dart';
 import 'package:wingmate/utils/said_text_item.dart';
@@ -58,9 +59,24 @@ class _HistoryPageState extends State<HistoryPage> {
       final file = File(filePath);
       final bytes = await file.readAsBytes();
       await Clipboard.setData(ClipboardData(text: base64Encode(bytes)));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('File copied to clipboard')),
-      );
+       if (Platform.isIOS) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            content: const Text('File copied to clipboard'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('File copied to clipboard')),
+        );
+      }
     }
   }
 
@@ -74,64 +90,118 @@ class _HistoryPageState extends State<HistoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('History'),
-      ),
-      body: ListView.builder(
-        itemCount: _saidTextItems.length,
-        itemBuilder: (context, index) {
-          final item = _saidTextItems[index];
-          final dateString =
-              DateTime.fromMillisecondsSinceEpoch(item.date ?? 0)
-                  .toLocal()
-                  .toString()
-                  .substring(0, 16); // e.g. "YYYY-MM-DD HH:MM"
-          return Dismissible(
-            key: ValueKey(item.saidText! + DateTime.now().toString()), // Unique key
-            direction: DismissDirection.horizontal,
-            background: Container(
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              color: Colors.blue,
-              child: const Icon(
-                Icons.share,
-                color: Colors.white,
-              ),
-            ),
-            secondaryBackground: Container(
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              color: Colors.red,
-              child: const Icon(
-                Icons.delete,
-                color: Colors.white,
-              ),
-            ),
-            confirmDismiss: (direction) async {
-              if (direction == DismissDirection.startToEnd) {
-                if (item.audioFilePath != null) {
-                  await _shareFile(item.audioFilePath!);
-                }
-                return false;
-              } else {
-                return await _deleteSaidTextItem(index);
-              }
-            },
-            child: ListTile(
-              key: ValueKey(item),
-              leading: Icon(Icons.speaker_phone),
-              title: Text(convertToUserFriendlyTags(item.saidText ?? '')),
-              subtitle: Text(dateString),
-              onTap: item.audioFilePath != null
-                  ? () async {
-                      await player.play(DeviceFileSource(item.audioFilePath!));
+    if (Platform.isIOS) {
+      return CupertinoPageScaffold(
+        navigationBar: const CupertinoNavigationBar(
+          middle: Text('History'),
+        ),
+        child: ListView.builder(
+          itemCount: _saidTextItems.length,
+          itemBuilder: (context, index) {
+            final item = _saidTextItems[index];
+            final dateString =
+                DateTime.fromMillisecondsSinceEpoch(item.date ?? 0)
+                    .toLocal()
+                    .toString()
+                    .substring(0, 16); // e.g. "YYYY-MM-DD HH:MM"
+            return CupertinoSlidingSegmentedControl<int>(
+              groupValue: 0,
+              onValueChanged: (int? value) {},
+              children: {
+                0: GestureDetector(
+                  onHorizontalDragEnd: (details) async {
+                    if (details.primaryVelocity! > 0) {
+                      if (item.audioFilePath != null) {
+                        await _shareFile(item.audioFilePath!);
+                      }
+                    } else if (details.primaryVelocity! < 0) {
+                      await _deleteSaidTextItem(index);
                     }
-                  : null,
-            ),
-          );
-        },
-      ),
-    );
+                  },
+                  child: Container(
+                    color: CupertinoColors.white, // Or any background color
+                    child: CupertinoListTile(
+                      key: ValueKey(item),
+                      leading: const Icon(CupertinoIcons.speaker_2),
+                      title: Text(convertToUserFriendlyTags(item.saidText ?? '')),
+                      subtitle: Text(dateString),
+                      onTap: item.audioFilePath != null
+                          ? () async {
+                              await player
+                                  .play(DeviceFileSource(item.audioFilePath!));
+                            }
+                          : null,
+                    ),
+                  ),
+                ),
+              },
+            );
+          },
+        ),
+      );
+    } else {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('History'),
+        ),
+        body: ListView.builder(
+          itemCount: _saidTextItems.length,
+          itemBuilder: (context, index) {
+            final item = _saidTextItems[index];
+            final dateString =
+                DateTime.fromMillisecondsSinceEpoch(item.date ?? 0)
+                    .toLocal()
+                    .toString()
+                    .substring(0, 16); // e.g. "YYYY-MM-DD HH:MM"
+            return Dismissible(
+              key: ValueKey(
+                  item.saidText! + DateTime.now().toString()), // Unique key
+              direction: DismissDirection.horizontal,
+              background: Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                color: Colors.blue,
+                child: const Icon(
+                  Icons.share,
+                  color: Colors.white,
+                ),
+              ),
+              secondaryBackground: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                color: Colors.red,
+                child: const Icon(
+                  Icons.delete,
+                  color: Colors.white,
+                ),
+              ),
+              confirmDismiss: (direction) async {
+                if (direction == DismissDirection.startToEnd) {
+                  if (item.audioFilePath != null) {
+                    await _shareFile(item.audioFilePath!);
+                  }
+                  return false;
+                } else {
+                  return await _deleteSaidTextItem(index);
+                }
+              },
+              child: ListTile(
+                key: ValueKey(item),
+                leading: const Icon(Icons.speaker_phone),
+                title: Text(convertToUserFriendlyTags(item.saidText ?? '')),
+                subtitle: Text(dateString),
+                onTap: item.audioFilePath != null
+                    ? () async {
+                        await player
+                            .play(DeviceFileSource(item.audioFilePath!));
+                      }
+                    : null,
+              ),
+            );
+          },
+        ),
+      );
+    }
   }
 }
+

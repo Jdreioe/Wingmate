@@ -1,6 +1,6 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import for Cupertino widgets
 import 'package:wingmate/utils/speech_item_dao.dart';
 import 'package:wingmate/utils/app_database.dart';
 import 'package:wingmate/utils/speech_item.dart';
@@ -88,17 +88,94 @@ class _FolderPageState extends State<FolderPage> {
       final file = File(filePath);
       final bytes = await file.readAsBytes();
       await Clipboard.setData(ClipboardData(text: base64Encode(bytes)));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('File copied to clipboard')),
-      );
+      // Show snackbar using platform-aware way.
+      if (Platform.isIOS) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            content: const Text('File copied to clipboard'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('File copied to clipboard')),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Use CupertinoPageScaffold for iOS
+    if (Platform.isIOS) {
+      return CupertinoPageScaffold(
+        navigationBar: CupertinoNavigationBar(
+          middle: const Text('Folder'),
+        ),
+        child: ListView.builder(
+          itemCount: _speechItems.length,
+          itemBuilder: (context, index) {
+            final item = _speechItems[index];
+            return CupertinoSlidingSegmentedControl<int>(
+              groupValue: 0, // Dummy value, not used for actual control in this case
+              onValueChanged: (int? value) {
+                // This callback is required, but we'll handle actions in GestureDetector
+              },
+              children: {
+                0: GestureDetector( // Wrap the entire list item with GestureDetector
+                  onHorizontalDragEnd: (details) async {
+                    // ручная обработка свайпа.
+                    if (details.primaryVelocity! > 0) { // Свайп вправо (Share)
+                      if (item.filePath != null) {
+                        await _shareFile(item.filePath!);
+                      }
+                    } else if (details.primaryVelocity! < 0) { // Свайп влево (Delete)
+                      await _deleteSpeechItem(index);
+                    }
+                  },
+                  child: Container(
+                    color: CupertinoColors.white, // Or any background you prefer
+                    child: CupertinoListTile(
+                      key: ValueKey(item),
+                      leading: Icon(item.isFolder! ? CupertinoIcons.folder : CupertinoIcons.speaker_2),
+                      title: Text(item.name ?? ''),
+                      subtitle: item.isFolder! ? null : Text(item.text ?? ''),
+                      onTap: item.isFolder!
+                          ? () {
+                              Navigator.push(
+                                context,
+                                CupertinoPageRoute( // Use CupertinoPageRoute
+                                  builder: (context) => FolderPage(folderId: item.id!),
+                                ),
+                              );
+                            }
+                          : () async {
+                              if (item.text != null) {
+                                final saidTextItem = await _saidTextDao.getItemByText(item.text!);
+                                if (saidTextItem?.audioFilePath != null) {
+                                  await azureTts.playText(DeviceFileSource(saidTextItem!.audioFilePath!));
+                                }
+                              }
+                            },
+                    ),
+                  ),
+                ),
+              },
+            );
+          },
+        ),
+      );
+    }
+    // Use Scaffold for Android
     return Scaffold(
       appBar: AppBar(
-        title: Text('Folder'),
+        title: const Text('Folder'),
       ),
       body: ListView.builder(
         itemCount: _speechItems.length,
@@ -164,3 +241,4 @@ class _FolderPageState extends State<FolderPage> {
     );
   }
 }
+
