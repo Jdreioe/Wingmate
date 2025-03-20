@@ -65,6 +65,7 @@ class _MainPageState extends State<MainPage> {
   late final SubscriptionManager _subscriptionManager;
   final SaidTextDao _saidTextDao = SaidTextDao(AppDatabase());
   String _previousText = '';
+  AudioPlayer? _audioPlayer;
 
   @override
   void initState() {
@@ -83,6 +84,7 @@ class _MainPageState extends State<MainPage> {
       _subscriptionManager.initialize();
     }
     _initializeAzureTts();
+    _initializeAudioPlayer();
     _loadItems();
     _watchIsPlaying();
   }
@@ -140,6 +142,14 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
+  void _initializeAudioPlayer() {
+    try {
+      _audioPlayer = AudioPlayer();
+    } catch (e) {
+      debugPrint('Failed to initialize AudioPlayer: $e');
+    }
+  }
+
   Future<void> _loadItems() async {
     final items = await _speechItemDao.getAllRootItems();
     setState(() {
@@ -185,8 +195,14 @@ class _MainPageState extends State<MainPage> {
         await azureTts!.generateSSML(xmlText);
       } else {
         debugPrint('Pausing playback...');
-        await azureTts!.pause();
-        isPlaying = false;
+        try {
+          await _audioPlayer?.pause();
+        } catch (e) {
+          debugPrint('Failed to pause AudioPlayer: $e');
+        }
+        setState(() {
+          isPlaying = false;
+        });
       }
     }
   }
@@ -382,6 +398,7 @@ class _MainPageState extends State<MainPage> {
   void dispose() {
     _subscriptionManager.dispose();
     _messageController.dispose();
+    _audioPlayer?.dispose();
     super.dispose();
   }
 
@@ -664,7 +681,11 @@ class _MainPageState extends State<MainPage> {
     if (item.text != null) {
       final speechItem = await _speechItemDao.getItemByText(item.text!);
       if (speechItem?.filePath != null) {
-        await azureTts!.playText(DeviceFileSource(speechItem!.filePath!));
+        try {
+          await _audioPlayer?.play(DeviceFileSource(speechItem!.filePath!));
+        } catch (e) {
+          debugPrint('Failed to play audio file: $e');
+        }
       }
     }
   }

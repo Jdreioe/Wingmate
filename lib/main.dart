@@ -16,6 +16,7 @@ import 'package:wingmate/ui/main_page.dart';
 import 'package:wingmate/utils/speech_service_config.dart';
 
 void main() async {
+  print('Running on ${Platform.operatingSystem}');
   // Ensure Flutter is properly initialized before any async operation
   WidgetsFlutterBinding.ensureInitialized();
   

@@ -1015,6 +1015,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.1"
+  wav:
+    dependency: "direct main"
+    description:
+      name: wav
+      sha256: e8f26c493017b64165098c13e6f27be22db6c3ed275544c048d97b667f5455bf
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.4.0"
   web:
     dependency: transitive
     description:
