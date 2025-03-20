@@ -45,5 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+<key>NSMicrophoneUsageDescription</key>
+<string> To use soeech to text, we require the usage of microphone access. The data is processed locally</string>
 </dict>
 </plist>
