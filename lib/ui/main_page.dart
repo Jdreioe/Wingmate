@@ -29,7 +29,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
 import 'package:wingmate/utils/subscription_manager.dart';
-import 'package:wingmate/utils/save_message_dialog_helper.dart';
 import 'package:wingmate/utils/full_screen_text_view.dart';
 import 'package:http/http.dart' as http;
 
@@ -404,9 +403,13 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Platform.isIOS
-        ? _buildCupertinoScaffold() // Use Cupertino for iOS
-        : _buildMaterialScaffold(); // Use Material for Android
+    if (kIsWeb) {
+      return _buildMaterialScaffold(); // Use Material for web
+    } else if (!kIsWeb && Platform.isIOS) {
+      return _buildCupertinoScaffold(); // Use Cupertino for iOS
+    } else {
+      return _buildMaterialScaffold(); // Use Material for other platforms
+    }
   }
 
   Widget _buildCupertinoScaffold() {
@@ -817,15 +820,20 @@ class _MainPageState extends State<MainPage> {
   void _showFullScreenText() {
     Navigator.push(
       context,
-      Platform.isIOS
-          ? CupertinoPageRoute( // Use CupertinoPageRoute
+      kIsWeb 
+          ? MaterialPageRoute(
               builder: (context) =>
                   FullScreenTextView(text: _messageController.text),
             )
-          : MaterialPageRoute(
-              builder: (context) =>
-                  FullScreenTextView(text: _messageController.text),
-            ),
+          : Platform.isIOS
+              ? CupertinoPageRoute(
+                  builder: (context) =>
+                      FullScreenTextView(text: _messageController.text),
+                )
+              : MaterialPageRoute(
+                  builder: (context) =>
+                      FullScreenTextView(text: _messageController.text),
+                ),
     );
   }
 }
@@ -837,9 +845,13 @@ class FullScreenTextView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Platform.isIOS
-        ? _buildCupertinoFullScreen(context)
-        : _buildMaterialFullScreen(context);
+    if (kIsWeb) {
+      return _buildMaterialFullScreen(context);
+    } else if (!kIsWeb && Platform.isIOS) {
+      return _buildCupertinoFullScreen(context);
+    } else {
+      return _buildMaterialFullScreen(context);
+    }
   }
 
   Widget _buildCupertinoFullScreen(BuildContext context) {

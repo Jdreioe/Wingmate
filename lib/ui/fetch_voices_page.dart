@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hive/hive.dart';
 import 'package:wingmate/services/voice_settings.dart';
 import 'package:wingmate/utils/app_database.dart';
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
 
 import '../models/voice_model.dart';
 import '../services/voice_service.dart';
@@ -51,7 +51,23 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
   // Opens a dialog to customize voice settings (pitch, rate, language).
   void _showVoiceSettingsDialog(
       String displayName, String shortName, List<String> supportedLanguages) {
-    if (Platform.isIOS) {
+    if (kIsWeb) {
+      showDialog(
+        context: context,
+        builder: (context) {
+          return VoiceSettingsDialog(
+            shortName: shortName,
+            displayName: displayName,
+            supportedLanguages: supportedLanguages,
+            onSave: (String language, double pitch, double rate,
+                String pitchForSSML, String rateForSSML) {
+              _saveSelectedVoiceSettings(shortName, supportedLanguages, language,
+                  pitch, rate, pitchForSSML, rateForSSML);
+            },
+          );
+        },
+      );
+    } else if (Platform.isIOS) {
       showCupertinoDialog(
         context: context,
         builder: (context) {
@@ -126,48 +142,14 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
           _filteredVoices = List.from(_voices); // Create a copy
         });
         // Use platform-aware way to show snackbar/toast
-        if (Platform.isIOS) {
-          showCupertinoDialog(
-            context: context,
-            builder: (context) => CupertinoAlertDialog(
-              content: const Text("Voices loaded from database"),
-              actions: [
-                CupertinoDialogAction(
-                  child: const Text("OK"),
-                  onPressed: () => Navigator.of(context).pop(),
-                )
-              ],
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Voices loaded from database")),
-          );
-        }
+        _showToast("Voices loaded from database");
       } else {
         // No voices in the database, fetch from API
         await _fetchVoices();
       }
     } catch (e) {
       // Use platform-aware way to show snackbar/toast
-      if (Platform.isIOS) {
-        showCupertinoDialog(
-          context: context,
-          builder: (context) => CupertinoAlertDialog(
-            content: Text("Error loading voices: $e"),
-            actions: [
-              CupertinoDialogAction(
-                child: const Text("OK"),
-                onPressed: () => Navigator.of(context).pop(),
-              )
-            ],
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error loading voices: $e")),
-        );
-      }
+      _showToast("Error loading voices: $e");
     } finally {
       setState(() => _isLoading = false);
     }
@@ -193,18 +175,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
       await _saveVoicesToDatabase(fetchedVoices);
     } catch (e) {
       // Use platform-aware way to show toast
-      if (Platform.isIOS) {
-        Fluttertoast.showToast(
-            msg: "Error fetching voices: $e",
-            toastLength: Toast.LENGTH_SHORT,
-            gravity: ToastGravity.CENTER,
-            timeInSecForIosWeb: 1,
-            backgroundColor: CupertinoColors.destructiveRed,
-            textColor: CupertinoColors.white,
-            fontSize: 16.0);
-      } else {
-        Fluttertoast.showToast(msg: "Error fetching voices: $e");
-      }
+      _showToast("Error fetching voices: $e");
     } finally {
       setState(() => _isLoading = false);
     }
@@ -263,20 +234,31 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Renders a search bar, filter options, and a list of available voices.
-    return Platform.isIOS // Use CupertinoPageScaffold for iOS
-        ? CupertinoPageScaffold(
-            navigationBar: const CupertinoNavigationBar(
-              middle: Text('Available Voices'), // Set the title
-            ),
-            child: _buildContent(),
-          )
-        : Scaffold(
-            appBar: AppBar(
-              title: const Text('Available Voices'), // Set the title
-            ),
-            body: _buildContent(),
-          );
+    if (kIsWeb) {
+      // Use Material design for web
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Available Voices'),
+        ),
+        body: _buildContent(),
+      );
+    } else if (Platform.isIOS) {
+      // Use Cupertino for iOS
+      return CupertinoPageScaffold(
+        navigationBar: const CupertinoNavigationBar(
+          middle: Text('Available Voices'),
+        ),
+        child: _buildContent(),
+      );
+    } else {
+      // Use Material for other platforms
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Available Voices'),
+        ),
+        body: _buildContent(),
+      );
+    }
   }
 
   Widget _buildContent() {
@@ -393,7 +375,8 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
     String label,
     bool value,
     void Function(bool newValue) onChanged,
-  ) {
+  ) 
+  {
     return Row(
       children: [
         Platform.isIOS
@@ -416,6 +399,31 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
         Text(label),
       ],
     );
+}
+
+  void _showToast(String message) {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } else if (Platform.isIOS) {
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          content: Text(message),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text("OK"),
+              onPressed: () => Navigator.of(context).pop(),
+            )
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
   }
 
   @override

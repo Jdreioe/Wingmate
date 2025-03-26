@@ -1,10 +1,12 @@
 import 'dart:ui';
 
 import 'package:dynamic_color/dynamic_color.dart';
+import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:wingmate/utils/speech_service_config_adapter.dart'; // Ensure this package is added to your pubspec.yaml
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
-import 'dart:io'; // Add this import
+import 'dart:io' show Platform; // Add this import
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -16,50 +18,48 @@ import 'package:wingmate/ui/main_page.dart';
 import 'package:wingmate/utils/speech_service_config.dart';
 
 void main() async {
-  print('Running on ${Platform.operatingSystem}');
-  // Ensure Flutter is properly initialized before any async operation
   WidgetsFlutterBinding.ensureInitialized();
-  
-  if (!Platform.isLinux) { // Check if not running on Linux
-    await Firebase.initializeApp();
-    FlutterError.onError = (errorDetails) {
-      FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
-    };
-    // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
-    PlatformDispatcher.instance.onError = (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-      return true;
-    };
+
+  try {
+    if (!kIsWeb && !Platform.isLinux) {
+      // Initialize Firebase only for non-web platforms
+      await Firebase.initializeApp();
+      FlutterError.onError = (errorDetails) {
+        FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+      };
+      PlatformDispatcher.instance.onError = (error, stack) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        return true;
+      };
+    }
+
+    if (kIsWeb) {
+      // Initialize Hive for web
+      await Hive.initFlutter();
+    } else {
+      // Initialize Hive for mobile and desktop
+      final appDocumentDir = await getApplicationDocumentsDirectory();
+      Hive.init(appDocumentDir.path);
+    }
+
+    Hive.registerAdapter(SpeechServiceConfigAdapter());
+    Hive.registerAdapter(VoiceAdapter());
+
+    await Hive.openBox('settings');
+    await Hive.openBox('selectedVoice');
+  } catch (e) {
+    print('Error initializing Hive: $e');
+    return; // Exit if Hive initialization fails
   }
-  // Initialize local storage with the app's document directory
-  final appDocumentDir = await getApplicationDocumentsDirectory();
-  Hive.init(appDocumentDir.path);
 
-  // Register Hive adapters for syncing SpeechServiceConfig and Voice data
-  Hive.registerAdapter(SpeechServiceConfigAdapter());
-  Hive.registerAdapter(VoiceAdapter());
-
-  // Open Hive boxes to store and retrieve settings
-  await Hive.openBox('settings');
-  await Hive.openBox('selectedVoice');
-  
-  // Try to retrieve stored configuration from Hive
   final box = Hive.box('settings');
   final config = box.get('config') as SpeechServiceConfig?;
-  if (config != null) {
-    final apiKey = config.key;
-    final endpoint = config.endpoint;
-
-    // If config exists and is valid, run the app with the saved settings
-    runApp(MyApp(speechServiceEndpoint: endpoint, speechServiceKey: apiKey));
-  } else {
-    // If no config is found, run the app with default settings
-    runApp(MyApp(
-      speechServiceEndpoint: '',
-      speechServiceKey: ' ',
-    ));
-  }
+  runApp(MyApp(
+    speechServiceEndpoint: config?.endpoint ?? '',
+    speechServiceKey: config?.key ?? '',
+  ));
 }
+
 
 // This widget holds the main CupertinoApp or MaterialApp based on the platform
 class MyApp extends StatefulWidget {
@@ -88,7 +88,36 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    if (Platform.isIOS) {
+    if (kIsWeb) {
+      // Use MaterialApp for web
+      return MaterialApp(
+        title: 'Wingmate',
+        theme: ThemeData(
+          colorScheme: _defaultLightColorScheme,
+          useMaterial3: true,
+        ),
+        darkTheme: ThemeData(
+          colorScheme: _defaultDarkColorScheme,
+          useMaterial3: true,
+        ),
+        themeMode: ThemeMode.system,
+        localizationsDelegates: [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: [
+          const Locale('en', ''), // English
+          const Locale('da'), // Danish
+        ],
+        home: MainPage(
+          speechServiceEndpoint: speechServiceEndpoint,
+          speechServiceKey: speechServiceKey,
+          onSaveSettings: _saveSettings,
+        ),
+      );
+    } else if (!kIsWeb && Platform.isIOS) {
       return CupertinoApp(
         title: 'Wingmate',
         theme: CupertinoThemeData(
@@ -104,16 +133,14 @@ class _MyAppState extends State<MyApp> {
           const Locale('en', ''), // English
           const Locale('da'), // Danish
         ],
-        routes: {
-          '/': (context) => MainPage(
-            speechServiceEndpoint: speechServiceEndpoint,
-            speechServiceKey: speechServiceKey,
-            onSaveSettings: _saveSettings,
-          ),
-
-        },
+        home: MainPage(
+          speechServiceEndpoint: speechServiceEndpoint,
+          speechServiceKey: speechServiceKey,
+          onSaveSettings: _saveSettings,
+        ),
       );
     } else {
+      // For Android, Linux, Windows, macOS
       return DynamicColorBuilder(
         builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
           final lightColorScheme = lightDynamic ?? _defaultLightColorScheme;
@@ -140,13 +167,11 @@ class _MyAppState extends State<MyApp> {
               const Locale('en', ''), // English
               const Locale('da'), // Danish
             ],
-            routes: {
-              '/': (context) => MainPage(
-                speechServiceEndpoint: speechServiceEndpoint,
-                speechServiceKey: speechServiceKey,
-                onSaveSettings: _saveSettings,
-              ),
-            },
+            home: MainPage(
+              speechServiceEndpoint: speechServiceEndpoint,
+              speechServiceKey: speechServiceKey,
+              onSaveSettings: _saveSettings,
+            ),
           );
         },
       );
