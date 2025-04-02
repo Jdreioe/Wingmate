@@ -64,7 +64,6 @@ class _MainPageState extends State<MainPage> {
   late final SubscriptionManager _subscriptionManager;
   final SaidTextDao _saidTextDao = SaidTextDao(AppDatabase());
   String _previousText = '';
-  AudioPlayer? _audioPlayer;
 
   @override
   void initState() {
@@ -83,7 +82,6 @@ class _MainPageState extends State<MainPage> {
       _subscriptionManager.initialize();
     }
     _initializeAzureTts();
-    _initializeAudioPlayer();
     _loadItems();
     _watchIsPlaying();
   }
@@ -141,14 +139,6 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  void _initializeAudioPlayer() {
-    try {
-      _audioPlayer = AudioPlayer();
-    } catch (e) {
-      debugPrint('Failed to initialize AudioPlayer: $e');
-    }
-  }
-
   Future<void> _loadItems() async {
     final items = await _speechItemDao.getAllRootItems();
     setState(() {
@@ -194,14 +184,8 @@ class _MainPageState extends State<MainPage> {
         await azureTts!.generateSSML(xmlText);
       } else {
         debugPrint('Pausing playback...');
-        try {
-          await _audioPlayer?.pause();
-        } catch (e) {
-          debugPrint('Failed to pause AudioPlayer: $e');
-        }
-        setState(() {
-          isPlaying = false;
-        });
+        await azureTts!.pause();
+        isPlaying = false;
       }
     }
   }
@@ -397,19 +381,14 @@ class _MainPageState extends State<MainPage> {
   void dispose() {
     _subscriptionManager.dispose();
     _messageController.dispose();
-    _audioPlayer?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb) {
-      return _buildMaterialScaffold(); // Use Material for web
-    } else if (!kIsWeb && Platform.isIOS) {
-      return _buildCupertinoScaffold(); // Use Cupertino for iOS
-    } else {
-      return _buildMaterialScaffold(); // Use Material for other platforms
-    }
+    return Platform.isIOS
+        ? _buildCupertinoScaffold() // Use Cupertino for iOS
+        : _buildMaterialScaffold(); // Use Material for Android
   }
 
   Widget _buildCupertinoScaffold() {
@@ -684,11 +663,7 @@ class _MainPageState extends State<MainPage> {
     if (item.text != null) {
       final speechItem = await _speechItemDao.getItemByText(item.text!);
       if (speechItem?.filePath != null) {
-        try {
-          await _audioPlayer?.play(DeviceFileSource(speechItem!.filePath!));
-        } catch (e) {
-          debugPrint('Failed to play audio file: $e');
-        }
+        await azureTts!.playText(DeviceFileSource(speechItem!.filePath!));
       }
     }
   }
@@ -820,20 +795,15 @@ class _MainPageState extends State<MainPage> {
   void _showFullScreenText() {
     Navigator.push(
       context,
-      kIsWeb 
-          ? MaterialPageRoute(
+      Platform.isIOS
+          ? CupertinoPageRoute( // Use CupertinoPageRoute
               builder: (context) =>
                   FullScreenTextView(text: _messageController.text),
             )
-          : Platform.isIOS
-              ? CupertinoPageRoute(
-                  builder: (context) =>
-                      FullScreenTextView(text: _messageController.text),
-                )
-              : MaterialPageRoute(
-                  builder: (context) =>
-                      FullScreenTextView(text: _messageController.text),
-                ),
+          : MaterialPageRoute(
+              builder: (context) =>
+                  FullScreenTextView(text: _messageController.text),
+            ),
     );
   }
 }
@@ -845,13 +815,9 @@ class FullScreenTextView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb) {
-      return _buildMaterialFullScreen(context);
-    } else if (!kIsWeb && Platform.isIOS) {
-      return _buildCupertinoFullScreen(context);
-    } else {
-      return _buildMaterialFullScreen(context);
-    }
+    return Platform.isIOS
+        ? _buildCupertinoFullScreen(context)
+        : _buildMaterialFullScreen(context);
   }
 
   Widget _buildCupertinoFullScreen(BuildContext context) {

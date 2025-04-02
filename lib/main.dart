@@ -100,17 +100,37 @@ Future<void> _initializeFirebase() async {
   }
   
   try {
-    await Firebase.initializeApp();
+    // For iOS, make sure to use the right initialization approach
+    if (isIOS) {
+      // iOS-specific Firebase initialization
+      await Firebase.initializeApp();
+      print('Firebase initialized for iOS');
+    } else {
+      // Standard initialization for other platforms
+      await Firebase.initializeApp();
+      print('Firebase initialized for Android/other platforms');
+    }
+    
+    // Configure Crashlytics after initialization
+    await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
+    
+    // Set up error handlers
     FlutterError.onError = (errorDetails) {
       FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
     };
+    
     PlatformDispatcher.instance.onError = (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
       return true;
     };
-    print('Firebase initialized successfully');
+    
+    print('Firebase Crashlytics enabled');
+    
+    // Record a test crash for verification (remove for production)
+    // FirebaseCrashlytics.instance.log("Firebase Crashlytics initialized");
+    
   } catch (e) {
-    print('Error initializing Firebase (non-fatal): $e');
+    print('Error initializing Firebase: $e');
     // Don't rethrow - allow app to continue without Firebase
   }
 }
