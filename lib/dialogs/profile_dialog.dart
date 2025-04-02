@@ -1,44 +1,50 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart'; // Import for Cupertino widgets
-import 'dart:io'; // Import for Platform.isIOS
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+// Safely import Platform
+import 'dart:io' as io show Platform;
+
+// Safe platform check
+bool get isIOS => !kIsWeb && io.Platform.isIOS;
 
 void showProfileDialog(
   BuildContext context,
   String speechServiceEndpoint,
   String speechServiceKey,
   Future<void> Function(String endpoint, String key) onSaveSettings,
-) {
+) async {
   debugPrint('Showing profile dialog');
   final endpointController = TextEditingController(text: speechServiceEndpoint);
   final keyController = TextEditingController(text: speechServiceKey);
 
-  // Use CupertinoAlertDialog for iOS, AlertDialog for Android
-  if (Platform.isIOS) {
-    showCupertinoDialog<void>( // Use showCupertinoDialog
+  // Use Material dialog for web
+  if (kIsWeb) {
+    showDialog<void>(
       context: context,
-      builder: (context) => CupertinoAlertDialog( // Use CupertinoAlertDialog
+      builder: (context) => AlertDialog(
         title: const Text('Profile Settings'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CupertinoTextField( // Use CupertinoTextField
+            TextField(
               controller: endpointController,
-              placeholder: 'Region', // Use placeholder instead of labelText
+              decoration: const InputDecoration(labelText: 'Region'),
             ),
-            CupertinoTextField( // Use CupertinoTextField
+            TextField(
               controller: keyController,
-              placeholder: 'Key', // Use placeholder instead of labelText
+              decoration: const InputDecoration(labelText: 'Key'),
             ),
           ],
         ),
         actions: [
-          CupertinoDialogAction( // Use CupertinoDialogAction
+          TextButton(
             onPressed: () {
               Navigator.pop(context);
             },
             child: const Text('Close'),
           ),
-          CupertinoDialogAction( // Use CupertinoDialogAction
+          TextButton(
             onPressed: () async {
               await onSaveSettings(endpointController.text, keyController.text);
               Navigator.pop(context);
@@ -48,7 +54,46 @@ void showProfileDialog(
         ],
       ),
     );
-  } else {
+  } 
+  // Use Cupertino for iOS
+  else if (isIOS) {
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Profile Settings'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CupertinoTextField(
+              controller: endpointController,
+              placeholder: 'Region',
+            ),
+            CupertinoTextField(
+              controller: keyController,
+              placeholder: 'Key',
+            ),
+          ],
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('Close'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () async {
+              await onSaveSettings(endpointController.text, keyController.text);
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  } 
+  // Use Material for other platforms
+  else {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
