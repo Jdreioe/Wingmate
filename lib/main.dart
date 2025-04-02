@@ -27,50 +27,38 @@ bool get isIOS => !kIsWeb && io.Platform.isIOS;
 bool get isLinux => !kIsWeb && io.Platform.isLinux;
 
 void main() async {
-  // Catch all errors to prevent crashes
-  runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
-    
-    try {
-      // Initialize Hive first - it's usually safer than Firebase
-      await _initializeHive();
+  WidgetsFlutterBinding.ensureInitialized();
 
-      // Initialize Firebase only on supported platforms and gracefully handle failures
-      await _initializeFirebase();
-      
-      // Get stored config and run the app
-      final box = Hive.box('settings');
-      final config = box.get('config') as SpeechServiceConfig?;
-      runApp(MyApp(
-        speechServiceEndpoint: config?.endpoint ?? '',
-        speechServiceKey: config?.key ?? '',
-      ));
-    } catch (e, stack) {
-      print('Error during app initialization: $e');
-      print('Stack trace: $stack');
-      
-      // Show a minimal error app instead of crashing
-      runApp(MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Text('Failed to initialize app: $e'),
-          ),
-        ),
-      ));
-    }
-  }, (error, stack) {
-    print('Uncaught error: $error');
-    print('Stack trace: $stack');
+  // Add debug logs to track initialization
+  print('Starting app initialization...');
+  
+  try {
+    await _initializeHive();
+    print('Hive initialized successfully.');
+
+    await _initializeFirebase();
+    print('Firebase initialized successfully.');
     
-    // Report to Firebase if available
-    if (!kIsWeb && !isLinux) {
-      try {
-        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-      } catch (e) {
-        // Ignore Firebase errors
-      }
-    }
-  });
+    final box = Hive.box('settings');
+    final config = box.get('config') as SpeechServiceConfig?;
+    print('Loaded config: $config');
+
+    runApp(MyApp(
+      speechServiceEndpoint: config?.endpoint ?? '',
+      speechServiceKey: config?.key ?? '',
+    ));
+  } catch (e, stack) {
+    print('Error during app initialization: $e');
+    print('Stack trace: $stack');
+
+    runApp(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Text('Failed to initialize app: $e'),
+        ),
+      ),
+    ));
+  }
 }
 
 Future<void> _initializeHive() async {
