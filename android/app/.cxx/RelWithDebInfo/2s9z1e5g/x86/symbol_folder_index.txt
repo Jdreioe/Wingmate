@@ -1,0 +1,1 @@
+/home/jdreioe/dev/Wingmate/build/app/intermediates/cxx/RelWithDebInfo/2s9z1e5g/obj/x86

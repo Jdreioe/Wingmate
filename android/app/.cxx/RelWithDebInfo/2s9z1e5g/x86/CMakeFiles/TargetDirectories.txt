@@ -1,0 +1,2 @@
+/home/jdreioe/dev/Wingmate/android/app/.cxx/RelWithDebInfo/2s9z1e5g/x86/CMakeFiles/edit_cache.dir
+/home/jdreioe/dev/Wingmate/android/app/.cxx/RelWithDebInfo/2s9z1e5g/x86/CMakeFiles/rebuild_cache.dir

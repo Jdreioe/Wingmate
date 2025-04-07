@@ -12,6 +12,7 @@ import 'package:hive/hive.dart';
 import 'package:wingmate/models/voice_model.dart';
 import 'package:wingmate/ui/main_page.dart';
 import 'package:wingmate/utils/speech_service_config.dart';
+import 'package:wingmate/firebase_options.dart';
 
 // Safely import platform
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -28,16 +29,24 @@ bool get isLinux => !kIsWeb && io.Platform.isLinux;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Add debug logs to track initialization
   print('Starting app initialization...');
   
   try {
+    // Initialize Firebase first on iOS
+    if (isIOS) {
+      await _initializeFirebase();
+      print('Firebase initialized successfully for iOS.');
+    }
+
+    // Initialize Hive
     await _initializeHive();
     print('Hive initialized successfully.');
 
-    await _initializeFirebase();
-    print('Firebase initialized successfully.');
+    // Initialize Firebase for other platforms
+    if (!isIOS) {
+      await _initializeFirebase();
+      print('Firebase initialized successfully for other platforms.');
+    }
     
     final box = Hive.box('settings');
     final config = box.get('config') as SpeechServiceConfig?;
@@ -77,7 +86,7 @@ Future<void> _initializeHive() async {
     await Hive.openBox('selectedVoice');
   } catch (e) {
     print('Error initializing Hive: $e');
-    throw e; // Rethrow to handle in the main try-catch
+    throw e;
   }
 }
 
@@ -88,16 +97,9 @@ Future<void> _initializeFirebase() async {
   }
   
   try {
-    // For iOS, make sure to use the right initialization approach
-    if (isIOS) {
-      // iOS-specific Firebase initialization
-      await Firebase.initializeApp();
-      print('Firebase initialized for iOS');
-    } else {
-      // Standard initialization for other platforms
-      await Firebase.initializeApp();
-      print('Firebase initialized for Android/other platforms');
-    }
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     
     // Configure Crashlytics after initialization
     await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
@@ -113,10 +115,6 @@ Future<void> _initializeFirebase() async {
     };
     
     print('Firebase Crashlytics enabled');
-    
-    // Record a test crash for verification (remove for production)
-    // FirebaseCrashlytics.instance.log("Firebase Crashlytics initialized");
-    
   } catch (e) {
     print('Error initializing Firebase: $e');
     // Don't rethrow - allow app to continue without Firebase

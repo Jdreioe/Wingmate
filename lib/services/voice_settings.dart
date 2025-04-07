@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:wingmate/models/voice_model.dart';
-import 'package:wingmate/services/tts/azure_text_to_speech.dart'; // Add this import
+import 'package:wingmate/services/tts/azure_text_to_speech.dart';
+import 'package:wingmate/utils/speech_service_config.dart';
 
 class VoiceSettingsDialog extends StatefulWidget {
   final String displayName;
@@ -39,7 +40,7 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
     2.0: 'x-high',
   };
 
-  late AzureTts azureTts; // Add this line
+  late AzureTts azureTts;
 
   @override
   void initState() {
@@ -54,17 +55,17 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
       _selectedLanguage = widget.supportedLanguages.first;
     }
     final settingsBox = Hive.box('settings');
-    final config = settingsBox.get('config');
-    final subscriptionKey = config.key as String;
-    final region = config.endpoint as String;
-    azureTts = AzureTts(
-      subscriptionKey: subscriptionKey, // Replace with your Azure subscription key
-      region: region, // Replace with your Azure region
-      settingsBox: settingsBox,
-      messageController: TextEditingController(),
-      voiceBox: Hive.box('selectedVoice'),
-      context: context,
-    );
+    final config = settingsBox.get('config') as SpeechServiceConfig?;
+    if (config != null) {
+      azureTts = AzureTts(
+        subscriptionKey: config.key,
+        region: config.endpoint,
+        settingsBox: settingsBox,
+        messageController: TextEditingController(),
+        voiceBox: Hive.box('selectedVoice'),
+        context: context,
+      );
+    }
   }
 
   @override

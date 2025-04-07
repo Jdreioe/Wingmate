@@ -13,6 +13,9 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:wingmate/utils/speech_item.dart';
 import 'package:wingmate/utils/speech_item_dao.dart';
 
+/// A service class for handling Azure Text-to-Speech functionality.
+/// This class manages the conversion of text to speech using Azure's TTS service,
+/// handles audio playback, and manages the storage of generated audio files.
 class AzureTts {
   final String subscriptionKey;
   final String region;
@@ -21,186 +24,214 @@ class AzureTts {
   final Box<dynamic> voiceBox;
   final player = AudioPlayer();
   final BuildContext context;
-  AzureTts(
-      {required this.subscriptionKey,
-      required this.region,
-      required this.settingsBox,
-      required this.messageController,
-      required this.voiceBox,
-      required this.context});
-  // Pauses the audio playback if it's active.
+
+  /// Creates a new instance of AzureTts.
+  /// 
+  /// [subscriptionKey] - The Azure subscription key for authentication
+  /// [region] - The Azure region endpoint
+  /// [settingsBox] - Hive box for storing settings
+  /// [messageController] - Controller for managing text input
+  /// [voiceBox] - Hive box for storing voice settings
+  /// [context] - BuildContext for showing error messages
+  AzureTts({
+    required this.subscriptionKey,
+    required this.region,
+    required this.settingsBox,
+    required this.messageController,
+    required this.voiceBox,
+    required this.context,
+  });
+
+  /// Pauses the current audio playback.
   Future<void> pause() async {
-    player.pause();
+    try {
+      await player.pause();
+      settingsBox.put('isPlaying', false);
+    } catch (e) {
+      _showError('Failed to pause audio', e.toString());
+    }
   }
 
-  // Converts given text to speech using the selected Voice and Azure TTS service.
+  /// Generates SSML and converts it to speech using Azure TTS service.
+  /// 
+  /// [text] - The text to convert to speech
   Future<void> generateSSML(String text) async {
-    debugPrint('generateSSML called with text: $text');
-    Voice voice = voiceBox.get('currentVoice');
-    final selectedVoice = voice.name; // 'the selected voice name';
-    final selectedLanguage = voice.selectedLanguage; // 'the selected language';
-    final pitch = voice.pitch;
-    final rate = voice.rate;
-    final pitchForSSML= voice.pitchForSSML;
-    
-    final rateForSSML = voice.rateForSSML;
-    
-    final url = Uri.parse(
-        'https://$region.tts.speech.microsoft.com/cognitiveservices/v1');
+    try {
+      final voice = _getCurrentVoice();
+      final ssml = _generateSSMLContent(text, voice);
+      await _processSSML(ssml, voice, text);
+    } catch (e) {
+      _handleError(e);
+    }
+  }
 
+  /// Generates SSML for a specific speech item.
+  /// 
+  /// [speechItem] - The speech item to convert to speech
+  Future<void> generateSSMLForItem(SpeechItem speechItem) async {
+    try {
+      final voice = _getCurrentVoice();
+      final ssml = _generateSSMLContent(speechItem.text ?? '', voice);
+      await _processSSMLForItem(ssml, speechItem);
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+
+  /// Plays audio from a file source.
+  /// 
+  /// [source] - The audio file source to play
+  Future<void> playText(DeviceFileSource source) async {
+    try {
+      await player.play(source);
+      settingsBox.put('isPlaying', true);
+      
+      player.onPlayerComplete.listen((event) {
+        settingsBox.put('isPlaying', false);
+      });
+    } catch (e) {
+      _showError('Failed to play audio', e.toString());
+    }
+  }
+
+  /// Gets the currently selected voice from storage.
+  Voice _getCurrentVoice() {
+    final voice = voiceBox.get('currentVoice') as Voice?;
+    if (voice == null) {
+      throw Exception('No voice selected');
+    }
+    return voice;
+  }
+
+  /// Generates SSML content for the given text and voice.
+  String _generateSSMLContent(String text, Voice voice) {
+    final selectedVoice = voice.name;
+    final selectedLanguage = voice.selectedLanguage;
+    final pitchForSSML = voice.pitchForSSML;
+    final rateForSSML = voice.rateForSSML;
+
+    final rateTag = '<prosody rate="$rateForSSML">';
+    final endRate = '</prosody>';
+    final pitchTag = '<prosody pitch="$pitchForSSML">';
+    final endPitch = '</prosody>';
+    final langTag = '<lang xml:lang="$selectedLanguage">';
+    final endLang = '</lang>';
+
+    if (selectedLanguage.isEmpty) {
+      return '''
+        <speak version="1.0" xml:lang="en-US">
+          <voice name="$selectedVoice">
+            $pitchTag
+            $rateTag
+            $text
+            $endPitch
+            $endRate
+          </voice>
+        </speak>
+      ''';
+    } else {
+      return '''
+        <speak version="1.0" xml:lang="en-US">
+          <voice name="$selectedVoice">
+            $langTag
+            $text
+            $endLang
+          </voice>
+        </speak>
+      ''';
+    }
+  }
+
+  /// Processes SSML content and saves the resulting audio.
+  Future<void> _processSSML(String ssml, Voice voice, String text) async {
+    final response = await _makeAzureRequest(ssml);
+    
+    if (response.statusCode == 200) {
+      settingsBox.put('isPlaying', true);
+      final file = await _saveAudioFile(response.bodyBytes);
+      await _saveAudioRecord(text, file.path, voice);
+      await playText(DeviceFileSource(file.path));
+    } else {
+      throw Exception('Azure TTS request failed: ${response.statusCode}');
+    }
+  }
+
+  /// Processes SSML content for a speech item.
+  Future<void> _processSSMLForItem(String ssml, SpeechItem speechItem) async {
+    final response = await _makeAzureRequest(ssml);
+    
+    if (response.statusCode == 200) {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/audio_${DateTime.now().millisecondsSinceEpoch}.mp3');
+      await file.writeAsBytes(response.bodyBytes);
+
+      speechItem.filePath = file.path;
+      final speechItemDao = SpeechItemDao(AppDatabase());
+      await speechItemDao.updateItem(speechItem);
+    } else {
+      throw Exception('Azure TTS request failed: ${response.statusCode}');
+    }
+  }
+
+  /// Makes a request to the Azure TTS service.
+  Future<http.Response> _makeAzureRequest(String ssml) async {
+    final url = Uri.parse('https://$region.tts.speech.microsoft.com/cognitiveservices/v1');
     final headers = {
       'Ocp-Apim-Subscription-Key': subscriptionKey,
       'Content-Type': 'application/ssml+xml',
       'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3',
       'User-Agent': 'WingmateCrossPlatform',
     };
-    String rateTag = '<prosody rate ="$rateForSSML">';
-    String endRate = '</prosody>';
-    String pitchTag 
-    = '<prosody pitch="$pitchForSSML">';
-    String endPitch = '</prosody>';
-    String langTag = '<lang xml:lang="$selectedLanguage">';
-    String endLang = '</lang>';
 
-    String ssml;
-    if (selectedLanguage.isEmpty) {
-    ssml =
-        '<speak version="1.0" xml:lang="en-US"> <voice name="$selectedVoice"> $pitchTag $rateTag  $text $endPitch $endRate </voice> </speak>';
+    return await http.post(url, headers: headers, body: ssml);
+  }
 
-    }
-    else{
-    ssml =
-        '<speak version="1.0" xml:lang="en-US"> <voice name="$selectedVoice">  $langTag $text $endLang </voice> </speak>';
-    }
+  /// Saves an audio file to the device.
+  Future<File> _saveAudioFile(List<int> audioData) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}/temp_audio.mp3');
+    await file.writeAsBytes(audioData);
+    return file;
+  }
 
-    debugPrint('SSML: $ssml');
-    // Attempt to post the SSML body to Azure TTS endpoint
-    try {
-      final response = await http.post(url, headers: headers, body: ssml);
-            
+  /// Saves an audio record to the database.
+  Future<void> _saveAudioRecord(
+    String text,
+    String filePath,
+    Voice voice,
+  ) async {
+    final saidTextDao = SaidTextDao(AppDatabase());
+    final saidTextItem = SaidTextItem(
+      saidText: text,
+      audioFilePath: filePath,
+      date: DateTime.now().millisecondsSinceEpoch,
+      voiceName: voice.name,
+      pitch: voice.pitch,
+      speed: voice.rate,
+      position: 0,
+      primaryLanguage: voice.selectedLanguage,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    );
 
-      if (response.statusCode == 200) {
-        settingsBox.put('isPlaying', true);
-        debugPrint('Azure TTS request succeeded ');
-        final directory = await getApplicationDocumentsDirectory();
-        final file = File('${directory.path}/temp_audio.mp3');
-        await file.writeAsBytes(response.bodyBytes);
-        // Save the audio file to the device and database
-        
-        saveAudioFile(text, file.readAsBytesSync(), selectedVoice, rate, pitch,  selectedLanguage);
-      } else {
-        debugPrint('Error: ${response.statusCode}, ${response.body}');
-//        _showErrorNotification('Error: ${response.statusCode}', response.body);
-      }
-    } catch (e) {
-      debugPrint('Exception: $e');
-      if (e.toString().contains("Connection closed while receiving data")) {
-        _showErrorNotification('Message too long', 'Please try a shorter message');
-      } else {
-        _showErrorNotification('Connection error', "Please check your connection to the internet");
-      }
-   
+    await saidTextDao.insertHistorik(saidTextItem);
+  }
+
+  /// Handles errors that occur during TTS operations.
+  void _handleError(dynamic error) {
+    if (error.toString().contains("Connection closed while receiving data")) {
+      _showError('Message too long', 'Please try a shorter message');
+    } else {
+      _showError('Connection error', 'Please check your internet connection');
     }
   }
 
-  void _showErrorNotification(String title, String message) {
+  /// Shows an error message to the user.
+  void _showError(String title, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('$title: $message'),
         backgroundColor: Colors.red,
       ),
     );
-  }
-
-  // Persists the audio file and text record in the local database.
-  Future<void> saveAudioFile(
-    String text,
-    List<int> audioData,
-    String voice,
-    double rate,
-    double pitch,
-    String? selectedLanguage,
-  ) async {
-    debugPrint('saveAudioFile called with voice: $voice');
-    final SaidTextDao saidTextDao = SaidTextDao(AppDatabase());
-    try {
-      final Directory directory = await getApplicationDocumentsDirectory();
-      final String filePath =
-          '${directory.path}/audio_${DateTime.now().millisecondsSinceEpoch}.mp3';
-      final File file = File(filePath);
-      await file.writeAsBytes(audioData);
-
-      SaidTextItem saidTextItem = SaidTextItem(
-          saidText: text,
-          audioFilePath: filePath,
-          date: DateTime.now().millisecondsSinceEpoch,
-          voiceName: voice,
-          pitch: pitch,
-          speed: rate,
-          position: 0, // Add position property
-          primaryLanguage: selectedLanguage ?? '',
-          createdAt: DateTime.now().millisecondsSinceEpoch
-
-      );
-
-      saidTextDao.insertHistorik(saidTextItem);
-      debugPrint('Audio file saved at: $filePath');
-      await playText(DeviceFileSource(filePath));
-    } catch (e) {
-      print('Error saving audio file: $e');
-    }
-
-  }
-  Future <void> playText(
-    DeviceFileSource filePath
-  ) async {
-    
-    await player.play(filePath);
-    
-    player.onPlayerComplete.listen((event) {
-      // Send isPlaying back to the main page with isPlaying = false
-          
-      settingsBox.put('isPlaying', false);
-      });
-
-  }
-
-  Future<void> generateSSMLForItem(SpeechItem speechItem) async {
-    debugPrint('generateSSMLForItem called with text: ${speechItem.text}');
-    Voice voice = voiceBox.get('currentVoice');
-    final selectedVoice = voice.name;
-    final selectedLanguage = voice.selectedLanguage;
-    final url = Uri.parse(
-        'https://$region.tts.speech.microsoft.com/cognitiveservices/v1');
-
-    final headers = {
-      'Ocp-Apim-Subscription-Key': subscriptionKey,
-      'Content-Type': 'application/ssml+xml',
-      'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3',
-      'User-Agent': 'WingmateCrossPlatform',
-    };
-
-    final ssml =
-        '<speak version="1.0" xml:lang="en-US"> <voice name="$selectedVoice"><lang xml:lang="$selectedLanguage">${speechItem.text}</lang > </voice> </speak>';
-
-    try {
-      final response = await http.post(url, headers: headers, body: ssml);
-
-      if (response.statusCode == 200) {
-        debugPrint('Azure TTS request succeeded');
-        final directory = await getApplicationDocumentsDirectory();
-        final file = File('${directory.path}/audio_${DateTime.now().millisecondsSinceEpoch}.mp3');
-        await file.writeAsBytes(response.bodyBytes);
-
-        speechItem.filePath = file.path;
-        final SpeechItemDao speechItemDao = SpeechItemDao(AppDatabase());
-        await speechItemDao.updateItem(speechItem);
-        debugPrint('Audio file saved at: ${file.path}');
-      } else {
-        debugPrint('Error: ${response.statusCode}, ${response.body}');
-      }
-    } catch (e) {
-      debugPrint('Exception: $e');
-    }
   }
 }

@@ -32,6 +32,11 @@ import 'package:wingmate/utils/subscription_manager.dart';
 import 'package:wingmate/utils/full_screen_text_view.dart';
 import 'package:http/http.dart' as http;
 
+import '../services/main_page_service.dart';
+import '../widgets/xml_shortcuts_row.dart';
+import '../widgets/message_input_row.dart';
+import '../widgets/speech_item_list_tile.dart';
+
 class MainPage extends StatefulWidget {
   final String speechServiceEndpoint;
   final String speechServiceKey;
@@ -49,25 +54,14 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  // Controller for user-entered text and list to display said texts.
-  final TextEditingController _messageController = TextEditingController();
-  final FocusNode _messageFocusNode = FocusNode();
-  final List<dynamic> _items = []; // Store both folders and speech items
-  bool isPlaying = false;
-  bool isSomeFolderSelected = false;
-  int currentFolderId = -1;
-  
-
-  AzureTts? azureTts;
-  final SpeechItemDao _speechItemDao = SpeechItemDao(AppDatabase());
+  late final MainPageService _service;
   bool _isSubscribed = false;
   late final SubscriptionManager _subscriptionManager;
-  final SaidTextDao _saidTextDao = SaidTextDao(AppDatabase());
-  String _previousText = '';
 
   @override
   void initState() {
     super.initState();
+    _initializeService();
     if (_isMobilePlatform()) {
       _subscriptionManager = SubscriptionManager(
         onSubscriptionStatusChanged: (isSubscribed) async {
@@ -81,24 +75,31 @@ class _MainPageState extends State<MainPage> {
       );
       _subscriptionManager.initialize();
     }
-    _initializeAzureTts();
-    _loadItems();
-    _watchIsPlaying();
+  }
+
+  void _initializeService() {
+    _service = MainPageService(
+      messageController: TextEditingController(),
+      messageFocusNode: FocusNode(),
+      speechItemDao: SpeechItemDao(AppDatabase()),
+      saidTextDao: SaidTextDao(AppDatabase()),
+      subscriptionManager: SubscriptionManager(
+        onSubscriptionStatusChanged: (isSubscribed) {},
+      ),
+      settingsBox: Hive.box('settings'),
+      voiceBox: Hive.box('selectedVoice'),
+      context: context,
+      speechServiceEndpoint: widget.speechServiceEndpoint,
+      speechServiceKey: widget.speechServiceKey,
+      onSaveSettings: widget.onSaveSettings,
+    );
+    _service.initialize();
   }
 
   bool _isMobilePlatform() {
     return !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.iOS ||
             defaultTargetPlatform == TargetPlatform.android);
-  }
-
-  void _watchIsPlaying() {
-    Hive.box('settings').watch(key: 'isPlaying').listen((event) {
-      debugPrint('isPlaying changed to: ${event.value}');
-      setState(() {
-        isPlaying = event.value as bool;
-      });
-    });
   }
 
   Future<void> _fetchAzureSubscriptionDetails() async {
@@ -114,293 +115,36 @@ class _MainPageState extends State<MainPage> {
       final region = data['region'];
       await widget.onSaveSettings(region, subscriptionKey);
     } else {
-      // Handle error
       debugPrint('Failed to fetch subscription details');
     }
   }
 
-  // Creates a new instance of AzureTts with the stored config and voice.
-  Future<void> _initializeAzureTts() async {
-    final settingsBox = Hive.box('settings');
-    final voiceBox = Hive.box('selectedVoice');
-    final config = settingsBox.get('config') as SpeechServiceConfig?;
-
-    if (config != null) {
-      setState(() {
-        azureTts = AzureTts(
-          subscriptionKey: config.key,
-          region: config.endpoint,
-          settingsBox: settingsBox,
-          voiceBox: voiceBox,
-          messageController: _messageController,
-          context: context,
-        );
-      });
-    }
-  }
-
-  Future<void> _loadItems() async {
-    final items = await _speechItemDao.getAllRootItems();
-    setState(() {
-      _items.clear();
-      _items.add('History'); // Add History folder
-      _items.addAll(items);
-    });
-  }
-
-  String convertToUserFriendlyTags(String text) {
-    // converting the SSML tags to user-friendly tags
-    final newText = text
-        .replaceAll('<lang xml:lang="en-US">', '<en>')
-        .replaceAll('</lang>', '</en>')
-        .replaceAll('<break time="2s"/>', "<2s>");
-    // Set the cursor position after the <en> tag
-    int newOffset = newText.indexOf("<en>") >= 0
-        ? newText.indexOf("<en>") + "<en>".length
-        : 0;
-    // Update the text and cursor position in the controller
-    _messageController.text = newText;
-    _messageController.selection = TextSelection.collapsed(offset: newOffset);
-
-    return newText;
-  }
-
-  String convertToXmlTags(String text) {
-    // Convert user-friendly tags to SSML tags
-    return text
-        .replaceAll('<en>', '<lang xml:lang="en-US">')
-        .replaceAll('</en>', '</lang>')
-        .replaceAll("<2s>", '<break time="2s"/>');
-  }
-
-  // Toggles between playing and pausing the TTS audio.
-  void _togglePlayPause() async {
-    debugPrint('_togglePlayPause triggered. Current isPlaying: $isPlaying');
-
-    if (_messageController.text.isNotEmpty && azureTts != null) {
-      if (!isPlaying) {
-        String userFriendlyText = _messageController.text;
-        String xmlText = convertToXmlTags(userFriendlyText);
-        await azureTts!.generateSSML(xmlText);
-      } else {
-        debugPrint('Pausing playback...');
-        await azureTts!.pause();
-        isPlaying = false;
-      }
-    }
-  }
-
-  Future<void> _handleSaveMessage(
-      String message, String category, bool categoryChecked) async {
-    debugPrint('Message: $message, Category: $category');
-    final speechItem = SpeechItem(
-      name: category,
-      text: message,
-      isFolder: categoryChecked,
-      parentId: isSomeFolderSelected ? currentFolderId : null,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
-    );
-    final id = await _speechItemDao.insertItem(speechItem);
-    speechItem.id = id;
-    await azureTts!.generateSSMLForItem(speechItem);
-    setState(() {
-      _items.add(speechItem);
-    });
-  }
-
-  Future<bool> _deleteItem(int index) async {
-    final item = _items[index];
-    if (item is SpeechItem) {
-      final result = await _speechItemDao.deleteItem(item.id!);
-      if (result > 0) {
-        if (item.filePath != null) {
-          final file = File(item.filePath!);
-          if (await file.exists()) {
-            await file.delete();
-          }
-        }
-        setState(() {
-          _items.removeAt(index);
-        });
-        return true;
-      }
-    }
-    return false;
-  }
-
-  Future<void> _reorderItems(int oldIndex, int newIndex) async {
-    if (_items[oldIndex] == 'History' || _items[newIndex] == 'History') {
-      return; // Do not allow reordering the History folder
-    }
-    setState(() {
-      if (newIndex > oldIndex) {
-        newIndex -= 1;
-      }
-      final item = _items.removeAt(oldIndex);
-      _items.insert(newIndex, item);
-    });
-    // update positions in the DB
-    for (int i = 0; i < _items.length; i++) {
-      if (_items[i] is SpeechItem) {
-        (_items[i] as SpeechItem).position = i;
-        await _speechItemDao.updateItem(_items[i] as SpeechItem);
-      }
-    }
-  }
-
-  // Adds the selected XML tag to the message field at the current cursor position.
-  void _addXmlTag(String tag) {
-    final text = _messageController.text;
-    final selection = _messageController.selection;
-    final userFriendlyTag = convertToUserFriendlyTags(tag);
-
-    String newText;
-    if (text.isEmpty) {
-      newText = userFriendlyTag;
-    } else {
-      newText =
-          text.replaceRange(selection.start, selection.end, userFriendlyTag);
-    }
-
-    int newOffset = selection.start + userFriendlyTag.indexOf('>') + 1;
-    if (newOffset > newText.length) {
-      newOffset = newText.length;
-    }
-
-    _messageController.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(offset: newOffset),
-    );
-
-    _messageFocusNode.requestFocus();
-  }
-
-  void selectFolder(int folderId, String folderName) async {
-    setState(() {
-      isSomeFolderSelected = true;
-      currentFolderId = folderId;
-      _items.clear();
-    });
-
-    if (folderId == -1) {
-      _loadItems();
-      return;
-    }
-
-    final items = await _speechItemDao.getAllItemsInFolder(folderId);
-    setState(() {
-      _items.addAll(items);
-    });
-  }
-
-  void selectRootFolder() async {
-    setState(() {
-      isSomeFolderSelected = false;
-      currentFolderId = -1;
-      _items.clear();
-    });
-
-    final rootItems = await _speechItemDao.getAllRootItems();
-    setState(() {
-      _items.add('History');
-      _items.addAll(rootItems);
-    });
-  }
-
-  Future<void> _shareFile(String filePath) async {
-    try {
-      await Share.shareXFiles([XFile(filePath)]);
-    } catch (e) {
-      final file = File(filePath);
-      final bytes = await file.readAsBytes();
-      await Clipboard.setData(ClipboardData(text: base64Encode(bytes)));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('File copied to clipboard')),
-      );
-    }
-  }
-
-  // Function to fetch said texts and use LLM to complete the sentence
-  Future<void> _finishSentence() async {
-        final voiceBox = Hive.box('selectedVoice');
-    Voice voice = voiceBox.get('currentVoice');
-    String selectedLanguage = voice.selectedLanguage;
-
-    final saidTexts = await _saidTextDao.getAllSaidTexts();
-    final currentText = _messageController.text;
-
-    // Save the current text before calling the LLM service
-    _previousText = currentText;
-
-    // Call your LLM service here with the saidTexts and currentText
-    final completedText = await _callLLMService(saidTexts, currentText, selectedLanguage);
-
-    setState(() {
-      _messageController.text = completedText;
-    });
-  }
-
-
-  Future<String> _callLLMService(
-      List<String> saidTexts, String currentText, String selectedLanguage) async {
-    final response = await http.post(
-      Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=YOUR_API__KEY'),
-      body: jsonEncode({
-        'contents': [
-          {
-            'parts': [
-              {
-                'text': 'In the language of ,$selectedLanguage, Improve the following text without translating it. See the meaning and avoid adding extra information. Focus on formulating basic needs clearly and distinctly. If there are words in a language other than the main body of the text, e.g. English if the main body is in Danish, wrap the word in "<lang xml:lang="en-US"> words </lang>". If there is a natural pause somewhere, write <break time="2s"/>. Assume that the person has a disability, e.g. a cognitive disability, and do as little as possible. is: "$currentText"'
-                }
-            ]
-          }
-        ]
-      }),
-      headers: {'Content-Type': 'application/json'},
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      debugPrint('LLM service response: $data');
-      return data['candidates'][0]['content']['parts'][0]['text'];
-    } else {
-      debugPrint('Failed to call LLM service');
-      return currentText; // Return the original text if the service call fails
-    }
-  }
-
-  // Function to undo the LLM changes
-  void _undoLLMChanges() {
-    setState(() {
-      _messageController.text = _previousText;
-    });
-  }
-
   @override
   void dispose() {
+    _service.dispose();
     _subscriptionManager.dispose();
-    _messageController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Platform.isIOS
-        ? _buildCupertinoScaffold() // Use Cupertino for iOS
-        : _buildMaterialScaffold(); // Use Material for Android
+        ? _buildCupertinoScaffold()
+        : _buildMaterialScaffold();
   }
 
   Widget _buildCupertinoScaffold() {
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
-        middle: Text(isSomeFolderSelected
+        middle: Text(_service.isSomeFolderSelected
             ? 'Folder'
             : (AppLocalizations.of(context)?.appTitle ?? 'Title')),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _handleLeadingIconPressed,
-          child: Icon(isSomeFolderSelected ? CupertinoIcons.back : CupertinoIcons.person),
+          child: Icon(_service.isSomeFolderSelected
+              ? CupertinoIcons.back
+              : CupertinoIcons.person),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -411,10 +155,18 @@ class _MainPageState extends State<MainPage> {
         child: Column(
           children: [
             Expanded(child: _buildCupertinoReorderableListView()),
-            _buildCupertinoXmlShortcutsRow(),
-            _buildCupertinoMessageInputRow(),
-            // _buildFinishSentenceButton(), // Add the new button here
-            // _buildUndoButton(), // Add the undo button here
+            XmlShortcutsRow(
+              onAddTag: _service.addXmlTag,
+              isCupertino: true,
+            ),
+            MessageInputRow(
+              controller: _service.messageController,
+              focusNode: _service.messageFocusNode,
+              onClear: () => _service.messageController.clear(),
+              onPlayPause: _service.togglePlayPause,
+              isPlaying: _service.isPlaying,
+              isCupertino: true,
+            ),
           ],
         ),
       ),
@@ -424,12 +176,14 @@ class _MainPageState extends State<MainPage> {
   Widget _buildMaterialScaffold() {
     return Scaffold(
       appBar: AppBar(
-        title: Text(isSomeFolderSelected
+        title: Text(_service.isSomeFolderSelected
             ? 'Folder'
             : (AppLocalizations.of(context)?.appTitle ?? 'Title')),
         centerTitle: true,
         leading: IconButton(
-          icon: Icon(isSomeFolderSelected ? Icons.arrow_back : Icons.person),
+          icon: Icon(_service.isSomeFolderSelected
+              ? Icons.arrow_back
+              : Icons.person),
           onPressed: _handleLeadingIconPressed,
         ),
         actions: _buildMaterialAppBarActions(),
@@ -437,10 +191,16 @@ class _MainPageState extends State<MainPage> {
       body: Column(
         children: [
           Expanded(child: _buildReorderableListView()),
-          _buildXmlShortcutsRow(),
-          _buildMessageInputRow(),
-          // _buildFinishSentenceButton(), // Add the new button here
-          // _buildUndoButton(), // Add the undo button here
+          XmlShortcutsRow(
+            onAddTag: _service.addXmlTag,
+          ),
+          MessageInputRow(
+            controller: _service.messageController,
+            focusNode: _service.messageFocusNode,
+            onClear: () => _service.messageController.clear(),
+            onPlayPause: _service.togglePlayPause,
+            isPlaying: _service.isPlaying,
+          ),
         ],
       ),
     );
@@ -459,7 +219,7 @@ class _MainPageState extends State<MainPage> {
         onPressed: () {
           Navigator.push(
             context,
-            CupertinoPageRoute( // Use CupertinoPageRoute
+            CupertinoPageRoute(
               builder: (context) => FetchVoicesPage(
                 endpoint: widget.speechServiceEndpoint,
                 subscriptionKey: widget.speechServiceKey,
@@ -472,12 +232,12 @@ class _MainPageState extends State<MainPage> {
       CupertinoButton(
         padding: EdgeInsets.zero,
         onPressed: () => showSaveMessageDialog(
-            context, _messageController.text, _handleSaveMessage),
+            context, _service.messageController.text, _service.handleSaveMessage),
         child: const Icon(CupertinoIcons.add),
       ),
       CupertinoButton(
         padding: EdgeInsets.zero,
-        onPressed: () => showFullScreenText(context, _messageController.text),
+        onPressed: () => showFullScreenText(context, _service.messageController.text),
         child: const Icon(CupertinoIcons.fullscreen),
       ),
     ];
@@ -507,26 +267,25 @@ class _MainPageState extends State<MainPage> {
       IconButton(
         icon: const Icon(Icons.add),
         onPressed: () => showSaveMessageDialog(
-            context, _messageController.text, _handleSaveMessage),
-
+            context, _service.messageController.text, _service.handleSaveMessage),
       ),
       IconButton(
         icon: const Icon(Icons.fullscreen),
-        onPressed: () => showFullScreenText(context, _messageController.text),
+        onPressed: () => showFullScreenText(context, _service.messageController.text),
       ),
     ];
   }
 
   void _handleLeadingIconPressed() {
-    if (isSomeFolderSelected) {
-      if (currentFolderId == -1) {
-        selectRootFolder();
+    if (_service.isSomeFolderSelected) {
+      if (_service.currentFolderId == -1) {
+        _service.selectRootFolder();
       } else {
-        _speechItemDao.getItemById(currentFolderId).then((currentFolder) {
+        _service.speechItemDao.getItemById(_service.currentFolderId).then((currentFolder) {
           if (currentFolder != null && currentFolder.parentId != null) {
-            selectFolder(currentFolder.parentId!, currentFolder.name!);
+            _service.selectFolder(currentFolder.parentId!, currentFolder.name!);
           } else {
-            selectRootFolder();
+            _service.selectRootFolder();
           }
         });
       }
@@ -540,101 +299,44 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  ReorderableListView _buildCupertinoReorderableListView() {
+  Widget _buildCupertinoReorderableListView() {
     return ReorderableListView.builder(
-      onReorder: _reorderItems,
-      itemBuilder: (context, index) => _buildCupertinoListItem(_items[index], index),
-      itemCount: _items.length,
-    );
-  }
-
-  ReorderableListView _buildReorderableListView() {
-    return ReorderableListView(
-      onReorder: _reorderItems,
-      children: _items.map((item) => _buildListItem(item)).toList(),
-    );
-  }
-
-  Widget _buildCupertinoListItem(dynamic item, int index) {
-    if (item is String && item == 'History') {
-      return CupertinoListTile(
-        key: ValueKey(item),
-        leading: Icon(CupertinoIcons.folder),
-        title: Text(item),
-        onTap: () {
-          Navigator.push(
-            context,
-            CupertinoPageRoute( // Use CupertinoPageRoute
-              builder: (context) => HistoryPage(),
-            ),
-          );
-        },
-      );
-    } else if (item is SpeechItem) {
-      return Dismissible(
-        key: ValueKey(item.id),
+      onReorder: _service.reorderItems,
+      itemBuilder: (context, index) => Dismissible(
+        key: ValueKey(_service.items[index]),
         direction: DismissDirection.horizontal,
         background: _buildDismissibleBackground(
-            Alignment.centerLeft, Colors.blue,
-            Platform.isIOS ? CupertinoIcons.share : Icons.share),
+            Alignment.centerLeft, Colors.blue, CupertinoIcons.share),
         secondaryBackground: _buildDismissibleBackground(
-            Alignment.centerRight, Colors.red,
-            Platform.isIOS ? CupertinoIcons.delete : Icons.delete),
-        confirmDismiss: (direction) => _handleDismiss(direction, item),
-        child: CupertinoListTile(
-          key: ValueKey(item),
-          leading: Icon(item.isFolder!
-              ? CupertinoIcons.folder
-              : CupertinoIcons.speaker_2),
-          title: Text(item.name ?? ''),
-          subtitle: item.isFolder! ? null : Text(item.text ?? ''),
-          onTap: item.isFolder!
-              ? () => selectFolder(item.id!, item.name!)
-              : () => _playSpeechItem(item),
+            Alignment.centerRight, Colors.red, CupertinoIcons.delete),
+        confirmDismiss: (direction) => _handleDismiss(direction, _service.items[index]),
+        child: SpeechItemListTile(
+          item: _service.items[index],
+          isCupertino: true,
+          onTap: () => _handleItemTap(_service.items[index]),
         ),
-      );
-    } else {
-      return Container();
-    }
+      ),
+      itemCount: _service.items.length,
+    );
   }
 
-  Widget _buildListItem(dynamic item) {
-    if (item is String && item == 'History') {
-      return ListTile(
+  Widget _buildReorderableListView() {
+    return ReorderableListView(
+      onReorder: _service.reorderItems,
+      children: _service.items.map((item) => Dismissible(
         key: ValueKey(item),
-        leading: Icon(Icons.folder),
-        title: Text(item),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => HistoryPage(),
-            ),
-          );
-        },
-      );
-    } else if (item is SpeechItem) {
-      return Dismissible(
-        key: ValueKey(item.id),
         direction: DismissDirection.horizontal,
         background: _buildDismissibleBackground(
             Alignment.centerLeft, Colors.blue, Icons.share),
         secondaryBackground: _buildDismissibleBackground(
             Alignment.centerRight, Colors.red, Icons.delete),
         confirmDismiss: (direction) => _handleDismiss(direction, item),
-        child: ListTile(
-          key: ValueKey(item),
-          leading: Icon(item.isFolder! ? Icons.folder : Icons.speaker_phone),
-          title: Text(item.name ?? ''),
-          subtitle: item.isFolder! ? null : Text(item.text ?? ''),
-          onTap: item.isFolder!
-              ? () => selectFolder(item.id!, item.name!)
-              : () => _playSpeechItem(item),
+        child: SpeechItemListTile(
+          item: item,
+          onTap: () => _handleItemTap(item),
         ),
-      );
-    } else {
-      return Container();
-    }
+      )).toList(),
+    );
   }
 
   Container _buildDismissibleBackground(
@@ -647,216 +349,45 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  Future<bool> _handleDismiss(
-      DismissDirection direction, SpeechItem item) async {
+  Future<bool> _handleDismiss(DismissDirection direction, dynamic item) async {
     if (direction == DismissDirection.startToEnd) {
-      if (item.filePath != null) {
+      if (item is SpeechItem && item.filePath != null) {
         await _shareFile(item.filePath!);
       }
       return false;
     } else {
-      return await _deleteItem(_items.indexOf(item));
+      final index = _service.items.indexOf(item);
+      return await _service.deleteItem(index);
     }
   }
 
-  Future<void> _playSpeechItem(SpeechItem item) async {
-    if (item.text != null) {
-      final speechItem = await _speechItemDao.getItemByText(item.text!);
-      if (speechItem?.filePath != null) {
-        await azureTts!.playText(DeviceFileSource(speechItem!.filePath!));
+  Future<void> _shareFile(String filePath) async {
+    try {
+      await Share.shareXFiles([XFile(filePath)]);
+    } catch (e) {
+      final file = File(filePath);
+      final bytes = await file.readAsBytes();
+      await Clipboard.setData(ClipboardData(text: base64Encode(bytes)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('File copied to clipboard')),
+      );
+    }
+  }
+
+  void _handleItemTap(dynamic item) {
+    if (item is String && item == 'History') {
+      Navigator.push(
+        context,
+        Platform.isIOS
+            ? CupertinoPageRoute(builder: (context) => HistoryPage())
+            : MaterialPageRoute(builder: (context) => HistoryPage()),
+      );
+    } else if (item is SpeechItem) {
+      if (item.isFolder!) {
+        _service.selectFolder(item.id!, item.name!);
+      } else {
+        _service.playSpeechItem(item);
       }
     }
-  }
-
-  Padding _buildCupertinoXmlShortcutsRow() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            CupertinoButton.filled(
-              onPressed: () => _addXmlTag('<lang xml:lang="en-US"> </lang>'),
-              child: Text('English'),
-            ),
-            SizedBox(width: 8),
-            CupertinoButton.filled(
-              onPressed: () => _addXmlTag('<break time="2s"/>'),
-              child: Text('2 sec break'),
-            ),
-            // Add more buttons for other XML tags as needed
-          ],
-        ),
-      ),
-    );
-  }
-
-  Padding _buildXmlShortcutsRow() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            ElevatedButton(
-              onPressed: () => _addXmlTag('<lang xml:lang="en-US"> </lang>'),
-              child: Text('English'),
-            ),
-            SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: () => _addXmlTag('<break time="2s"/>'),
-              child: Text('2 sec break'),
-            ),
-            // Add more buttons for other XML tags as needed
-          ],
-        ),
-      ),
-    );
-}
-
-  Padding _buildCupertinoMessageInputRow(){
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0, left: 16.0, right: 16.0),
-      child: Row(
-        children: [
-          CupertinoButton(
-            onPressed: () {
-              _messageController.clear();
-            },
-            child: const Icon(CupertinoIcons.delete),
-          ),
-          Expanded(
-            child: CupertinoTextField(
-              controller: _messageController,
-              focusNode: _messageFocusNode,
-              minLines: 1,
-              maxLines: 5,
-              placeholder: 'Enter text',
-              decoration: BoxDecoration(
-                border: Border.all(color: CupertinoColors.lightBackgroundGray),
-                borderRadius: BorderRadius.circular(5.0),
-              ),
-              textInputAction: TextInputAction.done,
-              keyboardType: TextInputType.text,
-            ),
-          ),
-          CupertinoButton(
-            onPressed: _togglePlayPause,
-            child: Icon(isPlaying ? CupertinoIcons.pause : CupertinoIcons.play_arrow),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Padding _buildMessageInputRow() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0, left: 16.0, right: 16.0),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(Icons.delete),
-            onPressed: () {
-              _messageController.clear();
-            },
-          ),
-          Expanded(
-            child: TextField(
-              controller: _messageController,
-              focusNode: _messageFocusNode,
-              minLines: 1,
-              maxLines: 5,
-              decoration: InputDecoration(
-                labelText: 'Enter text',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(5.0),
-                ),
-                focusedBorder: const OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.blue, width: 2.0),
-                ),
-                enabledBorder: const OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey, width: 1.0),
-                ),
-              ),
-              textInputAction: TextInputAction.done,
-              keyboardType: TextInputType.text,
-            ),
-          ),
-          IconButton(
-            icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-            onPressed: _togglePlayPause,
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  void _showFullScreenText() {
-    Navigator.push(
-      context,
-      Platform.isIOS
-          ? CupertinoPageRoute( // Use CupertinoPageRoute
-              builder: (context) =>
-                  FullScreenTextView(text: _messageController.text),
-            )
-          : MaterialPageRoute(
-              builder: (context) =>
-                  FullScreenTextView(text: _messageController.text),
-            ),
-    );
-  }
-}
-
-class FullScreenTextView extends StatelessWidget {
-  final String text;
-
-  const FullScreenTextView({Key? key, required this.text}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Platform.isIOS
-        ? _buildCupertinoFullScreen(context)
-        : _buildMaterialFullScreen(context);
-  }
-
-  Widget _buildCupertinoFullScreen(BuildContext context) {
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
-        middle: Text('Full Screen Text'),
-      ),
-      child: SafeArea(
-        child: _buildFullScreenContent(context),
-      ),
-    );
-  }
-
-  Widget _buildMaterialFullScreen(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Full Screen Text'),
-      ),
-      body: _buildFullScreenContent(context),
-    );
-  }
-
-  Widget _buildFullScreenContent(BuildContext context) {
-    return InteractiveViewer(
-      panEnabled: true,
-      scaleEnabled: true,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              text,
-              style: TextStyle(
-                  fontSize: constraints.maxWidth /
-                      10), // Adjust the font size based on the width
-            ),
-          );
-        },
-      ),
-    );
   }
 }
