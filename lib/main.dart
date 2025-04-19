@@ -1,29 +1,32 @@
 import 'dart:ui';
 import 'dart:async';
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/foundation.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:wingmate/utils/speech_service_config_adapter.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:path_provider/path_provider.dart';
+
+// App imports
 import 'package:wingmate/models/voice_model.dart';
 import 'package:wingmate/ui/main_page.dart';
 import 'package:wingmate/utils/speech_service_config.dart';
+import 'package:wingmate/utils/speech_service_config_adapter.dart';
+
+// Conditionally imported based on platform
 import 'package:wingmate/firebase_options.dart';
 
-// Safely import platform
-import 'package:flutter/foundation.dart' show kIsWeb;
 // Only import Platform when not on web
 import 'dart:io' as io show Platform;
 
-// Firebase imports - keep these conditional
+// Firebase imports 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:path_provider/path_provider.dart';
-// Safely check platform
+
+// Platform detection helpers
 bool get isIOS => !kIsWeb && io.Platform.isIOS;
 bool get isLinux => !kIsWeb && io.Platform.isLinux;
 
@@ -32,26 +35,12 @@ void main() async {
   print('Starting app initialization...');
   
   try {
-    // Initialize Firebase first on iOS
-    if (isIOS) {
-      await _initializeFirebase();
-      print('Firebase initialized successfully for iOS.');
-    }
-
-    // Initialize Hive
-    await _initializeHive();
-    print('Hive initialized successfully.');
-
-    // Initialize Firebase for other platforms
-    if (!isIOS) {
-      await _initializeFirebase();
-      print('Firebase initialized successfully for other platforms.');
-    }
+    // Initialize core services
+    await _initializeServices();
     
-    final box = Hive.box('settings');
-    final config = box.get('config') as SpeechServiceConfig?;
-    print('Loaded config: $config');
-
+    // Load config and start app
+    final config = _loadSpeechServiceConfig();
+    
     runApp(MyApp(
       speechServiceEndpoint: config?.endpoint ?? '',
       speechServiceKey: config?.key ?? '',
@@ -59,14 +48,23 @@ void main() async {
   } catch (e, stack) {
     print('Error during app initialization: $e');
     print('Stack trace: $stack');
+    runApp(_buildErrorApp(e.toString()));
+  }
+}
 
-    runApp(MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Text('Failed to initialize app: $e'),
-        ),
-      ),
-    ));
+Future<void> _initializeServices() async {
+  // Initialize Firebase first on iOS for better startup performance
+  if (isIOS) {
+    await _initializeFirebase();
+  }
+
+  // Initialize Hive database
+  await _initializeHive();
+  print('Hive initialized successfully.');
+
+  // Initialize Firebase for other platforms
+  if (!isIOS) {
+    await _initializeFirebase();
   }
 }
 
@@ -101,14 +99,11 @@ Future<void> _initializeFirebase() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     
-    // Configure Crashlytics after initialization
+    // Configure Crashlytics
     await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
     
     // Set up error handlers
-    FlutterError.onError = (errorDetails) {
-      FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
-    };
-    
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
     PlatformDispatcher.instance.onError = (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
       return true;
@@ -117,19 +112,36 @@ Future<void> _initializeFirebase() async {
     print('Firebase Crashlytics enabled');
   } catch (e) {
     print('Error initializing Firebase: $e');
-    // Don't rethrow - allow app to continue without Firebase
+    // Continue without Firebase
   }
 }
 
-// This widget holds the main CupertinoApp or MaterialApp based on the platform
+SpeechServiceConfig? _loadSpeechServiceConfig() {
+  final box = Hive.box('settings');
+  final config = box.get('config') as SpeechServiceConfig?;
+  print('Loaded config: $config');
+  return config;
+}
+
+MaterialApp _buildErrorApp(String errorMessage) {
+  return MaterialApp(
+    home: Scaffold(
+      body: Center(
+        child: Text('Failed to initialize app: $errorMessage'),
+      ),
+    ),
+  );
+}
+
 class MyApp extends StatefulWidget {
   final String speechServiceEndpoint;
   final String speechServiceKey;
 
-  MyApp({
+  const MyApp({
+    Key? key,
     required this.speechServiceEndpoint,
     required this.speechServiceKey,
-  });
+  }) : super(key: key);
 
   @override
   _MyAppState createState() => _MyAppState();
@@ -149,93 +161,63 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     if (kIsWeb) {
-      // Use MaterialApp for web
-      return MaterialApp(
-        title: 'Wingmate',
-        theme: ThemeData(
-          colorScheme: _defaultLightColorScheme,
-          useMaterial3: true,
-        ),
-        darkTheme: ThemeData(
-          colorScheme: _defaultDarkColorScheme,
-          useMaterial3: true,
-        ),
-        themeMode: ThemeMode.system,
-        localizationsDelegates: [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: [
-          const Locale('en', ''), // English
-          const Locale('da'), // Danish
-        ],
-        home: MainPage(
-          speechServiceEndpoint: speechServiceEndpoint,
-          speechServiceKey: speechServiceKey,
-          onSaveSettings: _saveSettings,
-        ),
-      );
-    } else if (!kIsWeb && isIOS) {
-      return CupertinoApp(
-        title: 'Wingmate',
-        theme: CupertinoThemeData(
-          primaryColor: CupertinoColors.systemBlue,
-        ),
-        localizationsDelegates: [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: [
-          const Locale('en', ''), // English
-          const Locale('da'), // Danish
-        ],
-        home: MainPage(
-          speechServiceEndpoint: speechServiceEndpoint,
-          speechServiceKey: speechServiceKey,
-          onSaveSettings: _saveSettings,
-        ),
-      );
+      return _buildMaterialApp(_defaultLightColorScheme, _defaultDarkColorScheme);
+    } else if (isIOS) {
+      return _buildCupertinoApp();
     } else {
-      // For Android, Linux, Windows, macOS
-      return DynamicColorBuilder(
-        builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-          final lightColorScheme = lightDynamic ?? _defaultLightColorScheme;
-          final darkColorScheme = darkDynamic ?? _defaultDarkColorScheme;
-
-          return MaterialApp(
-            title: 'Wingmate',
-            theme: ThemeData(
-              colorScheme: lightColorScheme,
-              useMaterial3: true,
-            ),
-            darkTheme: ThemeData(
-              colorScheme: darkColorScheme,
-              useMaterial3: true,
-            ),
-            themeMode: ThemeMode.system,
-            localizationsDelegates: [
-              AppLocalizations.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            supportedLocales: [
-              const Locale('en', ''), // English
-              const Locale('da'), // Danish
-            ],
-            home: MainPage(
-              speechServiceEndpoint: speechServiceEndpoint,
-              speechServiceKey: speechServiceKey,
-              onSaveSettings: _saveSettings,
-            ),
-          );
-        },
-      );
+      return _buildDynamicColorApp();
     }
+  }
+
+  MaterialApp _buildMaterialApp(ColorScheme lightScheme, ColorScheme darkScheme) {
+    return MaterialApp(
+      title: 'Wingmate',
+      theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
+      darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
+      themeMode: ThemeMode.system,
+      localizationsDelegates: _localizationDelegates,
+      supportedLocales: _supportedLocales,
+      home: _buildMainPage(),
+    );
+  }
+
+  CupertinoApp _buildCupertinoApp() {
+    return CupertinoApp(
+      title: 'Wingmate',
+      theme: const CupertinoThemeData(primaryColor: CupertinoColors.systemBlue),
+      localizationsDelegates: _localizationDelegates,
+      supportedLocales: _supportedLocales,
+      home: _buildMainPage(),
+    );
+  }
+
+  Widget _buildDynamicColorApp() {
+    return DynamicColorBuilder(
+      builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+        final lightColorScheme = lightDynamic ?? _defaultLightColorScheme;
+        final darkColorScheme = darkDynamic ?? _defaultDarkColorScheme;
+        return _buildMaterialApp(lightColorScheme, darkColorScheme);
+      },
+    );
+  }
+
+  MainPage _buildMainPage() {
+    return MainPage(
+      speechServiceEndpoint: speechServiceEndpoint,
+      speechServiceKey: speechServiceKey,
+      onSaveSettings: _saveSettings,
+    );
+  }
+
+  Future<void> _saveSettings(String endpoint, String key) async {
+    final box = Hive.box('settings');
+    final config = SpeechServiceConfig(endpoint: endpoint, key: key);
+    await box.put('config', config);
+
+    setState(() {
+      speechServiceEndpoint = endpoint;
+      speechServiceKey = key;
+    });
   }
 
   static final ColorScheme _defaultLightColorScheme = ColorScheme.fromSeed(
@@ -248,14 +230,15 @@ class _MyAppState extends State<MyApp> {
     brightness: Brightness.dark,
   );
 
-  Future<void> _saveSettings(String endpoint, String key) async {
-    final box = Hive.box('settings');
-    final config = SpeechServiceConfig(endpoint: endpoint, key: key);
-    await box.put('config', config);
+  static const List<LocalizationsDelegate<dynamic>> _localizationDelegates = [
+    AppLocalizations.delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+  ];
 
-    setState(() {
-      speechServiceEndpoint = endpoint;
-      speechServiceKey = key;
-    });
-  }
+  static const List<Locale> _supportedLocales = [
+    Locale('en', ''), // English
+    Locale('da'), // Danish
+  ];
 }
