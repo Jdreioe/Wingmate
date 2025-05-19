@@ -22,7 +22,7 @@ import 'package:wingmate/firebase_options.dart';
 // Only import Platform when not on web
 import 'dart:io' as io show Platform;
 
-// Firebase imports 
+// Firebase imports
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
@@ -33,18 +33,20 @@ bool get isLinux => !kIsWeb && io.Platform.isLinux;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   print('Starting app initialization...');
-  
+
   try {
     // Initialize core services
     await _initializeServices();
-    
+
     // Load config and start app
     final config = _loadSpeechServiceConfig();
-    
-    runApp(MyApp(
-      speechServiceEndpoint: config?.endpoint ?? '',
-      speechServiceKey: config?.key ?? '',
-    ));
+
+    runApp(
+      MyApp(
+        speechServiceEndpoint: config?.endpoint ?? '',
+        speechServiceKey: config?.key ?? '',
+      ),
+    );
   } catch (e, stack) {
     print('Error during app initialization: $e');
     print('Stack trace: $stack');
@@ -76,10 +78,10 @@ Future<void> _initializeHive() async {
       final appDocumentDir = await getApplicationDocumentsDirectory();
       Hive.init(appDocumentDir.path);
     }
-    
+
     Hive.registerAdapter(SpeechServiceConfigAdapter());
     Hive.registerAdapter(VoiceAdapter());
-    
+
     await Hive.openBox('settings');
     await Hive.openBox('selectedVoice');
   } catch (e) {
@@ -89,26 +91,26 @@ Future<void> _initializeHive() async {
 }
 
 Future<void> _initializeFirebase() async {
-  if (kIsWeb || isLinux) {
-    print('Skipping Firebase initialization on web or Linux');
+  if (kIsWeb || isLinux || isIOS) {
+    print('Skipping Firebase initialization on web, Linux or iOS');
     return;
   }
-  
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    
+
     // Configure Crashlytics
     await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
-    
+
     // Set up error handlers
     FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
     PlatformDispatcher.instance.onError = (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
       return true;
     };
-    
+
     print('Firebase Crashlytics enabled');
   } catch (e) {
     print('Error initializing Firebase: $e');
@@ -126,9 +128,7 @@ SpeechServiceConfig? _loadSpeechServiceConfig() {
 MaterialApp _buildErrorApp(String errorMessage) {
   return MaterialApp(
     home: Scaffold(
-      body: Center(
-        child: Text('Failed to initialize app: $errorMessage'),
-      ),
+      body: Center(child: Text('Failed to initialize app: $errorMessage')),
     ),
   );
 }
@@ -161,7 +161,10 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     if (kIsWeb) {
-      return _buildMaterialApp(_defaultLightColorScheme, _defaultDarkColorScheme);
+      return _buildMaterialApp(
+        _defaultLightColorScheme,
+        _defaultDarkColorScheme,
+      );
     } else if (isIOS) {
       return _buildCupertinoApp();
     } else {
@@ -169,7 +172,10 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  MaterialApp _buildMaterialApp(ColorScheme lightScheme, ColorScheme darkScheme) {
+  MaterialApp _buildMaterialApp(
+    ColorScheme lightScheme,
+    ColorScheme darkScheme,
+  ) {
     return MaterialApp(
       title: 'Wingmate',
       theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
