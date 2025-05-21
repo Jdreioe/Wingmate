@@ -88,6 +88,17 @@ class AppDatabase {
         primaryLanguage TEXT
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE user_profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        voiceName TEXT NOT NULL,
+        languageCode TEXT NOT NULL,
+        speechRate REAL NOT NULL,
+        pitch REAL NOT NULL
+      )
+    ''');
   }
 
   // Handles database schema upgrades (e.g., adding new columns).

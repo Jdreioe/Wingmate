@@ -27,6 +27,9 @@ class MainPageService {
   final String speechServiceEndpoint;
   final String speechServiceKey;
   final Future<void> Function(String endpoint, String key) onSaveSettings;
+  final ProfileService profileService; // Added ProfileService
+  late final VoiceService voiceService; // Added VoiceService
+  late final VoiceSettingsService voiceSettingsService; // Added VoiceSettingsService
 
   AzureTts? azureTts;
   AudioPlayer? audioPlayer;
@@ -48,7 +51,24 @@ class MainPageService {
     required this.speechServiceEndpoint,
     required this.speechServiceKey,
     required this.onSaveSettings,
-  });
+    required this.profileService, // Added to constructor
+  }) {
+    // Initialize VoiceService and VoiceSettingsService here
+    voiceService = VoiceService(
+      endpoint: speechServiceEndpoint,
+      subscriptionKey: speechServiceKey,
+      profileService: profileService,
+    );
+    voiceSettingsService = VoiceSettingsService(
+      voiceBox: voiceBox,
+      settingsBox: settingsBox,
+      endpoint: speechServiceEndpoint,
+      subscriptionKey: speechServiceKey,
+      onSaveSettings: onSaveSettings,
+      context: context,
+      profileService: profileService,
+    );
+  }
 
   Future<void> initialize() async {
     await _initializeAzureTts();
@@ -57,17 +77,19 @@ class MainPageService {
   }
 
   Future<void> _initializeAzureTts() async {
-    final config = settingsBox.get('config') as SpeechServiceConfig?;
-    if (config != null) {
-      azureTts = AzureTts(
-        subscriptionKey: config.key,
-        region: config.endpoint,
-        settingsBox: settingsBox,
-        voiceBox: voiceBox,
-        messageController: messageController,
-        context: context,
-      );
-    }
+    // AzureTts now needs the getter functions from VoiceSettingsService
+    azureTts = AzureTts(
+      subscriptionKey: voiceSettingsService.subscriptionKey, // Get from VoiceSettingsService
+      region: voiceSettingsService.endpoint, // Get from VoiceSettingsService
+      settingsBox: settingsBox,
+      voiceBox: voiceBox,
+      messageController: messageController,
+      context: context,
+      getActiveVoiceName: voiceSettingsService.getActiveVoiceName,
+      getActiveLanguageCode: voiceSettingsService.getActiveLanguageCode,
+      getActiveSpeechRate: voiceSettingsService.getActiveSpeechRate,
+      getActivePitch: voiceSettingsService.getActivePitch,
+    );
   }
 
   void _watchIsPlaying() {

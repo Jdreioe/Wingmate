@@ -1,12 +1,18 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'package:http/http.dart' as http;
+import 'profile_service.dart'; // Added import
 
 class VoiceService {
   final String endpoint;
   final String subscriptionKey;
+  final ProfileService _profileService; // Added ProfileService
 
-  VoiceService({required this.endpoint, required this.subscriptionKey});
+  VoiceService({
+    required this.endpoint,
+    required this.subscriptionKey,
+    required ProfileService profileService, // Added to constructor
+  }) : _profileService = profileService;
 
   Future<List<Map<String, dynamic>>> fetchVoicesFromApi() async {
     final url = Uri.parse(
