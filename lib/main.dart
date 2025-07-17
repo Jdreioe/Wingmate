@@ -173,7 +173,7 @@ class _MyAppState extends State<MyApp> {
       return _buildMaterialApp(
         _defaultLightColorScheme,
         _defaultDarkColorScheme,
-      );}
+      )};
 
       else {
       return _buildDynamicColorApp();
