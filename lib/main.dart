@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -181,8 +180,6 @@ class _MyAppState extends State<MyApp> {
       theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
       darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
       themeMode: ThemeMode.system,
-      localizationsDelegates: _localizationDelegates,
-      supportedLocales: _supportedLocales,
       home: _buildMainPage(),
     );
   }
@@ -191,8 +188,6 @@ class _MyAppState extends State<MyApp> {
     return CupertinoApp(
       title: 'Wingmate',
       theme: const CupertinoThemeData(primaryColor: CupertinoColors.systemBlue),
-      localizationsDelegates: _localizationDelegates,
-      supportedLocales: _supportedLocales,
       home: _buildMainPage(),
     );
   }
@@ -236,15 +231,4 @@ class _MyAppState extends State<MyApp> {
     brightness: Brightness.dark,
   );
 
-  static const List<LocalizationsDelegate<dynamic>> _localizationDelegates = [
-    AppLocalizations.delegate,
-    GlobalMaterialLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
-  ];
-
-  static const List<Locale> _supportedLocales = [
-    Locale('en', ''), // English
-    Locale('da'), // Danish
-  ];
 }

@@ -19,7 +19,6 @@ import 'package:wingmate/utils/speech_service_config.dart';
 import 'package:wingmate/ui/save_message_dialog.dart';
 import 'package:wingmate/utils/speech_item.dart';
 import 'package:wingmate/utils/speech_item_dao.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:wingmate/ui/history_page.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -137,8 +136,8 @@ class _MainPageState extends State<MainPage> {
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
         middle: Text(_service.isSomeFolderSelected
-            ? 'Folder'
-            : (AppLocalizations.of(context)?.appTitle ?? 'Title')),
+            ? 'Folder' : "Wingmate"
+),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _handleLeadingIconPressed,
@@ -178,7 +177,7 @@ class _MainPageState extends State<MainPage> {
       appBar: AppBar(
         title: Text(_service.isSomeFolderSelected
             ? 'Folder'
-            : (AppLocalizations.of(context)?.appTitle ?? 'Title')),
+            : "Wingmate"),
         centerTitle: true,
         leading: IconButton(
           icon: Icon(_service.isSomeFolderSelected
