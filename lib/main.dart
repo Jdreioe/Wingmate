@@ -28,7 +28,22 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 // Platform detection helpers
 bool get isIOS => !kIsWeb && io.Platform.isIOS;
 bool get isLinux => !kIsWeb && io.Platform.isLinux;
+if (isIOS) {
+  final CupertinoThemeData cupertinoTheme = CupertinoThemeData(
+  brightness: Brightness.light, // Set the initial brightness
+  primaryColor: CupertinoColors.systemBlue,
+  scaffoldBackgroundColor: CupertinoColors.systemGroupedBackground,
+  barBackgroundColor: CupertinoColors.secondarySystemBackground,
+);
 
+final CupertinoThemeData cupertinoDarkTheme = CupertinoThemeData(
+  brightness: Brightness.dark,
+  primaryColor: CupertinoColors.systemBlue, // CupertinoColors.systemBlue is also adaptive
+  scaffoldBackgroundColor: CupertinoColors.black,
+  barBackgroundColor: CupertinoColors.systemGrey6,
+);
+
+}
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   print('Starting app initialization...');
@@ -55,19 +70,14 @@ void main() async {
 
 Future<void> _initializeServices() async {
   // Initialize Firebase first on iOS for better startup performance
-  if (isIOS) {
     await _initializeFirebase();
-  }
-
+ 
   // Initialize Hive database
   await _initializeHive();
   print('Hive initialized successfully.');
 
   // Initialize Firebase for other platforms
-  if (!isIOS) {
-    await _initializeFirebase();
-  }
-}
+ 
 
 Future<void> _initializeHive() async {
   try {
@@ -90,7 +100,7 @@ Future<void> _initializeHive() async {
 }
 
 Future<void> _initializeFirebase() async {
-  if (kIsWeb || isLinux || isIOS) {
+  if (kIsWeb || isLinux) {
     print('Skipping Firebase initialization on web, Linux or iOS');
     return;
   }
@@ -159,14 +169,12 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb) {
+    if (kIsWeb || isIOS) {
       return _buildMaterialApp(
         _defaultLightColorScheme,
         _defaultDarkColorScheme,
       );
-    } else if (isIOS) {
-      return _buildCupertinoApp();
-    } else {
+      else {
       return _buildDynamicColorApp();
     }
   }
