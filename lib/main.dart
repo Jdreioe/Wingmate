@@ -28,8 +28,8 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 // Platform detection helpers
 bool get isIOS => !kIsWeb && io.Platform.isIOS;
 bool get isLinux => !kIsWeb && io.Platform.isLinux;
-if (isIOS) {
-  final CupertinoThemeData cupertinoTheme = CupertinoThemeData(
+// Cupertino themes for iOS (used later if needed)
+final CupertinoThemeData cupertinoTheme = CupertinoThemeData(
   brightness: Brightness.light, // Set the initial brightness
   primaryColor: CupertinoColors.systemBlue,
   scaffoldBackgroundColor: CupertinoColors.systemGroupedBackground,
@@ -42,8 +42,6 @@ final CupertinoThemeData cupertinoDarkTheme = CupertinoThemeData(
   scaffoldBackgroundColor: CupertinoColors.black,
   barBackgroundColor: CupertinoColors.systemGrey6,
 );
-
-}
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   print('Starting app initialization...');
@@ -172,17 +170,15 @@ class _MyAppState extends State<MyApp> {
     if (kIsWeb || isIOS) {
       return _buildMaterialApp(
         _defaultLightColorScheme,
-        _defaultDarkColorScheme,
-      )};
-
+      return _buildMaterialApp(
+      )}
       else {
       return _buildDynamicColorApp();
     }
-  
-
+    }
   MaterialApp _buildMaterialApp(
     ColorScheme lightScheme,
-    ColorScheme darkScheme
+    ColorScheme darkScheme,
     ) {
     return MaterialApp(
       title: 'Wingmate',
