@@ -181,21 +181,13 @@ class _MyAppState extends State<MyApp> {
 
   MaterialApp _buildMaterialApp(
     ColorScheme lightScheme,
-    ColorScheme darkScheme,
-  ) {
+    ColorScheme darkScheme
+    ) {
     return MaterialApp(
       title: 'Wingmate',
       theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
       darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
       themeMode: ThemeMode.system,
-      home: _buildMainPage(),
-    );
-  }
-
-  CupertinoApp _buildCupertinoApp() {
-    return CupertinoApp(
-      title: 'Wingmate',
-      theme: const CupertinoThemeData(primaryColor: CupertinoColors.systemBlue),
       home: _buildMainPage(),
     );
   }
@@ -209,6 +201,7 @@ class _MyAppState extends State<MyApp> {
       },
     );
   }
+  
 
   MainPage _buildMainPage() {
     return MainPage(
@@ -240,3 +233,6 @@ class _MyAppState extends State<MyApp> {
   );
 
 }
+}
+
+
