@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wingmate/models/voice_model.dart';
@@ -127,22 +126,17 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Platform.isIOS
-        ? _buildMaterialScaffold()
-        : _buildMaterialScaffold();
+    // Simplified to always return the Material Scaffold
+    return _buildMaterialScaffold();
   }
 
   Widget _buildMaterialScaffold() {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_service.isSomeFolderSelected
-            ? 'Folder'
-            : "Wingmate"),
+        title: Text(_service.isSomeFolderSelected ? 'Folder' : "Wingmate"),
         centerTitle: true,
         leading: IconButton(
-          icon: Icon(_service.isSomeFolderSelected
-              ? Icons.arrow_back
-              : Icons.person),
+          icon: Icon(_service.isSomeFolderSelected ? Icons.arrow_back : Icons.person),
           onPressed: _handleLeadingIconPressed,
         ),
         actions: _buildMaterialAppBarActions(),
@@ -164,7 +158,6 @@ class _MainPageState extends State<MainPage> {
       ),
     );
   }
-
 
   List<Widget> _buildMaterialAppBarActions() {
     return [
@@ -280,9 +273,7 @@ class _MainPageState extends State<MainPage> {
     if (item is String && item == 'History') {
       Navigator.push(
         context,
-        Platform.isIOS
-            ? MaterialPageRoute(builder: (context) => HistoryPage())
-            : MaterialPageRoute(builder: (context) => HistoryPage()),
+        MaterialPageRoute(builder: (context) => HistoryPage()),
       );
     } else if (item is SpeechItem) {
       if (item.isFolder!) {

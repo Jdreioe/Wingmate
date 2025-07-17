@@ -1,5 +1,4 @@
-import 'dart:io';
-import 'package:flutter/cupertino.dart';
+import 'dart:io'
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
@@ -15,7 +14,6 @@ Future<void> showVoiceSettingsDialog(
   String subscriptionKey,
   Function(String, String) onSaveSettings,
 ) async {
-  final isCupertino = Platform.isIOS;
   final voiceBox = Hive.box('selectedVoice');
   final settingsBox = Hive.box('settings');
 
@@ -28,33 +26,22 @@ Future<void> showVoiceSettingsDialog(
     context: context,
   );
 
-  if (isCupertino) {
-    await showCupertinoModalPopup(
-      context: context,
-      builder: (context) => VoiceSettingsDialog(
-        service: service,
-        isCupertino: true,
-      ),
-    );
-  } else {
-    await showDialog(
-      context: context,
-      builder: (context) => VoiceSettingsDialog(
-        service: service,
-        isCupertino: false,
-      ),
-    );
-  }
+  // Consolidated to use a single showDialog for all platforms
+  await showDialog(
+    context: context,
+    builder: (context) => VoiceSettingsDialog(
+      service: service,
+    ),
+  );
 }
 
 class VoiceSettingsDialog extends StatefulWidget {
   final VoiceSettingsService service;
-  final bool isCupertino;
 
+  // Removed the isCupertino parameter
   const VoiceSettingsDialog({
     Key? key,
     required this.service,
-    required this.isCupertino,
   }) : super(key: key);
 
   @override
@@ -62,7 +49,7 @@ class VoiceSettingsDialog extends StatefulWidget {
 }
 
 class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
-  late List<Voice> _voices;
+  // Removed _voices as it's not used here
   late Voice? _selectedVoice;
   late SpeechServiceConfig _config;
   bool _isLoading = true;
@@ -89,37 +76,22 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.isCupertino) {
-      return CupertinoPageScaffold(
-        navigationBar: CupertinoNavigationBar(
-          middle: const Text('Voice Settings'),
-          trailing: CupertinoButton(
-            padding: EdgeInsets.zero,
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Done'),
-          ),
-        ),
-        child: _buildContent(),
-      );
-    } else {
-      return Dialog(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppBar(
-              title: const Text('Voice Settings'),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
+    // Consolidated to a single Material Dialog for all platforms
+    return Dialog(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppBar(
+            title: const Text('Voice Settings'),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(context),
             ),
-            _buildContent(),
-          ],
-        ),
-      );
-    }
+          ),
+          Expanded(child: _buildContent()),
+        ],
+      ),
+    );
   }
 
   Widget _buildContent() {
@@ -131,10 +103,10 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
       length: 2,
       child: Column(
         children: [
-          TabBar(
+          const TabBar(
             tabs: [
-              Tab(text: widget.isCupertino ? 'Voices' : 'VOICES'),
-              Tab(text: widget.isCupertino ? 'Settings' : 'SETTINGS'),
+              Tab(text: 'VOICES'),
+              Tab(text: 'SETTINGS'),
             ],
           ),
           Expanded(
@@ -142,13 +114,10 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
               children: [
                 VoiceSelectionWidget(
                   service: widget.service,
-                  isCupertino: widget.isCupertino,
-                  voices: _voices,
                   selectedVoice: _selectedVoice,
                 ),
                 SettingsWidget(
                   service: widget.service,
-                  isCupertino: widget.isCupertino,
                   config: _config,
                 ),
               ],
@@ -158,4 +127,4 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
       ),
     );
   }
-} 
+}
