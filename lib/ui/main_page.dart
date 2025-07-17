@@ -128,48 +128,8 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     return Platform.isIOS
-        ? _buildCupertinoScaffold()
+        ? _buildMaterialScaffold()
         : _buildMaterialScaffold();
-  }
-
-  Widget _buildCupertinoScaffold() {
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(_service.isSomeFolderSelected
-            ? 'Folder' : "Wingmate"
-),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: _handleLeadingIconPressed,
-          child: Icon(_service.isSomeFolderSelected
-              ? CupertinoIcons.back
-              : CupertinoIcons.person),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: _buildCupertinoAppBarActions(),
-        ),
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Expanded(child: _buildCupertinoReorderableListView()),
-            XmlShortcutsRow(
-              onAddTag: _service.addXmlTag,
-              isCupertino: true,
-            ),
-            MessageInputRow(
-              controller: _service.messageController,
-              focusNode: _service.messageFocusNode,
-              onClear: () => _service.messageController.clear(),
-              onPlayPause: _service.togglePlayPause,
-              isPlaying: _service.isPlaying,
-              isCupertino: true,
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildMaterialScaffold() {
@@ -205,42 +165,6 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  List<Widget> _buildCupertinoAppBarActions() {
-    return [
-      if (!_isSubscribed && _isMobilePlatform())
-        CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => _subscriptionManager.showSubscriptionDialog(context),
-          child: const Icon(CupertinoIcons.lock),
-        ),
-      CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: () {
-          Navigator.push(
-            context,
-            CupertinoPageRoute(
-              builder: (context) => FetchVoicesPage(
-                endpoint: widget.speechServiceEndpoint,
-                subscriptionKey: widget.speechServiceKey,
-              ),
-            ),
-          );
-        },
-        child: const Icon(CupertinoIcons.settings),
-      ),
-      CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: () => showSaveMessageDialog(
-            context, _service.messageController.text, _service.handleSaveMessage),
-        child: const Icon(CupertinoIcons.add),
-      ),
-      CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: () => showFullScreenText(context, _service.messageController.text),
-        child: const Icon(CupertinoIcons.fullscreen),
-      ),
-    ];
-  }
 
   List<Widget> _buildMaterialAppBarActions() {
     return [
@@ -296,27 +220,6 @@ class _MainPageState extends State<MainPage> {
         widget.onSaveSettings,
       );
     }
-  }
-
-  Widget _buildCupertinoReorderableListView() {
-    return ReorderableListView.builder(
-      onReorder: _service.reorderItems,
-      itemBuilder: (context, index) => Dismissible(
-        key: ValueKey(_service.items[index]),
-        direction: DismissDirection.horizontal,
-        background: _buildDismissibleBackground(
-            Alignment.centerLeft, Colors.blue, CupertinoIcons.share),
-        secondaryBackground: _buildDismissibleBackground(
-            Alignment.centerRight, Colors.red, CupertinoIcons.delete),
-        confirmDismiss: (direction) => _handleDismiss(direction, _service.items[index]),
-        child: SpeechItemListTile(
-          item: _service.items[index],
-          isCupertino: true,
-          onTap: () => _handleItemTap(_service.items[index]),
-        ),
-      ),
-      itemCount: _service.items.length,
-    );
   }
 
   Widget _buildReorderableListView() {
@@ -378,7 +281,7 @@ class _MainPageState extends State<MainPage> {
       Navigator.push(
         context,
         Platform.isIOS
-            ? CupertinoPageRoute(builder: (context) => HistoryPage())
+            ? MaterialPageRoute(builder: (context) => HistoryPage())
             : MaterialPageRoute(builder: (context) => HistoryPage()),
       );
     } else if (item is SpeechItem) {

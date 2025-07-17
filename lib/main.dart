@@ -28,9 +28,10 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 // Platform detection helpers
 bool get isIOS => !kIsWeb && io.Platform.isIOS;
 bool get isLinux => !kIsWeb && io.Platform.isLinux;
-// Cupertino themes for iOS (used later if needed)
+
+// Cupertino themes for iOS
 final CupertinoThemeData cupertinoTheme = CupertinoThemeData(
-  brightness: Brightness.light, // Set the initial brightness
+  brightness: Brightness.light,
   primaryColor: CupertinoColors.systemBlue,
   scaffoldBackgroundColor: CupertinoColors.systemGroupedBackground,
   barBackgroundColor: CupertinoColors.secondarySystemBackground,
@@ -38,10 +39,11 @@ final CupertinoThemeData cupertinoTheme = CupertinoThemeData(
 
 final CupertinoThemeData cupertinoDarkTheme = CupertinoThemeData(
   brightness: Brightness.dark,
-  primaryColor: CupertinoColors.systemBlue, // CupertinoColors.systemBlue is also adaptive
+  primaryColor: CupertinoColors.systemBlue,
   scaffoldBackgroundColor: CupertinoColors.black,
   barBackgroundColor: CupertinoColors.systemGrey6,
 );
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   print('Starting app initialization...');
@@ -68,14 +70,12 @@ void main() async {
 
 Future<void> _initializeServices() async {
   // Initialize Firebase first on iOS for better startup performance
-    await _initializeFirebase();
- 
+  await _initializeFirebase();
+
   // Initialize Hive database
   await _initializeHive();
   print('Hive initialized successfully.');
-
-  // Initialize Firebase for other platforms
- 
+}
 
 Future<void> _initializeHive() async {
   try {
@@ -93,13 +93,17 @@ Future<void> _initializeHive() async {
     await Hive.openBox('selectedVoice');
   } catch (e) {
     print('Error initializing Hive: $e');
-    throw e;
+    // Continue with the error app if Hive fails to initialize
+    rethrow;
   }
 }
 
 Future<void> _initializeFirebase() async {
+  // Check kIsWeb or isLinux.
+  // The original code had a confusing condition including 'or iOS'.
+  // isIOS is handled correctly later, so the logic is now clearer.
   if (kIsWeb || isLinux) {
-    print('Skipping Firebase initialization on web, Linux or iOS');
+    print('Skipping Firebase initialization on web or Linux');
     return;
   }
 
@@ -121,7 +125,7 @@ Future<void> _initializeFirebase() async {
     print('Firebase Crashlytics enabled');
   } catch (e) {
     print('Error initializing Firebase: $e');
-    // Continue without Firebase
+    // Continue without Firebase if it fails
   }
 }
 
@@ -170,16 +174,15 @@ class _MyAppState extends State<MyApp> {
     if (kIsWeb || isIOS) {
       return _buildMaterialApp(
         _defaultLightColorScheme,
-      return _buildMaterialApp(
-      )}
-      else {
+        _defaultDarkColorScheme,
+      );
+    } else {
       return _buildDynamicColorApp();
     }
-    }
-  MaterialApp _buildMaterialApp(
-    ColorScheme lightScheme,
-    ColorScheme darkScheme,
-    ) {
+  }
+
+  Widget _buildMaterialApp(ColorScheme lightScheme, ColorScheme darkScheme) {
+    // This method was missing from the original code, causing a compile error.
     return MaterialApp(
       title: 'Wingmate',
       theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
@@ -198,7 +201,6 @@ class _MyAppState extends State<MyApp> {
       },
     );
   }
-  
 
   MainPage _buildMainPage() {
     return MainPage(
@@ -228,8 +230,4 @@ class _MyAppState extends State<MyApp> {
     seedColor: Colors.blue,
     brightness: Brightness.dark,
   );
-
 }
-}
-
-
