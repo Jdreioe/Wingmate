@@ -1,18 +1,16 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+// Removed material.dart as it is no longer used
 import 'package:wingmate/services/voice_settings_service.dart';
 import 'package:wingmate/utils/speech_service_config.dart';
 
 class SettingsWidget extends StatelessWidget {
   final VoiceSettingsService service;
-  final bool isCupertino;
   final SpeechServiceConfig config;
 
+  // The isCupertino parameter was removed as the entire app is now Cupertino
   const SettingsWidget({
     Key? key,
     required this.service,
-    required this.isCupertino,
     required this.config,
   }) : super(key: key);
 
@@ -25,9 +23,7 @@ class SettingsWidget extends StatelessWidget {
           padding: const EdgeInsets.all(16.0),
           child: Text(
             'Settings',
-            style: isCupertino
-                ? CupertinoTheme.of(context).textTheme.navTitleTextStyle
-                : Theme.of(context).textTheme.titleLarge,
+            style: CupertinoTheme.of(context).textTheme.navTitleTextStyle
           ),
         ),
         _buildSettingTile(
@@ -62,24 +58,19 @@ class SettingsWidget extends StatelessWidget {
     String value,
     Function(String) onChanged,
   ) {
-    if (isCupertino) {
-      return CupertinoListTile(
-        title: Text(title),
-        trailing: CupertinoTextField(
-          placeholder: value,
-          onChanged: onChanged,
+    // Consolidated to a single Cupertino widget as the platform check is no longer needed
+    return CupertinoListTile(
+      title: Text(title),
+      trailing: CupertinoTextField(
+        placeholder: value,
+        onChanged: onChanged,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        decoration: BoxDecoration(
+          color: CupertinoColors.white,
+          border: Border.all(color: CupertinoColors.systemGrey),
+          borderRadius: BorderRadius.circular(5.0),
         ),
-      );
-    } else {
-      return ListTile(
-        title: Text(title),
-        trailing: TextField(
-          decoration: InputDecoration(
-            hintText: value,
-          ),
-          onChanged: onChanged,
-        ),
-      );
-    }
+      ),
+    );
   }
-} 
+}

@@ -3,8 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart'; // ADDED: Required for ReorderableListView
+import 'package:flutter/services.dart'; // ADDED: Required for Clipboard
 import 'package:wingmate/models/voice_model.dart';
 import 'dart:math' as math;
 
@@ -126,52 +127,55 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Simplified to always return the Material Scaffold
-    return _buildMaterialScaffold();
-  }
-
-  Widget _buildMaterialScaffold() {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_service.isSomeFolderSelected ? 'Folder' : "Wingmate"),
-        centerTitle: true,
-        leading: IconButton(
-          icon: Icon(_service.isSomeFolderSelected ? Icons.arrow_back : Icons.person),
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(_service.isSomeFolderSelected ? 'Folder' : "Wingmate"),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
           onPressed: _handleLeadingIconPressed,
+          child: Icon(_service.isSomeFolderSelected
+              ? CupertinoIcons.back
+              : CupertinoIcons.person_alt_circle),
         ),
-        actions: _buildMaterialAppBarActions(),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: _buildCupertinoAppBarActions(),
+        ),
       ),
-      body: Column(
-        children: [
-          Expanded(child: _buildReorderableListView()),
-          XmlShortcutsRow(
-            onAddTag: _service.addXmlTag,
-          ),
-          MessageInputRow(
-            controller: _service.messageController,
-            focusNode: _service.messageFocusNode,
-            onClear: () => _service.messageController.clear(),
-            onPlayPause: _service.togglePlayPause,
-            isPlaying: _service.isPlaying,
-          ),
-        ],
+      child: SafeArea(
+        child: Column(
+          children: [
+            Expanded(child: _buildReorderableListView()),
+            XmlShortcutsRow(
+              onAddTag: _service.addXmlTag,
+            ),
+            MessageInputRow(
+              controller: _service.messageController,
+              focusNode: _service.messageFocusNode,
+              onClear: () => _service.messageController.clear(),
+              onPlayPause: _service.togglePlayPause,
+              isPlaying: _service.isPlaying,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  List<Widget> _buildMaterialAppBarActions() {
+  List<Widget> _buildCupertinoAppBarActions() {
     return [
       if (!_isSubscribed && _isMobilePlatform())
-        IconButton(
-          icon: const Icon(Icons.lock),
+        CupertinoButton(
+          padding: EdgeInsets.zero,
           onPressed: () => _subscriptionManager.showSubscriptionDialog(context),
+          child: const Icon(CupertinoIcons.lock_fill),
         ),
-      IconButton(
-        icon: const Icon(Icons.settings),
+      CupertinoButton(
+        padding: EdgeInsets.zero,
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
+            CupertinoPageRoute(
               builder: (context) => FetchVoicesPage(
                 endpoint: widget.speechServiceEndpoint,
                 subscriptionKey: widget.speechServiceKey,
@@ -179,15 +183,18 @@ class _MainPageState extends State<MainPage> {
             ),
           );
         },
+        child: const Icon(CupertinoIcons.settings),
       ),
-      IconButton(
-        icon: const Icon(Icons.add),
+      CupertinoButton(
+        padding: EdgeInsets.zero,
         onPressed: () => showSaveMessageDialog(
             context, _service.messageController.text, _service.handleSaveMessage),
+        child: const Icon(CupertinoIcons.add),
       ),
-      IconButton(
-        icon: const Icon(Icons.fullscreen),
+      CupertinoButton(
+        padding: EdgeInsets.zero,
         onPressed: () => showFullScreenText(context, _service.messageController.text),
+        child: const Icon(CupertinoIcons.fullscreen),
       ),
     ];
   }
@@ -218,42 +225,26 @@ class _MainPageState extends State<MainPage> {
   Widget _buildReorderableListView() {
     return ReorderableListView(
       onReorder: _service.reorderItems,
-      children: _service.items.map((item) => Dismissible(
-        key: ValueKey(item),
-        direction: DismissDirection.horizontal,
-        background: _buildDismissibleBackground(
-            Alignment.centerLeft, Colors.blue, Icons.share),
-        secondaryBackground: _buildDismissibleBackground(
-            Alignment.centerRight, Colors.red, Icons.delete),
-        confirmDismiss: (direction) => _handleDismiss(direction, item),
-        child: SpeechItemListTile(
-          item: item,
+      children: _service.items.map((item) => GestureDetector(
+        key: ValueKey(item.id),
+        onHorizontalDragEnd: (details) async {
+          if (details.primaryVelocity! > 0) {
+            if (item is SpeechItem && item.filePath != null) {
+              await _shareFile(item.filePath!);
+            }
+          } else if (details.primaryVelocity! < 0) {
+            final index = _service.items.indexOf(item);
+            await _service.deleteItem(index);
+          }
+        },
+        child: CupertinoListTile(
+          leading: Icon(item.isFolder! ? CupertinoIcons.folder : CupertinoIcons.speaker_2),
+          title: Text(item.name ?? ''),
+          subtitle: item.isFolder! ? null : Text(item.text ?? ''),
           onTap: () => _handleItemTap(item),
         ),
       )).toList(),
     );
-  }
-
-  Container _buildDismissibleBackground(
-      Alignment alignment, Color color, IconData icon) {
-    return Container(
-      alignment: alignment,
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      color: color,
-      child: Icon(icon, color: Colors.white),
-    );
-  }
-
-  Future<bool> _handleDismiss(DismissDirection direction, dynamic item) async {
-    if (direction == DismissDirection.startToEnd) {
-      if (item is SpeechItem && item.filePath != null) {
-        await _shareFile(item.filePath!);
-      }
-      return false;
-    } else {
-      final index = _service.items.indexOf(item);
-      return await _service.deleteItem(index);
-    }
   }
 
   Future<void> _shareFile(String filePath) async {
@@ -263,8 +254,17 @@ class _MainPageState extends State<MainPage> {
       final file = File(filePath);
       final bytes = await file.readAsBytes();
       await Clipboard.setData(ClipboardData(text: base64Encode(bytes)));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File copied to clipboard')),
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          content: const Text('File copied to clipboard'),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text('OK'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
       );
     }
   }
@@ -273,7 +273,7 @@ class _MainPageState extends State<MainPage> {
     if (item is String && item == 'History') {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => HistoryPage()),
+        CupertinoPageRoute(builder: (context) => HistoryPage()),
       );
     } else if (item is SpeechItem) {
       if (item.isFolder!) {

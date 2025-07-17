@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+// Removed material.dart as it is no longer used
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 
 class MessageInputRow extends StatelessWidget {
@@ -8,8 +8,8 @@ class MessageInputRow extends StatelessWidget {
   final VoidCallback onClear;
   final VoidCallback onPlayPause;
   final bool isPlaying;
-  final bool isCupertino;
 
+  // The isCupertino parameter was removed as the entire app is now Cupertino
   const MessageInputRow({
     Key? key,
     required this.controller,
@@ -17,7 +17,6 @@ class MessageInputRow extends StatelessWidget {
     required this.onClear,
     required this.onPlayPause,
     required this.isPlaying,
-    this.isCupertino = false,
   }) : super(key: key);
 
   @override
@@ -37,69 +36,35 @@ class MessageInputRow extends StatelessWidget {
   }
 
   Widget _buildClearButton() {
-    if (isCupertino) {
-      return CupertinoButton(
-        onPressed: onClear,
-        child: const Icon(CupertinoIcons.delete),
-      );
-    } else {
-      return IconButton(
-        icon: const Icon(Icons.delete),
-        onPressed: onClear,
-      );
-    }
+    // Consolidated to a single Cupertino widget
+    return CupertinoButton(
+      onPressed: onClear,
+      child: const Icon(CupertinoIcons.delete),
+    );
   }
 
   Widget _buildTextField() {
-    if (isCupertino) {
-      return CupertinoTextField(
-        controller: controller,
-        focusNode: focusNode,
-        minLines: 1,
-        maxLines: 5,
-        placeholder: 'Enter text',
-        decoration: BoxDecoration(
-          border: Border.all(color: CupertinoColors.lightBackgroundGray),
-          borderRadius: BorderRadius.circular(5.0),
-        ),
-        textInputAction: TextInputAction.done,
-        keyboardType: TextInputType.text,
-      );
-    } else {
-      return TextField(
-        controller: controller,
-        focusNode: focusNode,
-        minLines: 1,
-        maxLines: 5,
-        decoration: InputDecoration(
-          labelText: 'Enter text',
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(5.0),
-          ),
-          focusedBorder: const OutlineInputBorder(
-            borderSide: BorderSide(color: Colors.blue, width: 2.0),
-          ),
-          enabledBorder: const OutlineInputBorder(
-            borderSide: BorderSide(color: Colors.grey, width: 1.0),
-          ),
-        ),
-        textInputAction: TextInputAction.done,
-        keyboardType: TextInputType.text,
-      );
-    }
+    // Consolidated to a single Cupertino widget
+    return CupertinoTextField(
+      controller: controller,
+      focusNode: focusNode,
+      minLines: 1,
+      maxLines: 5,
+      placeholder: 'Enter text',
+      decoration: BoxDecoration(
+        border: Border.all(color: CupertinoColors.lightBackgroundGray),
+        borderRadius: BorderRadius.circular(5.0),
+      ),
+      textInputAction: TextInputAction.done,
+      keyboardType: TextInputType.text,
+    );
   }
 
   Widget _buildPlayPauseButton() {
-    if (isCupertino) {
-      return CupertinoButton(
-        onPressed: onPlayPause,
-        child: Icon(isPlaying ? CupertinoIcons.pause : CupertinoIcons.play_arrow),
-      );
-    } else {
-      return IconButton(
-        icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-        onPressed: onPlayPause,
-      );
-    }
+    // Consolidated to a single Cupertino widget
+    return CupertinoButton(
+      onPressed: onPlayPause,
+      child: Icon(isPlaying ? CupertinoIcons.pause : CupertinoIcons.play_arrow),
+    );
   }
-} 
+}

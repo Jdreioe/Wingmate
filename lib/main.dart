@@ -1,10 +1,8 @@
 import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:dynamic_color/dynamic_color.dart';
+import 'package:flutter/material.dart'; // ADDED: Required for DefaultMaterialLocalizations.delegate
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -29,7 +27,6 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 bool get isIOS => !kIsWeb && io.Platform.isIOS;
 bool get isLinux => !kIsWeb && io.Platform.isLinux;
 
-// Cupertino themes for iOS
 final CupertinoThemeData cupertinoTheme = CupertinoThemeData(
   brightness: Brightness.light,
   primaryColor: CupertinoColors.systemBlue,
@@ -49,10 +46,7 @@ void main() async {
   print('Starting app initialization...');
 
   try {
-    // Initialize core services
     await _initializeServices();
-
-    // Load config and start app
     final config = _loadSpeechServiceConfig();
 
     runApp(
@@ -69,10 +63,7 @@ void main() async {
 }
 
 Future<void> _initializeServices() async {
-  // Initialize Firebase first on iOS for better startup performance
   await _initializeFirebase();
-
-  // Initialize Hive database
   await _initializeHive();
   print('Hive initialized successfully.');
 }
@@ -85,47 +76,34 @@ Future<void> _initializeHive() async {
       final appDocumentDir = await getApplicationDocumentsDirectory();
       Hive.init(appDocumentDir.path);
     }
-
     Hive.registerAdapter(SpeechServiceConfigAdapter());
     Hive.registerAdapter(VoiceAdapter());
-
     await Hive.openBox('settings');
     await Hive.openBox('selectedVoice');
   } catch (e) {
     print('Error initializing Hive: $e');
-    // Continue with the error app if Hive fails to initialize
     rethrow;
   }
 }
 
 Future<void> _initializeFirebase() async {
-  // Check kIsWeb or isLinux.
-  // The original code had a confusing condition including 'or iOS'.
-  // isIOS is handled correctly later, so the logic is now clearer.
   if (kIsWeb || isLinux) {
     print('Skipping Firebase initialization on web or Linux');
     return;
   }
-
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-
-    // Configure Crashlytics
     await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
-
-    // Set up error handlers
     FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
     PlatformDispatcher.instance.onError = (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
       return true;
     };
-
     print('Firebase Crashlytics enabled');
   } catch (e) {
     print('Error initializing Firebase: $e');
-    // Continue without Firebase if it fails
   }
 }
 
@@ -136,10 +114,18 @@ SpeechServiceConfig? _loadSpeechServiceConfig() {
   return config;
 }
 
-MaterialApp _buildErrorApp(String errorMessage) {
-  return MaterialApp(
-    home: Scaffold(
-      body: Center(child: Text('Failed to initialize app: $errorMessage')),
+CupertinoApp _buildErrorApp(String errorMessage) {
+  return CupertinoApp(
+    home: CupertinoPageScaffold(
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Error'),
+      ),
+      child: Center(
+        child: Text(
+          'Failed to initialize app: $errorMessage',
+          textAlign: TextAlign.center,
+        ),
+      ),
     ),
   );
 }
@@ -171,42 +157,32 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb || isIOS) {
-      return _buildMaterialApp(
-        _defaultLightColorScheme,
-        _defaultDarkColorScheme,
-      );
-    } else {
-      return _buildDynamicColorApp();
-    }
-  }
-
-  Widget _buildMaterialApp(ColorScheme lightScheme, ColorScheme darkScheme) {
-    // This method was missing from the original code, causing a compile error.
-    return MaterialApp(
+    return CupertinoApp(
       title: 'Wingmate',
-      theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
-      darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
-      themeMode: ThemeMode.system,
+      theme: cupertinoTheme,
       home: _buildMainPage(),
+      localizationsDelegates: const [
+        // Added back the material delegate
+        DefaultMaterialLocalizations.delegate,
+        DefaultCupertinoLocalizations.delegate,
+        DefaultWidgetsLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en', 'US'),
+      ],
     );
   }
 
-  Widget _buildDynamicColorApp() {
-    return DynamicColorBuilder(
-      builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        final lightColorScheme = lightDynamic ?? _defaultLightColorScheme;
-        final darkColorScheme = darkDynamic ?? _defaultDarkColorScheme;
-        return _buildMaterialApp(lightColorScheme, darkColorScheme);
-      },
-    );
-  }
-
-  MainPage _buildMainPage() {
-    return MainPage(
-      speechServiceEndpoint: speechServiceEndpoint,
-      speechServiceKey: speechServiceKey,
-      onSaveSettings: _saveSettings,
+  CupertinoPageScaffold _buildMainPage() {
+    return CupertinoPageScaffold(
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Wingmate'),
+      ),
+      child: MainPage(
+        speechServiceEndpoint: speechServiceEndpoint,
+        speechServiceKey: speechServiceKey,
+        onSaveSettings: _saveSettings,
+      ),
     );
   }
 
@@ -220,14 +196,4 @@ class _MyAppState extends State<MyApp> {
       speechServiceKey = key;
     });
   }
-
-  static final ColorScheme _defaultLightColorScheme = ColorScheme.fromSeed(
-    seedColor: Colors.blue,
-    brightness: Brightness.light,
-  );
-
-  static final ColorScheme _defaultDarkColorScheme = ColorScheme.fromSeed(
-    seedColor: Colors.blue,
-    brightness: Brightness.dark,
-  );
 }

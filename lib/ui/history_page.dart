@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Changed to Cupertino
+// Removed material.dart as it's no longer needed for UI
 import 'package:wingmate/utils/said_text_dao.dart';
 import 'package:wingmate/utils/app_database.dart';
 import 'package:wingmate/utils/said_text_item.dart';
@@ -7,7 +8,7 @@ import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb; // Still useful for non-UI logic
 
 class HistoryPage extends StatefulWidget {
   @override
@@ -59,9 +60,18 @@ class _HistoryPageState extends State<HistoryPage> {
       final file = File(filePath);
       final bytes = await file.readAsBytes();
       await Clipboard.setData(ClipboardData(text: base64Encode(bytes)));
-      // Use SnackBar for all platforms when share fails
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File copied to clipboard')),
+      // Use CupertinoAlertDialog for "File copied to clipboard"
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          content: const Text('File copied to clipboard'),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text('OK'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
       );
     }
   }
@@ -76,12 +86,12 @@ class _HistoryPageState extends State<HistoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Only one Scaffold is needed for all platforms
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('History'),
+    // Always use CupertinoPageScaffold
+    return CupertinoPageScaffold(
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('History'),
       ),
-      body: _buildBodyContent(),
+      child: _buildBodyContent(),
     );
   }
 
@@ -90,46 +100,25 @@ class _HistoryPageState extends State<HistoryPage> {
       itemCount: _saidTextItems.length,
       itemBuilder: (context, index) {
         final item = _saidTextItems[index];
-        final dateString = DateTime.fromMillisecondsSinceEpoch(item.date ?? 0)
-            .toLocal()
-            .toString()
-            .substring(0, 16); // e.g. "YYYY-MM-DD HH:MM"
+        final dateString =
+            DateTime.fromMillisecondsSinceEpoch(item.date ?? 0)
+                .toLocal()
+                .toString()
+                .substring(0, 16); // e.g. "YYYY-MM-DD HH:MM"
 
-        // Use Dismissible for all platforms
-        return Dismissible(
-          key: ValueKey(item.id!),
-          direction: DismissDirection.horizontal,
-          background: Container(
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            color: Colors.blue,
-            child: const Icon(
-              Icons.share,
-              color: Colors.white,
-            ),
-          ),
-          secondaryBackground: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            color: Colors.red,
-            child: const Icon(
-              Icons.delete,
-              color: Colors.white,
-            ),
-          ),
-          confirmDismiss: (direction) async {
-            if (direction == DismissDirection.startToEnd) {
+        return GestureDetector(
+          onHorizontalDragEnd: (details) async {
+            if (details.primaryVelocity! > 0) { // Swipe right (Share)
               if (item.audioFilePath != null) {
                 await _shareFile(item.audioFilePath!);
               }
-              return false;
-            } else {
-              return await _deleteSaidTextItem(index);
+            } else if (details.primaryVelocity! < 0) { // Swipe left (Delete)
+              await _deleteSaidTextItem(index);
             }
           },
-          child: ListTile(
-            key: ValueKey(item),
-            leading: const Icon(Icons.speaker_phone),
+          child: CupertinoListTile(
+            key: ValueKey(item.id!), // Use item.id for a stable key
+            leading: const Icon(CupertinoIcons.speaker_2), // Cupertino icon
             title: Text(convertToUserFriendlyTags(item.saidText ?? '')),
             subtitle: Text(dateString),
             onTap: item.audioFilePath != null
