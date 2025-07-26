@@ -77,6 +77,22 @@ class SaidTextDao {
     return null;
   }
 
+  Future<SaidTextItem?> getItemByTextAndVoice(String text, String voiceName, double pitch, double speed) async {
+    final db = await _database.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'SaidTextItem',
+      where: 'saidText = ? AND voiceName = ? AND pitch = ? AND speed = ?',
+      whereArgs: [text, voiceName, pitch, speed],
+      orderBy: 'date DESC', // Get the most recent entry if multiple exist
+      limit: 1,
+    );
+    if (maps.isNotEmpty) {
+      return SaidTextItem.fromMap(maps.first);
+    }
+    return null;
+  }
+
+
   Future<List<String>> getAllSaidTexts() async {
     final db = await _database.database;
     final List<Map<String, dynamic>> maps = await db.query(
@@ -87,5 +103,5 @@ class SaidTextDao {
     return maps.map((map) => map['saidText'] as String).toList();
   }
 
-  // ... other methods
+
 }

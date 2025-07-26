@@ -1,36 +1,29 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:wingmate/models/voice_model.dart';
-import 'dart:math' as math;
-
-import 'package:wingmate/ui/fetch_voices_page.dart';
-import 'package:wingmate/services/tts/azure_text_to_speech.dart';
-import 'package:wingmate/dialogs/profile_dialog.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:hive/hive.dart';
-import 'package:wingmate/utils/app_database.dart';
-
-import 'package:wingmate/utils/speech_service_config.dart';
-import 'package:wingmate/utils/speech_item.dart';
-import 'package:wingmate/utils/speech_item_dao.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
-import 'package:wingmate/ui/history_page.dart';
+import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 
-import 'lib/utils/said_text_dao.dart';
-
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/foundation.dart'
-  show defaultTargetPlatform, TargetPlatform;
-import 'package:wingmate/utils/subscription_manager.dart';
-import 'package:wingmate/utils/save_message_dialog_helper.dart';
-import 'package:wingmate/utils/full_screen_text_view.dart';
-import 'package:http/http.dart' as http;
+import 'package:wingmate/data/app_database.dart';
+import 'package:wingmate/data/ui_settings.dart';
+import 'package:wingmate/data/ui_settings_dao.dart';
+import 'package:wingmate/dialogs/profile_dialog.dart';
+import 'package:wingmate/models/voice_model.dart';
+import 'package:wingmate/services/tts/azure_text_to_speech.dart';
+import 'package:wingmate/services/subscription_manager.dart';
+import 'package:wingmate/data/said_text_dao.dart';
+import 'package:wingmate/config/speech_service_config.dart';
+import 'package:wingmate/ui/fetch_voices_page.dart';
+import 'package:wingmate/ui/history_page.dart';
+import 'package:wingmate/ui/save_message_dialog.dart';
 
 class MainPage extends StatefulWidget {
   final String speechServiceEndpoint;
@@ -56,7 +49,7 @@ class _MainPageState extends State<MainPage> {
   bool isPlaying = false;
   bool isSomeFolderSelected = false;
   int currentFolderId = -1;
-  
+  UiSettings? _currentUiSettings;
 
   AzureTts? azureTts;
   final SpeechItemDao _speechItemDao = SpeechItemDao(AppDatabase());
@@ -68,24 +61,45 @@ class _MainPageState extends State<MainPage> {
 
   @override
   void initState() {
-  super.initState();
-  if (_isMobilePlatform()) {
-    _subscriptionManager = SubscriptionManager(
-    onSubscriptionStatusChanged: (isSubscribed) async {
-      setState(() {
-      _isSubscribed = isSubscribed;
-      });
-      if (isSubscribed) {
-      await _fetchAzureSubscriptionDetails();
-      }
-    },
-    );
-    _subscriptionManager.initialize();
+    super.initState();
+    _loadUiSettings();
+    if (_isMobilePlatform()) {
+      _subscriptionManager = SubscriptionManager(
+        onSubscriptionStatusChanged: (isSubscribed) async {
+          setState(() {
+            _isSubscribed = isSubscribed;
+          });
+          if (isSubscribed) {
+            await _fetchAzureSubscriptionDetails();
+          }
+        },
+      );
+      _subscriptionManager.initialize();
+    }
+    _initializeAzureTts();
+    _initializeAudioPlayer();
+    _loadItems();
+    _watchIsPlaying();
   }
-  _initializeAzureTts();
-  _initializeAudioPlayer();
-  _loadItems();
-  _watchIsPlaying();
+
+  void _loadUiSettings() async {
+    final uiSettingsDao = UiSettingsDao(Hive.box('settings'));
+    var settings = await uiSettingsDao.getByName('default');
+    if (settings == null) {
+      settings = UiSettings(
+        name: 'default',
+        themeMode: ThemeMode.system,
+        fontSize: 20.0,
+        fieldSize: 5.0,
+        phraseFontSize: 16.0,
+        phraseWidth: 100.0,
+        phraseHeight: 50.0,
+      );
+      await uiSettingsDao.insert(settings);
+    }
+    setState(() {
+      _currentUiSettings = settings;
+    });
   }
 
   bool _isMobilePlatform() {
@@ -429,7 +443,7 @@ class _MainPageState extends State<MainPage> {
       children: [
       Expanded(child: _buildCupertinoReorderableListView()),
       _buildCupertinoXmlShortcutsRow(),
-      _buildCupertinoMessageInputRow(),
+      _buildCupertinoMessageInputRow(_currentUiSettings!),
       // _buildFinishSentenceButton(), // Add the new button here
       // _buildUndoButton(), // Add the undo button here
       ],
@@ -455,7 +469,7 @@ class _MainPageState extends State<MainPage> {
     children: [
       Expanded(child: _buildReorderableListView()),
       _buildXmlShortcutsRow(),
-      _buildMessageInputRow(),
+      _buildMessageInputRow(_currentUiSettings!),
       // _buildFinishSentenceButton(), // Add the new button here
       // _buildUndoButton(), // Add the undo button here
     ],
@@ -477,9 +491,16 @@ class _MainPageState extends State<MainPage> {
       Navigator.push(
       context,
       CupertinoPageRoute( // Use CupertinoPageRoute
-        builder: (context) => FetchVoicesPage(
-        endpoint: widget.speechServiceEndpoint,
-        subscriptionKey: widget.speechServiceKey,
+        builder: (context) => SettingsPage(
+          uiSettingsDao: UiSettingsDao(Hive.box('settings')),
+          onSettingsSaved: (settings) {
+            setState(() {
+              _currentUiSettings = settings;
+            });
+          },
+          speechServiceEndpoint: widget.speechServiceEndpoint,
+          speechServiceKey: widget.speechServiceKey,
+          onSaveSettings: widget.onSaveSettings,
         ),
       ),
       );
@@ -513,9 +534,16 @@ class _MainPageState extends State<MainPage> {
       Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FetchVoicesPage(
-        endpoint: widget.speechServiceEndpoint,
-        subscriptionKey: widget.speechServiceKey,
+        builder: (context) => SettingsPage(
+          uiSettingsDao: UiSettingsDao(Hive.box('settings')),
+          onSettingsSaved: (settings) {
+            setState(() {
+              _currentUiSettings = settings;
+            });
+          },
+          speechServiceEndpoint: widget.speechServiceEndpoint,
+          speechServiceKey: widget.speechServiceKey,
+          onSaveSettings: widget.onSaveSettings,
         ),
       ),
       );
@@ -735,79 +763,36 @@ class _MainPageState extends State<MainPage> {
   );
 }
 
-  Padding _buildCupertinoMessageInputRow(){
+  Padding _buildCupertinoMessageInputRow(UiSettings uiSettings){
   return Padding(
     padding: const EdgeInsets.only(bottom: 16.0, left: 16.0, right: 16.0),
-    child: Row(
-    children: [
-      CupertinoButton(
-      onPressed: () {
+    child: MessageInputRow(
+      controller: _messageController,
+      focusNode: _messageFocusNode,
+      onClear: () {
         _messageController.clear();
       },
-      child: const Icon(CupertinoIcons.delete),
-      ),
-      Expanded(
-      child: CupertinoTextField(
-        controller: _messageController,
-        focusNode: _messageFocusNode,
-        minLines: 1,
-        maxLines: 5,
-        placeholder: 'Enter text',
-        decoration: BoxDecoration(
-        border: Border.all(color: CupertinoColors.lightBackgroundGray),
-        borderRadius: BorderRadius.circular(5.0),
-        ),
-        textInputAction: TextInputAction.done,
-        keyboardType: TextInputType.text,
-      ),
-      ),
-      CupertinoButton(
-      onPressed: _togglePlayPause,
-      child: Icon(isPlaying ? CupertinoIcons.pause : CupertinoIcons.play_arrow),
-      ),
-    ],
+      onPlayPause: _togglePlayPause,
+      isPlaying: isPlaying,
+      isCupertino: true,
+      uiSettings: uiSettings,
     ),
   );
   }
 
-  Padding _buildMessageInputRow() {
+  Padding _buildMessageInputRow(UiSettings uiSettings) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 16.0, left: 16.0, right: 16.0),
-    child: Row(
-    children: [
-      IconButton(
-      icon: Icon(Icons.delete),
-      onPressed: () {
+    child: MessageInputRow(
+      controller: _messageController,
+      focusNode: _messageFocusNode,
+      onClear: () {
         _messageController.clear();
       },
-      ),
-      Expanded(
-      child: TextField(
-        controller: _messageController,
-        focusNode: _messageFocusNode,
-        minLines: 1,
-        maxLines: 5,
-        decoration: InputDecoration(
-        labelText: 'Enter text',
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(5.0),
-        ),
-        focusedBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.blue, width: 2.0),
-        ),
-        enabledBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.grey, width: 1.0),
-        ),
-        ),
-        textInputAction: TextInputAction.done,
-        keyboardType: TextInputType.text,
-      ),
-      ),
-      IconButton(
-      icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-      onPressed: _togglePlayPause,
-      ),
-    ],
+      onPlayPause: _togglePlayPause,
+      isPlaying: isPlaying,
+      isCupertino: false,
+      uiSettings: uiSettings,
     ),
   );
   }

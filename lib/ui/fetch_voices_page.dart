@@ -1,24 +1,31 @@
+import 'package:wingmate/data/ui_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:hive/hive.dart';
 import 'package:wingmate/services/voice_settings.dart';
-import 'package:wingmate/utils/app_database.dart';
+import 'package:wingmate/data/app_database.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 
 import '../models/voice_model.dart';
 import '../services/voice_service.dart';
-import '../utils/voice_dao.dart';
-import '../utils/voice_item.dart';
+import '../data/voice_dao.dart';
+import 'package:wingmate/data/voice_item.dart';
+import 'package:wingmate/ui/main_page.dart';
+import 'package:wingmate/data/ui_settings.dart';
 
 class FetchVoicesPage extends StatefulWidget {
   final String endpoint;
   final String subscriptionKey;
+  final UiSettings uiSettings;
+  final Future<void> Function(String endpoint, String key, UiSettings uiSettings) onSaveSettings;
 
   const FetchVoicesPage({
     Key? key,
     required this.endpoint,
     required this.subscriptionKey,
+    required this.uiSettings,
+    required this.onSaveSettings,
   }) : super(key: key);
 
   @override
@@ -122,6 +129,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
       rateForSSML: rateForSSML,
     );
     await box.put('currentVoice', voice);
+    await widget.onSaveSettings(widget.endpoint, widget.subscriptionKey, widget.uiSettings);
   }
 
   // Loads voices from the database or fetches them from the API if needed.
@@ -366,6 +374,25 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
                               );
                             },
                           ),
+              ),
+              Align(
+                alignment: Alignment.bottomRight,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MainPage(
+                          speechServiceEndpoint: widget.endpoint,
+                          speechServiceKey: widget.subscriptionKey,
+                          uiSettings: widget.uiSettings,
+                          onSaveSettings: widget.onSaveSettings,
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Text('Next'),
+                ),
               ),
             ],
           );

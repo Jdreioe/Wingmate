@@ -1,4 +1,49 @@
 # Wingmate
+
+Wingmate is a Flutter-based AAC (Augmentative and Alternative Communication) application.
+
+## Project Structure
+
+The project is organized into the following directories:
+
+- `lib/`: Contains the main application code.
+  - `app.dart`: The main application widget (`MyApp`).
+  - `main.dart`: The main entry point of the application.
+  - `core/`: Core services and initialization logic.
+    - `app_initializer.dart`: Handles Firebase and Hive initialization.
+    - `platform_info.dart`: Platform detection logic.
+  - `config/`: Configuration-related classes.
+    - `speech_service_config.dart`: The speech service configuration model.
+    - `speech_service_config_adapter.dart`: The Hive adapter for the speech service configuration.
+  - `data/`: Data access objects (DAOs), database setup, and data models.
+    - `app_database.dart`: The database setup.
+    - `..._dao.dart`: Data access objects for different data models.
+    - `..._item.dart`: Data models.
+  - `dialogs/`: Dialogs used in the application.
+  - `l10n/`: Localization files.
+  - `models/`: Data models.
+  - `services/`: Business logic services.
+  - `ui/`: UI-related files.
+    - `pages/`: The pages of the application.
+    - `widgets/`: Reusable widgets.
+    - `helpers/`: UI helper classes.
+- `android/`: Android-specific files.
+- `ios/`: iOS-specific files.
+- `web/`: Web-specific files.
+- `linux/`: Linux-specific files.
+- `windows/`: Windows-specific files.
+- `macos/`: macOS-specific files.
+- `test/`: Test files.
+
+## Building the application
+
+To build the application, run the following command:
+
+```bash
+flutter build apk --debug
+```
+
+This will create a debug build of the application in `build/app/outputs/flutter-apk/app-debug.apk`.# Wingmate
 Wingmate is a Free and Open Source Software (FOSS) project aimed at providing an exceptional voice for people who cannot speak, using Azure Neural Voices.
 
 

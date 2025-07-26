@@ -1,88 +1,109 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:wingmate/models/voice_model.dart';
-import 'dart:math' as math;
-
-import 'package:wingmate/ui/fetch_voices_page.dart';
-import 'package:wingmate/services/tts/azure_text_to_speech.dart';
-import 'package:wingmate/dialogs/profile_dialog.dart';
 import 'package:hive/hive.dart';
-import 'package:wingmate/utils/app_database.dart';
-
-import 'package:wingmate/utils/speech_service_config.dart';
-import 'package:wingmate/ui/save_message_dialog.dart';
-import 'package:wingmate/utils/speech_item.dart';
-import 'package:wingmate/utils/speech_item_dao.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
-import 'package:wingmate/ui/history_page.dart';
-import 'package:share_plus/share_plus.dart';
-
-import '../utils/said_text_dao.dart';
-
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, TargetPlatform;
-import 'package:wingmate/utils/subscription_manager.dart';
-import 'package:wingmate/utils/full_screen_text_view.dart';
-import 'package:http/http.dart' as http;
-
+import 'package:wingmate/data/app_database.dart';
+import 'package:wingmate/config/speech_service_config.dart';
+import 'package:wingmate/services/tts/azure_text_to_speech.dart';
 import '../services/main_page_service.dart';
-import '../widgets/xml_shortcuts_row.dart';
-import '../widgets/message_input_row.dart';
-import '../widgets/speech_item_list_tile.dart';
-
+import 'package:wingmate/widgets/styled_text_controller.dart';
+import 'package:wingmate/ui/main_page/widgets/category_selector.dart';
+import 'package:wingmate/ui/main_page/widgets/phrase_grid.dart';
+import 'package:wingmate/ui/main_page/widgets/playback_controls.dart';
+import 'package:wingmate/ui/main_page/widgets/text_input.dart' as custom_text_input;
+import 'package:wingmate/ui/main_page/widgets/top_bar.dart';
+import 'package:wingmate/ui/settings_page.dart';
+import 'package:wingmate/ui/history_page.dart';
+import 'package:wingmate/dialogs/add_phrase_dialog.dart';
+import 'package:wingmate/data/phrase_item.dart';
+import 'package:wingmate/data/category_item.dart';
+import 'package:wingmate/data/category_dao.dart';
+import 'package:wingmate/data/ui_settings_dao.dart';
+import 'package:wingmate/data/ui_settings.dart';
+import 'package:wingmate/data/phrase_item_dao.dart';
+import 'package:wingmate/data/said_text_dao.dart';
+import 'package:wingmate/services/subscription_manager.dart';
 class MainPage extends StatefulWidget {
   final String speechServiceEndpoint;
   final String speechServiceKey;
-  final Future<void> Function(String endpoint, String key) onSaveSettings;
+  final Future<void> Function(String endpoint, String key, UiSettings uiSettings) onSaveSettings;
+  final UiSettings uiSettings;
 
   const MainPage({
     Key? key,
     required this.speechServiceEndpoint,
     required this.speechServiceKey,
     required this.onSaveSettings,
+    required this.uiSettings,
   }) : super(key: key);
 
   @override
   _MainPageState createState() => _MainPageState();
 }
 
-class _MainPageState extends State<MainPage> {
+class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final MainPageService _service;
-  bool _isSubscribed = false;
-  late final SubscriptionManager _subscriptionManager;
+  late AzureTts _azureTts;
+  final StyledTextController _keyboardController = StyledTextController(
+      highlightColor: Colors.amber.shade400);
+  String _secondaryLanguage = 'es-ES'; // Default secondary language
+
+  late AnimationController _animationController;
+  late Animation<double> _animation;
+
+  bool _isTextFieldExpanded = false;
+
+  bool _isKeyboardVisible = false;
+  List<PhraseItem> _phraseItems = []; // New: List to hold phrase items
+  CategoryItem? _selectedCategory; // New: Currently selected category
+
+  String _lastUsed = '';
+
+  @override
+  void didChangeMetrics() {
+    final bottomInset = WidgetsBinding.instance.window.viewInsets.bottom;
+    final newValue = bottomInset > 0.0;
+    if (newValue != _isKeyboardVisible) {
+      setState(() {
+        _isKeyboardVisible = newValue;
+      });
+    }
+  }
+
+  late String _speechServiceEndpoint;
+  late String _speechServiceKey;
+  late UiSettings _currentUiSettings;
 
   @override
   void initState() {
     super.initState();
-    _initializeService();
-    if (_isMobilePlatform()) {
-      _subscriptionManager = SubscriptionManager(
-        onSubscriptionStatusChanged: (isSubscribed) async {
-          setState(() {
-            _isSubscribed = isSubscribed;
-          });
-          if (isSubscribed) {
-            await _fetchAzureSubscriptionDetails();
-          }
-        },
-      );
-      _subscriptionManager.initialize();
-    }
+    _speechServiceEndpoint = widget.speechServiceEndpoint;
+    _speechServiceKey = widget.speechServiceKey;
+    _currentUiSettings = widget.uiSettings;
+    WidgetsBinding.instance.addObserver(this);
+    _initializeService(_currentUiSettings);
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _animation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+
+    // NEW: Add listener to update UI on text change in keyboard mode
+    _keyboardController.addListener(() {
+      setState(() {});
+    });
+    _initializeAzureTts();
   }
 
-  void _initializeService() {
+  Future<void> _initializeService(UiSettings uiSettings) async {
     _service = MainPageService(
       messageController: TextEditingController(),
       messageFocusNode: FocusNode(),
-      speechItemDao: SpeechItemDao(AppDatabase()),
+      phraseItemDao: PhraseItemDao(AppDatabase()),
       saidTextDao: SaidTextDao(AppDatabase()),
+      categoryDao: CategoryDao(AppDatabase()), // New: Pass CategoryDao
       subscriptionManager: SubscriptionManager(
         onSubscriptionStatusChanged: (isSubscribed) {},
       ),
@@ -92,302 +113,385 @@ class _MainPageState extends State<MainPage> {
       speechServiceEndpoint: widget.speechServiceEndpoint,
       speechServiceKey: widget.speechServiceKey,
       onSaveSettings: widget.onSaveSettings,
+      uiSettings: uiSettings,
     );
-    _service.initialize();
+    await _service.initialize();
+    await _loadPhraseItems();
+    await _loadCategories(); // New: Load categories on init
   }
 
-  bool _isMobilePlatform() {
-    return !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.iOS ||
-            defaultTargetPlatform == TargetPlatform.android);
-  }
-
-  Future<void> _fetchAzureSubscriptionDetails() async {
-    final response = await http.post(
-      Uri.parse('https://your-server-url/verify-subscription'),
-      body: jsonEncode({'purchaseToken': 'your-purchase-token'}),
-      headers: {'Content-Type': 'application/json'},
+  void _initializeAzureTts() {
+    _azureTts = AzureTts(
+      region: widget.speechServiceEndpoint,
+      subscriptionKey: widget.speechServiceKey,
+      settingsBox: Hive.box('settings'),
+      voiceBox: Hive.box('selectedVoice'),
+      context: context,
+      saidTextDao: SaidTextDao(AppDatabase()),
     );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      final subscriptionKey = data['subscriptionKey'];
-      final region = data['region'];
-      await widget.onSaveSettings(region, subscriptionKey);
-    } else {
-      debugPrint('Failed to fetch subscription details');
-    }
   }
+
+
+  
+
+  
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _service.dispose();
-    _subscriptionManager.dispose();
+    _keyboardController.dispose();
+    _azureTts.player.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Platform.isIOS
-        ? _buildCupertinoScaffold()
-        : _buildMaterialScaffold();
-  }
-
-  Widget _buildCupertinoScaffold() {
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(_service.isSomeFolderSelected
-            ? 'Folder'
-            : (AppLocalizations.of(context)?.appTitle ?? 'Title')),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: _handleLeadingIconPressed,
-          child: Icon(_service.isSomeFolderSelected
-              ? CupertinoIcons.back
-              : CupertinoIcons.person),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: _buildCupertinoAppBarActions(),
-        ),
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Expanded(child: _buildCupertinoReorderableListView()),
-            XmlShortcutsRow(
-              onAddTag: _service.addXmlTag,
-              isCupertino: true,
-            ),
-            MessageInputRow(
-              controller: _service.messageController,
-              focusNode: _service.messageFocusNode,
-              onClear: () => _service.messageController.clear(),
-              onPlayPause: _service.togglePlayPause,
-              isPlaying: _service.isPlaying,
-              isCupertino: true,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMaterialScaffold() {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_service.isSomeFolderSelected
-            ? 'Folder'
-            : (AppLocalizations.of(context)?.appTitle ?? 'Title')),
-        centerTitle: true,
-        leading: IconButton(
-          icon: Icon(_service.isSomeFolderSelected
-              ? Icons.arrow_back
-              : Icons.person),
-          onPressed: _handleLeadingIconPressed,
-        ),
-        actions: _buildMaterialAppBarActions(),
+      body: SafeArea(
+        child: _buildPrototypeUI(),
       ),
-      body: Column(
-        children: [
-          Expanded(child: _buildReorderableListView()),
-          XmlShortcutsRow(
-            onAddTag: _service.addXmlTag,
+      bottomNavigationBar: BottomNavigationBar(
+        items: const <BottomNavigationBarItem>[
+          BottomNavigationBarItem(
+            icon: Icon(Icons.grid_view),
+            label: 'Phrases',
           ),
-          MessageInputRow(
-            controller: _service.messageController,
-            focusNode: _service.messageFocusNode,
-            onClear: () => _service.messageController.clear(),
-            onPlayPause: _service.togglePlayPause,
-            isPlaying: _service.isPlaying,
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings_voice),
+            label: 'Voice settings',
           ),
         ],
       ),
     );
   }
 
-  List<Widget> _buildCupertinoAppBarActions() {
-    return [
-      if (!_isSubscribed && _isMobilePlatform())
-        CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => _subscriptionManager.showSubscriptionDialog(context),
-          child: const Icon(CupertinoIcons.lock),
-        ),
-      CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: () {
-          Navigator.push(
-            context,
-            CupertinoPageRoute(
-              builder: (context) => FetchVoicesPage(
-                endpoint: widget.speechServiceEndpoint,
-                subscriptionKey: widget.speechServiceKey,
+  Widget _buildPrototypeUI() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Column(
+        children: [
+          TopBar(
+            onWrapWithLangTag: _wrapWithLangTag,
+            onHistoryPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => HistoryPage(),
+                ),
+              );
+            },
+            onSettingsPressed: () {
+              showGeneralDialog(
+                context: context,
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    SettingsPage(
+                      uiSettingsDao: UiSettingsDao(AppDatabase()),
+                      onSettingsSaved: (newUiSettings) {
+                        widget.onSaveSettings(
+                          widget.speechServiceEndpoint,
+                          widget.speechServiceKey,
+                          newUiSettings,
+                        );
+                      },
+                      speechServiceEndpoint: widget.speechServiceEndpoint,
+                      speechServiceKey: widget.speechServiceKey,
+                      onSaveSettings: widget.onSaveSettings,
+                    ),
+                transitionDuration: const Duration(milliseconds: 300),
+                transitionBuilder: (context, animation, secondaryAnimation, child) {
+                  return SlideTransition(
+                    position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(animation),
+                    child: child,
+                  );
+                },
+              );
+            },
+            secondaryLanguageSelector: _buildSecondaryLanguageSelector(),
+          ),
+          const SizedBox(height: 8),
+          const SizedBox(height: 8),
+          AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) {
+              final int maxLines = _isKeyboardVisible ? 5 : 8;
+
+              return custom_text_input.TextInput(
+                controller: _keyboardController,
+                isExpanded: _isTextFieldExpanded,
+                animation: _animation,
+                maxLines: maxLines,
+                uiSettings: widget.uiSettings,
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          PlaybackControls(
+            isExpanded: _isTextFieldExpanded,
+            onPlayPressed: _speakFromInput,
+            onStopPressed: _stopPlayback,
+            onReplayPressed: _onReplayPressed,
+            onToggleExpand: () {
+              setState(() {
+                _isTextFieldExpanded = !_isTextFieldExpanded;
+                if (_isTextFieldExpanded) {
+                  _animationController.forward();
+                } else {
+                  _animationController.reverse();
+                }
+              });
+            },
+            isTextEmpty: _keyboardController.text.isEmpty,
+            isLastUsedEmpty: _lastUsed.isEmpty,
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              layoutBuilder: (Widget? currentChild,
+                  List<Widget> previousChildren) {
+                return Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    ...previousChildren,
+                    if (currentChild != null) currentChild,
+                  ],
+                );
+              },
+              child: _isTextFieldExpanded && _isKeyboardVisible
+                  ? Container(key: const ValueKey('empty'))
+                  : Column(
+                key: const ValueKey('grid'),
+                children: [
+                  CategorySelector(
+                    onAddCategoryPressed: _addCategory,
+                    categories: _categories,
+                    onCategorySelected: (category) {
+                      setState(() {
+                        _selectedCategory = category;
+                      });
+                      _loadPhraseItems(); // Reload phrases for the selected category
+                    },
+                  ),
+                  SizedBox(height: 8),
+                  Expanded(
+                      child: PhraseGrid(
+                        onPhraseSelected: _addTextToInput,
+                        onPhraseLongPressed: _editPhrase, // New: Pass the edit function
+                        uiSettings: widget.uiSettings,
+                        phraseItems: _phraseItems,
+                      )),
+                ],
               ),
             ),
-          );
-        },
-        child: const Icon(CupertinoIcons.settings),
+          ),
+        ],
       ),
-      CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: () => showSaveMessageDialog(
-            context, _service.messageController.text, _service.handleSaveMessage),
-        child: const Icon(CupertinoIcons.add),
-      ),
-      CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: () => showFullScreenText(context, _service.messageController.text),
-        child: const Icon(CupertinoIcons.fullscreen),
-      ),
-    ];
+    );
   }
 
-  List<Widget> _buildMaterialAppBarActions() {
-    return [
-      if (!_isSubscribed && _isMobilePlatform())
-        IconButton(
-          icon: const Icon(Icons.lock),
-          onPressed: () => _subscriptionManager.showSubscriptionDialog(context),
+
+  // --- Helper Methods for UI Logic ---
+
+  // --- NEW: Methods for secondary language feature ---
+
+  Widget _buildSecondaryLanguageSelector() {
+    return DropdownButton<String>(
+      value: _secondaryLanguage,
+      onChanged: (String? newValue) {
+        if (newValue != null) {
+          setState(() {
+            _secondaryLanguage = newValue;
+          });
+        }
+      },
+      underline: Container(),
+      items: const [
+        DropdownMenuItem(value: 'en-US', child: Text('English')),
+        DropdownMenuItem(value: 'es-ES', child: Text('Español')),
+        DropdownMenuItem(value: 'da-DK', child: Text('Dansk')),
+        DropdownMenuItem(value: 'fr-FR', child: Text('Français')),
+      ],
+    );
+  }
+
+  void _wrapWithLangTag() {
+    final text = _keyboardController.text;
+    final selection = _keyboardController.selection;
+    if (!selection.isValid || selection.isCollapsed) return;
+
+    final selectedText = selection.textInside(text);
+    final newText =
+        '<lang xml:lang="$_secondaryLanguage">$selectedText</lang>';
+
+    _keyboardController.text = text.replaceRange(
+      selection.start,
+      selection.end,
+      newText,
+    );
+    // Move cursor after the inserted tag
+    _keyboardController.selection = TextSelection.fromPosition(
+      TextPosition(offset: selection.start + newText.length),
+    );
+  }
+
+  void _addTextToInput(String text) {
+    if (text == 'ADD_PHRASE_BUTTON') {
+      _addPhrase();
+      return;
+    }
+
+    final selection = _keyboardController.selection;
+    final currentText = _keyboardController.text;
+
+    if (selection.start == -1 || selection.end == -1) {
+      // No valid selection, append the text to the end.
+      final newText = currentText + text;
+      _keyboardController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.fromPosition(
+          TextPosition(offset: newText.length),
         ),
-      IconButton(
-        icon: const Icon(Icons.settings),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => FetchVoicesPage(
-                endpoint: widget.speechServiceEndpoint,
-                subscriptionKey: widget.speechServiceKey,
-              ),
+      );
+    } else {
+      // Valid selection, replace the selected range.
+      final newText = currentText.replaceRange(
+          selection.start, selection.end, text);
+      _keyboardController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.fromPosition(
+          TextPosition(offset: selection.start + text.length),
+        ),
+      );
+    }
+  }
+
+  void _speakFromInput() {
+    final text = _keyboardController.text;
+    if (text
+        .trim()
+        .isNotEmpty) {
+      _azureTts.speakText(text);
+    }
+  }
+
+  void _stopPlayback() {
+    _azureTts.player.stop();
+  }
+
+  void _onReplayPressed() {
+    setState(() {
+      if (_keyboardController.text.isNotEmpty) {
+        _lastUsed = _keyboardController.text;
+        _keyboardController.clear();
+      } else if (_lastUsed.isNotEmpty) {
+        _keyboardController.text = _lastUsed;
+        _lastUsed = '';
+      }
+    });
+  }
+
+  void _addPhrase() async {
+    final categories = await _service.categoryDao.getAll();
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AddPhraseDialog(
+          categories: categories,
+          onSave: (newPhrase) async {
+            await _service.phraseItemDao.insert(newPhrase);
+            _loadPhraseItems(); // Refresh the PhraseGrid
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _loadPhraseItems() async {
+    debugPrint('Loading phrase items...');
+    List<PhraseItem> items;
+    if (_selectedCategory != null) {
+      items = await _service.phraseItemDao.getAllItemsInCategory(_selectedCategory!.id!); // Load phrases for selected category
+    } else {
+      items = await _service.phraseItemDao.getAll(); // Load all phrases if no category selected
+    }
+    debugPrint('Fetched ${items.length} items from DAO.');
+    setState(() {
+      _phraseItems = items.where((item) => item.isCategory == false).toList(); // Filter out categories
+      debugPrint('Filtered phrase items: ${_phraseItems.length}');
+      // Add a special PhraseItem for the "Add Phrase" button
+      _phraseItems.add(PhraseItem(
+        name: '+',
+        text: 'Add Phrase',
+        isCategory: false, // Treat as a regular item for display purposes
+        id: -1, // A unique ID to identify it as the add button
+      ));
+      debugPrint('Total phrase items after adding button: ${_phraseItems.length}');
+    });
+  }
+
+  void _addCategory() async {
+    final newCategoryName = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: const Text('Add New Category'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(labelText: 'Category Name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), // Cancel
+              child: const Text('Cancel'),
             ),
-          );
-        },
-      ),
-      IconButton(
-        icon: const Icon(Icons.add),
-        onPressed: () => showSaveMessageDialog(
-            context, _service.messageController.text, _service.handleSaveMessage),
-      ),
-      IconButton(
-        icon: const Icon(Icons.fullscreen),
-        onPressed: () => showFullScreenText(context, _service.messageController.text),
-      ),
-    ];
-  }
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()), // Save
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
 
-  void _handleLeadingIconPressed() {
-    if (_service.isSomeFolderSelected) {
-      if (_service.currentFolderId == -1) {
-        _service.selectRootFolder();
-      } else {
-        _service.speechItemDao.getItemById(_service.currentFolderId).then((currentFolder) {
-          if (currentFolder != null && currentFolder.parentId != null) {
-            _service.selectFolder(currentFolder.parentId!, currentFolder.name!);
-          } else {
-            _service.selectRootFolder();
-          }
-        });
-      }
-    } else {
-      showProfileDialog(
-        context,
-        widget.speechServiceEndpoint,
-        widget.speechServiceKey,
-        widget.onSaveSettings,
+    if (newCategoryName != null && newCategoryName.isNotEmpty) {
+      final newCategory = CategoryItem(
+        name: newCategoryName,
+        language: _secondaryLanguage, // Use the currently selected language
+        // You can add color and icon selection here later
       );
+      await _service.categoryDao.insert(newCategory);
+      // Refresh categories in CategorySelector
+      _loadCategories();
+      debugPrint('New category added: $newCategoryName');
     }
   }
 
-  Widget _buildCupertinoReorderableListView() {
-    return ReorderableListView.builder(
-      onReorder: _service.reorderItems,
-      itemBuilder: (context, index) => Dismissible(
-        key: ValueKey(_service.items[index]),
-        direction: DismissDirection.horizontal,
-        background: _buildDismissibleBackground(
-            Alignment.centerLeft, Colors.blue, CupertinoIcons.share),
-        secondaryBackground: _buildDismissibleBackground(
-            Alignment.centerRight, Colors.red, CupertinoIcons.delete),
-        confirmDismiss: (direction) => _handleDismiss(direction, _service.items[index]),
-        child: SpeechItemListTile(
-          item: _service.items[index],
-          isCupertino: true,
-          onTap: () => _handleItemTap(_service.items[index]),
-        ),
-      ),
-      itemCount: _service.items.length,
+  void _editPhrase(PhraseItem phraseItem) async {
+    final categories = await _service.categoryDao.getAll();
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AddPhraseDialog(
+          phraseItem: phraseItem, // Pass the existing phrase item for editing
+          categories: categories,
+          onSave: (updatedPhrase) async {
+            await _service.phraseItemDao.updateItem(updatedPhrase);
+            _loadPhraseItems(); // Refresh the PhraseGrid
+          },
+        );
+      },
     );
   }
 
-  Widget _buildReorderableListView() {
-    return ReorderableListView(
-      onReorder: _service.reorderItems,
-      children: _service.items.map((item) => Dismissible(
-        key: ValueKey(item),
-        direction: DismissDirection.horizontal,
-        background: _buildDismissibleBackground(
-            Alignment.centerLeft, Colors.blue, Icons.share),
-        secondaryBackground: _buildDismissibleBackground(
-            Alignment.centerRight, Colors.red, Icons.delete),
-        confirmDismiss: (direction) => _handleDismiss(direction, item),
-        child: SpeechItemListTile(
-          item: item,
-          onTap: () => _handleItemTap(item),
-        ),
-      )).toList(),
-    );
-  }
+  List<CategoryItem> _categories = [];
 
-  Container _buildDismissibleBackground(
-      Alignment alignment, Color color, IconData icon) {
-    return Container(
-      alignment: alignment,
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      color: color,
-      child: Icon(icon, color: Colors.white),
-    );
-  }
-
-  Future<bool> _handleDismiss(DismissDirection direction, dynamic item) async {
-    if (direction == DismissDirection.startToEnd) {
-      if (item is SpeechItem && item.filePath != null) {
-        await _shareFile(item.filePath!);
-      }
-      return false;
-    } else {
-      final index = _service.items.indexOf(item);
-      return await _service.deleteItem(index);
-    }
-  }
-
-  Future<void> _shareFile(String filePath) async {
-    try {
-      await Share.shareXFiles([XFile(filePath)]);
-    } catch (e) {
-      final file = File(filePath);
-      final bytes = await file.readAsBytes();
-      await Clipboard.setData(ClipboardData(text: base64Encode(bytes)));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File copied to clipboard')),
-      );
-    }
-  }
-
-  void _handleItemTap(dynamic item) {
-    if (item is String && item == 'History') {
-      Navigator.push(
-        context,
-        Platform.isIOS
-            ? CupertinoPageRoute(builder: (context) => HistoryPage())
-            : MaterialPageRoute(builder: (context) => HistoryPage()),
-      );
-    } else if (item is SpeechItem) {
-      if (item.isFolder!) {
-        _service.selectFolder(item.id!, item.name!);
-      } else {
-        _service.playSpeechItem(item);
-      }
-    }
+  Future<void> _loadCategories() async {
+    final loadedCategories = await _service.categoryDao.getAll();
+    setState(() {
+      _categories = loadedCategories;
+    });
   }
 }

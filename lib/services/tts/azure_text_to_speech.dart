@@ -1,17 +1,17 @@
 import 'dart:io';
+import 'dart:typed_data';
 
-
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
+import 'package:wingmate/data/phrase_item.dart';
 import 'package:wingmate/models/voice_model.dart';
-import 'package:wingmate/utils/app_database.dart';
-import 'package:wingmate/utils/said_text_dao.dart';
-import 'package:wingmate/utils/said_text_item.dart';
-import 'package:hive/hive.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'package:wingmate/utils/speech_item.dart';
-import 'package:wingmate/utils/speech_item_dao.dart';
+import 'package:wingmate/data/said_text_dao.dart'; // Keep this import
+import 'package:wingmate/data/said_text_item.dart'; // Keep this import
+import 'package:wingmate/data/phrase_item.dart'; // Keep this import
 
 /// A service class for handling Azure Text-to-Speech functionality.
 /// This class manages the conversion of text to speech using Azure's TTS service,
@@ -19,42 +19,33 @@ import 'package:wingmate/utils/speech_item_dao.dart';
 class AzureTts {
   final String subscriptionKey;
   final String region;
-  final Box<dynamic> settingsBox;
-  final TextEditingController messageController;
-  final Box<dynamic> voiceBox;
-  final player = AudioPlayer();
+  final Box settingsBox;
+  final Box voiceBox;
   final BuildContext context;
-
-  // Functions to get active profile settings
-  final Future<String?> Function()? getActiveVoiceName;
-  final Future<String?> Function()? getActiveLanguageCode;
-  final Future<double?> Function()? getActiveSpeechRate;
-  final Future<double?> Function()? getActivePitch;
+  final AudioPlayer player = AudioPlayer();
+  final SaidTextDao saidTextDao;
+  final Uuid _uuid = const Uuid();
 
   /// Creates a new instance of AzureTts.
   ///
   /// [subscriptionKey] - The Azure subscription key for authentication
   /// [region] - The Azure region endpoint
   /// [settingsBox] - Hive box for storing settings
-  /// [messageController] - Controller for managing text input
   /// [voiceBox] - Hive box for storing voice settings
   /// [context] - BuildContext for showing error messages
-  /// [getActiveVoiceName] - Function to get the active profile's voice name
-  /// [getActiveLanguageCode] - Function to get the active profile's language code
-  /// [getActiveSpeechRate] - Function to get the active profile's speech rate
-  /// [getActivePitch] - Function to get the active profile's pitch
   AzureTts({
     required this.subscriptionKey,
     required this.region,
     required this.settingsBox,
-    required this.messageController,
     required this.voiceBox,
     required this.context,
-    this.getActiveVoiceName,
-    this.getActiveLanguageCode,
-    this.getActiveSpeechRate,
-    this.getActivePitch,
-  });
+    required this.saidTextDao,
+  }) {
+    // Initialize the player complete listener in the constructor
+    player.onPlayerComplete.listen((event) {
+      settingsBox.put('isPlaying', false);
+    });
+  }
 
   /// Pauses the current audio playback.
   Future<void> pause() async {
@@ -66,202 +57,119 @@ class AzureTts {
     }
   }
 
-  /// Generates SSML and converts it to speech using Azure TTS service.
-  ///
-  /// [text] - The text to convert to speech
-  /// [useProfileSettings] - Whether to use settings from ProfileService (defaults to true)
-  Future<void> generateSSML(String text, {bool useProfileSettings = true}) async {
+  /// Speaks the given text, using global settings and caching.
+  /// It first checks the cache, then generates and saves if not found.
+  Future<void> speakText(String text) async {
+    if (text.isEmpty) {
+      _showError('Nothing to speak!', 'Please enter some text.');
+      return;
+    }
+
     try {
-      final voice = await _getCurrentVoice(useProfileSettings: useProfileSettings);
-      final ssml = await _generateSSMLContent(text, voice, useProfileSettings: useProfileSettings);
-      await _processSSML(ssml, voice, text);
+      final voice = voiceBox.get('currentVoice') as Voice?;
+      final voiceName = voice?.name ?? 'en-US-JennyNeural';
+      final pitch = settingsBox.get('pitch', defaultValue: 1.0) as double;
+      final rate = settingsBox.get('rate', defaultValue: 1.0) as double;
+
+      // 1. Check cache first
+      final cachedItem = await saidTextDao.getItemByTextAndVoice(text, voiceName, pitch, rate);
+      if (cachedItem?.audioFilePath != null && File(cachedItem!.audioFilePath!).existsSync()) {
+        debugPrint("Playing from cache: ${cachedItem.audioFilePath}");
+        await play(DeviceFileSource(cachedItem.audioFilePath!));
+        return;
+      }
+
+      // 2. If not in cache, generate, save, and play
+      debugPrint("Cache miss. Generating new audio for: $text");
+      await _generateAndPlay(text, voice, pitch, rate);
     } catch (e) {
       _handleError(e);
     }
   }
 
-  /// Generates SSML for a specific speech item.
-  ///
-  /// [speechItem] - The speech item to convert to speech
-  /// [useProfileSettings] - Whether to use settings from ProfileService (defaults to true)
-  Future<void> generateSSMLForItem(SpeechItem speechItem, {bool useProfileSettings = true}) async {
+  /// Generates audio for a given text and voice configuration, then plays it without caching.
+  /// Ideal for testing voice settings.
+  Future<void> testVoice(String text, Voice voice) async {
+    if (text.isEmpty) return;
     try {
-      // Pass useProfileSettings to _getCurrentVoice and _generateSSMLContent
-      final voice = await _getCurrentVoice(useProfileSettings: useProfileSettings);
-      final ssml = await _generateSSMLContent(speechItem.text ?? '', voice, useProfileSettings: useProfileSettings);
-      await _processSSMLForItem(ssml, speechItem);
+      final audioBytes = await _generateAudio(text, voice, voice.pitch, voice.rate);
+      if (audioBytes != null) {
+        // Play directly from memory without saving to a file
+        await play(BytesSource(audioBytes));
+      }
     } catch (e) {
       _handleError(e);
     }
   }
 
-  /// Plays audio from a file source.
-  /// 
-  /// [source] - The audio file source to play
-  Future<void> playText(DeviceFileSource source) async {
-    try {
-      await player.play(source);
-      settingsBox.put('isPlaying', true);
-      
-      player.onPlayerComplete.listen((event) {
-        settingsBox.put('isPlaying', false);
-      });
-    } catch (e) {
-      _showError('Failed to play audio', e.toString());
+  /// Generates and caches audio for a SpeechItem, returning the file path.
+  /// This is used for pre-caching audio for grid buttons.
+  Future<String?> generateAndCacheAudioForItem(PhraseItem item) async {
+    if (item.text == null || item.text!.isEmpty) {
+      return null;
     }
-  }
 
-  // Updated _getCurrentVoice to be async and use profile settings if available
-  Future<Voice> _getCurrentVoice({bool useProfileSettings = true}) async {
-    if (useProfileSettings &&
-        getActiveVoiceName != null &&
-        getActiveLanguageCode != null &&
-        getActiveSpeechRate != null &&
-        getActivePitch != null) {
-      final voiceName = await getActiveVoiceName!();
-      final languageCode = await getActiveLanguageCode!();
-      final speechRate = await getActiveSpeechRate!(); // Profile speechRate (e.g., 0.0 to 2.0)
-      final pitch = await getActivePitch!(); // Profile pitch (e.g., 0.0 to 2.0)
+    final voice = Voice(
+      name: item.voiceName ?? 'en-US-JennyNeural',
+      selectedLanguage: item.selectedLanguage ?? 'en-US',
+      pitch: item.pitch ?? 1.0, // Ensure non-null double
+      rate: item.rateForSsml ?? 1.0, // Ensure non-null double
+      supportedLanguages: [item.selectedLanguage ?? 'en-US'], // Assuming selected language is the only one relevant for this context
+      pitchForSSML: item.pitchForSsml?.toString() ?? 'medium', // Convert double? to String, provide default
+      rateForSSML: item.rateForSsml?.toString() ?? 'medium', // Convert double? to String, provide default
+    );
+    final pitch = item.pitch ?? 1.0;
+    final rate = item.rateForSsml ?? 1.0;
 
-      if (voiceName != null && languageCode != null) {
-        // Construct a Voice object from profile settings.
-        // Other fields like 'gender', 'displayName' are not directly in UserProfile.
-        // They might come from a full voice list if needed, or use defaults.
-        // pitchForSSML and rateForSSML will be derived from 'pitch' and 'speechRate'
-        // in _generateSSMLContent based on Azure's specific requirements.
-        return Voice(
-          name: voiceName,
-          selectedLanguage: languageCode, // Used for xml:lang
-          locale: languageCode, // Primary locale for the voice
-          pitch: pitch ?? 1.0, // Store the original profile pitch (0.0-2.0)
-          rate: speechRate ?? 1.0, // Store the original profile rate (0.0-2.0)
-          // The following are placeholders; actual SSML values are set in _generateSSMLContent
-          pitchForSSML: pitch ?? 1.0, 
-          rateForSSML: speechRate ?? 1.0,
-          displayName: voiceName, // Or a more descriptive name if available
-          gender: "", // Gender info isn't in UserProfile
+    try {
+      final audioBytes = await _generateAudio(item.text!, voice, pitch, rate);
+      if (audioBytes != null) {
+        final filePath = await _saveAudioToFile(audioBytes);
+        // Also add to SaidText cache for general history
+        final newItem = SaidTextItem(
+          saidText: item.text,
+          voiceName: voice.name,
+          pitch: pitch,
+          speed: rate,
+          audioFilePath: filePath,
+          date: DateTime.now().millisecondsSinceEpoch,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
         );
+        await saidTextDao.insertHistorik(newItem);
+        return filePath;
       }
+    } catch (e) {
+      _handleError(e);
     }
+    return null;
+  }
 
-    // Fallback to Hive voiceBox (legacy behavior or when not using profile settings)
-    final voice = voiceBox.get('currentVoice') as Voice?;
-    if (voice == null) {
-      // Fallback to a very basic default if nothing is found from Hive either
-      // This ensures the app can still function minimally.
-      return Voice(
-        name: "en-US-AriaNeural", // A common default voice
-        selectedLanguage: "en-US",
-        locale: "en-US",
-        pitch: 1.0,
-        rate: 1.0,
-        pitchForSSML: 1.0, // Default SSML pitch value
-        rateForSSML: 1.0, // Default SSML rate value
-        displayName: "Default Fallback Voice",
-        gender: "Female", // Common gender for AriaNeural
+  /// Private helper to generate audio, save it to a file and the database, then play it.
+  Future<void> _generateAndPlay(String text, Voice? voice, double pitch, double rate) async {
+    final audioBytes = await _generateAudio(text, voice, pitch, rate);
+    if (audioBytes != null) {
+      final filePath = await _saveAudioToFile(audioBytes);
+      
+      // Save metadata to DB for future cache hits
+      final newItem = SaidTextItem(
+        saidText: text,
+        voiceName: voice?.name ?? 'en-US-JennyNeural',
+        pitch: pitch,
+        speed: rate,
+        audioFilePath: filePath,
+        date: DateTime.now().millisecondsSinceEpoch,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
       );
-    }
-    return voice;
-  }
+      await saidTextDao.insertHistorik(newItem);
 
-  /// Generates SSML content for the given text and voice.
-  /// If useProfileSettings is true, it will try to use rate/pitch from ProfileService.
-  Future<String> _generateSSMLContent(String text, Voice voice, {bool useProfileSettings = true}) async {
-    String ssmlVoiceName = voice.name;
-    String ssmlLang = voice.selectedLanguage ?? "en-US"; // Fallback language for <speak> tag
-
-    // Determine effective rate and pitch
-    double currentRate = voice.rate; // This is the profile rate (e.g., 0.0-2.0) or Voice.rate
-    double currentPitch = voice.pitch; // This is the profile pitch (e.g., 0.0-2.0) or Voice.pitch
-
-    if (useProfileSettings) {
-      // Override with fresh profile values if available and useProfileSettings is true
-      if (getActiveSpeechRate != null) {
-        currentRate = await getActiveSpeechRate!() ?? currentRate;
-      }
-      if (getActivePitch != null) {
-        currentPitch = await getActivePitch!() ?? currentPitch;
-      }
-      // If getActiveVoiceName and getActiveLanguageCode were also to be dynamically fetched here:
-      // if (getActiveVoiceName != null) ssmlVoiceName = await getActiveVoiceName!() ?? ssmlVoiceName;
-      // if (getActiveLanguageCode != null) ssmlLang = await getActiveLanguageCode!() ?? ssmlLang;
-      // However, _getCurrentVoice already sets these on the 'voice' object for the current operation.
-    }
-
-    // Convert profile rate (e.g., 1.0 = normal, 0.5 = half, 2.0 = double) to SSML rate string.
-    // Azure TTS prosody rate is a multiplier.
-    String ssmlRateValue = currentRate.toStringAsFixed(2);
-
-    // Convert profile pitch (e.g., 1.0 = normal) to SSML pitch string.
-    // Azure TTS prosody pitch can be relative (e.g., "+20.00%", "-1st") or absolute.
-    // Let's use relative percentage: (pitch - 1.0) results in a multiplier.
-    // 0.0 -> -100% (interpreted as 0x speed, bad) or "x-low"
-    // 1.0 -> 0% (normal)
-    // 2.0 -> +100% (double pitch, also likely too high, typically up to +50% is used)
-    // A common mapping: Profile Pitch 1.0 = SSML Pitch 0%. Profile Pitch 1.5 = SSML Pitch +25%. Profile Pitch 0.5 = SSML Pitch -25%.
-    // So, (currentPitch - 1.0) / 2.0 * 100 to get a +/- 50% range from 0.0-2.0 profile range.
-    // (currentPitch - 1.0) * 50 gives a range of -50% to +50% for profile values 0.0 to 2.0
-    String ssmlPitchValue = "${((currentPitch - 1.0) * 50).toStringAsFixed(0)}%";
-
-    final rateProsodyTag = (currentRate != 1.0) ? '<prosody rate="$ssmlRateValue">' : '';
-    final endRateProsodyTag = (currentRate != 1.0) ? '</prosody>' : '';
-    final pitchProsodyTag = (currentPitch != 1.0) ? '<prosody pitch="$ssmlPitchValue">' : '';
-    final endPitchProsodyTag = (currentPitch != 1.0) ? '</prosody>' : '';
-    
-    // Ensure the primary language tag for <speak> is sensible.
-    final speakLang = ssmlLang.isNotEmpty ? ssmlLang : "en-US";
-
-    // Note: The original code had a <lang> tag inside <voice> if selectedLanguage was not empty.
-    // This is generally okay. Azure uses the voice's inherent language, but <lang> can override for a segment.
-    // For simplicity here, we're setting xml:lang on the <speak> tag and relying on the voice's natural language.
-    // If fine-grained control per-segment is needed, the <lang> tag logic could be re-introduced.
-
-    return '''
-      <speak version="1.0" xml:lang="$speakLang" xmlns="http://www.w3.org/2001/10/synthesis">
-        <voice name="$ssmlVoiceName">
-          $pitchProsodyTag
-            $rateProsodyTag
-              $text
-            $endRateProsodyTag
-          $pitchProsodyTag 
-        </voice>
-      </speak>
-    ''';
-  }
-
-  /// Processes SSML content and saves the resulting audio.
-  Future<void> _processSSML(String ssml, Voice voice, String text) async {
-    final response = await _makeAzureRequest(ssml);
-    
-    if (response.statusCode == 200) {
-      settingsBox.put('isPlaying', true);
-      final file = await _saveAudioFile(response.bodyBytes);
-      await _saveAudioRecord(text, file.path, voice);
-      await playText(DeviceFileSource(file.path));
-    } else {
-      throw Exception('Azure TTS request failed: ${response.statusCode}');
+      // Play the newly saved file
+      await play(DeviceFileSource(filePath));
     }
   }
-
-  /// Processes SSML content for a speech item.
-  Future<void> _processSSMLForItem(String ssml, SpeechItem speechItem) async {
-    final response = await _makeAzureRequest(ssml);
-    
-    if (response.statusCode == 200) {
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/audio_${DateTime.now().millisecondsSinceEpoch}.mp3');
-      await file.writeAsBytes(response.bodyBytes);
-
-      speechItem.filePath = file.path;
-      final speechItemDao = SpeechItemDao(AppDatabase());
-      await speechItemDao.updateItem(speechItem);
-    } else {
-      throw Exception('Azure TTS request failed: ${response.statusCode}');
-    }
-  }
-
-  /// Makes a request to the Azure TTS service.
-  Future<http.Response> _makeAzureRequest(String ssml) async {
+  
+  /// Private helper to make the actual Azure TTS API request.
+  Future<Uint8List?> _generateAudio(String text, Voice? voice, double pitch, double rate) async {
+    final ssml = _buildSsml(text, voice, pitch, rate);
     final url = Uri.parse('https://$region.tts.speech.microsoft.com/cognitiveservices/v1');
     final headers = {
       'Ocp-Apim-Subscription-Key': subscriptionKey,
@@ -270,55 +178,122 @@ class AzureTts {
       'User-Agent': 'WingmateCrossPlatform',
     };
 
-    return await http.post(url, headers: headers, body: ssml);
+    final response = await http.post(url, headers: headers, body: ssml);
+
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    } else {
+      debugPrint('Error from Azure TTS: ${response.statusCode} ${response.body}');
+      throw Exception('Azure TTS request failed: ${response.statusCode} - ${response.body}');
+    }
   }
 
-  /// Saves an audio file to the device.
-  Future<File> _saveAudioFile(List<int> audioData) async {
+  /// Private helper to save audio bytes to a unique file.
+  Future<String> _saveAudioToFile(Uint8List audioBytes) async {
     final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/temp_audio.mp3');
-    await file.writeAsBytes(audioData);
-    return file;
+    final fileName = '${_uuid.v4()}.mp3'; // Use UUID for unique filenames
+    final filePath = '${directory.path}/$fileName';
+    final file = File(filePath);
+    await file.writeAsBytes(audioBytes);
+    return file.path;
   }
 
-  /// Saves an audio record to the database.
-  Future<void> _saveAudioRecord(
-    String text,
-    String filePath,
-    Voice voice,
-  ) async {
-    final saidTextDao = SaidTextDao(AppDatabase());
-    final saidTextItem = SaidTextItem(
-      saidText: text,
-      audioFilePath: filePath,
-      date: DateTime.now().millisecondsSinceEpoch,
-      voiceName: voice.name,
-      pitch: voice.pitch,
-      speed: voice.rate,
-      position: 0,
-      primaryLanguage: voice.selectedLanguage,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
+  /// Private helper to build SSML content with pitch and rate.
+  String _buildSsml(String text, Voice? voice, double pitch, double rate) {
+    final voiceName = voice?.name ?? 'en-US-JennyNeural';
+    final defaultLanguage = voice?.selectedLanguage ?? 'en-US';
+
+    // Regex to find <lang xml:lang="...">...</lang> tags
+    final RegExp langTagRegex = RegExp(
+      r'<lang xml:lang="([^"]+)">(.*?)<\/lang>',
+      dotAll: true,
     );
 
-    await saidTextDao.insertHistorik(saidTextItem);
+    // Build the SSML by processing the text
+    final StringBuffer ssmlBuffer = StringBuffer();
+    ssmlBuffer.writeln('<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="$defaultLanguage">');
+    ssmlBuffer.writeln('  <voice name="$voiceName">');
+
+    int lastMatchEnd = 0;
+    for (final Match match in langTagRegex.allMatches(text)) {
+      // Add text before the current <lang> tag
+      if (match.start > lastMatchEnd) {
+        ssmlBuffer.writeln('    <prosody rate="${_getRateString(rate)}" pitch="${_getPitchString(pitch)}">');
+        ssmlBuffer.writeln('      ${text.substring(lastMatchEnd, match.start)}');
+        ssmlBuffer.writeln('    </prosody>');
+      }
+
+      final String langCode = match.group(1)!;
+      final String content = match.group(2)!;
+
+      // Add the content within the <lang> tag, applying pitch and rate
+      ssmlBuffer.writeln('    <lang xml:lang="$langCode">');
+      ssmlBuffer.writeln('      <prosody rate="${_getRateString(rate)}" pitch="${_getPitchString(pitch)}">');
+      ssmlBuffer.writeln('        $content');
+      ssmlBuffer.writeln('      </prosody>');
+      ssmlBuffer.writeln('    </lang>');
+
+      lastMatchEnd = match.end;
+    }
+
+    // Add any remaining text after the last <lang> tag
+    if (lastMatchEnd < text.length) {
+      ssmlBuffer.writeln('    <prosody rate="${_getRateString(rate)}" pitch="${_getPitchString(pitch)}">');
+      ssmlBuffer.writeln('      ${text.substring(lastMatchEnd)}');
+      ssmlBuffer.writeln('    </prosody>');
+    }
+
+    ssmlBuffer.writeln('  </voice>');
+    ssmlBuffer.writeln('</speak>');
+
+    final builtSsml = ssmlBuffer.toString();
+    debugPrint('Built SSML: $builtSsml');
+    return builtSsml;
+  }
+
+  String _getPitchString(double pitch) {
+    return (pitch >= 1.0) ? "+${((pitch - 1.0) * 50).toStringAsFixed(0)}%" : "-${((1.0 - pitch) * 50).toStringAsFixed(0)}%";
+  }
+
+  String _getRateString(double rate) {
+    return (rate >= 1.0) ? "+${((rate - 1.0) * 100).toStringAsFixed(0)}%" : "-${((1.0 - rate) * 100).toStringAsFixed(0)}%";
+  }
+
+  /// Plays audio from a given source.
+  Future<void> play(Source source) async {
+    try {
+      // Stop any current playback
+      await player.stop();
+      // Play the new source
+      await player.play(source);
+      settingsBox.put('isPlaying', true);
+    } catch (e) {
+      _handleError(e);
+    }
   }
 
   /// Handles errors that occur during TTS operations.
   void _handleError(dynamic error) {
+    debugPrint('TTS Error: $error'); // Log the full error
+    settingsBox.put('isPlaying', false); // Ensure isPlaying is reset on error
     if (error.toString().contains("Connection closed while receiving data")) {
       _showError('Message too long', 'Please try a shorter message');
+    } else if (error.toString().contains("400")) {
+      _showError('Invalid request', 'There was an issue with the speech parameters. Check voice, language, pitch, and rate settings.');
     } else {
-      _showError('Connection error', 'Please check your internet connection');
+      _showError('Connection error', 'Please check your internet connection or Azure settings.');
     }
   }
 
   /// Shows an error message to the user.
   void _showError(String title, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$title: $message'),
-        backgroundColor: Colors.red,
-      ),
-    );
+    if (context.mounted) { // Check if the widget is still mounted before showing SnackBar
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$title: $message'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

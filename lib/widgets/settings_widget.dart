@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:wingmate/services/voice_settings_service.dart';
-import 'package:wingmate/utils/speech_service_config.dart';
+import 'package:wingmate/config/speech_service_config.dart';
 
 class SettingsWidget extends StatelessWidget {
   final VoiceSettingsService service;

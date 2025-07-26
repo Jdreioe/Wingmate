@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:wingmate/models/voice_model.dart';
 import 'package:wingmate/services/voice_settings_service.dart';
-import 'package:wingmate/utils/speech_service_config.dart';
+import 'package:wingmate/config/speech_service_config.dart';
 import 'package:wingmate/widgets/voice_selection_widget.dart';
 import 'package:wingmate/widgets/settings_widget.dart';
 

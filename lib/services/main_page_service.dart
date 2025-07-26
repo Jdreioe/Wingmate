@@ -6,30 +6,33 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
+import 'package:wingmate/data/phrase_item_dao.dart';
 import 'package:wingmate/models/voice_model.dart';
 import 'package:wingmate/services/tts/azure_text_to_speech.dart';
-import 'package:wingmate/utils/app_database.dart';
-import 'package:wingmate/utils/said_text_dao.dart';
-import 'package:wingmate/utils/speech_item.dart';
-import 'package:wingmate/utils/speech_item_dao.dart';
-import 'package:wingmate/utils/speech_service_config.dart';
-import 'package:wingmate/utils/subscription_manager.dart';
+import 'package:wingmate/data/app_database.dart';
+import 'package:wingmate/data/said_text_dao.dart';
+import 'package:wingmate/data/phrase_item.dart';
+import 'package:wingmate/data/phrase_item_dao.dart';
+import 'package:wingmate/data/category_dao.dart';
+import 'package:wingmate/data/category_item.dart';
+import 'package:wingmate/config/speech_service_config.dart';
+import 'package:wingmate/services/subscription_manager.dart';
+import 'package:wingmate/data/ui_settings.dart';
 
 class MainPageService {
   final TextEditingController messageController;
   final FocusNode messageFocusNode;
-  final SpeechItemDao speechItemDao;
+  final PhraseItemDao phraseItemDao;
   final SaidTextDao saidTextDao;
+  final CategoryDao categoryDao; // New: CategoryDao
   final SubscriptionManager subscriptionManager;
   final Box<dynamic> settingsBox;
   final Box<dynamic> voiceBox;
   final BuildContext context;
   final String speechServiceEndpoint;
   final String speechServiceKey;
-  final Future<void> Function(String endpoint, String key) onSaveSettings;
-  final ProfileService profileService; // Added ProfileService
-  late final VoiceService voiceService; // Added VoiceService
-  late final VoiceSettingsService voiceSettingsService; // Added VoiceSettingsService
+  final Future<void> Function(String endpoint, String key, UiSettings uiSettings) onSaveSettings;
+  final UiSettings uiSettings;
 
   AzureTts? azureTts;
   AudioPlayer? audioPlayer;
@@ -42,8 +45,9 @@ class MainPageService {
   MainPageService({
     required this.messageController,
     required this.messageFocusNode,
-    required this.speechItemDao,
+    required this.phraseItemDao,
     required this.saidTextDao,
+    required this.categoryDao,
     required this.subscriptionManager,
     required this.settingsBox,
     required this.voiceBox,
@@ -51,24 +55,8 @@ class MainPageService {
     required this.speechServiceEndpoint,
     required this.speechServiceKey,
     required this.onSaveSettings,
-    required this.profileService, // Added to constructor
-  }) {
-    // Initialize VoiceService and VoiceSettingsService here
-    voiceService = VoiceService(
-      endpoint: speechServiceEndpoint,
-      subscriptionKey: speechServiceKey,
-      profileService: profileService,
-    );
-    voiceSettingsService = VoiceSettingsService(
-      voiceBox: voiceBox,
-      settingsBox: settingsBox,
-      endpoint: speechServiceEndpoint,
-      subscriptionKey: speechServiceKey,
-      onSaveSettings: onSaveSettings,
-      context: context,
-      profileService: profileService,
-    );
-  }
+    required this.uiSettings,
+  });
 
   Future<void> initialize() async {
     await _initializeAzureTts();
@@ -77,19 +65,17 @@ class MainPageService {
   }
 
   Future<void> _initializeAzureTts() async {
-    // AzureTts now needs the getter functions from VoiceSettingsService
-    azureTts = AzureTts(
-      subscriptionKey: voiceSettingsService.subscriptionKey, // Get from VoiceSettingsService
-      region: voiceSettingsService.endpoint, // Get from VoiceSettingsService
-      settingsBox: settingsBox,
-      voiceBox: voiceBox,
-      messageController: messageController,
-      context: context,
-      getActiveVoiceName: voiceSettingsService.getActiveVoiceName,
-      getActiveLanguageCode: voiceSettingsService.getActiveLanguageCode,
-      getActiveSpeechRate: voiceSettingsService.getActiveSpeechRate,
-      getActivePitch: voiceSettingsService.getActivePitch,
-    );
+    final config = settingsBox.get('config') as SpeechServiceConfig?;
+    if (config != null) {
+      azureTts = AzureTts(
+        subscriptionKey: config.key,
+        region: config.endpoint,
+        settingsBox: settingsBox,
+        voiceBox: voiceBox,
+        context: context,
+        saidTextDao: saidTextDao,
+      );
+    }
   }
 
   void _watchIsPlaying() {
@@ -99,38 +85,16 @@ class MainPageService {
   }
 
   Future<void> _loadItems() async {
-    final loadedItems = await speechItemDao.getAllRootItems();
+    final loadedItems = await phraseItemDao.getAllRootItems();
     items.clear();
     items.add('History');
     items.addAll(loadedItems);
   }
 
-  String convertToUserFriendlyTags(String text) {
-    final newText = text
-        .replaceAll('<lang xml:lang="en-US">', '<en>')
-        .replaceAll('</lang>', '</en>')
-        .replaceAll('<break time="2s"/>', "<2s>");
-    int newOffset = newText.indexOf("<en>") >= 0
-        ? newText.indexOf("<en>") + "<en>".length
-        : 0;
-    messageController.text = newText;
-    messageController.selection = TextSelection.collapsed(offset: newOffset);
-    return newText;
-  }
-
-  String convertToXmlTags(String text) {
-    return text
-        .replaceAll('<en>', '<lang xml:lang="en-US">')
-        .replaceAll('</en>', '</lang>')
-        .replaceAll("<2s>", '<break time="2s"/>');
-  }
-
   Future<void> togglePlayPause() async {
     if (messageController.text.isNotEmpty && azureTts != null) {
       if (!isPlaying) {
-        String userFriendlyText = messageController.text;
-        String xmlText = convertToXmlTags(userFriendlyText);
-        await azureTts!.generateSSML(xmlText);
+        await azureTts!.speakText(messageController.text);
       } else {
         await azureTts!.pause();
         isPlaying = false;
@@ -139,23 +103,28 @@ class MainPageService {
   }
 
   Future<void> handleSaveMessage(String message, String category, bool categoryChecked) async {
-    final speechItem = SpeechItem(
+    final phraseItem = PhraseItem(
       name: category,
       text: message,
-      isFolder: categoryChecked,
+      isCategory: categoryChecked,
       parentId: isSomeFolderSelected ? currentFolderId : null,
       createdAt: DateTime.now().millisecondsSinceEpoch,
     );
-    final id = await speechItemDao.insertItem(speechItem);
-    speechItem.id = id;
-    await azureTts!.generateSSMLForItem(speechItem);
-    items.add(speechItem);
+    final id = await phraseItemDao.insert(phraseItem);
+    phraseItem.id = id;
+    phraseItem.filePath = await azureTts!.generateAndCacheAudioForItem(phraseItem);
+    await phraseItemDao.updateItem(phraseItem);
+    items.add(phraseItem);
+  }
+
+  Future<void> loadPhraseItems() async {
+    await _loadItems();
   }
 
   Future<bool> deleteItem(int index) async {
     final item = items[index];
-    if (item is SpeechItem) {
-      final result = await speechItemDao.deleteItem(item.id!);
+    if (item is PhraseItem) {
+      final result = await phraseItemDao.deleteItem(item.id!);
       if (result > 0) {
         if (item.filePath != null) {
           final file = File(item.filePath!);
@@ -181,9 +150,9 @@ class MainPageService {
     items.insert(newIndex, item);
     
     for (int i = 0; i < items.length; i++) {
-      if (items[i] is SpeechItem) {
-        (items[i] as SpeechItem).position = i;
-        await speechItemDao.updateItem(items[i] as SpeechItem);
+      if (items[i] is PhraseItem) {
+        (items[i] as PhraseItem).position = i;
+        await phraseItemDao.updateItem(items[i] as PhraseItem);
       }
     }
   }
@@ -191,16 +160,15 @@ class MainPageService {
   void addXmlTag(String tag) {
     final text = messageController.text;
     final selection = messageController.selection;
-    final userFriendlyTag = convertToUserFriendlyTags(tag);
 
     String newText;
     if (text.isEmpty) {
-      newText = userFriendlyTag;
+      newText = tag;
     } else {
-      newText = text.replaceRange(selection.start, selection.end, userFriendlyTag);
+      newText = text.replaceRange(selection.start, selection.end, tag);
     }
 
-    int newOffset = selection.start + userFriendlyTag.indexOf('>') + 1;
+    int newOffset = selection.start + tag.length;
     if (newOffset > newText.length) {
       newOffset = newText.length;
     }
@@ -213,17 +181,17 @@ class MainPageService {
     messageFocusNode.requestFocus();
   }
 
-  void selectFolder(int folderId, String folderName) async {
+  void selectFolder(int categoryId, String folderName) async {
     isSomeFolderSelected = true;
-    currentFolderId = folderId;
+    currentFolderId = categoryId;
     items.clear();
 
-    if (folderId == -1) {
+    if (categoryId == -1) {
       await _loadItems();
       return;
     }
 
-    final folderItems = await speechItemDao.getAllItemsInFolder(folderId);
+    final folderItems = await phraseItemDao.getAllItemsInCategory(categoryId);
     items.addAll(folderItems);
   }
 
@@ -232,17 +200,15 @@ class MainPageService {
     currentFolderId = -1;
     items.clear();
 
-    final rootItems = await speechItemDao.getAllRootItems();
+    final rootItems = await phraseItemDao.getAllRootItems();
     items.add('History');
     items.addAll(rootItems);
   }
 
-  Future<void> playSpeechItem(SpeechItem item) async {
+  Future<void> playSpeechItem(PhraseItem item) async {
     if (item.text != null) {
-      final speechItem = await speechItemDao.getItemByText(item.text!);
-      if (speechItem?.filePath != null) {
-        await azureTts!.playText(DeviceFileSource(speechItem!.filePath!));
-      }
+      // The speakText method will handle caching and playback
+      await azureTts!.speakText(item.text!);
     }
   }
 
