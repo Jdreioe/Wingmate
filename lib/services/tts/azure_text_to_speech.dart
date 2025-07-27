@@ -169,7 +169,7 @@ class AzureTts {
   
   /// Private helper to make the actual Azure TTS API request.
   Future<Uint8List?> _generateAudio(String text, Voice? voice, double pitch, double rate) async {
-    final ssml = _buildSsml(text, voice, pitch, rate);
+    final ssml = _generateSSMLContent(text, voice!);
     final url = Uri.parse('https://$region.tts.speech.microsoft.com/cognitiveservices/v1');
     final headers = {
       'Ocp-Apim-Subscription-Key': subscriptionKey,
@@ -198,65 +198,42 @@ class AzureTts {
     return file.path;
   }
 
-  /// Private helper to build SSML content with pitch and rate.
-  String _buildSsml(String text, Voice? voice, double pitch, double rate) {
-    final voiceName = voice?.name ?? 'en-US-JennyNeural';
-    final defaultLanguage = voice?.selectedLanguage ?? 'en-US';
+  String _generateSSMLContent(String text, Voice voice) {
+    final selectedVoice = voice.name;
+    final selectedLanguage = voice.selectedLanguage;
+    final pitchForSSML = voice.pitchForSSML;
+    final rateForSSML = voice.rateForSSML;
 
-    // Regex to find <lang xml:lang="...">...</lang> tags
-    final RegExp langTagRegex = RegExp(
-      r'<lang xml:lang="([^"]+)">(.*?)<\/lang>',
-      dotAll: true,
-    );
+    final rateTag = '<prosody rate="$rateForSSML">';
+    final endRate = '</prosody>';
+    final pitchTag = '<prosody pitch="$pitchForSSML">';
+    final endPitch = '</prosody>';
+    final langTag = '<lang xml:lang="$selectedLanguage">';
+    final endLang = '</lang>';
 
-    // Build the SSML by processing the text
-    final StringBuffer ssmlBuffer = StringBuffer();
-    ssmlBuffer.writeln('<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="$defaultLanguage">');
-    ssmlBuffer.writeln('  <voice name="$voiceName">');
-
-    int lastMatchEnd = 0;
-    for (final Match match in langTagRegex.allMatches(text)) {
-      // Add text before the current <lang> tag
-      if (match.start > lastMatchEnd) {
-        ssmlBuffer.writeln('    <prosody rate="${_getRateString(rate)}" pitch="${_getPitchString(pitch)}">');
-        ssmlBuffer.writeln('      ${text.substring(lastMatchEnd, match.start)}');
-        ssmlBuffer.writeln('    </prosody>');
-      }
-
-      final String langCode = match.group(1)!;
-      final String content = match.group(2)!;
-
-      // Add the content within the <lang> tag, applying pitch and rate
-      ssmlBuffer.writeln('    <lang xml:lang="$langCode">');
-      ssmlBuffer.writeln('      <prosody rate="${_getRateString(rate)}" pitch="${_getPitchString(pitch)}">');
-      ssmlBuffer.writeln('        $content');
-      ssmlBuffer.writeln('      </prosody>');
-      ssmlBuffer.writeln('    </lang>');
-
-      lastMatchEnd = match.end;
+    if (selectedLanguage.isEmpty) {
+      return '''
+        <speak version="1.0" xml:lang="en-US">
+          <voice name="$selectedVoice">
+            $pitchTag
+            $rateTag
+            $text
+            $endPitch
+            $endRate
+          </voice>
+        </speak>
+      ''';
+    } else {
+      return '''
+        <speak version="1.0" xml:lang="en-US">
+          <voice name="$selectedVoice">
+            $langTag
+            $text
+            $endLang
+          </voice>
+        </speak>
+      ''';
     }
-
-    // Add any remaining text after the last <lang> tag
-    if (lastMatchEnd < text.length) {
-      ssmlBuffer.writeln('    <prosody rate="${_getRateString(rate)}" pitch="${_getPitchString(pitch)}">');
-      ssmlBuffer.writeln('      ${text.substring(lastMatchEnd)}');
-      ssmlBuffer.writeln('    </prosody>');
-    }
-
-    ssmlBuffer.writeln('  </voice>');
-    ssmlBuffer.writeln('</speak>');
-
-    final builtSsml = ssmlBuffer.toString();
-    debugPrint('Built SSML: $builtSsml');
-    return builtSsml;
-  }
-
-  String _getPitchString(double pitch) {
-    return (pitch >= 1.0) ? "+${((pitch - 1.0) * 50).toStringAsFixed(0)}%" : "-${((1.0 - pitch) * 50).toStringAsFixed(0)}%";
-  }
-
-  String _getRateString(double rate) {
-    return (rate >= 1.0) ? "+${((rate - 1.0) * 100).toStringAsFixed(0)}%" : "-${((1.0 - rate) * 100).toStringAsFixed(0)}%";
   }
 
   /// Plays audio from a given source.
