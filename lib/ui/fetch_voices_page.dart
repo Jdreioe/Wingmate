@@ -1,11 +1,9 @@
 import 'package:wingmate/data/ui_settings.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:hive/hive.dart';
 import 'package:wingmate/services/voice_settings.dart';
 import 'package:wingmate/data/app_database.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io' show Platform;
 
 import '../models/voice_model.dart';
 import '../services/voice_service.dart';
@@ -33,7 +31,6 @@ class FetchVoicesPage extends StatefulWidget {
 }
 
 class _FetchVoicesPageState extends State<FetchVoicesPage> {
-  // Holds all voices and the filtered subset based on user selection.
   late final VoiceService _voiceService;
   List<Map<String, dynamic>> _voices = [];
   List<Map<String, dynamic>> _filteredVoices = [];
@@ -47,7 +44,6 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
   @override
   void initState() {
     super.initState();
-    // Initialize service and load voices on creation.
     _voiceService = VoiceService(
       endpoint: widget.endpoint.toLowerCase().trim(),
       subscriptionKey: widget.subscriptionKey,
@@ -55,58 +51,24 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
     _loadVoices();
   }
 
-  // Opens a dialog to customize voice settings (pitch, rate, language).
+  // Opens a Material dialog to customize voice settings.
   void _showVoiceSettingsDialog(
       String displayName, String shortName, List<String> supportedLanguages) {
-    if (kIsWeb) {
-      showDialog(
-        context: context,
-        builder: (context) {
-          return VoiceSettingsDialog(
-            shortName: shortName,
-            displayName: displayName,
-            supportedLanguages: supportedLanguages,
-            onSave: (String language, double pitch, double rate,
-                String pitchForSSML, String rateForSSML) {
-              _saveSelectedVoiceSettings(shortName, supportedLanguages, language,
-                  pitch, rate, pitchForSSML, rateForSSML);
-            },
-          );
-        },
-      );
-    } else if (Platform.isIOS) {
-      showCupertinoDialog(
-        context: context,
-        builder: (context) {
-          return VoiceSettingsDialog(
-            shortName: shortName,
-            displayName: displayName,
-            supportedLanguages: supportedLanguages,
-            onSave: (String language, double pitch, double rate,
-                String pitchForSSML, String rateForSSML) {
-              _saveSelectedVoiceSettings(shortName, supportedLanguages, language,
-                  pitch, rate, pitchForSSML, rateForSSML);
-            },
-          );
-        },
-      );
-    } else {
-      showDialog(
-        context: context,
-        builder: (context) {
-          return VoiceSettingsDialog(
-            shortName: shortName,
-            displayName: displayName,
-            supportedLanguages: supportedLanguages,
-            onSave: (String language, double pitch, double rate,
-                String pitchForSSML, String rateForSSML) {
-              _saveSelectedVoiceSettings(shortName, supportedLanguages, language,
-                  pitch, rate, pitchForSSML, rateForSSML);
-            },
-          );
-        },
-      );
-    }
+    showDialog(
+      context: context,
+      builder: (context) {
+        return VoiceSettingsDialog(
+          shortName: shortName,
+          displayName: displayName,
+          supportedLanguages: supportedLanguages,
+          onSave: (String language, double pitch, double rate,
+              String pitchForSSML, String rateForSSML) {
+            _saveSelectedVoiceSettings(shortName, supportedLanguages, language,
+                pitch, rate, pitchForSSML, rateForSSML);
+          },
+        );
+      },
+    );
   }
 
   // Saves the user's selected voice to Hive.
@@ -136,27 +98,21 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
   Future<void> _loadVoices() async {
     setState(() => _isLoading = true);
     try {
-      const expirationTime = 60 * 24 * 60 * 24; // Set expiration time to 24 hours
+      const expirationTime = 60 * 24 * 60 * 24;
       final database = AppDatabase();
       final voiceDao = VoiceDao(database);
-      final existingVoices =
-          await voiceDao.getAllVoices(expirationTime); // Get all voices
+      final existingVoices = await voiceDao.getAllVoices(expirationTime);
 
       if (existingVoices.isNotEmpty) {
-        // Voices exist in the database, load them
         setState(() {
-          _voices =
-              existingVoices.map((voiceItem) => voiceItem.toMap()).toList();
-          _filteredVoices = List.from(_voices); // Create a copy
+          _voices = existingVoices.map((voiceItem) => voiceItem.toMap()).toList();
+          _filteredVoices = List.from(_voices);
         });
-        // Use platform-aware way to show snackbar/toast
         _showToast("Voices loaded from database");
       } else {
-        // No voices in the database, fetch from API
         await _fetchVoices();
       }
     } catch (e) {
-      // Use platform-aware way to show snackbar/toast
       _showToast("Error loading voices: $e");
     } finally {
       setState(() => _isLoading = false);
@@ -179,10 +135,8 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
         debugPrint('Fetched voices count: ${fetchedVoices.length}');
       }
 
-      // Save voices to the database
       await _saveVoicesToDatabase(fetchedVoices);
     } catch (e) {
-      // Use platform-aware way to show toast
       _showToast("Error fetching voices: $e");
     } finally {
       setState(() => _isLoading = false);
@@ -219,10 +173,8 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
 
   // Persists the fetched voices into the local database for offline use.
   Future<void> _saveVoicesToDatabase(List<Map<String, dynamic>> voices) async {
-    final database = AppDatabase(); // Get the database instance
+    final database = AppDatabase();
     final voiceDao = VoiceDao(database);
-
-    // Delete all previous entries if needed
     await voiceDao.deleteAll();
 
     for (var voice in voices) {
@@ -234,146 +186,92 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
         createdAt: DateTime.now().millisecondsSinceEpoch,
         displayName: voice['displayName'],
       );
-
-      // Insert voice into the database using the DAO
       await voiceDao.insert(voiceItem);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb) {
-      // Use Material design for web
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Available Voices'),
-        ),
-        body: _buildContent(),
-      );
-    } else if (Platform.isIOS) {
-      // Use Cupertino for iOS
-      return CupertinoPageScaffold(
-        navigationBar: const CupertinoNavigationBar(
-          middle: Text('Available Voices'),
-        ),
-        child: _buildContent(),
-      );
-    } else {
-      // Use Material for other platforms
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Available Voices'),
-        ),
-        body: _buildContent(),
-      );
-    }
+    // Consolidated into a single Material Scaffold for all platforms
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Available Voices'),
+      ),
+      body: _buildContent(),
+    );
   }
 
   Widget _buildContent() {
-    return _isLoading // Loading state
+    return _isLoading
         ? const Center(child: CircularProgressIndicator())
         : Column(
             children: [
               Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: Platform.isIOS
-                    ? CupertinoSearchTextField(
-                        controller: _searchController,
-                        onChanged: _filterVoices,
-                        placeholder: 'Search for voice name',
-                      )
-                    : TextField(
-                        controller: _searchController,
-                        onChanged: _filterVoices,
-                        decoration: const InputDecoration(
-                          hintText: 'Search for voice name',
-                          prefixIcon: Icon(Icons.search),
-                        ),
-                      ),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _filterVoices,
+                  decoration: const InputDecoration(
+                    hintText: 'Search for voice name',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                ),
               ),
               Row(
                 children: [
                   _buildCheckbox("Male", _filterMale, (newValue) {
                     setState(() {
-                      _filterMale = newValue; // Non-nullable assignment
+                      _filterMale = newValue;
                       _filterVoices(_searchController.text);
                     });
                   }),
                   _buildCheckbox("Female", _filterFemale, (newValue) {
                     setState(() {
-                      _filterFemale = newValue; // Non-nullable assignment
+                      _filterFemale = newValue;
                       _filterVoices(_searchController.text);
                     });
                   }),
                   _buildCheckbox("Neutral", _filterNeutral, (newValue) {
                     setState(() {
-                      _filterNeutral = newValue; // Non-nullable assignment
+                      _filterNeutral = newValue;
                       _filterVoices(_searchController.text);
                     });
                   }),
-                  _buildCheckbox("Multilingual", _filterMultilingual,
-                      (newValue) {
+                  _buildCheckbox("Multilingual", _filterMultilingual, (newValue) {
                     setState(() {
-                      _filterMultilingual =
-                          newValue; // Non-nullable assignment
+                      _filterMultilingual = newValue;
                       _filterVoices(_searchController.text);
                     });
                   }),
                 ],
               ),
               Expanded(
-                child: _filteredVoices.isEmpty &&
-                        _searchController.text.isNotEmpty
+                child: _filteredVoices.isEmpty && _searchController.text.isNotEmpty
                     ? const Center(child: Text("No voices found"))
-                    : Platform.isIOS
-                        ? CupertinoListSection(
-                            // Use CupertinoListSection and provide children directly
-                            children: _filteredVoices.map((voice) {
-                              return CupertinoListTile(
-                                title: Text(voice["displayName"]),
-                                subtitle: Text(
-                                    "${voice["gender"]} • ${voice["locale"]}"),
-                                onTap: () {
-                                  final shortName = voice["name"];
-                                  final supportedLanguages =
-                                      (voice["supportedLanguages"] as String)
-                                          .split(",")
-                                          .map((e) => e.trim())
-                                          .toList();
-                                  _showVoiceSettingsDialog(
-                                      voice["displayName"],
-                                      shortName,
-                                      supportedLanguages);
-                                },
-                              );
-                            }).toList(),
-                          )
-                        : ListView.builder(
-                            itemCount: _filteredVoices.length,
-                            itemBuilder: (context, index) {
-                              final voice = _filteredVoices[index];
-                              return Card(
-                                child: ListTile(
-                                  title: Text(voice["displayName"]),
-                                  subtitle: Text(
-                                      "${voice["gender"]} • ${voice["locale"]}"),
-                                  onTap: () {
-                                    final shortName = voice["name"];
-                                    final supportedLanguages =
-                                        (voice["supportedLanguages"]
-                                                as String)
-                                            .split(",")
-                                            .map((e) => e.trim())
-                                            .toList();
-                                    _showVoiceSettingsDialog(
-                                        voice["displayName"],
-                                        shortName,
-                                        supportedLanguages);
-                                  },
-                                ),
-                              );
-                            },
-                          ),
+                    : ListView.builder(
+                        itemCount: _filteredVoices.length,
+                        itemBuilder: (context, index) {
+                          final voice = _filteredVoices[index];
+                          return Card(
+                            child: ListTile(
+                              title: Text(voice["displayName"]),
+                              subtitle: Text("${voice["gender"]} • ${voice["locale"]}"),
+                              onTap: () {
+                                final shortName = voice["name"];
+                                final supportedLanguages =
+                                    (voice["supportedLanguages"] as String)
+                                        .split(",")
+                                        .map((e) => e.trim())
+                                        .toList();
+                                _showVoiceSettingsDialog(
+                                    voice["displayName"],
+                                    shortName,
+                                    supportedLanguages);
+                              },
+                            ),
+                          );
+                        },
+                      ),
               ),
               Align(
                 alignment: Alignment.bottomRight,
@@ -402,55 +300,27 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
     String label,
     bool value,
     void Function(bool newValue) onChanged,
-  ) 
-  {
+  ) {
     return Row(
       children: [
-        Platform.isIOS
-            ? CupertinoCheckbox(
-                value: value,
-                onChanged: (bool? newValue) {
-                  if (newValue != null) {
-                    onChanged(newValue); // Safely pass the non-nullable value
-                  }
-                },
-              )
-            : Checkbox(
-                value: value,
-                onChanged: (bool? newValue) {
-                  if (newValue != null) {
-                    onChanged(newValue); // Safely pass the non-nullable value
-                  }
-                },
-              ),
+        Checkbox(
+          value: value,
+          onChanged: (bool? newValue) {
+            if (newValue != null) {
+              onChanged(newValue);
+            }
+          },
+        ),
         Text(label),
       ],
     );
-}
+  }
 
   void _showToast(String message) {
-    if (kIsWeb) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    } else if (Platform.isIOS) {
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          content: Text(message),
-          actions: [
-            CupertinoDialogAction(
-              child: const Text("OK"),
-              onPressed: () => Navigator.of(context).pop(),
-            )
-          ],
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    }
+    // Consolidated to use SnackBar for all platforms
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -459,4 +329,3 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
     super.dispose();
   }
 }
-
