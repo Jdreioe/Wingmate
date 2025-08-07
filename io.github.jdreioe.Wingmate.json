@@ -1,0 +1,42 @@
+{
+  "app-id": "io.github.jdreioe.Wingmate",
+  "runtime": "org.freedesktop.Platform",
+  "runtime-version": "24.08",
+  "sdk": "org.freedesktop.Sdk",
+  "command": "wingmate",
+  "separate-locales": false,
+  "finish-args": [
+    "--share=ipc",
+    "--socket=fallback-x11",
+    "--socket=wayland",
+    "--socket=pulseaudio",
+    "--share=network",
+    "--device=dri",
+    "--filesystem=xdg-documents",
+    "--filesystem=xdg-data",
+    "--filesystem=xdg-config",
+    "--filesystem=xdg-cache",
+    "--persist=.wingmate",
+    "--env=PULSE_RUNTIME_PATH=/run/user/1000/pulse"
+  ],
+  "modules": [
+    {
+      "name": "wingmate",
+      "buildsystem": "simple",
+      "build-commands": [
+        "mkdir -p /app/bin",
+        "cp -r build/linux/x64/release/bundle/* /app/",
+        "ln -s /app/wingmate /app/bin/wingmate",
+        "install -Dm644 io.github.jdreioe.Wingmate.desktop /app/share/applications/io.github.jdreioe.Wingmate.desktop",
+        "install -Dm644 io.github.jdreioe.Wingmate.svg /app/share/icons/hicolor/scalable/apps/io.github.jdreioe.Wingmate.svg",
+        "install -Dm644 io.github.jdreioe.Wingmate.metainfo.xml /app/share/metainfo/io.github.jdreioe.Wingmate.metainfo.xml"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "."
+        }
+      ]
+    }
+  ]
+}

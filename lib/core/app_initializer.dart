@@ -6,9 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:wingmate/core/platform_info.dart';
-import 'package:wingmate/firebase_options.dart';
-import 'package:wingmate/models/voice_model.dart';
-import 'package:wingmate/config/speech_service_config_adapter.dart';
+import 'package:wingmate/infrastructure/firebase_options.dart';
+import 'package:wingmate/domain/models/voice_model.dart';
+import 'package:wingmate/infrastructure/config/speech_service_config_adapter.dart';
 
 class AppInitializer {
   static Future<void> initialize() async {
@@ -19,37 +19,14 @@ class AppInitializer {
       await _initializeFirebase();
     }
 
-    await _initializeHive();
-    print('Hive initialized successfully.');
+    
 
     if (!isIOS) {
       await _initializeFirebase();
     }
   }
 
-  static Future<void> _initializeHive() async {
-    try {
-      if (kIsWeb) {
-        await Hive.initFlutter();
-      } else {
-        final appDocumentDir = await getApplicationDocumentsDirectory();
-        Hive.init(appDocumentDir.path);
-      }
-
-      if (!Hive.isAdapterRegistered(SpeechServiceConfigAdapter().typeId)) {
-        Hive.registerAdapter(SpeechServiceConfigAdapter());
-      }
-      if (!Hive.isAdapterRegistered(VoiceAdapter().typeId)) {
-        Hive.registerAdapter(VoiceAdapter());
-      }
-
-      await Hive.openBox('settings');
-      await Hive.openBox('selectedVoice');
-    } catch (e) {
-      print('Error initializing Hive: $e');
-      rethrow;
-    }
-  }
+  
 
   static Future<void> _initializeFirebase() async {
     if (kDebugMode && (kIsWeb || isLinux)) {

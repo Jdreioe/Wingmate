@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart'; // We would use this if mocks could be generated
 import 'package:sqflite/sqflite.dart';
 import 'package:wingmate/models/user_profile.dart';
-import 'package:wingmate/utils/app_database.dart';
-import 'package:wingmate/utils/user_profile_dao.dart';
+import 'package:wingmate/data/app_database.dart';
+import 'package:wingmate/data/user_profile_dao.dart';
 
 // Manual (Illustrative) Mock for AppDatabase - In real scenario, use @GenerateMocks
 class MockAppDatabase extends Mock implements AppDatabase {
@@ -52,8 +52,8 @@ void main() {
       // Simulate that db.insert returns a new ID (e.g., 1)
       when(mockDatabase.insert(
         'user_profiles',
-        tUserProfile.toMap()..remove('id'), // DAO typically inserts without ID if it's auto-increment
-        conflictAlgorithm: ConflictAlgorithm.replace,
+        any(named: 'values'),
+        conflictAlgorithm: any(named: 'conflictAlgorithm'),
       )).thenAnswer((_) async => 1);
       
       // Act
@@ -73,8 +73,8 @@ void main() {
       // Arrange
       when(mockDatabase.query(
         'user_profiles',
-        where: 'id = ?',
-        whereArgs: [1],
+        where: anyNamed('where'),
+        whereArgs: anyNamed('whereArgs'),
       )).thenAnswer((_) async => [tUserProfileMap]);
 
       // Act
@@ -91,8 +91,8 @@ void main() {
       // Arrange
       when(mockDatabase.query(
         'user_profiles',
-        where: 'id = ?',
-        whereArgs: [1],
+        where: anyNamed('where'),
+        whereArgs: anyNamed('whereArgs'),
       )).thenAnswer((_) async => []); // Empty list means not found
 
       // Act

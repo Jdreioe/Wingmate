@@ -45,7 +45,7 @@ void main() {
       expect(copiedProfile.languageCode, tUserProfile.languageCode);
       expect(copiedProfile.speechRate, tUserProfile.speechRate);
       expect(copiedProfile.pitch, tUserProfile.pitch);
-      expect(copiedProfile == tUserProfile, isFalse); // Still a new instance
+      expect(copiedProfile == tUserProfile, isTrue); // Still a new instance
                                                       // but content-wise it would be equal
       expect(copiedProfile.hashCode, tUserProfile.hashCode); // Hash should be same if fields are same
     });

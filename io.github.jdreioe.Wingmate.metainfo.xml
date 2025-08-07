@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.jdreioe.Wingmate</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Wingmate</name>
+  <summary>A voice for people who cannot speak</summary>
+  <description>
+    <p>
+      Wingmate is a Free and Open Source Software (FOSS) project aimed at providing an exceptional voice for people who cannot speak, using Azure Neural Voices.
+    </p>
+    <p>
+      Developed by Jonas, who has Cerebral Palsy (CP) and extensive experience with various speech devices, Wingmate offers a high-quality, affordable communication solution built cross-platform using Flutter.
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>Select from multiple Azure Neural Voices</li>
+      <li>Multi-language support</li>
+      <li>XML tags for speech customization</li>
+      <li>Sentence and category saving (planned)</li>
+      <li>Offline backup voices (planned)</li>
+      <li>Hand gesture recognition (long-term goal)</li>
+      <li>Eye tracking support (long-term goal)</li>
+    </ul>
+  </description>
+  <categories>
+    <category>Accessibility</category>
+    <category>Education</category>
+    <category>Utility</category>
+  </categories>
+  <keywords>
+    <keyword>speech</keyword>
+    <keyword>communication</keyword>
+    <keyword>accessibility</keyword>
+    <keyword>azure</keyword>
+    <keyword>tts</keyword>
+    <keyword>aac</keyword>
+  </keywords>
+  <url type="homepage">https://github.com/Jdreioe/Wingmate</url>
+  <url type="bugtracker">https://github.com/Jdreioe/Wingmate/issues</url>
+  <url type="vcs-browser">https://github.com/Jdreioe/Wingmate</url>
+  <developer_name>Jonas</developer_name>
+  <content_rating type="oars-1.1" />
+  <launchable type="desktop-id">io.github.jdreioe.Wingmate.desktop</launchable>
+  <provides>
+    <binary>wingmate</binary>
+  </provides>
+</component>

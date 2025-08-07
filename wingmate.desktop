@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Wingmate
+Comment=A voice for people who cannot speak, using Azure Neural Voices
+GenericName=AAC Communication App
+Exec=wingmate
+Icon=io.github.jdreioe.Wingmate
+Type=Application
+Categories=Accessibility;Education;Utility;
+Keywords=speech;communication;accessibility;azure;tts;aac;cerebral-palsy;
+StartupNotify=true
+StartupWMClass=wingmate
+MimeType=text/plain;
+X-Flatpak-RenamedFrom=wingmate.desktop;

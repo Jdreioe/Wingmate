@@ -5,15 +5,25 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+import 'package:hive/hive.dart';
+import 'package:wingmate/data/ui_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:wingmate/main.dart';
+import 'package:wingmate/app.dart';
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(MainApp());
+    Hive.init('.');
+    await Hive.openBox('settings');
+    await Hive.openBox('selectedVoice');
+    await tester.pumpWidget(MyApp(
+      speechServiceEndpoint: '',
+      speechServiceKey: '',
+      onSaveSettings: (endpoint, key, newUiSettings) async {},
+      uiSettings: UiSettings(name: 'default'),
+    ));
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);
