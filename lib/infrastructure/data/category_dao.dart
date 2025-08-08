@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:wingmate/infrastructure/data/app_database.dart';
-import 'package:wingmate/infrastructure/data/category_item.dart';
+import 'package:wingmate/infrastructure/models/category_item.dart';
 
 class CategoryDao {
   final AppDatabase _database;

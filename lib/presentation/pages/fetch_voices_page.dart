@@ -1,5 +1,6 @@
 import 'package:wingmate/domain/entities/voice.dart';
 import 'package:wingmate/domain/models/voice_model.dart' as domain_models;
+import 'package:wingmate/domain/models/voice_model.dart' as domain_models;
 import 'package:wingmate/domain/entities/ui_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
@@ -19,6 +20,9 @@ class FetchVoicesPage extends StatefulWidget {
   final String subscriptionKey;
   final UiSettings uiSettings;
   final Future<void> Function(String endpoint, String key, UiSettings uiSettings) onSaveSettings;
+  final AppDatabase? database;
+  final VoiceDao? voiceDao;
+  final VoiceService? voiceService;
 
   const FetchVoicesPage({
     Key? key,
@@ -26,6 +30,9 @@ class FetchVoicesPage extends StatefulWidget {
     required this.subscriptionKey,
     required this.uiSettings,
     required this.onSaveSettings,
+    this.database,
+    this.voiceDao,
+    this.voiceService,
   }) : super(key: key);
 
   @override
@@ -46,14 +53,14 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
   @override
   void initState() {
     super.initState();
-    _voiceService = VoiceService(
+    
+    _voiceService = widget.voiceService ?? VoiceService(
       endpoint: widget.endpoint.toLowerCase().trim(),
       subscriptionKey: widget.subscriptionKey,
     );
     _loadVoices();
   }
 
-  // Opens a Material dialog to customize voice settings.
   void _showVoiceSettingsDialog(
       String displayName, String shortName, List<String> supportedLanguages) {
     showDialog(
@@ -82,6 +89,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
       double rate,
       String pitchForSSML,
       String rateForSSML) async {
+    debugPrint('[_saveSelectedVoiceSettings] Saving selected voice settings for $shortName');
     final box = await Hive.box('selectedVoice');
     final Voice voice = Voice(
       name: shortName,
@@ -93,18 +101,17 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
       rateForSSML: rateForSSML,
       selectedLanguage: language,
     );
-    final voiceModel = domain_models.Voice.fromDomain(voice);
-    await box.put('currentVoice', voiceModel);
+    await box.put('currentVoice', voice);
     await widget.onSaveSettings(widget.endpoint, widget.subscriptionKey, widget.uiSettings);
   }
 
   // Loads voices from the database or fetches them from the API if needed.
   Future<void> _loadVoices() async {
+    debugPrint('[_loadVoices] Loading voices...');
     setState(() => _isLoading = true);
     try {
-      const expirationTime = 60 * 24 * 60 * 24;
-      final database = AppDatabase();
-      final voiceDao = VoiceDao(database);
+      final database = widget.database ?? AppDatabase();
+      final voiceDao = widget.voiceDao ?? VoiceDao(database);
       final existingVoices = await voiceDao.getVoices();
 
       if (existingVoices.isNotEmpty) {
@@ -124,7 +131,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
   }
 
   Future<void> _fetchVoices() async {
-    debugPrint('_fetchVoices invoked');
+    debugPrint('[_fetchVoices] Fetching voices from API...');
     setState(() => _isLoading = true);
 
     try {
@@ -139,7 +146,9 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
         debugPrint('Fetched voices count: ${fetchedVoices.length}');
       }
 
-      await _saveVoicesToDatabase(fetchedVoices);
+      if (widget.database == null) {
+        await _saveVoicesToDatabase(fetchedVoices);
+      }
     } catch (e) {
       _showToast("Error fetching voices: $e");
     } finally {
@@ -177,6 +186,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
 
   // Persists the fetched voices into the local database for offline use.
   Future<void> _saveVoicesToDatabase(List<Map<String, dynamic>> voices) async {
+    debugPrint('[_saveVoicesToDatabase] Saving ${voices.length} voices to database.');
     final database = AppDatabase();
     final voiceDao = VoiceDao(database);
     await voiceDao.deleteAll();
@@ -264,6 +274,7 @@ class _FetchVoicesPageState extends State<FetchVoicesPage> {
                                     voice["displayName"],
                                     shortName,
                                     supportedLanguages);
+                                debugPrint('[_showVoiceSettingsDialog] Showing voice settings dialog for ${voice["displayName"]}');
                               },
                             ),
                           );

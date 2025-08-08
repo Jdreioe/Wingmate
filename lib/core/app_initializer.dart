@@ -7,7 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:wingmate/core/platform_info.dart';
 import 'package:wingmate/infrastructure/firebase_options.dart';
-import 'package:wingmate/domain/models/voice_model.dart';
+
 import 'package:wingmate/infrastructure/config/speech_service_config_adapter.dart';
 
 class AppInitializer {

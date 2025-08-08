@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
+import 'package:wingmate/core/platform_directory.dart';
 import 'package:uuid/uuid.dart';
 import 'package:wingmate/domain/entities/voice.dart' as domain_models;
 import 'package:wingmate/infrastructure/models/phrase_item.dart';
@@ -216,7 +216,7 @@ class AzureTts implements SpeechService {
 
   /// Private helper to save audio bytes to a unique file.
   Future<String> _saveAudioToFile(Uint8List audioBytes) async {
-    final directory = await getApplicationDocumentsDirectory();
+    final directory = await getPersistentStorageDirectory();
     final fileName = '${_uuid.v4()}.mp3'; // Use UUID for unique filenames
     final filePath = '${directory.path}/$fileName';
     final file = File(filePath);

@@ -1,6 +1,3 @@
-import 'package:wingmate/infrastructure/models/phrase_item.dart';
-import 'package:wingmate/infrastructure/models/category_item.dart';
-import 'package:wingmate/domain/entities/ui_settings.dart';
 part of 'main_page_bloc.dart';
 
 @immutable

@@ -6,17 +6,29 @@ part 'voice.g.dart';
 
 @HiveType(typeId: 1)
 class Voice extends Equatable {
+  @HiveField(0)
   final int? id;
+  @HiveField(1)
   final String? name;
+  @HiveField(2)
   final List<String>? supportedLanguages;
+  @HiveField(3)
   final String? gender;
+  @HiveField(4)
   final String? primaryLanguage;
+  @HiveField(5)
   final int? createdAt;
+  @HiveField(6)
   final String? displayName;
+  @HiveField(7)
   final String selectedLanguage;
+  @HiveField(8)
   final double? pitch;
+  @HiveField(9)
   final double? rate;
+  @HiveField(10)
   final String? pitchForSSML;
+  @HiveField(11)
   final String? rateForSSML;
 
   const Voice({

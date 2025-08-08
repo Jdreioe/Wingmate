@@ -3,7 +3,7 @@ import 'package:wingmate/domain/repositories/category_repository.dart';
 import 'package:wingmate/domain/repositories/voice_repository.dart';
 import 'package:wingmate/infrastructure/models/phrase_item.dart';
 import 'package:wingmate/infrastructure/models/category_item.dart';
-import 'package:wingmate/domain/models/voice_model.dart';
+
 import 'package:wingmate/domain/entities/ui_settings.dart';
 import 'package:wingmate/domain/repositories/phrase_item_repository.dart';
 import 'package:wingmate/domain/repositories/category_repository.dart';

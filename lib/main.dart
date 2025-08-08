@@ -9,7 +9,7 @@ import 'package:wingmate/core/platform_info.dart';
 
 import 'package:wingmate/core/app_initializer.dart';
 import 'package:wingmate/infrastructure/config/speech_service_config.dart';
-import 'package:wingmate/infrastructure/config/speech_service_config_adapter.dart';
+
 import 'package:wingmate/domain/entities/voice.dart';
 
 import 'package:wingmate/infrastructure/data/app_database.dart';
@@ -43,21 +43,27 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (kIsWeb) {
+    debugPrint('[main] Running on web, initializing HiveFlutter.');
     await Hive.initFlutter();
   } else if (isLinux) {
+    debugPrint('[main] Running on Linux.');
     final tempDir = await getTemporaryDirectory();
+    debugPrint('[main] Temporary directory: ${tempDir.path}');
     Hive.init(tempDir.path);
   } else {
+    debugPrint('[main] Running on other platform.');
     final appDocumentDir = await getApplicationDocumentsDirectory();
+    debugPrint('[main] Application documents directory: ${appDocumentDir.path}');
     Hive.init(appDocumentDir.path);
   }
 
   try {
-    if (!Hive.isAdapterRegistered(1)) {
-      Hive.registerAdapter(VoiceAdapter());
-    }
+    
     if (!Hive.isAdapterRegistered(SpeechServiceConfigAdapter().typeId)) {
       Hive.registerAdapter(SpeechServiceConfigAdapter());
+    }
+    if (!Hive.isAdapterRegistered(VoiceAdapter().typeId)) {
+      Hive.registerAdapter(VoiceAdapter());
     }
 
     // Open Hive boxes after adapters are registered

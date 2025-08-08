@@ -51,8 +51,8 @@ class VoiceSettingsService {
     await _voiceBox.put('currentVoice', voiceModel);
   }
 
-  Future<domain_models.Voice?> getSelectedVoice() async {
-    return await _voiceDao.getSelectedVoice();
+  domain_models.Voice? getSelectedVoice() {
+    return _voiceBox.get('currentVoice') as domain_models.Voice?;
   }
 
   Future<List<domain_models.Voice>> getVoices() async {

@@ -48,14 +48,17 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
   @override
   void initState() {
     super.initState();
+    debugPrint('[VoiceSettingsDialog] Initializing with displayName: ${widget.displayName}, shortName: ${widget.shortName}');
     final voiceBox = Hive.box('selectedVoice');
     final currentVoice = voiceBox.get('currentVoice') as domain_models.Voice?;
     if (currentVoice != null && currentVoice.name == widget.shortName) {
       _selectedLanguage = currentVoice.primaryLanguage ?? widget.supportedLanguages.first;
       _pitch = currentVoice.pitch ?? 1.0;
       _rate = currentVoice.rate ?? 1.0;
+      debugPrint('[VoiceSettingsDialog] Found existing voice settings: language=$_selectedLanguage, pitch=$_pitch, rate=$_rate');
     } else {
       _selectedLanguage = widget.supportedLanguages.first;
+      debugPrint('[VoiceSettingsDialog] No existing voice settings found, using default language: $_selectedLanguage');
     }
     _saidTextDao = SaidTextDao(AppDatabase());
     final settingsBox = Hive.box('settings');
@@ -69,6 +72,7 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
         context: context,
         saidTextDao: _saidTextDao,
       );
+      debugPrint('[VoiceSettingsDialog] AzureTts initialized.');
     }
   }
 
@@ -162,6 +166,7 @@ class _VoiceSettingsDialogState extends State<VoiceSettingsDialog> {
         ),
         TextButton(
           onPressed: () {
+            debugPrint('[VoiceSettingsDialog] Saving voice settings: language=$_selectedLanguage, pitch=$_pitch, rate=$_rate');
             widget.onSave(_selectedLanguage, _pitch, _rate, _pitchLabels[_pitch].toString(), _rateLabels[_rate].toString());
             Navigator.pop(context);
           },

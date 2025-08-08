@@ -1,5 +1,7 @@
 import 'package:hive/hive.dart';
 
+part 'speech_service_config.g.dart';
+
 @HiveType(typeId: 0)
 class SpeechServiceConfig {
   @HiveField(0)

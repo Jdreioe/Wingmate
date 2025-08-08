@@ -24,6 +24,8 @@ import 'package:wingmate/domain/use_cases/update_ui_settings_use_case.dart';
 import 'package:wingmate/domain/use_cases/update_secondary_language_use_case.dart';
 import 'package:wingmate/domain/use_cases/toggle_play_pause_use_case.dart';
 
+
+
 part 'main_page_event.dart';
 part 'main_page_state.dart';
 

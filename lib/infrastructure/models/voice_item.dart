@@ -70,7 +70,7 @@ class VoiceItem {
       primaryLanguage: primaryLanguage,
       createdAt: createdAt,
       displayName: displayName, 
-      selectedLanguage: primaryLanguage ?? '',
+      selectedLanguage: '',
       pitch: pitch,
       rate: rate,
       pitchForSSML: pitchForSSML,
