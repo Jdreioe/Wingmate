@@ -1,0 +1,16 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest18433159183081422419.xml:2:13-83
+INJECTED from /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest18433159183081422419.xml:2:13-83
+	package
+		INJECTED from /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest18433159183081422419.xml
+	xmlns:android
+		ADDED from /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest18433159183081422419.xml:2:23-81
+uses-sdk
+INJECTED from /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest18433159183081422419.xml reason: use-sdk injection requested
+INJECTED from /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest18433159183081422419.xml
+INJECTED from /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest18433159183081422419.xml
+	android:targetSdkVersion
+		INJECTED from /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest18433159183081422419.xml
+	android:minSdkVersion
+		INJECTED from /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest18433159183081422419.xml

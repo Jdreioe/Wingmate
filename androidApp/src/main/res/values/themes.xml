@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- App theme that uses Material3 DayNight to match Compose Material3 colors -->
+    <style name="Theme.Wingmate" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize your theme here. Colors are provided by Compose's MaterialTheme, but
+             the platform theme ensures the window background, status bar scrim, etc. follow M3. -->
+        <item name="android:statusBarColor">?attr/colorPrimary</item>
+        <item name="android:navigationBarColor">?attr/colorSurface</item>
+    </style>
+</resources>

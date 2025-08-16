@@ -1,0 +1,253 @@
+package io.github.jdreioe.wingmate.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.atan2
+import kotlin.math.hypot
+import kotlin.math.PI
+import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.CategoryItem
+import io.github.jdreioe.wingmate.ui.parseHexToColor
+
+@Composable
+fun AddPhraseDialog(
+    onDismiss: () -> Unit,
+    categories: List<CategoryItem>,
+    initialPhrase: Phrase? = null,
+    onSave: (Phrase) -> Unit,
+    onDelete: ((String) -> Unit)? = null
+) {
+    var text by remember { mutableStateOf(initialPhrase?.text ?: "") }
+    var altText by remember { mutableStateOf(initialPhrase?.name ?: "") }
+    var selectedColor by remember { mutableStateOf(initialPhrase?.backgroundColor?.let { parseHexToColor(it) } ?: Color.Blue) }
+    var useColor by remember { mutableStateOf(initialPhrase?.backgroundColor != null) }
+    var hue by remember { mutableStateOf(0f) }
+    var value by remember { mutableStateOf(1f) }
+    var selectedCategory by remember { mutableStateOf(categories.firstOrNull { it.id == initialPhrase?.parentId } ?: categories.firstOrNull()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (initialPhrase == null) "Add New Phrase" else "Edit Phrase") },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("New phrase text") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = altText,
+                    onValueChange = { altText = it },
+                    label = { Text("Alternative text / emoji") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Color preview + nested color picker dialog trigger
+                var showColorDialog by remember { mutableStateOf(false) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Color", modifier = Modifier.weight(1f))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    // preview
+                    Box(modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(if (useColor) selectedColor else MaterialTheme.colorScheme.surface)
+                        .border(width = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f), shape = CircleShape))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    if (useColor) {
+                        TextButton(onClick = { showColorDialog = true }) { Text("Pick color") }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        TextButton(onClick = { useColor = false }) { Text("None") }
+                    } else {
+                        TextButton(onClick = { useColor = true; showColorDialog = true }) { Text("Use color") }
+                    }
+                }
+                if (showColorDialog) {
+                    ColorPickerDialog(
+                        initialColor = selectedColor,
+                        initialUse = useColor,
+                        onDismiss = { showColorDialog = false },
+                        onPick = { pickedColor ->
+                            showColorDialog = false
+                            if (pickedColor == null) {
+                                useColor = false
+                            } else {
+                                useColor = true
+                                selectedColor = pickedColor
+                            }
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Category dropdown
+                if (categories.isNotEmpty()) {
+                    var expanded by remember { mutableStateOf(false) }
+                    Box {
+                        OutlinedTextField(
+                            value = selectedCategory?.name ?: "",
+                            onValueChange = {},
+                            label = { Text("Belongs to category") },
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth().clickable { expanded = true }
+                        )
+                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                            categories.forEach { cat ->
+                                        DropdownMenuItem(text = { Text(cat.name ?: "No Name") }, onClick = {
+                                            selectedCategory = cat
+                                            expanded = false
+                                        })
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                // Normalize to six-digit RRGGBB hex string (lowercase) or null when disabled
+                val hex = if (useColor) String.format("%06X", (selectedColor.toArgb() and 0xFFFFFF)).lowercase() else null
+                val phrase = Phrase(
+                    id = initialPhrase?.id ?: java.util.UUID.randomUUID().toString(),
+                    text = text.trim(),
+                    name = altText.trim(),
+                    backgroundColor = hex,
+                    parentId = selectedCategory?.id,
+                    isCategory = false,
+                    createdAt = initialPhrase?.createdAt ?: System.currentTimeMillis()
+                )
+                onSave(phrase)
+                onDismiss()
+            }) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            Row {
+                if (initialPhrase != null && onDelete != null) {
+                    TextButton(onClick = {
+                        onDelete(initialPhrase.id)
+                        onDismiss()
+                    }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
+    )
+}
+
+@Composable
+fun ColorWheel(hue: Float, value: Float, onHueChange: (Float) -> Unit, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.pointerInput(Unit) {
+        detectDragGestures { change, _ ->
+            val size = this.size
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val pos = change.position
+            val dx = pos.x - center.x
+            val dy = pos.y - center.y
+            val angle = atan2(dy, dx)
+            val degrees = ((angle * 180f / PI.toFloat()) + 360f) % 360f
+            onHueChange(degrees)
+        }
+    }) {
+        val radius = size.minDimension / 2f
+        val center = Offset(size.width / 2f, size.height / 2f)
+        // draw simple hue ring
+        val steps = 36
+        for (i in 0 until steps) {
+            val startAngle = i * 360f / steps
+            val endAngle = (i + 1) * 360f / steps
+            drawArc(color = hsvToColor(startAngle, 1f, value), startAngle = startAngle, sweepAngle = 360f / steps, useCenter = true, topLeft = Offset(center.x - radius, center.y - radius), size = Size(radius * 2f, radius * 2f))
+        }
+        // outline
+        drawCircle(color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.08f), radius = radius, center = center, style = Stroke(width = 2f))
+    }
+}
+
+fun hsvToColor(h: Float, s: Float, v: Float): Color {
+    val hue = h
+    val c = v * s
+    val x = c * (1 - kotlin.math.abs((hue / 60f) % 2 - 1))
+    val m = v - c
+    val (r1, g1, b1) = when {
+        hue < 60f -> Triple(c, x, 0f)
+        hue < 120f -> Triple(x, c, 0f)
+        hue < 180f -> Triple(0f, c, x)
+        hue < 240f -> Triple(0f, x, c)
+        hue < 300f -> Triple(x, 0f, c)
+        else -> Triple(c, 0f, x)
+    }
+    return Color(((r1 + m) * 255).toInt(), ((g1 + m) * 255).toInt(), ((b1 + m) * 255).toInt())
+}
+
+@Composable
+fun ColorPickerDialog(initialColor: Color = Color.Blue, initialUse: Boolean = true, onDismiss: () -> Unit, onPick: (Color?) -> Unit) {
+    var hue by remember { mutableStateOf(0f) }
+    var value by remember { mutableStateOf(1f) }
+    var tempColor by remember { mutableStateOf(initialColor) }
+    // populate initial HSV from color
+    LaunchedEffect(initialColor) {
+        val (h, v) = colorToHsv(initialColor)
+        hue = h
+        value = v
+        tempColor = hsvToColor(hue, 1f, value)
+    }
+
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Pick color") }, text = {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            ColorWheel(hue = hue, value = value, onHueChange = { h -> hue = h; tempColor = hsvToColor(h, 1f, value) }, modifier = Modifier.size(200.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Bright", style = MaterialTheme.typography.labelSmall)
+                Slider(value = value, onValueChange = { v -> value = v; tempColor = hsvToColor(hue, 1f, v) }, valueRange = 0.1f..1f, modifier = Modifier.width(180.dp))
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(tempColor))
+        }
+    }, confirmButton = {
+        TextButton(onClick = { onPick(tempColor) }) { Text("OK") }
+    }, dismissButton = {
+        Row {
+            TextButton(onClick = { onPick(null) }) { Text("Clear") }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    })
+}
+
+// returns Pair(hue, value)
+fun colorToHsv(color: Color): Pair<Float, Float> {
+    val r = color.red
+    val g = color.green
+    val b = color.blue
+    val max = maxOf(r, g, b)
+    val min = minOf(r, g, b)
+    val delta = max - min
+    val hue = when {
+        delta == 0f -> 0f
+        max == r -> ((g - b) / delta % 6f) * 60f
+        max == g -> ((b - r) / delta + 2f) * 60f
+        else -> ((r - g) / delta + 4f) * 60f
+    }.let { if (it < 0f) it + 360f else it }
+    val value = max
+    return Pair(hue, value)
+}

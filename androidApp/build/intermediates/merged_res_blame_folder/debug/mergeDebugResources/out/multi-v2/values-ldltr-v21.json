@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "io.github.jdreioe.wingmate.android.androidApp-mergeDebugResources-59:/values-ldltr-v21/values-ldltr-v21.xml",
+            "map": [
+                {
+                    "source": "/var/home/Jdreioe/.gradle/caches/8.13/transforms/503edf77389deb370874274e1ae60659/transformed/appcompat-1.7.1/res/values-ldltr-v21/values-ldltr-v21.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "112",
+                        "endOffsets": "163"
+                    }
+                }
+            ]
+        }
+    ]
+}

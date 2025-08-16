@@ -1,0 +1,11 @@
+io.github.jdreioe.wingmate.shared-jetified-lifecycle-viewmodel-ktx-2.8.4-0 /var/home/Jdreioe/.gradle/caches/8.13/transforms/276f45bf66343883636e27343672d830/transformed/jetified-lifecycle-viewmodel-ktx-2.8.4/res
+io.github.jdreioe.wingmate.shared-jetified-lifecycle-viewmodel-release-1 /var/home/Jdreioe/.gradle/caches/8.13/transforms/7d9df2af88e1bc8a17badf84df4b3832/transformed/jetified-lifecycle-viewmodel-release/res
+io.github.jdreioe.wingmate.shared-pngs-2 /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/generated/res/pngs/release
+io.github.jdreioe.wingmate.shared-resValues-3 /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/generated/res/resValues/release
+io.github.jdreioe.wingmate.shared-mergeReleaseResources-4 /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
+io.github.jdreioe.wingmate.shared-mergeReleaseResources-5 /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
+io.github.jdreioe.wingmate.shared-release-6 /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/build/intermediates/merged_res/release/mergeReleaseResources
+io.github.jdreioe.wingmate.shared-androidMain-7 /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/src/androidMain/res
+io.github.jdreioe.wingmate.shared-androidRelease-8 /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/src/androidRelease/res
+io.github.jdreioe.wingmate.shared-main-9 /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/src/main/res
+io.github.jdreioe.wingmate.shared-release-10 /var/home/Jdreioe/dev/Wingmate-old/kmp/shared/src/release/res

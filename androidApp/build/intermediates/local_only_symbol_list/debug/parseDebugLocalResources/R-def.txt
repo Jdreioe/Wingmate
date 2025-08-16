@@ -1,0 +1,7 @@
+R_DEF: Internal format may change without notice
+local
+color black
+color white
+mipmap ic_launcher
+string app_name
+style Theme.Wingmate
