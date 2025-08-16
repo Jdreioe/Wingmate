@@ -85,3 +85,92 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 }
+
+// Build + embed + (optionally) codesign the iOS framework into the Xcode app bundle.
+// Intended to be called from an Xcode Run Script phase.
+tasks.register("embedAndSignAppleFrameworkForXcode") {
+    group = "build"
+    description = "Builds the KMP iOS framework for the current SDK/CONFIGURATION, embeds into Xcode's Frameworks dir, and signs if needed."
+
+    // Resolve Xcode env
+    val configuration = System.getenv("CONFIGURATION") ?: "Debug"
+    val sdkName = System.getenv("SDK_NAME") ?: "iphonesimulator"
+    val archs = System.getenv("ARCHS") ?: ""
+    val targetBuildDir = System.getenv("TARGET_BUILD_DIR")
+    val frameworksFolder = System.getenv("FRAMEWORKS_FOLDER_PATH")
+    val codeSignIdentity = System.getenv("EXPANDED_CODE_SIGN_IDENTITY")
+
+    // Determine K/N target from SDK + arch
+    val targetName = when {
+        sdkName.startsWith("iphoneos") -> "iosArm64"
+        sdkName.startsWith("iphonesimulator") && archs.contains("arm64") -> "iosSimulatorArm64"
+        else -> "iosX64"
+    }
+    val buildType = when {
+        configuration.contains("DEBUG", ignoreCase = true) -> "Debug"
+        else -> "Release"
+    }
+
+    // Compute the link task to ensure framework is built first.
+    val linkTaskName = "link${buildType}Framework" + targetName.replaceFirstChar { it.uppercase() }
+    dependsOn(linkTaskName)
+
+    doLast {
+        if (targetBuildDir.isNullOrBlank() || frameworksFolder.isNullOrBlank()) {
+            logger.lifecycle("Xcode environment not detected; skipping embed.")
+            return@doLast
+        }
+
+        // Resolve framework output location from the Kotlin/Native convention
+        // build/bin/<target>/<buildType>/*.framework
+        val frameworkBinDir = layout.buildDirectory.dir("bin/$targetName/$buildType").get().asFile
+        val frameworks = frameworkBinDir.listFiles { f -> f.isDirectory && f.name.endsWith(".framework") }?.toList().orEmpty()
+        if (frameworks.isEmpty()) {
+            throw GradleException("No frameworks found in ${frameworkBinDir.absolutePath}")
+        }
+
+        val embedDir = file(targetBuildDir).resolve(frameworksFolder)
+        embedDir.mkdirs()
+
+        // Copy our framework(s) (include transitive K/N frameworks if present)
+        frameworks.forEach { fw ->
+            project.copy {
+                from(fw)
+                into(embedDir)
+            }
+            // Copy dSYM if present
+            val dsym = File(fw.parentFile, fw.name + ".dSYM")
+            if (dsym.exists()) {
+                val dsymDest = File(targetBuildDir).resolve("${fw.name}.dSYM")
+                project.copy {
+                    from(dsym)
+                    into(dsymDest.parentFile)
+                }
+            }
+        }
+
+        // Optionally sign frameworks (dynamic frameworks require signing; static ones typically don't)
+        if (!codeSignIdentity.isNullOrBlank()) {
+            frameworks.forEach { fw ->
+                val embeddedFw = embedDir.resolve(fw.name)
+                if (embeddedFw.exists()) {
+                    exec {
+                        commandLine(
+                            "codesign",
+                            "--force",
+                            "--sign",
+                            codeSignIdentity,
+                            "--timestamp=none",
+                            embeddedFw.absolutePath
+                        )
+                    }
+                }
+            }
+        } else {
+            logger.lifecycle("No EXPANDED_CODE_SIGN_IDENTITY provided; skipping codesign.")
+        }
+
+        logger.lifecycle("Embedded ${frameworks.size} framework(s) for $targetName/$buildType into ${embedDir.absolutePath}")
+    }
+}
+
