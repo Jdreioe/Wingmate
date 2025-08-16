@@ -8,6 +8,7 @@ fun overrideIosSpeechService() {
     loadKoinModules(
         module {
             single<io.github.jdreioe.wingmate.domain.ConfigRepository> { io.github.jdreioe.wingmate.infrastructure.IosConfigRepository() }
+            single<io.github.jdreioe.wingmate.domain.SpeechService> { io.github.jdreioe.wingmate.infrastructure.IosSpeechService() }
         }
     )
 }

@@ -13,6 +13,7 @@ import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
+@Suppress("unused")
 fun initKoin(extra: Module? = null) {
     val baseModule: Module = module {
         single<PhraseRepository> { InMemoryPhraseRepository() }
@@ -36,3 +37,7 @@ fun initKoin(extra: Module? = null) {
         modules(modulesList)
     }
 }
+
+// Convenience no-arg for Swift where optional bridging might produce a different symbol name
+@Suppress("unused")
+fun initKoin() = initKoin(null)

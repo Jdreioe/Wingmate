@@ -1,0 +1,7 @@
+platform :ios, '14.0'
+use_frameworks!
+
+target 'WingmateiOS' do
+  project 'WingmateiOS.xcodeproj'
+  pod 'shared', :path => '../shared'
+end
