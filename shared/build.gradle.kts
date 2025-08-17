@@ -31,6 +31,8 @@ kotlin {
         framework {
             baseName = "Shared"
             isStatic = true
+            // Export Koin as it's referenced in a public API (initKoin(extra: Module?)) so Swift can see the types
+            export("io.insert-koin:koin-core:3.5.6")
         }
     }
 
@@ -65,6 +67,8 @@ kotlin {
         val iosMain by getting {
             dependencies {
                 implementation("io.ktor:ktor-client-darwin:2.3.12")
+                // Ensure Koin is resolved for iOS binaries too
+                implementation("io.insert-koin:koin-core:3.5.6")
             }
         }
     }
