@@ -1,3 +1,0 @@
-// Placeholder minimal Xcode project is not generated here.
-// Open Xcode and create an iOS App project named 'WingmateiOS' in this iosApp folder.
-// Then run `pod install` to link the Kotlin shared framework.
