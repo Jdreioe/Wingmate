@@ -111,9 +111,16 @@ tasks.register("embedAndSignAppleFrameworkForXcode") {
         else -> "Release"
     }
 
-    // Compute the link task to ensure framework is built first.
-    val linkTaskName = "link${buildType}Framework" + targetName.replaceFirstChar { it.uppercase() }
-    dependsOn(linkTaskName)
+    // Compute candidate link tasks (MPP standard and Cocoapods-prefixed)
+    val linkCandidates = listOf(
+        // Standard MPP task name
+        "link${buildType}Framework" + targetName.replaceFirstChar { it.uppercase() },
+        // Cocoapods plugin task name
+        "linkPod${buildType}Framework" + targetName.replaceFirstChar { it.uppercase() }
+    )
+    linkCandidates.forEach { name ->
+        tasks.findByName(name)?.let { dependsOn(it) }
+    }
 
     doLast {
         if (targetBuildDir.isNullOrBlank() || frameworksFolder.isNullOrBlank()) {
@@ -121,18 +128,28 @@ tasks.register("embedAndSignAppleFrameworkForXcode") {
             return@doLast
         }
 
-        // Resolve framework output location from the Kotlin/Native convention
-        // build/bin/<target>/<buildType>/*.framework
-        val frameworkBinDir = layout.buildDirectory.dir("bin/$targetName/$buildType").get().asFile
-        val frameworks = frameworkBinDir.listFiles { f -> f.isDirectory && f.name.endsWith(".framework") }?.toList().orEmpty()
+        // Resolve framework output location; try Cocoapods sync dir first, then K/N bins
+        val cocoapodsDir = layout.buildDirectory.dir("cocoapods/framework").get().asFile
+        val binDirStandard = layout.buildDirectory.dir("bin/$targetName/$buildType").get().asFile
+        val binDirPod = layout.buildDirectory.dir("bin/$targetName/pod${buildType}Framework").get().asFile
+
+        fun scanFrameworks(dir: File): List<File> = dir.takeIf { it.exists() }?.listFiles { f ->
+            f.isDirectory && f.name.endsWith(".framework")
+        }?.toList().orEmpty()
+
+        val frameworks = buildList<File> {
+            addAll(scanFrameworks(cocoapodsDir))
+            addAll(scanFrameworks(binDirPod))
+            addAll(scanFrameworks(binDirStandard))
+        }.distinctBy { it.name }
         if (frameworks.isEmpty()) {
-            throw GradleException("No frameworks found in ${frameworkBinDir.absolutePath}")
+            throw GradleException("No frameworks found for $targetName/$buildType in: ${cocoapodsDir.absolutePath}, ${binDirPod.absolutePath}, ${binDirStandard.absolutePath}")
         }
 
         val embedDir = file(targetBuildDir).resolve(frameworksFolder)
         embedDir.mkdirs()
 
-        // Copy our framework(s) (include transitive K/N frameworks if present)
+    // Copy our framework(s) (include transitive K/N frameworks if present)
         frameworks.forEach { fw ->
             project.copy {
                 from(fw)
