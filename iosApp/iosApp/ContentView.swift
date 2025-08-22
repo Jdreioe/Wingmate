@@ -1,12 +1,26 @@
 import SwiftUI
 import Shared
 
+// Observer to bridge MVIKotlin states(observer:) to Swift closures
+private final class StoreObserver: NSObject, Shared.RxObserver {
+    private let onNextState: (Shared.PhraseListStoreState) -> Void
+    init(onNext: @escaping (Shared.PhraseListStoreState) -> Void) {
+        self.onNextState = onNext
+    }
+    func onComplete() { /* no-op */ }
+    func onNext(value: Any?) {
+        if let s = value as? Shared.PhraseListStoreState {
+            onNextState(s)
+        }
+    }
+}
+
 @MainActor
 final class IosViewModel: ObservableObject {
-    private let store: PhraseListStore
-    private var cancellable: AnyCancellable?
+    private let store: Shared.PhraseListStore
+    private var disposable: Shared.RxDisposable?
 
-    @Published var state: PhraseListState = PhraseListState(phrases: [], categories: [], selectedCategoryId: nil, isLoading: true, error: nil)
+    @Published var state: Shared.PhraseListStoreState = Shared.PhraseListStoreState(phrases: [], categories: [], selectedCategoryId: nil, isLoading: true, error: nil)
 
     // TODO: These need to be migrated to their own BLoC stores
     private let bridge = KoinBridge()
@@ -17,32 +31,32 @@ final class IosViewModel: ObservableObject {
 
     init() {
         self.store = KoinBridge().phraseListStore()
-        self.cancellable = store.stateFlow.asPublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] newState in
-                self?.state = newState
-            }
+        let observer = StoreObserver { [weak self] newState in
+            self?.state = newState
+        }
+        self.disposable = store.states(observer: observer)
     }
+    deinit { disposable?.dispose() }
 
     func addCurrentInputAsPhrase() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        store.dispatch(intent: PhraseListIntent.AddPhrase(text: text, categoryId: state.selectedCategoryId))
+    store.accept(intent: Shared.PhraseListStoreIntent.AddPhrase(text: text))
         input = ""
     }
 
     func addCategory(name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        store.dispatch(intent: PhraseListIntent.AddCategory(name: trimmed))
+    store.accept(intent: Shared.PhraseListStoreIntent.AddCategory(name: trimmed))
     }
 
     func deletePhrase(id: String) {
-        store.dispatch(intent: PhraseListIntent.DeletePhrase(id: id))
+    store.accept(intent: Shared.PhraseListStoreIntent.DeletePhrase(phraseId: id))
     }
 
     func selectCategory(id: String?) {
-        store.dispatch(intent: PhraseListIntent.SelectCategory(id: id))
+    store.accept(intent: Shared.PhraseListStoreIntent.SelectCategory(categoryId: id))
     }
 
     var filteredPhrases: [Shared.Phrase] {
@@ -235,8 +249,7 @@ struct ContentView: View {
         }
         .onAppear {
             print("ContentView.onAppear — initializing DI")
-            let bridge = KoinBridge()
-            bridge.startIfNeeded()
+            KoinBridge.companion.start()
             IosDiBridge().applyOverrides()
             model.refreshVoiceAndLanguages() // For settings that are not yet in BLoC
         }
