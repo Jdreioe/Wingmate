@@ -30,6 +30,9 @@ final class IosViewModel: ObservableObject {
     @Published var availableLanguages: [String] = []
 
     init() {
+    // Ensure DI is started and iOS overrides are applied before resolving the store
+    KoinBridge.companion.start()
+    IosDiBridge().applyOverrides()
         self.store = KoinBridge().phraseListStore()
         let observer = StoreObserver { [weak self] newState in
             self?.state = newState
@@ -248,9 +251,6 @@ struct ContentView: View {
             .presentationDetents([.fraction(0.3), .medium])
         }
         .onAppear {
-            print("ContentView.onAppear — initializing DI")
-            KoinBridge.companion.start()
-            IosDiBridge().applyOverrides()
             model.refreshVoiceAndLanguages() // For settings that are not yet in BLoC
         }
         #if DEBUG

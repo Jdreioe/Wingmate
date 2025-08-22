@@ -9,6 +9,7 @@ import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 
@@ -17,7 +18,11 @@ class KoinBridge : KoinComponent {
 
     // --- Simple bridging helpers for Swift UI ---
     suspend fun speak(text: String) {
-        get<SpeechService>().speak(text)
+        try {
+            get<SpeechService>().speak(text)
+        } catch (t: Throwable) {
+            logger.warn(t) { "speak() failed; swallowing to avoid Swift bridge crash" }
+        }
     }
 
     suspend fun selectVoiceAndMaybeUpdatePrimary(voice: Voice) {
@@ -58,10 +63,19 @@ class KoinBridge : KoinComponent {
     }
 
     companion object {
+        private var started: Boolean = false
     fun start() {
-            // Integrate the DI module using our shared initKoin(extraModule)
-            initKoin(appModule)
+            if (started) return
+            try {
+                initKoin(appModule)
+            } catch (_: Throwable) {
+                // If already started, ignore
+            } finally {
+                started = true
+            }
         }
     }
 }
+
+private val logger = KotlinLogging.logger {}
 
