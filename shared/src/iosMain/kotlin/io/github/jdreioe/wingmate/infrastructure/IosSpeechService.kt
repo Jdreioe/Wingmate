@@ -1,6 +1,8 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.SaidText
+import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -10,16 +12,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import platform.AVFAudio.AVAudioPlayer
 import platform.AVFAudio.AVAudioSession
-import platform.Foundation.NSData
-import platform.Foundation.NSError
-import platform.Foundation.dataWithBytes
+import platform.Foundation.*
 
 private val logger = KotlinLogging.logger {}
 
 @OptIn(ExperimentalForeignApi::class)
 class IosSpeechService(
     private val httpClient: HttpClient,
-    private val configRepository: ConfigRepository
+    private val configRepository: ConfigRepository,
+    private val saidRepo: SaidTextRepository? = null,
 ) : SpeechService {
 
     private var audioPlayer: AVAudioPlayer? = null
@@ -50,6 +51,14 @@ class IosSpeechService(
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
         if (text.isBlank()) return
 
+        // Try cache by key (voice+lang+pitch+rate+text hash)
+        val cacheKey = buildCacheKey(text, voice, pitch, rate)
+        val cachedPath = findCachedPath(cacheKey)
+        if (cachedPath != null) {
+            logger.info { "Playing from cache: $cachedPath" }
+            return playFile(cachedPath)
+        }
+
         val audioBytes = withContext(Dispatchers.Default) {
             try {
                 val config = configRepository.getSpeechConfig()
@@ -66,7 +75,7 @@ class IosSpeechService(
                     selectedLanguage = "en-US"
                 )
                 val ssml = AzureTtsClient.generateSsml(text, voiceToUse)
-                val audioData = AzureTtsClient.synthesize(httpClient, ssml, config)
+        val audioData = AzureTtsClient.synthesize(httpClient, ssml, config)
                 logger.info { "Generated ${audioData.size} bytes of audio for text: '${text.take(40)}'" }
                 audioData
             } catch (e: Exception) {
@@ -77,7 +86,25 @@ class IosSpeechService(
 
         audioBytes ?: return
 
-        playAudio(audioBytes)
+    // Save to cache and history
+    val filePath = saveToCache(cacheKey, audioBytes)
+    trySaveHistory(text, voice, pitch, rate, filePath)
+
+    playAudio(audioBytes)
+    }
+
+    private suspend fun playFile(path: String) = withContext(Dispatchers.Main) {
+        stop()
+        val url = NSURL.fileURLWithPath(path)
+        memScoped {
+            val error = alloc<ObjCObjectVar<NSError?>>()
+            audioPlayer = AVAudioPlayer(contentsOfURL = url, error = error.ptr)
+            if (error.value != null) {
+                logger.error { "Failed to create audio player from file: ${error.value?.localizedDescription}" }
+                return@memScoped
+            }
+            audioPlayer?.play()
+        }
     }
 
     private suspend fun playAudio(audioBytes: ByteArray) = withContext(Dispatchers.Main) {
@@ -113,5 +140,106 @@ class IosSpeechService(
             audioPlayer?.stop()
         }
         audioPlayer = null
+    }
+
+    // --- Caching helpers ---
+    private fun buildCacheKey(text: String, voice: Voice?, pitch: Double?, rate: Double?): String {
+        val v = voice?.name ?: voice?.displayName ?: "default"
+        val lang = voice?.selectedLanguage ?: voice?.primaryLanguage ?: ""
+        val p = pitch?.toString() ?: voice?.pitch?.toString() ?: ""
+        val r = rate?.toString() ?: voice?.rate?.toString() ?: ""
+        val raw = listOf(v, lang, p, r, text).joinToString("|")
+        return raw.sha1()
+    }
+
+    private fun findCachedPath(key: String): String? = try {
+        val dir = iosCacheDir()
+        val path = "$dir/$key.m4a"
+        if (platform.Foundation.NSFileManager.defaultManager.fileExistsAtPath(path)) path else null
+    } catch (_: Throwable) { null }
+
+    private fun saveToCache(key: String, bytes: ByteArray): String? = try {
+    val dir = iosCacheDir()
+    NSFileManager.defaultManager.createDirectoryAtPath(dir, true, null, null)
+        val path = "$dir/$key.m4a"
+    val data = bytes.usePinned { NSData.dataWithBytes(it.addressOf(0), it.get().size.toULong()) }
+    NSFileManager.defaultManager.createFileAtPath(path, contents = data, attributes = null)
+        path
+    } catch (t: Throwable) {
+        logger.warn(t) { "Failed to write cache file" }
+        null
+    }
+
+    private suspend fun trySaveHistory(text: String, voice: Voice?, pitch: Double?, rate: Double?, filePath: String?) {
+        val repo = saidRepo ?: return
+        try {
+            val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+            val item = SaidText(
+                date = now,
+                saidText = text,
+                voiceName = voice?.name ?: voice?.displayName,
+                pitch = pitch ?: voice?.pitch,
+                speed = rate ?: voice?.rate,
+                audioFilePath = filePath,
+                createdAt = now,
+                primaryLanguage = voice?.selectedLanguage ?: voice?.primaryLanguage
+            )
+            withContext(Dispatchers.Default) { repo.add(item) }
+        } catch (t: Throwable) {
+            logger.warn(t) { "Failed to save said history" }
+        }
+    }
+
+    private fun iosCacheDir(): String {
+        val home = NSHomeDirectory()
+        val base = "$home/Library/Caches"
+        return "$base/tts-cache"
+    }
+
+    private fun String.sha1(): String {
+        // Simple Kotlin implementation to avoid extra deps; acceptable for cache keys
+        val bytes = this.encodeToByteArray()
+        var h0 = 0x67452301
+        var h1 = 0xEFCDAB89.toInt()
+        var h2 = 0x98BADCFE.toInt()
+        var h3 = 0x10325476
+        var h4 = 0xC3D2E1F0.toInt()
+        val ml = bytes.size * 8L
+        val withOne = bytes + byteArrayOf(0x80.toByte())
+        val padLen = ((56 - (withOne.size % 64) + 64) % 64)
+        val padded = withOne + ByteArray(padLen) + ByteArray(8).apply {
+            for (i in 0 until 8) this[7 - i] = ((ml ushr (8 * i)) and 0xFF).toByte()
+        }
+        fun rotl(x: Int, n: Int) = (x shl n) or (x ushr (32 - n))
+        for (chunk in 0 until padded.size step 64) {
+            val w = IntArray(80)
+            for (i in 0 until 16) {
+                val j = chunk + i * 4
+                w[i] = ((padded[j].toInt() and 0xFF) shl 24) or
+                        ((padded[j + 1].toInt() and 0xFF) shl 16) or
+                        ((padded[j + 2].toInt() and 0xFF) shl 8) or
+                        (padded[j + 3].toInt() and 0xFF)
+            }
+            for (i in 16 until 80) w[i] = rotl(w[i - 3] xor w[i - 8] xor w[i - 14] xor w[i - 16], 1)
+            var a = h0; var b = h1; var c = h2; var d = h3; var e = h4
+            for (i in 0 until 80) {
+                val f: Int; val k: Int = when (i) {
+                    in 0..19 -> { f = (b and c) or ((b.inv()) and d); 0x5A827999 }
+                    in 20..39 -> { f = b xor c xor d; 0x6ED9EBA1 }
+                    in 40..59 -> { f = (b and c) or (b and d) or (c and d); 0x8F1BBCDC.toInt() }
+                    else -> { f = b xor c xor d; 0xCA62C1D6.toInt() }
+                }
+                val temp = (rotl(a, 5) + f + e + k + w[i])
+                e = d
+                d = c
+                c = rotl(b, 30)
+                b = a
+                a = temp
+            }
+            h0 += a; h1 += b; h2 += c; h3 += d; h4 += e
+        }
+        return buildString(40) {
+            for (h in intArrayOf(h0, h1, h2, h3, h4)) append(h.toUInt().toString(16).padStart(8, '0'))
+        }
     }
 }
