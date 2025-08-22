@@ -1,43 +1,116 @@
 package io.github.jdreioe.wingmate.infrastructure
 
+import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.oshai.kotlinlogging.KotlinLogging
+import io.ktor.client.*
+import kotlinx.cinterop.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.slf4j.LoggerFactory
-import platform.AVFoundation.AVSpeechBoundary
-import platform.AVFoundation.AVSpeechSynthesisVoice
-import platform.AVFoundation.AVSpeechSynthesizer
-import platform.AVFoundation.AVSpeechUtterance
-import platform.AVFoundation.AVSpeechUtteranceDefaultSpeechRate
+import platform.AVFAudio.AVAudioPlayer
+import platform.AVFAudio.AVAudioSession
+import platform.AVFAudio.AVAudioSessionCategoryPlayback
+import platform.Foundation.NSData
+import platform.Foundation.NSError
+import platform.Foundation.dataWithBytes
 
-class IosSpeechService : SpeechService {
-    private val log = LoggerFactory.getLogger("IosSpeechService")
-    private val synthesizer = AVSpeechSynthesizer()
+private val logger = KotlinLogging.logger {}
 
-    override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) = withContext(Dispatchers.Main) {
-        if (text.isBlank()) return@withContext
-        val utterance = AVSpeechUtterance.speechUtteranceWithString(text)
+@OptIn(ExperimentalForeignApi::class)
+class IosSpeechService(
+    private val httpClient: HttpClient,
+    private val configRepository: ConfigRepository
+) : SpeechService {
 
-        val lang = voice?.selectedLanguage?.ifBlank { null } ?: voice?.primaryLanguage?.ifBlank { null }
-        val avVoice = lang?.let { AVSpeechSynthesisVoice.voiceWithLanguage(it) }
-        if (avVoice != null) utterance.voice = avVoice
+    private var audioPlayer: AVAudioPlayer? = null
 
-        if (pitch != null) utterance.pitchMultiplier = pitch.coerceIn(0.5, 2.0).toFloat()
-        if (rate != null) {
-            val base = AVSpeechUtteranceDefaultSpeechRate
-            utterance.rate = (base * rate.coerceIn(0.1, 2.0)).toFloat().coerceIn(0.1f, 0.6f)
+    init {
+        configureAudioSession()
+    }
+
+    private fun configureAudioSession() {
+        try {
+            val session = AVAudioSession.sharedInstance()
+            // Newer AVFAudio bindings prefer NSErrorPointer parameters
+            memScoped {
+                val err = alloc<ObjCObjectVar<NSError?>>()
+                session.setCategory(AVAudioSessionCategoryPlayback, error = err.ptr)
+                session.setActive(true, error = err.ptr)
+                if (err.value != null) {
+                    logger.error { "AVAudioSession error: ${err.value?.localizedDescription}" }
+                }
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to configure AVAudioSession" }
+        }
+    }
+
+    override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
+        if (text.isBlank()) return
+
+        val audioBytes = withContext(Dispatchers.Default) {
+            try {
+                val config = configRepository.getSpeechConfig()
+                if (config == null) {
+                    logger.warn { "No speech config found, cannot speak" }
+                    return@withContext null
+                }
+
+                val voiceToUse = voice ?: Voice(
+                    id = null,
+                    name = "en-US-JennyNeural",
+                    displayName = "Default Voice",
+                    primaryLanguage = "en-US",
+                    selectedLanguage = "en-US"
+                )
+                val ssml = AzureTtsClient.generateSsml(text, voiceToUse)
+                val audioData = AzureTtsClient.synthesize(httpClient, ssml, config)
+                logger.info { "Generated ${audioData.size} bytes of audio for text: '${text.take(40)}'" }
+                audioData
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to synthesize speech for text: '${text.take(40)}'" }
+                null
+            }
         }
 
-        log.info("Speaking on iOS: '{}' (lang={})", text.take(40), lang ?: "<default>")
-        synthesizer.speakUtterance(utterance)
+        audioBytes ?: return
+
+        playAudio(audioBytes)
+    }
+
+    private suspend fun playAudio(audioBytes: ByteArray) = withContext(Dispatchers.Main) {
+        stop()
+
+        val nsData = audioBytes.usePinned {
+            NSData.dataWithBytes(it.addressOf(0), it.get().size.toULong())
+        }
+
+        memScoped {
+            val error = alloc<ObjCObjectVar<NSError?>>()
+            audioPlayer = AVAudioPlayer(data = nsData, error = error.ptr)
+
+            if (error.value != null) {
+                logger.error { "Failed to create audio player: ${error.value?.localizedDescription}" }
+                return@memScoped
+            }
+
+            audioPlayer?.play()
+        }
     }
 
     override suspend fun pause() = withContext(Dispatchers.Main) {
-        if (synthesizer.speaking) synthesizer.pauseSpeakingAtBoundary(AVSpeechBoundary.AVSpeechBoundaryImmediate)
+        logger.info { "Pause speech on iOS" }
+        if (audioPlayer?.isPlaying() == true) {
+            audioPlayer?.pause()
+        }
     }
 
     override suspend fun stop() = withContext(Dispatchers.Main) {
-        synthesizer.stopSpeakingAtBoundary(AVSpeechBoundary.AVSpeechBoundaryImmediate)
+        logger.info { "Stop speech on iOS" }
+        if (audioPlayer?.isPlaying() == true) {
+            audioPlayer?.stop()
+        }
+        audioPlayer = null
     }
 }

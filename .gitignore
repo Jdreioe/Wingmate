@@ -3,3 +3,19 @@
 local.properties
 *.iml
 .idea/
+
+# Ignore all Gradle/KMP build outputs in any module
+**/build/
+**/.gradle/
+
+# macOS
+.DS_Store
+
+# Xcode / iOS
+**/xcuserdata/
+**/*.xcuserstate
+iosApp/Pods/
+iosApp/iosApp.xcworkspace/
+shared/build/
+shared/build/bin/
+shared/build/cocoapods/
