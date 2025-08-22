@@ -62,6 +62,7 @@ final class IosViewModel: ObservableObject {
     func speak(_ text: String) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
+    AudioSessionHelper.activatePlayback()
         Task { _ = try? await bridge.speak(text: t) }
     }
 

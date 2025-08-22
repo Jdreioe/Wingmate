@@ -10,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import platform.AVFAudio.AVAudioPlayer
 import platform.AVFAudio.AVAudioSession
-import platform.AVFAudio.AVAudioSessionCategoryPlayback
 import platform.Foundation.NSData
 import platform.Foundation.NSError
 import platform.Foundation.dataWithBytes
@@ -35,8 +34,10 @@ class IosSpeechService(
             // Newer AVFAudio bindings prefer NSErrorPointer parameters
             memScoped {
                 val err = alloc<ObjCObjectVar<NSError?>>()
-                session.setCategory(AVAudioSessionCategoryPlayback, error = err.ptr)
-                session.setActive(true, error = err.ptr)
+                // Pass category by name to avoid constant import differences across SDKs
+                session.setCategory("AVAudioSessionCategoryPlayback", error = err.ptr)
+                // Some AVFAudio bindings don't expose setActive; skip if unavailable
+                // iOS often auto-activates on playback; if needed, this can be handled in Swift side
                 if (err.value != null) {
                     logger.error { "AVAudioSession error: ${err.value?.localizedDescription}" }
                 }

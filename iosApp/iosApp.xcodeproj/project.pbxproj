@@ -7,27 +7,27 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-	6633134F2E55CEF1005129F5 /* Shared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6633134E2E55CEF1005129F5 /* Shared.framework */; };
-	B9DA98062DC9E10A00A4DA20 /* Shared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6633134E2E55CEF1005129F5 /* Shared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		6633134F2E55CEF1005129F5 /* Shared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6633134E2E55CEF1005129F5 /* Shared.framework */; };
+		B9DA98062DC9E10A00A4DA20 /* Shared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6633134E2E55CEF1005129F5 /* Shared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-	B9DA98052DC9E10000A4DA20 /* Embed Frameworks */ = {
-		isa = PBXCopyFilesBuildPhase;
-		buildActionMask = 2147483647;
-		dstPath = "";
-		dstSubfolderSpec = 10;
-		files = (
+		B9DA98052DC9E10000A4DA20 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
 				B9DA98062DC9E10A00A4DA20 /* Shared.framework in Embed Frameworks */,
-		);
-		name = "Embed Frameworks";
-		runOnlyForDeploymentPostprocessing = 0;
-	};
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-	6633134E2E55CEF1005129F5 /* Shared.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Shared.framework; path = "$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)/Shared.framework"; sourceTree = "<absolute>"; };
-	B9DA97B12DC1472C00A4DA20 /* Wingmate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Wingmate.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6633134E2E55CEF1005129F5 /* Shared.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Shared.framework; path = "$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)/Shared.framework"; sourceTree = "<absolute>"; };
+		B9DA97B12DC1472C00A4DA20 /* Wingmate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Wingmate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -57,11 +57,11 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-	B9DA97AE2DC1472C00A4DA20 /* Frameworks */ = {
+		B9DA97AE2DC1472C00A4DA20 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-		6633134F2E55CEF1005129F5 /* Shared.framework in Frameworks */,
+				6633134F2E55CEF1005129F5 /* Shared.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -86,10 +86,10 @@
 			);
 			sourceTree = "<group>";
 		};
-	B9DA97B22DC1472C00A4DA20 /* Products */ = {
+		B9DA97B22DC1472C00A4DA20 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-		B9DA97B12DC1472C00A4DA20 /* Wingmate.app */,
+				B9DA97B12DC1472C00A4DA20 /* Wingmate.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -183,7 +183,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\n: \"${CONFIGURATION:=Debug}\"\n: \"${SDK_NAME:=iphonesimulator}\"\n: \"${ARCHS:=arm64}\"\nFRAMEWORK_DIR=\"$SRCROOT/../shared/build/xcode-frameworks/$CONFIGURATION/$SDK_NAME\"\nFRAMEWORK_PATH=\"$FRAMEWORK_DIR/Shared.framework\"\n\n# 1) If the framework already exists, use it.\nif [ -d \"$FRAMEWORK_PATH\" ]; then\n  echo \"Using cached Kotlin framework at $FRAMEWORK_PATH\"\n  exit 0\nfi\n\ncd \"$SRCROOT/..\"\nchmod +x ./gradlew || true\n# Try to locate a JDK (21 or 17).\nJAVA_CANDIDATE=\"$(/usr/libexec/java_home -v 21 2>/dev/null || /usr/libexec/java_home -v 17 2>/dev/null || true)\"\nif [ -n \"$JAVA_CANDIDATE\" ]; then export JAVA_HOME=\"$JAVA_CANDIDATE\"; export PATH=\"$JAVA_HOME/bin:$PATH\"; fi\n\n# 2) Preferred: embedAndSignAppleFrameworkForXcode populates xcode-frameworks/CONFIG/SDK.\nif command -v java >/dev/null 2>&1; then\n  echo \"Running Gradle task: :shared:embedAndSignAppleFrameworkForXcode\"\n  if ./gradlew :shared:embedAndSignAppleFrameworkForXcode \\\n      -PXCODE_CONFIGURATION=\"$CONFIGURATION\" \\\n      -PXCODE_SDK=\"$SDK_NAME\" \\\n      -PARCHS=\"$ARCHS\" \\\n      --no-daemon; then\n    if [ -d \"$FRAMEWORK_PATH\" ]; then\n      echo \"Kotlin framework is ready at $FRAMEWORK_PATH\"\n      exit 0\n    fi\n  else\n    echo \"embedAndSign task failed, will try link+copy fallback.\"\n  fi\nelse\n  echo \"Java not found, skipping embedAndSign task.\"\nfi\n\n# 3) Fallback: link the framework and copy to xcode-frameworks.\nARCH=\"${ARCHS%% *}\"\nPLATFORM=\"IosArm64\"\nif [[ \"$SDK_NAME\" == *simulator* ]]; then\n  if [[ \"$ARCH\" == \"x86_64\" ]]; then PLATFORM=\"IosX64\"; else PLATFORM=\"IosSimulatorArm64\"; fi\nfi\nTASK=\":shared:link${CONFIGURATION}Framework$PLATFORM\"\nBIN_CONF=\"debugFramework\"\nif [ \"$CONFIGURATION\" = \"Release\" ]; then BIN_CONF=\"releaseFramework\"; fi\nBIN_DIR=\"$SRCROOT/../shared/build/bin/$(echo $PLATFORM | sed 's/Ios/ios/')/$BIN_CONF\"\n\necho \"Running Gradle task: $TASK\"\nif command -v java >/dev/null 2>&1; then\n  ./gradlew $TASK --no-daemon || true\nelse\n  echo \"Java not found, attempting to use any prebuilt outputs if available.\"\nfi\n\nif [ -d \"$BIN_DIR/Shared.framework\" ]; then\n  mkdir -p \"$FRAMEWORK_DIR\"\n  rsync -a \"$BIN_DIR/Shared.framework\" \"$FRAMEWORK_DIR/\"\nfi\n\n# 4) Final check.\nif [ -d \"$FRAMEWORK_PATH\" ]; then\n  echo \"Kotlin framework is ready at $FRAMEWORK_PATH\"\n  exit 0\nfi\n\necho \"Shared.framework not found at $FRAMEWORK_PATH.\"\necho \"Tried embedAndSign and link+copy fallback.\"\necho \"To prebuild manually run one of:\\n  ./gradlew :shared:embedAndSignAppleFrameworkForXcode -PXCODE_CONFIGURATION=$CONFIGURATION -PXCODE_SDK=$SDK_NAME -PARCHS=$ARCHS\\n  ./gradlew $TASK\"\nexit 1\n";
 			shellScript = "set -euo pipefail\n\n# This script builds the shared Kotlin framework and ensures it's available for Xcode.\n\n# Go to the root of the project\ncd \"$SRCROOT/..\"\n\n# Run the Gradle wrapper to build the framework\n# The embedAndSignAppleFrameworkForXcode task builds a dynamic framework for the correct configuration and architecture.\necho \"Building shared framework for $CONFIGURATION $SDK_NAME ($ARCHS)\"\n./gradlew :shared:embedAndSignAppleFrameworkForXcode";
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -340,6 +339,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iosApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Wingmate;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -355,7 +355,6 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hojmoseit.Wingmate;
 				PRODUCT_NAME = Wingmate;
-				INFOPLIST_KEY_CFBundleDisplayName = Wingmate;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -384,6 +383,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iosApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Wingmate;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -399,7 +399,6 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hojmoseit.Wingmate;
 				PRODUCT_NAME = Wingmate;
-				INFOPLIST_KEY_CFBundleDisplayName = Wingmate;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
