@@ -1,0 +1,30 @@
+package io.github.jdreioe.wingmate.di
+
+import com.arkivanov.mvikotlin.core.store.StoreFactory
+import com.arkivanov.mvikotlin.main.store.DefaultStoreFactory
+import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
+import io.github.jdreioe.wingmate.application.bloc.PhraseListStoreFactory
+import io.github.jdreioe.wingmate.application.usecase.AddCategoryUseCase
+import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
+import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
+import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
+import org.koin.dsl.module
+
+val appModule = module {
+    single<StoreFactory> { DefaultStoreFactory() }
+
+    factory { AddPhraseUseCase(get()) }
+    factory { GetPhrasesAndCategoriesUseCase(get()) }
+    factory { AddCategoryUseCase(get()) }
+    factory { DeletePhraseUseCase(get()) }
+
+    factory {
+        PhraseListStoreFactory(
+            storeFactory = get(),
+            getPhrasesAndCategoriesUseCase = get(),
+            addPhraseUseCase = get(),
+            addCategoryUseCase = get(),
+            deletePhraseUseCase = get()
+        ).create()
+    }
+}

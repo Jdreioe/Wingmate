@@ -5,6 +5,7 @@ import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 
@@ -13,8 +14,20 @@ class AndroidSqlVoiceRepository(private val context: Context) : VoiceRepository 
     private val json = Json { prettyPrint = true }
 
     override suspend fun getVoices(): List<Voice> = withContext(Dispatchers.IO) {
-        // no persisted catalog, return empty
-        emptyList()
+        val db = helper.readableDatabase
+        val cursor = db.query("voices", arrayOf("data"), "id = ?", arrayOf("2"), null, null, null)
+        val list = if (cursor.moveToFirst()) {
+            val text = cursor.getString(cursor.getColumnIndexOrThrow("data"))
+            runCatching { Json { ignoreUnknownKeys = true }.decodeFromString(ListSerializer(Voice.serializer()), text) }.getOrNull() ?: emptyList()
+        } else emptyList()
+        cursor.close()
+        list
+    }
+
+    override suspend fun saveVoices(list: List<Voice>) = withContext(Dispatchers.IO) {
+        val jsonList = Json { prettyPrint = false }.encodeToString(ListSerializer(Voice.serializer()), list)
+        val db = helper.writableDatabase
+        db.execSQL("INSERT OR REPLACE INTO voices (id, data) VALUES (2, ?)", arrayOf(jsonList))
     }
 
     override suspend fun saveSelected(voice: Voice) = withContext(Dispatchers.IO) {

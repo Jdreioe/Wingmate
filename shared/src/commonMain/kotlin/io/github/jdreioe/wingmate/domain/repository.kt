@@ -22,6 +22,7 @@ interface SettingsRepository {
 
 interface VoiceRepository {
     suspend fun getVoices(): List<Voice>
+    suspend fun saveVoices(list: List<Voice>)
     suspend fun saveSelected(voice: Voice)
     suspend fun getSelected(): Voice?
 }

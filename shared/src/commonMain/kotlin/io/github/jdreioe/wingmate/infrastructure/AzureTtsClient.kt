@@ -7,13 +7,14 @@ import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import org.slf4j.LoggerFactory
+import io.github.oshai.kotlinlogging.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 /**
  * Thin shared Azure TTS client. Accepts SSML and returns audio bytes (mp3) from Azure.
  * Uses Ktor client from the calling platform (ensure ktor client engine configured on each platform).
  */
 object AzureTtsClient {
-    private val slf4jLogger = LoggerFactory.getLogger(AzureTtsClient::class.java)
     suspend fun synthesize(client: HttpClient, ssml: String, config: SpeechServiceConfig): ByteArray {
         // The stored config.endpoint may be either a short region (e.g. "westus")
         // or a full host/URL. Support both forms:
@@ -25,8 +26,8 @@ object AzureTtsClient {
         val url = "$baseUrl/cognitiveservices/v1"
 
         // Debug logging (do not print subscription key)
-        slf4jLogger.info("Azure TTS request -> url={} (endpoint={})", url, config.endpoint)
-        slf4jLogger.debug("SSML length={} preview={},", ssml.length, ssml.take(200).replace(Regex("\n"), " "))
+        logger.info { "Azure TTS request -> url=$url (endpoint=${config.endpoint})" }
+        logger.debug { "SSML length=${ssml.length} preview=${ssml.take(200).replace(Regex("\n"), " ")}" }
 
         val response: HttpResponse = client.post(url) {
             headers {
@@ -39,14 +40,14 @@ object AzureTtsClient {
             setBody(ssml)
         }
 
-        slf4jLogger.info("Azure TTS response status={}", response.status)
+        logger.info { "Azure TTS response status=${response.status}" }
         if (response.status.isSuccess()) {
             val bytes = response.body<ByteArray>()
-            slf4jLogger.info("Azure TTS returned {} bytes", bytes.size)
+            logger.info { "Azure TTS returned ${bytes.size} bytes" }
             return bytes
         } else {
             val body = response.bodyAsText()
-            slf4jLogger.error("Azure TTS failed: {} - {}", response.status, body.take(2000))
+            logger.error { "Azure TTS failed: ${response.status} - ${body.take(2000)}" }
             throw RuntimeException("Azure TTS failed: ${response.status} - $body")
         }
     }
@@ -57,8 +58,7 @@ object AzureTtsClient {
     val primaryLanguage = voice.primaryLanguage ?: "en-US"
     val pitchForSSML = voice.pitchForSSML ?: "medium"
     val rateForSSML = voice.rateForSSML ?: "medium"
-    slf4jLogger.debug("generateSsml: voiceName={} primaryLanguage={} selectedLanguage={} pitchForSSML={} rateForSSML={}",
-        voice.name, primaryLanguage, voice.primaryLanguage, pitchForSSML, rateForSSML)
+    logger.debug { "generateSsml: voiceName=${voice.name} primaryLanguage=$primaryLanguage selectedLanguage=${voice.primaryLanguage} pitchForSSML=$pitchForSSML rateForSSML=$rateForSSML" }
     val langTag = "<lang xml:lang=\"$primaryLanguage\">"
     val rateTag = "<prosody rate=\"$rateForSSML\">"
     val endRate = "</prosody>"
@@ -66,7 +66,7 @@ object AzureTtsClient {
     val endPitch = "</prosody>"
 
         val endLang = "</lang>"
-    slf4jLogger.debug("primaryLanguage.isEmpty()={}", primaryLanguage.isEmpty())
+    logger.debug { "primaryLanguage.isEmpty()=${primaryLanguage.isEmpty()}" }
         return if (primaryLanguage.isEmpty()) {
             """
             <speak version="1.0" xml:lang="en-US">

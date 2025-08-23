@@ -12,7 +12,7 @@ class InMemoryPhraseRepository : PhraseRepository {
     }
     override suspend fun add(phrase: Phrase): Phrase {
         delay(50)
-        val p = phrase.copy(id = phrase.id.ifBlank { Random.nextInt().toString() }, createdAt = if (phrase.createdAt == 0L) System.currentTimeMillis() else phrase.createdAt)
+        val p = phrase.copy(id = phrase.id.ifBlank { Random.nextInt().toString() }, createdAt = if (phrase.createdAt == 0L) kotlinx.datetime.Clock.System.now().toEpochMilliseconds() else phrase.createdAt)
         store.add(p)
         return p
     }
@@ -55,6 +55,11 @@ class InMemoryVoiceRepository : VoiceRepository {
     override suspend fun getVoices(): List<Voice> {
         delay(10)
         return voices.toList()
+    }
+    override suspend fun saveVoices(list: List<Voice>) {
+        delay(10)
+        voices.clear()
+        voices.addAll(list)
     }
     override suspend fun saveSelected(voice: Voice) {
         delay(10)

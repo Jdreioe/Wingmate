@@ -55,3 +55,19 @@ composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/infrastructure/D
 composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/infrastructure/DesktopSpeechService$speak$2.class
 composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/ui/ComposableSingletons$PhraseScreenKt.class
 composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/ui/ComposableSingletons$PhraseScreenKt$lambda-1$1.class
+
+# Ignore all Gradle/KMP build outputs in any module
+**/build/
+**/.gradle/
+
+# macOS
+.DS_Store
+
+# Xcode / iOS
+**/xcuserdata/
+**/*.xcuserstate
+iosApp/Pods/
+iosApp/iosApp.xcworkspace/
+shared/build/
+shared/build/bin/
+shared/build/cocoapods/
