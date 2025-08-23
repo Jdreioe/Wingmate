@@ -1,7 +1,57 @@
-/.gradle/
-/build/
-local.properties
-*.iml
+## OS junk
+.DS_Store
+Thumbs.db
+
+## IDEs/editors
 .idea/
-./shared/build/
-./composeApp/build
+*.iml
+.vscode/
+.fleet/
+
+## Gradle
+/.gradle/
+**/.gradle/
+/build/
+**/build/
+
+## Kotlin/Native local cache
+.konan/
+
+## Android
+local.properties
+*.keystore
+*.jks
+/androidApp/build/
+androidApp/**/build/
+
+## Compose Desktop/JVM
+/composeApp/build/
+
+## Shared module
+/shared/build/
+
+## iOS / Xcode
+/iosApp/build/
+iosApp/iosApp.xcodeproj/xcuserdata/
+iosApp/iosApp.xcodeproj/project.xcworkspace/xcuserdata/
+iosApp/iosApp.xcworkspace/xcuserdata/
+DerivedData/
+*.xcuserstate
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+## CocoaPods (we keep Podfile and Podfile.lock, but not Pods/)
+iosApp/Pods/
+
+## Logs
+*.log
+composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/infrastructure/DesktopSpeechService$speak$1.class
+composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/infrastructure/DesktopSpeechService$speak$1.class
+composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/infrastructure/DesktopSpeechService$speak$2.class
+composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/ui/ComposableSingletons$PhraseScreenKt.class
+composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/ui/ComposableSingletons$PhraseScreenKt$lambda-1$1.class
