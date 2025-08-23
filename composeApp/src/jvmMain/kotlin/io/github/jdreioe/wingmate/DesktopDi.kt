@@ -20,6 +20,8 @@ fun overrideDesktopSpeechService() {
             single<io.github.jdreioe.wingmate.domain.VoiceRepository> { DesktopSqlVoiceRepository() }
             // Persist UI settings on desktop
             single<io.github.jdreioe.wingmate.domain.SettingsRepository> { DesktopSqlSettingsRepository() }
+            // Persist said texts on desktop
+            single<io.github.jdreioe.wingmate.domain.SaidTextRepository> { io.github.jdreioe.wingmate.infrastructure.DesktopSqlSaidTextRepository() }
         }
     )
 }

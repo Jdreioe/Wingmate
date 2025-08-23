@@ -6,7 +6,10 @@ import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import javazoom.jl.player.Player
-import java.io.ByteArrayInputStream
+import java.io.FileInputStream
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.Dispatchers
@@ -56,19 +59,55 @@ class DesktopSpeechService : SpeechService {
                 val ssml = AzureTtsClient.generateSsml(text, vForSsml)
                 val bytes = AzureTtsClient.synthesize(client, ssml, cfg)
 
-                // Play from memory using JLayer. Ensure only one player runs at a time.
-                ByteArrayInputStream(bytes).use { bis ->
-                    val player = Player(bis)
-                    // Close any existing player before starting a new one
+                // Resolve data directory for audio files
+                fun dataDir(): Path {
+                    val os = System.getProperty("os.name").lowercase()
+                    return when {
+                        os.contains("mac") -> Paths.get(System.getProperty("user.home"), "Library", "Application Support", "Wingmate")
+                        os.contains("win") -> {
+                            val local = System.getenv("LOCALAPPDATA") ?: Paths.get(System.getProperty("user.home"), "AppData", "Local").toString()
+                            Paths.get(local, "Wingmate")
+                        }
+                        else -> Paths.get(System.getProperty("user.home"), ".local", "share", "wingmate")
+                    }
+                }
+
+                val audioDir = dataDir().resolve("audio")
+                if (!Files.exists(audioDir)) Files.createDirectories(audioDir)
+                val safeName = text.take(32).replace("[^A-Za-z0-9-_ ]".toRegex(), "_").trim().ifBlank { "utterance" }
+                val outPath = audioDir.resolve("${'$'}{System.currentTimeMillis()}_${'$'}safeName.mp3")
+                Files.write(outPath, bytes)
+
+                // Save history with audioFilePath if repo available
+                runCatching {
+                    val koin = org.koin.core.context.GlobalContext.getOrNull()
+                    val repo = koin?.get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+                    val now = System.currentTimeMillis()
+                    repo?.add(
+                        io.github.jdreioe.wingmate.domain.SaidText(
+                            date = now,
+                            saidText = text,
+                            voiceName = vForSsml.name,
+                            pitch = vForSsml.pitch,
+                            speed = vForSsml.rate,
+                            audioFilePath = outPath.toAbsolutePath().toString(),
+                            createdAt = now,
+                            position = 0,
+                            primaryLanguage = vForSsml.selectedLanguage?.takeIf { it.isNotBlank() } ?: vForSsml.primaryLanguage
+                        )
+                    )
+                }
+
+                // Play from saved file; ensure only one player at a time
+                FileInputStream(outPath.toFile()).use { fis ->
+                    val player = Player(fis)
                     synchronized(playerLock) {
                         currentPlayer?.close()
                         currentPlayer = player
                     }
-
                     try {
                         player.play()
                     } finally {
-                        // Clear reference when finished
                         synchronized(playerLock) {
                             if (currentPlayer === player) currentPlayer = null
                         }

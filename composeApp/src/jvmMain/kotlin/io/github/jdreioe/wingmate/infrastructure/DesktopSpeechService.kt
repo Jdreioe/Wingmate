@@ -10,6 +10,8 @@ import io.ktor.client.engine.okhttp.*
 import java.io.File
 import javazoom.jl.player.Player
 import java.io.ByteArrayInputStream
+import java.io.FileInputStream
+import java.nio.file.Files
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
@@ -47,10 +49,37 @@ class DesktopSpeechService : SpeechService {
             val bytes = AzureTtsClient.synthesize(client, ssml, cfg)
             log.info("received {} bytes from Azure TTS", bytes.size)
 
-            // Play from memory using JLayer
-            ByteArrayInputStream(bytes).use { bis ->
+            // Save audio to disk under platform data dir (e.g., ~/.local/share/wingmate/audio)
+            val audioDir = DesktopPaths.dataDir().resolve("audio")
+            if (!Files.exists(audioDir)) Files.createDirectories(audioDir)
+            val safeName = text.take(32).replace("[^A-Za-z0-9-_ ]".toRegex(), "_").trim().ifBlank { "utterance" }
+            val outPath = audioDir.resolve("${'$'}{System.currentTimeMillis()}_${'$'}safeName.mp3")
+            Files.write(outPath, bytes)
+
+            // Record history with file path if repository is available
+            runCatching {
+                val koin = GlobalContext.getOrNull()
+                val repo = koin?.get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+                val now = System.currentTimeMillis()
+                repo?.add(
+                    io.github.jdreioe.wingmate.domain.SaidText(
+                        date = now,
+                        saidText = text,
+                        voiceName = vForSsml.name,
+                        pitch = vForSsml.pitch,
+                        speed = vForSsml.rate,
+                        audioFilePath = outPath.toAbsolutePath().toString(),
+                        createdAt = now,
+                        position = 0,
+                        primaryLanguage = vForSsml.selectedLanguage?.takeIf { it.isNotBlank() } ?: vForSsml.primaryLanguage
+                    )
+                )
+            }
+
+            // Play from saved file for consistency with stored path
+            FileInputStream(outPath.toFile()).use { fis ->
                 log.info("starting playback on thread={}", Thread.currentThread().name)
-                val player = Player(bis)
+                val player = Player(fis)
                 player.play()
                 log.info("playback finished")
             }

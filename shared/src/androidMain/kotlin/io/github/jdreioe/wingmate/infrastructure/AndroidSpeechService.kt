@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import org.koin.core.context.GlobalContext
 import org.slf4j.LoggerFactory
 import java.io.File
+import android.os.Environment
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -76,9 +77,33 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                     val ssml = AzureTtsClient.generateSsml(text, vForSsml)
                     val bytes = AzureTtsClient.synthesize(client, ssml, cfg)
 
-                    // Write to temp file and play using MediaPlayer. Ensure single-player semantics.
-                    val tmp = File.createTempFile("wingmate-", ".mp3", context.cacheDir)
-                    tmp.outputStream().use { it.write(bytes) }
+                    // Persist to an app-private Music directory so history can reference it later
+                    val musicRoot = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
+                    val outDir = File(musicRoot, "wingmate/audio").apply { if (!exists()) mkdirs() }
+                    val safeName = text.take(32).replace("[^A-Za-z0-9-_ ]".toRegex(), "_").trim().ifBlank { "utterance" }
+                    val fileName = "${'$'}{System.currentTimeMillis()}_${'$'}safeName.mp3"
+                    val outFile = File(outDir, fileName)
+                    outFile.outputStream().use { it.write(bytes) }
+
+                    // Save history record if repository is available
+                    runCatching {
+                        val koin = GlobalContext.getOrNull()
+                        val saidRepo = koin?.get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+                        val now = System.currentTimeMillis()
+                        saidRepo?.add(
+                            io.github.jdreioe.wingmate.domain.SaidText(
+                                date = now,
+                                saidText = text,
+                                voiceName = vForSsml.name,
+                                pitch = vForSsml.pitch,
+                                speed = vForSsml.rate,
+                                audioFilePath = outFile.absolutePath,
+                                createdAt = now,
+                                position = 0,
+                                primaryLanguage = vForSsml.selectedLanguage?.ifBlank { vForSsml.primaryLanguage }
+                            )
+                        )
+                    }
 
                     val player = MediaPlayer()
                     player.setOnCompletionListener { mp ->
@@ -91,17 +116,14 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                                 }
                             }
                         } catch (_: Throwable) {
-                        } finally {
-                            try { tmp.delete() } catch (_: Throwable) {}
-                        }
+                        } finally { /* keep outFile for history */ }
                     }
                     player.setOnErrorListener { mp, what, extra ->
                         try { synchronized(playerLock) { if (mediaPlayer === mp) { mp.reset(); mp.release(); mediaPlayer = null } } } catch (_: Throwable) {}
-                        try { tmp.delete() } catch (_: Throwable) {}
                         false
                     }
 
-                    player.setDataSource(tmp.absolutePath)
+                    player.setDataSource(outFile.absolutePath)
                     player.prepare()
                     synchronized(playerLock) {
                         // Stop any existing player

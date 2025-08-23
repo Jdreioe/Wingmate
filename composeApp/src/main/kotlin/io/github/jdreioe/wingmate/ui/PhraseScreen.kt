@@ -51,6 +51,9 @@ fun PhraseScreen() {
                 value = s?.primaryLanguage ?: "en-US"
             }
 
+            // Input state (hoisted so topBar History button can access it)
+            var input by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 topBar = {
@@ -62,6 +65,24 @@ fun PhraseScreen() {
                                 Text(primaryLanguageState.value)
                             }
                             Spacer(Modifier.width(12.dp))
+                            // History button: restore the most recently saved said text into the input field
+                            val saidRepo = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>() }
+                            val topBarScope = rememberCoroutineScope()
+                            IconButton(onClick = {
+                                topBarScope.launch(Dispatchers.IO) {
+                                    val newest = runCatching { saidRepo.list().firstOrNull() }.getOrNull()
+                                    if (newest?.saidText != null) {
+                                        val text = newest.saidText ?: ""
+                                        // switch to main to update state
+                                        topBarScope.launch {
+                                            input = androidx.compose.ui.text.input.TextFieldValue(text, selection = androidx.compose.ui.text.TextRange(text.length))
+                                        }
+                                    }
+                                }
+                            }) {
+                                Icon(imageVector = Icons.Filled.FormatListBulleted, contentDescription = "History")
+                            }
+                            Spacer(Modifier.width(4.dp))
                             IconButton(onClick = { showVoiceSelection = true }) {
                                 Icon(imageVector = Icons.Filled.Settings, contentDescription = "Voice settings")
                             }
@@ -109,12 +130,12 @@ fun PhraseScreen() {
             }
 
             // simple inline add (TextToSpeech input at top) — use TextFieldValue to track cursor/selection
-            var input by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
             OutlinedTextField(value = input, onValueChange = { input = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Enter text to speak") })
             Spacer(modifier = Modifier.height(8.dp))
 
             // Playback controls below the input
             val speechService = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SpeechService>() }
+            val saidRepo = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>() }
             val voiceUseCase = remember { GlobalContext.get().get<VoiceUseCase>() }
             val settingsUseCase = remember { runCatching { GlobalContext.get().get<SettingsUseCase>() }.getOrNull() }
             val uiScope = rememberCoroutineScope()
@@ -124,6 +145,22 @@ fun PhraseScreen() {
                     try {
                         val selected = runCatching { voiceUseCase.selected() }.getOrNull()
                         speechService.speak(input.text, selected, selected?.pitch, selected?.rate)
+                        // Save a history record
+                        runCatching {
+                            val now = System.currentTimeMillis()
+                            saidRepo.add(
+                                io.github.jdreioe.wingmate.domain.SaidText(
+                                    date = now,
+                                    saidText = input.text,
+                                    voiceName = selected?.name,
+                                    pitch = selected?.pitch,
+                                    speed = selected?.rate,
+                                    createdAt = now,
+                                    position = 0,
+                                    primaryLanguage = selected?.selectedLanguage?.takeIf { it.isNotBlank() } ?: selected?.primaryLanguage
+                                )
+                            )
+                        }
                     } catch (t: Throwable) {
                         // swallow for UI; diagnostics logged by service
                     }
@@ -136,6 +173,22 @@ fun PhraseScreen() {
                         val secondaryLang = settingsUseCase?.let { runCatching { it.get() }.getOrNull()?.secondaryLanguage } ?: selected?.primaryLanguage
                         val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: selected?.selectedLanguage ?: "")
                         speechService.speak(input.text, vForSecondary, vForSecondary?.pitch, vForSecondary?.rate)
+                        // Save a history record for secondary as well
+                        runCatching {
+                            val now = System.currentTimeMillis()
+                            saidRepo.add(
+                                io.github.jdreioe.wingmate.domain.SaidText(
+                                    date = now,
+                                    saidText = input.text,
+                                    voiceName = vForSecondary?.name,
+                                    pitch = vForSecondary?.pitch,
+                                    speed = vForSecondary?.rate,
+                                    createdAt = now,
+                                    position = 0,
+                                    primaryLanguage = vForSecondary?.selectedLanguage?.takeIf { it.isNotBlank() } ?: vForSecondary?.primaryLanguage
+                                )
+                            )
+                        }
                     } catch (t: Throwable) {
                     }
                 }
