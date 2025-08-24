@@ -1,7 +1,7 @@
 /* Base (English) Localizations */
 "app.title" = "Wingmate";
-"welcome.title" = "Velkommen!";
-"welcome.subtitle" = "En Kotlin Multiplatform AAC app for Android, iOS, og PC.";
+"welcome.title" = "Velkommen til Wingmate!";
+"welcome.subtitle" = "En AAC-app, der føles hjemmehørende uanset platform.";
 "welcome.azure_settings" = "Azure Indstillinger";
 "welcome.choose_voice" = "Vælg din stemme!";
 "common.continue" = "Færdig";
@@ -55,3 +55,8 @@
 "ui_size.playback.icon" = "Ikon størrelse";
 
 "common.name" = "Navn";
+"common.done" = "OK";
+
+"phrase.edit" = "Rediger";
+"phrase.play_tts" = "Afspil";
+"phrase.record" = "Optag";
