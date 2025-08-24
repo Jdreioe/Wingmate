@@ -1,0 +1,56 @@
+/* German Localizations */
+"app.title" = "Wingmate";
+"welcome.title" = "Willkommen";
+"welcome.subtitle" = "Eine Kotlin Multiplatform AAC-App für Android, iOS und mehr.";
+"welcome.azure_settings" = "Azure-Einstellungen";
+"welcome.choose_voice" = "Stimme wählen";
+"common.continue" = "Weiter";
+
+"tts.placeholder" = "Text zum Sprechen eingeben";
+"toolbar.language" = "Sprache";
+"toolbar.voice" = "Stimme";
+"toolbar.add_category" = "Kategorie hinzufügen";
+"toolbar.ui_size" = "UI-Größe";
+"toolbar.reorder" = "Neu anordnen";
+
+"categories.all" = "Alle";
+"category.new.title" = "Neue Kategorie";
+"category.name.placeholder" = "Kategoriename";
+"category.save" = "Speichern";
+"category.close" = "Schließen";
+"category.delete" = "Kategorie löschen";
+
+"phrase.new.title" = "Neuer Ausdruck";
+"phrase.text.placeholder" = "Text des Ausdrucks";
+"phrase.edit.title" = "Ausdruck bearbeiten";
+"phrase.display_name.optional" = "Anzeigename (optional)";
+"phrase.save" = "Speichern";
+"phrase.delete" = "Löschen";
+"phrase.add.tile" = "Hinzufügen";
+
+"debug.content_loaded" = "DEBUG: ContentView geladen";
+"debug.voice" = "Stimme";
+
+"azure.settings.title" = "Azure-Einstellungen";
+"azure.endpoint.placeholder" = "Endpunkt (https://<region>.tts.speech.microsoft.com)";
+"azure.key.placeholder" = "Abonnementschlüssel";
+"common.error" = "Fehler";
+"common.ok" = "OK";
+"common.saving" = "Speichern…";
+"common.save" = "Speichern";
+
+"reorder.title" = "Ausdrücke neu anordnen";
+
+"voice.search.placeholder" = "Stimmen suchen";
+"common.select" = "Auswählen";
+"common.no_name" = "(Kein Name)";
+"common.unknown_error" = "Unbekannter Fehler";
+"common.name" = "Name";
+
+"ui_size.title" = "UI-Größe";
+"ui_size.input.section" = "Eingabe";
+"ui_size.input.height" = "Höhe";
+"ui_size.input.font" = "Schrift";
+"ui_size.chips.section" = "Chips";
+"ui_size.playback.section" = "Wiedergabe";
+"ui_size.playback.icon" = "Symbolgröße";

@@ -11,6 +11,10 @@ interface PhraseListStore : Store<PhraseListStore.Intent, PhraseListStore.State,
         data class AddCategory(val name: String) : Intent()
         data class SelectCategory(val categoryId: String?) : Intent()
         data class DeletePhrase(val phraseId: String) : Intent()
+    data class DeleteCategory(val categoryId: String) : Intent()
+    data class UpdatePhrase(val id: String, val text: String?, val name: String?) : Intent()
+    data class MoveCategory(val fromIndex: Int, val toIndex: Int) : Intent()
+    data class MovePhrase(val fromIndex: Int, val toIndex: Int) : Intent()
     }
 
     data class State(

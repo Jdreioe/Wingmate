@@ -53,43 +53,40 @@ object AzureTtsClient {
     }
 
     fun generateSsml(text: String, voice: Voice): String {
-    val selectedVoice = voice.name ?: "en-US-JennyNeural"
-    // Debug the voice selection and language used
-    val primaryLanguage = voice.primaryLanguage ?: "en-US"
-    val pitchForSSML = voice.pitchForSSML ?: "medium"
-    val rateForSSML = voice.rateForSSML ?: "medium"
-    logger.debug { "generateSsml: voiceName=${voice.name} primaryLanguage=$primaryLanguage selectedLanguage=${voice.primaryLanguage} pitchForSSML=$pitchForSSML rateForSSML=$rateForSSML" }
-    val langTag = "<lang xml:lang=\"$primaryLanguage\">"
-    val rateTag = "<prosody rate=\"$rateForSSML\">"
-    val endRate = "</prosody>"
-    val pitchTag = "<prosody pitch=\"$pitchForSSML\">"
-    val endPitch = "</prosody>"
-
-        val endLang = "</lang>"
-    logger.debug { "primaryLanguage.isEmpty()=${primaryLanguage.isEmpty()}" }
-        return if (primaryLanguage.isEmpty()) {
-            """
-            <speak version="1.0" xml:lang="en-US">
-              <voice name="$selectedVoice">
-                $pitchTag
-                $rateTag
-                ${escapeForSsml(text)}
-                $endPitch
-                $endRate
-              </voice>
-            </speak>
-            """.trimIndent()
-        } else {
-            """
-            <speak version="1.0" xml:lang="$primaryLanguage">
-              <voice name="$selectedVoice">
-                $langTag
-                ${escapeForSsml(text)}
-                $endLang
-              </voice>
-            </speak>
-            """.trimIndent()
+        val voiceName = voice.name ?: "en-US-JennyNeural" // Azure expects the short name
+        val lang = when {
+            !voice.selectedLanguage.isNullOrBlank() -> voice.selectedLanguage!!
+            !voice.primaryLanguage.isNullOrBlank() -> voice.primaryLanguage!!
+            else -> "en-US"
         }
+        val pitchForSSML = voice.pitchForSSML ?: "medium"
+        val rateForSSML = voice.rateForSSML ?: "medium"
+
+        logger.debug { "generateSsml: voiceName=${voice.name} selectedLanguage=${voice.selectedLanguage} primaryLanguage=${voice.primaryLanguage} pitchForSSML=$pitchForSSML rateForSSML=$rateForSSML" }
+
+        val escaped = escapeForSsml(text)
+        // Always include prosody; include lang tag if we have a language
+        val inner = buildString {
+            append("<prosody pitch=\"$pitchForSSML\">")
+            append("<prosody rate=\"$rateForSSML\">")
+            if (lang.isNotBlank()) {
+                append("<lang xml:lang=\"$lang\">")
+                append(escaped)
+                append("</lang>")
+            } else {
+                append(escaped)
+            }
+            append("</prosody>") // rate
+            append("</prosody>") // pitch
+        }
+
+        return """
+            <speak version="1.0" xml:lang="$lang">
+              <voice name="$voiceName">
+                $inner
+              </voice>
+            </speak>
+        """.trimIndent()
     }
 
     private fun escapeForSsml(text: String): String {

@@ -11,6 +11,9 @@ import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import io.github.oshai.kotlinlogging.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 
 class AzureVoiceCatalog(private val configRepo: ConfigRepository) {
     private val client = HttpClient {
@@ -27,21 +30,38 @@ class AzureVoiceCatalog(private val configRepo: ConfigRepository) {
     )
 
     suspend fun list(): List<Voice> {
-        val cfg = configRepo.getSpeechConfig() ?: return emptyList()
-        val url = "https://${cfg.endpoint}.tts.speech.microsoft.com/cognitiveservices/voices/list"
-        val res: List<AzureVoice> = client.get(url) {
-            header("Ocp-Apim-Subscription-Key", cfg.subscriptionKey)
-            header(HttpHeaders.UserAgent, "Wingmate 1.0")
-        }.body()
-        return res.map {
-            Voice(
-                name = it.shortName,
-                displayName = it.displayName,
-                gender = it.gender,
-                primaryLanguage = it.locale,
-                supportedLanguages = it.secondary ?: emptyList(),
-                selectedLanguage = it.locale ?: "",
-            )
+        return try {
+            val cfg = configRepo.getSpeechConfig() ?: run {
+                logger.debug { "AzureVoiceCatalog: no config; returning empty list" }
+                return emptyList()
+            }
+            val endpoint = cfg.endpoint.trim()
+            val key = cfg.subscriptionKey.trim()
+            if (endpoint.isEmpty() || key.isEmpty()) {
+                logger.warn { "AzureVoiceCatalog: empty endpoint or key; returning empty list" }
+                return emptyList()
+            }
+            val host = endpoint.removePrefix("https://").removePrefix("http://").removeSuffix("/")
+            val url = "https://$host.tts.speech.microsoft.com/cognitiveservices/voices/list"
+
+            val res: List<AzureVoice> = client.get(url) {
+                header("Ocp-Apim-Subscription-Key", key)
+                header(HttpHeaders.UserAgent, "Wingmate 1.0")
+            }.body()
+
+            res.map {
+                Voice(
+                    name = it.shortName,
+                    displayName = it.displayName,
+                    gender = it.gender,
+                    primaryLanguage = it.locale,
+                    supportedLanguages = it.secondary ?: emptyList(),
+                    selectedLanguage = it.locale ?: "",
+                )
+            }
+        } catch (t: Throwable) {
+            logger.warn(t) { "AzureVoiceCatalog: failed to fetch voice list; returning empty" }
+            emptyList()
         }
     }
 }

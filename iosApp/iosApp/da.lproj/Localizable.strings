@@ -1,0 +1,57 @@
+/* Base (English) Localizations */
+"app.title" = "Wingmate";
+"welcome.title" = "Velkommen!";
+"welcome.subtitle" = "En Kotlin Multiplatform AAC app for Android, iOS, og PC.";
+"welcome.azure_settings" = "Azure Indstillinger";
+"welcome.choose_voice" = "Vælg din stemme!";
+"common.continue" = "Færdig";
+
+"tts.placeholder" = "Tekst der skal oplæses";
+"toolbar.language" = "Sprog";
+"toolbar.voice" = "Stemme";
+"toolbar.add_category" = "Tilføj kategori";
+"toolbar.ui_size" = "Størrelse på UI";
+"toolbar.reorder" = "Rearranger layout";
+
+"categories.all" = "Alle";
+"category.new.title" = "Ny kategori";
+"category.name.placeholder" = "Kategori navn";
+"category.save" = "Gem";
+"category.close" = "Luk";
+"category.delete" = "Slet kategori";
+
+"phrase.new.title" = "Ny frase";
+"phrase.text.placeholder" = "Frase tekst";
+"phrase.edit.title" = "Rediger frase";
+"phrase.display_name.optional" = "Alternativ tekst på frasen";
+"phrase.save" = "Gem";
+"phrase.delete" = "Slet";
+"phrase.add.tile" = "Tilføj";
+
+"debug.content_loaded" = "DEBUG: ContentView loaded";
+"debug.voice" = "Voice";
+
+"azure.settings.title" = "Azure Indstillinger";
+"azure.endpoint.placeholder" = "Region";
+"azure.key.placeholder" = "Subscription Key";
+"common.error" = "FEJL";
+"common.ok" = "OK";
+"common.saving" = "Gemmmer";
+"common.save" = "Gem";
+
+"reorder.title" = "Rearranger fraser";
+
+"voice.search.placeholder" = "Søg efter stemme";
+"common.select" = "Vælg";
+"common.no_name" = "Ingen stemme";
+"common.unknown_error" = "Ukendt fejl";
+
+"ui_size.title" = "UI Størrelse";
+"ui_size.input.section" = "Input";
+"ui_size.input.height" = "Højde";
+"ui_size.input.font" = "Font Størrelse";
+"ui_size.chips.section" = "Kategori Størrelse";
+"ui_size.playback.section" = "Playback";
+"ui_size.playback.icon" = "Ikon størrelse";
+
+"common.name" = "Navn";
