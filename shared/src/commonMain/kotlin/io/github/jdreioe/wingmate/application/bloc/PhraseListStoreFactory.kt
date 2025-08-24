@@ -9,6 +9,10 @@ import io.github.jdreioe.wingmate.application.usecase.AddCategoryUseCase
 import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
+import io.github.jdreioe.wingmate.application.usecase.DeleteCategoryUseCase
+import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
+import io.github.jdreioe.wingmate.application.usecase.MovePhraseUseCase
+import io.github.jdreioe.wingmate.application.usecase.GetAllItemsUseCase
 import io.github.jdreioe.wingmate.domain.Phrase
 import kotlinx.coroutines.launch
 
@@ -17,7 +21,11 @@ class PhraseListStoreFactory(
     private val getPhrasesAndCategoriesUseCase: GetPhrasesAndCategoriesUseCase,
     private val addPhraseUseCase: AddPhraseUseCase,
     private val addCategoryUseCase: AddCategoryUseCase,
-    private val deletePhraseUseCase: DeletePhraseUseCase
+    private val deletePhraseUseCase: DeletePhraseUseCase,
+    private val deleteCategoryUseCase: DeleteCategoryUseCase,
+    private val updatePhraseUseCase: UpdatePhraseUseCase,
+    private val movePhraseUseCase: MovePhraseUseCase,
+    private val getAllItemsUseCase: GetAllItemsUseCase
 ) {
     fun create(): PhraseListStore =
         object : PhraseListStore, Store<PhraseListStore.Intent, PhraseListStore.State, Nothing> by storeFactory.create(
@@ -34,6 +42,10 @@ class PhraseListStoreFactory(
         data class PhraseAdded(val phrase: Phrase) : Msg()
         data class CategoryAdded(val category: Phrase) : Msg()
         data class PhraseDeleted(val phraseId: String) : Msg()
+    data class CategoryDeleted(val categoryId: String) : Msg()
+    data class PhrasesReordered(val list: List<Phrase>) : Msg()
+    data class CategoriesReordered(val list: List<Phrase>) : Msg()
+    data class PhraseUpdated(val phrase: Phrase) : Msg()
         data object LoadingStarted : Msg()
         data class ErrorOccurred(val error: String) : Msg()
     }
@@ -49,6 +61,10 @@ class PhraseListStoreFactory(
                 is PhraseListStore.Intent.AddCategory -> addCategory(intent.name)
                 is PhraseListStore.Intent.SelectCategory -> dispatch(Msg.CategorySelected(intent.categoryId))
                 is PhraseListStore.Intent.DeletePhrase -> deletePhrase(intent.phraseId)
+                is PhraseListStore.Intent.DeleteCategory -> deleteCategory(intent.categoryId)
+                is PhraseListStore.Intent.UpdatePhrase -> updatePhrase(intent.id, intent.text, intent.name)
+                is PhraseListStore.Intent.MovePhrase -> movePhrase(intent.fromIndex, intent.toIndex)
+                is PhraseListStore.Intent.MoveCategory -> moveCategory(intent.fromIndex, intent.toIndex)
             }
         }
 
@@ -97,6 +113,53 @@ class PhraseListStoreFactory(
                 }
             }
         }
+
+        private fun deleteCategory(categoryId: String) {
+            scope.launch {
+                try {
+                    deleteCategoryUseCase(categoryId)
+                    loadPhrasesAndCategories()
+                } catch (e: Exception) {
+                    dispatch(Msg.ErrorOccurred(e.message ?: "Failed to delete category"))
+                }
+            }
+        }
+
+        private fun updatePhrase(id: String, text: String?, name: String?) {
+            scope.launch {
+                try {
+                    val updated = updatePhraseUseCase(id, text, name)
+                    // Just reload to keep ordering consistent
+                    loadPhrasesAndCategories()
+                    dispatch(Msg.PhraseUpdated(updated))
+                } catch (e: Exception) {
+                    dispatch(Msg.ErrorOccurred(e.message ?: "Failed to update phrase"))
+                }
+            }
+        }
+
+    private fun movePhrase(fromIndex: Int, toIndex: Int) {
+            scope.launch {
+                try {
+            // Persist using repository move; indices refer to full ordered list
+            movePhraseUseCase(fromIndex, toIndex)
+                    loadPhrasesAndCategories()
+                } catch (e: Exception) {
+                    dispatch(Msg.ErrorOccurred(e.message ?: "Failed to move phrase"))
+                }
+            }
+        }
+
+        private fun moveCategory(fromIndex: Int, toIndex: Int) {
+            scope.launch {
+                try {
+                    // Categories are stored as phrases; for now, reorder in memory and reload
+                    loadPhrasesAndCategories()
+                } catch (e: Exception) {
+                    dispatch(Msg.ErrorOccurred(e.message ?: "Failed to move category"))
+                }
+            }
+        }
     }
 
     private object ReducerImpl : Reducer<PhraseListStore.State, Msg> {
@@ -107,6 +170,13 @@ class PhraseListStoreFactory(
                 is Msg.PhraseAdded -> copy(phrases = phrases + msg.phrase)
                 is Msg.CategoryAdded -> copy(categories = categories + msg.category)
                 is Msg.PhraseDeleted -> copy(phrases = phrases.filterNot { it.id == msg.phraseId })
+                is Msg.CategoryDeleted -> copy(
+                    categories = categories.filterNot { it.id == msg.categoryId },
+                    selectedCategoryId = selectedCategoryId?.takeIf { it != msg.categoryId }
+                )
+                is Msg.PhrasesReordered -> copy(phrases = msg.list)
+                is Msg.CategoriesReordered -> copy(categories = msg.list)
+                is Msg.PhraseUpdated -> copy(phrases = phrases.map { if (it.id == msg.phrase.id) msg.phrase else it })
                 is Msg.LoadingStarted -> copy(isLoading = true)
                 is Msg.ErrorOccurred -> copy(error = msg.error, isLoading = false)
             }

@@ -5,6 +5,7 @@ import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import kotlinx.cinterop.*
@@ -20,6 +21,7 @@ private val logger = KotlinLogging.logger {}
 class IosSpeechService(
     private val httpClient: HttpClient,
     private val configRepository: ConfigRepository,
+    private val voiceUseCase: VoiceUseCase? = null,
     private val saidRepo: SaidTextRepository? = null,
 ) : SpeechService {
 
@@ -67,7 +69,8 @@ class IosSpeechService(
                     return@withContext null
                 }
 
-                val voiceToUse = voice ?: Voice(
+                val selected = voice ?: runCatching { voiceUseCase?.selected() }.getOrNull()
+                val voiceToUse = selected ?: Voice(
                     id = null,
                     name = "en-US-JennyNeural",
                     displayName = "Default Voice",

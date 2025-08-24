@@ -34,7 +34,10 @@ class VoiceUseCase(
 ) {
     suspend fun list(): List<Voice> = repo.getVoices()
     suspend fun selected(): Voice? = repo.getSelected()
-    suspend fun select(voice: Voice) { repo.saveSelected(voice) }
+    suspend fun select(voice: Voice) {
+        try { println("DEBUG: VoiceUseCase.select() called for '${voice.name}' selectedLang='${voice.selectedLanguage}'") } catch (_: Throwable) {}
+        repo.saveSelected(voice)
+    }
     suspend fun refreshFromAzure(): List<Voice> {
         val list = azure.list()
         // Cache list for offline/next launch

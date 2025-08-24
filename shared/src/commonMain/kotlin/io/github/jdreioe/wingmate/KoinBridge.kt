@@ -15,6 +15,8 @@ import org.koin.core.component.get
 
 class KoinBridge : KoinComponent {
     fun phraseListStore(): PhraseListStore = get()
+    // Safe variant to avoid throwing across Swift bridge
+    fun phraseListStoreOrNull(): PhraseListStore? = try { get<PhraseListStore>() } catch (_: Throwable) { null }
 
     // --- Simple bridging helpers for Swift UI ---
     suspend fun speak(text: String) {
@@ -27,6 +29,7 @@ class KoinBridge : KoinComponent {
 
     suspend fun selectVoiceAndMaybeUpdatePrimary(voice: Voice) {
         val voiceUseCase: VoiceUseCase = get()
+    try { println("DEBUG: KoinBridge.selectVoiceAndMaybeUpdatePrimary() called for '\${voice.name}' selectedLang='\${voice.selectedLanguage}'") } catch (_: Throwable) {}
         voiceUseCase.select(voice)
 
         // Optionally align Settings.primaryLanguage with selected voice
@@ -50,7 +53,27 @@ class KoinBridge : KoinComponent {
         }
     }
 
+    // Update both the selected voice's selectedLanguage and the app Settings.primaryLanguage
+    suspend fun updateSelectedVoiceLanguage(lang: String) {
+        val voiceUseCase: VoiceUseCase = get()
+        val settingsUseCase: SettingsUseCase = get()
+
+        // Update selected voice, if any
+        val selected = voiceUseCase.selected()
+        if (selected != null && selected.selectedLanguage != lang) {
+            voiceUseCase.select(selected.copy(selectedLanguage = lang))
+        }
+        // Align settings primary language
+        val current = settingsUseCase.get()
+        if (lang != current.primaryLanguage) {
+            settingsUseCase.update(current.copy(primaryLanguage = lang))
+        }
+    }
+
     suspend fun selectedVoice(): Voice? = get<VoiceUseCase>().selected()
+
+    // Debug helper: return the runtime class name of the bound VoiceRepository
+    fun debugVoiceRepositoryName(): String = try { get<io.github.jdreioe.wingmate.domain.VoiceRepository>()::class.simpleName ?: "unknown" } catch (_: Throwable) { "error" }
 
     suspend fun listVoices(): List<Voice> = get<VoiceUseCase>().list()
 

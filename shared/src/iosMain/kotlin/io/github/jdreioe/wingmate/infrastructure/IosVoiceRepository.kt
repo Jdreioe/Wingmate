@@ -32,6 +32,10 @@ class IosVoiceRepository : VoiceRepository {
 
     override suspend fun saveSelected(voice: Voice) = withContext(Dispatchers.Default) {
         val text = json.encodeToString(Voice.serializer(), voice)
+        // Debug log to help trace persistence on iOS
+        try {
+            println("DEBUG: IosVoiceRepository.saveSelected() saving voice='${voice.name}' selectedLang='${voice.selectedLanguage}'")
+        } catch (_: Throwable) { }
         prefs.setObject(text, forKey = keySelected)
         prefs.synchronize()
         Unit
@@ -39,6 +43,10 @@ class IosVoiceRepository : VoiceRepository {
 
     override suspend fun getSelected(): Voice? = withContext(Dispatchers.Default) {
         val text = prefs.stringForKey(keySelected) ?: return@withContext null
-        return@withContext runCatching { json.decodeFromString(Voice.serializer(), text) }.getOrNull()
+        val v = runCatching { json.decodeFromString(Voice.serializer(), text) }.getOrNull()
+        try {
+            println("DEBUG: IosVoiceRepository.getSelected() loaded='${v?.name ?: "(none)"}' selectedLang='${v?.selectedLanguage ?: "-"}')")
+        } catch (_: Throwable) { }
+        return@withContext v
     }
 }
