@@ -1,7 +1,7 @@
 /* German Localizations */
 "app.title" = "Wingmate";
 "welcome.title" = "Willkommen";
-"welcome.subtitle" = "Eine Kotlin Multiplatform AAC-App für Android, iOS und mehr.";
+"welcome.subtitle" = "Eine AAC-App, die sich auf jeder Plattform nativ anfühlt.";
 "welcome.azure_settings" = "Azure-Einstellungen";
 "welcome.choose_voice" = "Stimme wählen";
 "common.continue" = "Weiter";
@@ -20,9 +20,9 @@
 "category.close" = "Schließen";
 "category.delete" = "Kategorie löschen";
 
-"phrase.new.title" = "Neuer Ausdruck";
-"phrase.text.placeholder" = "Text des Ausdrucks";
-"phrase.edit.title" = "Ausdruck bearbeiten";
+"phrase.new.title" = "Neue Phrase";
+"phrase.text.placeholder" = "Phrasentext";
+"phrase.edit.title" = "Phrase bearbeiten";
 "phrase.display_name.optional" = "Anzeigename (optional)";
 "phrase.save" = "Speichern";
 "phrase.delete" = "Löschen";
@@ -39,7 +39,7 @@
 "common.saving" = "Speichern…";
 "common.save" = "Speichern";
 
-"reorder.title" = "Ausdrücke neu anordnen";
+"reorder.title" = "Phrasen neu anordnen";
 
 "voice.search.placeholder" = "Stimmen suchen";
 "common.select" = "Auswählen";
@@ -54,3 +54,8 @@
 "ui_size.chips.section" = "Chips";
 "ui_size.playback.section" = "Wiedergabe";
 "ui_size.playback.icon" = "Symbolgröße";
+"common.done" = "Fertig";
+
+"phrase.edit" = "Bearbeiten";
+"phrase.play_tts" = "Abspielen";
+"phrase.record" = "Aufnehmen";

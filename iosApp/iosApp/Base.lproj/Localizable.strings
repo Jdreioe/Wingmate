@@ -1,7 +1,7 @@
 /* Base (English) Localizations */
 "app.title" = "Wingmate";
 "welcome.title" = "Welcome";
-"welcome.subtitle" = "A Kotlin Multiplatform AAC app for Android, iOS, and beyond.";
+"welcome.subtitle" = "An AAC app that feels native regardless of platform ";
 "welcome.azure_settings" = "Azure Settings";
 "welcome.choose_voice" = "Choose Voice";
 "common.continue" = "Continue";
@@ -54,3 +54,8 @@
 "ui_size.chips.section" = "Chips";
 "ui_size.playback.section" = "Playback";
 "ui_size.playback.icon" = "Icon size";
+
+"common.done" = "Done";
+"phrase.edit" = "Edit";
+"phrase.play_tts" = "Play";
+"phrase.record" = "Record";

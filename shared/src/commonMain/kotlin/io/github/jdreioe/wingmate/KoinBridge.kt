@@ -27,6 +27,22 @@ class KoinBridge : KoinComponent {
         }
     }
 
+    suspend fun pause() {
+        try {
+            get<SpeechService>().pause()
+        } catch (t: Throwable) {
+            logger.warn(t) { "pause() failed; swallowing to avoid Swift bridge crash" }
+        }
+    }
+
+    suspend fun stop() {
+        try {
+            get<SpeechService>().stop()
+        } catch (t: Throwable) {
+            logger.warn(t) { "stop() failed; swallowing to avoid Swift bridge crash" }
+        }
+    }
+
     suspend fun selectVoiceAndMaybeUpdatePrimary(voice: Voice) {
         val voiceUseCase: VoiceUseCase = get()
     try { println("DEBUG: KoinBridge.selectVoiceAndMaybeUpdatePrimary() called for '\${voice.name}' selectedLang='\${voice.selectedLanguage}'") } catch (_: Throwable) {}
