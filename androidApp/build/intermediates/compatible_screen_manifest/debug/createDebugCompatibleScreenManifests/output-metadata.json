@@ -4,7 +4,7 @@
     "type": "COMPATIBLE_SCREEN_MANIFEST",
     "kind": "Directory"
   },
-  "applicationId": "io.github.jdreioe.wingmate.android",
+  "applicationId": "com.hojmoseit.wingmate",
   "variantName": "debug",
   "elements": []
 }

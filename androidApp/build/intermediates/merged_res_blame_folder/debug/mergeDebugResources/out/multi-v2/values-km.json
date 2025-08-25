@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "io.github.jdreioe.wingmate.android.androidApp-mergeDebugResources-59:/values-km/values-km.xml",
+            "outputFile": "com.hojmoseit.wingmate.androidApp-mergeDebugResources-59:/values-km/values-km.xml",
             "map": [
                 {
                     "source": "/var/home/Jdreioe/.gradle/caches/8.13/transforms/7cee883d4c7dba3268090198c519a044/transformed/core-1.13.1/res/values-km/values-km.xml",

@@ -6,7 +6,6 @@ import io.github.jdreioe.wingmate.domain.VoiceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import org.slf4j.LoggerFactory
 
 class AndroidVoiceRepository(private val context: Context) : VoiceRepository {
     private val prefs by lazy { context.getSharedPreferences("wingmate_prefs", Context.MODE_PRIVATE) }
@@ -17,32 +16,37 @@ class AndroidVoiceRepository(private val context: Context) : VoiceRepository {
         emptyList()
     }
 
+    override suspend fun saveVoices(list: List<Voice>) {
+        TODO("Not yet implemented")
+    }
+
     override suspend fun saveSelected(voice: Voice) = withContext(Dispatchers.IO) {
-        val log = LoggerFactory.getLogger("AndroidVoiceRepository")
+        // Removed SLF4J logger for cross-platform compatibility
         try {
             val text = json.encodeToString(Voice.serializer(), voice)
             prefs.edit().putString("selected_voice", text).apply()
-            log.info("Saved selected voice to SharedPreferences: {}", voice.name)
+            println("Saved selected voice to SharedPreferences: {}: ${voice.name}")
         } catch (t: Throwable) {
-            log.error("Failed to save selected voice to SharedPreferences", t)
+            println("Failed to save selected voice to SharedPreferences: ${t}")
             throw t
         }
     }
 
     override suspend fun getSelected(): Voice? = withContext(Dispatchers.IO) {
-        val log = LoggerFactory.getLogger("AndroidVoiceRepository")
+        // Removed SLF4J logger for cross-platform compatibility
         val text = prefs.getString("selected_voice", null)
         if (text.isNullOrBlank()) {
-            log.info("No selected voice found in SharedPreferences")
+            println("No selected voice found in SharedPreferences")
             return@withContext null
         }
         return@withContext try {
             val v = json.decodeFromString(Voice.serializer(), text)
-            log.info("Loaded selected voice from SharedPreferences: {}", v.name)
+            println("Loaded selected voice from SharedPreferences: {}: ${v.name}")
             v
         } catch (t: Throwable) {
-            log.error("Failed to decode selected voice from SharedPreferences", t)
+            println("Failed to decode selected voice from SharedPreferences: ${t}")
             null
         }
     }
+
 }

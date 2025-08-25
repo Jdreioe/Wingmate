@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "io.github.jdreioe.wingmate.android.androidApp-mergeDebugResources-59:/values-en-rIN/values-en-rIN.xml",
+            "outputFile": "com.hojmoseit.wingmate.androidApp-mergeDebugResources-59:/values-en-rIN/values-en-rIN.xml",
             "map": [
                 {
                     "source": "/var/home/Jdreioe/.gradle/caches/8.13/transforms/e4c696cfbc0675da66b4b3a59e53cfd6/transformed/jetified-material3-release/res/values-en-rIN/values-en-rIN.xml",

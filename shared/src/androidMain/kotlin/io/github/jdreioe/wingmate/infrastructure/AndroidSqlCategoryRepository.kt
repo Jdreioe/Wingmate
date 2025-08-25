@@ -6,7 +6,6 @@ import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.CategoryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.slf4j.LoggerFactory
 import java.util.UUID
 
 class AndroidSqlCategoryRepository(private val context: Context) : CategoryRepository {
@@ -14,7 +13,7 @@ class AndroidSqlCategoryRepository(private val context: Context) : CategoryRepos
 
     override suspend fun getAll(): List<CategoryItem> = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
-        val log = LoggerFactory.getLogger("AndroidSqlCategoryRepository")
+        // Removed SLF4J logger for cross-platform compatibility
         val cursor = db.query("categories", null, null, null, null, null, "ordering ASC")
         val list = mutableListOf<CategoryItem>()
         while (cursor.moveToNext()) {
@@ -24,7 +23,7 @@ class AndroidSqlCategoryRepository(private val context: Context) : CategoryRepos
             list += CategoryItem(id = id, name = name, selectedLanguage = selectedLanguage)
         }
         cursor.close()
-        log.info("Loaded {} categories from SQLite", list.size)
+        println("Loaded {} categories from SQLite: ${list.size}")
         return@withContext list
     }
 

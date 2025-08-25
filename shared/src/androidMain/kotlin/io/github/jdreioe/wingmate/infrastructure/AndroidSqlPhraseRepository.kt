@@ -6,7 +6,6 @@ import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.slf4j.LoggerFactory
 import java.util.UUID
 
 class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepository {
@@ -14,7 +13,7 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
 
     override suspend fun getAll(): List<Phrase> = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
-        val log = LoggerFactory.getLogger("AndroidSqlPhraseRepository")
+        // Removed SLF4J logger for cross-platform compatibility
         val cursor = db.query("phrases", null, null, null, null, null, "ordering ASC")
         val list = mutableListOf<Phrase>()
         while (cursor.moveToNext()) {
@@ -28,7 +27,7 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             list += Phrase(id = id, text = text, name = name, backgroundColor = bg, parentId = parentId, isCategory = isCat, createdAt = createdAt)
         }
         cursor.close()
-        log.info("Loaded {} phrases from SQLite", list.size)
+        println("Loaded {} phrases from SQLite: ${list.size}")
         return@withContext list
     }
 

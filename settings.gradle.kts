@@ -23,3 +23,4 @@ rootProject.name = "WingmateKMP"
 include(":shared")
 include(":androidApp")
 include(":composeApp")
+include(":desktopApp")

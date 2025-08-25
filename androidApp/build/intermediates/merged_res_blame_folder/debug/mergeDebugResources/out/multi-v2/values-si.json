@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "io.github.jdreioe.wingmate.android.androidApp-mergeDebugResources-59:/values-si/values-si.xml",
+            "outputFile": "com.hojmoseit.wingmate.androidApp-mergeDebugResources-59:/values-si/values-si.xml",
             "map": [
                 {
                     "source": "/var/home/Jdreioe/.gradle/caches/8.13/transforms/ee99f9cbe30a5a689e7f76ed71028d2b/transformed/jetified-foundation-release/res/values-si/values-si.xml",

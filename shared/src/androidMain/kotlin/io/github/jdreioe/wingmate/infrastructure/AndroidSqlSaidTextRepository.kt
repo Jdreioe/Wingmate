@@ -7,7 +7,6 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import org.slf4j.LoggerFactory
 
 class AndroidSqlSaidTextRepository(private val context: Context) : SaidTextRepository {
     private val helper by lazy { AndroidSqlOpenHelper(context) }

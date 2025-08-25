@@ -4,15 +4,15 @@
     "type": "LINKED_RESOURCES_BINARY_FORMAT",
     "kind": "Directory"
   },
-  "applicationId": "io.github.jdreioe.wingmate.android",
+  "applicationId": "com.hojmoseit.wingmate",
   "variantName": "debug",
   "elements": [
     {
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 1,
-      "versionName": "0.1",
+      "versionCode": 3,
+      "versionName": "0.12",
       "outputFile": "linked-resources-binary-format-debug.ap_"
     }
   ],

@@ -4,7 +4,7 @@
     <application
         android:label="Wingmate KMP"
         android:icon="@mipmap/ic_launcher"
-        android:theme="@style/Theme.Wingmate">
+        android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
         <activity
             android:name="io.github.jdreioe.wingmate.MainActivity"
             android:exported="true">

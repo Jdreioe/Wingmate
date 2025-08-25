@@ -60,6 +60,16 @@ internal class AndroidSqlOpenHelper(
             );
         """.trimIndent())
 
+        // Persist full voice catalog as a separate single-row table
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS voice_catalog (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                list TEXT
+            );
+            """.trimIndent()
+        )
+
         // UI settings storage (single row)
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS ui_settings (
@@ -86,14 +96,16 @@ internal class AndroidSqlOpenHelper(
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Simple migration strategy: for now, only handle version bumps gracefully.
-        // Future migrations should be added here mirroring desktop migrations.
+        // Migrations by version
         if (oldVersion < 2 && newVersion >= 2) {
-            // example migration placeholder
+            // Rebuild voices table to enforce single-row (id=1) and clean any invalid rows
+            db.execSQL("DROP TABLE IF EXISTS voices")
+            // Ensure fresh schema including voices and voice_catalog
+            ensureTables(db)
         }
     }
 
     companion object {
-        private const val DB_VERSION = 1
+    private const val DB_VERSION = 2
     }
 }

@@ -71,3 +71,4 @@ iosApp/iosApp.xcworkspace/
 shared/build/
 shared/build/bin/
 shared/build/cocoapods/
+composeApp/build/*

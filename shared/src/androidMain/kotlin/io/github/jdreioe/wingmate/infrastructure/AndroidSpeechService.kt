@@ -13,7 +13,6 @@ import io.ktor.client.engine.okhttp.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.core.context.GlobalContext
-import org.slf4j.LoggerFactory
 import java.io.File
 import android.os.Environment
 import java.util.Locale
@@ -26,7 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class AndroidSpeechService(private val context: Context) : SpeechService {
     private val client = HttpClient(OkHttp) {}
-    private val slf4jLogger = LoggerFactory.getLogger(AndroidSpeechService::class.java)
+    // Removed SLF4J logger for cross-platform compatibility
 
     // Platform TTS (fallback)
     private var tts: TextToSpeech? = null
@@ -132,7 +131,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                     }
                     player.start()
                 } catch (t: Throwable) {
-                    slf4jLogger.warn("Azure TTS failed, falling back to platform TTS", t)
+                    println("Azure TTS failed, falling back to platform TTS: $t")
                     // Fallback to platform TTS on error
                     speakWithPlatformTts(text, voice, pitch, rate)
                 }

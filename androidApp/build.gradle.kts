@@ -5,15 +5,15 @@ plugins {
 }
 
 android {
-    namespace = "io.github.jdreioe.wingmate.android"
+    namespace = "com.hojmoseit.wingmate"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.jdreioe.wingmate.android"
+        applicationId = "com.hojmoseit.wingmate"
     minSdk = 24
     targetSdk = 36
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 3
+        versionName = "0.12"
     }
 
     buildFeatures { compose = true }
@@ -36,6 +36,7 @@ android {
 
 dependencies {
     implementation(project(":shared"))
+    implementation(project(":composeApp"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)

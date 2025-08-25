@@ -1,7 +1,10 @@
 R_DEF: Internal format may change without notice
 local
-color black
-color white
+drawable ic_launcher_monochrome
+drawable launch_background
 mipmap ic_launcher
-string app_name
-style Theme.Wingmate
+mipmap ic_launcher_background
+mipmap ic_launcher_foreground
+mipmap ic_launcher_round
+style LaunchTheme
+style NormalTheme

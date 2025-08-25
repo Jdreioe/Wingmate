@@ -6,7 +6,6 @@ import io.github.jdreioe.wingmate.domain.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import org.slf4j.LoggerFactory
 
 class AndroidSqlSettingsRepository(private val context: Context) : SettingsRepository {
     private val helper by lazy { AndroidSqlOpenHelper(context) }
@@ -25,17 +24,17 @@ class AndroidSqlSettingsRepository(private val context: Context) : SettingsRepos
 
     override suspend fun get(): Settings = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
-        val log = LoggerFactory.getLogger("AndroidSqlSettingsRepository")
+        // Removed SLF4J logger for cross-platform compatibility
         val cursor = db.query("ui_settings", arrayOf("data"), "id = 1", null, null, null, null)
         if (cursor.moveToFirst()) {
             val text = cursor.getString(cursor.getColumnIndexOrThrow("data"))
             cursor.close()
             return@withContext try {
                 val s = json.decodeFromString(Settings.serializer(), text)
-                log.info("Loaded UI settings from SQLite: {}", s)
+                println("Loaded UI settings from SQLite: {}: ${s}")
                 s
             } catch (t: Throwable) {
-                log.warn("Failed to decode UI settings from SQLite", t)
+                println("Failed to decode UI settings from SQLite: ${t}")
                 Settings()
             }
         }
@@ -45,10 +44,10 @@ class AndroidSqlSettingsRepository(private val context: Context) : SettingsRepos
 
     override suspend fun update(settings: Settings): Settings = withContext(Dispatchers.IO) {
         val db = helper.writableDatabase
-        val log = LoggerFactory.getLogger("AndroidSqlSettingsRepository")
+        // Removed SLF4J logger for cross-platform compatibility
         val text = json.encodeToString(Settings.serializer(), settings)
         db.execSQL("INSERT OR REPLACE INTO ui_settings (id, data) VALUES (1, ?)", arrayOf(text))
-        log.info("Saved UI settings to SQLite: {}", settings)
+        println("Saved UI settings to SQLite: {}: ${settings}")
         return@withContext settings
     }
 }
