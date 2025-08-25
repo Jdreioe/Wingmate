@@ -20,11 +20,19 @@ struct RightSettingsPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Settings").font(.title3).bold()
 
-            // System TTS toggle
-            Toggle("Use System TTS when offline", isOn: Binding(
-                get: { model.useSystemTtsWhenOffline },
-                set: { model.setUseSystemTtsWhenOffline($0) }
-            ))
+            // TTS Engine selection
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Text-to-Speech Engine").font(.headline)
+                Toggle("Use System TTS", isOn: Binding(
+                    get: { model.useSystemTts },
+                    set: { model.setUseSystemTts($0) }
+                ))
+                Toggle("Use System TTS when offline", isOn: Binding(
+                    get: { model.useSystemTtsWhenOffline },
+                    set: { model.setUseSystemTtsWhenOffline($0) }
+                ))
+                .disabled(model.useSystemTts) // Disable offline toggle when always using system TTS
+            }
 
             Divider()
 

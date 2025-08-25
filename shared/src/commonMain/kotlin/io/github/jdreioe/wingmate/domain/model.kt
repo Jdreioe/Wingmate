@@ -29,5 +29,7 @@ data class Settings(
     val speechRate: Float = 1.0f,
     // UI-level settings: primary and secondary locales used by the UI language selector
     val primaryLanguage: String = "en-US",
-    val secondaryLanguage: String = "en-US"
+    val secondaryLanguage: String = "en-US",
+    // TTS preference: true = use system TTS, false = use Azure TTS
+    val useSystemTts: Boolean = false
 )

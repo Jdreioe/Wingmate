@@ -22,6 +22,16 @@ class DesktopSpeechService : SpeechService {
 
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
         log.info("speak() called on thread={}", Thread.currentThread().name)
+        
+        // Check if user prefers system TTS (but desktop doesn't support it yet)
+        val koin = GlobalContext.getOrNull()
+        val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
+        val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
+        
+        if (uiSettings?.useSystemTts == true) {
+            throw UnsupportedOperationException("System TTS is not supported on desktop platform. Please use Azure TTS instead.")
+        }
+        
         // Run synthesis and playback on IO dispatcher to avoid blocking UI thread
         withContext(Dispatchers.IO) {
             log.info("speak() switched to IO on thread={}", Thread.currentThread().name)
@@ -87,11 +97,11 @@ class DesktopSpeechService : SpeechService {
     }
 
     override suspend fun pause() {
-        // JLayer Player doesn't support pause; implement later if needed
+        // TODO: Implement pause functionality
     }
 
     override suspend fun stop() {
-        // Not implemented for now
+        // TODO: Implement stop functionality
     }
 
     private suspend fun getConfig(): SpeechServiceConfig? {

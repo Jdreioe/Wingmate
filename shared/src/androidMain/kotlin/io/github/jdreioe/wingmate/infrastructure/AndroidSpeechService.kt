@@ -4,6 +4,11 @@ import android.content.Context
 import android.media.MediaPlayer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
@@ -34,6 +39,9 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     // MediaPlayer based playback for Azure synthesized audio
     private var mediaPlayer: MediaPlayer? = null
     private val playerLock = Any()
+    
+    // Track if we've already shown the offline warning to avoid spam
+    private val offlineWarningShown = AtomicBoolean(false)
 
     private fun ensureTts(): TextToSpeech {
         val cur = tts
@@ -52,93 +60,170 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         tts = created
         return created
     }
+    
+    /**
+     * Check if device has active internet connection
+     */
+    private fun isOnline(): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val networkCapabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+    
+    /**
+     * Show user warning about offline mode fallback to system TTS (similar to iOS behavior)
+     */
+    private fun showOfflineWarning() {
+        if (offlineWarningShown.compareAndSet(false, true)) {
+            Handler(Looper.getMainLooper()).post {
+                Toast.makeText(
+                    context,
+                    "No internet connection. Using device text-to-speech instead of Azure voices.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+    
+    /**
+     * Show user warning about missing Azure configuration
+     */
+    private fun showConfigWarning() {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(
+                context,
+                "Azure configuration not found. Using device text-to-speech.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+    
+    /**
+     * Show user warning about using default voice
+     */
+    private fun showDefaultVoiceWarning() {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(
+                context,
+                "Using default voice (Jenny Neural). Configure voices in settings for more options.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
+        // Check user preference for TTS engine first
+        val koin = GlobalContext.getOrNull()
+        val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
+        val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
+        
+        // If user prefers system TTS, use it directly
+        if (uiSettings?.useSystemTts == true) {
+            speakWithPlatformTts(text, voice, pitch, rate)
+            return
+        }
+        
         // Try to obtain persisted Azure config; if present, prefer Azure TTS pipeline
         val cfg = getConfig()
-        if (cfg != null) {
-            withContext(Dispatchers.IO) {
-                try {
-                    val v = voice ?: Voice(name = "en-US-JennyNeural", primaryLanguage = "en-US")
-
-                    // Determine effective language similar to desktop implementation
-                    val koin = GlobalContext.getOrNull()
-                    val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
-                    val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
-                    val effectiveLang = when {
-                        !v.selectedLanguage.isNullOrBlank() -> v.selectedLanguage
-                        !uiSettings?.primaryLanguage.isNullOrBlank() -> uiSettings!!.primaryLanguage
-                        !v.primaryLanguage.isNullOrBlank() -> v.primaryLanguage
-                        else -> "en-US"
-                    }
-
-                    val vForSsml = v.copy(primaryLanguage = effectiveLang)
-                    val ssml = AzureTtsClient.generateSsml(text, vForSsml)
-                    val bytes = AzureTtsClient.synthesize(client, ssml, cfg)
-
-                    // Persist to an app-private Music directory so history can reference it later
-                    val musicRoot = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
-                    val outDir = File(musicRoot, "wingmate/audio").apply { if (!exists()) mkdirs() }
-                    val safeName = text.take(32).replace("[^A-Za-z0-9-_ ]".toRegex(), "_").trim().ifBlank { "utterance" }
-                    val fileName = "${'$'}{System.currentTimeMillis()}_${'$'}safeName.mp3"
-                    val outFile = File(outDir, fileName)
-                    outFile.outputStream().use { it.write(bytes) }
-
-                    // Save history record if repository is available
-                    runCatching {
-                        val koin = GlobalContext.getOrNull()
-                        val saidRepo = koin?.get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
-                        val now = System.currentTimeMillis()
-                        saidRepo?.add(
-                            io.github.jdreioe.wingmate.domain.SaidText(
-                                date = now,
-                                saidText = text,
-                                voiceName = vForSsml.name,
-                                pitch = vForSsml.pitch,
-                                speed = vForSsml.rate,
-                                audioFilePath = outFile.absolutePath,
-                                createdAt = now,
-                                position = 0,
-                                primaryLanguage = vForSsml.selectedLanguage?.ifBlank { vForSsml.primaryLanguage }
-                            )
-                        )
-                    }
-
-                    val player = MediaPlayer()
-                    player.setOnCompletionListener { mp ->
-                        try {
-                            synchronized(playerLock) {
-                                if (mediaPlayer === mp) {
-                                    mp.reset()
-                                    mp.release()
-                                    mediaPlayer = null
-                                }
-                            }
-                        } catch (_: Throwable) {
-                        } finally { /* keep outFile for history */ }
-                    }
-                    player.setOnErrorListener { mp, what, extra ->
-                        try { synchronized(playerLock) { if (mediaPlayer === mp) { mp.reset(); mp.release(); mediaPlayer = null } } } catch (_: Throwable) {}
-                        false
-                    }
-
-                    player.setDataSource(outFile.absolutePath)
-                    player.prepare()
-                    synchronized(playerLock) {
-                        // Stop any existing player
-                        mediaPlayer?.let { try { it.stop(); it.release() } catch (_: Throwable) {} }
-                        mediaPlayer = player
-                    }
-                    player.start()
-                } catch (t: Throwable) {
-                    println("Azure TTS failed, falling back to platform TTS: $t")
-                    // Fallback to platform TTS on error
-                    speakWithPlatformTts(text, voice, pitch, rate)
-                }
-            }
-        } else {
-            // No Azure config – use platform TextToSpeech
+        if (cfg == null) {
+            // No Azure configuration - fall back to system TTS with warning
+            showConfigWarning()
             speakWithPlatformTts(text, voice, pitch, rate)
+            return
+        }
+        
+        // Check if we're online before attempting Azure TTS
+        if (!isOnline()) {
+            showOfflineWarning()
+            // Fall back to system TTS when offline
+            speakWithPlatformTts(text, voice, pitch, rate)
+            return
+        }
+        
+        withContext(Dispatchers.IO) {
+            try {
+                val v = voice ?: Voice(name = "en-US-JennyNeural", primaryLanguage = "en-US")
+                
+                // Show warning if no voice was provided (using default)
+                if (voice == null || voice.name.isNullOrBlank()) {
+                    showDefaultVoiceWarning()
+                }
+
+                // Determine effective language similar to desktop implementation
+                val koin = GlobalContext.getOrNull()
+                val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
+                val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
+                val effectiveLang = when {
+                    !v.selectedLanguage.isNullOrBlank() -> v.selectedLanguage
+                    !uiSettings?.primaryLanguage.isNullOrBlank() -> uiSettings!!.primaryLanguage
+                    !v.primaryLanguage.isNullOrBlank() -> v.primaryLanguage
+                    else -> "en-US"
+                }
+
+                val vForSsml = v.copy(primaryLanguage = effectiveLang)
+                val ssml = AzureTtsClient.generateSsml(text, vForSsml)
+                val bytes = AzureTtsClient.synthesize(client, ssml, cfg)
+
+                // Persist to an app-private Music directory so history can reference it later
+                val musicRoot = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
+                val outDir = File(musicRoot, "wingmate/audio").apply { if (!exists()) mkdirs() }
+                val safeName = text.take(32).replace("[^A-Za-z0-9-_ ]".toRegex(), "_").trim().ifBlank { "utterance" }
+                val fileName = "${'$'}{System.currentTimeMillis()}_${'$'}safeName.mp3"
+                val outFile = File(outDir, fileName)
+                outFile.outputStream().use { it.write(bytes) }
+
+                // Save history record if repository is available
+                runCatching {
+                    val koin = GlobalContext.getOrNull()
+                    val saidRepo = koin?.get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+                    val now = System.currentTimeMillis()
+                    saidRepo?.add(
+                        io.github.jdreioe.wingmate.domain.SaidText(
+                            date = now,
+                            saidText = text,
+                            voiceName = vForSsml.name,
+                            pitch = vForSsml.pitch,
+                            speed = vForSsml.rate,
+                            audioFilePath = outFile.absolutePath,
+                            createdAt = now,
+                            position = 0,
+                            primaryLanguage = vForSsml.selectedLanguage?.ifBlank { vForSsml.primaryLanguage }
+                        )
+                    )
+                }
+
+                val player = MediaPlayer()
+                player.setOnCompletionListener { mp ->
+                    try {
+                        synchronized(playerLock) {
+                            if (mediaPlayer === mp) {
+                                mp.reset()
+                                mp.release()
+                                mediaPlayer = null
+                            }
+                        }
+                    } catch (_: Throwable) {
+                    } finally { /* keep outFile for history */ }
+                }
+                player.setOnErrorListener { mp, what, extra ->
+                    try { synchronized(playerLock) { if (mediaPlayer === mp) { mp.reset(); mp.release(); mediaPlayer = null } } } catch (_: Throwable) {}
+                    false
+                }
+
+                player.setDataSource(outFile.absolutePath)
+                player.prepare()
+                synchronized(playerLock) {
+                    // Stop any existing player
+                    mediaPlayer?.let { try { it.stop(); it.release() } catch (_: Throwable) {} }
+                    mediaPlayer = player
+                }
+                player.start()
+            } catch (t: Throwable) {
+                println("Azure TTS failed, falling back to platform TTS: $t")
+                // Fallback to platform TTS on error
+                speakWithPlatformTts(text, voice, pitch, rate)
+            }
         }
     }
 
@@ -171,6 +256,9 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             }
         }
         try { tts?.stop() } catch (_: Throwable) {}
+        
+        // Reset offline warning for next session
+        offlineWarningShown.set(false)
     }
 
     private suspend fun getConfig(): SpeechServiceConfig? {

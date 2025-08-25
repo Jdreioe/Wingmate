@@ -33,6 +33,8 @@ final class IosViewModel: ObservableObject {
 
     // Offline handling and System TTS fallback
     @Published var showOfflineInfoOnce: Bool = false
+    // System TTS preference 
+    @Published var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
     @Published var useSystemTtsWhenOffline: Bool = UserDefaults.standard.bool(forKey: "use_system_tts_when_offline")
     private var hasShownOfflineBanner: Bool = UserDefaults.standard.bool(forKey: "offline_banner_shown")
     private var isOnline: Bool = true
@@ -132,6 +134,13 @@ final class IosViewModel: ObservableObject {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
         AudioSessionHelper.activatePlayback()
+        
+        // If user prefers system TTS, use it directly
+        if useSystemTts {
+            SystemTtsManager.shared.speak(t, language: primaryLanguage)
+            return
+        }
+        
         // If Azure is not configured, always use on-device TTS to keep the app working
         if !azureConfigured {
             SystemTtsManager.shared.speak(t, language: primaryLanguage)
@@ -146,7 +155,7 @@ final class IosViewModel: ObservableObject {
     }
 
     func pauseTts() {
-        if !azureConfigured {
+        if useSystemTts || !azureConfigured {
             SystemTtsManager.shared.pause()
         } else if !isOnline && useSystemTtsWhenOffline {
             SystemTtsManager.shared.pause()
@@ -156,13 +165,18 @@ final class IosViewModel: ObservableObject {
     }
 
     func stopTts() {
-        if !azureConfigured {
+        if useSystemTts || !azureConfigured {
             SystemTtsManager.shared.stop()
         } else if !isOnline && useSystemTtsWhenOffline {
             SystemTtsManager.shared.stop()
         } else {
             Task { _ = try? await bridge.stop() }
         }
+    }
+
+    func setUseSystemTts(_ enabled: Bool) {
+        self.useSystemTts = enabled
+        UserDefaults.standard.set(enabled, forKey: "use_system_tts")
     }
 
     func setUseSystemTtsWhenOffline(_ enabled: Bool) {

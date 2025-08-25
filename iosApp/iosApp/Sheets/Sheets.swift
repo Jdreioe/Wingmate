@@ -115,35 +115,53 @@ struct AzureSettingsSheet: View {
     @State private var loading = true
     @State private var saving = false
     @State private var error: String? = nil
+    @State private var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
     private let bridge = KoinBridge()
     let onClose: () -> Void
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Speech Engine") {
+                    Toggle("Use System TTS", isOn: $useSystemTts)
+                        .onChange(of: useSystemTts) { newValue in
+                            UserDefaults.standard.set(newValue, forKey: "use_system_tts")
+                        }
+                }
+                
                 Section("azure.settings.title") {
                     TextField(NSLocalizedString("azure.endpoint.placeholder", comment: ""), text: $endpoint)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
+                        .disabled(useSystemTts) // Disable Azure fields when using system TTS
                     SecureField(NSLocalizedString("azure.key.placeholder", comment: ""), text: $key)
+                        .disabled(useSystemTts)
                 }
                 Section {
                     Button(saving ? "common.saving" : "common.save") {
                         Task {
                             saving = true
                             defer { saving = false }
-                            do {
-                                let cfg = Shared.SpeechServiceConfig(endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                                     subscriptionKey: key.trimmingCharacters(in: .whitespacesAndNewlines))
-                                try await bridge.saveSpeechConfig(config: cfg)
-                                _ = try? await bridge.listVoices()
-                                onClose()
-                            } catch {
-                                self.error = error.localizedDescription
+                            
+                            // Save system TTS preference
+                            UserDefaults.standard.set(useSystemTts, forKey: "use_system_tts")
+                            
+                            // Only save Azure config if not using system TTS
+                            if !useSystemTts {
+                                do {
+                                    let cfg = Shared.SpeechServiceConfig(endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                                         subscriptionKey: key.trimmingCharacters(in: .whitespacesAndNewlines))
+                                    try await bridge.saveSpeechConfig(config: cfg)
+                                    _ = try? await bridge.listVoices()
+                                } catch {
+                                    self.error = error.localizedDescription
+                                    return
+                                }
                             }
+                            onClose()
                         }
                     }
-                    .disabled(loading || saving || endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(loading || saving || (!useSystemTts && (endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)))
                 }
             }
             .navigationTitle(Text("azure.settings.title"))
@@ -174,6 +192,7 @@ struct VoiceSelectionSheet: View {
     @State private var error: String? = nil
     @State private var selected: Shared.Voice?
     @State private var query: String = ""
+    @State private var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
     private let bridge = KoinBridge()
 
     let current: Shared.Voice?
@@ -190,19 +209,55 @@ struct VoiceSelectionSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                HStack {
-                    Image(systemName: "magnifyingglass").foregroundColor(.secondary)
-                    TextField(NSLocalizedString("voice.search.placeholder", comment: ""), text: $query)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
+                // Show system TTS info when enabled
+                if useSystemTts {
+                    VStack(spacing: 8) {
+                        HStack {
+                            Image(systemName: "info.circle.fill")
+                                .foregroundColor(.blue)
+                            Text("System TTS is enabled. Voice selection is handled through iOS Settings.")
+                                .font(.subheadline)
+                            Spacer()
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                        .background(Color.blue.opacity(0.1))
+                    }
+                } else {
+                    HStack {
+                        Image(systemName: "magnifyingglass").foregroundColor(.secondary)
+                        TextField(NSLocalizedString("voice.search.placeholder", comment: ""), text: $query)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+                    }
+                    .padding(8)
+                    .background(Color(.secondarySystemBackground))
                 }
-                .padding(8)
-                .background(Color(.secondarySystemBackground))
 
                 Group {
-                    if loading { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
-                    else if let err = error { HStack(spacing: 4) { Text("common.error"); Text(err) }.padding() }
-                    else {
+                    if useSystemTts {
+                        // Show system TTS info
+                        VStack(spacing: 16) {
+                            Spacer()
+                            VStack(spacing: 12) {
+                                Image(systemName: "speaker.wave.2.fill")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.secondary)
+                                Text("Using System Text-to-Speech")
+                                    .font(.title2)
+                                    .bold()
+                                Text("Voice options are managed in iOS Settings > Accessibility > Spoken Content > Voices")
+                                    .multilineTextAlignment(.center)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal)
+                            }
+                            Spacer()
+                        }
+                    } else if loading { 
+                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) 
+                    } else if let err = error { 
+                        HStack(spacing: 4) { Text("common.error"); Text(err) }.padding() 
+                    } else {
                         List {
                             ForEach(filteredVoices.indices, id: \.self) { idx in
                                 let v = filteredVoices[idx]
@@ -217,12 +272,19 @@ struct VoiceSelectionSheet: View {
             .navigationTitle(Text("toolbar.voice"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { Task { await refreshFromAzure() } } label: { Image(systemName: "arrow.clockwise") }
-                    Button("common.select") { if let v = selected { onSelect(v); onClose() } }
+                if !useSystemTts {
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        Button { Task { await refreshFromAzure() } } label: { Image(systemName: "arrow.clockwise") }
+                        Button("common.select") { if let v = selected { onSelect(v); onClose() } }
+                    }
                 }
             }
-            .onAppear { Task { await loadInitial() } }
+            .onAppear { 
+                useSystemTts = UserDefaults.standard.bool(forKey: "use_system_tts")
+                if !useSystemTts {
+                    Task { await loadInitial() } 
+                }
+            }
         }
     }
 
