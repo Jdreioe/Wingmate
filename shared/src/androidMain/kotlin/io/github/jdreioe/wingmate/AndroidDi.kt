@@ -16,7 +16,9 @@ import org.koin.dsl.module
 fun overrideAndroidSpeechService(context: Context) {
     loadKoinModules(
         module {
+            single<Context> { context }
             single<SpeechService> { AndroidSpeechService(context) }
+            single<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider> { io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider() }
             // Register Android SharedPreferences-backed ConfigRepository
             // Prefer SQLite-backed repositories on Android for parity with desktop
             single<io.github.jdreioe.wingmate.domain.ConfigRepository> { AndroidSqlConfigRepository(context) }

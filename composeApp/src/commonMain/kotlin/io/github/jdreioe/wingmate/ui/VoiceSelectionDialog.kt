@@ -4,14 +4,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -37,12 +34,16 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit) {
     var editingVoice by remember { mutableStateOf<Voice?>(null) }
     var useSystemTts by remember { mutableStateOf(false) }
     var systemVoices by remember { mutableStateOf<List<Voice>>(emptyList()) }
+    var selectedLanguage by remember { mutableStateOf<String?>(null) }
+    var availableLanguages by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showLanguageFilter by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    // Get system voice provider
+    // Get system voice provider from Koin
     val systemVoiceProvider = remember {
         try {
-            io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider()
+            val koin = GlobalContext.getOrNull()
+            koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>() }.getOrNull() }
         } catch (e: Exception) {
             null
         }
@@ -61,7 +62,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit) {
         try {
             if (useSystemTts) {
                 // Load system voices
-                systemVoices = systemVoiceProvider?.getSystemVoices() ?: listOf(
+                val allSystemVoices = systemVoiceProvider?.getSystemVoices() ?: listOf(
                     Voice(
                         name = "system-default",
                         displayName = "System Default",
@@ -69,13 +70,31 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit) {
                         gender = "Unknown"
                     )
                 )
+                systemVoices = allSystemVoices
+                
+                // Extract available languages from system voices
+                availableLanguages = allSystemVoices
+                    .mapNotNull { it.primaryLanguage }
+                    .distinct()
+                    .sorted()
+                
                 // Get currently selected voice if any
                 selected = try { useCase.selected() } catch (e: Exception) { null }
             } else {
                 // Load Azure voices
                 val fromCloud = withContext(Dispatchers.Default) { useCase.refreshFromAzure() }
                 val local = withContext(Dispatchers.Default) { useCase.list() }
-                voices = (fromCloud + local).distinctBy { it.name }
+                val allVoices = (fromCloud + local).distinctBy { it.name }
+                voices = allVoices
+                
+                // Extract available languages from Azure voices
+                availableLanguages = allVoices
+                    .flatMap { voice -> 
+                        listOfNotNull(voice.primaryLanguage) + (voice.supportedLanguages ?: emptyList())
+                    }
+                    .distinct()
+                    .sorted()
+                
                 selected = useCase.selected()
             }
         } catch (t: Throwable) {
@@ -84,11 +103,87 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit) {
         loading = false
     }
 
+    // Filter voices based on selected language
+    val filteredSystemVoices = if (selectedLanguage != null) {
+        systemVoices.filter { it.primaryLanguage == selectedLanguage }
+    } else {
+        systemVoices
+    }
+    
+    val filteredAzureVoices = if (selectedLanguage != null) {
+        voices.filter { voice ->
+            voice.primaryLanguage == selectedLanguage || 
+            voice.supportedLanguages?.contains(selectedLanguage) == true
+        }
+    } else {
+        voices
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Select Voice") },
         text = {
             Column(Modifier.fillMaxWidth()) {
+                // Language filter section
+                if (!loading && error == null && availableLanguages.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "Filter by Language:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        
+                        Box {
+                            OutlinedButton(
+                                onClick = { showLanguageFilter = !showLanguageFilter },
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.FilterList,
+                                    contentDescription = "Filter languages",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    selectedLanguage ?: "All Languages",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1
+                                )
+                            }
+                            
+                            DropdownMenu(
+                                expanded = showLanguageFilter,
+                                onDismissRequest = { showLanguageFilter = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("All Languages") },
+                                    onClick = {
+                                        selectedLanguage = null
+                                        showLanguageFilter = false
+                                    }
+                                )
+                                availableLanguages.forEach { language ->
+                                    DropdownMenuItem(
+                                        text = { Text(language) },
+                                        onClick = {
+                                            selectedLanguage = language
+                                            showLanguageFilter = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                }
+                
                 if (loading) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() }
                 } else if (error != null) {
@@ -96,91 +191,117 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit) {
                 } else if (useSystemTts) {
                     // Show system voices
                     Text(
-                        "System TTS Voices",
+                        "System TTS Voices" + if (selectedLanguage != null) " (${selectedLanguage})" else "",
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
-                        items(systemVoices) { v ->
-                            Row(modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp)
-                                .clickable {
-                                    scope.launch {
-                                        try {
-                                            println("User selected system voice: ${v.name}")
-                                            useCase.select(v)
-                                            // Update settings if needed
-                                            val primary = v.primaryLanguage ?: ""
-                                            if (primary.isNotBlank() && settingsUseCase != null) {
-                                                try {
-                                                    val current = settingsUseCase.get()
-                                                    val updated = current.copy(primaryLanguage = primary)
-                                                    settingsUseCase.update(updated)
-                                                } catch (t: Throwable) {
-                                                    println("Failed to persist primaryLanguage: $t")
+                    
+                    if (filteredSystemVoices.isEmpty() && selectedLanguage != null) {
+                        Text(
+                            "No system voices found for $selectedLanguage",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    } else {
+                        LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                            items(filteredSystemVoices) { v ->
+                                Row(modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp)
+                                    .clickable {
+                                        scope.launch {
+                                            try {
+                                                println("User selected system voice: ${v.name}")
+                                                useCase.select(v)
+                                                // Update settings if needed
+                                                val primary = v.primaryLanguage ?: ""
+                                                if (primary.isNotBlank() && settingsUseCase != null) {
+                                                    try {
+                                                        val current = settingsUseCase.get()
+                                                        val updated = current.copy(primaryLanguage = primary)
+                                                        settingsUseCase.update(updated)
+                                                    } catch (t: Throwable) {
+                                                        println("Failed to persist primaryLanguage: $t")
+                                                    }
                                                 }
+                                            } catch (t: Throwable) {
+                                                println("Failed to select system voice ${v.name}: $t")
                                             }
-                                        } catch (t: Throwable) {
-                                            println("Failed to select system voice ${v.name}: $t")
+                                            onDismiss()
                                         }
-                                        onDismiss()
-                                    }
-                                }) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(text = v.displayName ?: v.name ?: "Unknown")
-                                    Text(text = v.primaryLanguage ?: "", modifier = Modifier.padding(top = 2.dp))
-                                    if (selected?.name == v.name) {
-                                        Text(
-                                            text = "✓ Selected", 
-                                            color = MaterialTheme.colorScheme.primary,
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
+                                    }) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(text = v.displayName ?: v.name ?: "Unknown")
+                                        Text(text = v.primaryLanguage ?: "", modifier = Modifier.padding(top = 2.dp))
+                                        if (selected?.name == v.name) {
+                                            Text(
+                                                text = "✓ Selected", 
+                                                color = MaterialTheme.colorScheme.primary,
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 } else {
-                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
-                        items(voices) { v ->
-                            Row(modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp)
-                                .clickable {
-                                    scope.launch {
-                                        try {
-                                            println("User selected voice: ${v.name} (primary=${v.primaryLanguage}, selected=${v.selectedLanguage})")
-                                            useCase.select(v)
-                                            // also persist UI primary language when selecting a voice
-                                            val primary = v.selectedLanguage.ifBlank { v.selectedLanguage ?: "" }
-                                            if (primary.isNotBlank() && settingsUseCase != null) {
-                                                try {
-                                                    println("Persisting primaryLanguage='$primary' to Settings")
-                                                    val current = settingsUseCase.get()
-                                                    val updated = current.copy(primaryLanguage = primary)
-                                                    settingsUseCase.update(updated)
-                                                    println("Persisted primaryLanguage='$primary'")
-                                                } catch (t: Throwable) {
-                                                    println("Failed to persist primaryLanguage: $t")
+                    // Show Azure voices
+                    Text(
+                        "Azure TTS Voices" + if (selectedLanguage != null) " (${selectedLanguage})" else "",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    if (filteredAzureVoices.isEmpty() && selectedLanguage != null) {
+                        Text(
+                            "No Azure voices found for $selectedLanguage",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    } else {
+                        LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                            items(filteredAzureVoices) { v ->
+                                Row(modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp)
+                                    .clickable {
+                                        scope.launch {
+                                            try {
+                                                println("User selected voice: ${v.name} (primary=${v.primaryLanguage}, selected=${v.selectedLanguage})")
+                                                useCase.select(v)
+                                                // also persist UI primary language when selecting a voice
+                                                val primary = v.selectedLanguage.ifBlank { v.selectedLanguage ?: "" }
+                                                if (primary.isNotBlank() && settingsUseCase != null) {
+                                                    try {
+                                                        println("Persisting primaryLanguage='$primary' to Settings")
+                                                        val current = settingsUseCase.get()
+                                                        val updated = current.copy(primaryLanguage = primary)
+                                                        settingsUseCase.update(updated)
+                                                        println("Persisted primaryLanguage='$primary'")
+                                                    } catch (t: Throwable) {
+                                                        println("Failed to persist primaryLanguage: $t")
+                                                    }
                                                 }
+                                            } catch (t: Throwable) {
+                                                println("Failed to select voice ${v.name}: $t")
                                             }
-                                        } catch (t: Throwable) {
-                                            println("Failed to select voice ${v.name}: $t")
+                                            onDismiss()
                                         }
-                                        onDismiss()
+                                    }) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(text = v.displayName ?: v.name ?: "Unknown")
+                                        Text(text = v.primaryLanguage ?: "", modifier = Modifier.padding(top = 2.dp))
                                     }
-                                }) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(text = v.displayName ?: v.name ?: "Unknown")
-                                    Text(text = v.primaryLanguage ?: "", modifier = Modifier.padding(top = 2.dp))
-                                }
-                                Button(onClick = {
-                                    // open settings for this voice
-                                    editingVoice = v
-                                    showVoiceSettings = true
-                                }) {
-                                    Text("Settings")
+                                    Button(onClick = {
+                                        // open settings for this voice
+                                        editingVoice = v
+                                        showVoiceSettings = true
+                                    }) {
+                                        Text("Settings")
+                                    }
                                 }
                             }
                         }
