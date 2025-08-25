@@ -6,12 +6,56 @@
 "welcome.choose_voice" = "Vælg din stemme!";
 "common.continue" = "Færdig";
 
+/* Welcome Flow */
+"welcome_flow.title" = "Velkommen til Wingmate";
+"welcome_flow.subtitle" = "Lad os konfigurere din tekst-til-tale oplevelse i få trin.";
+"welcome_flow.tts_setup.title" = "Vælg din stemmemodel";
+"welcome_flow.tts_setup.subtitle" = "Vælg hvordan tekst skal oplæses";
+"welcome_flow.system_tts.title" = "System Tekst-til-Tale";
+"welcome_flow.system_tts.subtitle" = "Brug indbyggede iOS stemmer";
+"welcome_flow.system_tts.pro1" = "Virker offline";
+"welcome_flow.system_tts.pro2" = "0 konfiguration krævet";
+"welcome_flow.system_tts.pro3" = "Privatliv venlig";
+"welcome_flow.system_tts.con1" = "Begrænsede stemme muligheder";
+"welcome_flow.system_tts.con2" = "God kvalitet";
+"welcome_flow.azure_tts.title" = "Azure Cognitive Services";
+"welcome_flow.azure_tts.subtitle" = "Professionelle stemmer";
+"welcome_flow.azure_tts.pro1" = "Bedre kvalitet";
+"welcome_flow.azure_tts.pro2" = "Flersprogede stemmer";
+"welcome_flow.azure_tts.pro3" = "Naturligt lydende";
+"welcome_flow.azure_tts.con1" = "Kræver internet";
+"welcome_flow.azure_tts.con2" = "Kræver konfiguration";
+"welcome_flow.azure_tts.con3" = "Kan koste penge";
+"welcome_flow.voice_setup.title" = "Vælg din stemme";
+"welcome_flow.voice_setup.subtitle" = "Vælg en stemme der lyder rigtig for dig";
+"welcome_flow.voice_test.placeholder" = "Hej, sådan lyder jeg!";
+"welcome_flow.phrases_setup.title" = "Tilføj dine første fraser";
+"welcome_flow.phrases_setup.subtitle" = "Opret nogle fraser du bruger ofte";
+"welcome_flow.get_started" = "Kom i gang";
+"welcome_flow.skip" = "Spring over foreløbig";
+"welcome_flow.next" = "Næste";
+"welcome_flow.back" = "Tilbage";
+"welcome_flow.finish" = "Konfiguration færdig!";
+"welcome_flow.setup_complete_subtitle" = "Du er klar til at bruge Wingmate med din konfigurerede stemme.";
+"welcome_flow.help.add_phrases" = "Tilføj fraser ved at trykke på + knappen";
+"welcome_flow.help.play_phrases" = "Tryk på fraser for at høre dem oplæst";
+"welcome_flow.help.organize" = "Organiser med kategorier";
+"welcome_flow.system_tts_info" = "Du bruger System Tekst-til-Tale";
+"welcome_flow.system_tts_settings_info" = "Stemme indstillinger håndteres i iOS Indstillinger under Tilgængelighed > Talt indhold > Stemmer";
+"welcome_flow.open_settings" = "Åbn iOS Indstillinger";
+"welcome_flow.test_voice" = "Test din stemme";
+"welcome_flow.azure_voices_subtitle" = "Vælg mellem høj-kvalitets Azure stemmer";
+"welcome_flow.choose_voice" = "Vælg stemme";
+"welcome_flow.change_voice" = "Skift stemme";
+"welcome_flow.test_text" = "Hej, sådan lyder jeg!";
+
 "tts.placeholder" = "Tekst der skal oplæses";
 "toolbar.language" = "Sprog";
 "toolbar.voice" = "Stemme";
 "toolbar.add_category" = "Tilføj kategori";
 "toolbar.ui_size" = "Størrelse på UI";
-"toolbar.reorder" = "Rearranger layout";
+"toolbar.welcome_flow" = "Konfigurationsguide";
+"toolbar.settings_panel" = "Indstillingspanel";
 
 "categories.all" = "Alle";
 "category.new.title" = "Ny kategori";

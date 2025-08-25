@@ -115,27 +115,17 @@ struct AzureSettingsSheet: View {
     @State private var loading = true
     @State private var saving = false
     @State private var error: String? = nil
-    @State private var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
     private let bridge = KoinBridge()
     let onClose: () -> Void
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Speech Engine") {
-                    Toggle("Use System TTS", isOn: $useSystemTts)
-                        .onChange(of: useSystemTts) { newValue in
-                            UserDefaults.standard.set(newValue, forKey: "use_system_tts")
-                        }
-                }
-                
                 Section("azure.settings.title") {
                     TextField(NSLocalizedString("azure.endpoint.placeholder", comment: ""), text: $endpoint)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
-                        .disabled(useSystemTts) // Disable Azure fields when using system TTS
                     SecureField(NSLocalizedString("azure.key.placeholder", comment: ""), text: $key)
-                        .disabled(useSystemTts)
                 }
                 Section {
                     Button(saving ? "common.saving" : "common.save") {
@@ -143,25 +133,19 @@ struct AzureSettingsSheet: View {
                             saving = true
                             defer { saving = false }
                             
-                            // Save system TTS preference
-                            UserDefaults.standard.set(useSystemTts, forKey: "use_system_tts")
-                            
-                            // Only save Azure config if not using system TTS
-                            if !useSystemTts {
-                                do {
-                                    let cfg = Shared.SpeechServiceConfig(endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                                         subscriptionKey: key.trimmingCharacters(in: .whitespacesAndNewlines))
-                                    try await bridge.saveSpeechConfig(config: cfg)
-                                    _ = try? await bridge.listVoices()
-                                } catch {
-                                    self.error = error.localizedDescription
-                                    return
-                                }
+                            do {
+                                let cfg = Shared.SpeechServiceConfig(endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                                     subscriptionKey: key.trimmingCharacters(in: .whitespacesAndNewlines))
+                                try await bridge.saveSpeechConfig(config: cfg)
+                                _ = try? await bridge.listVoices()
+                            } catch {
+                                self.error = error.localizedDescription
+                                return
                             }
                             onClose()
                         }
                     }
-                    .disabled(loading || saving || (!useSystemTts && (endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)))
+                    .disabled(loading || saving || (endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                 }
             }
             .navigationTitle(Text("azure.settings.title"))

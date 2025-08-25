@@ -7,12 +7,12 @@ struct ContentView: View {
     @StateObject private var model = IosViewModel()
     @State private var showVoiceSheet = false
     @State private var showLanguageSheet = false
-    @State private var dismissedWelcome = false
+    @State private var showWelcomeFlow = false
+    @State private var hasCompletedWelcome = UserDefaults.standard.bool(forKey: "welcome_flow_completed")
     @State private var showAddCategory = false
     @State private var showAddPhrase = false
     @State private var showUiSizeSheet = false
     @State private var editingPhrase: Shared.Phrase? = nil
-    @State private var showReorderSheet = false
 
     // Runtime pieces
     @State private var recorder = AudioRecorder()
@@ -38,6 +38,10 @@ struct ContentView: View {
 
     // iPad right settings panel visibility
     @State private var showRightPanel: Bool = UIDevice.current.userInterfaceIdiom == .pad
+
+    private var shouldShowWelcomeFlow: Bool {
+        return showWelcomeFlow || (!hasCompletedWelcome && model.selectedVoice == nil)
+    }
 
     @ViewBuilder
     private func mainContent(columns: [GridItem]) -> some View {
@@ -74,7 +78,6 @@ struct ContentView: View {
             showAddPhrase: $showAddPhrase,
             showUiSizeSheet: $showUiSizeSheet,
             editingPhrase: $editingPhrase,
-            showReorderSheet: $showReorderSheet,
             uiTextFieldHeight: $uiTextFieldHeight,
             uiInputFontSize: $uiInputFontSize,
             uiChipFontSize: $uiChipFontSize,
@@ -82,11 +85,18 @@ struct ContentView: View {
         ) {
             NavigationStack {
                 Group {
-                    if !dismissedWelcome && model.selectedVoice == nil {
-                        WelcomeScreenIOS(
-                            onContinue: { dismissedWelcome = true },
-                            onVoiceSelected: { v in
-                                Task { await model.chooseVoice(v) }
+                    if shouldShowWelcomeFlow {
+                        WelcomeFlow(
+                            model: model,
+                            onComplete: {
+                                hasCompletedWelcome = true
+                                showWelcomeFlow = false
+                                UserDefaults.standard.set(true, forKey: "welcome_flow_completed")
+                            },
+                            onSkip: {
+                                hasCompletedWelcome = true 
+                                showWelcomeFlow = false
+                                UserDefaults.standard.set(true, forKey: "welcome_flow_completed")
                             }
                         )
                     } else {
@@ -113,7 +123,8 @@ struct ContentView: View {
                                             uiInputFontSize: $uiInputFontSize,
                                             uiChipFontSize: $uiChipFontSize,
                                             uiPlayIconSize: $uiPlayIconSize,
-                                            openVoicePicker: { showVoiceSheet = true }
+                                            openVoicePicker: { showVoiceSheet = true },
+                                            openWelcomeFlow: { showWelcomeFlow = true }
                                         )
                                         .frame(width: rightPanelWidth)
                                     }
@@ -128,9 +139,15 @@ struct ContentView: View {
                 .background(Color(.systemBackground))
                 .navigationTitle(Text("app.title"))
                 .toolbar {
-                    // Hide top navigation buttons when showing the welcome screen
-                    if !( !dismissedWelcome && model.selectedVoice == nil ) {
+                    // Hide top navigation buttons when showing the welcome flow
+                    if !shouldShowWelcomeFlow {
                         ToolbarItemGroup(placement: .topBarTrailing) {
+                            // Welcome flow restart button
+                            Button(action: { showWelcomeFlow = true }) {
+                                Image(systemName: "questionmark.circle")
+                                    .accessibilityLabel(Text("toolbar.welcome_flow"))
+                            }
+                            
                             // iPad: toggle the right settings panel, and hide voice/language/ui-size buttons
                             if UIDevice.current.userInterfaceIdiom == .pad {
                                 Button(action: { showRightPanel.toggle() }) {
@@ -148,9 +165,6 @@ struct ContentView: View {
                                     Image(systemName: "square.grid.3x3.fill")
                                         .accessibilityLabel(Text("toolbar.wiggle_mode"))
                                 }
-                            }
-                            Button(action: { showReorderSheet = true }) {
-                                Image(systemName: "arrow.up.arrow.down").accessibilityLabel(Text("toolbar.reorder"))
                             }
                             if UIDevice.current.userInterfaceIdiom != .pad {
                                 Button(action: { showLanguageSheet = true }) {

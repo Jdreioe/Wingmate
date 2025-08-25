@@ -10,7 +10,6 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
     @Binding var showAddPhrase: Bool
     @Binding var showUiSizeSheet: Bool
     @Binding var editingPhrase: Shared.Phrase?
-    @Binding var showReorderSheet: Bool
     let uiTextFieldHeight: Binding<Double>
     let uiInputFontSize: Binding<Double>
     let uiChipFontSize: Binding<Double>
@@ -60,17 +59,6 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                             uiChipFontSize: uiChipFontSize,
                             uiPlayIconSize: uiPlayIconSize)
                 .presentationDetents([.fraction(0.35), .medium])
-            }
-            .sheet(isPresented: $showReorderSheet) {
-                let phrases = model.filteredPhrases
-                let all = model.state.phrases
-                ReorderPhrasesSheet(
-                    phrases: phrases,
-                    allPhrases: all,
-                    onMove: { from, to in model.movePhrase(from: from, to: to) },
-                    onClose: { showReorderSheet = false }
-                )
-                .presentationDetents([.fraction(0.45), .large])
             }
             .sheet(isPresented: Binding(get: { editingPhrase != nil }, set: { if !$0 { editingPhrase = nil } })) {
                 if let phrase = editingPhrase {

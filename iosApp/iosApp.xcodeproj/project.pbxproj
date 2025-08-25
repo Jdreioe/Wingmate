@@ -35,7 +35,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				dk.lproj,
 			);
 			target = B9DA97B02DC1472C00A4DA20 /* iosApp */;
 		};
@@ -143,6 +142,7 @@
 				Base,
 				de,
 				da,
+				dk,
 			);
 			mainGroup = B9DA97A82DC1472C00A4DA20;
 			minimizedProjectReferenceProxies = 1;

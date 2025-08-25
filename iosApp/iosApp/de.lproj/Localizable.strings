@@ -6,12 +6,56 @@
 "welcome.choose_voice" = "Stimme wählen";
 "common.continue" = "Weiter";
 
+/* Welcome Flow */
+"welcome_flow.title" = "Willkommen bei Wingmate";
+"welcome_flow.subtitle" = "Lass uns deine Text-zu-Sprache-Erfahrung in wenigen Schritten einrichten.";
+"welcome_flow.tts_setup.title" = "Wähle deine Sprachausgabe";
+"welcome_flow.tts_setup.subtitle" = "Bestimme, wie Text gesprochen werden soll";
+"welcome_flow.system_tts.title" = "System Text-zu-Sprache";
+"welcome_flow.system_tts.subtitle" = "Verwende eingebaute iOS-Stimmen";
+"welcome_flow.system_tts.pro1" = "Funktioniert offline";
+"welcome_flow.system_tts.pro2" = "Keine Einrichtung erforderlich";
+"welcome_flow.system_tts.pro3" = "Privatsphäre-freundlich";
+"welcome_flow.system_tts.con1" = "Begrenzte Stimm-Optionen";
+"welcome_flow.system_tts.con2" = "Grundlegende Qualität";
+"welcome_flow.azure_tts.title" = "Azure Cognitive Services";
+"welcome_flow.azure_tts.subtitle" = "Professionelle Stimmen";
+"welcome_flow.azure_tts.pro1" = "Hochwertige Stimmen";
+"welcome_flow.azure_tts.pro2" = "Viele Sprachen";
+"welcome_flow.azure_tts.pro3" = "Natürlich klingend";
+"welcome_flow.azure_tts.con1" = "Benötigt Internet";
+"welcome_flow.azure_tts.con2" = "Einrichtung erforderlich";
+"welcome_flow.azure_tts.con3" = "Kann Geld kosten";
+"welcome_flow.voice_setup.title" = "Wähle deine Stimme";
+"welcome_flow.voice_setup.subtitle" = "Wähle eine Stimme, die für dich richtig klingt";
+"welcome_flow.voice_test.placeholder" = "Hallo, so klinge ich!";
+"welcome_flow.phrases_setup.title" = "Füge deine ersten Phrasen hinzu";
+"welcome_flow.phrases_setup.subtitle" = "Erstelle einige Phrasen, die du häufig verwendest";
+"welcome_flow.get_started" = "Loslegen";
+"welcome_flow.skip" = "Vorerst überspringen";
+"welcome_flow.next" = "Weiter";
+"welcome_flow.back" = "Zurück";
+"welcome_flow.finish" = "Einrichtung abgeschlossen!";
+"welcome_flow.setup_complete_subtitle" = "Du bist bereit, Wingmate mit deiner konfigurierten Stimme zu verwenden.";
+"welcome_flow.help.add_phrases" = "Phrasen durch Tippen auf die +-Taste hinzufügen";
+"welcome_flow.help.play_phrases" = "Phrasen antippen, um sie zu hören";
+"welcome_flow.help.organize" = "Mit Kategorien organisieren";
+"welcome_flow.system_tts_info" = "Du verwendest System Text-zu-Sprache";
+"welcome_flow.system_tts_settings_info" = "Stimm-Optionen werden in den iOS-Einstellungen unter Bedienungshilfen > Gesprochene Inhalte > Stimmen verwaltet";
+"welcome_flow.open_settings" = "iOS-Einstellungen öffnen";
+"welcome_flow.test_voice" = "Teste deine Stimme";
+"welcome_flow.azure_voices_subtitle" = "Wähle aus hochwertigen Azure-Stimmen";
+"welcome_flow.choose_voice" = "Stimme wählen";
+"welcome_flow.change_voice" = "Stimme wechseln";
+"welcome_flow.test_text" = "Hallo, so klinge ich!";
+
 "tts.placeholder" = "Text zum Sprechen eingeben";
 "toolbar.language" = "Sprache";
 "toolbar.voice" = "Stimme";
 "toolbar.add_category" = "Kategorie hinzufügen";
 "toolbar.ui_size" = "UI-Größe";
-"toolbar.reorder" = "Neu anordnen";
+"toolbar.welcome_flow" = "Einrichtungsassistent";
+"toolbar.settings_panel" = "Einstellungs-Panel";
 
 "categories.all" = "Alle";
 "category.new.title" = "Neue Kategorie";

@@ -6,12 +6,45 @@
 "welcome.choose_voice" = "Choose Voice";
 "common.continue" = "Continue";
 
+/* Welcome Flow */
+"welcome_flow.title" = "Welcome to Wingmate";
+"welcome_flow.subtitle" = "Let's set up your text-to-speech experience in just a few steps.";
+"welcome_flow.tts_setup.title" = "Choose Your Speech Engine";
+"welcome_flow.tts_setup.subtitle" = "Select how you want text to be spoken";
+"welcome_flow.system_tts.title" = "System Text-to-Speech";
+"welcome_flow.system_tts.subtitle" = "Use built-in iOS voices";
+"welcome_flow.system_tts.pro1" = "Works offline";
+"welcome_flow.system_tts.pro2" = "No setup required";
+"welcome_flow.system_tts.pro3" = "Privacy friendly";
+"welcome_flow.system_tts.con1" = "Limited voice options";
+"welcome_flow.system_tts.con2" = "Basic quality";
+"welcome_flow.azure_tts.title" = "Azure Cognitive Services";
+"welcome_flow.azure_tts.subtitle" = "Professional-grade voices";
+"welcome_flow.azure_tts.pro1" = "High quality voices";
+"welcome_flow.azure_tts.pro2" = "Many languages";
+"welcome_flow.azure_tts.pro3" = "Natural sounding";
+"welcome_flow.azure_tts.con1" = "Requires internet";
+"welcome_flow.azure_tts.con2" = "Setup required";
+"welcome_flow.azure_tts.con3" = "May cost money";
+"welcome_flow.voice_setup.title" = "Choose Your Voice";
+"welcome_flow.voice_setup.subtitle" = "Select a voice that sounds right to you";
+"welcome_flow.voice_test.placeholder" = "Hello, this is how I sound!";
+"welcome_flow.phrases_setup.title" = "Add Your First Phrases";
+"welcome_flow.phrases_setup.subtitle" = "Create some phrases you'll use often";
+"welcome_flow.get_started" = "Get Started";
+"welcome_flow.skip" = "Skip for now";
+"welcome_flow.next" = "Next";
+"welcome_flow.back" = "Back";
+"welcome_flow.finish" = "Finish Setup";
+
 "tts.placeholder" = "Type text to speak";
 "toolbar.language" = "Language";
 "toolbar.voice" = "Voice";
 "toolbar.add_category" = "Add Category";
 "toolbar.ui_size" = "UI Size";
 "toolbar.reorder" = "Reorder";
+"toolbar.welcome_flow" = "Setup Guide";
+"toolbar.settings_panel" = "Settings Panel";
 
 "categories.all" = "All";
 "category.new.title" = "New Category";
@@ -54,6 +87,21 @@
 "ui_size.chips.section" = "Chips";
 "ui_size.playback.section" = "Playback";
 "ui_size.playback.icon" = "Icon size";
+
+"welcome_flow.finish" = "Setup Complete!";
+"welcome_flow.setup_complete_subtitle" = "You're ready to start using Wingmate with your configured voice.";
+"welcome_flow.help.add_phrases" = "Add phrases by tapping the + button";
+"welcome_flow.help.play_phrases" = "Tap phrases to hear them spoken";
+"welcome_flow.help.organize" = "Organize with categories";
+"welcome_flow.system_tts_info" = "You're using System Text-to-Speech";
+"welcome_flow.system_tts_settings_info" = "Voice options are managed in iOS Settings under Accessibility > Spoken Content > Voices";
+"welcome_flow.open_settings" = "Open iOS Settings";
+"welcome_flow.test_voice" = "Test Your Voice";
+"welcome_flow.azure_voices_subtitle" = "Choose from high-quality Azure voices";
+"welcome_flow.choose_voice" = "Choose Voice";
+"welcome_flow.change_voice" = "Change Voice";
+
+"welcome_flow.test_text" = "Hello, this is how I sound!";
 
 "common.done" = "Done";
 "phrase.edit" = "Edit";

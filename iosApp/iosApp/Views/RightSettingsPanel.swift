@@ -10,6 +10,7 @@ struct RightSettingsPanel: View {
     @Binding var uiChipFontSize: Double
     @Binding var uiPlayIconSize: Double
     let openVoicePicker: () -> Void
+    let openWelcomeFlow: () -> Void
 
     private var languages: [String] {
         let langs = model.availableLanguages
@@ -62,6 +63,18 @@ struct RightSettingsPanel: View {
                     }
                 }
                 .pickerStyle(.menu)
+            }
+
+            Divider().padding(.vertical, 4)
+
+            // Welcome Flow Restart
+            Button(action: openWelcomeFlow) {
+                HStack {
+                    Image(systemName: "questionmark.circle")
+                    Text("Restart Setup Guide")
+                    Spacer()
+                }
+                .padding(.vertical, 4)
             }
 
             Divider().padding(.vertical, 4)
