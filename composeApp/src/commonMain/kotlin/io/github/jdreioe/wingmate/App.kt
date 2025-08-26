@@ -34,7 +34,7 @@ fun App() {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (currentScreen) {
             Screen.Welcome -> WelcomeScreen(onContinue = { currentScreen = Screen.Phrases })
-            Screen.Phrases -> PhraseScreen()
+            Screen.Phrases -> PhraseScreen(onBackToWelcome = { currentScreen = Screen.Welcome })
         }
     }
 }

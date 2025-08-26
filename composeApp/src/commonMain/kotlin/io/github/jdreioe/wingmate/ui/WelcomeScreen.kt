@@ -31,10 +31,21 @@ fun WelcomeScreen(onContinue: () -> Unit) {
             }
         }
         1 -> {
-            // Full-screen Azure settings
-            AzureSettingsFullScreen(onNext = { step = 2 }, onCancel = { step = 0 })
+            // Voice engine selector screen
+            VoiceEngineSelectorScreen(
+                onNext = { step = 3 }, // Skip to voice selection if System TTS
+                onCancel = { step = 0 },
+                onAzureSelected = { step = 2 } // Go to Azure config if Azure selected
+            )
         }
         2 -> {
+            // Azure configuration screen
+            AzureConfigScreen(
+                onNext = { step = 3 }, // Go to voice selection after Azure config
+                onBack = { step = 1 } // Back to TTS engine selection
+            )
+        }
+        3 -> {
             // Full-screen voice selector
             VoiceSelectionFullScreen(onNext = { onContinue() }, onCancel = { step = 1 })
         }

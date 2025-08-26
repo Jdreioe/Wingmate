@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.produceState
@@ -32,7 +33,7 @@ import kotlinx.coroutines.Dispatchers
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhraseScreen() {
+fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
     // Ensure Koin is initialized
     require(GlobalContext.getOrNull() != null) { "Koin not initialized. Call initKoin() before starting the app." }
     val bloc = remember { GlobalContext.get().get<PhraseBloc>() }
@@ -73,6 +74,17 @@ fun PhraseScreen() {
                     TopAppBar(
                         title = { Text("Wingmate", style = MaterialTheme.typography.titleLarge) },
                         actions = {
+                            // Back to Welcome button
+                            if (onBackToWelcome != null) {
+                                IconButton(onClick = onBackToWelcome) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Home, 
+                                        contentDescription = "Back to Welcome"
+                                    )
+                                }
+                                Spacer(Modifier.width(4.dp))
+                            }
+                            
                             // expressive language selector - shows current voice language
                             ElevatedButton(onClick = { showUiLanguageDialog = true }) {
                                 Text(selectedVoiceState.value?.selectedLanguage?.takeIf { it.isNotBlank() } 

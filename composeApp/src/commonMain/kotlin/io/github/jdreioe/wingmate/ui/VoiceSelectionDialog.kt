@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext
 
 @Composable
-fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit) {
+fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow: (() -> Unit)? = null) {
     if (!show) return
 
     val koin = GlobalContext.get()
@@ -317,35 +317,41 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit) {
     // nested voice settings dialog
     val scope2 = rememberCoroutineScope()
     if (showVoiceSettings && editingVoice != null) {
-        VoiceSettingsDialog(show = true, voice = editingVoice!!, onDismiss = { showVoiceSettings = false }, onSave = { updated ->
-            // persist updated voice selection
-            scope2.launch {
-                try {
-                    println("Saving updated voice ${updated.name} (selectedLang=${updated.selectedLanguage}, primary=${updated.primaryLanguage})")
-                    useCase.select(updated)
-                    // also persist primary language from updated voice if available
+        VoiceSettingsDialog(
+            show = true, 
+            voice = editingVoice!!, 
+            onDismiss = { showVoiceSettings = false }, 
+            onSave = { updated ->
+                // persist updated voice selection
+                scope2.launch {
                     try {
-                        val primary = updated.selectedLanguage.ifBlank { updated.primaryLanguage ?: "" }
-                        if (primary.isNotBlank() && settingsUseCase != null) {
-                            println("Persisting primaryLanguage='$primary' from voice settings")
-                            val current = settingsUseCase.get()
-                            val updatedSettings = current.copy(primaryLanguage = primary)
-                            settingsUseCase.update(updatedSettings)
-                            println("Persisted primaryLanguage='$primary' from voice settings")
+                        println("Saving updated voice ${updated.name} (selectedLang=${updated.selectedLanguage}, primary=${updated.primaryLanguage})")
+                        useCase.select(updated)
+                        // also persist primary language from updated voice if available
+                        try {
+                            val primary = updated.selectedLanguage.ifBlank { updated.primaryLanguage ?: "" }
+                            if (primary.isNotBlank() && settingsUseCase != null) {
+                                println("Persisting primaryLanguage='$primary' from voice settings")
+                                val current = settingsUseCase.get()
+                                val updatedSettings = current.copy(primaryLanguage = primary)
+                                settingsUseCase.update(updatedSettings)
+                                println("Persisted primaryLanguage='$primary' from voice settings")
+                            }
+                        } catch (t: Throwable) {
+                            println("Failed to persist primary language from voice settings: $t")
                         }
                     } catch (t: Throwable) {
-                        println("Failed to persist primary language from voice settings: $t")
+                        println("Failed to save updated voice: $t")
                     }
-                } catch (t: Throwable) {
-                    println("Failed to save updated voice: $t")
+                    showVoiceSettings = false
+                    // refresh list/selection
+                    try {
+                        voices = (useCase.refreshFromAzure() + useCase.list()).distinctBy { it.name }
+                        selected = useCase.selected()
+                    } catch (_: Throwable) {}
                 }
-                showVoiceSettings = false
-                // refresh list/selection
-                try {
-                    voices = (useCase.refreshFromAzure() + useCase.list()).distinctBy { it.name }
-                    selected = useCase.selected()
-                } catch (_: Throwable) {}
-            }
-        })
+            },
+            onOpenWelcomeFlow = onOpenWelcomeFlow
+        )
     }
 }
