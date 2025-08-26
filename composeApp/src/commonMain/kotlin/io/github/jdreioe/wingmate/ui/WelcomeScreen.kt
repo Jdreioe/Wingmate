@@ -47,7 +47,17 @@ fun WelcomeScreen(onContinue: () -> Unit) {
         }
         3 -> {
             // Full-screen voice selector
-            VoiceSelectionFullScreen(onNext = { onContinue() }, onCancel = { step = 1 })
+            VoiceSelectionFullScreen(
+                onNext = { step = 4 }, // Go to test voice screen after voice selection
+                onCancel = { step = 1 }
+            )
+        }
+        4 -> {
+            // Test voice screen
+            TestVoiceScreen(
+                onNext = { onContinue() }, // Complete setup after testing voice
+                onBack = { step = 3 } // Back to voice selection
+            )
         }
     }
 }

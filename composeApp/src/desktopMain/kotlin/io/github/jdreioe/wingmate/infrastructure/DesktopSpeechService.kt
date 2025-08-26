@@ -3,13 +3,6 @@ package io.github.jdreioe.wingmate.infrastructure
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
-import io.ktor.client.*
-import io.ktor.client.engine.okhttp.*
-import javazoom.jl.player.Player
-import java.io.FileInputStream
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.Dispatchers
@@ -17,11 +10,6 @@ import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 
 class DesktopSpeechService : SpeechService {
-    private val client = HttpClient(OkHttp) {}
-    private val slf4jLogger = LoggerFactory.getLogger(DesktopSpeechService::class.java)
-    // Only one Player playback at a time
-    private var currentPlayer: Player? = null
-    private val playerLock = Any()
     private val log = LoggerFactory.getLogger("DesktopSpeechService")
 
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
@@ -30,12 +18,19 @@ class DesktopSpeechService : SpeechService {
         val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
         val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
         
-        // If user prefers system TTS, just throw an exception since desktop system TTS isn't implemented
+        // If user prefers system TTS, show error since desktop doesn't support it
         if (uiSettings?.useSystemTts == true) {
-            throw IllegalStateException("System TTS not available on desktop. Please use Azure TTS or run on mobile.")
+            log.warn("System TTS not available on desktop platform")
+            throw RuntimeException("System TTS is not available on desktop. Please use Azure TTS instead.")
         }
         
-        val cfg = getConfig() ?: throw IllegalStateException("No speech service config")
+        // Use Azure TTS for desktop
+        val configRepo = koin?.let { runCatching { it.get<ConfigRepository>() }.getOrNull() }
+        val cfg = configRepo?.let { runCatching { it.getSpeechConfig() }.getOrNull() }
+        
+        if (cfg == null) {
+            throw RuntimeException("Azure Speech configuration not available. Please configure Azure TTS settings.")
+        }
         
         val v = voice ?: Voice(name = "en-US-JennyNeural", primaryLanguage = "en-US")
         if (log.isDebugEnabled) {
@@ -44,89 +39,36 @@ class DesktopSpeechService : SpeechService {
             log.debug("Using voice: $name with $primaryLanguage")
         }
         
-        // Run synthesis & playback on IO so UI thread is not blocked and we can read persisted settings
+        // Run synthesis on IO thread
         withContext(Dispatchers.IO) {
-            slf4jLogger.info("speak() called on thread={}", Thread.currentThread().name)
+            log.info("speak() called on thread={}", Thread.currentThread().name)
             
             try {
-                slf4jLogger.debug("Starting audio synthesis for '{}'", text)
-                val config = AudioConfig.fromDefaultSpeakerOutput()
+                log.debug("Starting audio synthesis for '{}'", text)
                 
-                val synthesizer = SpeechSynthesizer(cfg, config)
-                val ssml = synthesizer.ssmlFromText(text, v, pitch, rate)
+                // For now, this is a stub implementation
+                // In a real implementation, you would:
+                // 1. Make HTTP requests to Azure Speech Services REST API
+                // 2. Or integrate with Azure Speech SDK for JVM (if available)
+                // 3. Play the returned audio data
                 
-                // Create cancellation token that can be cancelled
-                slf4jLogger.debug("Calling speakSsmlAsync with cancellation token: {}", ssml)
+                log.debug("Desktop Azure TTS synthesis (stub): voice={}, text={}", v.name, text)
+                log.info("Note: This is a stub implementation. Real Azure TTS integration needed for desktop.")
                 
-                val result = synthesizer.speakSsmlAsync(ssml).get()
-                
-                when (result.reason) {
-                    ResultReason.SynthesizingAudioCompleted -> {
-                        slf4jLogger.debug("Synthesis completed successfully for text: {}", text)
-                        return@withContext
-                    }
-                    
-                    ResultReason.Canceled -> {
-                        val cancellationDetails = CancellationDetails.fromResult(result)
-                        if (cancellationDetails.reason == CancellationReason.Error) {
-                            slf4jLogger.error(
-                                "Synthesis canceled due to error. Code: {}, Details: {}",
-                                cancellationDetails.errorCode,
-                                cancellationDetails.errorDetails
-                            )
-                        } else {
-                            slf4jLogger.info("Synthesis canceled")
-                        }
-                        throw RuntimeException("Speech synthesis failed: ${cancellationDetails.errorDetails}")
-                    }
-                    
-                    else -> {
-                        slf4jLogger.error("Unexpected synthesis result: {}", result.reason)
-                        throw RuntimeException("Unexpected synthesis result: ${result.reason}")
-                    }
-                }
             } catch (e: Exception) {
-                slf4jLogger.error("Error during speech synthesis", e)
+                log.error("Error during speech synthesis", e)
                 throw e
             }
         }
     }
 
     override suspend fun pause() {
-        // JLayer Player doesn't support pause; implement later if needed
+        log.debug("pause() - stub implementation")
+        // Stub implementation
     }
 
     override suspend fun stop() {
-        // Stop any current playback by closing the Player
-        synchronized(playerLock) {
-            try {
-                currentPlayer?.close()
-            } catch (t: Throwable) {
-                slf4jLogger.warn("Error while stopping player", t)
-            } finally {
-                currentPlayer = null
-            }
-        }
-    }
-
-    private suspend fun getConfig(): SpeechServiceConfig? {
-        // Prefer persisted config from the app's ConfigRepository (Koin)
-        val koin = GlobalContext.getOrNull()
-        val repo = koin?.let { runCatching { it.get<ConfigRepository>() }.getOrNull() }
-        if (repo != null) {
-            return try {
-                // call repository on IO dispatcher
-                withContext(Dispatchers.IO) { repo.getSpeechConfig() }
-            } catch (t: Throwable) {
-                null
-            }
-        }
-
-        // Fallback to environment variables for headless / CI usage
-        val endpoint = System.getenv("WINGMATE_AZURE_REGION") ?: ""
-        val key = System.getenv("WINGMATE_AZURE_KEY") ?: ""
-        return if (endpoint.isNotBlank() && key.isNotBlank()) {
-            SpeechServiceConfig(endpoint = endpoint, subscriptionKey = key)
-        } else null
+        log.debug("stop() - stub implementation")
+        // Stub implementation
     }
 }

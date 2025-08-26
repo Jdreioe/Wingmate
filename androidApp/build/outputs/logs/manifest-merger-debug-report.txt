@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-17:12
-INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-17:12
-INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-17:12
-INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-17:12
+ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-18:12
+INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-18:12
+INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-18:12
+INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-18:12
 MERGED from [:composeApp] /var/home/Jdreioe/dev/WingmateKMP/composeApp/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml:2:1-7:12
 MERGED from [:shared] /var/home/Jdreioe/dev/WingmateKMP/shared/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml:2:1-7:12
 MERGED from [io.insert-koin:koin-android:4.1.0] /var/home/Jdreioe/.gradle/caches/8.13/transforms/e8ef831fcc49242ddc56e7973ca4eb48/transformed/jetified-koin-android-4.1.0/AndroidManifest.xml:2:1-7:12
@@ -106,9 +106,13 @@ uses-permission#android.permission.INTERNET
 ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:3:5-67
 	android:name
 		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:3:22-64
+uses-permission#android.permission.ACCESS_NETWORK_STATE
+ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:4:5-79
+	android:name
+		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:4:22-76
 application
-ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:4:5-16:19
-INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:4:5-16:19
+ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:5:5-17:19
+INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:5:5-17:19
 MERGED from [com.google.android.material:material:1.9.0] /var/home/Jdreioe/.gradle/caches/8.13/transforms/e88a2ca14b29360777b1e4a6c33e2d9c/transformed/material-1.9.0/AndroidManifest.xml:24:5-20
 MERGED from [com.google.android.material:material:1.9.0] /var/home/Jdreioe/.gradle/caches/8.13/transforms/e88a2ca14b29360777b1e4a6c33e2d9c/transformed/material-1.9.0/AndroidManifest.xml:24:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.0.1] /var/home/Jdreioe/.gradle/caches/8.13/transforms/35c39e9a5ed1765fe103a06acc163f22/transformed/constraintlayout-2.0.1/AndroidManifest.xml:9:5-20
@@ -134,27 +138,27 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] /var/home/Jdreioe/.gradle/c
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.13.1] /var/home/Jdreioe/.gradle/caches/8.13/transforms/7cee883d4c7dba3268090198c519a044/transformed/core-1.13.1/AndroidManifest.xml:28:18-86
 	android:label
-		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:5:9-37
+		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:6:9-37
 	android:icon
-		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:6:9-43
+		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:7:9-43
 	android:theme
-		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:7:9-68
+		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:8:9-68
 activity#io.github.jdreioe.wingmate.MainActivity
-ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:8:9-15:20
+ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:9:9-16:20
 	android:exported
-		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:10:13-36
+		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:11:13-36
 	android:name
-		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:9:13-67
+		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:10:13-67
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:11:13-14:29
+ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:12:13-15:29
 action#android.intent.action.MAIN
-ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:12:17-69
+ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:13:17-69
 	android:name
-		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:12:25-66
+		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:13:25-66
 category#android.intent.category.LAUNCHER
-ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:13:17-77
+ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:14:17-77
 	android:name
-		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:13:27-74
+		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:14:27-74
 uses-sdk
 INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml

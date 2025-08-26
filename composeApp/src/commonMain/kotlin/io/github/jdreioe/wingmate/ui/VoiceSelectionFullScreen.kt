@@ -287,13 +287,6 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                     }
                 }
             }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = onCancel) { Text("Back") }
-                Button(onClick = onNext) { Text("Continue") }
-            }
         } else if (loading) {
             CircularProgressIndicator()
         } else if (error != null) {
@@ -449,6 +442,14 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                     }
                 }
             }
+        }
+        
+        // Navigation buttons for Azure TTS section
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = onCancel) { Text("Back") }
+            Button(onClick = onNext) { Text("Continue") }
         }
     }
 }

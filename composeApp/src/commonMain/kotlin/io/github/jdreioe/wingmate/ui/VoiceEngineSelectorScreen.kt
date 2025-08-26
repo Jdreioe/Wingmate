@@ -2,6 +2,8 @@ package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -42,6 +44,7 @@ fun VoiceEngineSelectorScreen(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
         Text("Choose Voice Engine", style = MaterialTheme.typography.headlineSmall)
@@ -203,7 +206,7 @@ fun VoiceEngineSelectorScreen(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Action Buttons
         Row(
