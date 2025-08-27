@@ -12,7 +12,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import javax.swing.UIManager
 import java.awt.Color as AwtColor
 
-private val LightColors = lightColorScheme(
+// Desktop-specific colors (can be different from common theme)
+private val DesktopLightColors = lightColorScheme(
     primary = Color(0xFF7C4DFF),
     onPrimary = Color.White,
     secondary = Color(0xFF6950A1),
@@ -22,7 +23,7 @@ private val LightColors = lightColorScheme(
     onSurface = Color(0xFF111111)
 )
 
-private val DarkColors = darkColorScheme(
+private val DesktopDarkColors = darkColorScheme(
     primary = Color(0xFF6950A1),
     onPrimary = Color.White,
     secondary = Color(0xFF7C4DFF),
@@ -34,17 +35,14 @@ private val DarkColors = darkColorScheme(
 
 @Composable
 fun DesktopTheme(useDark: Boolean? = null, seed: Color? = null, content: @Composable () -> Unit) {
-    // allow optional override: if useDark==null fallback to a Swing-based detection
-    // First try desktop/GTK/KDE hints
-    // If caller requested explicit theme use it. Otherwise follow the system and re-evaluate
-    // periodically so the app responds when the system theme changes.
-    val use = if (useDark != null) {
+    // If useDark is explicitly set, use it. Otherwise detect system theme.
+    val useDarkTheme = if (useDark != null) {
         useDark
     } else {
-        // Compose's system theme detection (callable here because DesktopTheme is @Composable)
-        val composeSystemDark = isSystemInDarkTheme()
+        // Use common theme detection first, with desktop-specific enhancement
+        val commonSystemDark = isSystemInDarkTheme()
 
-        // mutable state that we'll update from a coroutine polling non-composable system hints
+        // Enhanced detection for Linux desktop environments
         val polledHint = remember { mutableStateOf<Boolean?>(try { detectSystemDark() } catch (_: Throwable) { null }) }
 
         LaunchedEffect(Unit) {
@@ -55,10 +53,7 @@ fun DesktopTheme(useDark: Boolean? = null, seed: Color? = null, content: @Compos
             }
         }
 
-        // Additionally, attempt to run `gdbus monitor --session` (if available) to listen for
-        // D-Bus changes and update immediately when we detect relevant events. This avoids
-        // adding a native DBus library dependency and still provides near-instant reactions
-        // on GNOME/KDE systems that ship `gdbus`.
+        // Listen for D-Bus theme changes (Linux)
         LaunchedEffect(Unit) {
             try {
                 val pb = ProcessBuilder("gdbus", "monitor", "--session")
@@ -67,8 +62,12 @@ fun DesktopTheme(useDark: Boolean? = null, seed: Color? = null, content: @Compos
                 val reader = proc.inputStream.bufferedReader()
                 while (true) {
                     val line = reader.readLine() ?: break
-                    // heuristics: change notifications commonly include keys like 'gtk-theme', 'ColorScheme', 'Theme' or settings paths
-                    if (line.contains("gtk-theme", ignoreCase = true) || line.contains("ColorScheme", ignoreCase = true) || line.contains("Theme", ignoreCase = true) || line.contains("kdeglobals", ignoreCase = true) || line.contains("org.gtk.Settings", ignoreCase = true) || line.contains("org.gnome", ignoreCase = true)) {
+                    if (line.contains("gtk-theme", ignoreCase = true) || 
+                        line.contains("ColorScheme", ignoreCase = true) || 
+                        line.contains("Theme", ignoreCase = true) || 
+                        line.contains("kdeglobals", ignoreCase = true) || 
+                        line.contains("org.gtk.Settings", ignoreCase = true) || 
+                        line.contains("org.gnome", ignoreCase = true)) {
                         val hint = try { detectSystemDark() } catch (_: Throwable) { null }
                         if (hint != null) polledHint.value = hint
                     }
@@ -78,11 +77,11 @@ fun DesktopTheme(useDark: Boolean? = null, seed: Color? = null, content: @Compos
             }
         }
 
-        // OS-specific quick checks: macOS and Windows expose theme via system commands/registry.
+        // OS-specific theme detection
         LaunchedEffect(Unit) {
             val os = System.getProperty("os.name")?.lowercase() ?: ""
             if (os.contains("mac") || os.contains("darwin")) {
-                // macOS: use osascript to query appearance dark-mode boolean
+                // macOS: use osascript to query dark mode
                 while (true) {
                     try {
                         val pb = ProcessBuilder("osascript", "-e", "tell application \"System Events\" to tell appearance preferences to get dark mode")
@@ -102,7 +101,7 @@ fun DesktopTheme(useDark: Boolean? = null, seed: Color? = null, content: @Compos
                     delay(1500)
                 }
             } else if (os.contains("win")) {
-                // Windows: read AppsUseLightTheme from registry; 1 = light, 0 = dark
+                // Windows: read AppsUseLightTheme from registry
                 while (true) {
                     try {
                         val pb = ProcessBuilder("reg", "query", "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "/v", "AppsUseLightTheme")
@@ -127,55 +126,41 @@ fun DesktopTheme(useDark: Boolean? = null, seed: Color? = null, content: @Compos
             }
         }
 
-        // If the polled hint is available use it, otherwise fall back to AWT brightness detection
-        val detected = polledHint.value ?: try {
-            val awt = UIManager.getColor("Panel.background") ?: AwtColor(0xFF, 0xFF, 0xFF)
-            val r = awt.red / 255f
-            val g = awt.green / 255f
-            val b = awt.blue / 255f
-            val luminance = 0.299f * r + 0.587f * g + 0.114f * b
-            luminance < 0.5f
-        } catch (_: Throwable) {
-            composeSystemDark
-        }
-
-    // invert detected because some desktop heuristics return "true" for light in our tests;
-    // flip so detected==true means dark theme (consistent with isSystemInDarkTheme semantics)
-    !detected
+        // Use enhanced detection if available, otherwise fall back to common detection
+        polledHint.value ?: commonSystemDark
     }
 
-    // detection completed; use dark-mode if requested or detected
-
+    // Select color scheme
     val colors = when {
         seed != null -> {
             val primary = seed
             val luminance = 0.299f * primary.red + 0.587f * primary.green + 0.114f * primary.blue
             val onPrimary = if (luminance > 0.5f) Color.Black else Color.White
             val secondary = lerp(primary, Color(0xFF6200EE), 0.18f)
-            if (use) {
+            if (useDarkTheme) {
                 darkColorScheme(
                     primary = primary,
                     onPrimary = onPrimary,
                     secondary = secondary,
-                    background = DarkColors.background,
-                    surface = DarkColors.surface,
-                    onBackground = DarkColors.onBackground,
-                    onSurface = DarkColors.onSurface
+                    background = DesktopDarkColors.background,
+                    surface = DesktopDarkColors.surface,
+                    onBackground = DesktopDarkColors.onBackground,
+                    onSurface = DesktopDarkColors.onSurface
                 )
             } else {
                 lightColorScheme(
                     primary = primary,
                     onPrimary = onPrimary,
                     secondary = secondary,
-                    background = LightColors.background,
-                    surface = LightColors.surface,
-                    onBackground = LightColors.onBackground,
-                    onSurface = LightColors.onSurface
+                    background = DesktopLightColors.background,
+                    surface = DesktopLightColors.surface,
+                    onBackground = DesktopLightColors.onBackground,
+                    onSurface = DesktopLightColors.onSurface
                 )
             }
         }
-        use -> DarkColors
-        else -> LightColors
+        useDarkTheme -> DesktopDarkColors
+        else -> DesktopLightColors
     }
 
     MaterialTheme(colorScheme = colors, content = content)

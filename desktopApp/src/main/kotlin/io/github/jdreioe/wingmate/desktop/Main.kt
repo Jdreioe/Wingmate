@@ -5,17 +5,33 @@ import androidx.compose.ui.window.application
 import io.github.jdreioe.wingmate.App
 import io.github.jdreioe.wingmate.ui.DesktopTheme
 import io.github.jdreioe.wingmate.initKoin
+import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.infrastructure.DesktopSpeechService
 import org.koin.dsl.module
 import org.koin.core.context.loadKoinModules
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 
 fun main() {
+    val log = LoggerFactory.getLogger("DesktopMain")
+    
     // Initialize Koin for desktop
     initKoin(module { })
     
     // Register desktop-specific implementations
     setupDesktopRepositories()
+    
+    // Register desktop speech service directly
+    runCatching {
+        loadKoinModules(
+            module(override = true) {
+                single<SpeechService> { DesktopSpeechService() }
+            }
+        )
+        log.info("Registered DesktopSpeechService successfully")
+    }.onFailure { t -> 
+        log.error("Failed to register DesktopSpeechService", t) 
+    }
     
     application {
         Window(

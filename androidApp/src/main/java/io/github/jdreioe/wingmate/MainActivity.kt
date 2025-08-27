@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import org.koin.core.context.GlobalContext
 import org.koin.dsl.module
 import io.github.jdreioe.wingmate.App
+import io.github.jdreioe.wingmate.ui.AppTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -21,7 +22,7 @@ class MainActivity : ComponentActivity() {
         overrideAndroidSpeechService(this)
 
         setContent {
-            MaterialTheme {
+            AppTheme {
                 App()
             }
         }
