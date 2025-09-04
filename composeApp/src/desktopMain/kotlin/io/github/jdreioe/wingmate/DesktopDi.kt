@@ -8,6 +8,7 @@ import io.github.jdreioe.wingmate.infrastructure.DesktopSqlVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlSettingsRepository
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.module
+import kotlinx.coroutines.runBlocking
 
 fun overrideDesktopSpeechService() {
     loadKoinModules(
@@ -24,4 +25,10 @@ fun overrideDesktopSpeechService() {
             single<io.github.jdreioe.wingmate.domain.SaidTextRepository> { io.github.jdreioe.wingmate.infrastructure.DesktopSqlSaidTextRepository() }
         }
     )
+    // Optional: log the current virtual mic preference for visibility
+    runCatching {
+    val repo = org.koin.core.context.GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SettingsRepository>()
+    val settings = runBlocking { repo.get() }
+        org.slf4j.LoggerFactory.getLogger("DesktopDi").info("Virtual mic enabled: {}", settings.virtualMicEnabled)
+    }
 }

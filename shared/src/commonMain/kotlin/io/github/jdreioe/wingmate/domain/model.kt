@@ -31,5 +31,7 @@ data class Settings(
     val primaryLanguage: String = "en-US",
     val secondaryLanguage: String = "en-US",
     // TTS preference: true = use system TTS, false = use Azure TTS
-    val useSystemTts: Boolean = false
+    val useSystemTts: Boolean = false,
+    // Desktop (Linux) only: when true, route TTS audio to a virtual sink whose monitor can be used as a microphone in apps like Zoom
+    val virtualMicEnabled: Boolean = false
 )

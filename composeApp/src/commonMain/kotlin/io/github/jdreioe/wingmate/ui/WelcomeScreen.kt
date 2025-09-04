@@ -14,9 +14,10 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun WelcomeScreen(onContinue: () -> Unit) {
     var step by remember { mutableStateOf(0) }
+    var showUiSettings by remember { mutableStateOf(false) }
 
     when (step) {
-        0 -> {
+    0 -> {
             // Intro
             Column(
                 modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -26,6 +27,8 @@ fun WelcomeScreen(onContinue: () -> Unit) {
                 Text("Welcome to Wingmate", style = MaterialTheme.typography.headlineSmall)
                 Spacer(modifier = Modifier.height(12.dp))
                 Text("A Kotlin Multiplatform AAC app for Android, iOS, and beyond.")
+        Spacer(modifier = Modifier.height(12.dp))
+        TextButton(onClick = { showUiSettings = true }) { Text("UI Settings") }
                 Spacer(modifier = Modifier.height(24.dp))
                 Button(onClick = { step = 1 }) { Text("Next") }
             }
@@ -59,5 +62,9 @@ fun WelcomeScreen(onContinue: () -> Unit) {
                 onBack = { step = 3 } // Back to voice selection
             )
         }
+    }
+
+    if (showUiSettings) {
+        UiSettingsDialog(onDismissRequest = { showUiSettings = false })
     }
 }

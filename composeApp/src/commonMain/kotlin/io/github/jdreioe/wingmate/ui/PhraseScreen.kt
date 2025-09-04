@@ -10,7 +10,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.TopAppBarDefaults
@@ -20,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import io.github.jdreioe.wingmate.application.PhraseBloc
 import io.github.jdreioe.wingmate.application.PhraseEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -67,6 +65,13 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                 value = runCatching { voiceUseCase.selected() }.getOrNull()
             }
             val uiScope = rememberCoroutineScope()
+            var historyItems by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.SaidText>>(emptyList()) }
+
+            // Load history on start so the History category appears if there are existing items
+            LaunchedEffect(saidRepo) {
+                val list = runCatching { saidRepo.list() }.getOrNull().orEmpty()
+                historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L }
+            }
 
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
@@ -91,25 +96,12 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                      ?: primaryLanguageState.value)
                             }
                             Spacer(Modifier.width(12.dp))
-                            // History button: restore the most recently saved said text into the input field
-                            val topBarScope = rememberCoroutineScope()
-                            IconButton(onClick = {
-                                topBarScope.launch(Dispatchers.IO) {
-                                    val newest = runCatching { saidRepo.list().firstOrNull() }.getOrNull()
-                                    if (newest?.saidText != null) {
-                                        val text = newest.saidText ?: ""
-                                        // switch to main to update state
-                                        topBarScope.launch {
-                                            input = androidx.compose.ui.text.input.TextFieldValue(text, selection = androidx.compose.ui.text.TextRange(text.length))
-                                        }
-                                    }
-                                }
-                            }) {
-                                Icon(imageVector = Icons.AutoMirrored.Filled.FormatListBulleted, contentDescription = "History")
-                            }
                             Spacer(Modifier.width(4.dp))
                             IconButton(onClick = { showVoiceSelection = true }) {
                                 Icon(imageVector = Icons.Filled.Settings, contentDescription = "Voice settings")
+                            }
+                            IconButton(onClick = { showSettingsDialog = true }) {
+                                Icon(imageVector = Icons.Filled.Settings, contentDescription = "App settings")
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors()
@@ -146,6 +138,11 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                                         primaryLanguage = selected?.selectedLanguage?.takeIf { it.isNotBlank() } ?: selected?.primaryLanguage
                                                     )
                                                 )
+                                            }.onSuccess { added ->
+                                                // Update local history cache so the category shows up immediately
+                                                uiScope.launch {
+                                                    historyItems = listOf(added) + historyItems
+                                                }
                                             }
                                         } catch (t: Throwable) {
                                             // swallow for UI; diagnostics logged by service
@@ -181,6 +178,8 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                                     primaryLanguage = vForSecondary?.selectedLanguage?.takeIf { it.isNotBlank() } ?: vForSecondary?.primaryLanguage
                                                 )
                                             )
+                                        }.onSuccess { added ->
+                                            uiScope.launch { historyItems = listOf(added) + historyItems }
                                         }
                                     } catch (t: Throwable) {
                                     }
@@ -197,6 +196,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     // Load categories from CategoryUseCase if available; fallback to phrases with isCategory flag
                     val categoryUseCase = remember { runCatching { GlobalContext.get().get<io.github.jdreioe.wingmate.application.CategoryUseCase>() }.getOrNull() }
                     var categories by remember { mutableStateOf<List<CategoryItem>>(emptyList()) }
+                    val HistoryCategoryId = remember { "__history__" }
                     val coroutineScope = rememberCoroutineScope()
 
                     // load initial categories
@@ -248,7 +248,17 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 label = { Text(category.name ?: "All") }
                             )
                         }
-                        
+                        // History chip: appears only when there are items; placed immediately after user categories
+                        if (historyItems.isNotEmpty()) {
+                            item {
+                                FilterChip(
+                                    selected = selectedCategory?.id == HistoryCategoryId,
+                                    onClick = { selectedCategory = CategoryItem(id = HistoryCategoryId, name = "History") },
+                                    label = { Text("History") }
+                                )
+                            }
+                        }
+
                         // Add category chip
                         item {
                             FilterChip(
@@ -266,6 +276,16 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     }
                                 }
                             )
+                        }
+
+                        // Note: History chip is added above, before the Add chip
+                    }
+
+                    // Refresh history from repo when switching to History
+                    LaunchedEffect(selectedCategory?.id) {
+                        if (selectedCategory?.id == HistoryCategoryId) {
+                            val list = runCatching { saidRepo.list() }.getOrNull().orEmpty()
+                            historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L }
                         }
                     }
 
@@ -333,7 +353,23 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     var showEditDialog by remember { mutableStateOf(false) }
                     var editingPhrase by remember { mutableStateOf<Phrase?>(null) }
                     // Show only actual phrase items (not category markers), filtered by selected category
-                    val visiblePhrases = state.items.filter { !it.isCategory && (selectedCategory?.id == null || it.parentId == selectedCategory?.id) }
+                    val isHistory = selectedCategory?.id == HistoryCategoryId
+                    val visiblePhrases = if (isHistory) {
+                        // Map history items to ephemeral Phrase objects to reuse the grid UI; hide Add tile for this view
+                        historyItems.mapIndexed { idx, s ->
+                            Phrase(
+                                id = "history_$idx",
+                                text = s.saidText ?: "",
+                                name = s.voiceName,
+                                backgroundColor = null,
+                                parentId = HistoryCategoryId,
+                                isCategory = false,
+                                createdAt = s.date ?: s.createdAt ?: 0L
+                            )
+                        }
+                    } else {
+                        state.items.filter { !it.isCategory && (selectedCategory?.id == null || it.parentId == selectedCategory?.id) }
+                    }
                     PhraseGrid(
                         phrases = visiblePhrases,
                         onInsert = { phrase ->
@@ -350,6 +386,29 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 try {
                                     val selected = runCatching { voiceUseCase.selected() }.getOrNull()
                                     speechService.speak(phrase.text ?: "", selected)
+                                    // Save a history record for phrase speak (primary)
+                                    runCatching {
+                                        val now = System.currentTimeMillis()
+                                        val effectiveLang = when {
+                                            !selected?.selectedLanguage.isNullOrBlank() -> selected?.selectedLanguage
+                                            else -> settingsUseCase?.let { runCatching { it.get() }.getOrNull()?.primaryLanguage } ?: selected?.primaryLanguage
+                                        }
+                                        val voiceName = selected?.name ?: selected?.displayName
+                                        saidRepo.add(
+                                            io.github.jdreioe.wingmate.domain.SaidText(
+                                                date = now,
+                                                saidText = phrase.text,
+                                                voiceName = voiceName,
+                                                pitch = selected?.pitch,
+                                                speed = selected?.rate,
+                                                createdAt = now,
+                                                position = 0,
+                                                primaryLanguage = effectiveLang
+                                            )
+                                        )
+                                    }.onSuccess { added ->
+                                        uiScope.launch { historyItems = listOf(added) + historyItems }
+                                    }
                                 } catch (_: Throwable) {}
                             }
                         },
@@ -360,18 +419,41 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     val secondaryLang = settingsUseCase?.let { runCatching { it.get() }.getOrNull()?.secondaryLanguage } ?: selected?.primaryLanguage
                                     val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: selected?.selectedLanguage ?: "")
                                     speechService.speak(phrase.text ?: "", vForSecondary)
+                                    // Save a history record for phrase speak (secondary)
+                                    runCatching {
+                                        val now = System.currentTimeMillis()
+                                        val voiceName = vForSecondary?.name ?: vForSecondary?.displayName
+                                        saidRepo.add(
+                                            io.github.jdreioe.wingmate.domain.SaidText(
+                                                date = now,
+                                                saidText = phrase.text,
+                                                voiceName = voiceName,
+                                                pitch = vForSecondary?.pitch,
+                                                speed = vForSecondary?.rate,
+                                                createdAt = now,
+                                                position = 0,
+                                                primaryLanguage = vForSecondary?.selectedLanguage?.takeIf { !it.isNullOrBlank() } ?: vForSecondary?.primaryLanguage
+                                            )
+                                        )
+                                    }.onSuccess { added ->
+                                        uiScope.launch { historyItems = listOf(added) + historyItems }
+                                    }
                                 } catch (_: Throwable) {}
                             }
                         },
                         onLongPress = { phrase ->
-                            // open edit dialog for this phrase
-                            editingPhrase = phrase
-                            showEditDialog = true
+                            if (!isHistory) {
+                                // open edit dialog for this phrase
+                                editingPhrase = phrase
+                                showEditDialog = true
+                            }
                         },
                         onMove = { from, to -> bloc.dispatch(PhraseEvent.Move(from, to)) },
                         onSavePhrase = { phrase -> bloc.dispatch(PhraseEvent.Add(phrase)) },
                         onDeletePhrase = { phrase -> bloc.dispatch(PhraseEvent.Delete(phrase.id)) },
-                        categories = categories
+                        categories = categories,
+                        showAddTile = !isHistory,
+                        readOnly = isHistory
                     )
 
                     if (showEditDialog && editingPhrase != null) {

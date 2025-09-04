@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext
+import io.github.jdreioe.wingmate.ui.isDesktop
 
 @Composable
 fun AzureSettingsFullScreen(
@@ -32,6 +33,7 @@ fun AzureSettingsFullScreen(
     var subscriptionKey by remember { mutableStateOf("") }
     var useSystemTts by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
+    var virtualMic by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(configRepo, settingsUseCase) {
@@ -46,6 +48,7 @@ fun AzureSettingsFullScreen(
                 runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
             }
             useSystemTts = settings.useSystemTts
+            virtualMic = settings.virtualMicEnabled
         }
         
         loading = false
@@ -239,6 +242,23 @@ fun AzureSettingsFullScreen(
                 }
             }
             
+            // Desktop virtual mic toggle (Linux only)
+            if (isDesktop()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Checkbox(checked = virtualMic, onCheckedChange = { checked -> virtualMic = checked })
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text("Use virtual microphone for calls")
+                        Text(
+                            "Routes TTS audio to a virtual device you can pick as mic in Zoom/Meet.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             // Azure Configuration (only show when Azure TTS is selected)
             if (!useSystemTts) {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -274,11 +294,11 @@ fun AzureSettingsFullScreen(
             Spacer(modifier = Modifier.width(8.dp))
             Button(onClick = {
                 scope.launch {
-                    // Save TTS preference
+            // Save TTS preference
                     if (settingsUseCase != null) {
                         withContext(Dispatchers.Default) {
                             val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                            val updated = current.copy(useSystemTts = useSystemTts)
+                val updated = current.copy(useSystemTts = useSystemTts, virtualMicEnabled = virtualMic)
                             settingsUseCase.update(updated)
                         }
                     }

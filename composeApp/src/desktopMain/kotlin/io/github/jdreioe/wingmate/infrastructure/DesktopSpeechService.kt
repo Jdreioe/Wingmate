@@ -11,6 +11,7 @@ import java.io.File
 import javazoom.jl.player.Player
 import java.io.ByteArrayInputStream
 import java.io.FileInputStream
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,6 +21,7 @@ import java.awt.Desktop
 import java.net.URI
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicBoolean
 
 class DesktopSpeechService : SpeechService {
     private val client = HttpClient(OkHttp) {}
@@ -30,6 +32,9 @@ class DesktopSpeechService : SpeechService {
     private var currentProcess: Process? = null
     private var isPlaying = false
     private var isPaused = false
+    private val stopRequested = AtomicBoolean(false)
+    private val virtualSinkName = "wingmate_vmic"
+    private val virtualSinkDesc = "Wingmate Virtual Mic"
 
     init {
         log.info("Enhanced DesktopSpeechService initialized with Azure TTS and System TTS support")
@@ -38,11 +43,24 @@ class DesktopSpeechService : SpeechService {
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
         log.info("speak() called with text='{}', voice={}, pitch={}, rate={}", text.take(50), voice?.name, pitch, rate)
         log.info("speak() called on thread={}", Thread.currentThread().name)
+    // Reset stop flag for this utterance
+    stopRequested.set(false)
+
+        // Prevent overlap: if something is currently playing, stop it first
+        if (isPlaying || currentPlayer != null || currentProcess != null) {
+            log.info("speak() detected existing playback; invoking stop() before starting new utterance")
+            try { stop() } catch (t: Throwable) { log.warn("error stopping previous playback", t) }
+            // After stop, ensure state reflects idle
+            currentPlayer = null
+            currentProcess = null
+            isPlaying = false
+            isPaused = false
+        }
         
         // Check if user prefers system TTS
         val koin = GlobalContext.getOrNull()
         val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
-        val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
+    val uiSettings = settingsRepo?.let { runCatching { runBlocking { it.get() } }.getOrNull() }
         
         if (uiSettings?.useSystemTts == true) {
             // Use system TTS
@@ -52,7 +70,7 @@ class DesktopSpeechService : SpeechService {
             return
         }
         
-        // Use Azure TTS (enhanced implementation)
+    // Use Azure TTS (enhanced implementation)
         withContext(Dispatchers.IO) {
             speakWithAzureTts(text, voice, pitch, rate)
         }
@@ -77,7 +95,7 @@ class DesktopSpeechService : SpeechService {
         // 4. fallback "en-US"
         val koin = GlobalContext.getOrNull()
         val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
-        val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
+    val uiSettings = settingsRepo?.let { runCatching { runBlocking { it.get() } }.getOrNull() }
         val effectiveLang = when {
             !enhancedVoice.selectedLanguage.isNullOrBlank() -> enhancedVoice.selectedLanguage
             !uiSettings?.primaryLanguage.isNullOrBlank() -> uiSettings!!.primaryLanguage
@@ -100,6 +118,10 @@ class DesktopSpeechService : SpeechService {
                 AzureTtsClient.AudioFormat.MP3_24KHZ_160KBPS
             )
             log.info("received {} bytes from Azure TTS", bytes.size)
+            if (stopRequested.get()) {
+                log.info("stop requested during synthesis; skipping playback")
+                return
+            }
             
             if (bytes.isEmpty()) {
                 throw RuntimeException("Azure TTS returned empty audio data")
@@ -123,6 +145,10 @@ class DesktopSpeechService : SpeechService {
             recordAzureTtsHistory(text, vForSsml, outPath.toAbsolutePath().toString(), timestamp)
 
             // Enhanced audio playback with better error handling
+            if (stopRequested.get()) {
+                log.info("stop requested before playback; skipping")
+                return
+            }
             playAudioFile(outPath.toFile())
             
         } catch (e: Exception) {
@@ -137,6 +163,10 @@ class DesktopSpeechService : SpeechService {
         val v = voice ?: Voice(name = "system-default", primaryLanguage = "en-US")
         
         // Determine which TTS system to use
+        if (stopRequested.get()) {
+            log.info("stop requested before system TTS launch; skipping")
+            return
+        }
         val success = when {
             v.name?.startsWith("espeak-") == true -> speakWithEspeak(text, v, pitch, rate)
             v.name?.startsWith("espeak-ng-") == true -> speakWithEspeakNg(text, v, pitch, rate)
@@ -217,6 +247,7 @@ class DesktopSpeechService : SpeechService {
 
     override suspend fun stop() {
         log.info("stop() called")
+    stopRequested.set(true)
         withContext(Dispatchers.IO) {
             try {
                 // Stop any current playback
@@ -465,23 +496,43 @@ class DesktopSpeechService : SpeechService {
             
             log.info("attempting to play audio file: ${audioFile.absolutePath} (${audioFile.length()} bytes)")
             
-            // Try JLayer first for MP3 playback
-            try {
-                FileInputStream(audioFile).use { fis ->
-                    log.info("trying JLayer MP3 playback")
-                    val player = Player(fis)
-                    currentPlayer = player
-                    isPlaying = true
-                    isPaused = false
-                    
-                    log.info("starting JLayer playback on thread={}", Thread.currentThread().name)
-                    player.play()
-                    log.info("JLayer playback completed")
-                    
-                    currentPlayer = null
-                    isPlaying = false
-                }
+            if (stopRequested.get()) {
+                log.info("stop requested before play; aborting")
                 return
+            }
+
+            // Determine whether to route audio to virtual mic
+            val routeToVirtual = shouldRouteToVirtualMic()
+            val sinkArg = if (routeToVirtual) {
+                ensureVirtualMic()
+                // For ffplay with PulseAudio: use -f pulse -i default or a named sink via PULSE_SINK env var
+                // We'll set PULSE_SINK to our sink name when launching ffplay
+                virtualSinkName
+            } else null
+
+            // Try JLayer first for MP3 playback (only for normal speakers; JLayer can't target specific sink)
+            try {
+                if (stopRequested.get()) {
+                    log.info("stop requested before JLayer start; aborting")
+                    return
+                }
+                if (!routeToVirtual) {
+                    FileInputStream(audioFile).use { fis ->
+                        log.info("trying JLayer MP3 playback")
+                        val player = Player(fis)
+                        currentPlayer = player
+                        isPlaying = true
+                        isPaused = false
+
+                        log.info("starting JLayer playback on thread={}", Thread.currentThread().name)
+                        player.play()
+                        log.info("JLayer playback completed")
+
+                        currentPlayer = null
+                        isPlaying = false
+                    }
+                    return
+                }
             } catch (e: Exception) {
                 log.warn("JLayer playback failed, trying system commands", e)
                 currentPlayer = null
@@ -490,7 +541,8 @@ class DesktopSpeechService : SpeechService {
             
             // Try system audio commands as fallback
             val commands = listOf(
-                listOf("ffplay", "-nodisp", "-autoexit", audioFile.absolutePath),
+                // Use ffplay with pulse output explicitly. PULSE_SINK env will target our sink.
+                listOf("ffplay", "-f", "pulse", "-nodisp", "-autoexit", audioFile.absolutePath),
                 listOf("mpg123", audioFile.absolutePath),
                 listOf("paplay", audioFile.absolutePath),
                 listOf("aplay", audioFile.absolutePath)
@@ -499,8 +551,19 @@ class DesktopSpeechService : SpeechService {
             for (command in commands) {
                 if (isCommandAvailable(command[0])) {
                     try {
+                        if (stopRequested.get()) {
+                            log.info("stop requested before system player start; aborting")
+                            return
+                        }
                         log.info("trying system command: {}", command.joinToString(" "))
-                        val process = ProcessBuilder(command)
+                        val pb = ProcessBuilder(command)
+                        if (sinkArg != null) {
+                            // Route to our null sink by setting PULSE_SINK env var; apps can then pick the monitor or remap mic.
+                            val env = pb.environment()
+                            env["PULSE_SINK"] = sinkArg
+                            log.info("routing playback to virtual sink: {}", sinkArg)
+                        }
+                        val process = pb
                             .redirectErrorStream(true)
                             .start()
                         
@@ -535,6 +598,98 @@ class DesktopSpeechService : SpeechService {
             currentProcess = null
             log.error("failed to play audio file: ${audioFile.absolutePath}", e)
             throw RuntimeException("Audio playback failed: ${e.message}", e)
+        }
+    }
+
+    private fun shouldRouteToVirtualMic(): Boolean {
+        return runCatching {
+            val koin = GlobalContext.getOrNull()
+            val settingsRepo = koin?.let { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }
+            val settings = runCatching { runBlocking { settingsRepo?.get() } }.getOrNull()
+            settings?.virtualMicEnabled == true
+        }.getOrNull() == true
+    }
+
+    private fun ensureVirtualMic() {
+        // Only attempt on Linux with PulseAudio or PipeWire's Pulse server
+        val os = System.getProperty("os.name").lowercase()
+        if (!os.contains("linux")) return
+        if (!isCommandAvailable("pactl")) {
+            log.warn("pactl not found; cannot create virtual mic sink")
+            return
+        }
+
+        try {
+            // Detect whether the Pulse server is PipeWire-backed
+            val info = ProcessBuilder("pactl", "info").redirectErrorStream(true).start()
+            val infoOut = info.inputStream.bufferedReader().readText()
+            val isPipeWire = infoOut.contains("PipeWire", ignoreCase = true)
+            log.info("Pulse server: {}", infoOut.lineSequence().firstOrNull { it.contains("Server Name", true) } ?: "<unknown>")
+
+            // Check if sink already exists
+            val listSinks = ProcessBuilder("pactl", "list", "short", "sinks")
+                .redirectErrorStream(true)
+                .start()
+            val sinksOut = listSinks.inputStream.bufferedReader().readText()
+            if (!sinksOut.lines().any { it.contains(virtualSinkName) }) {
+                // Create null sink; also set a readable monitor name via source_properties
+                log.info("creating PulseAudio null sink: {}", virtualSinkName)
+                val createSink = ProcessBuilder(
+                    "pactl", "load-module", "module-null-sink",
+                    "sink_name=$virtualSinkName",
+                    "sink_properties=device.description=$virtualSinkDesc",
+                    "source_properties=device.description=${virtualSinkDesc} (Monitor)"
+                ).redirectErrorStream(true).start()
+                createSink.waitFor()
+                log.info(
+                    "created null sink (exit={}): {}",
+                    createSink.exitValue(),
+                    createSink.inputStream.bufferedReader().readText()
+                )
+            }
+
+            // Create a dedicated microphone source that maps to the sink's monitor, so apps see it as a mic
+            val remapSourceName = "${virtualSinkName}_mic"
+            val listSources = ProcessBuilder("pactl", "list", "short", "sources")
+                .redirectErrorStream(true)
+                .start()
+            val sourcesOut = listSources.inputStream.bufferedReader().readText()
+            if (!sourcesOut.lines().any { it.contains(remapSourceName) }) {
+                if (isPipeWire) {
+                    // Prefer module-virtual-source under PipeWire to avoid remap-source crashes
+                    log.info("creating virtual-source mic (PipeWire): {} -> {}.monitor", remapSourceName, virtualSinkName)
+                    val createVsrc = ProcessBuilder(
+                        "pactl", "load-module", "module-virtual-source",
+                        "source_name=$remapSourceName",
+                        "master=${virtualSinkName}.monitor",
+                        "source_properties=device.description=$virtualSinkDesc"
+                    ).redirectErrorStream(true).start()
+                    createVsrc.waitFor()
+                    val vsrcOut = createVsrc.inputStream.bufferedReader().readText()
+                    if (createVsrc.exitValue() == 0) {
+                        log.info("created virtual-source mic (exit={}): {}", createVsrc.exitValue(), vsrcOut)
+                    } else {
+                        log.warn("failed to create virtual-source mic (exit={}): {} — falling back to monitor-only", createVsrc.exitValue(), vsrcOut)
+                    }
+                } else {
+                    // PulseAudio classic: remap-source is fine
+                    log.info("creating remap-source as microphone: {} -> {}.monitor", remapSourceName, virtualSinkName)
+                    val createSource = ProcessBuilder(
+                        "pactl", "load-module", "module-remap-source",
+                        "source_name=$remapSourceName",
+                        "master=${virtualSinkName}.monitor",
+                        "source_properties=device.description=$virtualSinkDesc"
+                    ).redirectErrorStream(true).start()
+                    createSource.waitFor()
+                    log.info(
+                        "created remap-source mic (exit={}): {}",
+                        createSource.exitValue(),
+                        createSource.inputStream.bufferedReader().readText()
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            log.warn("Failed to ensure virtual mic sink/source — using monitor-only fallback", e)
         }
     }
 }

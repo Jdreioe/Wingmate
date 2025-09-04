@@ -47,9 +47,11 @@ fun PhraseGrid(
     onSavePhrase: ((Phrase) -> Unit)? = null,
     phraseHeight: Dp = 120.dp,
     phraseFontSize: TextUnit = TextUnit.Unspecified,
+    showAddTile: Boolean = true,
+    readOnly: Boolean = false,
 ) {
     // Build item list; when not in wiggle mode show an Add button as last tile
-    val showAdd = !isWiggleMode
+    val showAdd = !isWiggleMode && showAddTile
     val itemCount = if (showAdd) phrases.size + 1 else phrases.size
 
     var showAddDialog by remember { mutableStateOf(false) }
@@ -96,6 +98,7 @@ fun PhraseGrid(
                     phraseFontSize = phraseFontSize,
                     index = index,
                     total = phrases.size,
+                    readOnly = readOnly,
                 )
             }
         }

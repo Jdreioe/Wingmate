@@ -49,6 +49,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
     var useSystemTts by remember { mutableStateOf(false) }
+    var virtualMic by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
@@ -66,6 +67,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                 runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
             }
             useSystemTts = settings.useSystemTts
+            virtualMic = settings.virtualMicEnabled
         }
         loading = false
     }
@@ -114,6 +116,23 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                             label = { Text("Subscription Key") }
                         )
                     }
+
+                    // Desktop virtual mic toggle
+                    if (isDesktop()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Checkbox(checked = virtualMic, onCheckedChange = { checked -> virtualMic = checked })
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("Use virtual microphone for calls")
+                                Text(
+                                    "Routes TTS audio to a virtual device you can pick as mic in Zoom/Meet.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -126,7 +145,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                         // Save TTS preference
                         if (settingsUseCase != null) {
                             val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                            val updated = current.copy(useSystemTts = useSystemTts)
+                            val updated = current.copy(useSystemTts = useSystemTts, virtualMicEnabled = virtualMic)
                             settingsUseCase.update(updated)
                         }
                         

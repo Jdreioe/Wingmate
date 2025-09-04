@@ -55,6 +55,7 @@ fun PhraseGridItem(
     phraseFontSize: TextUnit = TextUnit.Unspecified,
     index: Int = 0,
     total: Int = 0,
+    readOnly: Boolean = false,
 ) {
     val infiniteTransition = rememberInfiniteTransition()
     val angle = infiniteTransition.animateFloat(
@@ -73,12 +74,15 @@ fun PhraseGridItem(
             .fillMaxWidth()
             .height(phraseHeight)
             // long-press opens contextual menu; tap inserts if onTap provided
-            .combinedClickable(onClick = { showMenu = false; try { onTap?.invoke() ?: onPlay() } catch (_: Throwable) {} }, onLongClick = { showMenu = true }),
+            .combinedClickable(
+                onClick = { showMenu = false; try { onTap?.invoke() ?: onPlay() } catch (_: Throwable) {} },
+                onLongClick = { if (!readOnly) showMenu = true }
+            ),
         shape = RoundedCornerShape(8.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                     // contextual menu (appears on long-press or right-click)
-                    if (showMenu && !isEditMode) {
+                    if (showMenu && !isEditMode && !readOnly) {
                         DropdownMenu(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false },
@@ -139,7 +143,7 @@ fun PhraseGridItem(
                 }
             }
 
-            if (isEditMode) {
+            if (isEditMode && !readOnly) {
                 // Show material-style move up / move down / delete buttons
                 Column(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) {
                     IconButton(onClick = { if (index > 0) onMove?.invoke(index, index - 1) }) {
