@@ -9,6 +9,9 @@ import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.SaidTextRepository
+import kotlinx.datetime.Clock
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -121,6 +124,29 @@ class KoinBridge : KoinComponent {
             } finally {
                 started = true
             }
+        }
+    }
+
+    // --- History helpers ---
+    // Returns the list of said items mapped as Phrase objects for easy Swift UI rendering
+    suspend fun listHistoryAsPhrases(): List<Phrase> {
+        return try {
+            val said = get<SaidTextRepository>().list()
+            val now = Clock.System.now().toEpochMilliseconds()
+            said.map { s ->
+                Phrase(
+                    id = "history-" + (s.id?.toString() ?: (s.createdAt ?: s.date ?: now).toString()),
+                    text = s.saidText ?: "",
+                    name = null,
+                    backgroundColor = "#00000000",
+                    parentId = null,
+                    isCategory = false,
+                    createdAt = (s.createdAt ?: s.date ?: now),
+                    recordingPath = s.audioFilePath
+                )
+            }
+        } catch (_: Throwable) {
+            emptyList()
         }
     }
 }

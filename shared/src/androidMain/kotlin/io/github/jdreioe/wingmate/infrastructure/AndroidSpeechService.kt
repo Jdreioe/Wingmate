@@ -39,6 +39,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     // MediaPlayer based playback for Azure synthesized audio
     private var mediaPlayer: MediaPlayer? = null
     private val playerLock = Any()
+    private val CACHE_TTL_MS: Long = 30L * 24 * 60 * 60 * 1000
     
     // Track if we've already shown the offline warning to avoid spam
     private val offlineWarningShown = AtomicBoolean(false)
@@ -124,7 +125,10 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             return
         }
         
-        // Try to obtain persisted Azure config; if present, prefer Azure TTS pipeline
+    // Before Azure: try history-first playback with TTL
+    if (tryPlayFromHistoryIfFresh(text, voice)) return
+
+    // Try to obtain persisted Azure config; if present, prefer Azure TTS pipeline
         val cfg = getConfig()
         if (cfg == null) {
             // No Azure configuration - fall back to system TTS with warning
@@ -224,6 +228,63 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 // Fallback to platform TTS on error
                 speakWithPlatformTts(text, voice, pitch, rate)
             }
+        }
+    }
+
+    private suspend fun tryPlayFromHistoryIfFresh(text: String, voice: Voice?): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val koin = GlobalContext.getOrNull()
+                val saidRepo = koin?.get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+                val items = saidRepo?.list().orEmpty()
+                val now = System.currentTimeMillis()
+                val v = voice
+                val match = items
+                    .asSequence()
+                    .filter { it.saidText?.trim().equals(text.trim(), ignoreCase = false) }
+                    .sortedByDescending { it.createdAt ?: it.date ?: 0L }
+                    .firstOrNull { item ->
+                        val langOk = when {
+                            item.primaryLanguage.isNullOrBlank() -> true
+                            v?.selectedLanguage?.isNotBlank() == true -> item.primaryLanguage == v.selectedLanguage
+                            v?.primaryLanguage?.isNotBlank() == true -> item.primaryLanguage == v.primaryLanguage
+                            else -> true
+                        }
+                        if (!langOk) return@firstOrNull false
+                        val path = item.audioFilePath ?: return@firstOrNull false
+                        val baseTime = item.createdAt ?: item.date ?: File(path).lastModified()
+                        val age = now - baseTime
+                        val fresh = age <= CACHE_TTL_MS
+                        if (!fresh) runCatching { File(path).delete() }
+                        fresh
+                    }
+                if (match != null) {
+                    // Play file directly
+                    val p = match.audioFilePath!!
+                    val player = MediaPlayer()
+                    player.setOnCompletionListener { mp ->
+                        try {
+                            synchronized(playerLock) {
+                                if (mediaPlayer === mp) {
+                                    mp.reset(); mp.release(); mediaPlayer = null
+                                }
+                            }
+                        } catch (_: Throwable) {}
+                    }
+                    player.setOnErrorListener { mp, _, _ ->
+                        try { synchronized(playerLock) { if (mediaPlayer === mp) { mp.reset(); mp.release(); mediaPlayer = null } } } catch (_: Throwable) {}
+                        false
+                    }
+                    player.setDataSource(p)
+                    player.prepare()
+                    synchronized(playerLock) {
+                        mediaPlayer?.let { try { it.stop(); it.release() } catch (_: Throwable) {} }
+                        mediaPlayer = player
+                    }
+                    player.start()
+                    true
+                } else false
+            } catch (_: Throwable) { false }
         }
     }
 

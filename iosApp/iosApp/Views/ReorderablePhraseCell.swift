@@ -48,7 +48,9 @@ struct ReorderablePhraseCell: View {
         .zIndex(isDragging ? 999 : 0) // Higher z-index for dragging item
         .contentShape(Rectangle())
 
-        if wiggleMode {
+    // Disable drag gestures for history items to avoid affecting real phrases
+    let isHistory = phrase.id.hasPrefix("history-")
+    if wiggleMode && !isHistory {
             baseView
                 .gesture(
                     DragGesture(coordinateSpace: .named("gridSpace"))

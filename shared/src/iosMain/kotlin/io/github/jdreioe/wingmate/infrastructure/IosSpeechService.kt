@@ -27,8 +27,16 @@ class IosSpeechService(
 
     private var audioPlayer: AVAudioPlayer? = null
 
+    // Cache/History TTL: 30 days
+    private val CACHE_TTL_MS: Long = 30L * 24 * 60 * 60 * 1000
+
     init {
         configureAudioSession()
+        // Opportunistic cleanup on initialization
+        runCatching {
+            // Best-effort cleanup without blocking init; actual pruning happens during speak as well
+            kotlinx.coroutines.GlobalScope.launch(Dispatchers.Default) { cleanupExpiredFiles() }
+        }
     }
 
     private fun configureAudioSession() {
@@ -51,10 +59,26 @@ class IosSpeechService(
     }
 
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
+    // Periodic cleanup prior to speaking
+    cleanupExpiredFiles()
         if (text.isBlank()) return
 
-        // Try cache by key (voice+lang+pitch+rate+text hash)
-        val cacheKey = buildCacheKey(text, voice, pitch, rate)
+        // Resolve an effective voice for language matching in history
+        val selected = runCatching { voice ?: voiceUseCase?.selected() }.getOrNull()
+        val effectiveVoice = selected ?: Voice(
+            id = null,
+            name = "en-US-JennyNeural",
+            displayName = "Default Voice",
+            primaryLanguage = "en-US",
+            selectedLanguage = "en-US"
+        )
+
+        // 1) Try history-first playback with TTL
+        val historyPlayed = tryPlayFromHistoryIfFresh(text = text, voice = effectiveVoice)
+        if (historyPlayed) return
+
+        // 2) Try cache by key (voice+lang+pitch+rate+text hash) with TTL
+        val cacheKey = buildCacheKey(text, effectiveVoice, pitch, rate)
         val cachedPath = findCachedPath(cacheKey)
         if (cachedPath != null) {
             logger.info { "Playing from cache: $cachedPath" }
@@ -69,14 +93,7 @@ class IosSpeechService(
                     return@withContext null
                 }
 
-                val selected = voice ?: runCatching { voiceUseCase?.selected() }.getOrNull()
-                val voiceToUse = selected ?: Voice(
-                    id = null,
-                    name = "en-US-JennyNeural",
-                    displayName = "Default Voice",
-                    primaryLanguage = "en-US",
-                    selectedLanguage = "en-US"
-                )
+                val voiceToUse = effectiveVoice
                 val ssml = AzureTtsClient.generateSsml(text, voiceToUse)
         val audioData = AzureTtsClient.synthesize(httpClient, ssml, config)
                 logger.info { "Generated ${audioData.size} bytes of audio for text: '${text.take(40)}'" }
@@ -91,9 +108,77 @@ class IosSpeechService(
 
     // Save to cache and history
     val filePath = saveToCache(cacheKey, audioBytes)
-    trySaveHistory(text, voice, pitch, rate, filePath)
+    trySaveHistory(text, effectiveVoice, pitch, rate, filePath)
 
     playAudio(audioBytes)
+    }
+
+    private var lastCleanupAtMs: Long = 0L
+    private suspend fun cleanupExpiredFiles() {
+        val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+        if (now - lastCleanupAtMs < 24L * 60 * 60 * 1000) return
+        withContext(Dispatchers.Default) {
+            try {
+                // 1) Prune cache directory files by mtime
+                val dir = iosCacheDir()
+                val fm = NSFileManager.defaultManager
+                val contents = fm.contentsOfDirectoryAtPath(dir, error = null) as? List<*>
+                contents?.forEach { nameAny ->
+                    val name = nameAny as? String ?: return@forEach
+                    val path = "$dir/$name"
+                    val attrs = fm.attributesOfItemAtPath(path, error = null)
+                    val mtime = attrs?.objectForKey(NSFileModificationDate) as? NSDate
+                    val baseTime = mtime?.timeIntervalSince1970?.times(1000.0)?.toLong() ?: 0L
+                    val age = now - baseTime
+                    if (age > CACHE_TTL_MS) runCatching { fm.removeItemAtPath(path, error = null) }
+                }
+
+                // 2) Prune expired history audio file paths
+                runCatching {
+                    val items = saidRepo?.list().orEmpty()
+                    items.forEach { item ->
+                        val path = item.audioFilePath ?: return@forEach
+                        val attrs = fm.attributesOfItemAtPath(path, error = null)
+                        val mtime = attrs?.objectForKey(NSFileModificationDate) as? NSDate
+                        val base = (item.createdAt ?: item.date) ?: mtime?.timeIntervalSince1970?.times(1000.0)?.toLong()
+                        val age = if (base != null) now - base else Long.MAX_VALUE
+                        if (age > CACHE_TTL_MS) runCatching { fm.removeItemAtPath(path, error = null) }
+                    }
+                }
+            } finally { lastCleanupAtMs = now }
+        }
+    }
+
+    private suspend fun tryPlayFromHistoryIfFresh(text: String, voice: Voice): Boolean {
+        val repo = saidRepo ?: return false
+        return try {
+            val items = withContext(Dispatchers.Default) { repo.list() }
+            val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+            // Prefer most recent match by text and (if present) language
+            val match = items
+                .asSequence()
+                .filter { it.saidText?.trim().equals(text.trim(), ignoreCase = false) }
+                .sortedByDescending { it.createdAt ?: it.date ?: 0L }
+                .firstOrNull { item ->
+                    val langOk = when {
+                        item.primaryLanguage.isNullOrBlank() -> true
+                        !voice.selectedLanguage.isNullOrBlank() -> item.primaryLanguage == voice.selectedLanguage
+                        !voice.primaryLanguage.isNullOrBlank() -> item.primaryLanguage == voice.primaryLanguage
+                        else -> true
+                    }
+                    if (!langOk) return@firstOrNull false
+                    val path = item.audioFilePath ?: return@firstOrNull false
+                    val fresh = isFileFresh(path, now, item.createdAt ?: item.date)
+                    fresh
+                }
+            if (match != null) {
+                playFile(match.audioFilePath!!)
+                true
+            } else false
+        } catch (t: Throwable) {
+            logger.warn(t) { "History lookup failed" }
+            false
+        }
     }
 
     private suspend fun playFile(path: String) = withContext(Dispatchers.Main) {
@@ -158,7 +243,9 @@ class IosSpeechService(
     private fun findCachedPath(key: String): String? = try {
         val dir = iosCacheDir()
         val path = "$dir/$key.m4a"
-        if (platform.Foundation.NSFileManager.defaultManager.fileExistsAtPath(path)) path else null
+        if (!NSFileManager.defaultManager.fileExistsAtPath(path)) return null
+        val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+        return if (isFileFresh(path, now, null)) path else null
     } catch (_: Throwable) { null }
 
     private fun saveToCache(key: String, bytes: ByteArray): String? = try {
@@ -171,6 +258,19 @@ class IosSpeechService(
     } catch (t: Throwable) {
         logger.warn(t) { "Failed to write cache file" }
         null
+    }
+
+    private fun isFileFresh(path: String, nowMs: Long, createdAtMsOrNull: Long?): Boolean {
+        // Prefer provided createdAt; otherwise check file modification date
+        val baseTime = createdAtMsOrNull ?: runCatching {
+            val attrs = NSFileManager.defaultManager.attributesOfItemAtPath(path, error = null)
+            val mtime = attrs?.objectForKey(NSFileModificationDate) as? NSDate
+            if (mtime != null) (mtime.timeIntervalSince1970 * 1000.0).toLong() else null
+        }.getOrNull()
+        val age = if (baseTime != null) nowMs - baseTime else Long.MAX_VALUE
+        val fresh = age <= CACHE_TTL_MS
+        if (!fresh) runCatching { NSFileManager.defaultManager.removeItemAtPath(path, error = null) }
+        return fresh
     }
 
     private suspend fun trySaveHistory(text: String, voice: Voice?, pitch: Double?, rate: Double?, filePath: String?) {
