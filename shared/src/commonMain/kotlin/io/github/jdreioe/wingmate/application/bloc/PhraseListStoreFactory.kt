@@ -63,6 +63,7 @@ class PhraseListStoreFactory(
                 is PhraseListStore.Intent.DeletePhrase -> deletePhrase(intent.phraseId)
                 is PhraseListStore.Intent.DeleteCategory -> deleteCategory(intent.categoryId)
                 is PhraseListStore.Intent.UpdatePhrase -> updatePhrase(intent.id, intent.text, intent.name)
+                is PhraseListStore.Intent.UpdatePhraseRecording -> updatePhraseRecording(intent.id, intent.recordingPath)
                 is PhraseListStore.Intent.MovePhrase -> movePhrase(intent.fromIndex, intent.toIndex)
                 is PhraseListStore.Intent.MoveCategory -> moveCategory(intent.fromIndex, intent.toIndex)
             }
@@ -128,12 +129,24 @@ class PhraseListStoreFactory(
         private fun updatePhrase(id: String, text: String?, name: String?) {
             scope.launch {
                 try {
-                    val updated = updatePhraseUseCase(id, text, name)
+                    val updated = updatePhraseUseCase(id, text, name, null)
                     // Just reload to keep ordering consistent
                     loadPhrasesAndCategories()
                     dispatch(Msg.PhraseUpdated(updated))
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to update phrase"))
+                }
+            }
+        }
+
+        private fun updatePhraseRecording(id: String, recordingPath: String?) {
+            scope.launch {
+                try {
+                    val updated = updatePhraseUseCase(id, null, null, recordingPath)
+                    loadPhrasesAndCategories()
+                    dispatch(Msg.PhraseUpdated(updated))
+                } catch (e: Exception) {
+                    dispatch(Msg.ErrorOccurred(e.message ?: "Failed to update recording path"))
                 }
             }
         }

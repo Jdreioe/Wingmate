@@ -14,6 +14,9 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
     let uiInputFontSize: Binding<Double>
     let uiChipFontSize: Binding<Double>
     let uiPlayIconSize: Binding<Double>
+    // Recording surface
+    var recorder: AudioRecorder? = nil
+    var saveRecordingPath: ((String,String) -> Void)? = nil
     let content: () -> Content
 
     var body: some View {
@@ -28,6 +31,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                     }
                 }
                 .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: Binding(get: { !isPad && showLanguageSheet }, set: { if !$0 { showLanguageSheet = false } })) {
                 LanguageSelectionSheet(languages: model.availableLanguages.isEmpty ? [model.primaryLanguage] : model.availableLanguages,
@@ -36,21 +40,26 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                     model.updateLanguage(lang)
                     showLanguageSheet = false
                 }
-                .presentationDetents([.fraction(0.45), .large])
+                .presentationDetents([.height(300), .medium, .large])
+                .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showAddCategory) {
                 AddCategorySheet(onClose: { showAddCategory = false }) { name in
                     model.addCategory(name: name)
                     showAddCategory = false
                 }
-                .presentationDetents([.fraction(0.3), .medium])
+                .presentationDetents([.height(200), .medium])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
             }
             .sheet(isPresented: $showAddPhrase) {
-                AddPhraseSheet(onClose: { showAddPhrase = false }) { text in
+                AddPhraseSheet(onClose: { showAddPhrase = false }, recorder: recorder, saveRecordingPath: saveRecordingPath) { text in
                     model.addPhrase(text: text)
                     showAddPhrase = false
                 }
-                .presentationDetents([.fraction(0.3), .medium])
+                .presentationDetents([.height(400), .medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
             }
             .sheet(isPresented: Binding(get: { !isPad && showUiSizeSheet }, set: { if !$0 { showUiSizeSheet = false } })) {
                 UiSizeSheet(onClose: { showUiSizeSheet = false },
@@ -58,15 +67,24 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                             uiInputFontSize: uiInputFontSize,
                             uiChipFontSize: uiChipFontSize,
                             uiPlayIconSize: uiPlayIconSize)
-                .presentationDetents([.fraction(0.35), .medium])
+                .presentationDetents([.height(350), .medium, .large])
+                .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: Binding(get: { editingPhrase != nil }, set: { if !$0 { editingPhrase = nil } })) {
                 if let phrase = editingPhrase {
-                    EditPhraseSheet(phrase: phrase, onClose: { editingPhrase = nil }) { updatedText, updatedName in
-                        model.updatePhrase(id: phrase.id, text: updatedText, name: updatedName)
-                        editingPhrase = nil
-                    }
-                    .presentationDetents([.fraction(0.35), .medium])
+                    EditPhraseSheet(
+                        phrase: phrase,
+                        onClose: { editingPhrase = nil },
+                        onSave: { updatedText, updatedName in
+                            model.updatePhrase(id: phrase.id, text: updatedText, name: updatedName)
+                            editingPhrase = nil
+                        },
+                        recorder: recorder,
+                        saveRecordingPath: saveRecordingPath
+                    )
+                    .presentationDetents([.height(450), .medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(20)
                 }
             }
             .onAppear {

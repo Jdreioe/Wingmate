@@ -19,6 +19,23 @@ final class IosViewModel: ObservableObject {
     }
     private var store: Shared.PhraseListStore?
     private var disposable: Shared.RxDisposable?
+    private let hybrid = HybridSpeechPlayer()
+    private lazy var azureSequencer: AzureHybridSequencer = {
+        AzureHybridSequencer(
+            speak: { [weak self] text in
+                guard let self = self else { return }
+                _ = try? await self.bridge.speak(text: text)
+            },
+            pause: { [weak self] in
+                guard let self = self else { return }
+                _ = try? await self.bridge.pause()
+            },
+            stop: { [weak self] in
+                guard let self = self else { return }
+                _ = try? await self.bridge.stop()
+            }
+        )
+    }()
 
     @Published var state: Shared.PhraseListStoreState = Shared.PhraseListStoreState(phrases: [], categories: [], selectedCategoryId: nil, isLoading: true, error: nil)
 
@@ -36,6 +53,8 @@ final class IosViewModel: ObservableObject {
     // System TTS preference 
     @Published var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
     @Published var useSystemTtsWhenOffline: Bool = UserDefaults.standard.bool(forKey: "use_system_tts_when_offline")
+    // Mix recorded phrases inside sentences
+    @Published var mixRecordedPhrasesInSentences: Bool = UserDefaults.standard.bool(forKey: "mix_recorded_phrases")
     private var hasShownOfflineBanner: Bool = UserDefaults.standard.bool(forKey: "offline_banner_shown")
     private var isOnline: Bool = true
 
@@ -106,11 +125,6 @@ final class IosViewModel: ObservableObject {
     func deletePhrase(id: String) {
         if let path = recordingPath(for: id) {
             try? FileManager.default.removeItem(atPath: path)
-            setRecordingPath("", for: id)
-            recordings.removeValue(forKey: id)
-            if let data = try? JSONSerialization.data(withJSONObject: recordings, options: []) {
-                UserDefaults.standard.set(String(data: data, encoding: .utf8), forKey: recordingKey)
-            }
         }
         store?.accept(intent: Shared.PhraseListStoreIntent.DeletePhrase(phraseId: id))
     }
@@ -134,7 +148,27 @@ final class IosViewModel: ObservableObject {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
         AudioSessionHelper.activatePlayback()
-        
+        // Hybrid mixing: splice recorded phrase audio into sentence
+        if mixRecordedPhrasesInSentences {
+            let segments = buildHybridSegments(for: t)
+            if !segments.isEmpty {
+                // Decide engine for TTS segments: Azure vs local
+                let shouldUseAzure = azureConfigured && isOnline || (azureConfigured && !useSystemTtsWhenOffline)
+                if !useSystemTts && shouldUseAzure {
+                    let azSegments: [AzureHybridSequencer.Segment] = segments.map { seg in
+                        switch seg {
+                        case .audio(let url): return .audio(url)
+                        case .tts(let s): return .tts(s)
+                        }
+                    }
+                    azureSequencer.play(segments: azSegments)
+                } else {
+                    hybrid.play(segments: segments, language: primaryLanguage)
+                }
+                return
+            }
+        }
+
         // If user prefers system TTS, use it directly
         if useSystemTts {
             SystemTtsManager.shared.speak(t, language: primaryLanguage)
@@ -153,8 +187,69 @@ final class IosViewModel: ObservableObject {
         }
         Task { _ = try? await bridge.speak(text: t) }
     }
+    // Build mixed segments: recorded audio when a phrase name/text matches; TTS for the rest
+    private func buildHybridSegments(for text: String) -> [HybridSpeechPlayer.Segment] {
+        // Prepare lookup: map name/text -> recording path if exists
+        let phrases = filteredPhrases // use currently visible scope; could also use state.phrases
+        var dictionary: [(pattern: NSRegularExpression, id: String, path: String)] = []
+        for p in phrases {
+            let key = (p.name?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? p.text
+            guard !key.isEmpty, let path = recordingPath(for: p.id), !path.isEmpty else { continue }
+            // Word-boundary, case-insensitive
+            let pattern = "\\b" + NSRegularExpression.escapedPattern(for: key) + "\\b"
+            if let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+                dictionary.append((re, p.id, path))
+            }
+        }
+        guard !dictionary.isEmpty else { return [] }
+
+        // Find non-overlapping matches preferring longer keys first
+        let ns = text as NSString
+        var matches: [(range: NSRange, path: String)] = []
+        for (re, _, path) in dictionary.sorted(by: { $0.pattern.pattern.count > $1.pattern.pattern.count }) {
+            let found = re.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
+            for m in found {
+                // Skip overlaps
+                if matches.contains(where: { NSIntersectionRange($0.range, m.range).length > 0 }) { continue }
+                matches.append((m.range, path))
+            }
+        }
+        guard !matches.isEmpty else { return [] }
+
+        // Sort by location and build segments
+        matches.sort { $0.range.location < $1.range.location }
+        var segs: [HybridSpeechPlayer.Segment] = []
+        var cursor = 0
+        for m in matches {
+            if m.range.location > cursor {
+                let start = cursor
+                let end = m.range.location
+                let chunk = ns.substring(with: NSRange(location: start, length: end - start))
+                if !chunk.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    segs.append(.tts(chunk))
+                }
+            }
+            segs.append(.audio(URL(fileURLWithPath: m.path)))
+            cursor = m.range.location + m.range.length
+        }
+        if cursor < ns.length {
+            let chunk = ns.substring(from: cursor)
+            if !chunk.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                segs.append(.tts(chunk))
+            }
+        }
+        return segs
+    }
 
     func pauseTts() {
+        if azureSequencer.isRunning {
+            azureSequencer.pause()
+            return
+        }
+        if hybrid.isPlaying {
+            hybrid.pause()
+            return
+        }
         if useSystemTts || !azureConfigured {
             SystemTtsManager.shared.pause()
         } else if !isOnline && useSystemTtsWhenOffline {
@@ -165,6 +260,14 @@ final class IosViewModel: ObservableObject {
     }
 
     func stopTts() {
+        if azureSequencer.isRunning {
+            azureSequencer.stop()
+            return
+        }
+        if hybrid.isPlaying {
+            hybrid.stop()
+            return
+        }
         if useSystemTts || !azureConfigured {
             SystemTtsManager.shared.stop()
         } else if !isOnline && useSystemTtsWhenOffline {
@@ -184,23 +287,17 @@ final class IosViewModel: ObservableObject {
         UserDefaults.standard.set(enabled, forKey: "use_system_tts_when_offline")
     }
 
-    // MARK: - Recording store (Swift-side for now)
-    private let recordingKey = "phrase_recordings_v1"
-    private var recordings: [String: String] = {
-        let d = UserDefaults.standard
-        if let json = d.string(forKey: "phrase_recordings_v1"), let data = json.data(using: .utf8) {
-            return (try? JSONSerialization.jsonObject(with: data) as? [String: String]) ?? [:]
-        }
-        return [:]
-    }()
+    func setMixRecordedPhrases(_ enabled: Bool) {
+        self.mixRecordedPhrasesInSentences = enabled
+        UserDefaults.standard.set(enabled, forKey: "mix_recorded_phrases")
+    }
 
-    func recordingPath(for phraseId: String) -> String? { recordings[phraseId] }
-    func setRecordingPath(_ path: String, for phraseId: String) {
-        recordings[phraseId] = path
-        if let data = try? JSONSerialization.data(withJSONObject: recordings, options: []) {
-            UserDefaults.standard.set(String(data: data, encoding: .utf8), forKey: recordingKey)
-        }
-        objectWillChange.send()
+    // MARK: - Recording path (persisted in shared Phrase)
+    func recordingPath(for phraseId: String) -> String? {
+        state.phrases.first(where: { $0.id == phraseId })?.recordingPath
+    }
+    func setRecordingPath(_ path: String?, for phraseId: String) {
+        bridge.updatePhraseRecording(phraseId: phraseId, recordingPath: path)
     }
 
     func chooseVoice(_ v: Shared.Voice) async {

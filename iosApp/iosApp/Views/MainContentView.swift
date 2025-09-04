@@ -49,6 +49,31 @@ struct MainContentView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Show reorder mode banner
+            if wiggleMode {
+                HStack {
+                    Image(systemName: "hand.draw.fill")
+                        .foregroundColor(.orange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Reorder Mode")
+                            .font(.headline)
+                            .bold()
+                        Text("Drag phrases to reorder them")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text("Tap Done when finished")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .background(Color.orange.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.3), lineWidth: 1))
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            
             if model.showOfflineInfoOnce {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .top) {
@@ -101,7 +126,8 @@ struct MainContentView: View {
             PhrasesGridView(columns: columns,
                              phrases: currentPhrases,
                              onAdd: { showAddPhrase = true },
-                             onItemFramesChange: { frames in itemFrames = frames }) { p in
+                             onItemFramesChange: { frames in itemFrames = frames },
+                             isWiggleMode: wiggleMode) { p in
                 phraseCell(for: p)
             }
 

@@ -24,7 +24,9 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             val parentId = cursor.getString(cursor.getColumnIndexOrThrow("parent_id"))
             val isCat = cursor.getInt(cursor.getColumnIndexOrThrow("is_category")) != 0
             val createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at"))
-            list += Phrase(id = id, text = text, name = name, backgroundColor = bg, parentId = parentId, isCategory = isCat, createdAt = createdAt)
+            val recPathIdx = cursor.getColumnIndex("recording_path")
+            val recordingPath = if (recPathIdx >= 0) cursor.getString(recPathIdx) else null
+            list += Phrase(id = id, text = text, name = name, backgroundColor = bg, parentId = parentId, isCategory = isCat, createdAt = createdAt, recordingPath = recordingPath)
         }
         cursor.close()
         println("Loaded {} phrases from SQLite: ${list.size}")
@@ -48,6 +50,7 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             put("parent_id", phrase.parentId)
             put("is_category", if (phrase.isCategory) 1 else 0)
             put("created_at", createdAt)
+            put("recording_path", phrase.recordingPath)
             put("ordering", ord + 1)
         }
         db.insert("phrases", null, values)
@@ -62,6 +65,7 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             put("background_color", phrase.backgroundColor)
             put("parent_id", phrase.parentId)
             put("is_category", if (phrase.isCategory) 1 else 0)
+            put("recording_path", phrase.recordingPath)
         }
         db.update("phrases", values, "id = ?", arrayOf(phrase.id))
         return@withContext phrase

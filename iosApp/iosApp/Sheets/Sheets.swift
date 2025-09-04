@@ -1,5 +1,6 @@
 import SwiftUI
 import Shared
+import AVFoundation
 
 struct WelcomeScreenIOS: View {
     @State private var step: Int = 0
@@ -44,40 +45,237 @@ struct AddCategorySheet: View {
     @State private var name: String = ""
     let onClose: () -> Void
     let onSave: (String) -> Void
+    
     var body: some View {
         NavigationStack {
-            Form { TextField(NSLocalizedString("category.name.placeholder", comment: ""), text: $name) }
-                .navigationTitle(Text("category.new.title"))
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("category.save") { onSave(name) }
-                            .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Button("category.close", action: onClose)
+                    Spacer()
+                    Text("category.new.title")
+                        .font(.headline)
+                        .bold()
+                    Spacer()
+                    Button("category.save") { onSave(name) }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .fontWeight(.semibold)
+                        .foregroundColor(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .secondary : .accentColor)
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+                
+                Divider()
+                
+                // Content
+                VStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("category.name.placeholder")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.primary)
+                        
+                        TextField("", text: $name)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 16))
+                            .padding(16)
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color(.separator), lineWidth: 1)
+                            )
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+                    
+                    Spacer()
+                }
+            }
         }
+        .interactiveDismissDisabled(false)
     }
 }
 
 struct AddPhraseSheet: View {
     @State private var text: String = ""
+    @State private var recordingUrl: URL? = nil
+    @State private var micDenied: Bool = false
+    @State private var isRecording: Bool = false
     let onClose: () -> Void
+    let recorder: AudioRecorder?
+    // (phraseId, path)
+    let saveRecordingPath: ((String,String) -> Void)?
     let onSave: (String) -> Void
 
     var body: some View {
         NavigationStack {
-            Form {
-                TextField(NSLocalizedString("phrase.text.placeholder", comment: ""), text: $text, axis: .vertical)
-                    .lineLimit(3, reservesSpace: true)
-            }
-            .navigationTitle(Text("phrase.new.title"))
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("phrase.save") { onSave(text) }
-                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Button("category.close", action: onClose)
+                    Spacer()
+                    Text("phrase.new.title")
+                        .font(.headline)
+                        .bold()
+                    Spacer()
+                    Button("phrase.save") {
+                        onSave(text)
+                        // We don't have the phrase ID here; ContentView persists later after store update
+                    }
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .fontWeight(.semibold)
+                    .foregroundColor(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .secondary : .accentColor)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+                
+                Divider()
+                
+                // Content
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Text input
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("phrase.text.placeholder")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
+                            
+                            TextEditor(text: $text)
+                                .frame(minHeight: 100)
+                                .padding(12)
+                                .background(Color(.secondarySystemBackground))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(.separator), lineWidth: 1)
+                                )
+                        }
+                        
+                        // Recording section
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Recording")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
+                            
+                            VStack(spacing: 12) {
+                                HStack(spacing: 12) {
+                                    if isRecording {
+                                        Button(role: .destructive) {
+                                            Task {
+                                                if let url = try? await recorder?.stopRecording() {
+                                                    await MainActor.run {
+                                                        recordingUrl = url
+                                                        isRecording = false
+                                                    }
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 8) {
+                                                Image(systemName: "stop.circle.fill")
+                                                Text("Stop")
+                                            }
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 12)
+                                            .background(Color.red)
+                                            .cornerRadius(25)
+                                        }
+                                    } else {
+                                        Button {
+                                            requestMicPermission { granted in
+                                                guard granted else { micDenied = true; return }
+                                                Task {
+                                                    _ = try? await recorder?.startRecording()
+                                                    await MainActor.run { isRecording = true }
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 8) {
+                                                Image(systemName: "mic.circle.fill")
+                                                Text("Record")
+                                            }
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 12)
+                                            .background(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Color.accentColor)
+                                            .cornerRadius(25)
+                                        }
+                                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                    }
+                                    
+                                    Spacer()
+                                }
+                                
+                                if let url = recordingUrl {
+                                    HStack(spacing: 16) {
+                                        Button { recorder?.play(url: url) } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "play.circle.fill")
+                                                Text("Play")
+                                            }
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.accentColor)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(Color.accentColor.opacity(0.1))
+                                            .cornerRadius(20)
+                                        }
+                                        
+                                        Button { recorder?.stopPlayback() } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "stop.circle")
+                                                Text("Stop")
+                                            }
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.secondary)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(Color(.tertiarySystemBackground))
+                                            .cornerRadius(20)
+                                        }
+                                        
+                                        Spacer()
+                                    }
+                                }
+                                
+                                if micDenied {
+                                    HStack {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.orange)
+                                        Text("Microphone permission denied. Enable it in Settings.")
+                                            .font(.footnote)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(12)
+                                    .background(Color.orange.opacity(0.1))
+                                    .cornerRadius(8)
+                                }
+                            }
+                            .padding(16)
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(12)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
                 }
             }
+        }
+        .interactiveDismissDisabled(false)
+    }
+
+    private func requestMicPermission(_ cb: @escaping (Bool) -> Void) {
+        if #available(iOS 17.0, *) {
+            AVAudioApplication.requestRecordPermission { granted in cb(granted) }
+        } else {
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in cb(granted) }
         }
     }
 }
@@ -86,25 +284,202 @@ struct EditPhraseSheet: View {
     let phrase: Shared.Phrase
     let onClose: () -> Void
     let onSave: (String?, String?) -> Void
+    let recorder: AudioRecorder?
+    // (phraseId, path)
+    let saveRecordingPath: ((String,String) -> Void)?
     @State private var text: String = ""
     @State private var name: String = ""
+    @State private var recordingUrl: URL? = nil
+    @State private var micDenied: Bool = false
+    @State private var isRecording: Bool = false
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("phrase.display_name.optional") {
-                    TextField(NSLocalizedString("common.name", comment: ""), text: $name)
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Button("category.close", action: onClose)
+                    Spacer()
+                    Text("phrase.edit.title")
+                        .font(.headline)
+                        .bold()
+                    Spacer()
+                    Button("phrase.save") {
+                        onSave(text.trimmingCharacters(in: .whitespacesAndNewlines), name.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(.accentColor)
                 }
-                Section("phrase.text.placeholder") { TextEditor(text: $text).frame(minHeight: 120) }
-            }
-            .navigationTitle(Text("phrase.edit.title"))
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("phrase.save") { onSave(text.trimmingCharacters(in: .whitespacesAndNewlines), name.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+                
+                Divider()
+                
+                // Content
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Name input (optional)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("phrase.display_name.optional")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
+                            
+                            TextField("common.name", text: $name)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 16))
+                                .padding(16)
+                                .background(Color(.secondarySystemBackground))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(.separator), lineWidth: 1)
+                                )
+                        }
+                        
+                        // Text input
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("phrase.text.placeholder")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
+                            
+                            TextEditor(text: $text)
+                                .frame(minHeight: 120)
+                                .padding(12)
+                                .background(Color(.secondarySystemBackground))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(.separator), lineWidth: 1)
+                                )
+                        }
+                        
+                        // Recording section
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Recording")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
+                            
+                            VStack(spacing: 12) {
+                                HStack(spacing: 12) {
+                                    if isRecording {
+                                        Button(role: .destructive) {
+                                            Task {
+                                                if let url = try? await recorder?.stopRecording() {
+                                                    await MainActor.run {
+                                                        recordingUrl = url
+                                                        isRecording = false
+                                                    }
+                                                    if let cb = saveRecordingPath {
+                                                        cb(phrase.id, url.path)
+                                                    }
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 8) {
+                                                Image(systemName: "stop.circle.fill")
+                                                Text("Stop")
+                                            }
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 12)
+                                            .background(Color.red)
+                                            .cornerRadius(25)
+                                        }
+                                    } else {
+                                        Button {
+                                            requestMicPermission { granted in
+                                                guard granted else { micDenied = true; return }
+                                                Task {
+                                                    _ = try? await recorder?.startRecording()
+                                                    await MainActor.run { isRecording = true }
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 8) {
+                                                Image(systemName: "mic.circle.fill")
+                                                Text("Record")
+                                            }
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 12)
+                                            .background(Color.accentColor)
+                                            .cornerRadius(25)
+                                        }
+                                    }
+                                    
+                                    Spacer()
+                                }
+                                
+                                if let url = recordingUrl {
+                                    HStack(spacing: 16) {
+                                        Button { recorder?.play(url: url) } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "play.circle.fill")
+                                                Text("Play")
+                                            }
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.accentColor)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(Color.accentColor.opacity(0.1))
+                                            .cornerRadius(20)
+                                        }
+                                        
+                                        Button { recorder?.stopPlayback() } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "stop.circle")
+                                                Text("Stop")
+                                            }
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.secondary)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(Color(.tertiarySystemBackground))
+                                            .cornerRadius(20)
+                                        }
+                                        
+                                        Spacer()
+                                    }
+                                }
+                                
+                                if micDenied {
+                                    HStack {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.orange)
+                                        Text("Microphone permission denied. Enable it in Settings.")
+                                            .font(.footnote)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(12)
+                                    .background(Color.orange.opacity(0.1))
+                                    .cornerRadius(8)
+                                }
+                            }
+                            .padding(16)
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(12)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
                 }
             }
             .onAppear { text = phrase.text; name = phrase.name ?? "" }
+        }
+        .interactiveDismissDisabled(false)
+    }
+
+    private func requestMicPermission(_ cb: @escaping (Bool) -> Void) {
+        if #available(iOS 17.0, *) {
+            AVAudioApplication.requestRecordPermission { granted in cb(granted) }
+        } else {
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in cb(granted) }
         }
     }
 }
