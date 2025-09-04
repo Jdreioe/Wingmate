@@ -18,17 +18,18 @@ struct RightSettingsPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Settings").font(.title3).bold()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Settings").font(.title3).bold()
 
-            // TTS Engine selection
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Text-to-Speech Engine").font(.headline)
-                Toggle("Use System TTS", isOn: Binding(
-                    get: { model.useSystemTts },
-                    set: { model.setUseSystemTts($0) }
-                ))
-                Toggle("Use System TTS when offline", isOn: Binding(
+                // TTS Engine selection
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Text-to-Speech Engine").font(.headline)
+                    Toggle("Use System TTS", isOn: Binding(
+                        get: { model.useSystemTts },
+                        set: { model.setUseSystemTts($0) }
+                    ))
+                    Toggle("Use System TTS when offline", isOn: Binding(
                     get: { model.useSystemTtsWhenOffline },
                     set: { model.setUseSystemTtsWhenOffline($0) }
                 ))
@@ -79,6 +80,18 @@ struct RightSettingsPanel: View {
 
             Divider().padding(.vertical, 4)
 
+            // Mixing recorded phrases
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Playback").font(.headline)
+                Toggle("Mix recorded phrases in sentences", isOn: Binding(
+                    get: { model.mixRecordedPhrasesInSentences },
+                    set: { model.setMixRecordedPhrases($0) }
+                ))
+                .help("When on, the app will splice your recorded phrase audio into spoken sentences where the phrase name appears.")
+            }
+
+            Divider().padding(.vertical, 4)
+
             // UI Size Controls
             VStack(alignment: .leading, spacing: 10) {
                 Text("UI Size").font(.headline)
@@ -100,10 +113,22 @@ struct RightSettingsPanel: View {
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
+            }
         }
-        .padding(16)
-        .background(Color(.secondarySystemBackground))
-        .overlay(Rectangle().fill(Color(.separator)).frame(width: 1), alignment: .leading)
+        .padding(.top, 16)
+        .padding(.bottom, 16)
+        .padding(.leading, 16)
+        .padding(.trailing, 60) // Much larger right padding to ensure no cutoff
+        .background(.ultraThinMaterial) // frosted glass material
+        .overlay(
+            Rectangle()
+                .fill(Color(.separator))
+                .frame(width: 1), alignment: .leading
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 0)
+                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+        )
     }
 }

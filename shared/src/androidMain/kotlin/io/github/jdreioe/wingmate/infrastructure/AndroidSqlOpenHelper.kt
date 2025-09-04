@@ -32,6 +32,7 @@ internal class AndroidSqlOpenHelper(
                 parent_id TEXT,
                 is_category INTEGER DEFAULT 0,
                 created_at INTEGER,
+                recording_path TEXT,
                 ordering INTEGER
             );
         """.trimIndent())
@@ -103,9 +104,17 @@ internal class AndroidSqlOpenHelper(
             // Ensure fresh schema including voices and voice_catalog
             ensureTables(db)
         }
+        if (oldVersion < 3 && newVersion >= 3) {
+            // Add recording_path to phrases
+            try {
+                db.execSQL("ALTER TABLE phrases ADD COLUMN recording_path TEXT")
+            } catch (_: Throwable) {
+                // ignore if already exists
+            }
+        }
     }
 
     companion object {
-    private const val DB_VERSION = 2
+        private const val DB_VERSION = 3
     }
 }

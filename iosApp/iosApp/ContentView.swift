@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var showLanguageSheet = false
     @State private var showWelcomeFlow = false
     @State private var hasCompletedWelcome = UserDefaults.standard.bool(forKey: "welcome_flow_completed")
+    @State private var isWideLayout = true // Track layout mode
     @State private var showAddCategory = false
     @State private var showAddPhrase = false
     @State private var showUiSizeSheet = false
@@ -38,6 +39,8 @@ struct ContentView: View {
 
     // iPad right settings panel visibility
     @State private var showRightPanel: Bool = UIDevice.current.userInterfaceIdiom == .pad
+    // If we hid the right panel due to narrow width, remember to restore on wide
+    @State private var autoCollapsedRightPanel: Bool = false
 
     private var shouldShowWelcomeFlow: Bool {
         return showWelcomeFlow || (!hasCompletedWelcome && model.selectedVoice == nil)
@@ -81,7 +84,11 @@ struct ContentView: View {
             uiTextFieldHeight: $uiTextFieldHeight,
             uiInputFontSize: $uiInputFontSize,
             uiChipFontSize: $uiChipFontSize,
-            uiPlayIconSize: $uiPlayIconSize
+            uiPlayIconSize: $uiPlayIconSize,
+            recorder: recorder,
+            saveRecordingPath: { phraseId, path in
+                model.setRecordingPath(path, for: phraseId)
+            }
         ) {
             NavigationStack {
                 Group {
@@ -103,35 +110,67 @@ struct ContentView: View {
                         GeometryReader { proxy in
                             let width = proxy.size.width
                             let isPad = UIDevice.current.userInterfaceIdiom == .pad
+                            let wideThreshold: CGFloat = isPad ? 700 : 900
+                            let currentWideLayout = width > wideThreshold // Use width threshold tuned for iPad
                             let minTile: CGFloat = isPad ? 200 : 140
                             let spacing: CGFloat = isPad ? 12 : 8
-                            let rightPanelWidth: CGFloat = (isPad && showRightPanel) ? min(340, max(280, width * 0.28)) : 0
-                            let contentWidth = isPad ? max(0, width - rightPanelWidth) : width
+                            let rightPanelWidth: CGFloat = (currentWideLayout && showRightPanel) ? min(400, max(350, width * 0.35)) : 0
+                            let dividerWidth: CGFloat = (currentWideLayout && showRightPanel) ? max(1.0 / UIScreen.main.scale, 1) : 0
+                            let contentWidth = currentWideLayout ? max(0, width - rightPanelWidth - dividerWidth) : width
                             let available = max(contentWidth - spacing, minTile)
                             let count = max(2, Int((available + spacing) / (minTile + spacing)))
                             let cols = Array(repeating: GridItem(.flexible(), spacing: spacing), count: count)
 
-                            if isPad {
-                                HStack(spacing: 0) {
+                            Group {
+                                if currentWideLayout {
+                                    HStack(spacing: 0) {
+                                        mainContent(columns: cols)
+                                            .frame(width: contentWidth)
+                                        if showRightPanel {
+                                            HStack(spacing: 0) {
+                                                Divider()
+                                                RightSettingsPanel(
+                                                    model: model,
+                                                    uiTextFieldHeight: $uiTextFieldHeight,
+                                                    uiInputFontSize: $uiInputFontSize,
+                                                    uiChipFontSize: $uiChipFontSize,
+                                                    uiPlayIconSize: $uiPlayIconSize,
+                                                    openVoicePicker: { showVoiceSheet = true },
+                                                    openWelcomeFlow: { showWelcomeFlow = true }
+                                                )
+                                                .frame(width: rightPanelWidth)
+                                            }
+                                            .transition(.asymmetric(
+                                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                                removal: .move(edge: .trailing).combined(with: .opacity)
+                                            ))
+                                        }
+                                    }
+                                    .onAppear { isWideLayout = true }
+                                    .animation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.1), value: showRightPanel)
+                                } else {
                                     mainContent(columns: cols)
-                                        .frame(width: contentWidth)
-                                        .padding(24)
+                                        .padding(16)
+                                        .onAppear {
+                                            isWideLayout = false
+                                            showRightPanel = false
+                                            autoCollapsedRightPanel = true
+                                        }
+                                }
+                            }
+                            .onChange(of: currentWideLayout) { wide in
+                                isWideLayout = wide
+                                if wide {
+                                    if autoCollapsedRightPanel {
+                                        showRightPanel = true
+                                        autoCollapsedRightPanel = false
+                                    }
+                                } else {
                                     if showRightPanel {
-                                        RightSettingsPanel(
-                                            model: model,
-                                            uiTextFieldHeight: $uiTextFieldHeight,
-                                            uiInputFontSize: $uiInputFontSize,
-                                            uiChipFontSize: $uiChipFontSize,
-                                            uiPlayIconSize: $uiPlayIconSize,
-                                            openVoicePicker: { showVoiceSheet = true },
-                                            openWelcomeFlow: { showWelcomeFlow = true }
-                                        )
-                                        .frame(width: rightPanelWidth)
+                                        showRightPanel = false
+                                        autoCollapsedRightPanel = true
                                     }
                                 }
-                            } else {
-                                mainContent(columns: cols)
-                                    .padding(16)
                             }
                         }
                     }
@@ -148,25 +187,48 @@ struct ContentView: View {
                                     .accessibilityLabel(Text("toolbar.welcome_flow"))
                             }
                             
-                            // iPad: toggle the right settings panel, and hide voice/language/ui-size buttons
-                            if UIDevice.current.userInterfaceIdiom == .pad {
-                                Button(action: { showRightPanel.toggle() }) {
+                            // Show settings panel toggle only in wide layout
+                            if isWideLayout {
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.85, blendDuration: 0.1)) {
+                                        showRightPanel.toggle()
+                                    }
+                                }) {
                                     Image(systemName: "sidebar.right")
                                         .accessibilityLabel(Text("toolbar.settings_panel"))
                                 }
                             }
+                            
                             if wiggleMode {
-                                Button("common.done") { wiggleMode = false; gridLocal.removeAll(); draggingId = nil; draggingOffset = .zero }
+                                Button("common.done") { 
+                                    withAnimation(.easeOut(duration: 0.3)) {
+                                        wiggleMode = false
+                                        draggingId = nil
+                                        draggingOffset = .zero
+                                        dragStartFrame = nil
+                                        gridLocal.removeAll()
+                                    }
+                                }
+                                .foregroundStyle(.red)
+                                .bold()
                             } else {
                                 Button(action: {
-                                    wiggleMode = true
-                                    gridLocal = model.filteredPhrases
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        wiggleMode = true
+                                        gridLocal = model.filteredPhrases
+                                        // Reset any drag state when entering wiggle mode
+                                        draggingId = nil
+                                        draggingOffset = .zero
+                                        dragStartFrame = nil
+                                    }
                                 }) {
                                     Image(systemName: "square.grid.3x3.fill")
                                         .accessibilityLabel(Text("toolbar.wiggle_mode"))
                                 }
                             }
-                            if UIDevice.current.userInterfaceIdiom != .pad {
+                            
+                            // Show these buttons when NOT in wide layout or when right panel is hidden
+                            if !isWideLayout || !showRightPanel {
                                 Button(action: { showLanguageSheet = true }) {
                                     Label("toolbar.language", systemImage: "globe")
                                 }
@@ -177,6 +239,7 @@ struct ContentView: View {
                                     Image(systemName: "textformat.size").accessibilityLabel(Text("toolbar.ui_size"))
                                 }
                             }
+                            
                             Button(action: { showAddCategory = true }) {
                                 Image(systemName: "folder.badge.plus").accessibilityLabel(Text("toolbar.add_category"))
                             }
@@ -252,10 +315,8 @@ struct ContentView: View {
             model.movePhrase(from: fromGlobal, to: toGlobal)
         }
     }
-}
-
+ 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View { ContentView() }
 }
-
-
+}

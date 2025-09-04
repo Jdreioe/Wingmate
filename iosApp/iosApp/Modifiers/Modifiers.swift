@@ -26,14 +26,38 @@ struct ItemFramePref: PreferenceKey {
 struct WiggleEffect: ViewModifier {
     var active: Bool
     @State private var phase: Double = 0
+    @State private var timer: Timer?
+    
     func body(content: Content) -> some View {
         content
-            .rotationEffect(.degrees(active ? sin(phase) * 2.0 : 0))
-            .scaleEffect(active ? 0.98 : 1.0)
-            .onAppear { if active { start() } }
-            .onChange(of: active) { a, _ in if a { start() } }
+            .rotationEffect(.degrees(active ? sin(phase) * 1.5 : 0)) // Reduced from 2.0 to 1.5
+            .scaleEffect(active ? 0.99 : 1.0) // Reduced from 0.98 to 0.99
+            .onAppear { 
+                if active { 
+                    startWiggle() 
+                } 
+            }
+            .onChange(of: active) { isActive, _ in 
+                if isActive { 
+                    startWiggle() 
+                } else { 
+                    stopWiggle() 
+                } 
+            }
     }
-    private func start() {
-        withAnimation(.linear(duration: 0.35).repeatForever(autoreverses: true)) { phase = .pi * 2 }
+    
+    private func startWiggle() {
+        stopWiggle() // Stop any existing animation
+        
+        // Use a more subtle, continuous animation
+        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+            phase = .pi * 2
+        }
+    }
+    
+    private func stopWiggle() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            phase = 0
+        }
     }
 }

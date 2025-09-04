@@ -10,7 +10,9 @@ data class Phrase(
     val backgroundColor: String? = null,
     val parentId: String? = null,
     val isCategory: Boolean = false,
-    val createdAt: Long
+    val createdAt: Long,
+    // Optional local recording path for this phrase (platform-specific file path)
+    val recordingPath: String? = null
 )
 
 @Serializable

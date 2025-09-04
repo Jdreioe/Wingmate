@@ -1,8 +1,8 @@
 package io.github.jdreioe.wingmate
 
-import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
+import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.di.appModule
 import io.github.jdreioe.wingmate.initKoin
 import io.github.jdreioe.wingmate.domain.ConfigRepository
@@ -99,6 +99,15 @@ class KoinBridge : KoinComponent {
 
     suspend fun saveSpeechConfig(config: SpeechServiceConfig) {
         get<ConfigRepository>().saveSpeechConfig(config)
+    }
+
+    // Swift-friendly bridge to update phrase recording path
+    fun updatePhraseRecording(phraseId: String, recordingPath: String?) {
+        try {
+            phraseListStore().accept(PhraseListStore.Intent.UpdatePhraseRecording(id = phraseId, recordingPath = recordingPath))
+        } catch (t: Throwable) {
+            logger.warn(t) { "updatePhraseRecording() failed; swallowing to avoid Swift bridge crash" }
+        }
     }
 
     companion object {
