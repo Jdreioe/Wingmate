@@ -26,6 +26,13 @@ struct MainContentView: View {
     let commitMove: (String, Int) -> Void
     
     private var currentPhrases: [Shared.Phrase] { wiggleMode ? gridLocal : model.filteredPhrases }
+    // Treat history as a separate feed of pseudo-phrases
+    private var showingHistory: Bool {
+        // We'll detect by comparing a local selection binding; use model.state plus a local flag passed from chip
+        // MainContentView will maintain its own isHistorySelected state
+        return isHistorySelected
+    }
+    @State private var isHistorySelected: Bool = false
     
     @ViewBuilder
     private func phraseCell(for p: Shared.Phrase) -> some View {
@@ -118,17 +125,41 @@ struct MainContentView: View {
                 chipFontSize: CGFloat(uiChipFontSize),
                 chipHPadding: chipHPadding,
                 chipVPadding: chipVPadding,
-                onSelect: { id in model.selectCategory(id: id) },
+                onSelect: { id in
+                    if isHistorySelected { Task { await model.loadHistory() } }
+                    isHistorySelected = false
+                    model.selectCategory(id: id)
+                },
                 onDelete: { id in model.deleteCategory(id: id) }
+            ,
+                showHistoryChip: !model.historyPhrases.isEmpty,
+                isHistorySelected: isHistorySelected,
+                onSelectHistory: {
+                    isHistorySelected = true
+                    // Keep store selection neutral so gridLocal calculations still work
+                    model.selectCategory(id: model.historyCategoryId)
+                    Task { await model.loadHistory() }
+                }
             )
 
             // Grid of phrases
+            let phrasesToShow = showingHistory ? model.historyPhrases : currentPhrases
             PhrasesGridView(columns: columns,
-                             phrases: currentPhrases,
+                             phrases: phrasesToShow,
                              onAdd: { showAddPhrase = true },
                              onItemFramesChange: { frames in itemFrames = frames },
-                             isWiggleMode: wiggleMode) { p in
+                             isWiggleMode: wiggleMode,
+                             hideAddButton: showingHistory) { p in
                 phraseCell(for: p)
+            }
+            .overlay {
+                if showingHistory && model.historyPhrases.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "clock.arrow.circlepath").font(.system(size: 32)).foregroundStyle(.secondary)
+                        Text("No history yet").foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 40)
+                }
             }
 
             // Playback controls

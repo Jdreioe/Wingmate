@@ -68,14 +68,25 @@ struct CategoriesRowView: View {
     let chipVPadding: CGFloat
     let onSelect: (String?) -> Void
     let onDelete: (String) -> Void
+    // Optional History chip
+    var showHistoryChip: Bool = false
+    var isHistorySelected: Bool = false
+    var onSelectHistory: (() -> Void)? = nil
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 CategoryChip(title: NSLocalizedString("categories.all", comment: ""),
-                             selected: state.selectedCategoryId == nil,
+                             selected: state.selectedCategoryId == nil && !isHistorySelected,
                              fontSize: chipFontSize,
                              hPadding: chipHPadding,
                              vPadding: chipVPadding) { onSelect(nil) }
+                if showHistoryChip {
+                    CategoryChip(title: NSLocalizedString("categories.history", comment: "History"),
+                                 selected: isHistorySelected,
+                                 fontSize: chipFontSize,
+                                 hPadding: chipHPadding,
+                                 vPadding: chipVPadding) { onSelectHistory?() }
+                }
                 ForEach(state.categories, id: \.id) { cat in
                     CategoryChip(title: cat.name ?? NSLocalizedString("common.no_name", comment: ""),
                                  selected: state.selectedCategoryId == cat.id,
@@ -144,15 +155,20 @@ struct PhraseItemView: View {
         .buttonStyle(.plain)
         .modifier(WiggleEffect(active: wiggle))
         .contextMenu {
-            Button { onEdit() } label: { Label("phrase.edit", systemImage: "pencil") }
+            // Hide edit/record/delete for history items
+            let isHistory = phrase.id.hasPrefix("history-")
+            if !isHistory { Button { onEdit() } label: { Label("phrase.edit", systemImage: "pencil") } }
             Button { model.speak(phrase.text) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
-            if let path = model.recordingPath(for: phrase.id) {
+            // Prefer phrase.recordingPath (works for history pseudo-phrases)
+            if let direct = phrase.recordingPath, !direct.isEmpty {
+                Button { recorder.play(url: URL(fileURLWithPath: direct)) } label: { Label("phrase.play_recording", systemImage: "waveform") }
+            } else if let path = model.recordingPath(for: phrase.id) {
                 Button { recorder.play(url: URL(fileURLWithPath: path)) } label: { Label("phrase.play_recording", systemImage: "waveform") }
-                Button { requestMic(phrase.id) } label: { Label("phrase.record.replace", systemImage: "mic") }
-            } else {
+                if !isHistory { Button { requestMic(phrase.id) } label: { Label("phrase.record.replace", systemImage: "mic") } }
+            } else if !isHistory {
                 Button { requestMic(phrase.id) } label: { Label("phrase.record", systemImage: "mic") }
             }
-            Button(role: .destructive) { onDelete(phrase.id) } label: { Label("phrase.delete", systemImage: "trash") }
+            if !isHistory { Button(role: .destructive) { onDelete(phrase.id) } label: { Label("phrase.delete", systemImage: "trash") } }
         }
     }
 }

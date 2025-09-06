@@ -47,6 +47,10 @@ final class IosViewModel: ObservableObject {
     @Published var primaryLanguage: String = "en-US"
     @Published var selectedVoice: Shared.Voice? = nil
     @Published var availableLanguages: [String] = []
+    // History items exposed as phrases for UI rendering
+    @Published var historyPhrases: [Shared.Phrase] = []
+    // Special selection for History view
+    let historyCategoryId = "__history__"
 
     // Offline handling and System TTS fallback
     @Published var showOfflineInfoOnce: Bool = false
@@ -120,6 +124,8 @@ final class IosViewModel: ObservableObject {
                 UserDefaults.standard.set(true, forKey: "offline_banner_shown")
             }
         }
+    // Preload history once Koin is up
+    await loadHistory()
     }
 
     func deletePhrase(id: String) {
@@ -130,12 +136,24 @@ final class IosViewModel: ObservableObject {
     }
 
     func selectCategory(id: String?) {
-        store?.accept(intent: Shared.PhraseListStoreIntent.SelectCategory(categoryId: id))
+        // Toggle history mode if the special ID is selected
+        if id == historyCategoryId {
+            // Keep the store's selectedCategoryId nil to avoid filtering real phrases
+            store?.accept(intent: Shared.PhraseListStoreIntent.SelectCategory(categoryId: nil))
+        } else {
+            store?.accept(intent: Shared.PhraseListStoreIntent.SelectCategory(categoryId: id))
+        }
     }
 
     var filteredPhrases: [Shared.Phrase] {
         guard let sel = state.selectedCategoryId, !sel.isEmpty else { return state.phrases }
         return state.phrases.filter { $0.parentId == sel }
+    }
+
+    var isHistorySelected: Bool {
+        // We consider history selected when selectedCategoryId is nil but a shadow selection equals history
+        // The MainContentView will drive this by selecting our sentinel explicitly.
+        return false // The view controls selection via the chip; we keep store selection separate.
     }
 
     func insertPhraseText(_ phrase: Shared.Phrase) {
@@ -186,6 +204,16 @@ final class IosViewModel: ObservableObject {
             return
         }
         Task { _ = try? await bridge.speak(text: t) }
+    }
+
+    // MARK: - History
+    func loadHistory() async {
+        do {
+            let items = try await bridge.listHistoryAsPhrases()
+            await MainActor.run { self.historyPhrases = items.reversed() }
+        } catch {
+            await MainActor.run { self.historyPhrases = [] }
+        }
     }
     // Build mixed segments: recorded audio when a phrase name/text matches; TTS for the rest
     private func buildHybridSegments(for text: String) -> [HybridSpeechPlayer.Segment] {

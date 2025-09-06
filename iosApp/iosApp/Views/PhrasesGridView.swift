@@ -11,13 +11,15 @@ struct PhrasesGridView<Cell: View>: View {
     
     // Add wiggle mode state to disable add button during reordering
     var isWiggleMode: Bool = false
+    // Explicit flag to hide the Add button (e.g., in History mode)
+    var hideAddButton: Bool = false
 
     var body: some View {
         let rowSpacing: CGFloat = UIDevice.current.userInterfaceIdiom == .pad ? 12 : 8
         ScrollView {
             LazyVGrid(columns: columns, spacing: rowSpacing) {
                 // Hide add button during wiggle mode to avoid confusion
-                if !isWiggleMode {
+                if !isWiggleMode && !hideAddButton {
                     Button(action: onAdd) {
                         VStack {
                             Image(systemName: "plus.circle.fill").font(.system(size: 28))
