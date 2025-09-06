@@ -34,6 +34,24 @@ class DesktopSqlPhraseRepository : PhraseRepository {
                     )
                 """.trimIndent())
             }
+            // Ensure categories table exists so we can migrate legacy category phrases
+            try {
+                conn.createStatement().use { stCat ->
+                    stCat.executeUpdate(
+                        """
+                        CREATE TABLE IF NOT EXISTS categories (
+                            id TEXT PRIMARY KEY,
+                            name TEXT,
+                            selected_language TEXT,
+                            created_at INTEGER,
+                            ordering INTEGER
+                        )
+                        """.trimIndent()
+                    )
+                }
+            } catch (t: Throwable) {
+                log.warn("Failed ensuring categories table prior to migration", t)
+            }
             // Migration: if the DB was created by an older version, some columns may be missing.
             try {
                 val existing = mutableSetOf<String>()
@@ -88,6 +106,58 @@ class DesktopSqlPhraseRepository : PhraseRepository {
             } catch (t: Throwable) {
                 log.warn("Error checking/creating phrases table schema", t)
             }
+            // Legacy migration: move any phrases flagged as categories into real categories table
+            try {
+                conn.autoCommit = false
+                val legacy = mutableListOf<Triple<String, String?, Long>>()
+                conn.prepareStatement("SELECT id, COALESCE(NULLIF(name,''), NULLIF(text,'')) as display_name, created_at FROM phrases WHERE is_category = 1").use { ps ->
+                    val rs = ps.executeQuery()
+                    while (rs.next()) legacy += Triple(rs.getString(1), rs.getString(2), rs.getLong(3))
+                }
+                if (legacy.isNotEmpty()) {
+                    log.info("Migrating {} legacy category phrases", legacy.size)
+                    // Determine current max ordering in categories
+                    var nextOrd = 0
+                    conn.prepareStatement("SELECT COALESCE(MAX(ordering), -1) FROM categories").use { ps ->
+                        val rs = ps.executeQuery(); if (rs.next()) nextOrd = rs.getInt(1) + 1
+                    }
+                    // Detect which language column exists
+                    val catCols = mutableSetOf<String>()
+                    conn.createStatement().use { stCols ->
+                        val rs = stCols.executeQuery("PRAGMA table_info('categories')")
+                        while (rs.next()) catCols.add(rs.getString("name"))
+                    }
+                    val useSnake = catCols.contains("selected_language") && !catCols.contains("selectedLanguage")
+                    val insertSql = if (useSnake) {
+                        "INSERT OR IGNORE INTO categories(id, name, selected_language, created_at, ordering) VALUES (?,?,?,?,?)"
+                    } else {
+                        // ensure camel column exists for forward schema
+                        if (!catCols.contains("selectedLanguage")) {
+                            runCatching { conn.createStatement().use { it.executeUpdate("ALTER TABLE categories ADD COLUMN selectedLanguage TEXT") } }
+                        }
+                        "INSERT OR IGNORE INTO categories(id, name, selectedLanguage, created_at, ordering) VALUES (?,?,?,?,?)"
+                    }
+                    conn.prepareStatement(insertSql).use { ins ->
+                        legacy.forEachIndexed { idx, (id, name, createdAt) ->
+                            ins.setString(1, id)
+                            ins.setString(2, name ?: id)
+                            ins.setString(3, null)
+                            ins.setLong(4, if (createdAt == 0L) System.currentTimeMillis() else createdAt)
+                            ins.setInt(5, nextOrd + idx)
+                            ins.addBatch()
+                        }
+                        ins.executeBatch()
+                    }
+                    conn.prepareStatement("DELETE FROM phrases WHERE is_category = 1").use { it.executeUpdate() }
+                    conn.commit()
+                }
+                conn.autoCommit = true
+            } catch (t: Throwable) {
+                try { conn.rollback() } catch (_: Throwable) {}
+                log.warn("Failed migrating legacy category phrases", t)
+            } finally {
+                try { conn.autoCommit = true } catch (_: Throwable) {}
+            }
         }
     }
 
@@ -95,7 +165,7 @@ class DesktopSqlPhraseRepository : PhraseRepository {
         log.info("Loading phrases from SQLite at {}", dbPath)
         val items = mutableListOf<Phrase>()
         connection().use { conn ->
-            conn.prepareStatement("SELECT id, text, name, background_color, parent_id, is_category, created_at FROM phrases ORDER BY ordering ASC").use { ps ->
+            conn.prepareStatement("SELECT id, text, name, background_color, parent_id, /* ignore legacy */ 0 as is_category, created_at FROM phrases ORDER BY ordering ASC").use { ps ->
                 val rs = ps.executeQuery()
                 while (rs.next()) {
                     val p = Phrase(

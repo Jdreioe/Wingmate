@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.hojmoseit.wingmate.androidApp-mergeDebugResources-59:/values-as/values-as.xml",
+            "outputFile": "com.hojmoseit.wingmate.androidApp-mergeDebugResources-61:/values-as/values-as.xml",
             "map": [
                 {
                     "source": "/var/home/Jdreioe/.gradle/caches/8.13/transforms/e88a2ca14b29360777b1e4a6c33e2d9c/transformed/material-1.9.0/res/values-as/values-as.xml",

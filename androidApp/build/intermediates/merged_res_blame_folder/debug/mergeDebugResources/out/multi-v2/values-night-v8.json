@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.hojmoseit.wingmate.androidApp-mergeDebugResources-59:/values-night-v8/values-night-v8.xml",
+            "outputFile": "com.hojmoseit.wingmate.androidApp-mergeDebugResources-61:/values-night-v8/values-night-v8.xml",
             "map": [
                 {
                     "source": "/var/home/Jdreioe/.gradle/caches/8.13/transforms/503edf77389deb370874274e1ae60659/transformed/appcompat-1.7.1/res/values-night-v8/values-night-v8.xml",

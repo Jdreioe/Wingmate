@@ -13,6 +13,7 @@ interface CategoryRepository {
     suspend fun add(category: CategoryItem): CategoryItem
     suspend fun update(category: CategoryItem): CategoryItem
     suspend fun delete(id: String)
+    suspend fun move(fromIndex: Int, toIndex: Int)
 }
 
 interface SettingsRepository {

@@ -43,6 +43,7 @@ abstract class Bloc<E, S>(initial: S) {
 // App-specific blocs
 sealed class PhraseEvent {
     data class Add(val phrase: Phrase) : PhraseEvent()
+    // Legacy: categories are now stored in CategoryRepository; this event is no-op retained for binary compatibility
     data class AddCategory(val category: io.github.jdreioe.wingmate.domain.CategoryItem) : PhraseEvent()
     data class Edit(val phrase: Phrase) : PhraseEvent()
     data class Delete(val id: String) : PhraseEvent()
@@ -81,25 +82,7 @@ class PhraseBloc(private val useCase: PhraseUseCase) : Bloc<PhraseEvent, PhraseS
                     setState { it.copy(loading = false, error = t.message) }
                 }
             }
-            is PhraseEvent.AddCategory -> {
-                setState { it.copy(loading = true, error = null) }
-                try {
-                    // prevent duplicate category names (case-insensitive)
-                    val existing = useCase.list().filter { it.isCategory }
-                    val name = event.category.name?.trim() ?: ""
-                    if (existing.any { (it.name ?: "").trim().equals(name, ignoreCase = true) }) {
-                        setState { it.copy(loading = false, error = "Category with name '$name' already exists") }
-                    } else {
-                        val id = if (event.category.id.isBlank()) "category_${kotlinx.datetime.Clock.System.now().toEpochMilliseconds()}_${kotlin.random.Random.nextInt(1000, 9999)}" else event.category.id
-                        val p = Phrase(id = id, text = "", name = name, backgroundColor = null, parentId = null, isCategory = true, createdAt = kotlinx.datetime.Clock.System.now().toEpochMilliseconds())
-                        useCase.add(p)
-                        val list = useCase.list()
-                        setState { it.copy(loading = false, items = list) }
-                    }
-                } catch (t: Throwable) {
-                    setState { it.copy(loading = false, error = t.message) }
-                }
-            }
+            is PhraseEvent.AddCategory -> { /* no-op after model unification */ }
             is PhraseEvent.Edit -> {
                 setState { it.copy(loading = true, error = null) }
                 try {

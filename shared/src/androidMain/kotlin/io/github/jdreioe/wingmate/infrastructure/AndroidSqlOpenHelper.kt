@@ -45,6 +45,37 @@ internal class AndroidSqlOpenHelper(
                 ordering INTEGER DEFAULT 0
             );
         """.trimIndent())
+        // Legacy migration: move phrases flagged as categories into categories table and delete them from phrases
+        try {
+            db.beginTransaction()
+            val cursor = db.rawQuery("SELECT id, COALESCE(NULLIF(name,''), NULLIF(text,'')) FROM phrases WHERE is_category = 1", null)
+            val legacy = mutableListOf<Pair<String, String?>>()
+            while (cursor.moveToNext()) {
+                legacy += cursor.getString(0) to cursor.getString(1)
+            }
+            cursor.close()
+            if (legacy.isNotEmpty()) {
+                // Determine next ordering
+                var next = 0
+                val ordCur = db.rawQuery("SELECT COALESCE(MAX(ordering), -1) FROM categories", null)
+                if (ordCur.moveToFirst()) next = ordCur.getInt(0) + 1
+                ordCur.close()
+                val insert = db.compileStatement("INSERT OR IGNORE INTO categories(id, name, selectedLanguage, ordering) VALUES (?,?,?,?)")
+                legacy.forEachIndexed { idx, (id, name) ->
+                    insert.bindString(1, id)
+                    insert.bindString(2, name ?: id)
+                    insert.bindNull(3)
+                    insert.bindLong(4, (next + idx).toLong())
+                    insert.executeInsert()
+                }
+                db.delete("phrases", "is_category = 1", emptyArray())
+            }
+            db.setTransactionSuccessful()
+        } catch (_: Throwable) {
+            // swallow; non-critical
+        } finally {
+            try { db.endTransaction() } catch (_: Throwable) {}
+        }
 
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS configs (

@@ -2,6 +2,10 @@ package io.github.jdreioe.wingmate.infrastructure
 
 import android.content.Context
 import android.media.MediaPlayer
+import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.AudioFocusRequest
+import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.net.ConnectivityManager
@@ -17,6 +21,9 @@ import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext
 import java.io.File
 import android.os.Environment
@@ -39,6 +46,50 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     // MediaPlayer based playback for Azure synthesized audio
     private var mediaPlayer: MediaPlayer? = null
     private val playerLock = Any()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val audioManager: AudioManager by lazy { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    private val focusChangeListener = AudioManager.OnAudioFocusChangeListener { change ->
+        // For simplicity: on full loss, stop playback; on other changes we ignore/duck handled by system
+        if (change == AudioManager.AUDIOFOCUS_LOSS) {
+            scope.launch { runCatching { stop() } }
+        }
+    }
+    private val ttsAudioAttributes: AudioAttributes by lazy {
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
+    }
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private fun requestAudioFocus(): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                    .setOnAudioFocusChangeListener(focusChangeListener)
+                    .setAudioAttributes(ttsAudioAttributes)
+                    .build()
+                audioFocusRequest = req
+                audioManager.requestAudioFocus(req) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(
+                    focusChangeListener,
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+                ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+            }
+        } catch (_: Throwable) { false }
+    }
+    private fun abandonAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.abandonAudioFocus(focusChangeListener)
+            }
+        } catch (_: Throwable) { }
+    }
     
     // Track if we've already shown the offline warning to avoid spam
     private val offlineWarningShown = AtomicBoolean(false)
@@ -121,6 +172,11 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         // If user prefers system TTS, use it directly
         if (uiSettings?.useSystemTts == true) {
             speakWithPlatformTts(text, voice, pitch, rate)
+            return
+        }
+
+        // Try to reuse a cached audio file from history to save API calls (works even offline)
+        if (maybePlayFromHistoryCache(text, voice, pitch, rate, uiSettings?.primaryLanguage)) {
             return
         }
         
@@ -227,6 +283,105 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         }
     }
 
+    private fun effectiveVoice(
+        base: Voice?,
+        uiPrimaryLanguage: String?
+    ): Voice {
+        val v = base ?: Voice(name = "en-US-JennyNeural", primaryLanguage = "en-US")
+        val effectiveLang = when {
+            !v.selectedLanguage.isNullOrBlank() -> v.selectedLanguage
+            !uiPrimaryLanguage.isNullOrBlank() -> uiPrimaryLanguage
+            !v.primaryLanguage.isNullOrBlank() -> v.primaryLanguage
+            else -> "en-US"
+        }
+        return v.copy(primaryLanguage = effectiveLang)
+    }
+
+    private suspend fun maybePlayFromHistoryCache(
+        text: String,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        uiPrimaryLanguage: String?
+    ): Boolean {
+        return runCatching {
+            val koin = GlobalContext.getOrNull()
+            val saidRepo = koin?.getOrNull<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+            if (saidRepo == null) return false
+
+            val v = effectiveVoice(voice, uiPrimaryLanguage)
+            val list = runCatching { withContext(Dispatchers.IO) { saidRepo.list() } }.getOrNull().orEmpty()
+            val candidate = list.asSequence()
+                .filter { it.saidText == text }
+                .filter { !it.audioFilePath.isNullOrBlank() }
+                .filter { it.voiceName == v.name }
+                .filter { (it.primaryLanguage ?: "") == (v.selectedLanguage?.ifBlank { v.primaryLanguage } ?: v.primaryLanguage ?: "") }
+                .filter { (it.pitch == null && pitch == null) || (it.pitch != null && pitch != null && it.pitch == pitch) }
+                .filter { (it.speed == null && rate == null) || (it.speed != null && rate != null && it.speed == rate) }
+                .sortedByDescending { it.date ?: it.createdAt ?: 0L }
+                .firstOrNull()
+
+            val path = candidate?.audioFilePath
+            if (path.isNullOrBlank()) return false
+
+            val file = File(path)
+            if (!file.exists() || file.length() <= 0L) return false
+
+            // Append a history record for this playback referencing the cached file
+            runCatching {
+                val now = System.currentTimeMillis()
+                withContext(Dispatchers.IO) {
+                    saidRepo.add(
+                        io.github.jdreioe.wingmate.domain.SaidText(
+                            date = now,
+                            saidText = text,
+                            voiceName = v.name,
+                            pitch = pitch ?: v.pitch,
+                            speed = rate ?: v.rate,
+                            audioFilePath = file.absolutePath,
+                            createdAt = now,
+                            position = 0,
+                            primaryLanguage = v.selectedLanguage?.ifBlank { v.primaryLanguage }
+                        )
+                    )
+                }
+            }
+
+            // Play the cached file with MediaPlayer (mirror Azure playback path)
+            val player = MediaPlayer()
+            if (!requestAudioFocus()) {
+                // Even if focus fails, try to play; but Android Auto may ignore without focus
+            }
+            player.setOnCompletionListener { mp ->
+                try {
+                    synchronized(playerLock) {
+                        if (mediaPlayer === mp) {
+                            mp.reset()
+                            mp.release()
+                            mediaPlayer = null
+                        }
+                    }
+                    abandonAudioFocus()
+                } catch (_: Throwable) {}
+            }
+            player.setOnErrorListener { mp, _, _ ->
+                try { synchronized(playerLock) { if (mediaPlayer === mp) { mp.reset(); mp.release(); mediaPlayer = null } } } catch (_: Throwable) {}
+                abandonAudioFocus()
+                false
+            }
+            // Ensure proper routing for car/AA: use navigation guidance speech attributes
+            try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
+            player.setDataSource(file.absolutePath)
+            player.prepare()
+            synchronized(playerLock) {
+                mediaPlayer?.let { try { it.stop(); it.release() } catch (_: Throwable) {} }
+                mediaPlayer = player
+            }
+            player.start()
+            true
+        }.getOrElse { false }
+    }
+
     private suspend fun speakWithPlatformTts(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
         withContext(Dispatchers.Main) {
             val t = ensureTts()
@@ -235,6 +390,9 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             t.language = loc
             t.setPitch((pitch ?: 1.0).toFloat())
             t.setSpeechRate((rate ?: 1.0).toFloat())
+            // Route TTS through car audio properly by setting AudioAttributes and requesting focus
+            try { t.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
+            requestAudioFocus()
             t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "wingmate-${System.currentTimeMillis()}")
         }
     }
@@ -256,6 +414,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             }
         }
         try { tts?.stop() } catch (_: Throwable) {}
+    abandonAudioFocus()
         
         // Reset offline warning for next session
         offlineWarningShown.set(false)

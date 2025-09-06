@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.hojmoseit.wingmate"
-    android:versionCode="4"
-    android:versionName="1.2da" >
+    android:versionCode="6"
+    android:versionName="1.3" >
 
     <uses-sdk
         android:minSdkVersion="24"
@@ -25,6 +25,16 @@
         android:label="Wingmate KMP"
         android:testOnly="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" >
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.hojmoseit.wingmate.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true" >
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <activity
             android:name="io.github.jdreioe.wingmate.MainActivity"
             android:exported="true" >
@@ -34,6 +44,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name="io.github.jdreioe.wingmate.display.PrimaryDisplayActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
 
         <provider
             android:name="org.jetbrains.compose.resources.AndroidContextProvider"
@@ -45,6 +59,13 @@
         <activity
             android:name="androidx.compose.ui.tooling.PreviewActivity"
             android:exported="true" />
+
+        <uses-library
+            android:name="androidx.window.extensions"
+            android:required="false" />
+        <uses-library
+            android:name="androidx.window.sidecar"
+            android:required="false" />
 
         <provider
             android:name="androidx.startup.InitializationProvider"

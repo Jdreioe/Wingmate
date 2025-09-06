@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.hojmoseit.wingmate.androidApp-mergeDebugResources-59:/values-az/values-az.xml",
+            "outputFile": "com.hojmoseit.wingmate.androidApp-mergeDebugResources-61:/values-az/values-az.xml",
             "map": [
                 {
                     "source": "/var/home/Jdreioe/.gradle/caches/8.13/transforms/e4c696cfbc0675da66b4b3a59e53cfd6/transformed/jetified-material3-release/res/values-az/values-az.xml",

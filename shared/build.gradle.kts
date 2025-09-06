@@ -68,6 +68,8 @@ kotlin {
             dependencies {
                 implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
                 implementation("io.ktor:ktor-client-okhttp:2.3.12")
+                // Required for FileProvider and core Android helpers used in androidMain
+                implementation("androidx.core:core-ktx:1.13.1")
 
             }
         }

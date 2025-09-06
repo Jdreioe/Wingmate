@@ -70,9 +70,91 @@ class DesktopSpeechService : SpeechService {
             return
         }
         
+        // Try to reuse cached Azure audio if available to save API calls
+        if (maybePlayFromCache(text, voice, pitch, rate, uiSettings?.primaryLanguage)) {
+            return
+        }
+
     // Use Azure TTS (enhanced implementation)
         withContext(Dispatchers.IO) {
             speakWithAzureTts(text, voice, pitch, rate)
+        }
+    }
+
+    private suspend fun maybePlayFromCache(
+        text: String,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        uiPrimaryLanguage: String?
+    ): Boolean {
+        return runCatching {
+            val koin = GlobalContext.getOrNull()
+            val repo = koin?.get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+            if (repo == null) return false
+
+            // Determine effective voice/lang similar to Azure path
+            val baseVoice = voice ?: Voice(name = "en-US-JennyNeural", primaryLanguage = "en-US")
+            val enhancedVoice = baseVoice.copy(
+                pitch = pitch ?: baseVoice.pitch,
+                rate = rate ?: baseVoice.rate
+            )
+            val effectiveLang = when {
+                !enhancedVoice.selectedLanguage.isNullOrBlank() -> enhancedVoice.selectedLanguage
+                !uiPrimaryLanguage.isNullOrBlank() -> uiPrimaryLanguage
+                !enhancedVoice.primaryLanguage.isNullOrBlank() -> enhancedVoice.primaryLanguage
+                else -> "en-US"
+            }
+            val vForMatch = enhancedVoice.copy(primaryLanguage = effectiveLang)
+
+            val list = runCatching { repo.list() }.getOrNull().orEmpty()
+            val targetPitch = vForMatch.pitch
+            val targetRate = vForMatch.rate
+
+            val candidate = list.asSequence()
+                .filter { it.saidText == text }
+                .filter { !it.audioFilePath.isNullOrBlank() }
+                .filter { it.voiceName == vForMatch.name }
+                .filter { (it.primaryLanguage ?: "") == (vForMatch.primaryLanguage ?: "") }
+                .filter { (it.pitch == null && targetPitch == null) || (it.pitch != null && targetPitch != null && it.pitch == targetPitch) }
+                .filter { (it.speed == null && targetRate == null) || (it.speed != null && targetRate != null && it.speed == targetRate) }
+                .sortedByDescending { it.date ?: it.createdAt ?: 0L }
+                .firstOrNull()
+
+            if (candidate != null) {
+                val path = candidate.audioFilePath!!
+                val file = File(path)
+                if (file.exists() && file.length() > 0L) {
+                    log.info("reusing cached audio from history: {}", file.absolutePath)
+                    // Record a new history entry referencing the same audio file for this play
+                    val now = System.currentTimeMillis()
+                    runCatching {
+                        repo.add(
+                            io.github.jdreioe.wingmate.domain.SaidText(
+                                date = now,
+                                saidText = text,
+                                voiceName = vForMatch.name,
+                                pitch = vForMatch.pitch,
+                                speed = vForMatch.rate,
+                                audioFilePath = file.absolutePath,
+                                createdAt = now,
+                                position = 0,
+                                primaryLanguage = vForMatch.selectedLanguage?.takeIf { it.isNotBlank() } ?: vForMatch.primaryLanguage
+                            )
+                        )
+                    }.onFailure { t -> log.warn("Failed to append cached-play history", t) }
+
+                    // Play the cached file
+                    withContext(Dispatchers.IO) { playAudioFile(file) }
+                    return true
+                } else {
+                    log.info("cached history file missing or empty; will synthesize via API: {}", path)
+                }
+            }
+            false
+        }.getOrElse { e ->
+            log.warn("cache reuse attempt failed; falling back to API", e)
+            false
         }
     }
 

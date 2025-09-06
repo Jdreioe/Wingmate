@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.hojmoseit.wingmate.androidApp-mergeDebugResources-59:/values-sr/values-sr.xml",
+            "outputFile": "com.hojmoseit.wingmate.androidApp-mergeDebugResources-61:/values-sr/values-sr.xml",
             "map": [
                 {
                     "source": "/var/home/Jdreioe/.gradle/caches/8.13/transforms/6038503cc72e4f9f0fa1ba8903401c33/transformed/jetified-ui-release/res/values-sr/values-sr.xml",

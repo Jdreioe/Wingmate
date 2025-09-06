@@ -19,9 +19,10 @@ fun overrideAndroidSpeechService(context: Context) {
             single<Context> { context }
             single<SpeechService> { AndroidSpeechService(context) }
             single<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider> { io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider() }
-            // Register Android SharedPreferences-backed ConfigRepository
             // Prefer SQLite-backed repositories on Android for parity with desktop
             single<io.github.jdreioe.wingmate.domain.ConfigRepository> { AndroidSqlConfigRepository(context) }
+            // Audio clipboard support
+            single<io.github.jdreioe.wingmate.platform.AudioClipboard> { io.github.jdreioe.wingmate.platform.AndroidAudioClipboard(context) }
             single<io.github.jdreioe.wingmate.domain.PhraseRepository> { AndroidSqlPhraseRepository(context) }
             single<io.github.jdreioe.wingmate.domain.CategoryRepository> { AndroidSqlCategoryRepository(context) }
             single<io.github.jdreioe.wingmate.domain.VoiceRepository> { AndroidSqlVoiceRepository(context) }

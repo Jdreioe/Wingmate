@@ -24,6 +24,9 @@ dependencies {
     
     // Koin
     implementation("io.insert-koin:koin-core:3.5.6")
+    
+    // Compose runtime for collectAsState
+    implementation("org.jetbrains.compose.runtime:runtime:1.5.3")
 }
 
 kotlin {

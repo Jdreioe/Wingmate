@@ -16,7 +16,8 @@ import org.koin.dsl.module
 @Suppress("unused")
 fun initKoin(extra: Module? = null) {
     val baseModule: Module = module {
-        single<PhraseRepository> { InMemoryPhraseRepository() }
+    single<PhraseRepository> { InMemoryPhraseRepository() }
+    single<CategoryRepository> { InMemoryCategoryRepository() }
         single<SettingsRepository> { InMemorySettingsRepository() }
         single<VoiceRepository> { InMemoryVoiceRepository() }
         single<SaidTextRepository> { InMemorySaidTextRepository() }

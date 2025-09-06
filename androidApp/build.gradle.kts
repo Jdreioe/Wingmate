@@ -12,8 +12,8 @@ android {
         applicationId = "com.hojmoseit.wingmate"
     minSdk = 24
     targetSdk = 36
-        versionCode = 4
-        versionName = "1.2da"
+        versionCode =6
+        versionName = "1.3"
     }
 
     buildFeatures { compose = true }
@@ -62,6 +62,9 @@ dependencies {
     // DI
     implementation("io.insert-koin:koin-core:4.1.0")
     implementation("io.insert-koin:koin-android:4.1.0")
+
+    // Dual-screen / WindowManager (API 34+ rear display & window area APIs)
+    implementation("androidx.window:window:1.2.0-beta03")
 }
 
 kotlin {

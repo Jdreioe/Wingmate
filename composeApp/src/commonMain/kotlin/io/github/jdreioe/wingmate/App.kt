@@ -23,10 +23,8 @@ fun App() {
         val koin = GlobalContext.getOrNull()
         val voiceUseCase = koin?.let { runCatching { it.get<VoiceUseCase>() }.getOrNull() }
         if (voiceUseCase != null) {
-            try {
-                val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                if (selected != null) currentScreen = Screen.Phrases
-            } catch (_: Throwable) {}
+            val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+            if (selected != null) currentScreen = Screen.Phrases
         }
     }
 

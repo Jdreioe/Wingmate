@@ -56,6 +56,7 @@ fun PhraseGridItem(
     index: Int = 0,
     total: Int = 0,
     readOnly: Boolean = false,
+    onCopyAudio: ((filePath: String) -> Unit)? = null,
 ) {
     val infiniteTransition = rememberInfiniteTransition()
     val angle = infiniteTransition.animateFloat(
@@ -76,33 +77,43 @@ fun PhraseGridItem(
             // long-press opens contextual menu; tap inserts if onTap provided
             .combinedClickable(
                 onClick = { showMenu = false; try { onTap?.invoke() ?: onPlay() } catch (_: Throwable) {} },
-                onLongClick = { if (!readOnly) showMenu = true }
+                onLongClick = { showMenu = true }
             ),
         shape = RoundedCornerShape(8.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                     // contextual menu (appears on long-press or right-click)
-                    if (showMenu && !isEditMode && !readOnly) {
+                    if (showMenu && !isEditMode) {
                         DropdownMenu(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false },
                             modifier = Modifier.align(Alignment.TopEnd)
                         ) {
-                            DropdownMenuItem(text = { Text("Edit") }, onClick = {
-                                showMenu = false
-                                try { onLongPress() } catch (_: Throwable) {}
-                            })
+                            if (!readOnly) {
+                                DropdownMenuItem(text = { Text("Edit") }, onClick = {
+                                    showMenu = false
+                                    try { onLongPress() } catch (_: Throwable) {}
+                                })
+                            }
                             // secondary language speak option
-                            if (onSpeakSecondary != null) {
+                            if (onSpeakSecondary != null && !readOnly) {
                                 DropdownMenuItem(text = { Text("Speak (secondary)") }, onClick = {
                                     showMenu = false
                                     try { onSpeakSecondary.invoke() } catch (_: Throwable) {}
                                 })
                             }
-                            if (onDelete != null) {
+                            if (onDelete != null && !readOnly) {
                                 DropdownMenuItem(text = { Text("Delete") }, onClick = {
                                     showMenu = false
                                     try { onDelete.invoke() } catch (_: Throwable) {}
+                                })
+                            }
+                            // Copy audio file if available
+                            val audioPath = item.recordingPath
+                            if (!audioPath.isNullOrBlank() && onCopyAudio != null) {
+                                DropdownMenuItem(text = { Text("Copy soundfile") }, onClick = {
+                                    showMenu = false
+                                    try { onCopyAudio.invoke(audioPath) } catch (_: Throwable) {}
                                 })
                             }
                         }

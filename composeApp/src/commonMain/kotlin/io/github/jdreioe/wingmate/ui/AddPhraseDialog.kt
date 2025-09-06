@@ -25,11 +25,12 @@ import kotlin.math.PI
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.ui.parseHexToColor
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddPhraseDialog(
     onDismiss: () -> Unit,
     categories: List<CategoryItem>,
+    defaultCategoryId: String? = null,
     initialPhrase: Phrase? = null,
     onSave: (Phrase) -> Unit,
     onDelete: ((String) -> Unit)? = null
@@ -40,7 +41,12 @@ fun AddPhraseDialog(
     var useColor by remember { mutableStateOf(initialPhrase?.backgroundColor != null) }
     var hue by remember { mutableStateOf(0f) }
     var value by remember { mutableStateOf(1f) }
-    var selectedCategory by remember { mutableStateOf(categories.firstOrNull { it.id == initialPhrase?.parentId } ?: categories.firstOrNull()) }
+    var selectedCategory by remember {
+        mutableStateOf(
+            categories.firstOrNull { it.id == (initialPhrase?.parentId ?: defaultCategoryId) }
+                ?: categories.firstOrNull()
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -103,20 +109,32 @@ fun AddPhraseDialog(
                 // Category dropdown
                 if (categories.isNotEmpty()) {
                     var expanded by remember { mutableStateOf(false) }
-                    Box {
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = !expanded }
+                    ) {
                         OutlinedTextField(
                             value = selectedCategory?.name ?: "",
                             onValueChange = {},
                             label = { Text("Belongs to category") },
                             readOnly = true,
-                            modifier = Modifier.fillMaxWidth().clickable { expanded = true }
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth()
                         )
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
                             categories.forEach { cat ->
-                                        DropdownMenuItem(text = { Text(cat.name ?: "No Name") }, onClick = {
-                                            selectedCategory = cat
-                                            expanded = false
-                                        })
+                                DropdownMenuItem(
+                                    text = { Text(cat.name ?: "No Name") },
+                                    onClick = {
+                                        selectedCategory = cat
+                                        expanded = false
+                                    }
+                                )
                             }
                         }
                     }

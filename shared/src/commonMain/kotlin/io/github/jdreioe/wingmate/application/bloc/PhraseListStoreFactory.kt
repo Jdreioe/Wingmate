@@ -5,11 +5,9 @@ import com.arkivanov.mvikotlin.core.store.SimpleBootstrapper
 import com.arkivanov.mvikotlin.core.store.Store
 import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.arkivanov.mvikotlin.extensions.coroutines.CoroutineExecutor
-import io.github.jdreioe.wingmate.application.usecase.AddCategoryUseCase
 import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
-import io.github.jdreioe.wingmate.application.usecase.DeleteCategoryUseCase
 import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.MovePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetAllItemsUseCase
@@ -20,9 +18,7 @@ class PhraseListStoreFactory(
     private val storeFactory: StoreFactory,
     private val getPhrasesAndCategoriesUseCase: GetPhrasesAndCategoriesUseCase,
     private val addPhraseUseCase: AddPhraseUseCase,
-    private val addCategoryUseCase: AddCategoryUseCase,
     private val deletePhraseUseCase: DeletePhraseUseCase,
-    private val deleteCategoryUseCase: DeleteCategoryUseCase,
     private val updatePhraseUseCase: UpdatePhraseUseCase,
     private val movePhraseUseCase: MovePhraseUseCase,
     private val getAllItemsUseCase: GetAllItemsUseCase
@@ -58,10 +54,10 @@ class PhraseListStoreFactory(
         override fun executeIntent(intent: PhraseListStore.Intent, getState: () -> PhraseListStore.State) {
             when (intent) {
                 is PhraseListStore.Intent.AddPhrase -> addPhrase(intent.text, getState().selectedCategoryId)
-                is PhraseListStore.Intent.AddCategory -> addCategory(intent.name)
+                is PhraseListStore.Intent.AddCategory -> { /* no-op after model unification */ }
                 is PhraseListStore.Intent.SelectCategory -> dispatch(Msg.CategorySelected(intent.categoryId))
                 is PhraseListStore.Intent.DeletePhrase -> deletePhrase(intent.phraseId)
-                is PhraseListStore.Intent.DeleteCategory -> deleteCategory(intent.categoryId)
+                is PhraseListStore.Intent.DeleteCategory -> { /* no-op */ }
                 is PhraseListStore.Intent.UpdatePhrase -> updatePhrase(intent.id, intent.text, intent.name)
                 is PhraseListStore.Intent.UpdatePhraseRecording -> updatePhraseRecording(intent.id, intent.recordingPath)
                 is PhraseListStore.Intent.MovePhrase -> movePhrase(intent.fromIndex, intent.toIndex)
@@ -92,16 +88,6 @@ class PhraseListStoreFactory(
             }
         }
 
-        private fun addCategory(name: String) {
-            scope.launch {
-                try {
-                    addCategoryUseCase(name)
-                    loadPhrasesAndCategories()
-                } catch (e: Exception) {
-                    dispatch(Msg.ErrorOccurred(e.message ?: "Failed to add category"))
-                }
-            }
-        }
 
         private fun deletePhrase(phraseId: String) {
             scope.launch {
@@ -115,16 +101,6 @@ class PhraseListStoreFactory(
             }
         }
 
-        private fun deleteCategory(categoryId: String) {
-            scope.launch {
-                try {
-                    deleteCategoryUseCase(categoryId)
-                    loadPhrasesAndCategories()
-                } catch (e: Exception) {
-                    dispatch(Msg.ErrorOccurred(e.message ?: "Failed to delete category"))
-                }
-            }
-        }
 
         private fun updatePhrase(id: String, text: String?, name: String?) {
             scope.launch {

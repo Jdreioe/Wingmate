@@ -44,11 +44,13 @@ fun PhraseGrid(
     onDeletePhrase: ((Phrase) -> Unit)? = null,
     onMove: ((oldIndex: Int, newIndex: Int) -> Unit)? = null,
     categories: List<CategoryItem> = emptyList(),
+    defaultCategoryId: String? = null,
     onSavePhrase: ((Phrase) -> Unit)? = null,
     phraseHeight: Dp = 120.dp,
     phraseFontSize: TextUnit = TextUnit.Unspecified,
     showAddTile: Boolean = true,
     readOnly: Boolean = false,
+    onCopyAudio: ((filePath: String) -> Unit)? = null,
 ) {
     // Build item list; when not in wiggle mode show an Add button as last tile
     val showAdd = !isWiggleMode && showAddTile
@@ -99,6 +101,7 @@ fun PhraseGrid(
                     index = index,
                     total = phrases.size,
                     readOnly = readOnly,
+                    onCopyAudio = onCopyAudio,
                 )
             }
         }
@@ -107,6 +110,7 @@ fun PhraseGrid(
         AddPhraseDialog(
             onDismiss = { showAddDialog = false },
             categories = categories,
+            defaultCategoryId = defaultCategoryId,
             onSave = { phrase ->
                 onSavePhrase?.invoke(phrase)
                 showAddDialog = false

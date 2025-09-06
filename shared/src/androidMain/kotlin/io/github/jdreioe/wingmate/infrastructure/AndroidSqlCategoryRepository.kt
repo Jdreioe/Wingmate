@@ -30,11 +30,16 @@ class AndroidSqlCategoryRepository(private val context: Context) : CategoryRepos
     override suspend fun add(category: CategoryItem): CategoryItem = withContext(Dispatchers.IO) {
         val db = helper.writableDatabase
         val id = category.id.ifBlank { UUID.randomUUID().toString() }
+        // Determine next ordering as max + 1
+        val cur = db.rawQuery("SELECT COALESCE(MAX(ordering), -1) FROM categories", null)
+        var next = -1
+        if (cur.moveToFirst()) next = cur.getInt(0)
+        cur.close()
         val values = ContentValues().apply {
             put("id", id)
             put("name", category.name)
             put("selectedLanguage", category.selectedLanguage)
-            put("ordering", 0)
+            put("ordering", next + 1)
         }
         db.insert("categories", null, values)
         return@withContext category.copy(id = id)
@@ -54,5 +59,26 @@ class AndroidSqlCategoryRepository(private val context: Context) : CategoryRepos
         val db = helper.writableDatabase
         db.delete("categories", "id = ?", arrayOf(id))
         Unit
+    }
+
+    override suspend fun move(fromIndex: Int, toIndex: Int) = withContext(Dispatchers.IO) {
+        val db = helper.writableDatabase
+        val cursor = db.query("categories", arrayOf("id"), null, null, null, null, "ordering ASC")
+        val ids = mutableListOf<String>()
+        while (cursor.moveToNext()) ids += cursor.getString(cursor.getColumnIndexOrThrow("id"))
+        cursor.close()
+        if (fromIndex !in ids.indices || toIndex !in ids.indices) return@withContext
+        val id = ids.removeAt(fromIndex)
+        ids.add(toIndex, id)
+        db.beginTransaction()
+        try {
+            ids.forEachIndexed { idx, cid ->
+                val cv = ContentValues().apply { put("ordering", idx) }
+                db.update("categories", cv, "id = ?", arrayOf(cid))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 }

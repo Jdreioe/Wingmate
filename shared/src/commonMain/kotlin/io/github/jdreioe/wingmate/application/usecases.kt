@@ -16,10 +16,17 @@ class PhraseUseCase(private val repo: PhraseRepository) {
 }
 
 class CategoryUseCase(private val repo: io.github.jdreioe.wingmate.domain.CategoryRepository) {
-    suspend fun list(): List<io.github.jdreioe.wingmate.domain.CategoryItem> = repo.getAll()
-    suspend fun add(category: io.github.jdreioe.wingmate.domain.CategoryItem): io.github.jdreioe.wingmate.domain.CategoryItem = repo.add(category)
+    suspend fun list(): List<io.github.jdreioe.wingmate.domain.CategoryItem> {
+        println("[DEBUG] CategoryUseCase.list() using repository: ${repo::class.simpleName}")
+        return repo.getAll()
+    }
+    suspend fun add(category: io.github.jdreioe.wingmate.domain.CategoryItem): io.github.jdreioe.wingmate.domain.CategoryItem {
+        println("[DEBUG] CategoryUseCase.add() using repository: ${repo::class.simpleName}")
+        return repo.add(category)
+    }
     suspend fun update(category: io.github.jdreioe.wingmate.domain.CategoryItem): io.github.jdreioe.wingmate.domain.CategoryItem = repo.update(category)
     suspend fun delete(id: String) = repo.delete(id)
+    suspend fun move(fromIndex: Int, toIndex: Int) = repo.move(fromIndex, toIndex)
 }
 
 class SettingsUseCase(private val repo: SettingsRepository) {
