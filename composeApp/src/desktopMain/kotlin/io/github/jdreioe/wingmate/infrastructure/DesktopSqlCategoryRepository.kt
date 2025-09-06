@@ -67,7 +67,6 @@ class DesktopSqlCategoryRepository : CategoryRepository {
     }
 
     override suspend fun getAll(): List<CategoryItem> {
-        log.info("[DEBUG] DesktopSqlCategoryRepository.getAll() called")
         val items = mutableListOf<CategoryItem>()
         try {
             connection().use { conn ->
@@ -78,9 +77,8 @@ class DesktopSqlCategoryRepository : CategoryRepository {
                     }
                 }
             }
-            log.info("[DEBUG] DesktopSqlCategoryRepository.getAll() returning ${items.size} items: ${items.map { it.name to it.id }}")
         } catch (e: Exception) {
-            log.error("[DEBUG] DesktopSqlCategoryRepository.getAll() failed with exception", e)
+            log.error("Failed to retrieve categories", e)
         }
         return items
     }
@@ -104,7 +102,7 @@ class DesktopSqlCategoryRepository : CategoryRepository {
             }
         }
         val result = CategoryItem(id = id, name = category.name, selectedLanguage = category.selectedLanguage)
-        log.info("[DEBUG] DesktopSqlCategoryRepository.add() added category: $result")
+        log.info("Added category: ${result.name} (${result.id})")
         return result
     }
 
