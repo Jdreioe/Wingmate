@@ -11,16 +11,13 @@ class InMemoryCategoryRepository : CategoryRepository {
     private val categories = mutableListOf<CategoryItem>()
 
     override suspend fun getAll(): List<CategoryItem> = mutex.withLock { 
-        val result = categories.toList()
-        println("[DEBUG] InMemoryCategoryRepository.getAll() returning ${result.size} items: ${result.map { it.name to it.id }}")
-        result
+        categories.toList()
     }
 
     override suspend fun add(category: CategoryItem): CategoryItem = mutex.withLock {
         val id = if (category.id.isBlank()) "cat_${Random.nextInt(100000)}" else category.id
         val added = category.copy(id = id)
         categories.add(added)
-        println("[DEBUG] InMemoryCategoryRepository.add() added category: $added")
         added
     }
 

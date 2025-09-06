@@ -121,22 +121,28 @@ class DesktopSqlCategoryRepository : CategoryRepository {
     }
 
     override suspend fun delete(id: String) {
+        log.info("[DEBUG] DesktopSqlCategoryRepository.delete() deleting category with id: $id")
         connection().use { conn ->
             conn.prepareStatement("DELETE FROM categories WHERE id = ?").use { ps ->
                 ps.setString(1, id)
-                ps.executeUpdate()
+                val rowsDeleted = ps.executeUpdate()
+                log.info("[DEBUG] DesktopSqlCategoryRepository.delete() deleted $rowsDeleted rows")
             }
         }
     }
 
     override suspend fun move(fromIndex: Int, toIndex: Int) {
+        log.info("[DEBUG] DesktopSqlCategoryRepository.move() moving from $fromIndex to $toIndex")
         connection().use { conn ->
             val ids = mutableListOf<String>()
             conn.prepareStatement("SELECT id FROM categories ORDER BY ordering ASC, name COLLATE NOCASE ASC").use { ps ->
                 val rs = ps.executeQuery()
                 while (rs.next()) ids += rs.getString(1)
             }
-            if (fromIndex !in ids.indices || toIndex !in ids.indices) return
+            if (fromIndex !in ids.indices || toIndex !in ids.indices) {
+                log.warn("[DEBUG] DesktopSqlCategoryRepository.move() invalid indices: fromIndex=$fromIndex, toIndex=$toIndex, total=${ids.size}")
+                return
+            }
             val id = ids.removeAt(fromIndex)
             ids.add(toIndex, id)
             conn.autoCommit = false
@@ -150,8 +156,11 @@ class DesktopSqlCategoryRepository : CategoryRepository {
                     ps.executeBatch()
                 }
                 conn.commit()
+                log.info("[DEBUG] DesktopSqlCategoryRepository.move() successfully reordered categories")
             } catch (t: Throwable) {
-                conn.rollback(); throw t
+                conn.rollback(); 
+                log.error("[DEBUG] DesktopSqlCategoryRepository.move() failed", t)
+                throw t
             } finally { conn.autoCommit = true }
         }
     }

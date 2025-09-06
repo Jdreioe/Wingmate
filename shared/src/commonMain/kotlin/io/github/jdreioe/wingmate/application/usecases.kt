@@ -25,8 +25,14 @@ class CategoryUseCase(private val repo: io.github.jdreioe.wingmate.domain.Catego
         return repo.add(category)
     }
     suspend fun update(category: io.github.jdreioe.wingmate.domain.CategoryItem): io.github.jdreioe.wingmate.domain.CategoryItem = repo.update(category)
-    suspend fun delete(id: String) = repo.delete(id)
-    suspend fun move(fromIndex: Int, toIndex: Int) = repo.move(fromIndex, toIndex)
+    suspend fun delete(id: String) {
+        println("[DEBUG] CategoryUseCase.delete() deleting category with id: $id")
+        repo.delete(id)
+    }
+    suspend fun move(fromIndex: Int, toIndex: Int) {
+        println("[DEBUG] CategoryUseCase.move() moving category from index $fromIndex to $toIndex")
+        repo.move(fromIndex, toIndex)
+    }
 }
 
 class SettingsUseCase(private val repo: SettingsRepository) {
