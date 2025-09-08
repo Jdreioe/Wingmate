@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate
 
 import android.os.Bundle
+import android.os.Build
 import android.hardware.display.DisplayManager
 import android.view.Display
 import androidx.lifecycle.lifecycleScope
@@ -35,7 +36,13 @@ class MainActivity : ComponentActivity() {
     private val rearController by lazy { RearDisplayController(applicationContext) }
     private var presentation: ExternalDisplayPresentation? = null
     private val displayListener = object : DisplayManager.DisplayListener {
-        override fun onDisplayAdded(displayId: Int) { attachToExternalDisplayIfRequested() }
+        override fun onDisplayAdded(displayId: Int) { 
+            attachToExternalDisplayIfRequested()
+            // Auto-open fullscreen when a new external display is connected
+            if (!io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.value) {
+                checkAndAutoOpenOnSecondDisplay()
+            }
+        }
         override fun onDisplayRemoved(displayId: Int) { dismissPresentationIfInvalid() }
         override fun onDisplayChanged(displayId: Int) { /* no-op */ }
     }
@@ -73,7 +80,8 @@ class MainActivity : ComponentActivity() {
             }
             .launchIn(lifecycleScope)
 
-    // Fullscreen is opened via the app bar button; do not auto-open on launch
+        // Auto-open fullscreen if second display is already connected at startup
+        checkAndAutoOpenOnSecondDisplay()
 
         setContent {
             AppTheme {
@@ -133,6 +141,19 @@ class MainActivity : ComponentActivity() {
     private fun dismissPresentation() {
         presentation?.let { runCatching { it.dismiss() } }
         presentation = null
+    }
+
+    private fun checkAndAutoOpenOnSecondDisplay() {
+        val dm = getSystemService(DISPLAY_SERVICE) as? DisplayManager ?: return
+        val externalDisplays = dm.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
+        
+        // Check if rear display is available (API 34+)
+        val hasRearDisplay = Build.VERSION.SDK_INT >= 34 && rearController.active.value
+        
+        // Auto-open if external display or rear display is available
+        if (externalDisplays.isNotEmpty() || hasRearDisplay) {
+            io.github.jdreioe.wingmate.presentation.DisplayWindowBus.open()
+        }
     }
 }
 

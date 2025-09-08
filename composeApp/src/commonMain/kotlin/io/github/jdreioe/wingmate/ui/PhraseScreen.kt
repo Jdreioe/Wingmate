@@ -227,11 +227,8 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     LaunchedEffect(categoryUseCaseState.value) {
                         val uc = categoryUseCaseState.value
                         categories = if (uc != null) {
-                            val list = runCatching { uc.list() }.getOrNull() ?: emptyList()
-                            println("[DEBUG] Loaded categories from use case: ${list.map { it.name to it.id }}")
-                            list
+                            runCatching { uc.list() }.getOrNull() ?: emptyList()
                         } else {
-                            println("[DEBUG] No CategoryUseCase yet, categories empty")
                             emptyList()
                         }
                     }
@@ -385,7 +382,6 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                             val ucImmediate = categoryUseCaseState.value ?: runCatching { GlobalContext.get().get<io.github.jdreioe.wingmate.application.CategoryUseCase>() }.getOrNull()?.also { categoryUseCaseState.value = it }
                                             // Always create an ephemeral chip so user sees immediate feedback
                                             val temp = io.github.jdreioe.wingmate.domain.CategoryItem(id = "temp_${name}_${System.currentTimeMillis()}", name = name, selectedLanguage = primaryLanguageState.value)
-                                            println("[DEBUG] Adding temp category: $temp")
                                             categories = categories + temp
                                             selectedCategory = temp
                                             coroutineScope.launch(Dispatchers.IO) {
@@ -402,13 +398,11 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                                         val added = uc.add(temp.copy(id = ""))
                                                         val newList = runCatching { uc.list() }.getOrNull() ?: emptyList()
                                                         coroutineScope.launch {
-                                                            println("[DEBUG] Categories after persistence: ${newList.map { it.name to it.id }}")
                                                             categories = newList
                                                             selectedCategory = newList.find { it.id == added.id } ?: added
                                                         }
                                                     } catch (t: Throwable) {
                                                         // Roll back ephemeral on failure
-                                                        println("[DEBUG] Failed to persist category, removing temp: $temp")
                                                         coroutineScope.launch { categories = categories.filterNot { it.id == temp.id } }
                                                     }
                                                 } else {
