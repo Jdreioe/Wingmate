@@ -1,33 +1,32 @@
-# Wingmate KMP port (Onion + Bloc)
+# Wingmate
+Wingmate is a Free and Open Source Software (FOSS) project aimed at providing an exceptional voice for people who cannot speak, using Azure Neural Voices.
 
-This adds a Kotlin Multiplatform module (`shared`) with Onion layers:
-- domain: models + repository contracts
-- application: Bloc-style state managers
-- infrastructure: in-memory repo implementations for now
 
-Android app (`androidApp`) shows basic Compose UI wiring to `PhraseBloc`.
+## About the project
+Wingmate is developed by Jonas, who has Cerebral Palsy (CP) and extensive experience with various speech devices. The current goal is to offer a high-quality, affordable communication solution that can be built cross platform using KMP.
 
-## Build Android
+## Features:
 
-- Open this `kmp` folder in Android Studio, or run Gradle from CLI.
+- Select voice
+- Native UI on iOS and Android
+- Select primary language
+- Speak
+- Bring your own Speech Resource 
+- Save Sentences & Categories
+- Cache Sentences
+- Offline Backup Voices
+- Hand Gesture Recognition: Long-term goal
+- Eye tracking support: Long-term goal
 
-## iOS integration (no shared UI)
+## How to setup (the DYI version):
 
-- Create an Xcode iOS app target that depends on the generated `shared` framework.
-- Expose simple Swift wrappers to create and use `PhraseBloc`/`SettingsBloc` via Koin.
-- Use UIKit/SwiftUI for views; observe `StateFlow` via Kotlin `Flow` <-> Combine bridge or callbacks.
+- Install the app
+- Make a free Microsoft Azure account (portal.azure.com) 
+- Create a Speech Resource (F0 = 500k free characters a month - that's enough for me)
+- Follow the workflow to get through the setup
+License: GPL 3.0
 
-Next steps:
-- Replace in-memory repos with real persistence/network.
-- Map existing Flutter features into `domain` contracts first, then implement per-platform infra.
+Credits: 
 
-## Desktop Virtual Mic (Linux)
-
-Enable the "Use virtual microphone for calls" toggle in settings. This creates a PulseAudio/PipeWire null sink named `wingmate_vmic` and a microphone source `wingmate_vmic_mic` mapped to its monitor. TTS playback is routed to that sink so apps can pick up the mic.
-
-- Prereqs: `pactl` and at least one of `ffplay` (recommended), `mpg123`, `paplay`, or `aplay` on PATH.
-- After toggling on and playing something once, select microphone input `Wingmate Virtual Mic` (or `wingmate_vmic_mic`) in Zoom/Google Meet.
-- If you don't see it, verify modules are loaded:
-	- `pactl list short sinks | grep wingmate_vmic`
-	- `pactl list short sources | grep wingmate_vmic_mic`
-	- If missing, try toggling setting off/on or restarting the app.
+**Logo:** Anna Thaulov
+**Name idea:** Jeppe Forchmann's awesome documentary **_Wingman_** 
