@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.SmallFloatingActionButton
 import io.github.jdreioe.wingmate.domain.Phrase
+import org.koin.core.context.GlobalContext
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -108,12 +109,21 @@ fun PhraseGridItem(
                                     try { onDelete.invoke() } catch (_: Throwable) {}
                                 })
                             }
-                            // Copy audio file if available
+                            // Copy/share audio file if available
                             val audioPath = item.recordingPath
                             if (!audioPath.isNullOrBlank() && onCopyAudio != null) {
                                 DropdownMenuItem(text = { Text("Copy soundfile") }, onClick = {
                                     showMenu = false
                                     try { onCopyAudio.invoke(audioPath) } catch (_: Throwable) {}
+                                })
+                            }
+                            if (!audioPath.isNullOrBlank()) {
+                                DropdownMenuItem(text = { Text("Share soundfile") }, onClick = {
+                                    showMenu = false
+                                    runCatching {
+                                        GlobalContext.get().get<io.github.jdreioe.wingmate.platform.ShareService>()
+                                            .shareAudio(audioPath)
+                                    }
                                 })
                             }
                         }
@@ -142,10 +152,12 @@ fun PhraseGridItem(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(text = item.text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                    val baseLarge = MaterialTheme.typography.bodyLarge
+                    val effectiveLarge = if (phraseFontSize != TextUnit.Unspecified) baseLarge.copy(fontSize = phraseFontSize) else baseLarge
+                    Text(text = item.text, style = effectiveLarge, color = MaterialTheme.colorScheme.onSurface)
                     if (!item.name.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = item.name ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                        Text(text = item.name.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                     }
                     if (!item.backgroundColor.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(4.dp))

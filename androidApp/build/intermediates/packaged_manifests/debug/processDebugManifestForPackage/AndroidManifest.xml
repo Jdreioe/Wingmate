@@ -48,6 +48,10 @@
             android:name="io.github.jdreioe.wingmate.display.PrimaryDisplayActivity"
             android:exported="false"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+        <activity
+            android:name="io.github.jdreioe.wingmate.display.RearDisplayActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
 
         <provider
             android:name="org.jetbrains.compose.resources.AndroidContextProvider"

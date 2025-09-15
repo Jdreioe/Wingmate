@@ -1,6 +1,19 @@
 package io.github.jdreioe.wingmate.ui
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -21,7 +34,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import io.github.jdreioe.wingmate.application.PhraseBloc
 import io.github.jdreioe.wingmate.application.PhraseEvent
@@ -48,7 +60,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
     var showVoiceSelection by remember { mutableStateOf(false) }
     var showUiLanguageDialog by remember { mutableStateOf(false) }
     var showOverflow by remember { mutableStateOf(false) }
-    var showFullScreen by remember { mutableStateOf(false) }
+    // fullscreen state managed via DisplayWindowBus; no local state needed
 
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -148,6 +160,26 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         }
                                     }
                                 )
+                                    // Share last soundfile for current text
+                                    DropdownMenuItem(
+                                        text = { Text("Share last soundfile") },
+                                        onClick = {
+                                            showOverflow = false
+                                            uiScope.launch(Dispatchers.IO) {
+                                                runCatching {
+                                                    val repo = GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+                                                    val last = repo.list()
+                                                        .filter { it.saidText == input.text && !it.audioFilePath.isNullOrBlank() }
+                                                        .maxByOrNull { it.date ?: it.createdAt ?: 0L }
+                                                    val path = last?.audioFilePath
+                                                    if (!path.isNullOrBlank()) {
+                                                        GlobalContext.get().get<io.github.jdreioe.wingmate.platform.ShareService>()
+                                                            .shareAudio(path)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
                             }
                         }
                     )
@@ -157,7 +189,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .imePadding()
+                            // omit imePadding in common to avoid ambiguity across targets
                             .navigationBarsPadding()
                             .padding(16.dp)
                     ) {
@@ -190,7 +222,8 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     try {
                                         val selected = runCatching { voiceUseCase.selected() }.getOrNull()
                                         val secondaryLang = settingsUseCase?.let { runCatching { it.get() }.getOrNull()?.secondaryLanguage } ?: selected?.primaryLanguage
-                                        val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: selected?.selectedLanguage ?: "")
+                                        val fallbackLang = selected?.selectedLanguage ?: ""
+                                        val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: fallbackLang)
                                         speechService.speak(input.text, vForSecondary, vForSecondary?.pitch, vForSecondary?.rate)
                                         // Refresh history from repo
                                         try {
@@ -490,7 +523,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             // insert phrase.text at current cursor position
                             val fv = input
                             val pos = fv.selection.start.coerceIn(0, fv.text.length)
-                            val insertText = phrase.text ?: ""
+                            val insertText = phrase.text
                             val newText = fv.text.substring(0, pos) + insertText + fv.text.substring(pos)
                             val newCursor = pos + insertText.length
                             input = androidx.compose.ui.text.input.TextFieldValue(newText, selection = androidx.compose.ui.text.TextRange(newCursor))
@@ -499,7 +532,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             uiScope.launch(Dispatchers.IO) {
                                 try {
                                     val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                    speechService.speak(phrase.text ?: "", selected)
+                                    speechService.speak(phrase.text, selected)
                                     // Refresh history from repo
                                     try {
                                         val list = saidRepo.list()
@@ -513,8 +546,9 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 try {
                                     val selected = runCatching { voiceUseCase.selected() }.getOrNull()
                                     val secondaryLang = settingsUseCase?.let { runCatching { it.get() }.getOrNull()?.secondaryLanguage } ?: selected?.primaryLanguage
-                                    val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: selected?.selectedLanguage ?: "")
-                                    speechService.speak(phrase.text ?: "", vForSecondary)
+                                    val fallbackLang2 = selected?.selectedLanguage ?: ""
+                                    val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: fallbackLang2)
+                                    speechService.speak(phrase.text, vForSecondary)
                                     // Refresh history from repo
                                     try {
                                         val list = saidRepo.list()

@@ -11,10 +11,10 @@ INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManif
 	android:name
 		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:10:13-62
 manifest
-ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-31:12
-INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-31:12
-INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-31:12
-INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-31:12
+ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-35:12
+INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-35:12
+INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-35:12
+INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:2:1-35:12
 MERGED from [:composeApp] /var/home/Jdreioe/dev/WingmateKMP/composeApp/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml:2:1-7:12
 MERGED from [:shared] /var/home/Jdreioe/dev/WingmateKMP/shared/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml:2:1-7:12
 MERGED from [io.insert-koin:koin-android:4.1.0] /var/home/Jdreioe/.gradle/caches/8.13/transforms/e8ef831fcc49242ddc56e7973ca4eb48/transformed/jetified-koin-android-4.1.0/AndroidManifest.xml:2:1-7:12
@@ -124,8 +124,8 @@ ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest
 	android:name
 		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:4:22-76
 application
-ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:5:5-30:19
-INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:5:5-30:19
+ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:5:5-34:19
+INJECTED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:5:5-34:19
 MERGED from [com.google.android.material:material:1.9.0] /var/home/Jdreioe/.gradle/caches/8.13/transforms/e88a2ca14b29360777b1e4a6c33e2d9c/transformed/material-1.9.0/AndroidManifest.xml:24:5-20
 MERGED from [com.google.android.material:material:1.9.0] /var/home/Jdreioe/.gradle/caches/8.13/transforms/e88a2ca14b29360777b1e4a6c33e2d9c/transformed/material-1.9.0/AndroidManifest.xml:24:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.0.1] /var/home/Jdreioe/.gradle/caches/8.13/transforms/35c39e9a5ed1765fe103a06acc163f22/transformed/constraintlayout-2.0.1/AndroidManifest.xml:9:5-20
@@ -182,6 +182,14 @@ ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest
 		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:29:13-72
 	android:name
 		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:27:13-85
+activity#io.github.jdreioe.wingmate.display.RearDisplayActivity
+ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:30:9-33:75
+	android:exported
+		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:32:13-37
+	android:theme
+		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:33:13-72
+	android:name
+		ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:31:13-82
 meta-data#android.support.FILE_PROVIDER_PATHS
 ADDED from /var/home/Jdreioe/dev/WingmateKMP/androidApp/src/main/AndroidManifest.xml:14:13-16:54
 	android:resource
