@@ -13,3 +13,10 @@ tasks.register("assembleDebug") {
 tasks.register("assembleRelease") {
     dependsOn(":androidApp:assembleRelease")
 }
+
+// Task to build desktop app with Conveyor
+tasks.register<Exec>("packageDesktop") {
+    dependsOn(":desktopApp:build")
+    commandLine("conveyor", "make", "site")
+    workingDir = rootDir
+}

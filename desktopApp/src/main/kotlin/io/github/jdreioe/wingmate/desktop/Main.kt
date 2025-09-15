@@ -18,6 +18,8 @@ import io.github.jdreioe.wingmate.infrastructure.DesktopSpeechService
 import org.koin.dsl.module
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.single
+import javax.imageio.ImageIO
+import androidx.compose.runtime.LaunchedEffect
 
 fun main() {
     val log = LoggerFactory.getLogger("DesktopMain")
@@ -43,8 +45,13 @@ fun main() {
     application {
         Window(
             onCloseRequest = { exitApplication() },
-            title = "Wingmate Desktop"
+            title = "Wingmate Desktop",
+            state = rememberWindowState()
         ) {
+            val windowRef = this.window
+            LaunchedEffect(windowRef) {
+                setAppIcon(windowRef)
+            }
             DesktopTheme {
                 App()
             }
@@ -132,4 +139,14 @@ private fun setupDesktopRepositories() {
         loadKoinModules(module { single<io.github.jdreioe.wingmate.domain.SaidTextRepository> { repo } })
         log.info("Registered DesktopSqlSaidTextRepository")
     }.onFailure { t -> log.warn("Could not register DesktopSqlSaidTextRepository", t) }
+}
+
+fun setAppIcon(window: java.awt.Window) {
+    try {
+        val iconStream = object {}.javaClass.getResourceAsStream("/app-icon.png")
+        if (iconStream != null) {
+            val icon = ImageIO.read(iconStream)
+            (window as? java.awt.Frame)?.iconImage = icon
+        }
+    } catch (_: Throwable) {}
 }
