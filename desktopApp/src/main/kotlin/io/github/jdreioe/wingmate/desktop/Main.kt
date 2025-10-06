@@ -14,12 +14,21 @@ import io.github.jdreioe.wingmate.App
 import io.github.jdreioe.wingmate.ui.DesktopTheme
 import io.github.jdreioe.wingmate.initKoin
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.UpdateService
 import io.github.jdreioe.wingmate.infrastructure.DesktopSpeechService
+import io.github.jdreioe.wingmate.infrastructure.DesktopUpdateService
+import io.github.jdreioe.wingmate.infrastructure.GitHubApiClient
+import io.github.jdreioe.wingmate.presentation.UpdateManager
+import io.github.jdreioe.wingmate.application.SettingsUseCase
 import org.koin.dsl.module
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.single
 import javax.imageio.ImageIO
 import androidx.compose.runtime.LaunchedEffect
+import io.ktor.client.*
+import io.ktor.client.engine.okhttp.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
 
 fun main() {
     val log = LoggerFactory.getLogger("DesktopMain")
@@ -29,11 +38,12 @@ fun main() {
     
     // Register desktop-specific implementations
     setupDesktopRepositories()
+    setupUpdateService()
     
     // Register desktop speech service directly
     runCatching {
         loadKoinModules(
-            module(override = true) {
+            module {
                 single<SpeechService> { DesktopSpeechService() }
             }
         )
@@ -139,6 +149,30 @@ private fun setupDesktopRepositories() {
         loadKoinModules(module { single<io.github.jdreioe.wingmate.domain.SaidTextRepository> { repo } })
         log.info("Registered DesktopSqlSaidTextRepository")
     }.onFailure { t -> log.warn("Could not register DesktopSqlSaidTextRepository", t) }
+}
+
+private fun setupUpdateService() {
+    val log = LoggerFactory.getLogger("DesktopMain")
+    
+    runCatching {
+        loadKoinModules(
+            module {
+                single {
+                    HttpClient(OkHttp) {
+                        install(ContentNegotiation) {
+                            json()
+                        }
+                    }
+                }
+                single { GitHubApiClient(get()) }
+                single<UpdateService> { DesktopUpdateService(get(), get()) }
+                single { UpdateManager(get(), get<SettingsUseCase>()) }
+            }
+        )
+        log.info("Registered UpdateService successfully")
+    }.onFailure { t -> 
+        log.error("Failed to register UpdateService", t) 
+    }
 }
 
 fun setAppIcon(window: java.awt.Window) {

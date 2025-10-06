@@ -9,6 +9,7 @@ import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.application.SettingsUseCase
+import io.github.jdreioe.wingmate.application.SettingsStateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -26,6 +27,11 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
     val settingsUseCase = remember {
         org.koin.core.context.GlobalContext.getOrNull()?.let { koin ->
             runCatching { koin.get<SettingsUseCase>() }.getOrNull()
+        }
+    }
+    val settingsStateManager = remember {
+        org.koin.core.context.GlobalContext.getOrNull()?.let { koin ->
+            runCatching { koin.get<SettingsStateManager>() }.getOrNull()
         }
     }
 
@@ -59,6 +65,11 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
     var buttonScale by remember { mutableStateOf(1.0f) }
     var inputFieldScale by remember { mutableStateOf(1.0f) }
     
+    // Theme state variables
+    var forceDarkTheme by remember { mutableStateOf<Boolean?>(null) }
+    var useCustomColors by remember { mutableStateOf(false) }
+    var primaryColor by remember { mutableStateOf("") }
+    
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -82,17 +93,26 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
             categoryChipScale = settings.categoryChipScale
             buttonScale = settings.buttonScale
             inputFieldScale = settings.inputFieldScale
+            forceDarkTheme = settings.forceDarkTheme
+            useCustomColors = settings.useCustomColors
+            primaryColor = settings.primaryColor ?: "#7C4DFF"
         }
         loading = false
     }
     
-    // Helper function to update settings
+    // Helper function to update settings with immediate notification
     suspend fun updateSettings(update: (Settings) -> Settings) {
-        settingsUseCase?.let { useCase ->
-            withContext(Dispatchers.Default) {
-                val current = runCatching { useCase.get() }.getOrNull() ?: Settings()
-                val updated = update(current)
-                useCase.update(updated)
+        if (settingsStateManager != null) {
+            // Use the state manager for reactive updates
+            settingsStateManager.updateSettings(update)
+        } else {
+            // Fallback to direct use case updates
+            settingsUseCase?.let { useCase ->
+                withContext(Dispatchers.Default) {
+                    val current = runCatching { useCase.get() }.getOrNull() ?: Settings()
+                    val updated = update(current)
+                    useCase.update(updated)
+                }
             }
         }
     }

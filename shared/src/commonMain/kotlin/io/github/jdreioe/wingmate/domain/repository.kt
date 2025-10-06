@@ -40,6 +40,19 @@ interface ConfigRepository {
 
 interface SpeechService {
     suspend fun speak(text: String, voice: Voice? = null, pitch: Double? = null, rate: Double? = null)
+    suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice? = null, pitch: Double? = null, rate: Double? = null)
     suspend fun pause()
     suspend fun stop()
+    suspend fun resume()
+    fun isPlaying(): Boolean
+    fun isPaused(): Boolean
+}
+
+interface UpdateService {
+    suspend fun checkForUpdates(): UpdateInfo?
+    suspend fun downloadUpdate(updateInfo: UpdateInfo): Result<String>
+    suspend fun installUpdate(downloadPath: String): Result<Unit>
+    fun getCurrentVersion(): AppVersion
+    suspend fun getUpdateStatus(): UpdateStatus
+    suspend fun setUpdateStatus(status: UpdateStatus)
 }

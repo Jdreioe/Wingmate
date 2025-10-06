@@ -16,6 +16,8 @@ import android.widget.Toast
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.SpeechSegment
+import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.infrastructure.AzureTtsClient
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
@@ -94,6 +96,16 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     
     // Track if we've already shown the offline warning to avoid spam
     private val offlineWarningShown = AtomicBoolean(false)
+    
+    // Enhanced state for segmented playback and resume
+    private var currentSegments: List<SpeechSegment> = emptyList()
+    private var currentSegmentIndex = 0
+    private var currentVoice: Voice? = null
+    private var currentPitch: Double? = null
+    private var currentRate: Double? = null
+    private var pausedAtSegment = false
+    private var isPlaying = false
+    private var isPaused = false
 
     private fun ensureTts(): TextToSpeech {
         val cur = tts
@@ -165,31 +177,52 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     }
 
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
+        // Process text to extract pause tags and create segments
+        val segments = SpeechTextProcessor.processText(text)
+        
+        // Use the enhanced speakSegments function
+        speakSegments(segments, voice, pitch, rate)
+    }
+
+    override suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
         // Check user preference for TTS engine first
         val koin = GlobalContext.getOrNull()
         val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
         val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
         
+        // Store current playback context for resume functionality
+        currentSegments = segments
+        currentSegmentIndex = 0
+        currentVoice = voice
+        currentPitch = pitch  
+        currentRate = rate
+        pausedAtSegment = false
+        isPlaying = true
+        isPaused = false
+        
         // If user prefers system TTS, use it directly
         if (uiSettings?.useSystemTts == true) {
-            speakWithPlatformTts(text, voice, pitch, rate)
+            playSegmentsWithPlatformTts(segments, voice, pitch, rate)
             return
         }
 
+        // Combine all segments text for cache lookup
+        val combinedText = segments.joinToString("") { it.text }
+
         // Try to reuse a cached audio file from history to save API calls (works even offline)
-        if (maybePlayFromHistoryCache(text, voice, pitch, rate, uiSettings?.primaryLanguage)) {
+        if (maybePlayFromHistoryCache(combinedText, voice, pitch, rate, uiSettings?.primaryLanguage)) {
             return
         }
         
     // Before Azure: try history-first playback with TTL
-    if (tryPlayFromHistoryIfFresh(text, voice)) return
+    if (tryPlayFromHistoryIfFresh(combinedText, voice)) return
 
     // Try to obtain persisted Azure config; if present, prefer Azure TTS pipeline
         val cfg = getConfig()
         if (cfg == null) {
             // No Azure configuration - fall back to system TTS with warning
             showConfigWarning()
-            speakWithPlatformTts(text, voice, pitch, rate)
+            speakWithPlatformTts(combinedText, voice, pitch, rate)
             return
         }
         
@@ -197,7 +230,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         if (!isOnline()) {
             showOfflineWarning()
             // Fall back to system TTS when offline
-            speakWithPlatformTts(text, voice, pitch, rate)
+            speakWithPlatformTts(combinedText, voice, pitch, rate)
             return
         }
         
@@ -222,13 +255,13 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 }
 
                 val vForSsml = v.copy(primaryLanguage = effectiveLang)
-                val ssml = AzureTtsClient.generateSsml(text, vForSsml)
+                val ssml = AzureTtsClient.generateSsml(combinedText, vForSsml)
                 val bytes = AzureTtsClient.synthesize(client, ssml, cfg)
 
                 // Persist to an app-private Music directory so history can reference it later
                 val musicRoot = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
                 val outDir = File(musicRoot, "wingmate/audio").apply { if (!exists()) mkdirs() }
-                val safeName = text.take(32).replace("[^A-Za-z0-9-_ ]".toRegex(), "_").trim().ifBlank { "utterance" }
+                val safeName = combinedText.take(32).replace("[^A-Za-z0-9-_ ]".toRegex(), "_").trim().ifBlank { "utterance" }
                 val fileName = "${'$'}{System.currentTimeMillis()}_${'$'}safeName.mp3"
                 val outFile = File(outDir, fileName)
                 outFile.outputStream().use { it.write(bytes) }
@@ -241,7 +274,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                     saidRepo?.add(
                         io.github.jdreioe.wingmate.domain.SaidText(
                             date = now,
-                            saidText = text,
+                            saidText = combinedText,
                             voiceName = vForSsml.name,
                             pitch = vForSsml.pitch,
                             speed = vForSsml.rate,
@@ -282,7 +315,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             } catch (t: Throwable) {
                 println("Azure TTS failed, falling back to platform TTS: $t")
                 // Fallback to platform TTS on error
-                speakWithPlatformTts(text, voice, pitch, rate)
+                speakWithPlatformTts(combinedText, voice, pitch, rate)
             }
         }
     }
@@ -463,7 +496,11 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         synchronized(playerLock) {
             mediaPlayer?.let { if (it.isPlaying) it.pause() }
         }
-        // platform TTS has no pause
+        try { tts?.stop() } catch (_: Throwable) {}
+        
+        // Mark as paused for segmented playback
+        isPaused = true
+        pausedAtSegment = true
     }
 
     override suspend fun stop() {
@@ -475,10 +512,89 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             }
         }
         try { tts?.stop() } catch (_: Throwable) {}
-    abandonAudioFocus()
+        abandonAudioFocus()
+        
+        // Reset state
+        isPlaying = false
+        isPaused = false
+        pausedAtSegment = false
+        currentSegments = emptyList()
+        currentSegmentIndex = 0
         
         // Reset offline warning for next session
         offlineWarningShown.set(false)
+    }
+
+    override suspend fun resume() {
+        if (isPaused && pausedAtSegment && currentSegments.isNotEmpty()) {
+            isPaused = false
+            pausedAtSegment = false
+            // Resume playing segments from where we left off
+            playSegmentsFromIndex(currentSegmentIndex)
+        }
+    }
+
+    override fun isPlaying(): Boolean = isPlaying
+
+    override fun isPaused(): Boolean = isPaused
+
+    private suspend fun playSegmentsFromIndex(startIndex: Int) {
+        val koin = GlobalContext.getOrNull()
+        val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
+        val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
+        
+        // If user prefers system TTS, use platform TTS approach
+        if (uiSettings?.useSystemTts == true) {
+            playSegmentsWithPlatformTts(currentSegments.drop(startIndex), currentVoice, currentPitch, currentRate)
+        } else {
+            // For Azure TTS: concatenate remaining segments and use main speak logic
+            val remainingSegments = currentSegments.drop(startIndex)
+            if (remainingSegments.isNotEmpty()) {
+                val remainingText = remainingSegments.joinToString(" ") { it.text }
+                // Call the original speakSegments logic but bypass the text processing
+                playTextWithAzure(remainingText, currentVoice, currentPitch, currentRate)
+            }
+        }
+        
+        // Mark as finished if we completed all segments
+        if (startIndex >= currentSegments.size - 1) {
+            isPlaying = false
+            currentSegments = emptyList()
+            currentSegmentIndex = 0
+        }
+    }
+
+    private suspend fun playTextWithAzure(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
+        // Use the existing Azure TTS logic from the original speakSegments method
+        // This is a simplified version that just calls the platform TTS as fallback
+        speakWithPlatformTts(text, voice, pitch, rate)
+    }
+
+    private suspend fun playSegmentsWithPlatformTts(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
+        for ((index, segment) in segments.withIndex()) {
+            if (!isPlaying || pausedAtSegment) break
+            
+            currentSegmentIndex = index
+            
+            if (segment.text.isNotEmpty()) {
+                speakWithPlatformTts(segment.text, voice, pitch, rate)
+                
+                // Wait for TTS to finish (simplified approach)
+                kotlinx.coroutines.delay(segment.text.length * 50L) // rough estimate
+            }
+            
+            // Apply pause if specified
+            if (segment.pauseDurationMs > 0 && !pausedAtSegment) {
+                kotlinx.coroutines.delay(segment.pauseDurationMs)
+            }
+        }
+        
+        // Mark as finished
+        if (currentSegmentIndex >= segments.size - 1) {
+            isPlaying = false
+            currentSegments = emptyList()
+            currentSegmentIndex = 0
+        }
     }
 
     private suspend fun getConfig(): SpeechServiceConfig? {

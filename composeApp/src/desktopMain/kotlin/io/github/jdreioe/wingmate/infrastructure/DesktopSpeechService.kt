@@ -4,6 +4,8 @@ import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.SpeechSegment
+import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import org.koin.core.context.GlobalContext
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
@@ -35,6 +37,14 @@ class DesktopSpeechService : SpeechService {
     private val stopRequested = AtomicBoolean(false)
     private val virtualSinkName = "wingmate_vmic"
     private val virtualSinkDesc = "Wingmate Virtual Mic"
+    
+    // Enhanced state for segmented playback and resume
+    private var currentSegments: List<SpeechSegment> = emptyList()
+    private var currentSegmentIndex = 0
+    private var currentVoice: Voice? = null
+    private var currentPitch: Double? = null
+    private var currentRate: Double? = null
+    private var pausedAtSegment = false
 
     init {
         log.info("Enhanced DesktopSpeechService initialized with Azure TTS and System TTS support")
@@ -43,12 +53,24 @@ class DesktopSpeechService : SpeechService {
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
         log.info("speak() called with text='{}', voice={}, pitch={}, rate={}", text.take(50), voice?.name, pitch, rate)
         log.info("speak() called on thread={}", Thread.currentThread().name)
-    // Reset stop flag for this utterance
-    stopRequested.set(false)
+        
+        // Process text to extract pause tags and create segments
+        val segments = SpeechTextProcessor.processText(text)
+        log.info("Processed text into {} segments", segments.size)
+        
+        // Use the enhanced speakSegments function
+        speakSegments(segments, voice, pitch, rate)
+    }
+
+    override suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
+        log.info("speakSegments() called with {} segments, voice={}, pitch={}, rate={}", segments.size, voice?.name, pitch, rate)
+        
+        // Reset stop flag for this utterance
+        stopRequested.set(false)
 
         // Prevent overlap: if something is currently playing, stop it first
         if (isPlaying || currentPlayer != null || currentProcess != null) {
-            log.info("speak() detected existing playback; invoking stop() before starting new utterance")
+            log.info("speakSegments() detected existing playback; invoking stop() before starting new utterance")
             try { stop() } catch (t: Throwable) { log.warn("error stopping previous playback", t) }
             // After stop, ensure state reflects idle
             currentPlayer = null
@@ -57,28 +79,16 @@ class DesktopSpeechService : SpeechService {
             isPaused = false
         }
         
-        // Check if user prefers system TTS
-        val koin = GlobalContext.getOrNull()
-        val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
-    val uiSettings = settingsRepo?.let { runCatching { runBlocking { it.get() } }.getOrNull() }
+        // Store current playback context for resume functionality
+        currentSegments = segments
+        currentSegmentIndex = 0
+        currentVoice = voice
+        currentPitch = pitch
+        currentRate = rate
+        pausedAtSegment = false
         
-        if (uiSettings?.useSystemTts == true) {
-            // Use system TTS
-            withContext(Dispatchers.IO) {
-                speakWithSystemTts(text, voice, pitch, rate)
-            }
-            return
-        }
-        
-        // Try to reuse cached Azure audio if available to save API calls
-        if (maybePlayFromCache(text, voice, pitch, rate, uiSettings?.primaryLanguage)) {
-            return
-        }
-
-    // Use Azure TTS (enhanced implementation)
-        withContext(Dispatchers.IO) {
-            speakWithAzureTts(text, voice, pitch, rate)
-        }
+        // Start playing segments
+        playSegmentsFromIndex(0)
     }
 
     private suspend fun maybePlayFromCache(
@@ -316,8 +326,10 @@ class DesktopSpeechService : SpeechService {
                         currentProcess = null
                     }
                     
+                    // Mark as paused for segmented playback
                     isPaused = true
-                    log.info("speech paused/stopped")
+                    pausedAtSegment = true
+                    log.info("speech paused/stopped - can be resumed from segment {}", currentSegmentIndex)
                 } else {
                     log.info("no active speech to pause")
                 }
@@ -329,7 +341,7 @@ class DesktopSpeechService : SpeechService {
 
     override suspend fun stop() {
         log.info("stop() called")
-    stopRequested.set(true)
+        stopRequested.set(true)
         withContext(Dispatchers.IO) {
             try {
                 // Stop any current playback
@@ -354,11 +366,101 @@ class DesktopSpeechService : SpeechService {
                 
                 isPlaying = false
                 isPaused = false
+                pausedAtSegment = false
+                currentSegments = emptyList()
+                currentSegmentIndex = 0
                 log.info("speech stopped completely")
             } catch (e: Exception) {
                 log.error("error during stop", e)
             }
         }
+    }
+
+    override suspend fun resume() {
+        log.info("resume() called")
+        if (isPaused && pausedAtSegment && currentSegments.isNotEmpty()) {
+            log.info("resuming from segment index: {}", currentSegmentIndex)
+            isPaused = false
+            pausedAtSegment = false
+            playSegmentsFromIndex(currentSegmentIndex)
+        } else {
+            log.info("no paused segments to resume")
+        }
+    }
+
+    override fun isPlaying(): Boolean = isPlaying
+
+    override fun isPaused(): Boolean = isPaused
+
+    private suspend fun playSegmentsFromIndex(startIndex: Int) {
+        log.info("playSegmentsFromIndex() called with startIndex: {}", startIndex)
+        
+        withContext(Dispatchers.IO) {
+            for (i in startIndex until currentSegments.size) {
+                if (stopRequested.get()) {
+                    log.info("Stop requested, aborting segment playback")
+                    break
+                }
+                
+                if (pausedAtSegment) {
+                    log.info("Paused at segment, stopping playback")
+                    currentSegmentIndex = i
+                    break
+                }
+                
+                val segment = currentSegments[i]
+                currentSegmentIndex = i
+                
+                log.info("Playing segment {}/{}: '{}'", i + 1, currentSegments.size, segment.text.take(50))
+                
+                // Play the text content of this segment
+                if (segment.text.isNotEmpty()) {
+                    playTextSegment(segment.text, currentVoice, currentPitch, currentRate)
+                }
+                
+                // Apply pause if specified and not stopped/paused
+                if (segment.pauseDurationMs > 0 && !stopRequested.get() && !pausedAtSegment) {
+                    log.info("Applying pause of {}ms after segment", segment.pauseDurationMs)
+                    try {
+                        kotlinx.coroutines.delay(segment.pauseDurationMs)
+                    } catch (e: Exception) {
+                        log.warn("Pause interrupted", e)
+                        break
+                    }
+                }
+            }
+            
+            // Mark as finished if we completed all segments
+            if (currentSegmentIndex >= currentSegments.size - 1 && !pausedAtSegment) {
+                isPlaying = false
+                currentSegments = emptyList()
+                currentSegmentIndex = 0
+                log.info("Completed playing all segments")
+            }
+        }
+    }
+
+    private suspend fun playTextSegment(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
+        log.info("playTextSegment() called with text: '{}'", text.take(50))
+        
+        // Check if user prefers system TTS
+        val koin = GlobalContext.getOrNull()
+        val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
+        val uiSettings = settingsRepo?.let { runCatching { runBlocking { it.get() } }.getOrNull() }
+        
+        if (uiSettings?.useSystemTts == true) {
+            // Use system TTS
+            speakWithSystemTts(text, voice, pitch, rate)
+            return
+        }
+        
+        // Try to reuse cached Azure audio if available to save API calls
+        if (maybePlayFromCache(text, voice, pitch, rate, uiSettings?.primaryLanguage)) {
+            return
+        }
+
+        // Use Azure TTS (enhanced implementation)
+        speakWithAzureTts(text, voice, pitch, rate)
     }
 
     // Helper methods (implement these with the system TTS functionality)

@@ -17,6 +17,8 @@ dependencies {
     
     // Desktop-specific dependencies that composeApp needs but can't declare in commonMain
     implementation("io.ktor:ktor-client-okhttp:2.3.12")
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
     implementation("javazoom:jlayer:1.0.1")
     implementation("org.xerial:sqlite-jdbc:3.41.2.1")
     runtimeOnly("org.slf4j:slf4j-simple:2.0.9")

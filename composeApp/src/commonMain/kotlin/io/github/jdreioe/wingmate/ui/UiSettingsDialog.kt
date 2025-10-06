@@ -7,6 +7,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.SettingsUseCase
+import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.domain.Settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -17,16 +18,21 @@ import org.koin.core.context.GlobalContext
 fun UiSettingsDialog(onDismissRequest: () -> Unit) {
     val koin = GlobalContext.getOrNull()
     val settingsUseCase = remember { koin?.let { runCatching { it.get<SettingsUseCase>() }.getOrNull() } }
+    val settingsStateManager = remember { koin?.let { runCatching { it.get<SettingsStateManager>() }.getOrNull() } }
 
     var virtualMic by remember { mutableStateOf(false) }
     var autoUpdateEnabled by remember { mutableStateOf(true) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
-    // Helper function to update settings
+    // Helper function to update settings with reactive updates
     fun updateSettings(update: (Settings) -> Settings) {
-        if (settingsUseCase != null) {
-            scope.launch {
+        scope.launch {
+            if (settingsStateManager != null) {
+                // Use reactive state manager for immediate UI updates
+                settingsStateManager.updateSettings(update)
+            } else if (settingsUseCase != null) {
+                // Fallback to direct use case
                 withContext(Dispatchers.Default) {
                     val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
                     val updated = update(current)

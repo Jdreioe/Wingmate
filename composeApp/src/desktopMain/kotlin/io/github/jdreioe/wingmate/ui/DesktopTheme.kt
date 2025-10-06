@@ -5,10 +5,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.foundation.isSystemInDarkTheme
+import io.github.jdreioe.wingmate.application.SettingsStateManager
+import org.koin.core.context.GlobalContext
 import javax.swing.UIManager
 import java.awt.Color as AwtColor
 
@@ -35,9 +39,20 @@ private val DesktopDarkColors = darkColorScheme(
 
 @Composable
 fun DesktopTheme(useDark: Boolean? = null, seed: Color? = null, content: @Composable () -> Unit) {
-    // If useDark is explicitly set, use it. Otherwise detect system theme.
+    // Get reactive settings for theme preferences
+    val settingsStateManager = remember {
+        GlobalContext.getOrNull()?.let { koin ->
+            runCatching { koin.get<SettingsStateManager>() }.getOrNull()
+        }
+    }
+    val settings by (settingsStateManager?.settings?.collectAsState() ?: remember { mutableStateOf(io.github.jdreioe.wingmate.domain.Settings()) })
+    
+    // If useDark is explicitly set, use it. Otherwise check settings, then detect system theme.
     val useDarkTheme = if (useDark != null) {
         useDark
+    } else if (settings.forceDarkTheme != null) {
+        // Use setting preference if set
+        settings.forceDarkTheme!!
     } else {
         // Use common theme detection first, with desktop-specific enhancement
         val commonSystemDark = isSystemInDarkTheme()
@@ -131,9 +146,28 @@ fun DesktopTheme(useDark: Boolean? = null, seed: Color? = null, content: @Compos
     }
 
     // Select color scheme
+    val effectiveSeed = when {
+        seed != null -> seed
+        settings.useCustomColors && settings.primaryColor != null -> {
+            try {
+                // Parse hex color string to Color
+                val hexColor = settings.primaryColor!!.removePrefix("#")
+                val colorInt = hexColor.toLong(16)
+                Color(
+                    red = ((colorInt shr 16) and 0xFF) / 255f,
+                    green = ((colorInt shr 8) and 0xFF) / 255f,
+                    blue = (colorInt and 0xFF) / 255f
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
+        else -> null
+    }
+    
     val colors = when {
-        seed != null -> {
-            val primary = seed
+        effectiveSeed != null -> {
+            val primary = effectiveSeed
             val luminance = 0.299f * primary.red + 0.587f * primary.green + 0.114f * primary.blue
             val onPrimary = if (luminance > 0.5f) Color.Black else Color.White
             val secondary = lerp(primary, Color(0xFF6200EE), 0.18f)

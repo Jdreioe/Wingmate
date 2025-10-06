@@ -98,6 +98,10 @@ class InMemoryConfigRepository : ConfigRepository {
 
 class NoopSpeechService : SpeechService {
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) { /* no-op */ }
+    override suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) { /* no-op */ }
     override suspend fun pause() { /* no-op */ }
     override suspend fun stop() { /* no-op */ }
+    override suspend fun resume() { /* no-op */ }
+    override fun isPlaying(): Boolean = false
+    override fun isPaused(): Boolean = false
 }

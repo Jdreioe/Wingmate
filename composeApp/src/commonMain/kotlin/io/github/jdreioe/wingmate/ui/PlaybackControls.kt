@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,7 +21,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun PlaybackControls(onPlay: () -> Unit, onPause: () -> Unit, onStop: () -> Unit, onPlaySecondary: (() -> Unit)? = null) {
+fun PlaybackControls(
+    onPlay: () -> Unit, 
+    onPause: () -> Unit, 
+    onStop: () -> Unit, 
+    onPlaySecondary: (() -> Unit)? = null,
+    onResume: (() -> Unit)? = null,
+    isPaused: Boolean = false
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -33,7 +41,13 @@ fun PlaybackControls(onPlay: () -> Unit, onPause: () -> Unit, onStop: () -> Unit
             modifier = Modifier.wrapContentWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SmallIconButton(icon = Icons.Filled.PlayArrow, tint = MaterialTheme.colorScheme.onSurface, onClick = onPlay)
+            // Show Resume button if paused, otherwise show Play button
+            if (isPaused && onResume != null) {
+                SmallIconButton(icon = Icons.Filled.SkipNext, tint = MaterialTheme.colorScheme.primary, onClick = onResume)
+            } else {
+                SmallIconButton(icon = Icons.Filled.PlayArrow, tint = MaterialTheme.colorScheme.onSurface, onClick = onPlay)
+            }
+            
             // Speak using secondary language (if provided)
             SmallIconButton(icon = Icons.Filled.Language, tint = MaterialTheme.colorScheme.onSurface, onClick = { onPlaySecondary?.invoke() })
             SmallIconButton(icon = Icons.Filled.Pause, tint = MaterialTheme.colorScheme.onSurface, onClick = onPause)

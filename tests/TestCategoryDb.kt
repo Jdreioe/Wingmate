@@ -2,6 +2,7 @@ import java.nio.file.Path
 import java.sql.DriverManager
 
 fun main() {
+    // Use the same path as DesktopPaths.configDir() for Linux
     val dbPath = Path.of(System.getProperty("user.home"), ".config", "wingmate", "wingmate.db")
     Class.forName("org.sqlite.JDBC")
     val conn = DriverManager.getConnection("jdbc:sqlite:${dbPath.toAbsolutePath()}")

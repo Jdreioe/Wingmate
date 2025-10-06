@@ -41,6 +41,7 @@ import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.Phrase
 import org.koin.core.context.GlobalContext
 import io.github.jdreioe.wingmate.application.SettingsUseCase
+import io.github.jdreioe.wingmate.application.SettingsStateManager
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -54,20 +55,12 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
     val bloc = remember { GlobalContext.get().get<PhraseBloc>() }
     val state by bloc.state.collectAsState()
 
-    // Load settings for UI scaling
-    var settings by remember { mutableStateOf(io.github.jdreioe.wingmate.domain.Settings()) }
+    // Load settings for UI scaling using reactive state manager
+    val settings by rememberReactiveSettings()
+    
     val uiSettingsUseCase = remember {
         org.koin.core.context.GlobalContext.getOrNull()?.let { koin ->
             runCatching { koin.get<io.github.jdreioe.wingmate.application.SettingsUseCase>() }.getOrNull()
-        }
-    }
-    
-    LaunchedEffect(Unit) {
-        uiSettingsUseCase?.let {
-            val loadedSettings = withContext(Dispatchers.Default) {
-                runCatching { it.get() }.getOrNull() ?: io.github.jdreioe.wingmate.domain.Settings()
-            }
-            settings = loadedSettings
         }
     }
 
@@ -93,6 +86,17 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             val speechService = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SpeechService>() }
             val saidRepo = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>() }
             val voiceUseCase = remember { GlobalContext.get().get<VoiceUseCase>() }
+            
+            // Speech service state tracking
+            var isSpeechPaused by remember { mutableStateOf(false) }
+            
+            // Update speech state periodically
+            LaunchedEffect(Unit) {
+                while (true) {
+                    isSpeechPaused = speechService.isPaused()
+                    kotlinx.coroutines.delay(500) // Check every 500ms
+                }
+            }
             
             // selected voice / available languages for language selection
             val selectedVoiceState = produceState<io.github.jdreioe.wingmate.domain.Voice?>(initialValue = null, key1 = voiceUseCase) {
@@ -155,6 +159,32 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) },
                                     onClick = { showOverflow = false; showSettingsDialog = true }
+                                )
+                                // Pause examples
+                                DropdownMenuItem(
+                                    text = { Text("Pause examples", style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) },
+                                    onClick = { 
+                                        showOverflow = false
+                                        val examples = io.github.jdreioe.wingmate.domain.SpeechTextProcessor.getExampleTexts()
+                                        if (examples.isNotEmpty()) {
+                                            input = androidx.compose.ui.text.input.TextFieldValue(examples.random())
+                                        }
+                                    }
+                                )
+                                // PDF merge examples
+                                DropdownMenuItem(
+                                    text = { Text("PDF merge examples", style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) },
+                                    onClick = { 
+                                        showOverflow = false
+                                        val examples = io.github.jdreioe.wingmate.domain.SpeechTextProcessor.getPdfMergeExamples()
+                                        if (examples.isNotEmpty()) {
+                                            input = androidx.compose.ui.text.input.TextFieldValue(examples.random())
+                                        }
+                                    }
                                 )
                                 // Check for updates (if UpdateService is available)
                                 DropdownMenuItem(
@@ -261,6 +291,10 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             onStop = { 
                                 uiScope.launch { speechService.stop() } 
                             },
+                            onResume = {
+                                uiScope.launch { speechService.resume() }
+                            },
+                            isPaused = isSpeechPaused,
                             onPlaySecondary = {
                                 if (input.text.isBlank()) return@PlaybackControls
                                 uiScope.launch(Dispatchers.IO) {

@@ -7,6 +7,7 @@ import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.CategoryUseCase
+import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.domain.*
 import io.github.jdreioe.wingmate.infrastructure.*
 import org.koin.core.context.startKoin
@@ -27,6 +28,7 @@ fun initKoin(extra: Module? = null) {
         single { PhraseUseCase(get<PhraseRepository>()) }
     single { CategoryUseCase(get<io.github.jdreioe.wingmate.domain.CategoryRepository>()) }
         single { SettingsUseCase(get<SettingsRepository>()) }
+        single { SettingsStateManager(get<SettingsRepository>()) }
         single { VoiceUseCase(get<VoiceRepository>(), get<AzureVoiceCatalog>(), get<ConfigRepository>()) }
         factory { PhraseBloc(get<PhraseUseCase>()) }
         factory { SettingsBloc(get<SettingsUseCase>()) }
