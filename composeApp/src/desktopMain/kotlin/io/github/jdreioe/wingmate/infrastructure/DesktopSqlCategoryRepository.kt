@@ -9,7 +9,7 @@ import java.sql.DriverManager
 
 class DesktopSqlCategoryRepository : CategoryRepository {
     private val log = LoggerFactory.getLogger("DesktopSqlCategoryRepository")
-    private val dbPath: Path = Path.of(System.getProperty("user.home"), ".config", "wingmate", "wingmate.db")
+    private val dbPath: Path = DesktopPaths.configDir().resolve("wingmate.db")
 
     private fun connection() = run {
         Files.createDirectories(dbPath.parent)

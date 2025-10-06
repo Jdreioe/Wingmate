@@ -13,16 +13,11 @@ import java.sql.Connection
 import java.sql.DriverManager
 
 class DesktopSqlSettingsRepository : SettingsRepository {
-    private val dbPath: Path by lazy {
-        val home = System.getProperty("user.home")
-        val dir = Paths.get(home, ".config", "wingmate")
-        if (!Files.exists(dir)) Files.createDirectories(dir)
-        dir.resolve("wingmate.db")
-    }
+    private val dbPath: Path = DesktopPaths.configDir().resolve("wingmate.db")
 
     private fun connection(): Connection {
         Class.forName("org.sqlite.JDBC")
-        return DriverManager.getConnection("jdbc:sqlite:${'$'}{dbPath.toAbsolutePath()}")
+        return DriverManager.getConnection("jdbc:sqlite:${dbPath.toAbsolutePath()}")
     }
 
     private val json = Json { prettyPrint = true }

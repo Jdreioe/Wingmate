@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,13 +27,13 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.navigationBarsPadding
 import io.github.jdreioe.wingmate.application.PhraseBloc
 import io.github.jdreioe.wingmate.application.PhraseEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -45,6 +44,7 @@ import io.github.jdreioe.wingmate.application.SettingsUseCase
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -54,7 +54,22 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
     val bloc = remember { GlobalContext.get().get<PhraseBloc>() }
     val state by bloc.state.collectAsState()
 
-    LaunchedEffect(Unit) { bloc.dispatch(PhraseEvent.Load) }
+    // Load settings for UI scaling
+    var settings by remember { mutableStateOf(io.github.jdreioe.wingmate.domain.Settings()) }
+    val uiSettingsUseCase = remember {
+        org.koin.core.context.GlobalContext.getOrNull()?.let { koin ->
+            runCatching { koin.get<io.github.jdreioe.wingmate.application.SettingsUseCase>() }.getOrNull()
+        }
+    }
+    
+    LaunchedEffect(Unit) {
+        uiSettingsUseCase?.let {
+            val loadedSettings = withContext(Dispatchers.Default) {
+                runCatching { it.get() }.getOrNull() ?: io.github.jdreioe.wingmate.domain.Settings()
+            }
+            settings = loadedSettings
+        }
+    }
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showVoiceSelection by remember { mutableStateOf(false) }
@@ -100,7 +115,9 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                 modifier = Modifier.fillMaxSize(),
                 topBar = {
                     TopAppBar(
-                        title = { Text("Wingmate") },
+                        title = { Text("Wingmate", style = MaterialTheme.typography.titleLarge.copy(
+                            fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
+                        )) },
                         actions = {
                             // Fullscreen toggle: mirrors the current input text
                             val showFullscreen by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsState()
@@ -120,29 +137,56 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 // Language quick access
                                 DropdownMenuItem(
                                     text = { Text("Language: " + (selectedVoiceState.value?.selectedLanguage?.takeIf { it.isNotBlank() }
-                                        ?: primaryLanguageState.value)) },
+                                        ?: primaryLanguageState.value), style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) },
                                     onClick = { showOverflow = false; showUiLanguageDialog = true }
                                 )
                                 // Voice settings
                                 DropdownMenuItem(
-                                    text = { Text("Voice settings") },
+                                    text = { Text("Voice settings", style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) },
                                     onClick = { showOverflow = false; showVoiceSelection = true }
                                 )
                                 // App settings
                                 DropdownMenuItem(
-                                    text = { Text("App settings") },
+                                    text = { Text("App settings", style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) },
                                     onClick = { showOverflow = false; showSettingsDialog = true }
+                                )
+                                // Check for updates (if UpdateService is available)
+                                DropdownMenuItem(
+                                    text = { Text("Check for updates", style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) },
+                                    onClick = { 
+                                        showOverflow = false
+                                        val updateService = runCatching { 
+                                            GlobalContext.get().get<io.github.jdreioe.wingmate.domain.UpdateService>() 
+                                        }.getOrNull()
+                                        if (updateService != null) {
+                                            uiScope.launch(Dispatchers.IO) {
+                                                runCatching { updateService.checkForUpdates() }
+                                            }
+                                        }
+                                    }
                                 )
                                 // Optional: back to welcome (if supported)
                                 if (onBackToWelcome != null) {
                                     DropdownMenuItem(
-                                        text = { Text("Welcome screen") },
+                                        text = { Text("Welcome screen", style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                        )) },
                                         onClick = { showOverflow = false; onBackToWelcome.invoke() }
                                     )
                                 }
                                 // Copy last played audio for current text
                                 DropdownMenuItem(
-                                    text = { Text("Copy last soundfile") },
+                                    text = { Text("Copy last soundfile", style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) },
                                     onClick = {
                                         showOverflow = false
                                         uiScope.launch(Dispatchers.IO) {
@@ -162,7 +206,9 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 )
                                     // Share last soundfile for current text
                                     DropdownMenuItem(
-                                        text = { Text("Share last soundfile") },
+                                        text = { Text("Share last soundfile", style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                        )) },
                                         onClick = {
                                             showOverflow = false
                                             uiScope.launch(Dispatchers.IO) {
@@ -190,7 +236,6 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         modifier = Modifier
                             .fillMaxWidth()
                             // omit imePadding in common to avoid ambiguity across targets
-                            .navigationBarsPadding()
                             .padding(16.dp)
                     ) {
                         PlaybackControls(
@@ -239,8 +284,12 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                 }
             ) { innerPadding ->
                 Column(modifier = Modifier.padding(16.dp).padding(innerPadding)) {
-                    if (state.loading) Text("Loading...")
-                    state.error?.let { Text("Error: $it", color = MaterialTheme.colorScheme.error) }
+                    if (state.loading) Text("Loading...", style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                    ))
+                    state.error?.let { Text("Error: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                    )) }
 
                     // Dynamically resolve CategoryUseCase; it might be registered after initial composition (platform overrides)
                     val categoryUseCaseState = remember { mutableStateOf<io.github.jdreioe.wingmate.application.CategoryUseCase?>(null) }
@@ -280,15 +329,19 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         }, 
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 120.dp, max = 180.dp), // Fixed size based on 4-6 lines
-                        placeholder = { Text("Enter text to speak") },
+                            .heightIn(min = (120.dp * settings.inputFieldScale), max = (180.dp * settings.inputFieldScale)), // Fixed size based on 4-6 lines
+                        placeholder = { Text("Enter text to speak", style = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                        )) },
                         minLines = 4,
                         maxLines = 6
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
                     if (categoryUseCaseState.value == null) {
-                        Text("(Loading categories backend...)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                        Text("(Loading categories backend...)", style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = MaterialTheme.typography.labelSmall.fontSize * settings.fontSizeScale
+                        ), color = MaterialTheme.colorScheme.outline)
                     }
 
                     // Category chips
@@ -301,7 +354,9 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             FilterChip(
                                 selected = selectedCategory == null,
                                 onClick = { selectedCategory = null },
-                                label = { Text("All") }
+                                label = { Text("All", style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                )) }
                             )
                         }
                         
@@ -312,14 +367,18 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 FilterChip(
                                     selected = selectedCategory?.id == category.id,
                                     onClick = { selectedCategory = category },
-                                    label = { Text(category.name ?: "All") },
+                                    label = { Text(category.name ?: "All", style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) },
                                     modifier = Modifier.combinedClickable(
                                         onClick = { selectedCategory = category },
                                         onLongClick = { showCategoryMenu = true }
                                     )
                                 )
                                 DropdownMenu(expanded = showCategoryMenu, onDismissRequest = { showCategoryMenu = false }) {
-                                    DropdownMenuItem(text = { Text("Move left") }, enabled = index > 0, onClick = {
+                                    DropdownMenuItem(text = { Text("Move left", style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) }, enabled = index > 0, onClick = {
                                         showCategoryMenu = false
                                         val uc = categoryUseCaseState.value
                                         if (index > 0 && uc != null) {
@@ -330,7 +389,9 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                             }
                                         }
                                     })
-                                    DropdownMenuItem(text = { Text("Move right") }, enabled = index < categories.lastIndex, onClick = {
+                                    DropdownMenuItem(text = { Text("Move right", style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) }, enabled = index < categories.lastIndex, onClick = {
                                         showCategoryMenu = false
                                         val uc = categoryUseCaseState.value
                                         if (index < categories.lastIndex && uc != null) {
@@ -341,7 +402,9 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                             }
                                         }
                                     })
-                                    DropdownMenuItem(text = { Text("Delete (with phrases)") }, onClick = {
+                                    DropdownMenuItem(text = { Text("Delete (with phrases)", style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) }, onClick = {
                                         showCategoryMenu = false
                                         // Confirm dialog
                                         confirmDeleteCategory = category
@@ -355,7 +418,9 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 FilterChip(
                                     selected = selectedCategory?.id == HistoryCategoryId,
                                     onClick = { selectedCategory = CategoryItem(id = HistoryCategoryId, name = "History") },
-                                    label = { Text("History") }
+                                    label = { Text("History", style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) }
                                 )
                             }
                         }
@@ -370,10 +435,12 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         Icon(
                                             imageVector = Icons.Filled.Add,
                                             contentDescription = "Add category",
-                                            modifier = Modifier.size(16.dp)
+                                            modifier = Modifier.size((16.dp * settings.playbackIconScale))
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Add")
+                                        Text("Add", style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                        ))
                                     }
                                 }
                             )
@@ -398,12 +465,16 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         var categoryName by remember { mutableStateOf("") }
                         AlertDialog(
                             onDismissRequest = { showAddCategoryDialog = false },
-                            title = { Text("Add Category") },
+                            title = { Text("Add Category", style = MaterialTheme.typography.titleLarge.copy(
+                                fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
+                            )) },
                             text = {
                                 OutlinedTextField(
                                     value = categoryName,
                                     onValueChange = { categoryName = it },
-                                    placeholder = { Text("Category name") },
+                                    placeholder = { Text("Category name", style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                    )) },
                                     singleLine = true
                                 )
                             },
@@ -447,7 +518,9 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         categoryName = ""
                                     }
                                 ) {
-                                    Text("Add")
+                                    Text("Add", style = MaterialTheme.typography.labelLarge.copy(
+                                        fontSize = MaterialTheme.typography.labelLarge.fontSize * settings.fontSizeScale
+                                    ))
                                 }
                             },
                             dismissButton = {
@@ -455,7 +528,9 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     showAddCategoryDialog = false
                                     categoryName = ""
                                 }) {
-                                    Text("Cancel")
+                                    Text("Cancel", style = MaterialTheme.typography.labelLarge.copy(
+                                        fontSize = MaterialTheme.typography.labelLarge.fontSize * settings.fontSizeScale
+                                    ))
                                 }
                             }
                         )
@@ -465,8 +540,12 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     if (confirmDeleteCategory != null) {
                         AlertDialog(
                             onDismissRequest = { confirmDeleteCategory = null },
-                            title = { Text("Delete Category") },
-                            text = { Text("Delete '${confirmDeleteCategory?.name}' and all phrases inside?") },
+                            title = { Text("Delete Category", style = MaterialTheme.typography.titleLarge.copy(
+                                fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
+                            )) },
+                            text = { Text("Delete '${confirmDeleteCategory?.name}' and all phrases inside?", style = MaterialTheme.typography.bodyLarge.copy(
+                                fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                            )) },
                             confirmButton = {
                                 TextButton(onClick = {
                                     val cat = confirmDeleteCategory
@@ -489,9 +568,13 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                             }
                                         }
                                     }
-                                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                                }) { Text("Delete", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge.copy(
+                                    fontSize = MaterialTheme.typography.labelLarge.fontSize * settings.fontSizeScale
+                                )) }
                             },
-                            dismissButton = { TextButton(onClick = { confirmDeleteCategory = null }) { Text("Cancel") } }
+                            dismissButton = { TextButton(onClick = { confirmDeleteCategory = null }) { Text("Cancel", style = MaterialTheme.typography.labelLarge.copy(
+                                fontSize = MaterialTheme.typography.labelLarge.fontSize * settings.fontSizeScale
+                            )) } }
                         )
                     }
 
@@ -571,6 +654,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         defaultCategoryId = selectedCategory?.id,
                         showAddTile = !isHistory,
                         readOnly = isHistory,
+                        phraseFontSize = androidx.compose.ui.unit.TextUnit(settings.fontSizeScale, androidx.compose.ui.unit.TextUnitType.Sp),
                         onCopyAudio = { filePath ->
                             // Try to copy soundfile via platform clipboard
                             runCatching {

@@ -51,6 +51,15 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
     var useSystemTts by remember { mutableStateOf(false) }
     var virtualMic by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
+    
+    // UI Scaling state variables
+    var fontSizeScale by remember { mutableStateOf(1.0f) }
+    var playbackIconScale by remember { mutableStateOf(1.0f) }
+    var categoryChipScale by remember { mutableStateOf(1.0f) }
+    var buttonScale by remember { mutableStateOf(1.0f) }
+    var inputFieldScale by remember { mutableStateOf(1.0f) }
+    
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         // load existing config
@@ -61,15 +70,31 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
             subscriptionKey = it.subscriptionKey
         }
         
-        // load TTS preference
+        // load TTS preference and UI scaling settings
         if (settingsUseCase != null) {
             val settings = withContext(Dispatchers.Default) { 
                 runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
             }
             useSystemTts = settings.useSystemTts
             virtualMic = settings.virtualMicEnabled
+            fontSizeScale = settings.fontSizeScale
+            playbackIconScale = settings.playbackIconScale
+            categoryChipScale = settings.categoryChipScale
+            buttonScale = settings.buttonScale
+            inputFieldScale = settings.inputFieldScale
         }
         loading = false
+    }
+    
+    // Helper function to update settings
+    suspend fun updateSettings(update: (Settings) -> Settings) {
+        settingsUseCase?.let { useCase ->
+            withContext(Dispatchers.Default) {
+                val current = runCatching { useCase.get() }.getOrNull() ?: Settings()
+                val updated = update(current)
+                useCase.update(updated)
+            }
+        }
     }
 
     AlertDialog(
@@ -133,19 +158,160 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                             }
                         }
                     }
+                    
+                    // UI Scaling Settings
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        "UI Scaling",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    // Font Size Scale (with stepped values)
+                    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Text("Font Size", style = MaterialTheme.typography.bodyMedium)
+                            Text("${(fontSizeScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Slider(
+                            value = fontSizeScale,
+                            onValueChange = { newValue ->
+                                // Snap to steps of 0.1
+                                val stepped = (newValue * 10).toInt() / 10f
+                                fontSizeScale = stepped
+                                scope.launch {
+                                    updateSettings { it.copy(fontSizeScale = stepped) }
+                                }
+                            },
+                            valueRange = 0.5f..2.0f,
+                            steps = 14, // 15 total values (0.5, 0.6, 0.7, ..., 2.0)
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    
+                    // Playback Icons Scale
+                    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Text("Playback Icons", style = MaterialTheme.typography.bodyMedium)
+                            Text("${(playbackIconScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Slider(
+                            value = playbackIconScale,
+                            onValueChange = { newValue ->
+                                val stepped = (newValue * 10).toInt() / 10f
+                                playbackIconScale = stepped
+                                scope.launch {
+                                    updateSettings { it.copy(playbackIconScale = stepped) }
+                                }
+                            },
+                            valueRange = 0.5f..2.0f,
+                            steps = 14,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    
+                    // Category Chips Scale
+                    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Text("Category Chips", style = MaterialTheme.typography.bodyMedium)
+                            Text("${(categoryChipScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Slider(
+                            value = categoryChipScale,
+                            onValueChange = { newValue ->
+                                val stepped = (newValue * 10).toInt() / 10f
+                                categoryChipScale = stepped
+                                scope.launch {
+                                    updateSettings { it.copy(categoryChipScale = stepped) }
+                                }
+                            },
+                            valueRange = 0.5f..2.0f,
+                            steps = 14,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    
+                    // Buttons Scale
+                    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Text("Buttons", style = MaterialTheme.typography.bodyMedium)
+                            Text("${(buttonScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Slider(
+                            value = buttonScale,
+                            onValueChange = { newValue ->
+                                val stepped = (newValue * 10).toInt() / 10f
+                                buttonScale = stepped
+                                scope.launch {
+                                    updateSettings { it.copy(buttonScale = stepped) }
+                                }
+                            },
+                            valueRange = 0.5f..2.0f,
+                            steps = 14,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    
+                    // Input Fields Scale
+                    Column(modifier = Modifier.padding(bottom = 16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Text("Input Fields", style = MaterialTheme.typography.bodyMedium)
+                            Text("${(inputFieldScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Slider(
+                            value = inputFieldScale,
+                            onValueChange = { newValue ->
+                                val stepped = (newValue * 10).toInt() / 10f
+                                inputFieldScale = stepped
+                                scope.launch {
+                                    updateSettings { it.copy(inputFieldScale = stepped) }
+                                }
+                            },
+                            valueRange = 0.5f..2.0f,
+                            steps = 14,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
         },
         confirmButton = {
-            val scope = rememberCoroutineScope()
             Button(onClick = {
                 // save
                 scope.launch {
                     withContext(Dispatchers.Default) {
-                        // Save TTS preference
+                        // Save TTS preference and UI scaling settings
                         if (settingsUseCase != null) {
                             val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                            val updated = current.copy(useSystemTts = useSystemTts, virtualMicEnabled = virtualMic)
+                            val updated = current.copy(
+                                useSystemTts = useSystemTts, 
+                                virtualMicEnabled = virtualMic,
+                                fontSizeScale = fontSizeScale,
+                                playbackIconScale = playbackIconScale,
+                                categoryChipScale = categoryChipScale,
+                                buttonScale = buttonScale,
+                                inputFieldScale = inputFieldScale
+                            )
                             settingsUseCase.update(updated)
                         }
                         

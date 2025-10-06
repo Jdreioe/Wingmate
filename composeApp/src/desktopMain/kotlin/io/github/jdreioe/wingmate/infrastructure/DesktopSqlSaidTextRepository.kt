@@ -18,7 +18,7 @@ class DesktopSqlSaidTextRepository : SaidTextRepository {
 
     private fun connection(): Connection {
         Class.forName("org.sqlite.JDBC")
-        return DriverManager.getConnection("jdbc:sqlite:${'$'}{dbPath.toAbsolutePath()}")
+        return DriverManager.getConnection("jdbc:sqlite:${dbPath.toAbsolutePath()}")
     }
 
     init {
