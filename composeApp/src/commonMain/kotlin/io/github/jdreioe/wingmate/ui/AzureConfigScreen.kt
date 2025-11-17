@@ -36,13 +36,21 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
         loading = false
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .padding(24.dp)
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
     ) {
-        Text("Azure TTS Configuration", style = MaterialTheme.typography.headlineSmall)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(24.dp)
+        ) {
+            Text(
+                "Azure TTS Configuration", 
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground
+            )
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
@@ -139,6 +147,7 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
                     Text("Continue")
                 }
             }
+        }
         }
     }
 }

@@ -62,9 +62,7 @@ fun main() {
             LaunchedEffect(windowRef) {
                 setAppIcon(windowRef)
             }
-            DesktopTheme {
-                App()
-            }
+            App()
         }
 
         // Full-screen display window driven by DisplayWindowBus

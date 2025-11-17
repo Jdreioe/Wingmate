@@ -70,14 +70,13 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
     var showOverflow by remember { mutableStateOf(false) }
     // fullscreen state managed via DisplayWindowBus; no local state needed
 
-    MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            // Load persisted primary language for display in top bar
-            val settingsUseCase = remember { runCatching { GlobalContext.get().get<SettingsUseCase>() }.getOrNull() }
-            val primaryLanguageState = produceState(initialValue = "en-US", key1 = settingsUseCase) {
-                val s = settingsUseCase?.let { runCatching { it.get() }.getOrNull() }
-                value = s?.primaryLanguage ?: "en-US"
-            }
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        // Load persisted primary language for display in top bar
+        val settingsUseCase = remember { runCatching { GlobalContext.get().get<SettingsUseCase>() }.getOrNull() }
+        val primaryLanguageState = produceState(initialValue = "en-US", key1 = settingsUseCase) {
+            val s = settingsUseCase?.let { runCatching { it.get() }.getOrNull() }
+            value = s?.primaryLanguage ?: "en-US"
+        }
 
             // Input state (hoisted so topBar History button can access it)
             var input by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
@@ -720,6 +719,5 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             if (showUiLanguageDialog) {
                 UiLanguageDialog(show = true, onDismiss = { showUiLanguageDialog = false })
             }
-        }
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import io.github.jdreioe.wingmate.ui.WelcomeScreen
 import io.github.jdreioe.wingmate.ui.PhraseScreen
+import io.github.jdreioe.wingmate.ui.AppTheme
 import org.koin.core.context.GlobalContext
 
 enum class Screen { Welcome, Phrases }
@@ -16,20 +17,25 @@ enum class Screen { Welcome, Phrases }
 @OptIn(ExperimentalMaterial3Api::class )
 @Composable
 fun App() {
-    MaterialTheme {
-        var currentScreen by remember { mutableStateOf("welcome") }
+    AppTheme {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            var currentScreen by remember { mutableStateOf("welcome") }
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (currentScreen) {
-                "welcome" -> {
-                    WelcomeScreen {
-                        currentScreen = "phrase"
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (currentScreen) {
+                    "welcome" -> {
+                        WelcomeScreen {
+                            currentScreen = "phrase"
+                        }
                     }
-                }
-                "phrase" -> {
-                    PhraseScreen(
-                        onBackToWelcome = { currentScreen = "welcome" }
-                    )
+                    "phrase" -> {
+                        PhraseScreen(
+                            onBackToWelcome = { currentScreen = "welcome" }
+                        )
+                    }
                 }
             }
         }

@@ -689,47 +689,92 @@ class DesktopSpeechService : SpeechService {
             val routeToVirtual = shouldRouteToVirtualMic()
             val sinkArg = if (routeToVirtual) {
                 ensureVirtualMic()
-                // For ffplay with PulseAudio: use -f pulse -i default or a named sink via PULSE_SINK env var
-                // We'll set PULSE_SINK to our sink name when launching ffplay
                 virtualSinkName
             } else null
 
-            // Try JLayer first for MP3 playback (only for normal speakers; JLayer can't target specific sink)
-            try {
-                if (stopRequested.get()) {
-                    log.info("stop requested before JLayer start; aborting")
-                    return
-                }
-                if (!routeToVirtual) {
-                    FileInputStream(audioFile).use { fis ->
-                        log.info("trying JLayer MP3 playback")
-                        val player = Player(fis)
-                        currentPlayer = player
-                        isPlaying = true
-                        isPaused = false
+            if (stopRequested.get()) {
+                log.info("stop requested before audio playback start; aborting")
+                return
+            }
 
-                        log.info("starting JLayer playback on thread={}", Thread.currentThread().name)
-                        player.play()
-                        log.info("JLayer playback completed")
+            // For MP3 files, use ffplay directly as it has better compatibility
+            if (audioFile.extension.lowercase() == "mp3") {
+                log.info("MP3 file detected, using ffplay for playback")
+                playWithSystemCommand(audioFile, sinkArg)
+                return
+            }
 
-                        currentPlayer = null
-                        isPlaying = false
+            // For WAV files, try Java Sound API first
+            if (!routeToVirtual && audioFile.extension.lowercase() == "wav") {
+                try {
+                    log.info("trying Java Sound API for WAV playback")
+                    
+                    val audioInputStream = AudioSystem.getAudioInputStream(audioFile)
+                    val format = audioInputStream.format
+                    log.info("Audio format: sampleRate=${format.sampleRate}, channels=${format.channels}, encoding=${format.encoding}")
+                    
+                    val clip = AudioSystem.getClip()
+                    
+                    var playbackCompleted = false
+                    clip.addLineListener { event ->
+                        when (event.type) {
+                            LineEvent.Type.STOP -> {
+                                playbackCompleted = true
+                                log.info("Audio playback stopped event received")
+                            }
+                            LineEvent.Type.START -> {
+                                log.info("Audio playback started")
+                            }
+                            else -> {}
+                        }
                     }
+                    
+                    clip.open(audioInputStream)
+                    isPlaying = true
+                    isPaused = false
+                    
+                    log.info("starting Java Sound API playback on thread=${Thread.currentThread().name}")
+                    clip.start()
+                    
+                    while (!playbackCompleted && clip.isRunning && !stopRequested.get()) {
+                        Thread.sleep(50)
+                    }
+                    
+                    if (stopRequested.get()) {
+                        log.info("Stop requested during playback")
+                        clip.stop()
+                    }
+                    
+                    Thread.sleep(100)
+                    
+                    clip.close()
+                    audioInputStream.close()
+                    isPlaying = false
+                    
+                    log.info("Java Sound API playback completed")
                     return
+                } catch (e: Exception) {
+                    log.warn("Java Sound API playback failed, trying system commands", e)
+                    isPlaying = false
                 }
-            } catch (e: Exception) {
-                log.warn("JLayer playback failed, trying system commands", e)
-                currentPlayer = null
-                isPlaying = false
             }
             
-            // Try system audio commands as fallback
+            // Fallback to system commands
+            playWithSystemCommand(audioFile, sinkArg)
+        } catch (e: Exception) {
+            log.error("error playing audio file", e)
+            isPlaying = false
+        }
+    }
+
+    private suspend fun playWithSystemCommand(audioFile: File, sinkArg: String?) {
+        withContext(Dispatchers.IO) {
+            // Try system audio commands
             val commands = listOf(
-                // Use ffplay with pulse output explicitly. PULSE_SINK env will target our sink.
-                listOf("ffplay", "-f", "pulse", "-nodisp", "-autoexit", audioFile.absolutePath),
+                // ffplay with volume boost and better audio driver selection for PipeWire/PulseAudio
+                listOf("ffplay", "-nodisp", "-autoexit", "-volume", "100", audioFile.absolutePath),
                 listOf("mpg123", audioFile.absolutePath),
-                listOf("paplay", audioFile.absolutePath),
-                listOf("aplay", audioFile.absolutePath)
+                listOf("paplay", audioFile.absolutePath)
             )
             
             for (command in commands) {
@@ -737,12 +782,11 @@ class DesktopSpeechService : SpeechService {
                     try {
                         if (stopRequested.get()) {
                             log.info("stop requested before system player start; aborting")
-                            return
+                            return@withContext
                         }
                         log.info("trying system command: {}", command.joinToString(" "))
                         val pb = ProcessBuilder(command)
                         if (sinkArg != null) {
-                            // Route to our null sink by setting PULSE_SINK env var; apps can then pick the monitor or remap mic.
                             val env = pb.environment()
                             env["PULSE_SINK"] = sinkArg
                             log.info("routing playback to virtual sink: {}", sinkArg)
@@ -762,7 +806,7 @@ class DesktopSpeechService : SpeechService {
                         
                         if (exitCode == 0) {
                             log.info("system audio player succeeded: {}", command[0])
-                            return
+                            return@withContext
                         } else {
                             log.warn("system audio player failed with exit code {}: {}", exitCode, command[0])
                         }
@@ -774,14 +818,7 @@ class DesktopSpeechService : SpeechService {
                 }
             }
             
-            throw RuntimeException("All audio playback methods failed")
-            
-        } catch (e: Exception) {
-            isPlaying = false
-            currentPlayer = null
-            currentProcess = null
-            log.error("failed to play audio file: ${audioFile.absolutePath}", e)
-            throw RuntimeException("Audio playback failed: ${e.message}", e)
+            log.error("no working audio player found for file: {}", audioFile.absolutePath)
         }
     }
 

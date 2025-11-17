@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -19,18 +20,32 @@ fun WelcomeScreen(onContinue: () -> Unit) {
     when (step) {
     0 -> {
             // Intro
-            Column(
-                modifier = Modifier.fillMaxSize().padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background
             ) {
-                Text("Welcome to Wingmate", style = MaterialTheme.typography.headlineSmall)
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("A Kotlin Multiplatform AAC app for Android, iOS, and beyond.")
-        Spacer(modifier = Modifier.height(12.dp))
-        TextButton(onClick = { showUiSettings = true }) { Text("UI Settings") }
-                Spacer(modifier = Modifier.height(24.dp))
-                Button(onClick = { step = 1 }) { Text("Next") }
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Welcome to Wingmate", 
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "A Kotlin Multiplatform AAC app for Android, iOS, and beyond.",
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    TextButton(onClick = { showUiSettings = true }) { 
+                        Text("UI Settings") 
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(onClick = { step = 1 }) { Text("Next") }
+                }
             }
         }
         1 -> {
