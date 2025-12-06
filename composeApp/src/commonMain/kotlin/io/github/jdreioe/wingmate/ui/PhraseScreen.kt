@@ -1,11 +1,14 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,8 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
@@ -33,12 +36,26 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.PhraseBloc
 import io.github.jdreioe.wingmate.application.PhraseEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.PredictionResult
+import io.github.jdreioe.wingmate.domain.SpeechSegment
+import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
+import io.github.jdreioe.wingmate.domain.TextPredictionService
 import org.koin.core.context.GlobalContext
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.SettingsStateManager
@@ -79,16 +96,27 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
         }
 
             // Input state (hoisted so topBar History button can access it)
-            var input by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+            var input by remember { mutableStateOf(TextFieldValue("")) }
+            var secondaryLanguageRanges by remember { mutableStateOf<List<TextRange>>(emptyList()) }
+            val textFieldFocusRequester = remember { FocusRequester() }
+            val refocusInput = remember(textFieldFocusRequester) {
+                { textFieldFocusRequester.requestFocus() }
+            }
 
             // Dependencies for playback controls
             val speechService = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SpeechService>() }
             val saidRepo = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>() }
             val voiceUseCase = remember { GlobalContext.get().get<VoiceUseCase>() }
             
+            // Text prediction service (optional - may not be available on all platforms)
+            val predictionService = remember { 
+                runCatching { GlobalContext.get().get<TextPredictionService>() }.getOrNull() 
+            }
+            var predictions by remember { mutableStateOf(PredictionResult()) }
+
             // Speech service state tracking
             var isSpeechPaused by remember { mutableStateOf(false) }
-            
+
             // Update speech state periodically
             LaunchedEffect(Unit) {
                 while (true) {
@@ -96,7 +124,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     kotlinx.coroutines.delay(500) // Check every 500ms
                 }
             }
-            
+
             // selected voice / available languages for language selection
             val selectedVoiceState = produceState<io.github.jdreioe.wingmate.domain.Voice?>(initialValue = null, key1 = voiceUseCase) {
                 value = runCatching { voiceUseCase.selected() }.getOrNull()
@@ -105,14 +133,36 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             var historyItems by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.SaidText>>(emptyList()) }
 
             // Load history on start so the History category appears if there are existing items
+            // Also train the prediction model on the history
             LaunchedEffect(saidRepo) {
                 try {
                     val list = saidRepo.list()
+                    println("DEBUG: Loaded ${list.size} history entries for prediction training")
                     historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L }
-                } catch (_: Throwable) {
+                    // Train prediction model on history
+                    if (predictionService != null) {
+                        predictionService.train(list)
+                        println("DEBUG: Prediction model trained, isTrained=${predictionService.isTrained()}")
+                    } else {
+                        println("DEBUG: No prediction service available")
+                    }
+                } catch (e: Throwable) {
+                    println("DEBUG: Error loading history: ${e.message}")
                     historyItems = emptyList()
                 }
             }
+            
+            // Update predictions as user types
+            LaunchedEffect(input.text) {
+                if (predictionService == null || !predictionService.isTrained()) {
+                    predictions = PredictionResult()
+                    return@LaunchedEffect
+                }
+                // Small debounce to avoid excessive calls
+                delay(100)
+                predictions = predictionService.predict(input.text, maxWords = 5, maxLetters = 4)
+            }
+
 
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
@@ -166,9 +216,12 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     )) },
                                     onClick = { 
                                         showOverflow = false
-                                        val examples = io.github.jdreioe.wingmate.domain.SpeechTextProcessor.getExampleTexts()
+                                        val examples = SpeechTextProcessor.getExampleTexts()
                                         if (examples.isNotEmpty()) {
-                                            input = androidx.compose.ui.text.input.TextFieldValue(examples.random())
+                                            val text = examples.random()
+                                            input = TextFieldValue(text)
+                                            secondaryLanguageRanges = emptyList()
+                                            io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(text)
                                         }
                                     }
                                 )
@@ -179,9 +232,12 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     )) },
                                     onClick = { 
                                         showOverflow = false
-                                        val examples = io.github.jdreioe.wingmate.domain.SpeechTextProcessor.getPdfMergeExamples()
+                                        val examples = SpeechTextProcessor.getPdfMergeExamples()
                                         if (examples.isNotEmpty()) {
-                                            input = androidx.compose.ui.text.input.TextFieldValue(examples.random())
+                                            val text = examples.random()
+                                            input = TextFieldValue(text)
+                                            secondaryLanguageRanges = emptyList()
+                                            io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(text)
                                         }
                                     }
                                 )
@@ -217,18 +273,34 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) },
                                     onClick = {
+                                        println("[DEBUG] Copy last soundfile menu item clicked")
                                         showOverflow = false
                                         uiScope.launch(Dispatchers.IO) {
                                             runCatching {
+                                                println("[DEBUG] Looking for last audio file for text: ${input.text}")
                                                 val repo = GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
-                                                val last = repo.list()
-                                                    .filter { it.saidText == input.text && !it.audioFilePath.isNullOrBlank() }
-                                                    .maxByOrNull { it.date ?: it.createdAt ?: 0L }
+                                                val allEntries = repo.list()
+                                                println("[DEBUG] Total entries in repo: ${allEntries.size}")
+                                                
+                                                val matchingEntries = allEntries.filter { it.saidText == input.text && !it.audioFilePath.isNullOrBlank() }
+                                                println("[DEBUG] Matching entries with audio: ${matchingEntries.size}")
+                                                
+                                                val last = matchingEntries.maxByOrNull { it.date ?: it.createdAt ?: 0L }
                                                 val path = last?.audioFilePath
+                                                
+                                                println("[DEBUG] Last audio file path: $path")
+                                                
                                                 if (!path.isNullOrBlank()) {
-                                                    GlobalContext.get().get<io.github.jdreioe.wingmate.platform.AudioClipboard>()
-                                                        .copyAudioFile(path)
+                                                    val clipboard = GlobalContext.get().get<io.github.jdreioe.wingmate.platform.AudioClipboard>()
+                                                    println("[DEBUG] Calling copyAudioFile with path: $path")
+                                                    val result = clipboard.copyAudioFile(path)
+                                                    println("[DEBUG] copyAudioFile result: $result")
+                                                } else {
+                                                    println("[DEBUG] No audio file path found")
                                                 }
+                                            }.onFailure { e ->
+                                                println("[ERROR] Exception in copy soundfile: ${e.message}")
+                                                e.printStackTrace()
                                             }
                                         }
                                     }
@@ -267,51 +339,67 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             // omit imePadding in common to avoid ambiguity across targets
                             .padding(16.dp)
                     ) {
+                        val normalizedSelection = normalizeRange(input.selection, input.text.length)
+                        val selectionHasLength = normalizedSelection.spanLength() > 0
+                        val selectionAlreadySecondary = selectionHasLength && isRangeFullySecondary(normalizedSelection, secondaryLanguageRanges)
                         PlaybackControls(
                             onPlay = {
-                                if (input.text.isBlank()) return@PlaybackControls
+                                if (input.text.isBlank()) {
+                                    refocusInput()
+                                    return@PlaybackControls
+                                }
                                 uiScope.launch(Dispatchers.IO) {
                                     try {
                                         val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                        speechService.speak(input.text, selected, selected?.pitch, selected?.rate)
+                                        val secondaryLang = settingsUseCase?.let { runCatching { it.get() }.getOrNull()?.secondaryLanguage }
+                                        val segments = if (secondaryLanguageRanges.isNotEmpty()) {
+                                            buildLanguageAwareSegments(input.text, secondaryLanguageRanges, secondaryLang)
+                                        } else emptyList()
+                                        if (segments.isNotEmpty()) {
+                                            speechService.speakSegments(segments, selected, selected?.pitch, selected?.rate)
+                                        } else {
+                                            speechService.speak(input.text, selected, selected?.pitch, selected?.rate)
+                                        }
                                         // Refresh history from repo so the History chip appears after first save
+                                        // Also retrain prediction model with new data
                                         try {
                                             val list = saidRepo.list()
                                             uiScope.launch { historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
+                                            predictionService?.train(list)
                                         } catch (_: Throwable) {}
-                                        } catch (t: Throwable) {
-                                            // swallow for UI; diagnostics logged by service
-                                        }
+                                    } catch (t: Throwable) {
+                                        // swallow for UI; diagnostics logged by service
                                     }
-                                },
+                                }
+                                refocusInput()
+                            },
                             onPause = {
                                 uiScope.launch { speechService.pause() }
+                                refocusInput()
                             },
                             onStop = { 
-                                uiScope.launch { speechService.stop() } 
+                                uiScope.launch { speechService.stop() }
+                                refocusInput()
                             },
                             onResume = {
                                 uiScope.launch { speechService.resume() }
+                                refocusInput()
                             },
                             isPaused = isSpeechPaused,
                             onPlaySecondary = {
-                                if (input.text.isBlank()) return@PlaybackControls
-                                uiScope.launch(Dispatchers.IO) {
-                                    try {
-                                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                        val secondaryLang = settingsUseCase?.let { runCatching { it.get() }.getOrNull()?.secondaryLanguage } ?: selected?.primaryLanguage
-                                        val fallbackLang = selected?.selectedLanguage ?: ""
-                                        val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: fallbackLang)
-                                        speechService.speak(input.text, vForSecondary, vForSecondary?.pitch, vForSecondary?.rate)
-                                        // Refresh history from repo
-                                        try {
-                                            val list = saidRepo.list()
-                                            uiScope.launch { historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
-                                        } catch (_: Throwable) {}
-                                    } catch (t: Throwable) {
-                                    }
+                                if (!selectionHasLength) {
+                                    refocusInput()
+                                    return@PlaybackControls
                                 }
-                            }
+                                secondaryLanguageRanges = toggleSecondaryRange(
+                                    secondaryLanguageRanges,
+                                    normalizedSelection,
+                                    input.text.length
+                                )
+                                refocusInput()
+                            },
+                            isSecondarySelectionActive = selectionAlreadySecondary,
+                            isSecondaryActionEnabled = selectionHasLength
                         )
                     }
                 }
@@ -353,22 +441,79 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     var showAddCategoryDialog by remember { mutableStateOf(false) }
                     var confirmDeleteCategory by remember { mutableStateOf<CategoryItem?>(null) }
 
-                    // Large text input field that expands to fill available space
-                    OutlinedTextField(
-                        value = input, 
-                        onValueChange = {
-                            input = it
-                            io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(it.text)
-                        }, 
+                    val secondaryHighlightColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
+                    SecondaryLanguageTextField(
+                        value = input,
+                        onValueChange = { newValue ->
+                            val previous = input
+                            secondaryLanguageRanges = adjustRangesAfterEdit(previous.text, newValue.text, secondaryLanguageRanges)
+                            input = newValue
+                            io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newValue.text)
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = (120.dp * settings.inputFieldScale), max = (180.dp * settings.inputFieldScale)), // Fixed size based on 4-6 lines
-                        placeholder = { Text("Enter text to speak", style = MaterialTheme.typography.bodyLarge.copy(
-                            fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                        )) },
+                            .heightIn(min = (120.dp * settings.inputFieldScale), max = (180.dp * settings.inputFieldScale)),
+                        focusRequester = textFieldFocusRequester,
+                        highlightRanges = secondaryLanguageRanges,
+                        highlightColor = secondaryHighlightColor,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
                         minLines = 4,
-                        maxLines = 6
+                        maxLines = 6,
+                        placeholder = {
+                            Text(
+                                "Enter text to speak",
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
                     )
+                    
+                    // Word and letter prediction bar
+                    if (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty()) {
+                        PredictionBar(
+                            predictions = predictions,
+                            onWordSelected = { word ->
+                                val fv = input
+                                val text = fv.text
+                                val cursorPos = fv.selection.start.coerceIn(0, text.length)
+                                
+                                // Find start of current word being typed
+                                val wordStart = text.lastIndexOf(' ', cursorPos - 1) + 1
+                                val partialWord = text.substring(wordStart, cursorPos)
+                                
+                                // If we have a partial word and the suggestion starts with it, complete it
+                                val newText = if (partialWord.isNotEmpty() && word.lowercase().startsWith(partialWord.lowercase())) {
+                                    text.substring(0, wordStart) + word + " " + text.substring(cursorPos)
+                                } else {
+                                    // Otherwise, insert word at cursor with space
+                                    text.substring(0, cursorPos) + (if (cursorPos > 0 && text[cursorPos - 1] != ' ') " " else "") + word + " " + text.substring(cursorPos)
+                                }
+                                val newCursor = if (partialWord.isNotEmpty() && word.lowercase().startsWith(partialWord.lowercase())) {
+                                    wordStart + word.length + 1
+                                } else {
+                                    cursorPos + (if (cursorPos > 0 && text[cursorPos - 1] != ' ') 1 else 0) + word.length + 1
+                                }
+                                secondaryLanguageRanges = adjustRangesAfterEdit(text, newText, secondaryLanguageRanges)
+                                input = TextFieldValue(newText, selection = TextRange(newCursor.coerceAtMost(newText.length)))
+                                io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                            },
+                            onLetterSelected = { letter ->
+                                val fv = input
+                                val pos = fv.selection.start.coerceIn(0, fv.text.length)
+                                val newText = fv.text.substring(0, pos) + letter + fv.text.substring(pos)
+                                val newCursor = pos + 1
+                                secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
+                                input = TextFieldValue(newText, selection = TextRange(newCursor))
+                                io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                            },
+                            fontSizeScale = settings.fontSizeScale
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(8.dp))
                     if (categoryUseCaseState.value == null) {
@@ -618,7 +763,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     val isHistory = selectedCategory?.id == HistoryCategoryId
                     val visiblePhrases = if (isHistory) {
                         // Map history items to ephemeral Phrase objects to reuse the grid UI; hide Add tile for this view
-            historyItems.mapIndexed { idx, s ->
+                        historyItems.mapIndexed { idx, s ->
                             Phrase(
                                 id = "history_$idx",
                                 text = s.saidText ?: "",
@@ -626,8 +771,8 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 backgroundColor = null,
                                 parentId = HistoryCategoryId,
                                 isCategory = false,
-                createdAt = s.date ?: s.createdAt ?: 0L,
-                recordingPath = s.audioFilePath
+                                createdAt = s.date ?: s.createdAt ?: 0L,
+                                recordingPath = s.audioFilePath
                             )
                         }
                     } else {
@@ -642,7 +787,9 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             val insertText = phrase.text
                             val newText = fv.text.substring(0, pos) + insertText + fv.text.substring(pos)
                             val newCursor = pos + insertText.length
-                            input = androidx.compose.ui.text.input.TextFieldValue(newText, selection = androidx.compose.ui.text.TextRange(newCursor))
+                            secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
+                            input = TextFieldValue(newText, selection = TextRange(newCursor))
+                            io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
                         },
                         onPlay = { phrase ->
                             uiScope.launch(Dispatchers.IO) {
@@ -719,5 +866,285 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             if (showUiLanguageDialog) {
                 UiLanguageDialog(show = true, onDismiss = { showUiLanguageDialog = false })
             }
+    }
+}
+
+@Composable
+private fun SecondaryLanguageTextField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    highlightRanges: List<TextRange> = emptyList(),
+    highlightColor: Color,
+    textStyle: TextStyle,
+    placeholder: (@Composable () -> Unit)? = null,
+    minLines: Int = 1,
+    maxLines: Int = Int.MAX_VALUE
+) {
+    val resolvedColor = if (textStyle.color == Color.Unspecified) MaterialTheme.colorScheme.onSurface else textStyle.color
+    val annotated: AnnotatedString = remember(value.text, highlightRanges, highlightColor) {
+        buildAnnotatedString {
+            append(value.text)
+            highlightRanges.sortedBy { it.start }.forEach { range ->
+                val start = range.start.coerceIn(0, value.text.length)
+                val end = range.end.coerceIn(0, value.text.length)
+                if (start < end) {
+                    addStyle(SpanStyle(background = highlightColor), start, end)
+                }
+            }
+        }
+    }
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Box(modifier = Modifier.padding(16.dp)) {
+            if (value.text.isEmpty()) {
+                placeholder?.invoke()
+            } else {
+                Text(
+                    text = annotated,
+                    style = textStyle,
+                    color = resolvedColor
+                )
+            }
+
+            val inputModifier = if (focusRequester != null) {
+                Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+            } else {
+                Modifier.fillMaxWidth()
+            }
+
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                textStyle = textStyle.copy(color = Color.Transparent),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = inputModifier,
+                minLines = minLines,
+                maxLines = maxLines
+            )
+        }
+    }
+}
+
+private fun normalizeRange(range: TextRange, maxLength: Int): TextRange {
+    val start = range.start.coerceIn(0, maxLength)
+    val end = range.end.coerceIn(0, maxLength)
+    return if (start <= end) TextRange(start, end) else TextRange(end, start)
+}
+
+private fun TextRange.spanLength(): Int = (end - start).coerceAtLeast(0)
+
+private fun isRangeFullySecondary(selection: TextRange, ranges: List<TextRange>): Boolean {
+    if (selection.spanLength() == 0) return false
+    var cursor = selection.start
+    val sorted = ranges.sortedBy { it.start }
+    var index = 0
+    while (cursor < selection.end) {
+        while (index < sorted.size && sorted[index].end <= cursor) {
+            index++
+        }
+        if (index >= sorted.size) return false
+        val range = sorted[index]
+        if (cursor < range.start) return false
+        cursor = minOf(selection.end, range.end)
+    }
+    return true
+}
+
+private fun toggleSecondaryRange(
+    ranges: List<TextRange>,
+    selection: TextRange,
+    textLength: Int
+): List<TextRange> {
+    val normalized = normalizeRange(selection, textLength)
+    if (normalized.spanLength() == 0) return ranges
+    val cleaned = clampRanges(ranges, textLength)
+    return if (isRangeFullySecondary(normalized, cleaned)) {
+        subtractRange(cleaned, normalized)
+    } else {
+        mergeRanges(cleaned + normalized)
+    }
+}
+
+private fun adjustRangesAfterEdit(oldText: String, newText: String, ranges: List<TextRange>): List<TextRange> {
+    if (ranges.isEmpty()) return emptyList()
+    if (oldText == newText) return clampRanges(ranges, newText.length)
+    val prefix = commonPrefixLength(oldText, newText)
+    val suffix = commonSuffixLength(oldText, newText, prefix)
+    val oldChangedEnd = oldText.length - suffix
+    val newChangedEnd = newText.length - suffix
+    val delta = newChangedEnd - oldChangedEnd
+
+    val updated = mutableListOf<TextRange>()
+    ranges.sortedBy { it.start }.forEach { range ->
+        when {
+            range.end <= prefix -> updated.add(range)
+            range.start >= oldChangedEnd -> updated.add(TextRange(range.start + delta, range.end + delta))
+            else -> {
+                if (range.start < prefix) {
+                    updated.add(TextRange(range.start, prefix))
+                }
+                if (range.end > oldChangedEnd) {
+                    updated.add(TextRange(oldChangedEnd + delta, range.end + delta))
+                }
+            }
+        }
+    }
+    return clampRanges(updated, newText.length)
+}
+
+private fun clampRanges(ranges: List<TextRange>, maxLength: Int): List<TextRange> {
+    if (ranges.isEmpty()) return emptyList()
+    return ranges.mapNotNull { range ->
+        val start = range.start.coerceIn(0, maxLength)
+        val end = range.end.coerceIn(0, maxLength)
+        if (start < end) TextRange(start, end) else null
+    }.sortedBy { it.start }
+}
+
+private fun subtractRange(ranges: List<TextRange>, removal: TextRange): List<TextRange> {
+    if (ranges.isEmpty()) return emptyList()
+    val result = mutableListOf<TextRange>()
+    ranges.forEach { range ->
+        if (removal.end <= range.start || removal.start >= range.end) {
+            result.add(range)
+        } else {
+            if (removal.start > range.start) {
+                result.add(TextRange(range.start, removal.start))
+            }
+            if (removal.end < range.end) {
+                result.add(TextRange(removal.end, range.end))
+            }
+        }
+    }
+    return result.filter { it.spanLength() > 0 }
+}
+
+private fun mergeRanges(ranges: List<TextRange>): List<TextRange> {
+    if (ranges.isEmpty()) return emptyList()
+    val sorted = ranges.sortedBy { it.start }
+    val merged = mutableListOf<TextRange>()
+    var current = sorted.first()
+    for (index in 1 until sorted.size) {
+        val candidate = sorted[index]
+        if (candidate.start <= current.end) {
+            current = TextRange(current.start, maxOf(current.end, candidate.end))
+        } else {
+            if (current.spanLength() > 0) merged.add(current)
+            current = candidate
+        }
+    }
+    if (current.spanLength() > 0) merged.add(current)
+    return merged
+}
+
+private fun commonPrefixLength(a: String, b: String): Int {
+    val minLen = minOf(a.length, b.length)
+    var idx = 0
+    while (idx < minLen && a[idx] == b[idx]) idx++
+    return idx
+}
+
+private fun commonSuffixLength(a: String, b: String, prefix: Int): Int {
+    val aRemaining = a.length - prefix
+    val bRemaining = b.length - prefix
+    val maxLen = minOf(aRemaining, bRemaining)
+    var count = 0
+    while (count < maxLen && a[a.length - 1 - count] == b[b.length - 1 - count]) {
+        count++
+    }
+    return count
+}
+
+private val PauseTagRegex = Regex("""<(?:pause|break)(?:\\s+(?:duration|time)=["']([^"']+)["'])?[^>]*/>""", RegexOption.IGNORE_CASE)
+
+private fun buildLanguageAwareSegments(
+    rawText: String,
+    markedRanges: List<TextRange>,
+    secondaryLanguage: String?
+): List<SpeechSegment> {
+    if (rawText.isBlank()) return emptyList()
+    if (markedRanges.isEmpty()) return SpeechTextProcessor.processText(rawText)
+
+    val normalizedRanges = clampRanges(markedRanges, rawText.length)
+    val segments = mutableListOf<SpeechSegment>()
+    var cursor = 0
+
+    PauseTagRegex.findAll(rawText).forEach { match ->
+        val before = rawText.substring(cursor, match.range.first)
+        segments += chunkWithLanguage(before, cursor, normalizedRanges, secondaryLanguage)
+        val duration = parseDuration(match.groupValues.getOrNull(1))
+        segments += SpeechSegment(text = "", pauseDurationMs = duration)
+        cursor = match.range.last + 1
+    }
+
+    val tail = rawText.substring(cursor)
+    segments += chunkWithLanguage(tail, cursor, normalizedRanges, secondaryLanguage)
+
+    return segments.filter { it.text.isNotBlank() || it.pauseDurationMs > 0 }
+}
+
+private fun chunkWithLanguage(
+    chunk: String,
+    offset: Int,
+    ranges: List<TextRange>,
+    secondaryLanguage: String?
+): List<SpeechSegment> {
+    if (chunk.isEmpty()) return emptyList()
+    val result = mutableListOf<SpeechSegment>()
+    var buffer = StringBuilder()
+    var currentState: Boolean? = null
+    var rangeIndex = 0
+    var activeRange = ranges.getOrNull(rangeIndex)
+
+    fun flush(state: Boolean?) {
+        if (buffer.isEmpty()) return
+        val textPart = buffer.toString()
+        val processed = SpeechTextProcessor.processText(textPart)
+        val lang = if (state == true) secondaryLanguage else null
+        processed.forEach { segment ->
+            val languageOverride = segment.languageTag ?: lang
+            result.add(segment.copy(languageTag = languageOverride))
+        }
+        buffer = StringBuilder()
+    }
+
+    chunk.forEachIndexed { index, c ->
+        val absoluteIndex = offset + index
+        while (activeRange != null && absoluteIndex >= activeRange!!.end) {
+            rangeIndex++
+            activeRange = ranges.getOrNull(rangeIndex)
+        }
+        val isSecondary = activeRange?.let { absoluteIndex >= it.start && absoluteIndex < it.end } ?: false
+        if (currentState == null) currentState = isSecondary
+        if (isSecondary != currentState) {
+            flush(currentState)
+            currentState = isSecondary
+        }
+        buffer.append(c)
+    }
+
+    flush(currentState)
+    return result
+}
+
+private fun parseDuration(durationStr: String?): Long {
+    if (durationStr.isNullOrBlank()) return 500L
+    val clean = durationStr.trim().lowercase()
+    return when {
+        clean.endsWith("ms") -> clean.removeSuffix("ms").toDoubleOrNull()?.toLong() ?: 500L
+        clean.endsWith("s") -> {
+            val seconds = clean.removeSuffix("s").toDoubleOrNull() ?: 0.5
+            (seconds * 1000).toLong()
+        }
+        else -> clean.toDoubleOrNull()?.toLong() ?: 500L
     }
 }

@@ -147,6 +147,30 @@ private fun setupDesktopRepositories() {
         loadKoinModules(module { single<io.github.jdreioe.wingmate.domain.SaidTextRepository> { repo } })
         log.info("Registered DesktopSqlSaidTextRepository")
     }.onFailure { t -> log.warn("Could not register DesktopSqlSaidTextRepository", t) }
+    
+    // Audio clipboard for desktop
+    runCatching {
+        val clipboardClass = Class.forName("io.github.jdreioe.wingmate.platform.DesktopAudioClipboard")
+        val clipboard = clipboardClass.getDeclaredConstructor().newInstance() as io.github.jdreioe.wingmate.platform.AudioClipboard
+        loadKoinModules(module { single<io.github.jdreioe.wingmate.platform.AudioClipboard> { clipboard } })
+        log.info("Registered DesktopAudioClipboard")
+    }.onFailure { t -> log.warn("Could not register DesktopAudioClipboard", t) }
+    
+    // Share service for desktop
+    runCatching {
+        val shareClass = Class.forName("io.github.jdreioe.wingmate.platform.DesktopShareService")
+        val share = shareClass.getDeclaredConstructor().newInstance() as io.github.jdreioe.wingmate.platform.ShareService
+        loadKoinModules(module { single<io.github.jdreioe.wingmate.platform.ShareService> { share } })
+        log.info("Registered DesktopShareService")
+    }.onFailure { t -> log.warn("Could not register DesktopShareService", t) }
+    
+    // Text prediction service (n-gram based)
+    runCatching {
+        val predictionClass = Class.forName("io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService")
+        val prediction = predictionClass.getDeclaredConstructor().newInstance() as io.github.jdreioe.wingmate.domain.TextPredictionService
+        loadKoinModules(module { single<io.github.jdreioe.wingmate.domain.TextPredictionService> { prediction } })
+        log.info("Registered SimpleNGramPredictionService")
+    }.onFailure { t -> log.warn("Could not register SimpleNGramPredictionService", t) }
 }
 
 private fun setupUpdateService() {

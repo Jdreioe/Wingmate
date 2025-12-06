@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
@@ -121,62 +122,39 @@ object AzureTtsClient {
     /**
      * Enhanced SSML generation with better voice parameter support
      */
-    /**
-     * Enhanced SSML generation with better voice parameter support
-     */
     fun generateSsml(text: String, voice: Voice): String {
-        val voiceName = voice.name ?: "en-US-JennyNeural" // Azure expects the short name
-        val lang = when {
-            !voice.selectedLanguage.isNullOrBlank() -> voice.selectedLanguage!!
-            !voice.primaryLanguage.isNullOrBlank() -> voice.primaryLanguage!!
-            else -> "en-US"
-        }
-        
-        // Enhanced parameter handling with better defaults and validation
-        val pitchForSSML = when {
-            voice.pitchForSSML != null -> voice.pitchForSSML!!
-            voice.pitch != null -> convertPitchToSSML(voice.pitch!!)
-            else -> "medium"
-        }
-        
-        val rateForSSML = when {
-            voice.rateForSSML != null -> voice.rateForSSML!!
-            voice.rate != null -> convertRateToSSML(voice.rate!!)
-            else -> "medium"
-        }
-
-        logger.debug { "generateSsml: voiceName=${voice.name} selectedLanguage=${voice.selectedLanguage} primaryLanguage=${voice.primaryLanguage} pitch=$pitchForSSML rate=$rateForSSML" }
-
+        val params = resolveVoiceParams(voice)
         val escaped = escapeForSsml(text)
-        
-        // Enhanced SSML with better structure and error handling
-        val inner = buildString {
-            append("<prosody pitch=\"$pitchForSSML\">")
-            append("<prosody rate=\"$rateForSSML\">")
-            
-            // Add volume control if needed (future enhancement)
-            // append("<prosody volume=\"medium\">")
-            
-            if (lang.isNotBlank() && lang != "en-US") {
-                append("<lang xml:lang=\"$lang\">")
-                append(escaped)
-                append("</lang>")
-            } else {
-                append(escaped)
-            }
-            
-            // Close prosody tags in reverse order
-            append("</prosody>") // rate
-            append("</prosody>") // pitch
+        val content = if (params.baseLang.isNotBlank() && params.baseLang != "en-US") {
+            "<lang xml:lang=\"${params.baseLang}\">$escaped</lang>"
+        } else {
+            escaped
         }
+        return buildSsmlDocument(params, content)
+    }
 
-        return """
-            <speak version="1.0" xml:lang="$lang">
-              <voice name="$voiceName">
-                $inner
-              </voice>
-            </speak>
-        """.trimIndent()
+    /**
+     * Generate SSML by weaving <lang> tags through provided segments.
+     */
+    fun generateSsml(segments: List<SpeechSegment>, voice: Voice): String {
+        val params = resolveVoiceParams(voice)
+        val content = buildString {
+            segments.forEach { segment ->
+                if (segment.text.isNotEmpty()) {
+                    val escaped = escapeForSsml(segment.text)
+                    val overrideLang = segment.languageTag?.takeIf { it.isNotBlank() }
+                    if (!overrideLang.isNullOrBlank() && overrideLang != params.baseLang) {
+                        append("<lang xml:lang=\"$overrideLang\">$escaped</lang>")
+                    } else {
+                        append(escaped)
+                    }
+                }
+                if (segment.pauseDurationMs > 0) {
+                    append("<break time=\"${segment.pauseDurationMs}ms\"/>")
+                }
+            }
+        }
+        return buildSsmlDocument(params, content)
     }
     
     /**
@@ -215,5 +193,51 @@ object AzureTtsClient {
             .replace(">", "&gt;")
             .replace("\"", "&quot;")
             .replace("'", "&apos;")
+    }
+
+    private data class VoiceParams(
+        val voiceName: String,
+        val baseLang: String,
+        val pitch: String,
+        val rate: String
+    )
+
+    private fun resolveVoiceParams(voice: Voice): VoiceParams {
+        val voiceName = voice.name ?: "en-US-JennyNeural"
+        val baseLang = when {
+            !voice.selectedLanguage.isNullOrBlank() -> voice.selectedLanguage!!
+            !voice.primaryLanguage.isNullOrBlank() -> voice.primaryLanguage!!
+            else -> "en-US"
+        }
+        val pitch = when {
+            voice.pitchForSSML != null -> voice.pitchForSSML!!
+            voice.pitch != null -> convertPitchToSSML(voice.pitch!!)
+            else -> "medium"
+        }
+        val rate = when {
+            voice.rateForSSML != null -> voice.rateForSSML!!
+            voice.rate != null -> convertRateToSSML(voice.rate!!)
+            else -> "medium"
+        }
+        logger.debug { "resolveVoiceParams: voiceName=${voice.name} baseLang=$baseLang pitch=$pitch rate=$rate" }
+        return VoiceParams(voiceName, baseLang, pitch, rate)
+    }
+
+    private fun buildSsmlDocument(params: VoiceParams, content: String): String {
+        val primaryWrapped = "<lang xml:lang=\"${params.baseLang}\">$content</lang>"
+        val inner = buildString {
+            append("<prosody pitch=\"${params.pitch}\">")
+            append("<prosody rate=\"${params.rate}\">")
+            append(primaryWrapped)
+            append("</prosody>")
+            append("</prosody>")
+        }
+                return """
+                        <speak version="1.0" xml:lang="${params.baseLang}">
+                            <voice xml:lang="${params.baseLang}" name="${params.voiceName}">
+                                $inner
+                            </voice>
+                        </speak>
+                """.trimIndent()
     }
 }

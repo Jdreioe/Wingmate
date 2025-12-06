@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
@@ -27,7 +28,9 @@ fun PlaybackControls(
     onStop: () -> Unit, 
     onPlaySecondary: (() -> Unit)? = null,
     onResume: (() -> Unit)? = null,
-    isPaused: Boolean = false
+    isPaused: Boolean = false,
+    isSecondarySelectionActive: Boolean = false,
+    isSecondaryActionEnabled: Boolean = true
 ) {
     Row(
         modifier = Modifier
@@ -49,7 +52,13 @@ fun PlaybackControls(
             }
             
             // Speak using secondary language (if provided)
-            SmallIconButton(icon = Icons.Filled.Language, tint = MaterialTheme.colorScheme.onSurface, onClick = { onPlaySecondary?.invoke() })
+            SmallIconButton(
+                icon = Icons.Filled.Language,
+                tint = if (isSecondarySelectionActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                onClick = { onPlaySecondary?.invoke() },
+                selected = isSecondarySelectionActive,
+                enabled = isSecondaryActionEnabled && onPlaySecondary != null
+            )
             SmallIconButton(icon = Icons.Filled.Pause, tint = MaterialTheme.colorScheme.onSurface, onClick = onPause)
             SmallIconButton(icon = Icons.Filled.Stop, tint = MaterialTheme.colorScheme.onSurface, onClick = onStop)
         }
@@ -57,16 +66,34 @@ fun PlaybackControls(
 }
 
 @Composable
-private fun SmallIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, onClick: () -> Unit) {
+private fun SmallIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: Color,
+    onClick: () -> Unit,
+    selected: Boolean = false,
+    enabled: Boolean = true
+) {
+    val background = when {
+        !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        selected -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
+        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+    }
+    val contentTint = if (enabled) tint else tint.copy(alpha = 0.3f)
     Box(
         modifier = Modifier
             .size(44.dp)
             .clip(CircleShape)
-            .background(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+            .background(color = background),
         contentAlignment = Alignment.Center
     ) {
-        IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
-            Icon(imageVector = icon, contentDescription = null, tint = tint)
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier
+                .size(44.dp)
+                .focusProperties { canFocus = false }
+        ) {
+            Icon(imageVector = icon, contentDescription = null, tint = contentTint)
         }
     }
 }

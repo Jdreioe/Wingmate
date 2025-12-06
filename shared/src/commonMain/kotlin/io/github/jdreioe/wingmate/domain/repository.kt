@@ -56,3 +56,35 @@ interface UpdateService {
     suspend fun getUpdateStatus(): UpdateStatus
     suspend fun setUpdateStatus(status: UpdateStatus)
 }
+
+/**
+ * Prediction result containing word and letter suggestions.
+ */
+data class PredictionResult(
+    val words: List<String> = emptyList(),
+    val letters: List<Char> = emptyList()
+)
+
+/**
+ * Service for predicting the next word or letter based on user's text history.
+ * Uses a lightweight n-gram model trained on previously spoken text.
+ */
+interface TextPredictionService {
+    /**
+     * Train the model on the user's speech history.
+     */
+    suspend fun train(history: List<SaidText>)
+    
+    /**
+     * Predict the next words and letters given the current input context.
+     * @param context The current text being typed
+     * @param maxWords Maximum number of word predictions to return
+     * @param maxLetters Maximum number of letter predictions to return
+     */
+    suspend fun predict(context: String, maxWords: Int = 5, maxLetters: Int = 5): PredictionResult
+    
+    /**
+     * Check if the model has been trained.
+     */
+    fun isTrained(): Boolean
+}

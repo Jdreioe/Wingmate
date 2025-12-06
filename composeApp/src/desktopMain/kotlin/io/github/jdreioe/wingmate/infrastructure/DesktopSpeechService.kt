@@ -78,6 +78,12 @@ class DesktopSpeechService : SpeechService {
             isPlaying = false
             isPaused = false
         }
+
+        val hasLanguageOverrides = segments.any { !it.languageTag.isNullOrBlank() }
+        if (hasLanguageOverrides && trySpeakSegmentsWithAzureSsml(segments, voice, pitch, rate)) {
+            log.info("Combined Azure SSML playback succeeded; skipping segmented playback")
+            return
+        }
         
         // Store current playback context for resume functionality
         currentSegments = segments
@@ -193,56 +199,13 @@ class DesktopSpeechService : SpeechService {
             !uiSettings?.primaryLanguage.isNullOrBlank() -> uiSettings!!.primaryLanguage
             !enhancedVoice.primaryLanguage.isNullOrBlank() -> enhancedVoice.primaryLanguage
             else -> "en-US"
-        }
+        } ?: "en-US"
 
         val vForSsml = enhancedVoice.copy(primaryLanguage = effectiveLang)
         
         try {
             val ssml = AzureTtsClient.generateSsml(text, vForSsml)
-            log.info("sending synth request to Azure endpoint (endpoint: ${cfg.endpoint})")
-            log.debug("SSML preview: ${ssml.take(200)}...")
-            
-            // Use enhanced Azure TTS with higher quality audio
-            val bytes = AzureTtsClient.synthesize(
-                client, 
-                ssml, 
-                cfg, 
-                AzureTtsClient.AudioFormat.MP3_24KHZ_160KBPS
-            )
-            log.info("received {} bytes from Azure TTS", bytes.size)
-            if (stopRequested.get()) {
-                log.info("stop requested during synthesis; skipping playback")
-                return
-            }
-            
-            if (bytes.isEmpty()) {
-                throw RuntimeException("Azure TTS returned empty audio data")
-            }
-
-            // Enhanced audio file handling with better directory structure
-            val userHome = System.getProperty("user.home")
-            val dataDir = Paths.get(userHome, ".local", "share", "wingmate", "audio", "azure")
-            if (!Files.exists(dataDir)) Files.createDirectories(dataDir)
-            
-            // Create more descriptive filename with voice info
-            val timestamp = System.currentTimeMillis()
-            val safeName = text.take(32).replace("[^A-Za-z0-9-_ ]".toRegex(), "_").trim().ifBlank { "utterance" }
-            val voiceShortName = (vForSsml.name ?: "unknown").split("-").lastOrNull() ?: "default"
-            val outPath = dataDir.resolve("${timestamp}_${voiceShortName}_${safeName}.mp3")
-            
-            Files.write(outPath, bytes)
-            log.info("saved audio to: ${outPath.toAbsolutePath()}")
-
-            // Record enhanced history with more metadata
-            recordAzureTtsHistory(text, vForSsml, outPath.toAbsolutePath().toString(), timestamp)
-
-            // Enhanced audio playback with better error handling
-            if (stopRequested.get()) {
-                log.info("stop requested before playback; skipping")
-                return
-            }
-            playAudioFile(outPath.toFile())
-            
+            synthesizeAndPlayAzureSsml(ssml, vForSsml, cfg, text)
         } catch (e: Exception) {
             log.error("Azure TTS synthesis failed", e)
             throw RuntimeException("Azure TTS failed: ${e.message}", e)
@@ -415,7 +378,8 @@ class DesktopSpeechService : SpeechService {
                 
                 // Play the text content of this segment
                 if (segment.text.isNotEmpty()) {
-                    playTextSegment(segment.text, currentVoice, currentPitch, currentRate)
+                    val segmentVoice = currentVoice.applyLanguageOverride(segment.languageTag)
+                    playTextSegment(segment.text, segmentVoice, currentPitch, currentRate)
                 }
                 
                 // Apply pause if specified and not stopped/paused
@@ -473,6 +437,109 @@ class DesktopSpeechService : SpeechService {
         } catch (e: Exception) {
             false
         }
+    }
+
+    private fun Voice?.applyLanguageOverride(languageTag: String?): Voice? {
+        if (languageTag.isNullOrBlank()) return this
+        val base = this ?: Voice(name = "en-US-JennyNeural", primaryLanguage = languageTag, selectedLanguage = languageTag.orEmpty())
+        return base.copy(
+            selectedLanguage = languageTag.orEmpty(),
+            primaryLanguage = languageTag
+        )
+    }
+
+    private suspend fun trySpeakSegmentsWithAzureSsml(
+        segments: List<SpeechSegment>,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?
+    ): Boolean {
+        if (segments.isEmpty()) return false
+        val combinedText = segments.joinToString(separator = "") { it.text }
+        if (combinedText.isBlank()) return false
+
+        val koin = GlobalContext.getOrNull()
+        val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
+        val uiSettings = settingsRepo?.let { runCatching { runBlocking { it.get() } }.getOrNull() }
+        if (uiSettings?.useSystemTts == true) {
+            log.info("System TTS preferred; skipping Azure SSML merge path")
+            return false
+        }
+
+        val cfg = getConfig() ?: return false
+
+        if (maybePlayFromCache(combinedText, voice, pitch, rate, uiSettings?.primaryLanguage)) {
+            log.info("Reused cached Azure audio for combined SSML")
+            return true
+        }
+
+        val baseVoice = voice ?: Voice(name = "en-US-JennyNeural", primaryLanguage = "en-US")
+        val enhancedVoice = baseVoice.copy(
+            pitch = pitch ?: baseVoice.pitch,
+            rate = rate ?: baseVoice.rate
+        )
+        val effectiveLang = when {
+            !enhancedVoice.selectedLanguage.isNullOrBlank() -> enhancedVoice.selectedLanguage
+            !uiSettings?.primaryLanguage.isNullOrBlank() -> uiSettings!!.primaryLanguage
+            !enhancedVoice.primaryLanguage.isNullOrBlank() -> enhancedVoice.primaryLanguage
+            else -> "en-US"
+        } ?: "en-US"
+        val voiceForSsml = enhancedVoice.copy(primaryLanguage = effectiveLang, selectedLanguage = effectiveLang)
+
+        return try {
+            val ssml = AzureTtsClient.generateSsml(segments, voiceForSsml)
+            synthesizeAndPlayAzureSsml(ssml, voiceForSsml, cfg, combinedText)
+            true
+        } catch (t: Throwable) {
+            log.warn("Combined Azure SSML path failed; falling back to segmented playback", t)
+            false
+        }
+    }
+
+    private suspend fun synthesizeAndPlayAzureSsml(
+        ssml: String,
+        voice: Voice,
+        cfg: SpeechServiceConfig,
+        plainTextForHistory: String
+    ) {
+        log.info("sending synth request to Azure endpoint (endpoint: ${cfg.endpoint})")
+        log.debug("SSML preview: ${ssml.take(200)}...")
+
+        val bytes = AzureTtsClient.synthesize(
+            client,
+            ssml,
+            cfg,
+            AzureTtsClient.AudioFormat.MP3_24KHZ_160KBPS
+        )
+        log.info("received {} bytes from Azure TTS", bytes.size)
+        if (stopRequested.get()) {
+            log.info("stop requested during synthesis; skipping playback")
+            return
+        }
+
+        if (bytes.isEmpty()) {
+            throw RuntimeException("Azure TTS returned empty audio data")
+        }
+
+        val userHome = System.getProperty("user.home")
+        val dataDir = Paths.get(userHome, ".local", "share", "wingmate", "audio", "azure")
+        if (!Files.exists(dataDir)) Files.createDirectories(dataDir)
+
+        val timestamp = System.currentTimeMillis()
+        val safeName = plainTextForHistory.take(32).replace("[^A-Za-z0-9-_ ]".toRegex(), "_").trim().ifBlank { "utterance" }
+        val voiceShortName = (voice.name ?: "unknown").split("-").lastOrNull() ?: "default"
+        val outPath = dataDir.resolve("${timestamp}_${voiceShortName}_${safeName}.mp3")
+
+        Files.write(outPath, bytes)
+        log.info("saved audio to: ${outPath.toAbsolutePath()}")
+
+        recordAzureTtsHistory(plainTextForHistory, voice, outPath.toAbsolutePath().toString(), timestamp)
+
+        if (stopRequested.get()) {
+            log.info("stop requested before playback; skipping")
+            return
+        }
+        playAudioFile(outPath.toFile())
     }
 
     private suspend fun speakWithEspeak(text: String, voice: Voice, pitch: Double?, rate: Double?): Boolean {

@@ -49,7 +49,9 @@ data class Settings(
     // Theme settings (for hot theme switching)
     val forceDarkTheme: Boolean? = null, // null = follow system, true = dark, false = light
     val primaryColor: String? = null, // hex color for custom primary color
-    val useCustomColors: Boolean = false // enable custom color theming
+    val useCustomColors: Boolean = false, // enable custom color theming
+    // Welcome flow completion
+    val welcomeFlowCompleted: Boolean = false
 )
 
 @Serializable

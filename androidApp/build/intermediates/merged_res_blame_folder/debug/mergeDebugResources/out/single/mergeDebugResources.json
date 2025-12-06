@@ -1,102 +1,102 @@
 [
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxhdpi_ic_launcher_round.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxhdpi/ic_launcher_round.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xhdpi_ic_launcher_round.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xhdpi/ic_launcher_round.webp"
     },
     {
         "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/xml_file_paths.xml.flat",
         "source": "com.hojmoseit.wingmate.androidApp-main-65:/xml/file_paths.xml"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xhdpi_ic_launcher_round.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xhdpi/ic_launcher_round.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-mdpi_ic_launcher.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-mdpi/ic_launcher.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxhdpi_ic_launcher.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxhdpi/ic_launcher.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxxhdpi_ic_launcher_round.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxxhdpi/ic_launcher_round.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxxhdpi_ic_launcher_foreground.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxxhdpi/ic_launcher_foreground.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/drawable-v21_launch_background.xml.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/drawable-v21/launch_background.xml"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xhdpi_ic_launcher_foreground.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xhdpi/ic_launcher_foreground.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xhdpi_ic_launcher_foreground.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xhdpi/ic_launcher_foreground.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-hdpi_ic_launcher_round.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-hdpi/ic_launcher_round.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-hdpi_ic_launcher_round.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-hdpi/ic_launcher_round.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-hdpi_ic_launcher_foreground.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-hdpi/ic_launcher_foreground.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxhdpi_ic_launcher_round.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxhdpi/ic_launcher_round.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxhdpi_ic_launcher_background.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxhdpi/ic_launcher_background.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxhdpi_ic_launcher.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxhdpi/ic_launcher.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/drawable-v21_launch_background.xml.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/drawable-v21/launch_background.xml"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-hdpi_ic_launcher_foreground.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-hdpi/ic_launcher_foreground.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-anydpi-v26_ic_launcher.xml.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-anydpi-v26/ic_launcher.xml"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxhdpi_ic_launcher_background.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxhdpi/ic_launcher_background.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xhdpi_ic_launcher.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xhdpi/ic_launcher.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxxhdpi_ic_launcher_background.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxxhdpi/ic_launcher_background.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-hdpi_ic_launcher.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-hdpi/ic_launcher.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-anydpi-v26/ic_launcher.xml"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-mdpi_ic_launcher_round.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-mdpi/ic_launcher_round.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-mdpi_ic_launcher_foreground.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-mdpi/ic_launcher_foreground.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/drawable_ic_launcher_monochrome.xml.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/drawable/ic_launcher_monochrome.xml"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-anydpi-v26/ic_launcher_round.xml"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-mdpi_ic_launcher_foreground.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-mdpi/ic_launcher_foreground.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/drawable_ic_launcher_monochrome.xml.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/drawable/ic_launcher_monochrome.xml"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-mdpi_ic_launcher.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-mdpi/ic_launcher.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-mdpi_ic_launcher_round.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-mdpi/ic_launcher_round.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-hdpi_ic_launcher_background.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-hdpi/ic_launcher_background.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-hdpi_ic_launcher.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-hdpi/ic_launcher.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-mdpi_ic_launcher_background.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-mdpi/ic_launcher_background.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxxhdpi_ic_launcher.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxxhdpi/ic_launcher.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxxhdpi_ic_launcher_round.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxxhdpi/ic_launcher_round.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xhdpi_ic_launcher_background.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xhdpi/ic_launcher_background.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-anydpi-v26/ic_launcher_round.xml"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxxhdpi_ic_launcher_foreground.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxxhdpi/ic_launcher_foreground.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xhdpi_ic_launcher_background.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xhdpi/ic_launcher_background.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxhdpi_ic_launcher_foreground.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxhdpi/ic_launcher_foreground.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxxhdpi_ic_launcher_background.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxxhdpi/ic_launcher_background.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-hdpi_ic_launcher_background.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-hdpi/ic_launcher_background.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxxhdpi_ic_launcher.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxxhdpi/ic_launcher.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xhdpi_ic_launcher.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xhdpi/ic_launcher.webp"
     },
     {
-        "merged": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-xxhdpi_ic_launcher_foreground.webp.flat",
-        "source": "/var/home/Jdreioe/.gradle/daemon/8.13/com.hojmoseit.wingmate.androidApp-main-65:/mipmap-xxhdpi/ic_launcher_foreground.webp"
+        "merged": "com.hojmoseit.wingmate.androidApp-debug-63:/mipmap-mdpi_ic_launcher_background.webp.flat",
+        "source": "com.hojmoseit.wingmate.androidApp-main-65:/mipmap-mdpi/ic_launcher_background.webp"
     }
 ]

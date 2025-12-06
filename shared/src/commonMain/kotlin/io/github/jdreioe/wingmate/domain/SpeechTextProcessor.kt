@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class SpeechSegment(
     val text: String,
-    val pauseDurationMs: Long = 0 // Pause duration after this segment in milliseconds
+    val pauseDurationMs: Long = 0,
+    val languageTag: String? = null // Optional language override for this segment
 )
 
 /**

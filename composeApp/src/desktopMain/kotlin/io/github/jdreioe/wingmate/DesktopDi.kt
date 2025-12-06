@@ -1,7 +1,9 @@
 package io.github.jdreioe.wingmate
 
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.infrastructure.DesktopSpeechService
+import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlVoiceRepository
@@ -25,6 +27,10 @@ fun overrideDesktopSpeechService() {
             single<io.github.jdreioe.wingmate.domain.SaidTextRepository> { io.github.jdreioe.wingmate.infrastructure.DesktopSqlSaidTextRepository() }
             // Share service for desktop (opens file in default handler)
             single<io.github.jdreioe.wingmate.platform.ShareService> { io.github.jdreioe.wingmate.platform.DesktopShareService() }
+            // Audio clipboard for desktop
+            single<io.github.jdreioe.wingmate.platform.AudioClipboard> { io.github.jdreioe.wingmate.platform.DesktopAudioClipboard() }
+            // Text prediction service using n-grams trained on user's history
+            single<TextPredictionService> { SimpleNGramPredictionService() }
         }
     )
     // Optional: log the current virtual mic preference for visibility

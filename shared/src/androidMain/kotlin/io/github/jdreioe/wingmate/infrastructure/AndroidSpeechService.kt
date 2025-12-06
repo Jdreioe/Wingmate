@@ -248,14 +248,18 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
                 val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
                 val effectiveLang = when {
-                    !v.selectedLanguage.isNullOrBlank() -> v.selectedLanguage
+                    v.selectedLanguage.isNotBlank() -> v.selectedLanguage
                     !uiSettings?.primaryLanguage.isNullOrBlank() -> uiSettings!!.primaryLanguage
                     !v.primaryLanguage.isNullOrBlank() -> v.primaryLanguage
                     else -> "en-US"
-                }
+                } ?: "en-US"
 
-                val vForSsml = v.copy(primaryLanguage = effectiveLang)
-                val ssml = AzureTtsClient.generateSsml(combinedText, vForSsml)
+                val vForSsml = v.copy(primaryLanguage = effectiveLang, selectedLanguage = effectiveLang)
+                val ssml = if (segments.any { !it.languageTag.isNullOrBlank() }) {
+                    AzureTtsClient.generateSsml(segments, vForSsml)
+                } else {
+                    AzureTtsClient.generateSsml(combinedText, vForSsml)
+                }
                 val bytes = AzureTtsClient.synthesize(client, ssml, cfg)
 
                 // Persist to an app-private Music directory so history can reference it later
@@ -577,7 +581,8 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             currentSegmentIndex = index
             
             if (segment.text.isNotEmpty()) {
-                speakWithPlatformTts(segment.text, voice, pitch, rate)
+                val segmentVoice = voice.applyLanguageOverride(segment.languageTag)
+                speakWithPlatformTts(segment.text, segmentVoice, pitch, rate)
                 
                 // Wait for TTS to finish (simplified approach)
                 kotlinx.coroutines.delay(segment.text.length * 50L) // rough estimate
@@ -608,5 +613,14 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         val endpoint = System.getenv("WINGMATE_AZURE_REGION") ?: ""
         val key = System.getenv("WINGMATE_AZURE_KEY") ?: ""
         return if (endpoint.isNotBlank() && key.isNotBlank()) SpeechServiceConfig(endpoint = endpoint, subscriptionKey = key) else null
+    }
+
+    private fun Voice?.applyLanguageOverride(languageTag: String?): Voice? {
+        if (languageTag.isNullOrBlank()) return this
+        val base = this ?: Voice(name = "en-US-JennyNeural", primaryLanguage = languageTag, selectedLanguage = languageTag)
+        return base.copy(
+            selectedLanguage = languageTag,
+            primaryLanguage = languageTag
+        )
     }
 }
