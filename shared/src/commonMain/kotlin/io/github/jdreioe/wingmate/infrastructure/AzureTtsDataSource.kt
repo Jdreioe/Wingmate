@@ -11,12 +11,13 @@ import io.ktor.http.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
+
 /**
  * Enhanced shared Azure TTS client with improved audio quality and error handling.
  * Accepts SSML and returns audio bytes (mp3) from Azure.
  * Uses Ktor client from the calling platform (ensure ktor client engine configured on each platform).
  */
-object AzureTtsClient {
+class AzureTtsDataSource(private val client: HttpClient) {
     
     /**
      * Audio format options for Azure TTS
@@ -30,7 +31,6 @@ object AzureTtsClient {
     }
     
     suspend fun synthesize(
-        client: HttpClient, 
         ssml: String, 
         config: SpeechServiceConfig,
         audioFormat: AudioFormat = AudioFormat.MP3_24KHZ_160KBPS
@@ -115,8 +115,8 @@ object AzureTtsClient {
     /**
      * Backward compatibility method with default audio format
      */
-    suspend fun synthesize(client: HttpClient, ssml: String, config: SpeechServiceConfig): ByteArray {
-        return synthesize(client, ssml, config, AudioFormat.MP3_24KHZ_160KBPS)
+    suspend fun synthesize(ssml: String, config: SpeechServiceConfig): ByteArray {
+        return synthesize(ssml, config, AudioFormat.MP3_24KHZ_160KBPS)
     }
 
     /**

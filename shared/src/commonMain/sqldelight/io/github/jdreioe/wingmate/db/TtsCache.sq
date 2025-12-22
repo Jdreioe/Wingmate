@@ -1,0 +1,12 @@
+CREATE TABLE CachedTts (
+    hash TEXT PRIMARY KEY NOT NULL,
+    path TEXT NOT NULL,
+    voice_params TEXT NOT NULL,
+    timestamp INTEGER NOT NULL
+);
+
+selectByHash:
+SELECT * FROM CachedTts WHERE hash = ?;
+
+insert:
+INSERT OR REPLACE INTO CachedTts(hash, path, voice_params, timestamp) VALUES (?, ?, ?, ?);

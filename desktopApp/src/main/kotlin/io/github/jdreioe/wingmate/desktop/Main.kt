@@ -15,7 +15,6 @@ import io.github.jdreioe.wingmate.ui.DesktopTheme
 import io.github.jdreioe.wingmate.initKoin
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.UpdateService
-import io.github.jdreioe.wingmate.infrastructure.DesktopSpeechService
 import io.github.jdreioe.wingmate.infrastructure.DesktopUpdateService
 import io.github.jdreioe.wingmate.infrastructure.GitHubApiClient
 import io.github.jdreioe.wingmate.presentation.UpdateManager
@@ -37,20 +36,9 @@ fun main() {
     initKoin(module { })
     
     // Register desktop-specific implementations
+    io.github.jdreioe.wingmate.overrideDesktopSpeechService() // This registers TtsRepository via Koin
     setupDesktopRepositories()
     setupUpdateService()
-    
-    // Register desktop speech service directly
-    runCatching {
-        loadKoinModules(
-            module {
-                single<SpeechService> { DesktopSpeechService() }
-            }
-        )
-        log.info("Registered DesktopSpeechService successfully")
-    }.onFailure { t -> 
-        log.error("Failed to register DesktopSpeechService", t) 
-    }
     
     application {
         Window(

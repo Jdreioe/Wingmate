@@ -4,6 +4,7 @@ plugins {
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("app.cash.sqldelight")
 }
 
 kotlin {
@@ -57,6 +58,10 @@ kotlin {
                 implementation("com.arkivanov.mvikotlin:mvikotlin:$mviKotlinVersion")
                 implementation("com.arkivanov.mvikotlin:mvikotlin-main:$mviKotlinVersion")
                 implementation("com.arkivanov.mvikotlin:mvikotlin-extensions-coroutines:$mviKotlinVersion")
+
+                // SQLDelight
+                implementation("app.cash.sqldelight:runtime:2.0.2")
+                implementation("app.cash.sqldelight:coroutines-extensions:2.0.2")
             }
         }
         val commonTest by getting {
@@ -70,7 +75,7 @@ kotlin {
                 implementation("io.ktor:ktor-client-okhttp:2.3.12")
                 // Required for FileProvider and core Android helpers used in androidMain
                 implementation("androidx.core:core-ktx:1.13.1")
-
+                implementation("app.cash.sqldelight:android-driver:2.0.2")
             }
         }
         applyDefaultHierarchyTemplate()
@@ -79,13 +84,23 @@ kotlin {
                 implementation("io.ktor:ktor-client-darwin:2.3.12")
                 // Ensure Koin is resolved for iOS binaries too
                 api("io.insert-koin:koin-core:3.5.6")
+                implementation("app.cash.sqldelight:native-driver:2.0.2")
             }
         }
         val jvmMain by getting {
             dependencies {
                 implementation("io.ktor:ktor-client-okhttp:2.3.12")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
+                implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
             }
+        }
+    }
+}
+
+sqldelight {
+    databases {
+        create("TtsDatabase") {
+            packageName.set("io.github.jdreioe.wingmate.db")
         }
     }
 }

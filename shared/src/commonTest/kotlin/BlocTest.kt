@@ -7,14 +7,17 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
     private class Repo : PhraseRepository {
-    private val items = mutableListOf<Phrase>()
-    override suspend fun getAll(): List<Phrase> = items
+        private val items = mutableListOf<Phrase>()
+        override suspend fun getAll(): List<Phrase> = items
         override suspend fun add(phrase: Phrase): Phrase {
             val p = phrase.copy(id = "1", createdAt = if (phrase.createdAt == 0L) 0L else phrase.createdAt)
             items += p
             return p
         }
-}
+        override suspend fun update(phrase: Phrase): Phrase = phrase
+        override suspend fun delete(id: String) {}
+        override suspend fun move(fromIndex: Int, toIndex: Int) {}
+    }
 
 class BlocTest {
     @Test
