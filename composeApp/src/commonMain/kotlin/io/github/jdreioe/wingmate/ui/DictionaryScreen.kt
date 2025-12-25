@@ -26,6 +26,7 @@ fun DictionaryScreen(
     onAddEntry: (String, String, String) -> Unit,
     onDeleteEntry: (PronunciationEntry) -> Unit,
     onTestEntry: (String, String, String) -> Unit,
+    onGuessPronunciation: suspend (String) -> String? = { null },
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -103,7 +104,8 @@ fun DictionaryScreen(
                 onAddEntry(word, phoneme, alphabet)
                 showAddDialog = false
             },
-            onTest = onTestEntry
+            onTest = onTestEntry,
+            onGuess = onGuessPronunciation
         )
     }
 }
@@ -168,12 +170,16 @@ private fun DictionaryEntryCard(
 private fun AddDictionaryEntryDialog(
     onDismiss: () -> Unit,
     onAdd: (String, String, String) -> Unit,
-    onTest: (String, String, String) -> Unit
+    onTest: (String, String, String) -> Unit,
+    onGuess: suspend (String) -> String?
 ) {
     var word by remember { mutableStateOf("") }
     var phoneme by remember { mutableStateOf("") }
     var alphabet by remember { mutableStateOf("ipa") }
     var expandedAlphabet by remember { mutableStateOf(false) }
+    var isGuessing by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     
     val commonIpa = listOf("ə", "ˈ", "ˌ", "ː", "θ", "ð", "ʃ", "ʒ", "ŋ", "j", "æ", "ɑ", "ɔ", "ɛ", "ɪ", "ʊ", "ʌ", "u", "i")
 
@@ -184,6 +190,14 @@ private fun AddDictionaryEntryDialog(
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (error != null) {
+                    Text(
+                        text = error!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
                 OutlinedTextField(
                     value = word,
                     onValueChange = { word = it },
@@ -193,14 +207,44 @@ private fun AddDictionaryEntryDialog(
                     singleLine = true
                 )
 
-                OutlinedTextField(
-                    value = phoneme,
-                    onValueChange = { phoneme = it },
-                    label = { Text("Phoneme") },
-                    placeholder = { Text("e.g., /təˈmɑːtoʊ/") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = phoneme,
+                        onValueChange = { phoneme = it },
+                        label = { Text("Phoneme") },
+                        placeholder = { Text("e.g., /təˈmɑːtoʊ/") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    
+                    if (isGuessing) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    } else {
+                        TextButton(
+                            onClick = {
+                                if (word.isNotBlank()) {
+                                    isGuessing = true
+                                    error = null
+                                    scope.launch {
+                                        val guess = onGuess(word)
+                                        if (guess != null) {
+                                            phoneme = guess
+                                        } else {
+                                            error = "Could not find pronunciation"
+                                        }
+                                        isGuessing = false
+                                    }
+                                }
+                            },
+                            enabled = word.isNotBlank()
+                        ) {
+                            Text("Guess")
+                        }
+                    }
+                }
                 
                 Text("Common IPA Symbols", style = MaterialTheme.typography.labelMedium)
                 Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {

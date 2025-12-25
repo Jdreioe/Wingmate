@@ -897,6 +897,11 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             speechService.speak(testSsml, selected, selected?.pitch, selected?.rate)
                         }
                     },
+                    onGuessPronunciation = { word ->
+                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                        val lang = selected?.primaryLanguage ?: "en"
+                        speechService.guessPronunciation(word, lang)
+                    },
                     onBack = { showDictionaryScreen = false }
                 )
             }

@@ -46,6 +46,7 @@ interface SpeechService {
     suspend fun resume()
     fun isPlaying(): Boolean
     fun isPaused(): Boolean
+    suspend fun guessPronunciation(text: String, language: String = "en"): String? = null
 }
 
 interface UpdateService {

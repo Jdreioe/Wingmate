@@ -20,6 +20,9 @@ import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.infrastructure.AzureTtsClient
 import io.ktor.client.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import kotlinx.serialization.json.*
 import io.ktor.client.engine.okhttp.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -541,6 +544,44 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     override fun isPlaying(): Boolean = isPlaying
 
     override fun isPaused(): Boolean = isPaused
+
+    override suspend fun guessPronunciation(text: String, language: String): String? {
+        val langCode = language.take(2).lowercase()
+        return try {
+            // Use Wiktionary API as a robust source for IPA
+            val url = "https://en.wiktionary.org/w/api.php?action=query&titles=${text.trim()}&prop=revisions&rvprop=content&format=json"
+            val response = client.get(url)
+            
+            if (response.status.value == 200) {
+                val body = io.ktor.client.statement.bodyAsText(response)
+                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                val root = json.parseToJsonElement(body).jsonObject
+                
+                val pages = root["query"]?.jsonObject?.get("pages")?.jsonObject
+                if (pages == null || pages.isEmpty()) return null
+                
+                val pageKey = pages.keys.first()
+                if (pageKey == "-1") return null
+                
+                val page = pages[pageKey]?.jsonObject
+                val revisions = page?.get("revisions")?.jsonArray
+                val content = revisions?.get(0)?.jsonObject?.get("*")?.jsonPrimitive?.content
+                
+                if (content != null) {
+                    val regex = Regex("\\{\\{IPA\\|$langCode\\|/([^/]+)/")
+                    val match = regex.find(content)
+                    if (match != null) return match.groupValues[1]
+                    
+                    val regexBrackets = Regex("\\{\\{IPA\\|$langCode\\|\\[([^\\]]+)\\]")
+                    val matchBrackets = regexBrackets.find(content)
+                    if (matchBrackets != null) return matchBrackets.groupValues[1]
+                }
+            }
+            null
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     private suspend fun playSegmentsFromIndex(startIndex: Int) {
         val koin = GlobalContext.getOrNull()

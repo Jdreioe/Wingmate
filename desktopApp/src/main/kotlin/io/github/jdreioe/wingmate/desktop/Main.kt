@@ -55,7 +55,7 @@ fun main() {
     runCatching {
         loadKoinModules(
             module {
-                single<SpeechService> { DesktopSpeechService() }
+                single<SpeechService> { DesktopSpeechService(get()) }
             }
         )
         log.info("Registered DesktopSpeechService successfully")

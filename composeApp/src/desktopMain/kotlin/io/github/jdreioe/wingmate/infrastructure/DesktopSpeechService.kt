@@ -25,7 +25,14 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicBoolean
 
-class DesktopSpeechService : SpeechService {
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import kotlinx.serialization.json.*
+import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
+
+class DesktopSpeechService(
+    private val dictionaryRepo: PronunciationDictionaryRepository? = null
+) : SpeechService {
     private val client = HttpClient(OkHttp) {}
     private val log = LoggerFactory.getLogger("DesktopSpeechService")
     
@@ -54,23 +61,72 @@ class DesktopSpeechService : SpeechService {
         log.info("speak() called with text='{}', voice={}, pitch={}, rate={}", text.take(50), voice?.name, pitch, rate)
         log.info("speak() called on thread={}", Thread.currentThread().name)
         
-        // Check if text contains SSML markup (user inserted via sidebar buttons)
+        var processedText = text
+        
+        // Apply dictionary replacements if available
+        if (dictionaryRepo != null) {
+            val entries = dictionaryRepo.getAll()
+            if (entries.isNotEmpty()) {
+                processedText = applyDictionary(processedText, entries)
+            }
+        }
+
+        // Check if text contains SSML markup (user inserted via sidebar buttons OR dictionary injection)
         // Look for common SSML tags: <emphasis>, <break>, <phoneme>, <say-as>, <lang>, etc.
-        val containsSSML = text.contains(Regex("<(emphasis|break|phoneme|say-as|lang|prosody|voice)"))
+        val containsSSML = processedText.contains(Regex("<(emphasis|break|phoneme|say-as|lang|prosody|voice)"))
         
         if (containsSSML) {
             log.info("Detected SSML markup in text; bypassing text processing and using Azure TTS directly")
+            
+            // Convert <pause> to <break> for Azure compatibility since we are bypassing SpeechTextProcessor
+            processedText = processedText.replace(Regex("<pause\\s+duration=[\"']([^\"']+)[\"']\\s*/>")) { 
+                "<break time=\"${it.groupValues[1]}\"/>" 
+            }.replace("<pause/>", "<break time=\"500ms\"/>")
+            
             // Don't process SSML through SpeechTextProcessor - send directly to Azure with voice wrapping
-            speakWithAzureTts(text, voice, pitch, rate)
+            speakWithAzureTts(processedText, voice, pitch, rate)
             return
         }
         
         // For plain text, process to extract pause tags and create segments
-        val segments = SpeechTextProcessor.processText(text)
+        val segments = SpeechTextProcessor.processText(processedText)
         log.info("Processed text into {} segments", segments.size)
         
         // Use the enhanced speakSegments function
         speakSegments(segments, voice, pitch, rate)
+    }
+
+    private fun applyDictionary(text: String, entries: List<io.github.jdreioe.wingmate.domain.PronunciationEntry>): String {
+        val tagRegex = "<[^>]+>".toRegex()
+        val parts = mutableListOf<String>()
+        var lastIndex = 0
+        
+        tagRegex.findAll(text).forEach { match ->
+            // Text before tag
+            val textPart = text.substring(lastIndex, match.range.first)
+            parts.add(replaceWords(textPart, entries))
+            // The tag itself (unchanged)
+            parts.add(match.value)
+            lastIndex = match.range.last + 1
+        }
+        // Remaining text
+        val textPart = text.substring(lastIndex)
+        parts.add(replaceWords(textPart, entries))
+        
+        return parts.joinToString("")
+    }
+
+    private fun replaceWords(text: String, entries: List<io.github.jdreioe.wingmate.domain.PronunciationEntry>): String {
+        var processed = text
+        for (entry in entries) {
+             val pattern = "\\b${Regex.escape(entry.word)}\\b".toRegex(RegexOption.IGNORE_CASE)
+             if (pattern.containsMatchIn(processed)) {
+                 processed = processed.replace(pattern) { matchResult ->
+                     "<phoneme alphabet=\"${entry.alphabet}\" ph=\"${entry.phoneme}\">${matchResult.value}</phoneme>"
+                 }
+             }
+        }
+        return processed
     }
 
     override suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
@@ -438,6 +494,62 @@ class DesktopSpeechService : SpeechService {
     override fun isPlaying(): Boolean = isPlaying
 
     override fun isPaused(): Boolean = isPaused
+
+    override suspend fun guessPronunciation(text: String, language: String): String? {
+        val langCode = language.take(2).lowercase()
+        log.info("Guessing pronunciation for: '$text' in language '$langCode' using Wiktionary")
+        return try {
+            // Use Wiktionary API as a robust source for IPA
+            val url = "https://en.wiktionary.org/w/api.php?action=query&titles=${text.trim()}&prop=revisions&rvprop=content&format=json"
+            log.info("Fetching URL: $url")
+            val response = client.get(url)
+            
+            if (response.status.value == 200) {
+                val body = response.bodyAsText()
+                val json = Json { ignoreUnknownKeys = true }
+                val root = json.parseToJsonElement(body).jsonObject
+                
+                val pages = root["query"]?.jsonObject?.get("pages")?.jsonObject
+                if (pages == null || pages.isEmpty()) return null
+                
+                // Wiktionary returns "-1" key for missing pages, or the page ID
+                val pageKey = pages.keys.first()
+                if (pageKey == "-1") {
+                    log.info("Word not found in Wiktionary")
+                    return null
+                }
+                
+                val page = pages[pageKey]?.jsonObject
+                val revisions = page?.get("revisions")?.jsonArray
+                val content = revisions?.get(0)?.jsonObject?.get("*")?.jsonPrimitive?.content
+                
+                if (content != null) {
+                    // Look for {{IPA|lang|/pronunciation/}}
+                    // Regex to capture the content between slashes
+                    val regex = Regex("\\{\\{IPA\\|$langCode\\|/([^/]+)/")
+                    val match = regex.find(content)
+                    if (match != null) {
+                        val ipa = match.groupValues[1]
+                        log.info("Found IPA in Wiktionary: $ipa")
+                        return ipa
+                    }
+                    
+                    // Fallback: sometimes it's [pronunciation]
+                    val regexBrackets = Regex("\\{\\{IPA\\|$langCode\\|\\[([^\\]]+)\\]")
+                    val matchBrackets = regexBrackets.find(content)
+                    if (matchBrackets != null) {
+                        val ipa = matchBrackets.groupValues[1]
+                        log.info("Found IPA (brackets) in Wiktionary: $ipa")
+                        return ipa
+                    }
+                }
+            }
+            null
+        } catch (e: Exception) {
+            log.warn("Failed to guess pronunciation for '$text'", e)
+            null
+        }
+    }
 
     private suspend fun playSegmentsFromIndex(startIndex: Int) {
         log.info("playSegmentsFromIndex() called with startIndex: {}", startIndex)
