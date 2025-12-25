@@ -890,6 +890,13 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             entries = dictionaryRepo.getAll()
                         }
                     },
+                    onTestEntry = { word, phoneme, alphabet ->
+                        scope.launch {
+                            val testSsml = "<phoneme alphabet=\"$alphabet\" ph=\"$phoneme\">$word</phoneme>"
+                            val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                            speechService.speak(testSsml, selected, selected?.pitch, selected?.rate)
+                        }
+                    },
                     onBack = { showDictionaryScreen = false }
                 )
             }

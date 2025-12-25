@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -22,6 +25,7 @@ fun DictionaryScreen(
     entries: List<PronunciationEntry>,
     onAddEntry: (String, String, String) -> Unit,
     onDeleteEntry: (PronunciationEntry) -> Unit,
+    onTestEntry: (String, String, String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -83,7 +87,8 @@ fun DictionaryScreen(
                     items(entries, key = { it.word }) { entry ->
                         DictionaryEntryCard(
                             entry = entry,
-                            onDelete = { onDeleteEntry(entry) }
+                            onDelete = { onDeleteEntry(entry) },
+                            onTest = { onTestEntry(entry.word, entry.phoneme, entry.alphabet) }
                         )
                     }
                 }
@@ -97,7 +102,8 @@ fun DictionaryScreen(
             onAdd = { word, phoneme, alphabet ->
                 onAddEntry(word, phoneme, alphabet)
                 showAddDialog = false
-            }
+            },
+            onTest = onTestEntry
         )
     }
 }
@@ -106,6 +112,7 @@ fun DictionaryScreen(
 private fun DictionaryEntryCard(
     entry: PronunciationEntry,
     onDelete: () -> Unit,
+    onTest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -137,12 +144,21 @@ private fun DictionaryEntryCard(
                 )
             }
             
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.error
-                )
+            Row {
+                IconButton(onClick = onTest) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = "Test",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }
@@ -151,12 +167,15 @@ private fun DictionaryEntryCard(
 @Composable
 private fun AddDictionaryEntryDialog(
     onDismiss: () -> Unit,
-    onAdd: (String, String, String) -> Unit
+    onAdd: (String, String, String) -> Unit,
+    onTest: (String, String, String) -> Unit
 ) {
     var word by remember { mutableStateOf("") }
     var phoneme by remember { mutableStateOf("") }
     var alphabet by remember { mutableStateOf("ipa") }
     var expandedAlphabet by remember { mutableStateOf(false) }
+    
+    val commonIpa = listOf("ə", "ˈ", "ˌ", "ː", "θ", "ð", "ʃ", "ʒ", "ŋ", "j", "æ", "ɑ", "ɔ", "ɛ", "ɪ", "ʊ", "ʌ", "u", "i")
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -182,6 +201,17 @@ private fun AddDictionaryEntryDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
+                
+                Text("Common IPA Symbols", style = MaterialTheme.typography.labelMedium)
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    commonIpa.forEach { symbol ->
+                        SuggestionChip(
+                            onClick = { phoneme += symbol },
+                            label = { Text(symbol) },
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                    }
+                }
 
                 Text("Alphabet", style = MaterialTheme.typography.labelMedium)
                 Box {
@@ -205,6 +235,19 @@ private fun AddDictionaryEntryDialog(
                             )
                         }
                     }
+                }
+                
+                Button(
+                    onClick = { onTest(word, phoneme, alphabet) },
+                    enabled = word.isNotBlank() && phoneme.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Icon(Icons.Default.PlayArrow, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Test Pronunciation")
                 }
 
                 Text(
