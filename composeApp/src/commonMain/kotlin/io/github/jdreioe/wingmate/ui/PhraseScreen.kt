@@ -25,6 +25,8 @@ import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.MoreVert
@@ -71,6 +73,11 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
     require(GlobalContext.getOrNull() != null) { "Koin not initialized. Call initKoin() before starting the app." }
     val bloc = remember { GlobalContext.get().get<PhraseBloc>() }
     val state by bloc.state.collectAsState()
+
+    // Ensure initial list loads on first composition
+    LaunchedEffect(bloc) {
+        bloc.dispatch(PhraseEvent.Load)
+    }
 
     // Load settings for UI scaling using reactive state manager
     val settings by rememberReactiveSettings()
@@ -336,6 +343,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .platformImePadding()
                             // omit imePadding in common to avoid ambiguity across targets
                             .padding(16.dp)
                     ) {
@@ -352,14 +360,23 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     try {
                                         val selected = runCatching { voiceUseCase.selected() }.getOrNull()
                                         val secondaryLang = settingsUseCase?.let { runCatching { it.get() }.getOrNull()?.secondaryLanguage }
-                                        val segments = if (secondaryLanguageRanges.isNotEmpty()) {
-                                            buildLanguageAwareSegments(input.text, secondaryLanguageRanges, secondaryLang)
-                                        } else emptyList()
-                                        if (segments.isNotEmpty()) {
-                                            speechService.speakSegments(segments, selected, selected?.pitch, selected?.rate)
-                                        } else {
+                                        
+                                        val hasSSML = input.text.contains("<") && input.text.contains(">")
+                                        
+                                        // When SSML is present, bypass segmentation and speak directly
+                                        if (hasSSML) {
                                             speechService.speak(input.text, selected, selected?.pitch, selected?.rate)
+                                        } else {
+                                            val segments = if (secondaryLanguageRanges.isNotEmpty()) {
+                                                buildLanguageAwareSegments(input.text, secondaryLanguageRanges, secondaryLang)
+                                            } else emptyList()
+                                            if (segments.isNotEmpty()) {
+                                                speechService.speakSegments(segments, selected, selected?.pitch, selected?.rate)
+                                            } else {
+                                                speechService.speak(input.text, selected, selected?.pitch, selected?.rate)
+                                            }
                                         }
+                                        
                                         // Refresh history from repo so the History chip appears after first save
                                         // Also retrain prediction model with new data
                                         try {
@@ -404,7 +421,10 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     }
                 }
             ) { innerPadding ->
-                Column(modifier = Modifier.padding(16.dp).padding(innerPadding)) {
+                BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                    val isWide = maxWidth >= 900.dp
+                    Row(Modifier.fillMaxSize()) {
+                        Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(16.dp)) {
                     if (state.loading) Text("Loading...", style = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                     ))
@@ -834,7 +854,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         defaultCategoryId = selectedCategory?.id,
                         showAddTile = !isHistory,
                         readOnly = isHistory,
-                        phraseFontSize = androidx.compose.ui.unit.TextUnit(settings.fontSizeScale, androidx.compose.ui.unit.TextUnitType.Sp),
+                        phraseFontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale,
                         onCopyAudio = { filePath ->
                             // Try to copy soundfile via platform clipboard
                             runCatching {
@@ -854,6 +874,24 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         )
                     }
                 // Full screen handled by platform window on desktop; on mobile we could add a dedicated screen later.
+                }
+                        if (isWide) {
+                            SsmlSidebar(
+                                modifier = Modifier.width(320.dp).fillMaxHeight().padding(12.dp),
+                                inputText = input.text,
+                                inputSelection = input.selection,
+                                onInsertSsml = { ssmlMarkup ->
+                                    val fv = input
+                                    val pos = fv.selection.start.coerceIn(0, fv.text.length)
+                                    val newText = fv.text.substring(0, pos) + ssmlMarkup + fv.text.substring(pos)
+                                    val newCursor = pos + ssmlMarkup.length
+                                    secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
+                                    input = TextFieldValue(newText, selection = TextRange(newCursor))
+                                    io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                                }
+                            )
+                        }
+                    }
                 }
             }
 

@@ -240,4 +240,89 @@ object AzureTtsClient {
                         </speak>
                 """.trimIndent()
     }
+    
+    // ========================================================================
+    // TOKEN-BASED AUTHENTICATION (Secure Backend)
+    // ========================================================================
+    
+    /**
+     * Synthesize speech using a bearer token instead of subscription key.
+     * 
+     * This is the secure method that should be used in production:
+     * 1. Client calls TokenExchangeClient.getToken() to get a short-lived token
+     * 2. This method uses that token to call Azure TTS directly
+     * 3. No subscription key is ever stored on the client device
+     * 
+     * @param client Ktor HTTP client
+     * @param ssml The SSML document to synthesize
+     * @param token Bearer token from TokenExchangeClient
+     * @param region Azure region (e.g., "eastus")
+     * @param audioFormat Desired audio format
+     */
+    suspend fun synthesizeWithToken(
+        client: HttpClient,
+        ssml: String,
+        token: String,
+        region: String,
+        audioFormat: AudioFormat = AudioFormat.MP3_24KHZ_160KBPS
+    ): ByteArray {
+        val url = "https://$region.tts.speech.microsoft.com/cognitiveservices/v1"
+        
+        logger.info { "Azure TTS (token auth) -> url=$url, format=${audioFormat.value}" }
+        logger.debug { "SSML length=${ssml.length} chars" }
+        
+        try {
+            val response: HttpResponse = client.post(url) {
+                headers {
+                    // Use Bearer token instead of subscription key
+                    append(HttpHeaders.Authorization, "Bearer $token")
+                    append(HttpHeaders.ContentType, "application/ssml+xml")
+                    append("X-Microsoft-OutputFormat", audioFormat.value)
+                    append(HttpHeaders.UserAgent, "WingmateKMP/2.0")
+                    append(HttpHeaders.Accept, "audio/*")
+                }
+                setBody(ssml)
+            }
+            
+            logger.info { "Azure TTS (token auth) response status=${response.status}" }
+            
+            when {
+                response.status.isSuccess() -> {
+                    val bytes = response.body<ByteArray>()
+                    logger.info { "Azure TTS returned ${bytes.size} bytes (${bytes.size / 1024}KB)" }
+                    
+                    if (bytes.isEmpty()) {
+                        throw RuntimeException("Azure TTS returned empty audio data")
+                    }
+                    return bytes
+                }
+                response.status.value == 401 -> {
+                    logger.error { "Azure TTS token expired or invalid" }
+                    throw TokenExpiredException("Azure TTS token expired or invalid")
+                }
+                response.status.value == 429 -> {
+                    logger.error { "Azure TTS rate limit exceeded" }
+                    throw RuntimeException("Azure TTS rate limit exceeded. Please try again later.")
+                }
+                else -> {
+                    val body = response.bodyAsText()
+                    logger.error { "Azure TTS failed: ${response.status} - ${body.take(500)}" }
+                    throw RuntimeException("Azure TTS failed: ${response.status}")
+                }
+            }
+        } catch (e: TokenExpiredException) {
+            throw e
+        } catch (e: RuntimeException) {
+            throw e
+        } catch (e: Exception) {
+            logger.error(e) { "Azure TTS network error" }
+            throw RuntimeException("Azure TTS network error: ${e.message}", e)
+        }
+    }
 }
+
+/**
+ * Exception thrown when the Azure TTS token has expired.
+ * The caller should invalidate the cached token and request a new one.
+ */
+class TokenExpiredException(message: String) : Exception(message)

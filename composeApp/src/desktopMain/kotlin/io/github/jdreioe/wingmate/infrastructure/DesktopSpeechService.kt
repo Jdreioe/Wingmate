@@ -54,7 +54,18 @@ class DesktopSpeechService : SpeechService {
         log.info("speak() called with text='{}', voice={}, pitch={}, rate={}", text.take(50), voice?.name, pitch, rate)
         log.info("speak() called on thread={}", Thread.currentThread().name)
         
-        // Process text to extract pause tags and create segments
+        // Check if text contains SSML markup (user inserted via sidebar buttons)
+        // Look for common SSML tags: <emphasis>, <break>, <phoneme>, <say-as>, <lang>, etc.
+        val containsSSML = text.contains(Regex("<(emphasis|break|phoneme|say-as|lang|prosody|voice)"))
+        
+        if (containsSSML) {
+            log.info("Detected SSML markup in text; bypassing text processing and using Azure TTS directly")
+            // Don't process SSML through SpeechTextProcessor - send directly to Azure with voice wrapping
+            speakWithAzureTts(text, voice, pitch, rate)
+            return
+        }
+        
+        // For plain text, process to extract pause tags and create segments
         val segments = SpeechTextProcessor.processText(text)
         log.info("Processed text into {} segments", segments.size)
         
@@ -193,7 +204,7 @@ class DesktopSpeechService : SpeechService {
         // 4. fallback "en-US"
         val koin = GlobalContext.getOrNull()
         val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
-    val uiSettings = settingsRepo?.let { runCatching { runBlocking { it.get() } }.getOrNull() }
+        val uiSettings = settingsRepo?.let { runCatching { runBlocking { it.get() } }.getOrNull() }
         val effectiveLang = when {
             !enhancedVoice.selectedLanguage.isNullOrBlank() -> enhancedVoice.selectedLanguage
             !uiSettings?.primaryLanguage.isNullOrBlank() -> uiSettings!!.primaryLanguage
@@ -204,11 +215,84 @@ class DesktopSpeechService : SpeechService {
         val vForSsml = enhancedVoice.copy(primaryLanguage = effectiveLang)
         
         try {
-            val ssml = AzureTtsClient.generateSsml(text, vForSsml)
+            // Check if text contains SSML markup (user inserted via sidebar)
+            val hasSSML = text.contains("<") && text.contains(">") && !text.trim().startsWith("<speak")
+            
+            val ssml = if (hasSSML) {
+                log.info("Text contains SSML markup; wrapping with voice/language info")
+                // Wrap user SSML in proper voice/prosody/language tags
+                wrapSSMLWithVoiceInfo(text, vForSsml)
+            } else {
+                log.info("Generating SSML from plain text")
+                // Generate complete SSML from plain text
+                AzureTtsClient.generateSsml(text, vForSsml)
+            }
+            
+            log.debug("Final SSML: ${ssml.take(300)}...")
             synthesizeAndPlayAzureSsml(ssml, vForSsml, cfg, text)
         } catch (e: Exception) {
             log.error("Azure TTS synthesis failed", e)
             throw RuntimeException("Azure TTS failed: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Wrap user-provided SSML content with proper voice/language/prosody tags.
+     * User content like "<emphasis>hello</emphasis>" gets wrapped as:
+     * <speak>
+     *   <voice name="...">
+     *     <prosody pitch="..." rate="...">
+     *       <lang xml:lang="...">
+     *         <emphasis>hello</emphasis>
+     *       </lang>
+     *     </prosody>
+     *   </voice>
+     * </speak>
+     */
+    private fun wrapSSMLWithVoiceInfo(userSSML: String, voice: Voice): String {
+        val voiceName = voice.name ?: "en-US-JennyNeural"
+        val lang = voice.primaryLanguage ?: "en-US"
+        val pitch = when {
+            voice.pitchForSSML != null -> voice.pitchForSSML!!
+            voice.pitch != null -> convertPitchToSSML(voice.pitch!!)
+            else -> "medium"
+        }
+        val rate = when {
+            voice.rateForSSML != null -> voice.rateForSSML!!
+            voice.rate != null -> convertRateToSSML(voice.rate!!)
+            else -> "medium"
+        }
+        
+        return """
+            <speak version="1.0" xml:lang="$lang">
+                <voice xml:lang="$lang" name="$voiceName">
+                    <prosody pitch="$pitch" rate="$rate">
+                        <lang xml:lang="$lang">
+                            $userSSML
+                        </lang>
+                    </prosody>
+                </voice>
+            </speak>
+        """.trimIndent()
+    }
+    
+    private fun convertPitchToSSML(pitch: Double): String {
+        return when {
+            pitch < 0.7 -> "x-low"
+            pitch < 0.8 -> "low"
+            pitch < 1.2 -> "medium"
+            pitch < 1.5 -> "high"
+            else -> "x-high"
+        }
+    }
+    
+    private fun convertRateToSSML(rate: Double): String {
+        return when {
+            rate < 0.7 -> "x-slow"
+            rate < 0.8 -> "slow"
+            rate < 1.2 -> "medium"
+            rate < 1.5 -> "fast"
+            else -> "x-fast"
         }
     }
 
