@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.focus.FocusRequester
@@ -91,6 +93,8 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showVoiceSelection by remember { mutableStateOf(false) }
     var showUiLanguageDialog by remember { mutableStateOf(false) }
+    var showDictionaryScreen by remember { mutableStateOf(false) }
+    var showSsmlDialog by remember { mutableStateOf(false) }
     var showOverflow by remember { mutableStateOf(false) }
     // fullscreen state managed via DisplayWindowBus; no local state needed
 
@@ -194,65 +198,72 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Menu")
                             }
                             DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
-                                // Language quick access
+                                // === VOICE & SPEECH ===
                                 DropdownMenuItem(
                                     text = { Text("Language: " + (selectedVoiceState.value?.selectedLanguage?.takeIf { it.isNotBlank() }
-                                        ?: primaryLanguageState.value), style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                    )) },
+                                        ?: primaryLanguageState.value), style = MaterialTheme.typography.bodyMedium) },
                                     onClick = { showOverflow = false; showUiLanguageDialog = true }
                                 )
-                                // Voice settings
                                 DropdownMenuItem(
-                                    text = { Text("Voice settings", style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                    )) },
+                                    text = { Text("Voice settings", style = MaterialTheme.typography.bodyMedium) },
                                     onClick = { showOverflow = false; showVoiceSelection = true }
                                 )
-                                // App settings
                                 DropdownMenuItem(
-                                    text = { Text("App settings", style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                    )) },
+                                    text = { Text("Pronunciation dictionary", style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = { showOverflow = false; showDictionaryScreen = true }
+                                )
+                                
+                                Divider()
+                                
+                                // === AUDIO FILES ===
+                                DropdownMenuItem(
+                                    text = { Text("Copy last soundfile", style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = {
+                                        showOverflow = false
+                                        uiScope.launch(Dispatchers.IO) {
+                                            runCatching {
+                                                val repo = GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+                                                val last = repo.list()
+                                                    .filter { it.saidText == input.text && !it.audioFilePath.isNullOrBlank() }
+                                                    .maxByOrNull { it.date ?: it.createdAt ?: 0L }
+                                                val path = last?.audioFilePath
+                                                if (!path.isNullOrBlank()) {
+                                                    GlobalContext.get().get<io.github.jdreioe.wingmate.platform.AudioClipboard>()
+                                                        .copyAudioFile(path)
+                                                }
+                                            }
+                                        }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share last soundfile", style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = {
+                                        showOverflow = false
+                                        uiScope.launch(Dispatchers.IO) {
+                                            runCatching {
+                                                val repo = GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+                                                val last = repo.list()
+                                                    .filter { it.saidText == input.text && !it.audioFilePath.isNullOrBlank() }
+                                                    .maxByOrNull { it.date ?: it.createdAt ?: 0L }
+                                                val path = last?.audioFilePath
+                                                if (!path.isNullOrBlank()) {
+                                                    GlobalContext.get().get<io.github.jdreioe.wingmate.platform.ShareService>()
+                                                        .shareAudio(path)
+                                                }
+                                            }
+                                        }
+                                    }
+                                )
+                                
+                                Divider()
+                                
+                                // === APP SETTINGS ===
+                                DropdownMenuItem(
+                                    text = { Text("App settings", style = MaterialTheme.typography.bodyMedium) },
                                     onClick = { showOverflow = false; showSettingsDialog = true }
                                 )
-                                // Pause examples
                                 DropdownMenuItem(
-                                    text = { Text("Pause examples", style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                    )) },
-                                    onClick = { 
-                                        showOverflow = false
-                                        val examples = SpeechTextProcessor.getExampleTexts()
-                                        if (examples.isNotEmpty()) {
-                                            val text = examples.random()
-                                            input = TextFieldValue(text)
-                                            secondaryLanguageRanges = emptyList()
-                                            io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(text)
-                                        }
-                                    }
-                                )
-                                // PDF merge examples
-                                DropdownMenuItem(
-                                    text = { Text("PDF merge examples", style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                    )) },
-                                    onClick = { 
-                                        showOverflow = false
-                                        val examples = SpeechTextProcessor.getPdfMergeExamples()
-                                        if (examples.isNotEmpty()) {
-                                            val text = examples.random()
-                                            input = TextFieldValue(text)
-                                            secondaryLanguageRanges = emptyList()
-                                            io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(text)
-                                        }
-                                    }
-                                )
-                                // Check for updates (if UpdateService is available)
-                                DropdownMenuItem(
-                                    text = { Text("Check for updates", style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                    )) },
+                                    text = { Text("Check for updates", style = MaterialTheme.typography.bodyMedium) },
                                     onClick = { 
                                         showOverflow = false
                                         val updateService = runCatching { 
@@ -265,75 +276,13 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         }
                                     }
                                 )
-                                // Optional: back to welcome (if supported)
                                 if (onBackToWelcome != null) {
                                     DropdownMenuItem(
-                                        text = { Text("Welcome screen", style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                        )) },
+                                        text = { Text("Welcome screen", style = MaterialTheme.typography.bodyMedium) },
                                         onClick = { showOverflow = false; onBackToWelcome.invoke() }
                                     )
                                 }
-                                // Copy last played audio for current text
-                                DropdownMenuItem(
-                                    text = { Text("Copy last soundfile", style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                    )) },
-                                    onClick = {
-                                        println("[DEBUG] Copy last soundfile menu item clicked")
-                                        showOverflow = false
-                                        uiScope.launch(Dispatchers.IO) {
-                                            runCatching {
-                                                println("[DEBUG] Looking for last audio file for text: ${input.text}")
-                                                val repo = GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
-                                                val allEntries = repo.list()
-                                                println("[DEBUG] Total entries in repo: ${allEntries.size}")
-                                                
-                                                val matchingEntries = allEntries.filter { it.saidText == input.text && !it.audioFilePath.isNullOrBlank() }
-                                                println("[DEBUG] Matching entries with audio: ${matchingEntries.size}")
-                                                
-                                                val last = matchingEntries.maxByOrNull { it.date ?: it.createdAt ?: 0L }
-                                                val path = last?.audioFilePath
-                                                
-                                                println("[DEBUG] Last audio file path: $path")
-                                                
-                                                if (!path.isNullOrBlank()) {
-                                                    val clipboard = GlobalContext.get().get<io.github.jdreioe.wingmate.platform.AudioClipboard>()
-                                                    println("[DEBUG] Calling copyAudioFile with path: $path")
-                                                    val result = clipboard.copyAudioFile(path)
-                                                    println("[DEBUG] copyAudioFile result: $result")
-                                                } else {
-                                                    println("[DEBUG] No audio file path found")
-                                                }
-                                            }.onFailure { e ->
-                                                println("[ERROR] Exception in copy soundfile: ${e.message}")
-                                                e.printStackTrace()
-                                            }
-                                        }
-                                    }
-                                )
-                                    // Share last soundfile for current text
-                                    DropdownMenuItem(
-                                        text = { Text("Share last soundfile", style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                        )) },
-                                        onClick = {
-                                            showOverflow = false
-                                            uiScope.launch(Dispatchers.IO) {
-                                                runCatching {
-                                                    val repo = GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
-                                                    val last = repo.list()
-                                                        .filter { it.saidText == input.text && !it.audioFilePath.isNullOrBlank() }
-                                                        .maxByOrNull { it.date ?: it.createdAt ?: 0L }
-                                                    val path = last?.audioFilePath
-                                                    if (!path.isNullOrBlank()) {
-                                                        GlobalContext.get().get<io.github.jdreioe.wingmate.platform.ShareService>()
-                                                            .shareAudio(path)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    )
+
                             }
                         }
                     )
@@ -492,6 +441,18 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             )
                         }
                     )
+                    
+                    // SSML controls button for narrow screens
+                    if (!isWide) {
+                        OutlinedButton(
+                            onClick = { showSsmlDialog = true },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Text("SSML Controls", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
                     
                     // Word and letter prediction bar
                     if (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty()) {
@@ -903,6 +864,85 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             }
             if (showUiLanguageDialog) {
                 UiLanguageDialog(show = true, onDismiss = { showUiLanguageDialog = false })
+            }
+            if (showDictionaryScreen) {
+                val dictionaryRepo = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>() }
+                val scope = rememberCoroutineScope()
+                var entries by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.PronunciationEntry>>(emptyList()) }
+                
+                LaunchedEffect(showDictionaryScreen) {
+                    if (showDictionaryScreen) {
+                        entries = dictionaryRepo.getAll()
+                    }
+                }
+                
+                DictionaryScreen(
+                    entries = entries,
+                    onAddEntry = { word, phoneme, alphabet ->
+                        scope.launch {
+                            dictionaryRepo.add(io.github.jdreioe.wingmate.domain.PronunciationEntry(word, phoneme, alphabet))
+                            entries = dictionaryRepo.getAll()
+                        }
+                    },
+                    onDeleteEntry = { entry ->
+                        scope.launch {
+                            dictionaryRepo.delete(entry.word)
+                            entries = dictionaryRepo.getAll()
+                        }
+                    },
+                    onBack = { showDictionaryScreen = false }
+                )
+            }
+            
+            if (showSsmlDialog) {
+                androidx.compose.ui.window.Dialog(
+                    onDismissRequest = { showSsmlDialog = false }
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth(0.95f)
+                            .fillMaxHeight(0.85f),
+                        shape = MaterialTheme.shapes.large,
+                        color = MaterialTheme.colorScheme.surface
+                    ) {
+                        Column {
+                            // Dialog title bar with close button
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "SSML Controls",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                IconButton(onClick = { showSsmlDialog = false }) {
+                                    Icon(Icons.Default.ArrowBack, "Close")
+                                }
+                            }
+                            
+                            Divider()
+                            
+                            // SSML Sidebar content
+                            SsmlSidebar(
+                                modifier = Modifier.weight(1f),
+                                inputText = input.text,
+                                inputSelection = input.selection,
+                                onInsertSsml = { ssmlText ->
+                                    val cursorPos = input.selection.start.coerceIn(0, input.text.length)
+                                    val newText = input.text.substring(0, cursorPos) + ssmlText + input.text.substring(cursorPos)
+                                    val newCursor = cursorPos + ssmlText.length
+                                    secondaryLanguageRanges = adjustRangesAfterEdit(input.text, newText, secondaryLanguageRanges)
+                                    input = TextFieldValue(newText, selection = TextRange(newCursor))
+                                    io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                                }
+                            )
+                        }
+                    }
+                }
             }
     }
 }
