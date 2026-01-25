@@ -47,6 +47,9 @@ final class IosViewModel: ObservableObject {
     @Published var primaryLanguage: String = "en-US"
     @Published var selectedVoice: Shared.Voice? = nil
     @Published var availableLanguages: [String] = []
+    // Predictions
+    @Published var predictions: Shared.PredictionResult = Shared.PredictionResult(words: [], letters: [])
+    private var predictionJob: Task<Void, Never>? = nil
     // History items exposed as phrases for UI rendering
     @Published var historyPhrases: [Shared.Phrase] = []
     // Special selection for History view
@@ -126,6 +129,8 @@ final class IosViewModel: ObservableObject {
         }
     // Preload history once Koin is up
     await loadHistory()
+    // Train prediction model on history
+    await bridge.trainPredictionModel()
     }
 
     func deletePhrase(id: String) {
@@ -160,6 +165,8 @@ final class IosViewModel: ObservableObject {
         let t = phrase.text
         guard !t.isEmpty else { return }
         input.append(t)
+        // Incremental learning
+        Task { await bridge.learnPhrase(text: t) }
     }
 
     func speak(_ text: String) {
@@ -396,5 +403,49 @@ final class IosViewModel: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         store?.accept(intent: Shared.PhraseListStoreIntent.AddPhrase(text: trimmed))
+        // Incremental learning
+        Task { await bridge.learnPhrase(text: trimmed) }
+    }
+    
+    // MARK: - Prediction
+    func onInputChanged(_ newValue: String) {
+        input = newValue
+        predictionJob?.cancel()
+        predictionJob = Task {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms debounce
+            if Task.isCancelled { return }
+            let res = await bridge.predict(context: newValue, maxWords: 5, maxLetters: 5)
+            await MainActor.run { self.predictions = res }
+        }
+    }
+    
+    func applyWordPrediction(_ word: String) {
+        let text = input
+        // Simple heuristic: replace last word part or append
+        // Finding the last word boundary
+        let ns = text as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        // Regex to find the last token
+        // Strategy: find last space.
+        if let lastSpaceInfo = text.lastIndex(of: " ") {
+            let prefix = text[..<lastSpaceInfo]
+            // If the typed word matches start of prediction, replace it. 
+            // Actually, simplest is: if text ends with space, append. If not, replace last token.
+            if text.hasSuffix(" ") {
+                input = text + word + " "
+            } else {
+                input = String(prefix) + " " + word + " "
+            }
+        } else {
+            // First word
+             input = word + " "
+        }
+        // Re-predict
+        onInputChanged(input)
+    }
+    
+    func applyLetterPrediction(_ char: String) {
+        input.append(char)
+        onInputChanged(input)
     }
 }

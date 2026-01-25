@@ -36,6 +36,8 @@ fun overrideIosSpeechService() {
                     saidRepo = get()
                 )
             }
+            // Text prediction service
+            single<io.github.jdreioe.wingmate.domain.TextPredictionService> { io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService() }
         }
     )
 }

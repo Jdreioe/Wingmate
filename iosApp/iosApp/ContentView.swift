@@ -57,6 +57,8 @@ struct ContentView: View {
             wiggleMode: $wiggleMode,
             gridLocal: $gridLocal,
             draggingId: $draggingId,
+            gridLocal: $gridLocal,
+            draggingId: $draggingId,
             draggingOffset: $draggingOffset,
             dragStartFrame: $dragStartFrame,
             itemFrames: $itemFrames,
@@ -138,6 +140,7 @@ struct ContentView: View {
                                                     openVoicePicker: { showVoiceSheet = true },
                                                     openWelcomeFlow: { showWelcomeFlow = true }
                                                 )
+                                                )
                                                 .frame(width: rightPanelWidth)
                                             }
                                             .transition(.asymmetric(
@@ -149,13 +152,37 @@ struct ContentView: View {
                                     .onAppear { isWideLayout = true }
                                     .animation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.1), value: showRightPanel)
                                 } else {
-                                    mainContent(columns: cols)
-                                        .padding(16)
-                                        .onAppear {
-                                            isWideLayout = false
-                                            showRightPanel = false
-                                            autoCollapsedRightPanel = true
+                                    VStack(spacing: 0) {
+                                        // Prediction bar (iPhone/Narrow layout)
+                                        if !model.predictions.words.isEmpty || !model.predictions.letters.isEmpty {
+                                            PredictionBar(
+                                                result: model.predictions,
+                                                onWordSelected: { model.applyWordPrediction($0) },
+                                                onLetterSelected: { model.applyLetterPrediction($0) },
+                                                fontSizeScale: 1.0 // Adjust if needed
+                                            )
+                                            .transition(.move(edge: .top).combined(with: .opacity))
                                         }
+                                            VStack(spacing: 0) {
+                                        // Prediction bar (iPhone/Narrow layout)
+                                        if !model.predictions.words.isEmpty || !model.predictions.letters.isEmpty {
+                                            PredictionBar(
+                                                result: model.predictions,
+                                                onWordSelected: { model.applyWordPrediction($0) },
+                                                onLetterSelected: { model.applyLetterPrediction($0) },
+                                                fontSizeScale: 1.0 // Adjust if needed
+                                            )
+                                            .transition(.move(edge: .top).combined(with: .opacity))
+                                        }
+                                        
+                                        mainContent(columns: cols)
+                                            .padding(16)
+                                    }
+                                    .onAppear {
+                                        isWideLayout = false
+                                        showRightPanel = false
+                                        autoCollapsedRightPanel = true
+                                    }
                                 }
                             }
                             .onChange(of: currentWideLayout) { wide in

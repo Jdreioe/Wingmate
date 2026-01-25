@@ -28,6 +28,7 @@ fun initKoin(extra: Module? = null) {
         single<PronunciationDictionaryRepository> { InMemoryPronunciationDictionaryRepository() }
         single<SpeechService> { NoopSpeechService() } // Android overrides this
         single { AzureVoiceCatalog(get<ConfigRepository>()) }
+        single { DictionaryLoader() } // For language dictionary pretraining
         single { PhraseUseCase(get<PhraseRepository>()) }
     single { CategoryUseCase(get<io.github.jdreioe.wingmate.domain.CategoryRepository>()) }
         single { SettingsUseCase(get<SettingsRepository>()) }
@@ -39,6 +40,7 @@ fun initKoin(extra: Module? = null) {
     }
 
     startKoin {
+        allowOverride(true)
         // Include base bindings, MVIKotlin store module, and any extra platform-specific modules
         val modulesList = listOf(baseModule, appModule) + listOfNotNull(extra)
         modules(modulesList)

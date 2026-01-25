@@ -34,26 +34,80 @@ class SimpleNGramPredictionService : TextPredictionService {
     
     private var trained = false
     
-    override suspend fun train(history: List<SaidText>) = withContext(Dispatchers.Default) {
-        log.info { "Training prediction model on ${history.size} history entries" }
+    /**
+     * Train the model on a list of phrases.
+     * @param history List of phrases to train on
+     * @param clear If true, wipes existing model data before training. Set false to append to existing data.
+     */
+    override suspend fun train(history: List<SaidText>) = train(history, true)
+
+    suspend fun train(history: List<SaidText>, clear: Boolean) = withContext(Dispatchers.Default) {
+        println("DEBUG: Training on ${history.size} entries (clear=$clear)")
         
         mutex.withLock {
-            // Clear existing data
-            bigramCounts.clear()
-            trigramCounts.clear()
-            letterBigramCounts.clear()
-            letterTrigramCounts.clear()
-            wordsByPrefix.clear()
-            wordFrequency.clear()
+            if (clear) {
+                // Clear existing data
+                bigramCounts.clear()
+                trigramCounts.clear()
+                letterBigramCounts.clear()
+                letterTrigramCounts.clear()
+                wordsByPrefix.clear()
+                wordFrequency.clear()
+            }
             
             // Process each history entry
             history.forEach { entry ->
                 val text = entry.saidText ?: return@forEach
+                println("DEBUG: Training on text: '$text'")
                 trainOnText(text)
             }
             
             trained = true
-            log.info { "Training complete. Vocabulary size: ${wordFrequency.size} words, ${bigramCounts.size} bigrams, ${trigramCounts.size} trigrams" }
+            println("DEBUG: Training complete. Vocab: ${wordFrequency.size} words. Prefixes: ${wordsByPrefix.size}. Bigrams: ${bigramCounts.size}. Trigrams: ${trigramCounts.size}")
+            
+            // Log top 10 words
+            val topWords = wordFrequency.entries.sortedByDescending { it.value }.take(10).map { "${it.key}(${it.value})" }
+            println("DEBUG: Top words: $topWords")
+        }
+    }
+    
+    /** Incrementally add a single phrase to the model without full retrain */
+    suspend fun learnPhrase(text: String) = withContext(Dispatchers.Default) {
+        mutex.withLock {
+            println("DEBUG: Learning new phrase: '$text'")
+            trainOnText(text)
+        }
+    }
+    
+    /** 
+     * Set the base language for dictionary pretraining.
+     * This loads common words for the language and adds them to the model.
+     * User's own words will be added on top with higher priority.
+     */
+    suspend fun setBaseLanguage(words: List<Pair<String, Int>>) = withContext(Dispatchers.Default) {
+        mutex.withLock {
+            println("DEBUG: Setting base language with ${words.size} dictionary words")
+            
+            // Add dictionary words with their frequency weights
+            words.forEach { (word, frequency) ->
+                // Use lower weight for dictionary words so user words have priority
+                // Frequency is roughly 0-255. Divide by 10 gives range 0-25.
+                // User words increase by 1 per usage.
+                val weight = (frequency / 10).coerceAtLeast(1)
+                wordFrequency[word] = (wordFrequency[word] ?: 0) + weight
+                
+                // Index by all prefixes
+                for (len in 1..word.length) {
+                    val prefix = word.substring(0, len).lowercase()
+                    wordsByPrefix.getOrPut(prefix) { mutableSetOf() }.add(word)
+                }
+                
+                // Train letter n-grams with weight
+                trainLetterNGrams(word, weight)
+            }
+            
+            trained = true
+            println("DEBUG: Base language set. Vocab: ${wordFrequency.size} words. Prefixes: ${wordsByPrefix.size}")
         }
     }
     
@@ -92,7 +146,7 @@ class SimpleNGramPredictionService : TextPredictionService {
         }
     }
     
-    private fun trainLetterNGrams(word: String) {
+    private fun trainLetterNGrams(word: String, weight: Int = 1) {
         if (word.length < 2) return
         
         // Letter bigrams
@@ -100,7 +154,7 @@ class SimpleNGramPredictionService : TextPredictionService {
             val c1 = word[i].lowercaseChar()
             val c2 = word[i + 1]
             letterBigramCounts.getOrPut(c1) { mutableMapOf() }
-                .let { it[c2] = (it[c2] ?: 0) + 1 }
+                .let { it[c2] = (it[c2] ?: 0) + weight }
         }
         
         // Letter trigrams
@@ -108,14 +162,16 @@ class SimpleNGramPredictionService : TextPredictionService {
             val context = word.substring(i, i + 2).lowercase()
             val nextChar = word[i + 2]
             letterTrigramCounts.getOrPut(context) { mutableMapOf() }
-                .let { it[nextChar] = (it[nextChar] ?: 0) + 1 }
+                .let { it[nextChar] = (it[nextChar] ?: 0) + weight }
         }
     }
     
     private fun tokenize(text: String): List<String> {
-        // Split on whitespace and punctuation, keeping words only
-        return text.split(Regex("[\\s,.!?;:\"'()\\\\\\[\\\\]{}]+"))
-            .filter { it.isNotBlank() && it.all { c -> c.isLetter() || c == '-' || c == '\'' } }
+        // Split on whitespace and common punctuation only
+        // Keep words with letters, hyphens, and apostrophes (for contractions)
+        return text.split(Regex("[\\s,.!?;:]+"))
+            .map { it.trim('"', '\'', '(', ')', '[', ']', '{', '}') }
+            .filter { it.isNotBlank() && it.any { c -> c.isLetter() } }
     }
     
     override suspend fun predict(context: String, maxWords: Int, maxLetters: Int): PredictionResult = 
@@ -137,61 +193,80 @@ class SimpleNGramPredictionService : TextPredictionService {
     
     private fun predictWords(context: String, maxWords: Int): List<String> {
         val trimmed = context.trimEnd()
-        val words = tokenize(trimmed)
-        val lastWord = context.substringAfterLast(' ', "").takeIf { 
-            !context.endsWith(' ') && it.isNotBlank() 
-        }
+        val historyWordsForContext = tokenize(trimmed)
         
-        // Case 1: User is typing a partial word - suggest completions
-        if (lastWord != null && lastWord.isNotBlank()) {
-            val prefix = lastWord.lowercase()
-            val completions = wordsByPrefix[prefix]
-                ?.filter { it.lowercase() != prefix }
-                ?.map { it to (wordFrequency[it] ?: 0) }
-                ?.sortedByDescending { it.second }
-                ?.take(maxWords)
-                ?.map { it.first }
-                ?: emptyList()
-            
-            if (completions.isNotEmpty()) {
-                return completions
+        // Check if user is currently typing a word (no trailing space)
+        val lastWordInProgress = if (context.isNotEmpty() && !context.endsWith(' ')) {
+            context.substringAfterLast(' ', context).takeIf { it.isNotBlank() }
+        } else null
+        
+        val prefix = lastWordInProgress?.lowercase() ?: ""
+        
+        // Collect all candidates with weights
+        val candidates = mutableMapOf<String, Double>()
+        
+        // 1. Trigram signals (highest precision)
+        // If we are typing a word, context is the two words BEFORE it.
+        // If we just typed a space, context is the two words BEFORE the space.
+        val contextForNGrams = if (lastWordInProgress != null) {
+            historyWordsForContext.dropLast(1)
+        } else {
+            historyWordsForContext
+        }
+
+        if (contextForNGrams.size >= 2) {
+            val trigramKey = "${contextForNGrams[contextForNGrams.size - 2].lowercase()} ${contextForNGrams.last().lowercase()}"
+            trigramCounts[trigramKey]?.forEach { (word, count) ->
+                candidates[word] = (candidates[word] ?: 0.0) + (count * 10.0)
             }
         }
         
-        // Case 2: Predict next word based on n-gram context
-        val predictions = mutableListOf<Pair<String, Int>>()
-        
-        // Try trigram first (higher accuracy)
-        if (words.size >= 2) {
-            val trigramContext = "${words[words.size - 2].lowercase()} ${words.last().lowercase()}"
-            trigramCounts[trigramContext]?.forEach { (word, count) ->
-                predictions.add(word to count * 3) // Weight trigrams higher
+        // 2. Bigram signals
+        if (contextForNGrams.isNotEmpty()) {
+            val bigramKey = contextForNGrams.last().lowercase()
+            bigramCounts[bigramKey]?.forEach { (word, count) ->
+                candidates[word] = (candidates[word] ?: 0.0) + (count * 5.0)
             }
         }
         
-        // Add bigram predictions
-        if (words.isNotEmpty()) {
-            val bigramContext = words.last().lowercase()
-            bigramCounts[bigramContext]?.forEach { (word, count) ->
-                predictions.add(word to count * 2)
+        // 3. Unigram / Completion signals
+        if (prefix.isNotEmpty()) {
+            // Add all words from vocabulary that match the current prefix
+            wordsByPrefix[prefix]?.forEach { word ->
+                candidates[word] = (candidates[word] ?: 0.0) + (wordFrequency[word] ?: 1).toDouble()
+            }
+        } else {
+            // Fallback to general frequency if no context or prefix
+            wordFrequency.forEach { (word, count) ->
+                candidates[word] = (candidates[word] ?: 0.0) + (count * 0.1)
             }
         }
         
-        // Fallback to most frequent words
-        if (predictions.isEmpty()) {
-            wordFrequency.entries
-                .sortedByDescending { it.value }
-                .take(maxWords)
-                .forEach { predictions.add(it.key to it.value) }
+        // Log raw candidates
+        if (candidates.isNotEmpty()) {
+            println("DEBUG: Raw candidates for '$prefix': ${candidates.entries.sortedByDescending { it.value }.take(5).map { "${it.key}(${it.value})" }}")
         }
-        
-        // Merge and sort by weighted count
-        return predictions
-            .groupBy { it.first }
-            .map { (word, counts) -> word to counts.sumOf { it.second } }
-            .sortedByDescending { it.second }
+
+        // Final filtering and ranking
+        val result = candidates.entries
+            .asSequence()
+            .filter { (word, _) ->
+                // If user is typing, only show words starting with that prefix (completions)
+                // If user just typed a space, show any likely next words
+                if (prefix.isNotEmpty()) {
+                    word.lowercase().startsWith(prefix) && word.lowercase() != prefix
+                } else {
+                    true
+                }
+            }
+            .sortedByDescending { it.value }
+            .map { it.key }
+            .distinct()
             .take(maxWords)
-            .map { it.first }
+            .toList()
+
+        println("PREDICTION_V2: prefix='$prefix' result=$result")
+        return result
     }
     
     private fun predictLetters(context: String, maxLetters: Int): List<Char> {

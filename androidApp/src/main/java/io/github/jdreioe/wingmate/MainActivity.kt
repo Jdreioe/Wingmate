@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.FoldingFeature
 import androidx.window.area.WindowAreaController
@@ -80,6 +81,9 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalWindowApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Ensure IME insets can be detected correctly
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         
         // Initialize Koin if not already done
         if (GlobalContext.getOrNull() == null) {

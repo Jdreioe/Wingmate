@@ -129,28 +129,57 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             val uiScope = rememberCoroutineScope()
             var historyItems by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.SaidText>>(emptyList()) }
 
+            // Track model version to re-trigger predictions when training finishes
+            var predictionModelVersion by remember { mutableStateOf(0) }
+
             // Load history on start so the History category appears if there are existing items
             // Also train the prediction model on the history
-            LaunchedEffect(saidRepo) {
+            LaunchedEffect(saidRepo, primaryLanguageState.value) {
                 try {
                     val list = saidRepo.list()
                     println("DEBUG: Loaded ${list.size} history entries for prediction training")
                     historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L }
-                    // Train prediction model on history
-                    if (predictionService != null) {
+                    
+                    // Train prediction model: first load base language dictionary, then user history
+                    val ngramService = predictionService as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
+                    if (ngramService != null) {
+                        // Load dictionary for primary language
+                        val dictionaryLoader = runCatching { 
+                            org.koin.core.context.GlobalContext.get().get<io.github.jdreioe.wingmate.infrastructure.DictionaryLoader>() 
+                        }.getOrNull()
+                        
+                        if (dictionaryLoader != null) {
+                            val dictWords = dictionaryLoader.loadDictionary(primaryLanguageState.value)
+                            if (dictWords.isNotEmpty()) {
+                                ngramService.setBaseLanguage(dictWords)
+                                // History trained on TOP of dictionary, so don't clear
+                                ngramService.train(list, clear = false)
+                            } else {
+                                // No dictionary (or failed), so standard train (clears old data)
+                                ngramService.train(list)
+                            }
+                        } else {
+                            ngramService.train(list)
+                        }
+                        
+                        predictionModelVersion++ // Trigger update
+                        println("DEBUG: Prediction model trained, isTrained=${ngramService.isTrained()}")
+                    } else if (predictionService != null) {
                         predictionService.train(list)
-                        println("DEBUG: Prediction model trained, isTrained=${predictionService.isTrained()}")
+                        predictionModelVersion++
+                        println("DEBUG: Prediction model trained (non-ngram service)")
                     } else {
                         println("DEBUG: No prediction service available")
                     }
                 } catch (e: Throwable) {
                     println("DEBUG: Error loading history: ${e.message}")
+                    e.printStackTrace()
                     historyItems = emptyList()
                 }
             }
             
-            // Update predictions as user types
-            LaunchedEffect(input.text) {
+            // Update predictions as user types or model retrains
+            LaunchedEffect(input.text, predictionModelVersion) {
                 if (predictionService == null || !predictionService.isTrained()) {
                     predictions = PredictionResult()
                     return@LaunchedEffect
@@ -313,11 +342,13 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         }
                                         
                                         // Refresh history from repo so the History chip appears after first save
-                                        // Also retrain prediction model with new data
+                                        // Also train prediction model incrementally with new phrase
                                         try {
                                             val list = saidRepo.list()
                                             uiScope.launch { historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
-                                            predictionService?.train(list)
+                                            // Incremental learning for immediate feedback
+                                            (predictionService as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService)?.learnPhrase(input.text)
+                                            predictionModelVersion++ // Trigger update after new entry
                                         } catch (_: Throwable) {}
                                     } catch (t: Throwable) {
                                         // swallow for UI; diagnostics logged by service
