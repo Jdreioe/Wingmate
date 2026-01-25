@@ -1,13 +1,24 @@
 package io.github.jdreioe.wingmate.desktop
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.window.application
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import java.awt.GraphicsEnvironment
 import org.slf4j.LoggerFactory
 import io.github.jdreioe.wingmate.App
@@ -44,7 +55,7 @@ fun main() {
     runCatching {
         loadKoinModules(
             module {
-                single<SpeechService> { DesktopSpeechService() }
+                single<SpeechService> { DesktopSpeechService(get()) }
             }
         )
         log.info("Registered DesktopSpeechService successfully")
@@ -56,18 +67,32 @@ fun main() {
         Window(
             onCloseRequest = { exitApplication() },
             title = "Wingmate Desktop",
+            resizable = true,
             state = rememberWindowState()
         ) {
             val windowRef = this.window
             LaunchedEffect(windowRef) {
                 setAppIcon(windowRef)
             }
-            App()
+            // Ensure content fills the entire window
+            Box(
+                modifier = Modifier.fillMaxSize()
+                    .background(Color(0xFF121217))
+            ) {
+                App()
+            }
         }
 
         // Full-screen display window driven by DisplayWindowBus
-        val show by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsState(initial = false)
-        if (show) {
+        // Only show when explicitly requested via the fullscreen button
+        val showDisplay by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsState()
+        // Add a startup guard to prevent showing during initial composition
+        var hasInitialized by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(500)
+            hasInitialized = true
+        }
+        if (showDisplay && hasInitialized) {
             // Determine a secondary screen if available
             val ge = GraphicsEnvironment.getLocalGraphicsEnvironment()
             val screens = ge.screenDevices

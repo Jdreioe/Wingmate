@@ -104,4 +104,5 @@ class NoopSpeechService : SpeechService {
     override suspend fun resume() { /* no-op */ }
     override fun isPlaying(): Boolean = false
     override fun isPaused(): Boolean = false
+    override suspend fun guessPronunciation(text: String, language: String): String? = null
 }

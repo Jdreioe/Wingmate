@@ -15,6 +15,10 @@ import platform.AVFAudio.AVAudioPlayer
 import platform.AVFAudio.AVAudioSession
 import platform.Foundation.*
 
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import kotlinx.serialization.json.*
+
 private val logger = KotlinLogging.logger {}
 
 @OptIn(ExperimentalForeignApi::class)
@@ -228,6 +232,53 @@ class IosSpeechService(
             audioPlayer?.stop()
         }
         audioPlayer = null
+    }
+
+    override suspend fun resume() {
+        // No-op for now
+    }
+
+    override fun isPlaying(): Boolean = audioPlayer?.isPlaying() == true
+
+    override fun isPaused(): Boolean = false
+
+    override suspend fun guessPronunciation(text: String, language: String): String? {
+        val langCode = language.take(2).lowercase()
+        return try {
+            // Use Wiktionary API as a robust source for IPA
+            val url = "https://en.wiktionary.org/w/api.php?action=query&titles=${text.trim()}&prop=revisions&rvprop=content&format=json"
+            val response = httpClient.get(url)
+            
+            if (response.status.value == 200) {
+                val body = response.bodyAsText()
+                val json = Json { ignoreUnknownKeys = true }
+                val root = json.parseToJsonElement(body).jsonObject
+                
+                val pages = root["query"]?.jsonObject?.get("pages")?.jsonObject
+                if (pages == null || pages.isEmpty()) return null
+                
+                val pageKey = pages.keys.first()
+                if (pageKey == "-1") return null
+                
+                val page = pages[pageKey]?.jsonObject
+                val revisions = page?.get("revisions")?.jsonArray
+                val content = revisions?.get(0)?.jsonObject?.get("*")?.jsonPrimitive?.content
+                
+                if (content != null) {
+                    val regex = Regex("\\{\\{IPA\\|$langCode\\|/([^/]+)/")
+                    val match = regex.find(content)
+                    if (match != null) return match.groupValues[1]
+                    
+                    val regexBrackets = Regex("\\{\\{IPA\\|$langCode\\|\\[([^\\]]+)\\]")
+                    val matchBrackets = regexBrackets.find(content)
+                    if (matchBrackets != null) return matchBrackets.groupValues[1]
+                }
+            }
+            null
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to guess pronunciation for '$text'" }
+            null
+        }
     }
 
     // --- Caching helpers ---

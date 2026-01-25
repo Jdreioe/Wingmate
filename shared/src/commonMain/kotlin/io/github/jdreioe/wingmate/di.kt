@@ -23,6 +23,7 @@ fun initKoin(extra: Module? = null) {
         single<VoiceRepository> { InMemoryVoiceRepository() }
         single<SaidTextRepository> { InMemorySaidTextRepository() }
         single<ConfigRepository> { InMemoryConfigRepository() }
+        single<PronunciationDictionaryRepository> { InMemoryPronunciationDictionaryRepository() }
         single<SpeechService> { NoopSpeechService() } // Android overrides this
         single { AzureVoiceCatalog(get<ConfigRepository>()) }
         single { PhraseUseCase(get<PhraseRepository>()) }
