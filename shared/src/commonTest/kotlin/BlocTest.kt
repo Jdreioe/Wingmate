@@ -14,6 +14,20 @@ import kotlin.test.assertTrue
             items += p
             return p
         }
+        override suspend fun update(phrase: Phrase): Phrase {
+            val index = items.indexOfFirst { it.id == phrase.id }
+            if (index >= 0) items[index] = phrase
+            return phrase
+        }
+        override suspend fun delete(id: String) {
+            items.removeAll { it.id == id }
+        }
+        override suspend fun move(fromIndex: Int, toIndex: Int) {
+            if (fromIndex in items.indices && toIndex in items.indices) {
+                val item = items.removeAt(fromIndex)
+                items.add(toIndex, item)
+            }
+        }
 }
 
 class BlocTest {

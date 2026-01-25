@@ -14,6 +14,8 @@ import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
+import io.github.jdreioe.wingmate.di.appModule
+
 @Suppress("unused")
 fun initKoin(extra: Module? = null) {
     val baseModule: Module = module {
@@ -37,7 +39,8 @@ fun initKoin(extra: Module? = null) {
     }
 
     startKoin {
-        val modulesList = listOf(baseModule) + listOfNotNull(extra)
+        // Include base bindings, MVIKotlin store module, and any extra platform-specific modules
+        val modulesList = listOf(baseModule, appModule) + listOfNotNull(extra)
         modules(modulesList)
     }
 }

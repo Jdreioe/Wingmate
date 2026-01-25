@@ -553,7 +553,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             val response = client.get(url)
             
             if (response.status.value == 200) {
-                val body = io.ktor.client.statement.bodyAsText(response)
+                val body = response.bodyAsText()
                 val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
                 val root = json.parseToJsonElement(body).jsonObject
                 

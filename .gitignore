@@ -50,11 +50,6 @@ iosApp/Pods/
 
 ## Logs
 *.log
-composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/infrastructure/DesktopSpeechService$speak$1.class
-composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/infrastructure/DesktopSpeechService$speak$1.class
-composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/infrastructure/DesktopSpeechService$speak$2.class
-composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/ui/ComposableSingletons$PhraseScreenKt.class
-composeApp/build/classes/kotlin/main/io/github/jdreioe/wingmate/ui/ComposableSingletons$PhraseScreenKt$lambda-1$1.class
 
 # Ignore all Gradle/KMP build outputs in any module
 **/build/

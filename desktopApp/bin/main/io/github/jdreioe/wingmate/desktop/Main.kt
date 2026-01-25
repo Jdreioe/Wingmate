@@ -1,18 +1,30 @@
 package io.github.jdreioe.wingmate.desktop
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.window.application
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import java.awt.GraphicsEnvironment
 import org.slf4j.LoggerFactory
 import io.github.jdreioe.wingmate.App
 import io.github.jdreioe.wingmate.ui.DesktopTheme
 import io.github.jdreioe.wingmate.initKoin
+import io.github.jdreioe.wingmate.overrideDesktopSpeechService
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.UpdateService
 import io.github.jdreioe.wingmate.infrastructure.DesktopSpeechService
@@ -36,38 +48,40 @@ fun main() {
     // Initialize Koin for desktop
     initKoin(module { })
     
-    // Register desktop-specific implementations
-    setupDesktopRepositories()
+    // Register all desktop-specific implementations (repositories, services, etc.)
+    overrideDesktopSpeechService()
     setupUpdateService()
-    
-    // Register desktop speech service directly
-    runCatching {
-        loadKoinModules(
-            module {
-                single<SpeechService> { DesktopSpeechService() }
-            }
-        )
-        log.info("Registered DesktopSpeechService successfully")
-    }.onFailure { t -> 
-        log.error("Failed to register DesktopSpeechService", t) 
-    }
     
     application {
         Window(
             onCloseRequest = { exitApplication() },
             title = "Wingmate Desktop",
+            resizable = true,
             state = rememberWindowState()
         ) {
             val windowRef = this.window
             LaunchedEffect(windowRef) {
                 setAppIcon(windowRef)
             }
-            App()
+            // Ensure content fills the entire window
+            Box(
+                modifier = Modifier.fillMaxSize()
+                    .background(Color(0xFF121217))
+            ) {
+                App()
+            }
         }
 
         // Full-screen display window driven by DisplayWindowBus
-        val show by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsState(initial = false)
-        if (show) {
+        // Only show when explicitly requested via the fullscreen button
+        val showDisplay by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsState()
+        // Add a startup guard to prevent showing during initial composition
+        var hasInitialized by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(500)
+            hasInitialized = true
+        }
+        if (showDisplay && hasInitialized) {
             // Determine a secondary screen if available
             val ge = GraphicsEnvironment.getLocalGraphicsEnvironment()
             val screens = ge.screenDevices
@@ -98,80 +112,7 @@ fun main() {
     }
 }
 
-private fun setupDesktopRepositories() {
-    val log = LoggerFactory.getLogger("DesktopMain")
-    
-    // Register desktop-specific repositories
-    runCatching {
-        val repoClass = Class.forName("io.github.jdreioe.wingmate.infrastructure.DesktopSqlConfigRepository")
-        val repo = repoClass.getDeclaredConstructor().newInstance() as io.github.jdreioe.wingmate.domain.ConfigRepository
-        loadKoinModules(module { single<io.github.jdreioe.wingmate.domain.ConfigRepository> { repo } })
-        log.info("Registered DesktopSqlConfigRepository")
-    }.onFailure { t -> log.warn("Could not register DesktopSqlConfigRepository", t) }
-    
-    runCatching {
-        val repoClass = Class.forName("io.github.jdreioe.wingmate.infrastructure.DesktopSqlPhraseRepository")
-        val repo = repoClass.getDeclaredConstructor().newInstance() as io.github.jdreioe.wingmate.domain.PhraseRepository
-        loadKoinModules(module { single<io.github.jdreioe.wingmate.domain.PhraseRepository> { repo } })
-        log.info("Registered DesktopSqlPhraseRepository")
-    }.onFailure { t -> log.warn("Could not register DesktopSqlPhraseRepository", t) }
-    
-    runCatching {
-        val repoClass = Class.forName("io.github.jdreioe.wingmate.infrastructure.DesktopSqlCategoryRepository")
-        val repo = repoClass.getDeclaredConstructor().newInstance() as io.github.jdreioe.wingmate.domain.CategoryRepository
-        loadKoinModules(module { single<io.github.jdreioe.wingmate.domain.CategoryRepository> { repo } })
-        log.info("Registered DesktopSqlCategoryRepository")
-    }.onFailure { t -> 
-        log.warn("Could not register DesktopSqlCategoryRepository", t)
-    }
-    
-    runCatching {
-        val repoClass = Class.forName("io.github.jdreioe.wingmate.infrastructure.DesktopSqlSettingsRepository")
-        val repo = repoClass.getDeclaredConstructor().newInstance() as io.github.jdreioe.wingmate.domain.SettingsRepository
-        loadKoinModules(module { single<io.github.jdreioe.wingmate.domain.SettingsRepository> { repo } })
-        log.info("Registered DesktopSqlSettingsRepository")
-    }.onFailure { t -> log.warn("Could not register DesktopSqlSettingsRepository", t) }
 
-    // Voice repository (SQLite) for caching voices and persisting selected voice
-    runCatching {
-        val repoClass = Class.forName("io.github.jdreioe.wingmate.infrastructure.DesktopSqlVoiceRepository")
-        val repo = repoClass.getDeclaredConstructor().newInstance() as io.github.jdreioe.wingmate.domain.VoiceRepository
-        loadKoinModules(module { single<io.github.jdreioe.wingmate.domain.VoiceRepository> { repo } })
-        log.info("Registered DesktopSqlVoiceRepository")
-    }.onFailure { t -> log.warn("Could not register DesktopSqlVoiceRepository", t) }
-
-    // Said text history repository (SQLite)
-    runCatching {
-        val repoClass = Class.forName("io.github.jdreioe.wingmate.infrastructure.DesktopSqlSaidTextRepository")
-        val repo = repoClass.getDeclaredConstructor().newInstance() as io.github.jdreioe.wingmate.domain.SaidTextRepository
-        loadKoinModules(module { single<io.github.jdreioe.wingmate.domain.SaidTextRepository> { repo } })
-        log.info("Registered DesktopSqlSaidTextRepository")
-    }.onFailure { t -> log.warn("Could not register DesktopSqlSaidTextRepository", t) }
-    
-    // Audio clipboard for desktop
-    runCatching {
-        val clipboardClass = Class.forName("io.github.jdreioe.wingmate.platform.DesktopAudioClipboard")
-        val clipboard = clipboardClass.getDeclaredConstructor().newInstance() as io.github.jdreioe.wingmate.platform.AudioClipboard
-        loadKoinModules(module { single<io.github.jdreioe.wingmate.platform.AudioClipboard> { clipboard } })
-        log.info("Registered DesktopAudioClipboard")
-    }.onFailure { t -> log.warn("Could not register DesktopAudioClipboard", t) }
-    
-    // Share service for desktop
-    runCatching {
-        val shareClass = Class.forName("io.github.jdreioe.wingmate.platform.DesktopShareService")
-        val share = shareClass.getDeclaredConstructor().newInstance() as io.github.jdreioe.wingmate.platform.ShareService
-        loadKoinModules(module { single<io.github.jdreioe.wingmate.platform.ShareService> { share } })
-        log.info("Registered DesktopShareService")
-    }.onFailure { t -> log.warn("Could not register DesktopShareService", t) }
-    
-    // Text prediction service (n-gram based)
-    runCatching {
-        val predictionClass = Class.forName("io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService")
-        val prediction = predictionClass.getDeclaredConstructor().newInstance() as io.github.jdreioe.wingmate.domain.TextPredictionService
-        loadKoinModules(module { single<io.github.jdreioe.wingmate.domain.TextPredictionService> { prediction } })
-        log.info("Registered SimpleNGramPredictionService")
-    }.onFailure { t -> log.warn("Could not register SimpleNGramPredictionService", t) }
-}
 
 private fun setupUpdateService() {
     val log = LoggerFactory.getLogger("DesktopMain")

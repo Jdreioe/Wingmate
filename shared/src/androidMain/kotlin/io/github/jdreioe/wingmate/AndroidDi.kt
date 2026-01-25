@@ -10,8 +10,10 @@ import io.github.jdreioe.wingmate.infrastructure.AndroidSqlCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSaidTextRepository
+import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.module
+import io.github.jdreioe.wingmate.domain.TextPredictionService
 
 fun overrideAndroidSpeechService(context: Context) {
     loadKoinModules(
@@ -30,6 +32,8 @@ fun overrideAndroidSpeechService(context: Context) {
             single<io.github.jdreioe.wingmate.domain.VoiceRepository> { AndroidSqlVoiceRepository(context) }
             single<io.github.jdreioe.wingmate.domain.SettingsRepository> { AndroidSqlSettingsRepository(context) }
             single<io.github.jdreioe.wingmate.domain.SaidTextRepository> { AndroidSqlSaidTextRepository(context) }
+            // Text prediction service using n-grams trained on user's history
+            single<TextPredictionService> { SimpleNGramPredictionService() }
         }
     )
 }

@@ -12,8 +12,8 @@ android {
         applicationId = "com.hojmoseit.wingmate"
     minSdk = 24
     targetSdk = 36
-        versionCode =7
-        versionName = "0.4"
+        versionCode = 9
+        versionName = "0.5"
     }
 
     buildFeatures { compose = true }

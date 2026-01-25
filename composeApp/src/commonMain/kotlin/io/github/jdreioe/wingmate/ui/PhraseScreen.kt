@@ -3,22 +3,8 @@ package io.github.jdreioe.wingmate.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
@@ -50,7 +36,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.*
 import io.github.jdreioe.wingmate.application.PhraseBloc
 import io.github.jdreioe.wingmate.application.PhraseEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -442,8 +428,45 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         }
                     )
                     
-                    // SSML controls button for narrow screens
-                    if (!isWide) {
+                    // On narrow screens, if keyboard is active, show prediction bar instead of SSML button
+                    val isKeyboardVisible = WindowInsets.ime.asPaddingValues().calculateBottomPadding() > 0.dp
+                    
+                    if (!isWide && isKeyboardVisible && (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty())) {
+                         PredictionBar(
+                            predictions = predictions,
+                            onWordSelected = { word ->
+                                val fv = input
+                                val text = fv.text
+                                val cursorPos = fv.selection.start.coerceIn(0, text.length)
+                                val wordStart = text.lastIndexOf(' ', cursorPos - 1) + 1
+                                val partialWord = text.substring(wordStart, cursorPos)
+                                val newText = if (partialWord.isNotEmpty() && word.lowercase().startsWith(partialWord.lowercase())) {
+                                    text.substring(0, wordStart) + word + " " + text.substring(cursorPos)
+                                } else {
+                                    text.substring(0, cursorPos) + (if (cursorPos > 0 && text[cursorPos - 1] != ' ') " " else "") + word + " " + text.substring(cursorPos)
+                                }
+                                val newCursor = if (partialWord.isNotEmpty() && word.lowercase().startsWith(partialWord.lowercase())) {
+                                    wordStart + word.length + 1
+                                } else {
+                                    cursorPos + (if (cursorPos > 0 && text[cursorPos - 1] != ' ') 1 else 0) + word.length + 1
+                                }
+                                secondaryLanguageRanges = adjustRangesAfterEdit(text, newText, secondaryLanguageRanges)
+                                input = TextFieldValue(newText, selection = TextRange(newCursor.coerceAtMost(newText.length)))
+                                io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                            },
+                            onLetterSelected = { letter ->
+                                val fv = input
+                                val pos = fv.selection.start.coerceIn(0, fv.text.length)
+                                val newText = fv.text.substring(0, pos) + letter + fv.text.substring(pos)
+                                val newCursor = pos + 1
+                                secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
+                                input = TextFieldValue(newText, selection = TextRange(newCursor))
+                                io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                            },
+                            fontSizeScale = settings.fontSizeScale,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    } else if (!isWide) {
                         OutlinedButton(
                             onClick = { showSsmlDialog = true },
                             modifier = Modifier
@@ -454,8 +477,8 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         }
                     }
                     
-                    // Word and letter prediction bar
-                    if (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty()) {
+                    // Word and letter prediction bar in original position (only if keyboard is NOT active on narrow screens, or always on wide screens)
+                    if ((isWide || !isKeyboardVisible) && (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty())) {
                         PredictionBar(
                             predictions = predictions,
                             onWordSelected = { word ->
@@ -972,7 +995,6 @@ private fun SecondaryLanguageTextField(
     minLines: Int = 1,
     maxLines: Int = Int.MAX_VALUE
 ) {
-    val resolvedColor = if (textStyle.color == Color.Unspecified) MaterialTheme.colorScheme.onSurface else textStyle.color
     val annotated: AnnotatedString = remember(value.text, highlightRanges, highlightColor) {
         buildAnnotatedString {
             append(value.text)
@@ -986,6 +1008,9 @@ private fun SecondaryLanguageTextField(
         }
     }
 
+    // Wrap the plain TextFieldValue with our annotated string for display
+    val styledValue = value.copy(annotatedString = annotated)
+
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(8.dp),
@@ -995,12 +1020,6 @@ private fun SecondaryLanguageTextField(
         Box(modifier = Modifier.padding(16.dp)) {
             if (value.text.isEmpty()) {
                 placeholder?.invoke()
-            } else {
-                Text(
-                    text = annotated,
-                    style = textStyle,
-                    color = resolvedColor
-                )
             }
 
             val inputModifier = if (focusRequester != null) {
@@ -1012,9 +1031,12 @@ private fun SecondaryLanguageTextField(
             }
 
             BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                textStyle = textStyle.copy(color = Color.Transparent),
+                value = styledValue,
+                onValueChange = { 
+                    // Pass the plain text back to the parent to keep the logic simple there
+                    onValueChange(it.copy(annotatedString = AnnotatedString(it.text)))
+                },
+                textStyle = textStyle,
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 modifier = inputModifier,
                 minLines = minLines,

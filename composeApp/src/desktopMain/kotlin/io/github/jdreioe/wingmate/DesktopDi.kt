@@ -2,12 +2,16 @@ package io.github.jdreioe.wingmate
 
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.TextPredictionService
+import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.PhraseRepository
+import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSpeechService
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
-import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlSettingsRepository
+import io.github.jdreioe.wingmate.infrastructure.DesktopSqlPhraseRepository
+import io.github.jdreioe.wingmate.infrastructure.DesktopSqlCategoryRepository
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.module
 import kotlinx.coroutines.runBlocking
@@ -16,9 +20,10 @@ fun overrideDesktopSpeechService() {
     loadKoinModules(
         module {
             single<SpeechService> { DesktopSpeechService() }
-            // override config repository with a JVM-backed implementation that persists to disk
-            // Use SQLite-backed repo for durability
+            // SQLite-backed repositories for durability
             single<ConfigRepository> { DesktopSqlConfigRepository() }
+            single<PhraseRepository> { DesktopSqlPhraseRepository() }
+            single<CategoryRepository> { DesktopSqlCategoryRepository() }
             // Persist UI settings on desktop
             single<io.github.jdreioe.wingmate.domain.SettingsRepository> { io.github.jdreioe.wingmate.infrastructure.DesktopSqlSettingsRepository() }
             // Persist selected voice on desktop
