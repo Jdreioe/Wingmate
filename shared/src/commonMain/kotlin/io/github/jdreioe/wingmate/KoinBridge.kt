@@ -21,6 +21,19 @@ class KoinBridge : KoinComponent {
     // Safe variant to avoid throwing across Swift bridge
     fun phraseListStoreOrNull(): PhraseListStore? = try { get<PhraseListStore>() } catch (_: Throwable) { null }
 
+    // --- Sharing helpers ---
+    fun shareAudio(path: String) {
+        try {
+            get<io.github.jdreioe.wingmate.platform.ShareService>().shareAudio(path)
+        } catch (_: Throwable) {}
+    }
+
+    fun copyAudio(path: String) {
+        try {
+            get<io.github.jdreioe.wingmate.platform.AudioClipboard>().copyAudioFile(path)
+        } catch (_: Throwable) {}
+    }
+
     // --- Simple bridging helpers for Swift UI ---
     suspend fun speak(text: String) {
         try {
@@ -199,6 +212,29 @@ class KoinBridge : KoinComponent {
             if (service is io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService) {
                 service.learnPhrase(text)
             }
+        } catch (_: Throwable) {}
+    }
+
+    // --- Pronunciation Dictionary Helpers ---
+    suspend fun listPronunciations(): List<io.github.jdreioe.wingmate.domain.PronunciationEntry> {
+        return try {
+            get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().getAll()
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    suspend fun addPronunciation(word: String, phoneme: String, alphabet: String) {
+        try {
+            get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().add(
+                io.github.jdreioe.wingmate.domain.PronunciationEntry(word, phoneme, alphabet)
+            )
+        } catch (_: Throwable) {}
+    }
+
+    suspend fun deletePronunciation(word: String) {
+        try {
+            get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().delete(word)
         } catch (_: Throwable) {}
     }
 }

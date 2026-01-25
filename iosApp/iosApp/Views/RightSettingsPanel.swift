@@ -11,6 +11,7 @@ struct RightSettingsPanel: View {
     @Binding var uiPlayIconSize: Double
     let openVoicePicker: () -> Void
     let openWelcomeFlow: () -> Void
+    let openPronunciation: () -> Void
 
     private var languages: [String] {
         let langs = model.availableLanguages
@@ -73,6 +74,18 @@ struct RightSettingsPanel: View {
                 HStack {
                     Image(systemName: "questionmark.circle")
                     Text("Restart Setup Guide")
+                    Spacer()
+                }
+                .padding(.vertical, 4)
+            }
+
+            Divider().padding(.vertical, 4)
+            
+            // Pronunciation
+            Button(action: openPronunciation) {
+                HStack {
+                    Image(systemName: "character.book.closed")
+                    Text("Pronunciation Dictionary")
                     Spacer()
                 }
                 .padding(.vertical, 4)

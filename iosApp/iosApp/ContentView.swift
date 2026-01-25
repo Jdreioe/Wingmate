@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var showAddCategory = false
     @State private var showAddPhrase = false
     @State private var showUiSizeSheet = false
+    @State private var showPronunciationSheet = false
     @State private var editingPhrase: Shared.Phrase? = nil
 
     // Runtime pieces
@@ -82,6 +83,7 @@ struct ContentView: View {
             showAddCategory: $showAddCategory,
             showAddPhrase: $showAddPhrase,
             showUiSizeSheet: $showUiSizeSheet,
+            showPronunciationSheet: $showPronunciationSheet,
             editingPhrase: $editingPhrase,
             uiTextFieldHeight: $uiTextFieldHeight,
             uiInputFontSize: $uiInputFontSize,
@@ -138,7 +140,8 @@ struct ContentView: View {
                                                     uiChipFontSize: $uiChipFontSize,
                                                     uiPlayIconSize: $uiPlayIconSize,
                                                     openVoicePicker: { showVoiceSheet = true },
-                                                    openWelcomeFlow: { showWelcomeFlow = true }
+                                                    openWelcomeFlow: { showWelcomeFlow = true },
+                                                    openPronunciation: { showPronunciationSheet = true }
                                                 )
                                                 )
                                                 .frame(width: rightPanelWidth)
@@ -265,10 +268,25 @@ struct ContentView: View {
                                 Button(action: { showUiSizeSheet = true }) {
                                     Image(systemName: "textformat.size").accessibilityLabel(Text("toolbar.ui_size"))
                                 }
+                                Button(action: { showPronunciationSheet = true }) {
+                                    Image(systemName: "character.book.closed").accessibilityLabel(Text("toolbar.pronunciation"))
+                                }
                             }
                             
                             Button(action: { showAddCategory = true }) {
                                 Image(systemName: "folder.badge.plus").accessibilityLabel(Text("toolbar.add_category"))
+                            }
+                            
+                            Menu {
+                                Button(action: { model.shareLastAudio() }) {
+                                    Label("Share last audio", systemImage: "square.and.arrow.up")
+                                }
+                                Button(action: { model.copyLastAudio() }) {
+                                    Label("Copy last audio", systemImage: "doc.on.doc")
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .accessibilityLabel(Text("toolbar.more_actions"))
                             }
                         }
                     }

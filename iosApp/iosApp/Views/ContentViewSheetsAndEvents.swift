@@ -9,6 +9,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
     @Binding var showAddCategory: Bool
     @Binding var showAddPhrase: Bool
     @Binding var showUiSizeSheet: Bool
+    @Binding var showPronunciationSheet: Bool
     @Binding var editingPhrase: Shared.Phrase?
     let uiTextFieldHeight: Binding<Double>
     let uiInputFontSize: Binding<Double>
@@ -68,6 +69,13 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                             uiChipFontSize: uiChipFontSize,
                             uiPlayIconSize: uiPlayIconSize)
                 .presentationDetents([.height(350), .medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showPronunciationSheet) {
+                NavigationStack {
+                    PronunciationDictionaryView(model: model)
+                }
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: Binding(get: { editingPhrase != nil }, set: { if !$0 { editingPhrase = nil } })) {

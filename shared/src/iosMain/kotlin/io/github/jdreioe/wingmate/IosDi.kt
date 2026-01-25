@@ -38,6 +38,14 @@ fun overrideIosSpeechService() {
             }
             // Text prediction service
             single<io.github.jdreioe.wingmate.domain.TextPredictionService> { io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService() }
+            
+            // Share service
+            single<io.github.jdreioe.wingmate.platform.ShareService> { io.github.jdreioe.wingmate.infrastructure.IosShareService() }
+            // Clipboard
+            single<io.github.jdreioe.wingmate.platform.AudioClipboard> { io.github.jdreioe.wingmate.infrastructure.IosAudioClipboard() }
+            
+            // Pronunciation dictionary (persisted)
+            single<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository> { io.github.jdreioe.wingmate.infrastructure.IosPronunciationDictionaryRepository() }
         }
     )
 }

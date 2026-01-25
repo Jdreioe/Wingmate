@@ -65,6 +65,9 @@ final class IosViewModel: ObservableObject {
     private var hasShownOfflineBanner: Bool = UserDefaults.standard.bool(forKey: "offline_banner_shown")
     private var isOnline: Bool = true
 
+    // Pronunciation Dictionary
+    @Published var pronunciations: [Shared.PronunciationEntry] = []
+
     // Debug helpers
     @Published var debugRepoName: String = ""
     @Published var debugPersistedVoiceName: String = ""
@@ -131,6 +134,8 @@ final class IosViewModel: ObservableObject {
     await loadHistory()
     // Train prediction model on history
     await bridge.trainPredictionModel()
+    // Load pronunciations
+    await loadPronunciations()
     }
 
     func deletePhrase(id: String) {
@@ -447,5 +452,53 @@ final class IosViewModel: ObservableObject {
     func applyLetterPrediction(_ char: String) {
         input.append(char)
         onInputChanged(input)
+    }
+    
+    // MARK: - Sharing
+    func shareLastAudio() {
+        guard !input.isEmpty else { return }
+        // Find most recent history item with matching text and audio path
+        if let match = historyPhrases.first(where: {
+            ($0.text == input || $0.name == input) && $0.recordingPath != nil && !$0.recordingPath!.isEmpty
+        }) {
+            if let path = match.recordingPath {
+                bridge.shareAudio(path: path)
+            }
+        }
+    }
+
+    func copyLastAudio() {
+        guard !input.isEmpty else { return }
+        if let match = historyPhrases.first(where: {
+            ($0.text == input || $0.name == input) && $0.recordingPath != nil && !$0.recordingPath!.isEmpty
+        }) {
+             if let path = match.recordingPath {
+                bridge.copyAudio(path: path)
+            }
+        }
+    }
+    
+    // MARK: - Pronunciations
+    func loadPronunciations() async {
+        do {
+            let items = try await bridge.listPronunciations()
+            await MainActor.run { self.pronunciations = items }
+        } catch {
+            await MainActor.run { self.pronunciations = [] }
+        }
+    }
+    
+    func addPronunciation(word: String, phoneme: String, alphabet: String) {
+        Task {
+            try? await bridge.addPronunciation(word: word, phoneme: phoneme, alphabet: alphabet)
+            await loadPronunciations()
+        }
+    }
+    
+    func deletePronunciation(word: String) {
+        Task {
+            try? await bridge.deletePronunciation(word: word)
+            await loadPronunciations()
+        }
     }
 }
