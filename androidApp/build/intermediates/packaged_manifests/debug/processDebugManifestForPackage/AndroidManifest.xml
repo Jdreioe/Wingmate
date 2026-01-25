@@ -23,6 +23,7 @@
         android:extractNativeLibs="false"
         android:icon="@mipmap/ic_launcher"
         android:label="Wingmate KMP"
+        android:testOnly="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" >
         <provider
             android:name="androidx.core.content.FileProvider"
