@@ -6,4 +6,5 @@ package io.github.jdreioe.wingmate.platform
  */
 interface ShareService {
     fun shareAudio(filePath: String): Boolean
+    fun shareText(text: String): Boolean
 }

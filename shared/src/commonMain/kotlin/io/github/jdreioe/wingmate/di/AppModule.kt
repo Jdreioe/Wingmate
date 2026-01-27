@@ -14,6 +14,9 @@ import org.koin.dsl.module
 
 val appModule = module {
     single<StoreFactory> { DefaultStoreFactory() }
+    
+    single { io.github.jdreioe.wingmate.infrastructure.ObfParser() }
+    single<io.github.jdreioe.wingmate.domain.BoardRepository> { io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository() }
 
     factory { AddPhraseUseCase(get()) }
     factory { GetPhrasesAndCategoriesUseCase(get()) }

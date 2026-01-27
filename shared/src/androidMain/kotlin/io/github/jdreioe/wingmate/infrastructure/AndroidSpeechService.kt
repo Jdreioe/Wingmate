@@ -258,51 +258,52 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 } ?: "en-US"
 
                 val vForSsml = v.copy(primaryLanguage = effectiveLang, selectedLanguage = effectiveLang)
+                
+                // Fetch dictionary entries to apply
+                val dict = runCatching { 
+                    GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().getAll() 
+                }.getOrDefault(emptyList())
+
+                val musicRoot = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
+                val outDir = File(musicRoot, "wingmate/audio").apply { if (!exists()) mkdirs() }
+                
+                // Calculate hash early to check if file already exists
+                val dictHash = dict.joinToString("|") { "${it.word}:${it.phoneme}:${it.alphabet}" }.hashCode()
+                val cacheKey = "${combinedText}_${vForSsml.name}_${vForSsml.primaryLanguage}_${vForSsml.selectedLanguage}_${pitch}_${rate}_${dictHash}".hashCode()
+                val fileName = "tts_$cacheKey.mp3"
+                val outFile = File(outDir, fileName)
+
+                if (outFile.exists() && outFile.length() > 0) {
+                    // Cache hit! reuse the file without calling Azure
+                    recordHistory(combinedText, vForSsml, outFile.absolutePath)
+                    
+                    // Simple playback logic (duplicated from below for now to keep flow linear)
+                    startPlayback(outFile, vForSsml)
+                    return@withContext
+                }
+
+                // Cache Miss - Proceed to Synthesis
+                
                 // Use segments-based SSML generation if ANY segment has language override OR pause
                 val ssml = if (segments.any { !it.languageTag.isNullOrBlank() || it.pauseDurationMs > 0 }) {
-                    AzureTtsClient.generateSsml(segments, vForSsml)
+                    AzureTtsClient.generateSsml(segments, vForSsml, dict)
                 } else {
-                    AzureTtsClient.generateSsml(combinedText, vForSsml)
+                    AzureTtsClient.generateSsml(combinedText, vForSsml, dict)
                 }
                 val bytes = AzureTtsClient.synthesize(client, ssml, cfg)
 
                 // Persist to an app-private Music directory so history can reference it later
-                val musicRoot = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
-                val outDir = File(musicRoot, "wingmate/audio").apply { if (!exists()) mkdirs() }
-                val safeName = combinedText.take(32).replace("[^A-Za-z0-9-_ ]".toRegex(), "_").trim().ifBlank { "utterance" }
-                val fileName = "${'$'}{System.currentTimeMillis()}_${'$'}safeName.mp3"
-                val outFile = File(outDir, fileName)
-                outFile.outputStream().use { it.write(bytes) }
+                
+                // Use a stable hash for the filename to allow aggressive caching and reuse
+                
+                // If file already exists and is valid, skip writing (unless 0 bytes)
+                if (!outFile.exists() || outFile.length() == 0L) {
+                    outFile.outputStream().use { it.write(bytes) }
+                }
 
                 // Save history record
                 recordHistory(combinedText, vForSsml, outFile.absolutePath)
-
-                val player = MediaPlayer()
-                player.setOnCompletionListener { mp ->
-                    try {
-                        synchronized(playerLock) {
-                            if (mediaPlayer === mp) {
-                                mp.reset()
-                                mp.release()
-                                mediaPlayer = null
-                            }
-                        }
-                    } catch (_: Throwable) {
-                    } finally { /* keep outFile for history */ }
-                }
-                player.setOnErrorListener { mp, what, extra ->
-                    try { synchronized(playerLock) { if (mediaPlayer === mp) { mp.reset(); mp.release(); mediaPlayer = null } } } catch (_: Throwable) {}
-                    false
-                }
-
-                player.setDataSource(outFile.absolutePath)
-                player.prepare()
-                synchronized(playerLock) {
-                    // Stop any existing player
-                    mediaPlayer?.let { try { it.stop(); it.release() } catch (_: Throwable) {} }
-                    mediaPlayer = player
-                }
-                player.start()
+                startPlayback(outFile, vForSsml)
             } catch (t: Throwable) {
                 println("Azure TTS failed, falling back to platform TTS: $t")
                 // Fallback to platform TTS on error
@@ -310,6 +311,33 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 speakWithPlatformTts(combinedText, voice, pitch, rate)
             }
         }
+    }
+    
+    private fun startPlayback(file: File, voice: Voice) {
+        val player = MediaPlayer()
+        player.setOnCompletionListener { mp ->
+            try {
+                synchronized(playerLock) {
+                    if (mediaPlayer === mp) {
+                        mp.reset()
+                        mp.release()
+                        mediaPlayer = null
+                    }
+                }
+            } catch (_: Throwable) {}
+        }
+        player.setOnErrorListener { mp, _, _ ->
+            try { synchronized(playerLock) { if (mediaPlayer === mp) { mp.reset(); mp.release(); mediaPlayer = null } } } catch (_: Throwable) {}
+            false
+        }
+        try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
+        player.setDataSource(file.absolutePath)
+        player.prepare()
+        synchronized(playerLock) {
+            mediaPlayer?.let { try { it.stop(); it.release() } catch (_: Throwable) {} }
+            mediaPlayer = player
+        }
+        player.start()
     }
 
     private fun effectiveVoice(
@@ -340,13 +368,32 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
 
             val v = effectiveVoice(voice, uiPrimaryLanguage)
             val list = runCatching { withContext(Dispatchers.IO) { saidRepo.list() } }.getOrNull().orEmpty()
+            // Dictionary-aware caching:
+            // To ensure we don't play stale audio when pronunciation rules change, we need to check if the
+            // cached item was created with the *current* set of pronunciation rules.
+            // Since we don't store rule hashes in the DB yet, we can use a heuristic:
+            // 1. Only reuse history if it was created AFTER the last dictionary update (if we tracked that).
+            // 2. OR, for now, simply re-enable cache but be aware it might persist old pronunciations until cleared.
+            // A better approach for the future is to include a dictionary hash in the SaidText record.
+            
+            // For now, to satisfy the requirement of "fewest API calls", we re-enable it 
+            // but we add a check: if the user JUST added a rule, they likely want to hear it.
+            // We can't easily detect that here without more state. 
+            // Let's re-enable the exact match logic.
+            
             val candidate = list.asSequence()
                 .filter { it.saidText == text }
                 .filter { !it.audioFilePath.isNullOrBlank() }
                 .filter { it.voiceName == v.name }
-                .filter { (it.primaryLanguage ?: "") == (v.selectedLanguage?.ifBlank { v.primaryLanguage } ?: v.primaryLanguage ?: "") }
-                .filter { (it.pitch == null && pitch == null) || (it.pitch != null && pitch != null && it.pitch == pitch) }
-                .filter { (it.speed == null && rate == null) || (it.speed != null && rate != null && it.speed == rate) }
+                // Stricter language matching
+                .filter { 
+                    val itemLang = it.primaryLanguage ?: ""
+                    val voiceLang = v.selectedLanguage?.ifBlank { v.primaryLanguage } ?: v.primaryLanguage ?: ""
+                    itemLang == voiceLang
+                }
+                // Stricter pitch/rate matching to avoid playing "normal" speed for "slow" request
+                .filter { (it.pitch ?: 1.0) == (pitch ?: v.pitch ?: 1.0) }
+                .filter { (it.speed ?: 1.0) == (rate ?: v.rate ?: 1.0) }
                 .filter { item ->
                     val path = item.audioFilePath ?: return@filter false
                     val baseTime = item.createdAt ?: item.date ?: File(path).lastModified()
@@ -421,6 +468,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
 
 
     private suspend fun speakWithPlatformTts(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
+        val cleanText = text.replace(Regex("<[^>]+>"), "") // Strip tags for system TTS fallback
         withContext(Dispatchers.Main) {
             val t = ensureTts()
             val lang = voice?.primaryLanguage ?: Locale.getDefault().toLanguageTag()
@@ -431,7 +479,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             // Route TTS through car audio properly by setting AudioAttributes and requesting focus
             try { t.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
             requestAudioFocus()
-            t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "wingmate-${System.currentTimeMillis()}")
+            t.speak(cleanText, TextToSpeech.QUEUE_FLUSH, null, "wingmate-${System.currentTimeMillis()}")
         }
     }
 

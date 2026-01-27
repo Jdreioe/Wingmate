@@ -33,6 +33,7 @@ fun overrideAndroidSpeechService(context: Context) {
             single<io.github.jdreioe.wingmate.domain.SettingsRepository> { AndroidSqlSettingsRepository(context) }
             single<io.github.jdreioe.wingmate.domain.SaidTextRepository> { AndroidSqlSaidTextRepository(context) }
             // Text prediction service using n-grams trained on user's history
+            single<io.github.jdreioe.wingmate.domain.FileStorage> { io.github.jdreioe.wingmate.infrastructure.AndroidFileStorage(context) }
             single<TextPredictionService> { SimpleNGramPredictionService() }
         }
     )

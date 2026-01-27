@@ -1,5 +1,15 @@
 package io.github.jdreioe.wingmate.domain
 
+
+import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+
+interface BoardRepository {
+    suspend fun getBoard(id: String): ObfBoard?
+    suspend fun saveBoard(board: ObfBoard)
+    suspend fun listBoards(): List<ObfBoard>
+    suspend fun deleteBoard(id: String)
+}
+
 interface PhraseRepository {
     suspend fun getAll(): List<Phrase>
     suspend fun add(phrase: Phrase): Phrase
@@ -31,6 +41,8 @@ interface VoiceRepository {
 interface SaidTextRepository {
     suspend fun add(item: SaidText): SaidText
     suspend fun list(): List<SaidText>
+    suspend fun deleteAll()
+    suspend fun addAll(items: List<SaidText>)
 }
 
 interface ConfigRepository {

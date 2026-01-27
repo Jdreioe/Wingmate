@@ -68,4 +68,34 @@ class AndroidSqlSaidTextRepository(private val context: Context) : SaidTextRepos
         cursor.close()
         return@withContext list
     }
+
+    override suspend fun deleteAll() = withContext(Dispatchers.IO) {
+        val db = helper.writableDatabase
+        db.delete("said_texts", null, null)
+        Unit
+    }
+
+    override suspend fun addAll(items: List<SaidText>) = withContext(Dispatchers.IO) {
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            items.forEach { item ->
+                val values = ContentValues().apply {
+                    put("date", item.date)
+                    put("said_text", item.saidText)
+                    put("voice_name", item.voiceName)
+                    put("pitch", item.pitch)
+                    put("speed", item.speed)
+                    put("audio_file_path", item.audioFilePath)
+                    put("created_at", item.createdAt)
+                    put("position", item.position)
+                    put("primary_language", item.primaryLanguage)
+                }
+                db.insert("said_texts", null, values)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
 }

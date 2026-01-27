@@ -39,4 +39,26 @@ class IosShareService : ShareService {
         }
         return false
     }
+
+    override fun shareText(text: String): Boolean {
+        val controller = UIActivityViewController(
+            activityItems = listOf(text),
+            applicationActivities = null
+        )
+        
+        val rootController = UIApplication.sharedApplication.keyWindow?.rootViewController
+        if (rootController != null) {
+            var top = rootController
+            while (top.presentedViewController != null) {
+                top = top.presentedViewController!!
+            }
+            
+            controller.popoverPresentationController?.sourceView = top.view
+            controller.popoverPresentationController?.sourceRect = top.view.bounds
+            
+            top.presentViewController(controller, animated = true, completion = null)
+            return true
+        }
+        return false
+    }
 }

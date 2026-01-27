@@ -3,12 +3,18 @@ package io.github.jdreioe.wingmate.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.ArrowDropDown
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.Settings
@@ -30,7 +36,8 @@ fun SsmlSidebar(
     var selectedVoice by remember { mutableStateOf<Voice?>(null) }
     var availableLangs by remember { mutableStateOf(listOf("en-US")) }
     var primaryLang by remember { mutableStateOf("en-US") }
-    var secondaryLang by remember { mutableStateOf("en-US") }
+    // secondaryLang retained for logic if needed, but simplified UI might hide it or integrate it differently
+    var secondaryLang by remember { mutableStateOf("en-US") } 
     var pitch by remember { mutableStateOf(1.0) }
     var rate by remember { mutableStateOf(1.0) }
     var volume by remember { mutableStateOf(1.0) }
@@ -64,228 +71,203 @@ fun SsmlSidebar(
         onInsertSsml?.invoke("$prefix$content$suffix")
     }
 
-    Surface(modifier = modifier, tonalElevation = 2.dp, shape = MaterialTheme.shapes.medium) {
+    Surface(modifier = modifier.padding(8.dp), tonalElevation = 1.dp, shape = MaterialTheme.shapes.large) {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("SSML Controls", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "Speech Controls", 
+                style = MaterialTheme.typography.titleMedium, 
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
 
             // ===== Voice & Engine =====
-            Text("Voice & Engine", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text("Engine: ${if (useSystemTts) "System" else "Azure"}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                Switch(checked = useSystemTts, onCheckedChange = { checked ->
-                    useSystemTts = checked
-                    scope.launch {
-                        val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                        settingsUseCase.updateWithNotification(current.copy(useSystemTts = checked))
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column {
+                            Text("Engine", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
+                            Text(if (useSystemTts) "System (Offline)" else "Azure (Premium)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        }
+                        Switch(
+                            checked = useSystemTts, 
+                            onCheckedChange = { checked ->
+                                useSystemTts = checked
+                                scope.launch {
+                                    val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
+                                    settingsUseCase.updateWithNotification(current.copy(useSystemTts = checked))
+                                }
+                            },
+                            thumbContent = {
+                                Icon(
+                                    imageVector = if (useSystemTts) Icons.Filled.Settings else Icons.Filled.Cloud,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        )
                     }
-                }, modifier = Modifier.scale(0.8f))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Voice: ${selectedVoice?.displayName ?: selectedVoice?.name ?: "(none)"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
-            Text(
-                text = "Voice: ${selectedVoice?.displayName ?: selectedVoice?.name ?: "(none)"}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline
-            )
-
-            Divider()
-
-            // ===== Languages =====
-            Text("Languages", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            
-            Text("Primary", style = MaterialTheme.typography.labelSmall)
-            LanguageMenu(available = availableLangs, filter = "", selected = primaryLang) { sel ->
-                primaryLang = sel
-                scope.launch {
-                    val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                    settingsUseCase.updateWithNotification(current.copy(primaryLanguage = sel))
-                    selectedVoice?.let { v ->
-                        runCatching { voiceUseCase.select(v.copy(selectedLanguage = sel)) }
+            // ===== Tone & Speed (Prosody) =====
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Tone & Speed", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    
+                    // Pitch
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text("Pitch", style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(48.dp))
+                        Slider(
+                            value = pitch.toFloat(), 
+                            onValueChange = { pitch = it.toDouble() }, 
+                            valueRange = 0.5f..2.0f, 
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(String.format("%.1f", pitch), style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(32.dp))
+                    }
+                    
+                    // Rate
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text("Speed", style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(48.dp))
+                        Slider(
+                            value = rate.toFloat(), 
+                            onValueChange = { rate = it.toDouble() }, 
+                            valueRange = 0.5f..2.0f, 
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(String.format("%.1f", rate), style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(32.dp))
+                    }
+                    
+                    FilledTonalButton(
+                        onClick = {
+                             selectedVoice?.let { base ->
+                                val updated = base.copy(pitch = pitch, rate = rate, pitchForSSML = null, rateForSSML = null)
+                                scope.launch { runCatching { voiceUseCase.select(updated) } }
+                                selectedVoice = updated
+                            }
+                        }, 
+                        modifier = Modifier.fillMaxWidth().height(36.dp),
+                        enabled = selectedVoice != null
+                    ) { 
+                        Text("Apply Settings") 
                     }
                 }
             }
 
-            Text("Secondary", style = MaterialTheme.typography.labelSmall)
-            LanguageMenu(available = availableLangs, filter = "", selected = secondaryLang) { sel ->
-                secondaryLang = sel
-                scope.launch {
-                    val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                    settingsUseCase.updateWithNotification(current.copy(secondaryLanguage = sel))
+            // ===== Pauses =====
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Add Pause", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        FilterChip(
+                            selected = false,
+                            onClick = { onInsertSsml?.invoke(" [0.5s] ") },
+                            label = { Text("0.5s") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = false,
+                            onClick = { onInsertSsml?.invoke(" [1.0s] ") },
+                            label = { Text("1.0s") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = false,
+                            onClick = { onInsertSsml?.invoke(" [2.0s] ") },
+                            label = { Text("2.0s") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
-
-            Divider()
-
-            // ===== Prosody (Pitch, Rate, Volume) =====
-            Text("Prosody", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             
-            Text("Pitch: ${String.format("%.2f", pitch)}", style = MaterialTheme.typography.labelSmall)
-            Slider(value = pitch.toFloat(), onValueChange = { v ->
-                pitch = v.toDouble()
-            }, valueRange = 0.5f..2.0f, modifier = Modifier.height(32.dp))
-            
-            Text("Rate: ${String.format("%.2f", rate)}", style = MaterialTheme.typography.labelSmall)
-            Slider(value = rate.toFloat(), onValueChange = { v ->
-                rate = v.toDouble()
-            }, valueRange = 0.5f..2.0f, modifier = Modifier.height(32.dp))
-            
-            Text("Volume: ${String.format("%.2f", volume)}", style = MaterialTheme.typography.labelSmall)
-            Slider(value = volume.toFloat(), onValueChange = { v ->
-                volume = v.toDouble()
-            }, valueRange = 0.5f..2.0f, modifier = Modifier.height(32.dp))
-            
-            Button(onClick = {
-                selectedVoice?.let { base ->
-                    val updated = base.copy(pitch = pitch, rate = rate, pitchForSSML = null, rateForSSML = null)
-                    scope.launch { runCatching { voiceUseCase.select(updated) } }
-                    selectedVoice = updated
-                }
-            }, enabled = selectedVoice != null, modifier = Modifier.fillMaxWidth()) { 
-                Text("Apply Prosody") 
-            }
-
-            Divider()
-
             // ===== Emphasis =====
-            Text("Emphasis", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            
-            var expandedEmphasis by remember { mutableStateOf(false) }
-            Box {
-                OutlinedButton(onClick = { expandedEmphasis = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(emphasis, style = MaterialTheme.typography.labelSmall)
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Emphasis", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text("Highlight the ${if(hasSelection) "selected text" else "next word"} with:", style = MaterialTheme.typography.bodySmall)
+                    
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                        listOf("reduced", "moderate", "strong").forEach { level ->
+                            FilterChip(
+                                selected = emphasis == level,
+                                onClick = { 
+                                    emphasis = level
+                                    insertWithSelection("<emphasis level=\"$level\">", "</emphasis>", "text")
+                                },
+                                label = { Text(level.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }) }
+                            )
+                        }
+                    }
                 }
-                DropdownMenu(expanded = expandedEmphasis, onDismissRequest = { expandedEmphasis = false }, modifier = Modifier.fillMaxWidth(0.8f)) {
-                    listOf("none", "reduced", "moderate", "strong").forEach { level ->
-                        DropdownMenuItem(
-                            text = { Text(level, style = MaterialTheme.typography.labelSmall) },
-                            onClick = { emphasis = level; expandedEmphasis = false }
-                        )
+            }
+
+            // ===== Interpretation =====
+            ElevatedCard(
+                 colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Read As...", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    
+                    var expanded by remember { mutableStateOf(false) }
+                    
+                    OutlinedButton(
+                        onClick = { expanded = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(sayAsType.replace("-", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() })
+                        Spacer(Modifier.width(8.dp))
+                        Icon(Icons.Filled.ArrowDropDown, null)
+                    }
+                    
+                    if (expanded) {
+                         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                             listOf("spell-out", "date", "time", "telephone", "currency", "number").forEach { type ->
+                                DropdownMenuItem(
+                                    text = { Text(type) },
+                                    onClick = { 
+                                        sayAsType = type
+                                        expanded = false
+                                        insertWithSelection("<say-as interpret-as=\"$type\">", "</say-as>", "text")
+                                    }
+                                )
+                             }
+                         }
                     }
                 }
             }
             
-            Button(
-                onClick = { insertWithSelection("<emphasis level=\"$emphasis\">", "</emphasis>", "text") },
-                enabled = onInsertSsml != null && emphasis != "none",
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary
+             // Info Tip
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Icon(Icons.Filled.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Switch to Azure engine to hear the highest quality changes.", 
+                    style = MaterialTheme.typography.labelSmall, 
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            ) {
-                Text("Emphasize ${if (hasSelection) "Selection" else "Text"}", style = MaterialTheme.typography.labelSmall)
-            }
-
-            Divider()
-
-            // ===== Break/Silence =====
-            Text("Break (ms)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            
-            OutlinedTextField(
-                value = breakDuration.toString(),
-                onValueChange = { v ->
-                    runCatching { breakDuration = v.toInt().coerceIn(0, 5000) }.onFailure { breakDuration = 500 }
-                },
-                label = { Text("Duration (ms)", style = MaterialTheme.typography.labelSmall) },
-                modifier = Modifier.fillMaxWidth(),
-                textStyle = MaterialTheme.typography.bodySmall,
-                singleLine = true
-            )
-            
-            Button(
-                onClick = { onInsertSsml?.invoke(" <break time=\"${breakDuration}ms\"/> ") },
-                enabled = onInsertSsml != null,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.tertiary
-                )
-            ) {
-                Text("Add ${breakDuration}ms Break", style = MaterialTheme.typography.labelSmall)
-            }
-
-            Divider()
-
-            // ===== Phoneme/Dictionary =====
-            Text("Dictionary", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            
-            Text("Phoneme IPA", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-            OutlinedTextField(
-                value = phonemeEntry,
-                onValueChange = { phonemeEntry = it },
-                placeholder = { Text("e.g., /təˈmɑːtoʊ/", style = MaterialTheme.typography.labelSmall) },
-                modifier = Modifier.fillMaxWidth(),
-                textStyle = MaterialTheme.typography.bodySmall,
-                singleLine = true
-            )
-            Text("IPA phonemes for custom pronunciation", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-            
-            Button(
-                onClick = { insertWithSelection("<phoneme alphabet=\"ipa\" ph=\"$phonemeEntry\">", "</phoneme>", "text") },
-                enabled = onInsertSsml != null && phonemeEntry.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Text("Set Pronunciation", style = MaterialTheme.typography.labelSmall)
-            }
-
-            Divider()
-
-            // ===== Say-As =====
-            Text("Say-As", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            
-            var expandedSayAs by remember { mutableStateOf(false) }
-            Box {
-                OutlinedButton(onClick = { expandedSayAs = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(sayAsType, style = MaterialTheme.typography.labelSmall)
-                }
-                DropdownMenu(expanded = expandedSayAs, onDismissRequest = { expandedSayAs = false }, modifier = Modifier.fillMaxWidth(0.8f)) {
-                    listOf(
-                        "characters", "spell-out", "cardinal", "number",
-                        "ordinal", "digits", "fraction", "unit",
-                        "date", "time", "telephone", "address",
-                        "currency", "name"
-                    ).forEach { type ->
-                        DropdownMenuItem(
-                            text = { Text(type, style = MaterialTheme.typography.labelSmall) },
-                            onClick = { sayAsType = type; expandedSayAs = false }
-                        )
-                    }
-                }
-            }
-            Text("Interprets text as specific types (e.g., dates, numbers)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-            
-            Button(
-                onClick = { insertWithSelection("<say-as interpret-as=\"$sayAsType\">", "</say-as>", "text") },
-                enabled = onInsertSsml != null,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Text("Read as ${sayAsType.replace("-", " ").capitalize()}", style = MaterialTheme.typography.labelSmall)
-            }
-
-            Divider()
-
-            // ===== Info =====
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                )
-            ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                    Text("Tip: Use these controls to fine-tune speech output with SSML markup.", 
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Text("Changes apply to new speech generation.", 
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer)
-                }
             }
         }
     }

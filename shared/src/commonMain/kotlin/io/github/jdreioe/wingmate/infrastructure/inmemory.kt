@@ -82,6 +82,14 @@ class InMemorySaidTextRepository : SaidTextRepository {
         delay(10)
         return items.toList()
     }
+    override suspend fun deleteAll() {
+        delay(10)
+        items.clear()
+    }
+    override suspend fun addAll(list: List<SaidText>) {
+        delay(10)
+        items.addAll(list)
+    }
 }
 
 class InMemoryConfigRepository : ConfigRepository {

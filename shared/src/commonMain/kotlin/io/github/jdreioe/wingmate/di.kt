@@ -28,10 +28,11 @@ fun initKoin(extra: Module? = null) {
         single<PronunciationDictionaryRepository> { InMemoryPronunciationDictionaryRepository() }
         single<SpeechService> { NoopSpeechService() } // Android overrides this
         single { AzureVoiceCatalog(get<ConfigRepository>()) }
-        single { DictionaryLoader() } // For language dictionary pretraining
+        single { DictionaryLoader(getOrNull<io.github.jdreioe.wingmate.domain.FileStorage>()) } // For language dictionary pretraining and caching
         single { PhraseUseCase(get<PhraseRepository>()) }
     single { CategoryUseCase(get<io.github.jdreioe.wingmate.domain.CategoryRepository>()) }
         single { SettingsUseCase(get<SettingsRepository>()) }
+        single { UserDataManager(get<SaidTextRepository>()) }
         single { SettingsStateManager(get<SettingsRepository>()) }
         single { VoiceUseCase(get<VoiceRepository>(), get<AzureVoiceCatalog>(), get<ConfigRepository>()) }
         factory { PhraseBloc(get<PhraseUseCase>()) }

@@ -98,7 +98,13 @@ class IosSpeechService(
                 }
 
                 val voiceToUse = effectiveVoice
-                val ssml = AzureTtsClient.generateSsml(text, voiceToUse)
+                
+                // Fetch dictionary entries to apply
+                val dict = runCatching { 
+                    GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().getAll() 
+                }.getOrDefault(emptyList())
+
+                val ssml = AzureTtsClient.generateSsml(text, voiceToUse, dict)
         val audioData = AzureTtsClient.synthesize(httpClient, ssml, config)
                 logger.info { "Generated ${audioData.size} bytes of audio for text: '${text.take(40)}'" }
                 audioData
@@ -115,6 +121,53 @@ class IosSpeechService(
     trySaveHistory(text, effectiveVoice, pitch, rate, filePath)
 
     playAudio(audioBytes)
+    }
+
+    override suspend fun speakSegments(segments: List<io.github.jdreioe.wingmate.domain.SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
+        if (segments.isEmpty()) return
+        val combinedText = segments.joinToString("") { it.text }
+        
+        // Resolve an effective voice
+        val selected = runCatching { voice ?: voiceUseCase?.selected() }.getOrNull()
+        val effectiveVoice = selected ?: Voice(
+            id = null,
+            name = "en-US-JennyNeural",
+            displayName = "Default Voice",
+            primaryLanguage = "en-US",
+            selectedLanguage = "en-US"
+        )
+
+        // 1) Try history-first playback
+        if (tryPlayFromHistoryIfFresh(text = combinedText, voice = effectiveVoice)) return
+
+        // 2) Try cache by key
+        val cacheKey = buildCacheKey(combinedText, effectiveVoice, pitch, rate)
+        val cachedPath = findCachedPath(cacheKey)
+        if (cachedPath != null) {
+            return playFile(cachedPath)
+        }
+
+        val audioBytes = withContext(Dispatchers.Default) {
+            try {
+                val config = configRepository.getSpeechConfig() ?: return@withContext null
+                
+                // Fetch dictionary entries
+                val dict = runCatching { 
+                    GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().getAll() 
+                }.getOrDefault(emptyList())
+
+                val ssml = AzureTtsClient.generateSsml(segments, effectiveVoice, dict)
+                AzureTtsClient.synthesize(httpClient, ssml, config)
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to synthesize segments" }
+                null
+            }
+        }
+
+        audioBytes ?: return
+        val filePath = saveToCache(cacheKey, audioBytes)
+        trySaveHistory(combinedText, effectiveVoice, pitch, rate, filePath)
+        playAudio(audioBytes)
     }
 
     private var lastCleanupAtMs: Long = 0L

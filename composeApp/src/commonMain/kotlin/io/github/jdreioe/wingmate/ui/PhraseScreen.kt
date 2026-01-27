@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.background
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
@@ -21,6 +22,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.produceState
@@ -46,6 +49,7 @@ import io.github.jdreioe.wingmate.domain.PredictionResult
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TextPredictionService
+import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import org.koin.core.context.GlobalContext
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.SettingsStateManager
@@ -80,16 +84,16 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
     var showVoiceSelection by remember { mutableStateOf(false) }
     var showUiLanguageDialog by remember { mutableStateOf(false) }
     var showDictionaryScreen by remember { mutableStateOf(false) }
+    var showSettingsExportDialog by remember { mutableStateOf(false) }
     var showSsmlDialog by remember { mutableStateOf(false) }
     var showOverflow by remember { mutableStateOf(false) }
     // fullscreen state managed via DisplayWindowBus; no local state needed
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         // Load persisted primary language for display in top bar
-        val settingsUseCase = remember { runCatching { GlobalContext.get().get<SettingsUseCase>() }.getOrNull() }
-        val primaryLanguageState = produceState(initialValue = "en-US", key1 = settingsUseCase) {
-            val s = settingsUseCase?.let { runCatching { it.get() }.getOrNull() }
-            value = s?.primaryLanguage ?: "en-US"
+        // Use the reactive settings as key to ensure this updates when settings change
+        val primaryLanguageState = produceState(initialValue = settings.primaryLanguage, key1 = settings.primaryLanguage) {
+            value = settings.primaryLanguage
         }
 
             // Input state (hoisted so topBar History button can access it)
@@ -128,6 +132,15 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             }
             val uiScope = rememberCoroutineScope()
             var historyItems by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.SaidText>>(emptyList()) }
+            
+            // OBF Board State
+            val boardRepo = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.BoardRepository>() }
+            var currentBoard by remember { mutableStateOf<ObfBoard?>(null) }
+            val obfParser = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.infrastructure.ObfParser>() }
+            // Map of all boards (ID -> Board) for linking support in OBZ files
+            var boardsMap by remember { mutableStateOf<Map<String, ObfBoard>>(emptyMap()) }
+            // Navigation stack for going back to previous boards
+            var boardStack by remember { mutableStateOf<List<ObfBoard>>(emptyList()) }
 
             // Track model version to re-trigger predictions when training finishes
             var predictionModelVersion by remember { mutableStateOf(0) }
@@ -278,6 +291,10 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     onClick = { showOverflow = false; showSettingsDialog = true }
                                 )
                                 DropdownMenuItem(
+                                    text = { Text("Import/Export Data", style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = { showOverflow = false; showSettingsExportDialog = true }
+                                )
+                                DropdownMenuItem(
                                     text = { Text("Check for updates", style = MaterialTheme.typography.bodyMedium) },
                                     onClick = { 
                                         showOverflow = false
@@ -291,12 +308,118 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         }
                                     }
                                 )
-                                if (onBackToWelcome != null) {
-                                    DropdownMenuItem(
-                                        text = { Text("Welcome screen", style = MaterialTheme.typography.bodyMedium) },
-                                        onClick = { showOverflow = false; onBackToWelcome.invoke() }
-                                    )
-                                }
+                                DropdownMenuItem(
+                                    text = { Text("Welcome screen", style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = { showOverflow = false; onBackToWelcome?.invoke() }
+                                )
+                                
+                                Divider()
+
+                                DropdownMenuItem(
+                                    text = { Text(if (currentBoard == null) "Load Sample Board" else "Close Board", style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = { 
+                                        showOverflow = false
+                                        if (currentBoard == null) {
+                                            uiScope.launch {
+                                                // Load a sample board for demonstration
+                                                val sampleJson = """
+                                                    {
+                                                      "format": "open-board-0.1",
+                                                      "id": "sample_1",
+                                                      "name": "Sample Board",
+                                                      "grid": { "rows": 3, "columns": 2, "order": [["b1", "b2"], ["b3", "b4"], ["b5", "b6"]] },
+                                                      "buttons": [
+                                                        {"id": "b1", "label": "Hello", "background_color": "#ffcccc"},
+                                                        {"id": "b2", "label": "How are you?", "background_color": "#ccffcc"},
+                                                        {"id": "b3", "label": "Yes", "background_color": "#ccccff"},
+                                                        {"id": "b4", "label": "No", "background_color": "#ffffcc"},
+                                                        {"id": "b5", "label": "Thank you", "background_color": "#ffccff"},
+                                                        {"id": "b6", "label": "Please", "background_color": "#ccffff"}
+                                                      ]
+                                                    }
+                                                """.trimIndent()
+                                                val boardRes = obfParser.parseBoard(sampleJson)
+                                                if (boardRes.isSuccess) {
+                                                    val board = boardRes.getOrThrow()
+                                                    boardRepo.saveBoard(board)
+                                                    currentBoard = board
+                                                }
+                                            }
+                                        } else {
+                                            currentBoard = null
+                                        }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Import OBF/OBZ Board...", style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = { 
+                                        showOverflow = false
+                                        uiScope.launch(Dispatchers.IO) {
+                                            val filePicker = runCatching { 
+                                                GlobalContext.get().get<io.github.jdreioe.wingmate.platform.FilePicker>() 
+                                            }.getOrNull()
+                                            if (filePicker != null) {
+                                                val path = filePicker.pickFile("Select OBF/OBZ Board", listOf("obf", "obz", "json"))
+                                                if (path != null) {
+                                                    val isObz = path.lowercase().endsWith(".obz")
+                                                    if (isObz) {
+                                                        // Handle OBZ (zip archive)
+                                                        runCatching {
+                                                            val zipFile = java.util.zip.ZipFile(path)
+                                                            // Read manifest.json to find root board
+                                                            val manifestEntry = zipFile.getEntry("manifest.json")
+                                                            if (manifestEntry != null) {
+                                                                val manifestContent = zipFile.getInputStream(manifestEntry).bufferedReader().readText()
+                                                                val manifest = obfParser.parseManifest(manifestContent).getOrNull()
+                                                                if (manifest != null) {
+                                                                    // Load ALL boards from manifest into map
+                                                                    val loadedBoards = mutableMapOf<String, ObfBoard>()
+                                                                    manifest.paths.boards.forEach { (boardId, boardPath) ->
+                                                                        val entry = zipFile.getEntry(boardPath)
+                                                                        if (entry != null) {
+                                                                            val content = zipFile.getInputStream(entry).bufferedReader().readText()
+                                                                            obfParser.parseBoard(content).getOrNull()?.let { board ->
+                                                                                loadedBoards[boardId] = board
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                    // Also load root board if not in paths
+                                                                    val rootEntry = zipFile.getEntry(manifest.root)
+                                                                    if (rootEntry != null) {
+                                                                        val boardContent = zipFile.getInputStream(rootEntry).bufferedReader().readText()
+                                                                        val boardRes = obfParser.parseBoard(boardContent)
+                                                                        if (boardRes.isSuccess) {
+                                                                            val board = boardRes.getOrThrow()
+                                                                            loadedBoards[board.id] = board
+                                                                            boardRepo.saveBoard(board)
+                                                                            uiScope.launch { 
+                                                                                boardsMap = loadedBoards
+                                                                                boardStack = emptyList()
+                                                                                currentBoard = board 
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                            zipFile.close()
+                                                        }
+                                                    } else {
+                                                        // Handle plain OBF file
+                                                        val content = filePicker.readFileAsText(path)
+                                                        if (content != null) {
+                                                            val boardRes = obfParser.parseBoard(content)
+                                                            if (boardRes.isSuccess) {
+                                                                val board = boardRes.getOrThrow()
+                                                                boardRepo.saveBoard(board)
+                                                                uiScope.launch { currentBoard = board }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                )
 
                             }
                         }
@@ -323,7 +446,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 uiScope.launch(Dispatchers.IO) {
                                     try {
                                         val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                        val secondaryLang = settingsUseCase?.let { runCatching { it.get() }.getOrNull()?.secondaryLanguage }
+                                        val secondaryLang = settings.secondaryLanguage
                                         
                                         val hasSSML = input.text.contains("<") && input.text.contains(">")
                                         
@@ -428,6 +551,14 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     var confirmDeleteCategory by remember { mutableStateOf<CategoryItem?>(null) }
 
                     val secondaryHighlightColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
+                    
+                    val ssmlRanges = remember(input.text) {
+                        Regex("\\[(\\d+(\\.\\d+)?)s\\]").findAll(input.text).map {
+                            androidx.compose.ui.text.TextRange(it.range.first, it.range.last + 1)
+                        }.toList()
+                    }
+                    val ssmlHighlightColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+
                     SecondaryLanguageTextField(
                         value = input,
                         onValueChange = { newValue ->
@@ -442,6 +573,8 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         focusRequester = textFieldFocusRequester,
                         highlightRanges = secondaryLanguageRanges,
                         highlightColor = secondaryHighlightColor,
+                        ssmlRanges = ssmlRanges,
+                        ssmlColor = ssmlHighlightColor,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
                             fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale,
                             color = MaterialTheme.colorScheme.onSurface
@@ -843,7 +976,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             uiScope.launch(Dispatchers.IO) {
                                 try {
                                     val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                    val secondaryLang = settingsUseCase?.let { runCatching { it.get() }.getOrNull()?.secondaryLanguage } ?: selected?.primaryLanguage
+                                    val secondaryLang = settings.secondaryLanguage
                                     val fallbackLang2 = selected?.selectedLanguage ?: ""
                                     val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: fallbackLang2)
                                     speechService.speak(phrase.text, vForSecondary)
@@ -889,6 +1022,113 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         )
                     }
                 // Full screen handled by platform window on desktop; on mobile we could add a dedicated screen later.
+                }
+
+                if (currentBoard != null) {
+                    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Top bar with board name and navigation buttons
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Left side: Back button (if stacked) and board name
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (boardStack.isNotEmpty()) {
+                                        IconButton(onClick = { 
+                                            currentBoard = boardStack.last()
+                                            boardStack = boardStack.dropLast(1)
+                                        }) {
+                                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                                        }
+                                    }
+                                    Text("${currentBoard?.name ?: "Board"}", style = MaterialTheme.typography.titleMedium)
+                                }
+                                // Right side: Erase and Home buttons
+                                Row {
+                                    IconButton(onClick = { 
+                                        input = TextFieldValue("")
+                                        io.github.jdreioe.wingmate.presentation.DisplayTextBus.set("")
+                                    }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Erase")
+                                    }
+                                    IconButton(onClick = { 
+                                        currentBoard = null
+                                        boardsMap = emptyMap()
+                                        boardStack = emptyList()
+                                    }) {
+                                        Icon(Icons.Default.Home, contentDescription = "Home")
+                                    }
+                                }
+                            }
+                            
+                            // Textfield showing accumulated text
+                            OutlinedTextField(
+                                value = input,
+                                onValueChange = { newValue ->
+                                    input = newValue
+                                    io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newValue.text)
+                                },
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                placeholder = { Text("Tap buttons to build a sentence...") },
+                                trailingIcon = {
+                                    if (input.text.isNotEmpty()) {
+                                        IconButton(onClick = {
+                                            // Speak the entire text
+                                            uiScope.launch(Dispatchers.IO) {
+                                                val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                                                speechService.speak(input.text, selected)
+                                            }
+                                        }) {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = "Speak")
+                                        }
+                                    }
+                                },
+                                singleLine = false,
+                                maxLines = 3
+                            )
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            // Board grid
+                            ObfBoardView(
+                                board = currentBoard!!,
+                                onButtonClick = { button ->
+                                    // Check if this is a linking button
+                                    val loadBoard = button.loadBoard
+                                    if (loadBoard != null) {
+                                        // Try to find the linked board by ID or path
+                                        val linkedBoard = loadBoard.id?.let { boardsMap[it] }
+                                            ?: loadBoard.path?.let { path -> 
+                                                boardsMap.values.find { it.id == path.removeSuffix(".obf") }
+                                            }
+                                        if (linkedBoard != null) {
+                                            boardStack = boardStack + currentBoard!!
+                                            currentBoard = linkedBoard
+                                        }
+                                    } else {
+                                        // Normal button - speak and append text
+                                        val textToSpeak = button.vocalization ?: button.label
+                                        if (!textToSpeak.isNullOrBlank()) {
+                                            uiScope.launch(Dispatchers.IO) {
+                                                val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                                                speechService.speak(textToSpeak, selected)
+                                            }
+                                            val fv = input
+                                            val pos = fv.selection.start.coerceIn(0, fv.text.length)
+                                            val insertText = "$textToSpeak "
+                                            val newText = fv.text.substring(0, pos) + insertText + fv.text.substring(pos)
+                                            val newCursor = pos + insertText.length
+                                            input = TextFieldValue(newText, selection = TextRange(newCursor))
+                                            io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).fillMaxWidth()
+                            )
+                        }
+                    }
                 }
                         if (isWide) {
                             SsmlSidebar(
@@ -1010,6 +1250,12 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     }
                 }
             }
+
+            if (showSettingsExportDialog) {
+                SettingsExportDialog(
+                    onDismiss = { showSettingsExportDialog = false }
+                )
+            }
     }
 }
 
@@ -1021,12 +1267,14 @@ private fun SecondaryLanguageTextField(
     focusRequester: FocusRequester? = null,
     highlightRanges: List<TextRange> = emptyList(),
     highlightColor: Color,
+    ssmlRanges: List<TextRange> = emptyList(),
+    ssmlColor: Color = MaterialTheme.colorScheme.primaryContainer,
     textStyle: TextStyle,
     placeholder: (@Composable () -> Unit)? = null,
     minLines: Int = 1,
     maxLines: Int = Int.MAX_VALUE
 ) {
-    val annotated: AnnotatedString = remember(value.text, highlightRanges, highlightColor) {
+    val annotated: AnnotatedString = remember(value.text, highlightRanges, highlightColor, ssmlRanges, ssmlColor) {
         buildAnnotatedString {
             append(value.text)
             highlightRanges.sortedBy { it.start }.forEach { range ->
@@ -1034,6 +1282,13 @@ private fun SecondaryLanguageTextField(
                 val end = range.end.coerceIn(0, value.text.length)
                 if (start < end) {
                     addStyle(SpanStyle(background = highlightColor), start, end)
+                }
+            }
+            ssmlRanges.sortedBy { it.start }.forEach { range ->
+                val start = range.start.coerceIn(0, value.text.length)
+                val end = range.end.coerceIn(0, value.text.length)
+                if (start < end) {
+                    addStyle(SpanStyle(background = ssmlColor, fontWeight = FontWeight.Bold), start, end)
                 }
             }
         }

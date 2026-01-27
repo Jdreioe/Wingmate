@@ -88,6 +88,14 @@ class SimpleNGramPredictionService : TextPredictionService {
         mutex.withLock {
             println("DEBUG: Setting base language with ${words.size} dictionary words")
             
+            // Clear existing linguistic data before switching languages
+            bigramCounts.clear()
+            trigramCounts.clear()
+            letterBigramCounts.clear()
+            letterTrigramCounts.clear()
+            wordsByPrefix.clear()
+            wordFrequency.clear()
+
             // Add dictionary words with their frequency weights
             words.forEach { (word, frequency) ->
                 // Use lower weight for dictionary words so user words have priority

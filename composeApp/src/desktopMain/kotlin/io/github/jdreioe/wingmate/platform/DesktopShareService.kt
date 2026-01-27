@@ -24,4 +24,12 @@ class DesktopShareService : ShareService {
             exit == 0
         }.getOrElse { false }
     }
+    override fun shareText(text: String): Boolean {
+        return runCatching {
+            val selection = java.awt.datatransfer.StringSelection(text)
+            val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+            clipboard.setContents(selection, selection)
+            true
+        }.getOrElse { false }
+    }
 }

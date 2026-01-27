@@ -36,6 +36,8 @@ fun overrideDesktopSpeechService() {
             single<io.github.jdreioe.wingmate.platform.AudioClipboard> { io.github.jdreioe.wingmate.platform.DesktopAudioClipboard() }
             // Text prediction service using n-grams trained on user's history
             single<TextPredictionService> { SimpleNGramPredictionService() }
+            // File picker for importing files
+            single<io.github.jdreioe.wingmate.platform.FilePicker> { io.github.jdreioe.wingmate.platform.DesktopFilePicker() }
         }
     )
     // Optional: log the current virtual mic preference for visibility

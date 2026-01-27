@@ -93,4 +93,42 @@ class DesktopSqlSaidTextRepository : SaidTextRepository {
             }
         }
     }
+    override suspend fun deleteAll(): Unit = withContext(Dispatchers.IO) {
+        connection().use { conn ->
+            conn.createStatement().use { st ->
+                st.executeUpdate("DELETE FROM said_texts")
+                log.info("All said texts deleted from SQLite")
+            }
+        }
+    }
+        
+
+    override suspend fun addAll(items: List<SaidText>) = withContext(Dispatchers.IO) {
+        connection().use { conn ->
+            conn.setAutoCommit(false)
+            try {
+                conn.prepareStatement(
+                    "INSERT INTO said_texts (date, said_text, voice_name, pitch, speed, audio_file_path, created_at, position, primary_language) VALUES (?,?,?,?,?,?,?,?,?)"
+                ).use { ps ->
+                    for (item in items) {
+                        ps.setObject(1, item.date)
+                        ps.setString(2, item.saidText)
+                        ps.setString(3, item.voiceName)
+                        ps.setObject(4, item.pitch)
+                        ps.setObject(5, item.speed)
+                        ps.setString(6, item.audioFilePath)
+                        ps.setObject(7, item.createdAt)
+                        ps.setObject(8, item.position)
+                        ps.setString(9, item.primaryLanguage)
+                        ps.addBatch()
+                    }
+                    ps.executeBatch()
+                }
+                conn.commit()
+            } catch (e: Exception) {
+                conn.rollback()
+                throw e
+            }
+        }
+    }
 }

@@ -122,9 +122,10 @@ object AzureTtsClient {
     /**
      * Enhanced SSML generation with better voice parameter support
      */
-    fun generateSsml(text: String, voice: Voice): String {
+    fun generateSsml(text: String, voice: Voice, dictionary: List<io.github.jdreioe.wingmate.domain.PronunciationEntry> = emptyList()): String {
         val params = resolveVoiceParams(voice)
-        val escaped = escapeForSsml(text)
+        val processed = applyPronunciationDictionary(text, dictionary)
+        val escaped = escapeForSsml(processed)
         val content = if (params.baseLang.isNotBlank() && params.baseLang != "en-US") {
             "<lang xml:lang=\"${params.baseLang}\">$escaped</lang>"
         } else {
@@ -136,12 +137,13 @@ object AzureTtsClient {
     /**
      * Generate SSML by weaving <lang> tags through provided segments.
      */
-    fun generateSsml(segments: List<SpeechSegment>, voice: Voice): String {
+    fun generateSsml(segments: List<SpeechSegment>, voice: Voice, dictionary: List<io.github.jdreioe.wingmate.domain.PronunciationEntry> = emptyList()): String {
         val params = resolveVoiceParams(voice)
         val content = buildString {
             segments.forEach { segment ->
                 if (segment.text.isNotEmpty()) {
-                    val escaped = escapeForSsml(segment.text)
+                    val processed = applyPronunciationDictionary(segment.text, dictionary)
+                    val escaped = escapeForSsml(processed)
                     val overrideLang = segment.languageTag?.takeIf { it.isNotBlank() }
                     if (!overrideLang.isNullOrBlank() && overrideLang != params.baseLang) {
                         append("<lang xml:lang=\"$overrideLang\">$escaped</lang>")
@@ -155,6 +157,27 @@ object AzureTtsClient {
             }
         }
         return buildSsmlDocument(params, content)
+    }
+
+    /**
+     * Replaces words with <phoneme> tags based on the provided dictionary.
+     */
+    private fun applyPronunciationDictionary(text: String, dictionary: List<io.github.jdreioe.wingmate.domain.PronunciationEntry>): String {
+        if (dictionary.isEmpty()) return text
+        var result = text
+        // Sort by length descending to avoid partial matches (e.g. "car" matching "carpet")
+        val sortedDict = dictionary.sortedByDescending { it.word.length }
+        
+        for (entry in sortedDict) {
+            if (entry.word.isBlank() || entry.phoneme.isBlank()) continue
+            
+            // Regex to match whole word, case insensitive
+            val regex = Regex("\\b${Regex.escape(entry.word)}\\b", RegexOption.IGNORE_CASE)
+            result = result.replace(regex) { match ->
+                "<phoneme alphabet=\"${entry.alphabet}\" ph=\"${entry.phoneme}\">${match.value}</phoneme>"
+            }
+        }
+        return result
     }
     
     /**
@@ -187,12 +210,35 @@ object AzureTtsClient {
      * Enhanced SSML text escaping with comprehensive character support
      */
     private fun escapeForSsml(text: String): String {
-        return text
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-            .replace("'", "&apos;")
+        // Find segments that are tags vs plain text
+        val tagRegex = Regex("<[^>]+>")
+        val matches = tagRegex.findAll(text)
+        
+        if (matches.none()) {
+            return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
+        }
+        
+        val result = StringBuilder()
+        var lastIndex = 0
+        
+        for (match in matches) {
+            // 1. Escape the text BEFORE the tag
+            val preText = text.substring(lastIndex, match.range.first)
+            result.append(preText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;"))
+            
+            // 2. Add the tag AS-IS (do not escape the code parts of it)
+            result.append(match.value)
+            
+            lastIndex = match.range.last + 1
+        }
+        
+        // 3. Escape the remaining text AFTER the last tag
+        if (lastIndex < text.length) {
+            val postText = text.substring(lastIndex)
+            result.append(postText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;"))
+        }
+        
+        return result.toString()
     }
 
     private data class VoiceParams(

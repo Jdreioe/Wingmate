@@ -26,8 +26,13 @@ object SpeechTextProcessor {
      * - <break time="2s"/> - SSML-style break (alias for pause)
      */
     fun processText(text: String): List<SpeechSegment> {
+        // Expand shortcodes like [0.5s] to <break time="0.5s"/>
+        val expandedText = text.replace(Regex("\\[(\\d+(\\.\\d+)?)s\\]")) { 
+            "<break time=\"${it.groupValues[1]}s\"/>" 
+        }
+
         // First, merge lines that don't end with proper punctuation
-        val mergedText = mergeIncompleteLines(text)
+        val mergedText = mergeIncompleteLines(expandedText)
         
         val segments = mutableListOf<SpeechSegment>()
         
