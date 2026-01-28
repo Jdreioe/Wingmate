@@ -5,11 +5,12 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Phrase(
     val id: String,
-    val text: String,
-    val name: String? = null,
-    val backgroundColor: String? = null,
-    val parentId: String? = null,
-    val isCategory: Boolean = false,
+    val text: String,                   // Display label (maps to OBF label)
+    val name: String? = null,           // Vocalization - what to speak if different from text (maps to OBF vocalization)
+    val backgroundColor: String? = null, // Background and border color
+    val imageUrl: String? = null,       // Image URL for visual display
+    val parentId: String? = null,       // Parent category ID
+    val linkedBoardId: String? = null,  // Link to another board (implements category/folder functionality)
     val createdAt: Long,
     // Optional local recording path for this phrase (platform-specific file path)
     val recordingPath: String? = null

@@ -34,7 +34,7 @@ class BlocTest {
     @Test
     fun addAndLoad() = runBlocking {
     val bloc = PhraseBloc(Repo())
-    bloc.dispatch(PhraseEvent.Add(Phrase(id = "", text = "hi", name = null, backgroundColor = null, parentId = null, isCategory = false, createdAt = 0L)))
+    bloc.dispatch(PhraseEvent.Add(Phrase(id = "", text = "hi", name = null, backgroundColor = null, parentId = null, createdAt = 0L)))
         bloc.dispatch(PhraseEvent.Load)
         // Just ensure no crash and state accessible
         assertTrue(true)

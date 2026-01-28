@@ -27,8 +27,9 @@ class DesktopSqlPhraseRepository : PhraseRepository {
                         text TEXT,
                         name TEXT,
                         background_color TEXT,
+                        image_url TEXT,
                         parent_id TEXT,
-                        is_category INTEGER DEFAULT 0,
+                        linked_board_id TEXT,
                         created_at INTEGER,
                         ordering INTEGER
                     )
@@ -65,8 +66,9 @@ class DesktopSqlPhraseRepository : PhraseRepository {
                 val migrations = mutableListOf<String>()
                 if (!existing.contains("name")) migrations.add("ALTER TABLE phrases ADD COLUMN name TEXT")
                 if (!existing.contains("background_color")) migrations.add("ALTER TABLE phrases ADD COLUMN background_color TEXT")
+                if (!existing.contains("image_url")) migrations.add("ALTER TABLE phrases ADD COLUMN image_url TEXT")
                 if (!existing.contains("parent_id")) migrations.add("ALTER TABLE phrases ADD COLUMN parent_id TEXT")
-                if (!existing.contains("is_category")) migrations.add("ALTER TABLE phrases ADD COLUMN is_category INTEGER DEFAULT 0")
+                if (!existing.contains("linked_board_id")) migrations.add("ALTER TABLE phrases ADD COLUMN linked_board_id TEXT")
                 if (!existing.contains("created_at")) migrations.add("ALTER TABLE phrases ADD COLUMN created_at INTEGER")
                 if (!existing.contains("ordering")) migrations.add("ALTER TABLE phrases ADD COLUMN ordering INTEGER")
 
@@ -165,7 +167,7 @@ class DesktopSqlPhraseRepository : PhraseRepository {
         log.info("Loading phrases from SQLite at {}", dbPath)
         val items = mutableListOf<Phrase>()
         connection().use { conn ->
-            conn.prepareStatement("SELECT id, text, name, background_color, parent_id, /* ignore legacy */ 0 as is_category, created_at FROM phrases ORDER BY ordering ASC").use { ps ->
+            conn.prepareStatement("SELECT id, text, name, background_color, image_url, parent_id, linked_board_id, created_at FROM phrases ORDER BY ordering ASC").use { ps ->
                 val rs = ps.executeQuery()
                 while (rs.next()) {
                     val p = Phrase(
@@ -173,9 +175,10 @@ class DesktopSqlPhraseRepository : PhraseRepository {
                         text = rs.getString(2),
                         name = rs.getString(3),
                         backgroundColor = rs.getString(4),
-                        parentId = rs.getString(5),
-                        isCategory = rs.getInt(6) != 0,
-                        createdAt = rs.getLong(7)
+                        imageUrl = rs.getString(5),
+                        parentId = rs.getString(6),
+                        linkedBoardId = rs.getString(7),
+                        createdAt = rs.getLong(8)
                     )
                     items.add(p)
                     log.debug("Loaded phrase {} with bg='{}'", p.id, p.backgroundColor)
@@ -192,32 +195,34 @@ class DesktopSqlPhraseRepository : PhraseRepository {
                 val rs = ps.executeQuery()
                 val max = if (rs.next()) rs.getInt(1) else -1
                 val ord = max + 1
-                conn.prepareStatement("INSERT INTO phrases(id, text, name, background_color, parent_id, is_category, created_at, ordering) VALUES (?,?,?,?,?,?,?,?)").use { ins ->
+                conn.prepareStatement("INSERT INTO phrases(id, text, name, background_color, image_url, parent_id, linked_board_id, created_at, ordering) VALUES (?,?,?,?,?,?,?,?,?)").use { ins ->
                     ins.setString(1, id)
                     ins.setString(2, phrase.text)
                     ins.setString(3, phrase.name)
                     ins.setString(4, phrase.backgroundColor)
-                    ins.setString(5, phrase.parentId)
-                    ins.setInt(6, if (phrase.isCategory) 1 else 0)
-                    ins.setLong(7, createdAt)
-                    ins.setInt(8, ord)
+                    ins.setString(5, phrase.imageUrl)
+                    ins.setString(6, phrase.parentId)
+                    ins.setString(7, phrase.linkedBoardId)
+                    ins.setLong(8, createdAt)
+                    ins.setInt(9, ord)
                     ins.executeUpdate()
                 }
             }
         }
     log.info("Saved phrase {} with bg='{}'", id, phrase.backgroundColor)
-        return Phrase(id = id, text = phrase.text, name = phrase.name, backgroundColor = phrase.backgroundColor, parentId = phrase.parentId, isCategory = phrase.isCategory, createdAt = createdAt)
+        return Phrase(id = id, text = phrase.text, name = phrase.name, backgroundColor = phrase.backgroundColor, imageUrl = phrase.imageUrl, parentId = phrase.parentId, linkedBoardId = phrase.linkedBoardId, createdAt = createdAt)
     }
 
     override suspend fun update(phrase: Phrase): Phrase {
         connection().use { conn ->
-            conn.prepareStatement("UPDATE phrases SET text = ?, name = ?, background_color = ?, parent_id = ?, is_category = ? WHERE id = ?").use { ps ->
+            conn.prepareStatement("UPDATE phrases SET text = ?, name = ?, background_color = ?, image_url = ?, parent_id = ?, linked_board_id = ? WHERE id = ?").use { ps ->
                 ps.setString(1, phrase.text)
                 ps.setString(2, phrase.name)
                 ps.setString(3, phrase.backgroundColor)
-                ps.setString(4, phrase.parentId)
-                ps.setInt(5, if (phrase.isCategory) 1 else 0)
-                ps.setString(6, phrase.id)
+                ps.setString(4, phrase.imageUrl)
+                ps.setString(5, phrase.parentId)
+                ps.setString(6, phrase.linkedBoardId)
+                ps.setString(7, phrase.id)
                 ps.executeUpdate()
             }
         }

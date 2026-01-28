@@ -25,6 +25,9 @@ import kotlin.math.PI
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.ui.parseHexToColor
+import kotlinx.coroutines.launch
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddPhraseDialog(
@@ -37,6 +40,7 @@ fun AddPhraseDialog(
 ) {
     var text by remember { mutableStateOf(initialPhrase?.text ?: "") }
     var altText by remember { mutableStateOf(initialPhrase?.name ?: "") }
+    var imageUrl by remember { mutableStateOf(initialPhrase?.imageUrl ?: "") }
     var selectedColor by remember { mutableStateOf(initialPhrase?.backgroundColor?.let { parseHexToColor(it) } ?: Color.Blue) }
     var useColor by remember { mutableStateOf(initialPhrase?.backgroundColor != null) }
     var hue by remember { mutableStateOf(0f) }
@@ -54,18 +58,98 @@ fun AddPhraseDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
+                    value = altText,
+                    onValueChange = { altText = it },
+                    label = { Text("Vocalization (what to speak)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
                     label = { Text("New phrase text") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = altText,
-                    onValueChange = { altText = it },
-                    label = { Text("Alternative text / emoji") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                
+                // Image selection
+                var showSymbolSearch by remember { mutableStateOf(false) }
+                val filePicker = remember { 
+                    try { 
+                        org.koin.core.context.GlobalContext.get().get<io.github.jdreioe.wingmate.platform.FilePicker>() 
+                    } catch (e: Throwable) { null } 
+                }
+                val scope = rememberCoroutineScope()
+                
+                Column {
+                    Text("Image", style = MaterialTheme.typography.labelMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    if (imageUrl.isNotBlank()) {
+                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Preview could go here, but for now just the URL/Path text
+                            Text(
+                                text = imageUrl.takeLast(30).let { if (imageUrl.length > 30) "...$it" else it },
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f).padding(end = 8.dp),
+                                maxLines = 1
+                            )
+                            IconButton(onClick = { imageUrl = "" }) {
+                                Icon(Icons.Filled.Close, "Clear image")
+                            }
+                        }
+                    }
+                    
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                         // File Picker Button
+                        if (filePicker != null) {
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        val picked = filePicker.pickFile("Select Image", listOf("png", "jpg", "jpeg", "svg"))
+                                        if (picked != null) {
+                                            // Ensure file protocol for local files
+                                            imageUrl = if (picked.startsWith("http")) picked else "file://$picked"
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Pick File")
+                            }
+                        }
+                        
+                        // OpenSymbols Button
+                        OutlinedButton(
+                            onClick = { showSymbolSearch = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("OpenSymbols")
+                        }
+                    }
+                }
+                
+                if (showSymbolSearch) {
+                    val imageCacher = remember { 
+                        try { org.koin.core.context.GlobalContext.get().get<io.github.jdreioe.wingmate.infrastructure.ImageCacher>() } catch (e: Throwable) { null } 
+                    }
+                    
+                    OpenSymbolsSearchDialog(
+                        onDismiss = { showSymbolSearch = false },
+                        onSelect = { url ->
+                            showSymbolSearch = false
+                            // Cache the image if cacher is available
+                            if (imageCacher != null) {
+                                scope.launch {
+                                    val cachedPath = imageCacher.getCachedImagePath(url)
+                                    imageUrl = cachedPath
+                                }
+                            } else {
+                                imageUrl = url
+                            }
+                        }
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Color preview + nested color picker dialog trigger
@@ -145,13 +229,18 @@ fun AddPhraseDialog(
             TextButton(onClick = {
                 // Normalize to six-digit RRGGBB hex string (lowercase) or null when disabled
                 val hex = if (useColor) String.format("%06X", (selectedColor.toArgb() and 0xFFFFFF)).lowercase() else null
+                
+                val finalVocalization = altText.trim().ifEmpty { null }
+                // If Label (text) is empty, default to Vocalization (altText/finalVocalization) if available
+                val finalLabel = text.trim().ifEmpty { finalVocalization ?: "" }
+                
                 val phrase = Phrase(
                     id = initialPhrase?.id ?: java.util.UUID.randomUUID().toString(),
-                    text = text.trim(),
-                    name = altText.trim(),
+                    text = finalLabel,
+                    name = finalVocalization,
                     backgroundColor = hex,
+                    imageUrl = imageUrl.trim().ifEmpty { null },
                     parentId = selectedCategory?.id,
-                    isCategory = false,
                     createdAt = initialPhrase?.createdAt ?: System.currentTimeMillis()
                 )
                 onSave(phrase)

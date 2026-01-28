@@ -13,7 +13,6 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
 
     override suspend fun getAll(): List<Phrase> = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
-        // Removed SLF4J logger for cross-platform compatibility
         val cursor = db.query("phrases", null, null, null, null, null, "ordering ASC")
         val list = mutableListOf<Phrase>()
         while (cursor.moveToNext()) {
@@ -21,12 +20,25 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             val text = cursor.getString(cursor.getColumnIndexOrThrow("text"))
             val name = cursor.getString(cursor.getColumnIndexOrThrow("name"))
             val bg = cursor.getString(cursor.getColumnIndexOrThrow("background_color"))
+            val imageUrlIdx = cursor.getColumnIndex("image_url")
+            val imageUrl = if (imageUrlIdx >= 0) cursor.getString(imageUrlIdx) else null
             val parentId = cursor.getString(cursor.getColumnIndexOrThrow("parent_id"))
-            val isCat = cursor.getInt(cursor.getColumnIndexOrThrow("is_category")) != 0
+            val linkedBoardIdx = cursor.getColumnIndex("linked_board_id")
+            val linkedBoardId = if (linkedBoardIdx >= 0) cursor.getString(linkedBoardIdx) else null
             val createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at"))
             val recPathIdx = cursor.getColumnIndex("recording_path")
             val recordingPath = if (recPathIdx >= 0) cursor.getString(recPathIdx) else null
-            list += Phrase(id = id, text = text, name = name, backgroundColor = bg, parentId = parentId, isCategory = isCat, createdAt = createdAt, recordingPath = recordingPath)
+            list += Phrase(
+                id = id, 
+                text = text, 
+                name = name, 
+                backgroundColor = bg, 
+                imageUrl = imageUrl,
+                parentId = parentId, 
+                linkedBoardId = linkedBoardId,
+                createdAt = createdAt, 
+                recordingPath = recordingPath
+            )
         }
         cursor.close()
         println("Loaded {} phrases from SQLite: ${list.size}")
@@ -47,14 +59,24 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             put("text", phrase.text)
             put("name", phrase.name)
             put("background_color", phrase.backgroundColor)
+            put("image_url", phrase.imageUrl)
             put("parent_id", phrase.parentId)
-            put("is_category", if (phrase.isCategory) 1 else 0)
+            put("linked_board_id", phrase.linkedBoardId)
             put("created_at", createdAt)
             put("recording_path", phrase.recordingPath)
             put("ordering", ord + 1)
         }
         db.insert("phrases", null, values)
-        return@withContext Phrase(id = id, text = phrase.text, name = phrase.name, backgroundColor = phrase.backgroundColor, parentId = phrase.parentId, isCategory = phrase.isCategory, createdAt = createdAt)
+        return@withContext Phrase(
+            id = id, 
+            text = phrase.text, 
+            name = phrase.name, 
+            backgroundColor = phrase.backgroundColor, 
+            imageUrl = phrase.imageUrl,
+            parentId = phrase.parentId, 
+            linkedBoardId = phrase.linkedBoardId,
+            createdAt = createdAt
+        )
     }
 
     override suspend fun update(phrase: Phrase): Phrase = withContext(Dispatchers.IO) {
@@ -63,8 +85,9 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             put("text", phrase.text)
             put("name", phrase.name)
             put("background_color", phrase.backgroundColor)
+            put("image_url", phrase.imageUrl)
             put("parent_id", phrase.parentId)
-            put("is_category", if (phrase.isCategory) 1 else 0)
+            put("linked_board_id", phrase.linkedBoardId)
             put("recording_path", phrase.recordingPath)
         }
         db.update("phrases", values, "id = ?", arrayOf(phrase.id))

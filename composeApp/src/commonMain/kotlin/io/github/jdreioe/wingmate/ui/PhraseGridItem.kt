@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.SmallFloatingActionButton
 import io.github.jdreioe.wingmate.domain.Phrase
 import org.koin.core.context.GlobalContext
+import androidx.compose.ui.graphics.toComposeImageBitmap
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -145,6 +146,34 @@ fun PhraseGridItem(
                 .align(Alignment.Center)
                 .fillMaxSize()
                 .rotate(rotation)) {
+                
+                // Async load image from URL if available
+                var imageBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                val imageUrl = item.imageUrl
+                androidx.compose.runtime.LaunchedEffect(imageUrl) {
+                    if (!imageUrl.isNullOrBlank()) {
+                        when {
+                            imageUrl.startsWith("http") -> {
+                                imageBitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    runCatching {
+                                        val bytes = java.net.URL(imageUrl).readBytes()
+                                        org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
+                                    }.getOrNull()
+                                }
+                            }
+                            imageUrl.startsWith("file://") || imageUrl.startsWith("/") -> {
+                                imageBitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    runCatching {
+                                        val path = if (imageUrl.startsWith("file://")) java.net.URI(imageUrl).path else imageUrl
+                                        val bytes = java.io.File(path).readBytes()
+                                        org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
+                                    }.getOrNull()
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -152,17 +181,18 @@ fun PhraseGridItem(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Show image if loaded
+                    if (imageBitmap != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = imageBitmap!!,
+                            contentDescription = item.text,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                            modifier = Modifier.weight(1f).fillMaxWidth().padding(4.dp)
+                        )
+                    }
                     val baseLarge = MaterialTheme.typography.bodyLarge
                     val effectiveLarge = if (phraseFontSize != TextUnit.Unspecified) baseLarge.copy(fontSize = phraseFontSize) else baseLarge
                     Text(text = item.text, style = effectiveLarge, color = MaterialTheme.colorScheme.onSurface)
-                    if (!item.name.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = item.name.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    if (!item.backgroundColor.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = "#${item.backgroundColor}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
-                    }
                 }
             }
 

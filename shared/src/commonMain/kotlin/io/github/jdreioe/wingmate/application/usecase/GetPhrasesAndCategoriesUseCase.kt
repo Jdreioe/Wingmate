@@ -6,8 +6,9 @@ import io.github.jdreioe.wingmate.domain.PhraseRepository
 class GetPhrasesAndCategoriesUseCase(private val phraseRepository: PhraseRepository) {
     suspend operator fun invoke(): Pair<List<Phrase>, List<Phrase>> {
         val all = phraseRepository.getAll()
-        val phrases = all.filter { !it.isCategory }
-        val categories = all.filter { it.isCategory }
-        return phrases to categories
+        // Phrases with linkedBoardId are folder/category items, others are regular phrases
+        val phrases = all.filter { it.linkedBoardId == null }
+        val folders = all.filter { it.linkedBoardId != null }
+        return phrases to folders
     }
 }

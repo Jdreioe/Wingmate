@@ -11,7 +11,6 @@ class AddPhraseUseCase(private val phraseRepository: PhraseRepository) {
             name = null,
             backgroundColor = null,
             parentId = categoryId,
-            isCategory = false,
             createdAt = 0 // Repository will set timestamp
         )
         return phraseRepository.add(phrase)

@@ -93,6 +93,28 @@ class MainActivity : ComponentActivity() {
         // Register Android-specific implementations (TTS, SharedPreferences config)
         overrideAndroidSpeechService(this)
 
+        // Initialize FilePicker bridge
+        runCatching {
+            val picker = GlobalContext.get().get<io.github.jdreioe.wingmate.platform.FilePicker>() as? io.github.jdreioe.wingmate.platform.AndroidFilePicker
+            if (picker != null) {
+                val launcher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+                    picker.onFilePicked(uri)
+                }
+                picker.registerLauncher { extensions ->
+                    val mimeTypes = extensions.map { ext ->
+                        when(ext.lowercase()) {
+                             "png" -> "image/png"
+                             "jpg", "jpeg" -> "image/jpeg"
+                             "svg" -> "image/svg+xml"
+                             "obz", "zip" -> "application/zip"
+                             else -> "*/*"
+                        }
+                    }.toTypedArray()
+                    launcher.launch(mimeTypes)
+                }
+            }
+        }
+
         // Initialize Window Area Controller for rear display
         if (Build.VERSION.SDK_INT >= 34) {
             displayExecutor = ContextCompat.getMainExecutor(this)

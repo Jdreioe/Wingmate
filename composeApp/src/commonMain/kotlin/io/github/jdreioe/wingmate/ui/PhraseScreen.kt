@@ -141,6 +141,8 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             var boardsMap by remember { mutableStateOf<Map<String, ObfBoard>>(emptyMap()) }
             // Navigation stack for going back to previous boards
             var boardStack by remember { mutableStateOf<List<ObfBoard>>(emptyList()) }
+            // Extracted images from OBZ (path -> bytes)
+            var extractedImages by remember { mutableStateOf<Map<String, ByteArray>>(emptyMap()) }
 
             // Track model version to re-trigger predictions when training finishes
             var predictionModelVersion by remember { mutableStateOf(0) }
@@ -383,6 +385,15 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                                                             }
                                                                         }
                                                                     }
+                                                                    // Extract ALL images from manifest
+                                                                    val loadedImages = mutableMapOf<String, ByteArray>()
+                                                                    manifest.paths.images.forEach { (imageId, imagePath) ->
+                                                                        val entry = zipFile.getEntry(imagePath)
+                                                                        if (entry != null) {
+                                                                            val bytes = zipFile.getInputStream(entry).readBytes()
+                                                                            loadedImages[imagePath] = bytes
+                                                                        }
+                                                                    }
                                                                     // Also load root board if not in paths
                                                                     val rootEntry = zipFile.getEntry(manifest.root)
                                                                     if (rootEntry != null) {
@@ -395,6 +406,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                                                             uiScope.launch { 
                                                                                 boardsMap = loadedBoards
                                                                                 boardStack = emptyList()
+                                                                                extractedImages = loadedImages
                                                                                 currentBoard = board 
                                                                             }
                                                                         }
@@ -938,7 +950,6 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 name = s.voiceName,
                                 backgroundColor = null,
                                 parentId = HistoryCategoryId,
-                                isCategory = false,
                                 createdAt = s.date ?: s.createdAt ?: 0L,
                                 recordingPath = s.audioFilePath
                             )
@@ -949,10 +960,10 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     PhraseGrid(
                         phrases = visiblePhrases,
                         onInsert = { phrase ->
-                            // insert phrase.text at current cursor position
+                            // insert phrase.name (vocalization) or phrase.text (label) at current cursor position
                             val fv = input
                             val pos = fv.selection.start.coerceIn(0, fv.text.length)
-                            val insertText = phrase.text
+                            val insertText = phrase.name?.ifBlank { null } ?: phrase.text
                             val newText = fv.text.substring(0, pos) + insertText + fv.text.substring(pos)
                             val newCursor = pos + insertText.length
                             secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
@@ -963,7 +974,8 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             uiScope.launch(Dispatchers.IO) {
                                 try {
                                     val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                    speechService.speak(phrase.text, selected)
+                                    val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
+                                    speechService.speak(textToSpeak, selected)
                                     // Refresh history from repo
                                     try {
                                         val list = saidRepo.list()
@@ -979,7 +991,8 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     val secondaryLang = settings.secondaryLanguage
                                     val fallbackLang2 = selected?.selectedLanguage ?: ""
                                     val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: fallbackLang2)
-                                    speechService.speak(phrase.text, vForSecondary)
+                                    val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
+                                    speechService.speak(textToSpeak, vForSecondary)
                                     // Refresh history from repo
                                     try {
                                         val list = saidRepo.list()
@@ -1125,7 +1138,8 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         }
                                     }
                                 },
-                                modifier = Modifier.weight(1f).fillMaxWidth()
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                extractedImages = extractedImages
                             )
                         }
                     }

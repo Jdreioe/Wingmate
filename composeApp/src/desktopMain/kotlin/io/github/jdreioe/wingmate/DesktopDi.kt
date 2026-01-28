@@ -5,6 +5,7 @@ import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.CategoryRepository
+import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSpeechService
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlConfigRepository
@@ -12,6 +13,9 @@ import io.github.jdreioe.wingmate.infrastructure.DesktopSqlVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlCategoryRepository
+import io.github.jdreioe.wingmate.infrastructure.DesktopSqlBoardRepository
+import io.github.jdreioe.wingmate.infrastructure.ImageCacher
+import io.github.jdreioe.wingmate.infrastructure.JvmImageCacher
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.module
 import kotlinx.coroutines.runBlocking
@@ -24,6 +28,8 @@ fun overrideDesktopSpeechService() {
             single<ConfigRepository> { DesktopSqlConfigRepository() }
             single<PhraseRepository> { DesktopSqlPhraseRepository() }
             single<CategoryRepository> { DesktopSqlCategoryRepository() }
+            // Persist imported OBF/OBZ boards on desktop
+            single<BoardRepository> { DesktopSqlBoardRepository() }
             // Persist UI settings on desktop
             single<io.github.jdreioe.wingmate.domain.SettingsRepository> { io.github.jdreioe.wingmate.infrastructure.DesktopSqlSettingsRepository() }
             // Persist selected voice on desktop
@@ -38,6 +44,7 @@ fun overrideDesktopSpeechService() {
             single<TextPredictionService> { SimpleNGramPredictionService() }
             // File picker for importing files
             single<io.github.jdreioe.wingmate.platform.FilePicker> { io.github.jdreioe.wingmate.platform.DesktopFilePicker() }
+            single<ImageCacher> { JvmImageCacher() }
         }
     )
     // Optional: log the current virtual mic preference for visibility

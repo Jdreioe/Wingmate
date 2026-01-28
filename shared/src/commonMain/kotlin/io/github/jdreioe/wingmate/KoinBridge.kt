@@ -153,7 +153,6 @@ class KoinBridge : KoinComponent {
                     name = null,
                     backgroundColor = "#00000000",
                     parentId = null,
-                    isCategory = false,
                     createdAt = (s.createdAt ?: s.date ?: now),
                     recordingPath = s.audioFilePath
                 )
