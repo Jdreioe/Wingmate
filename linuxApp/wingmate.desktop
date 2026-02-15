@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Wingmate
+GenericName=Communication Aid
+Comment=Voice communication aid using Azure Neural Voices
+Icon=preferences-desktop-accessibility
+Exec=wingmate-kde
+Categories=Utility;Accessibility;Qt;KDE;
+Keywords=speech;communication;voice;accessibility;
+Terminal=false

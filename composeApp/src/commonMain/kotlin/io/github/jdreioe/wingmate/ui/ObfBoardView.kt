@@ -13,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -23,7 +22,6 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.jetbrains.skia.Image as SkiaImage
 import java.net.URL
 
 // Simple in-memory cache for downloaded images
@@ -131,10 +129,10 @@ fun ObfButtonItem(
     
     // Try to load image from various sources synchronously first
     val syncBitmap = remember(image, extractedImageBytes) {
-        // Option 1: Extracted bytes from OBZ
+                // Option 1: Extracted bytes from OBZ
         extractedImageBytes?.let { bytes ->
             runCatching {
-                SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
+                bytes.toComposeImageBitmap()
             }.getOrNull()
         } 
         // Option 2: Base64 data embedded in image
@@ -142,7 +140,7 @@ fun ObfButtonItem(
             runCatching {
                 val base64 = if (data.contains(",")) data.substringAfter(",") else data
                 val bytes = java.util.Base64.getDecoder().decode(base64)
-                SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
+                bytes.toComposeImageBitmap()
             }.getOrNull()
         }
     }
@@ -162,7 +160,7 @@ fun ObfButtonItem(
                         imageCache[imageUrl] = downloaded
                         downloaded
                     }
-                    SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
+                    bytes.toComposeImageBitmap()
                 }.getOrNull()
             }
         }

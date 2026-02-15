@@ -24,6 +24,8 @@ val appModule = module {
     factory { UpdatePhraseUseCase(get()) }
     factory { MovePhraseUseCase(get()) }
     factory { GetAllItemsUseCase(get()) }
+    
+    single { io.github.jdreioe.wingmate.infrastructure.BoardImportService(get(), get(), get(), get()) }
 
     factory {
         PhraseListStoreFactory(

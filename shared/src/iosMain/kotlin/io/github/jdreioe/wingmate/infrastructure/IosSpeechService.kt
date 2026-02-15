@@ -4,6 +4,7 @@ import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -65,7 +66,8 @@ class IosSpeechService(
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
     // Periodic cleanup prior to speaking
     cleanupExpiredFiles()
-        if (text.isBlank()) return
+        val normalizedText = SpeechTextProcessor.normalizeShorthandSsml(text)
+        if (normalizedText.isBlank()) return
 
         // Resolve an effective voice for language matching in history
         val selected = runCatching { voice ?: voiceUseCase?.selected() }.getOrNull()
@@ -78,11 +80,11 @@ class IosSpeechService(
         )
 
         // 1) Try history-first playback with TTL
-        val historyPlayed = tryPlayFromHistoryIfFresh(text = text, voice = effectiveVoice)
+        val historyPlayed = tryPlayFromHistoryIfFresh(text = normalizedText, voice = effectiveVoice)
         if (historyPlayed) return
 
         // 2) Try cache by key (voice+lang+pitch+rate+text hash) with TTL
-        val cacheKey = buildCacheKey(text, effectiveVoice, pitch, rate)
+        val cacheKey = buildCacheKey(normalizedText, effectiveVoice, pitch, rate)
         val cachedPath = findCachedPath(cacheKey)
         if (cachedPath != null) {
             logger.info { "Playing from cache: $cachedPath" }
@@ -104,12 +106,12 @@ class IosSpeechService(
                     GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().getAll() 
                 }.getOrDefault(emptyList())
 
-                val ssml = AzureTtsClient.generateSsml(text, voiceToUse, dict)
+                val ssml = AzureTtsClient.generateSsml(normalizedText, voiceToUse, dict)
         val audioData = AzureTtsClient.synthesize(httpClient, ssml, config)
-                logger.info { "Generated ${audioData.size} bytes of audio for text: '${text.take(40)}'" }
+                logger.info { "Generated ${audioData.size} bytes of audio for text: '${normalizedText.take(40)}'" }
                 audioData
             } catch (e: Exception) {
-                logger.error(e) { "Failed to synthesize speech for text: '${text.take(40)}'" }
+                logger.error(e) { "Failed to synthesize speech for text: '${normalizedText.take(40)}'" }
                 null
             }
         }
@@ -118,7 +120,7 @@ class IosSpeechService(
 
     // Save to cache and history
     val filePath = saveToCache(cacheKey, audioBytes)
-    trySaveHistory(text, effectiveVoice, pitch, rate, filePath)
+    trySaveHistory(normalizedText, effectiveVoice, pitch, rate, filePath)
 
     playAudio(audioBytes)
     }

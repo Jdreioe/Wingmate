@@ -16,6 +16,66 @@ data class SpeechSegment(
  * Processes text to extract pause commands and split into segments
  */
 object SpeechTextProcessor {
+
+    private val shortLanguageMap = mapOf(
+        "en" to "en-US",
+        "da" to "da-DK",
+        "de" to "de-DE",
+        "fr" to "fr-FR",
+        "es" to "es-ES",
+        "it" to "it-IT",
+        "nl" to "nl-NL",
+        "pt" to "pt-PT",
+        "sv" to "sv-SE",
+        "no" to "nb-NO"
+    )
+
+    private val breakShortTagRegex = Regex("""<\s*(\d+(?:\.\d+)?)\s*s\s*>""", RegexOption.IGNORE_CASE)
+    private val languageShortTagRegex = Regex(
+        """<\s*([a-z]{2}(?:-[a-z]{2})?)\s*>(.*?)<\s*/\s*\1\s*>""",
+        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+    )
+
+    /**
+     * Normalizes shorthand tags into SSML-safe equivalents.
+     * Examples:
+     * - <en>hello</en> -> <lang xml:lang="en-US">hello</lang>
+     * - <2s> -> <break time="2s"/>
+     */
+    fun normalizeShorthandSsml(text: String): String {
+        if (text.isBlank()) return text
+
+        var normalized = breakShortTagRegex.replace(text) {
+            "<break time=\"${it.groupValues[1]}s\"/>"
+        }
+
+        var previous: String
+        do {
+            previous = normalized
+            normalized = languageShortTagRegex.replace(normalized) { match ->
+                val shorthand = match.groupValues[1]
+                val content = match.groupValues[2]
+                val locale = resolveLocale(shorthand) ?: return@replace match.value
+                "<lang xml:lang=\"$locale\">$content</lang>"
+            }
+        } while (normalized != previous)
+
+        return normalized
+    }
+
+    private fun resolveLocale(shorthand: String): String? {
+        val normalized = shorthand.trim().lowercase()
+        if (normalized.isBlank()) return null
+
+        if (normalized.contains('-')) {
+            val parts = normalized.split('-', limit = 2)
+            if (parts.size == 2 && parts[0].length == 2 && parts[1].length == 2) {
+                return "${parts[0]}-${parts[1].uppercase()}"
+            }
+        }
+
+        return shortLanguageMap[normalized]
+    }
     
     /**
      * Processes text containing XML pause tags and returns segments
@@ -26,8 +86,9 @@ object SpeechTextProcessor {
      * - <break time="2s"/> - SSML-style break (alias for pause)
      */
     fun processText(text: String): List<SpeechSegment> {
+        val normalizedText = normalizeShorthandSsml(text)
         // Expand shortcodes like [0.5s] to <break time="0.5s"/>
-        val expandedText = text.replace(Regex("\\[(\\d+(\\.\\d+)?)s\\]")) { 
+        val expandedText = normalizedText.replace(Regex("\\[(\\d+(\\.\\d+)?)s\\]")) {
             "<break time=\"${it.groupValues[1]}s\"/>" 
         }
 
@@ -101,8 +162,9 @@ object SpeechTextProcessor {
      * Removes all pause tags from text, returning clean text
      */
     fun stripPauseTags(text: String): String {
+        val normalizedText = normalizeShorthandSsml(text)
         val pauseRegex = Regex("""<(?:pause|break)(?:\s+(?:duration|time)=["'][^"']+["'])?[^>]*/>""", RegexOption.IGNORE_CASE)
-        return pauseRegex.replace(text, "").replace(Regex("""\s+"""), " ").trim()
+        return pauseRegex.replace(normalizedText, "").replace(Regex("""\s+"""), " ").trim()
     }
     
     /**

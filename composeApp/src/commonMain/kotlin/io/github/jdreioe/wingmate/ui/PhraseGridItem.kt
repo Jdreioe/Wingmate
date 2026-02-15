@@ -39,7 +39,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.SmallFloatingActionButton
 import io.github.jdreioe.wingmate.domain.Phrase
 import org.koin.core.context.GlobalContext
-import androidx.compose.ui.graphics.toComposeImageBitmap
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -157,7 +156,7 @@ fun PhraseGridItem(
                                 imageBitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                                     runCatching {
                                         val bytes = java.net.URL(imageUrl).readBytes()
-                                        org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
+                                        bytes.toComposeImageBitmap()
                                     }.getOrNull()
                                 }
                             }
@@ -166,7 +165,7 @@ fun PhraseGridItem(
                                     runCatching {
                                         val path = if (imageUrl.startsWith("file://")) java.net.URI(imageUrl).path else imageUrl
                                         val bytes = java.io.File(path).readBytes()
-                                        org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
+                                        bytes.toComposeImageBitmap()
                                     }.getOrNull()
                                 }
                             }

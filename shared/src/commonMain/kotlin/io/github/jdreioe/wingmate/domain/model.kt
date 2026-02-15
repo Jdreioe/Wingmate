@@ -13,7 +13,10 @@ data class Phrase(
     val linkedBoardId: String? = null,  // Link to another board (implements category/folder functionality)
     val createdAt: Long,
     // Optional local recording path for this phrase (platform-specific file path)
-    val recordingPath: String? = null
+    val recordingPath: String? = null,
+    // Layout preference: if true, this item (even if it is a folder) appears in the grid.
+    // If null, defaults to true for items (linkedBoardId == null) and false for folders (linkedBoardId != null).
+    val isGridItem: Boolean? = null
 )
 
 @Serializable
@@ -27,7 +30,7 @@ data class CategoryItem(
 
 @Serializable
 data class Settings(
-    val language: String = "en",
+    val language: String = "en-US",
     val voice: String = "default",
     val speechRate: Float = 1.0f,
     // UI-level settings: primary and secondary locales used by the UI language selector

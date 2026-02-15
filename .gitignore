@@ -1,5 +1,10 @@
 ## OS junk
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
 ## IDEs/editors
@@ -7,12 +12,16 @@ Thumbs.db
 *.iml
 .vscode/
 .fleet/
+*.swp
+*.swo
+*~
 
 ## Gradle
-/.gradle/
+.gradle/
 **/.gradle/
-/build/
+build/
 **/build/
+.kotlin/
 
 ## Kotlin/Native local cache
 .konan/
@@ -21,49 +30,50 @@ Thumbs.db
 local.properties
 *.keystore
 *.jks
-/androidApp/build/
+androidApp/build/
 androidApp/**/build/
+androidApp/release/
 
-## Compose Desktop/JVM
-/composeApp/build/
+## Desktop/JVM
+desktopApp/build/
+desktopApp/bin/
+
+## Compose
+composeApp/build/
 
 ## Shared module
-/shared/build/
+shared/build/
+
+## Linux App
+linuxApp/build/
 
 ## iOS / Xcode
-/iosApp/build/
+iosApp/build/
 iosApp/iosApp.xcodeproj/xcuserdata/
 iosApp/iosApp.xcodeproj/project.xcworkspace/xcuserdata/
-iosApp/iosApp.xcworkspace/xcuserdata/
+iosApp/iosApp.xcworkspace/
+iosApp/**/*.xcuserstate
 DerivedData/
 *.xcuserstate
 *.pbxuser
 *.mode1v3
 *.mode2v3
+*.perspectivev3
 *.hmap
 *.ipa
 *.dSYM
 *.dSYM.zip
+xcuserdata/
 
-## CocoaPods (we keep Podfile and Podfile.lock, but not Pods/)
+## CocoaPods
 iosApp/Pods/
 
-## Logs
+## Logs and crash reports
 *.log
+*.crashlog
 
-# Ignore all Gradle/KMP build outputs in any module
-**/build/
-**/.gradle/
-
-# macOS
-.DS_Store
-
-# Xcode / iOS
-**/xcuserdata/
-**/*.xcuserstate
-iosApp/Pods/
-iosApp/iosApp.xcworkspace/
-shared/build/
-shared/build/bin/
-shared/build/cocoapods/
-composeApp/build/*
+## Generated files
+**/generated/
+**/tmp/
+**/intermediates/
+**/.cxx/

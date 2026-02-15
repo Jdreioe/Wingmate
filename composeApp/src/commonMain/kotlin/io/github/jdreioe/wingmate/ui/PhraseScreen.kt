@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -39,6 +40,9 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.*
 import io.github.jdreioe.wingmate.application.PhraseBloc
 import io.github.jdreioe.wingmate.application.PhraseEvent
@@ -58,7 +62,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
     // Ensure Koin is initialized
@@ -724,14 +728,38 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             Box {
                                 FilterChip(
                                     selected = selectedCategory?.id == category.id,
-                                    onClick = { selectedCategory = category },
+                                    onClick = {
+                                        if (selectedCategory?.id == category.id) {
+                                            showCategoryMenu = true
+                                        } else {
+                                            selectedCategory = category
+                                        }
+                                    },
                                     label = { Text(category.name ?: "All", style = MaterialTheme.typography.bodyLarge.copy(
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) },
-                                    modifier = Modifier.combinedClickable(
-                                        onClick = { selectedCategory = category },
-                                        onLongClick = { showCategoryMenu = true }
-                                    )
+                                    modifier = Modifier
+                                        .pointerInput(Unit) {
+                                            awaitPointerEventScope {
+                                                while (true) {
+                                                    val event = awaitPointerEvent()
+                                                    if (event.type == PointerEventType.Press &&
+                                                        event.buttons.isSecondaryPressed) {
+                                                        showCategoryMenu = true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        .combinedClickable(
+                                            onClick = {
+                                                if (selectedCategory?.id == category.id) {
+                                                    showCategoryMenu = true
+                                                } else {
+                                                    selectedCategory = category
+                                                }
+                                            },
+                                            onLongClick = { showCategoryMenu = true }
+                                        )
                                 )
                                 DropdownMenu(expanded = showCategoryMenu, onDismissRequest = { showCategoryMenu = false }) {
                                     DropdownMenuItem(text = { Text("Move left", style = MaterialTheme.typography.bodyLarge.copy(
@@ -971,17 +999,28 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
                         },
                         onPlay = { phrase ->
-                            uiScope.launch(Dispatchers.IO) {
-                                try {
-                                    val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                    val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
-                                    speechService.speak(textToSpeak, selected)
-                                    // Refresh history from repo
+                            // Classic Folder Navigation: if item has a linked board, entering it updates the view
+                            if (phrase.linkedBoardId != null) {
+                                uiScope.launch {
+                                    selectedCategory = io.github.jdreioe.wingmate.domain.CategoryItem(
+                                        id = phrase.id,
+                                        name = phrase.text,
+                                        isFolder = true
+                                    )
+                                }
+                            } else {
+                                uiScope.launch(Dispatchers.IO) {
                                     try {
-                                        val list = saidRepo.list()
-                                        uiScope.launch { historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
+                                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                                        val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
+                                        speechService.speak(textToSpeak, selected)
+                                        // Refresh history from repo
+                                        try {
+                                            val list = saidRepo.list()
+                                            uiScope.launch { historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
+                                        } catch (_: Throwable) {}
                                     } catch (_: Throwable) {}
-                                } catch (_: Throwable) {}
+                                }
                             }
                         },
                         onPlaySecondary = { phrase ->

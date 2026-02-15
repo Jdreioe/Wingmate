@@ -14,14 +14,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.jetbrains.skia.Image as SkiaImage
 import java.net.URL
 
 /**
@@ -116,7 +114,7 @@ private fun SymbolGridItem(
             imageBitmap = withContext(Dispatchers.IO) {
                 runCatching {
                     val bytes = URL(url).readBytes()
-                    SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
+                    bytes.toComposeImageBitmap()
                 }.getOrNull()
             }
         }

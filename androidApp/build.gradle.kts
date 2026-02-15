@@ -1,27 +1,52 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
-    namespace = "com.hojmoseit.wingmate"
-    compileSdk = 36
+    namespace = "io.github.jdreioe.wingmate"
+    compileSdk = libs.versions.android.compileSdk.get().toInt()
+
+    val versionPropsFile = project.file("../version.properties")
+    val versionProps = Properties()
+    if (versionPropsFile.exists()) {
+        versionPropsFile.inputStream().use { versionProps.load(it) }
+    }
+    val vCode = (versionProps.getProperty("versionCode") ?: "1").toInt()
+    val vName = versionProps.getProperty("versionName") ?: "1.0"
 
     defaultConfig {
-        applicationId = "com.hojmoseit.wingmate"
-    minSdk = 24
-    targetSdk = 36
-        versionCode = 10
-        versionName = "0.6"
+        applicationId = "io.github.jdreioe.wingmate"
+        minSdk = libs.versions.android.minSdk.get().toInt()
+        targetSdk = libs.versions.android.targetSdk.get().toInt()
+        versionCode = vCode
+        versionName = vName
     }
+
+    tasks.register("incrementVersionCode") {
+        doLast {
+            val currentCode = versionProps.getProperty("versionCode")?.toInt() ?: 1
+            versionProps.setProperty("versionCode", (currentCode + 1).toString())
+            versionPropsFile.outputStream().use { versionProps.store(it, "Auto-incremented by build") }
+            println("Version code incremented to ${currentCode + 1}")
+        }
+    }
+
+    tasks.configureEach {
+        if (name == "bundleRelease" || name == "bundleReleaseStandard" || name == "bundleReleaseAab") {
+            dependsOn("incrementVersionCode")
+        }
+    }
+
 
     buildFeatures { compose = true }
     
     composeOptions {
         // Compiler extension version must match the Compose compiler compatible with the project's Kotlin plugin.
         // If you use a different Compose compiler version in CI/IDE, adjust this value accordingly.
-        kotlinCompilerExtensionVersion = "1.5.3"
+        kotlinCompilerExtensionVersion = libs.versions.kotlin.get()
     }
 
     packaging {

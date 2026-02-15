@@ -9,10 +9,17 @@ import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
  */
 class PhraseUseCase(private val repo: PhraseRepository) {
     suspend fun list(): List<Phrase> = repo.getAll()
-    suspend fun add(phrase: Phrase): Phrase = repo.add(phrase)
-    suspend fun update(phrase: Phrase): Phrase = repo.update(phrase)
+    suspend fun add(phrase: Phrase): Phrase = repo.add(normalizePhrase(phrase))
+    suspend fun update(phrase: Phrase): Phrase = repo.update(normalizePhrase(phrase))
     suspend fun delete(id: String) = repo.delete(id)
     suspend fun move(fromIndex: Int, toIndex: Int) = repo.move(fromIndex, toIndex)
+
+    private fun normalizePhrase(phrase: Phrase): Phrase {
+        return phrase.copy(
+            text = SpeechTextProcessor.normalizeShorthandSsml(phrase.text),
+            name = phrase.name?.let { SpeechTextProcessor.normalizeShorthandSsml(it) }
+        )
+    }
 }
 
 class CategoryUseCase(private val repo: io.github.jdreioe.wingmate.domain.CategoryRepository) {

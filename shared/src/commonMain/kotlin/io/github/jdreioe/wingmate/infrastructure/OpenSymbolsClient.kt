@@ -1,11 +1,14 @@
 package io.github.jdreioe.wingmate.infrastructure
 
+import io.ktor.client.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
  * Client for OpenSymbols API - searches for pictograms/symbols.
@@ -22,6 +25,8 @@ object OpenSymbolsClient {
     private var cachedToken: String? = null
     private var tokenExpiry: Long = 0L
     
+    private val httpClient = HttpClient()
+    
     private val json = Json { 
         ignoreUnknownKeys = true 
         isLenient = true
@@ -35,28 +40,24 @@ object OpenSymbolsClient {
     /**
      * Get access token (cached if still valid)
      */
-    private suspend fun getAccessToken(): String? = withContext(Dispatchers.IO) {
+    private suspend fun getAccessToken(): String? = withContext(Dispatchers.Default) {
         // Return cached token if still valid (with 30s buffer)
-        if (cachedToken != null && System.currentTimeMillis() < tokenExpiry - 30000) {
+        val currentTime = Clock.System.now().toEpochMilliseconds()
+        if (cachedToken != null && currentTime < tokenExpiry - 30000) {
             return@withContext cachedToken
         }
         
         runCatching {
-            val url = URL(TOKEN_ENDPOINT)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            val response: HttpResponse = httpClient.post(TOKEN_ENDPOINT) {
+                contentType(ContentType.Application.FormUrlEncoded)
+                setBody("secret=$sharedSecret")
+            }
             
-            val body = "secret=$sharedSecret"
-            conn.outputStream.use { it.write(body.toByteArray()) }
-            
-            if (conn.responseCode == 200) {
-                val response = conn.inputStream.bufferedReader().readText()
-                val tokenResponse = json.decodeFromString<TokenResponse>(response)
+            if (response.status == HttpStatusCode.OK) {
+                val tokenResponse = json.decodeFromString<TokenResponse>(response.bodyAsText())
                 cachedToken = tokenResponse.access_token
                 // Token is typically valid for a few minutes
-                tokenExpiry = System.currentTimeMillis() + 4 * 60 * 1000
+                tokenExpiry = Clock.System.now().toEpochMilliseconds() + 4 * 60 * 1000
                 tokenResponse.access_token
             } else {
                 null
@@ -67,19 +68,19 @@ object OpenSymbolsClient {
     /**
      * Search for symbols matching query
      */
-    suspend fun search(query: String, locale: String = "en"): List<SymbolResult> = withContext(Dispatchers.IO) {
+    suspend fun search(query: String, locale: String = "en"): List<SymbolResult> = withContext(Dispatchers.Default) {
         val token = getAccessToken() ?: return@withContext emptyList()
         
         runCatching {
-            val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
-            val url = URL("$SYMBOLS_ENDPOINT?q=$encodedQuery&locale=$locale&access_token=$token")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.setRequestProperty("Accept", "application/json")
+            val response: HttpResponse = httpClient.get(SYMBOLS_ENDPOINT) {
+                parameter("q", query)
+                parameter("locale", locale)
+                parameter("access_token", token)
+                accept(ContentType.Application.Json)
+            }
             
-            if (conn.responseCode == 200) {
-                val response = conn.inputStream.bufferedReader().readText()
-                json.decodeFromString<List<SymbolResult>>(response)
+            if (response.status == HttpStatusCode.OK) {
+                json.decodeFromString<List<SymbolResult>>(response.bodyAsText())
             } else {
                 emptyList()
             }

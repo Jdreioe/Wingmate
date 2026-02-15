@@ -1,18 +1,18 @@
 plugins {
     kotlin("multiplatform")
-    id("com.android.library")
+    id("com.android.kotlin.multiplatform.library")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.compose")
 }
 
 kotlin {
-    androidTarget {
-        compilations.all {
-            compileKotlinTask.compilerOptions {
-                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
-            }
-        }
+    jvmToolchain(21)
+    
+    androidLibrary {
+        namespace = "io.github.jdreioe.wingmate.compose"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
     }
     
     jvm("desktop")
@@ -21,12 +21,19 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 implementation(project(":shared"))
+                @Suppress("DEPRECATION")
                 implementation(compose.runtime)
+                @Suppress("DEPRECATION")
                 implementation(compose.foundation)
+                @Suppress("DEPRECATION")
                 implementation(compose.material3)
+                @Suppress("DEPRECATION")
                 implementation(compose.ui)
+                @Suppress("DEPRECATION")
                 implementation(compose.components.resources)
+                @Suppress("DEPRECATION")
                 implementation(compose.components.uiToolingPreview)
+                @Suppress("DEPRECATION")
                 implementation(compose.materialIconsExtended)
                 
                 implementation("io.insert-koin:koin-core:3.5.6")
@@ -45,6 +52,7 @@ kotlin {
         
         val desktopMain by getting {
             dependencies {
+                @Suppress("DEPRECATION")
                 implementation(compose.desktop.common)
                 implementation("io.ktor:ktor-client-okhttp:2.3.12")
                 implementation("javazoom:jlayer:1.0.1")
@@ -53,32 +61,6 @@ kotlin {
                 runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.8.15")
             }
         }
-    }
-}
-
-kotlin {
-    jvmToolchain(21)
-}
-
-android {
-    namespace = "io.github.jdreioe.wingmate.composeapp"
-    compileSdk = 36
-
-    defaultConfig {
-        minSdk = 24
-    }
-    
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
-    }
-    
-    buildFeatures {
-        compose = true
-    }
-    
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.3"
     }
 }
 

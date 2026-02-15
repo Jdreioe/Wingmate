@@ -1,0 +1,6 @@
+module components
+singleton Theme 1.0 Theme.qml
+ModernCard 1.0 ModernCard.qml
+Sidebar 1.0 Sidebar.qml
+ModernButton 1.0 ModernButton.qml
+PhraseButton 1.0 PhraseButton.qml

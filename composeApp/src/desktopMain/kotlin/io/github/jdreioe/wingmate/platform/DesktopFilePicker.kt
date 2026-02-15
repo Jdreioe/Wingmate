@@ -34,4 +34,23 @@ class DesktopFilePicker : FilePicker {
             File(path).readText()
         }.getOrNull()
     }
+
+    override suspend fun readZipEntries(path: String): Map<String, ByteArray>? = withContext(Dispatchers.IO) {
+        runCatching {
+            val file = File(path)
+            val entries = mutableMapOf<String, ByteArray>()
+            java.util.zip.ZipFile(file).use { zip ->
+                val enumeration = zip.entries()
+                while (enumeration.hasMoreElements()) {
+                    val entry = enumeration.nextElement()
+                    if (!entry.isDirectory) {
+                        zip.getInputStream(entry).use { input ->
+                            entries[entry.name] = input.readBytes()
+                        }
+                    }
+                }
+            }
+            entries
+        }.getOrNull()
+    }
 }

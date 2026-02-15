@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/">
+        <file>main.qml</file>
+        <file>pages/SettingsPage.qml</file>
+        <file>components/qmldir</file>
+        <file>components/Theme.qml</file>
+        <file>components/ModernCard.qml</file>
+        <file>components/Sidebar.qml</file>
+        <file>components/ModernButton.qml</file>
+        <file>components/PhraseButton.qml</file>
+    </qresource>
+</RCC>

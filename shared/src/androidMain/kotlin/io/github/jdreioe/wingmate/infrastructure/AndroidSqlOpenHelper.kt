@@ -29,7 +29,9 @@ internal class AndroidSqlOpenHelper(
                 text TEXT,
                 name TEXT,
                 background_color TEXT,
+                image_url TEXT,
                 parent_id TEXT,
+                linked_board_id TEXT,
                 is_category INTEGER DEFAULT 0,
                 created_at INTEGER,
                 recording_path TEXT,
@@ -143,9 +145,21 @@ internal class AndroidSqlOpenHelper(
                 // ignore if already exists
             }
         }
+        if (oldVersion < 5 && newVersion >= 5) {
+            try {
+                db.execSQL("ALTER TABLE phrases ADD COLUMN image_url TEXT")
+            } catch (_: Throwable) {
+                // ignore
+            }
+            try {
+                db.execSQL("ALTER TABLE phrases ADD COLUMN linked_board_id TEXT")
+            } catch (_: Throwable) {
+                // ignore
+            }
+        }
     }
 
     companion object {
-        private const val DB_VERSION = 3
+        private const val DB_VERSION = 5
     }
 }

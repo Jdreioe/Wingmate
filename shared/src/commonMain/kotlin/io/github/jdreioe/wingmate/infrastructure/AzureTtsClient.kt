@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate.infrastructure
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.SpeechSegment
+import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
@@ -124,7 +125,8 @@ object AzureTtsClient {
      */
     fun generateSsml(text: String, voice: Voice, dictionary: List<io.github.jdreioe.wingmate.domain.PronunciationEntry> = emptyList()): String {
         val params = resolveVoiceParams(voice)
-        val processed = applyPronunciationDictionary(text, dictionary)
+        val normalized = SpeechTextProcessor.normalizeShorthandSsml(text)
+        val processed = applyPronunciationDictionary(normalized, dictionary)
         val escaped = escapeForSsml(processed)
         val content = if (params.baseLang.isNotBlank() && params.baseLang != "en-US") {
             "<lang xml:lang=\"${params.baseLang}\">$escaped</lang>"
@@ -142,7 +144,8 @@ object AzureTtsClient {
         val content = buildString {
             segments.forEach { segment ->
                 if (segment.text.isNotEmpty()) {
-                    val processed = applyPronunciationDictionary(segment.text, dictionary)
+                    val normalized = SpeechTextProcessor.normalizeShorthandSsml(segment.text)
+                    val processed = applyPronunciationDictionary(normalized, dictionary)
                     val escaped = escapeForSsml(processed)
                     val overrideLang = segment.languageTag?.takeIf { it.isNotBlank() }
                     if (!overrideLang.isNullOrBlank() && overrideLang != params.baseLang) {
@@ -363,6 +366,75 @@ object AzureTtsClient {
         } catch (e: Exception) {
             logger.error(e) { "Azure TTS network error" }
             throw RuntimeException("Azure TTS network error: ${e.message}", e)
+        }
+    }
+
+    
+    suspend fun getVoices(
+        client: HttpClient, 
+        config: SpeechServiceConfig
+    ): List<Voice> {
+        // The stored config.endpoint may be either a short region (e.g. "westus")
+        // or a full host/URL. Support both forms:
+        val baseUrl = when {
+            config.endpoint.startsWith("http", ignoreCase = true) -> config.endpoint.trimEnd('/')
+            config.endpoint.contains("tts.speech.microsoft.com", ignoreCase = true) || 
+            config.endpoint.contains("cognitiveservices", ignoreCase = true) -> "https://${config.endpoint.trimEnd('/') }"
+            else -> "https://${config.endpoint}.tts.speech.microsoft.com"
+        }
+        val url = "$baseUrl/cognitiveservices/voices/list"
+        
+        logger.info { "Fetching Azure voices from $url" }
+        
+        try {
+            val response: HttpResponse = client.get(url) {
+                headers {
+                    append("Ocp-Apim-Subscription-Key", config.subscriptionKey)
+                    append(HttpHeaders.UserAgent, "WingmateKMP/2.0")
+                    append(HttpHeaders.Accept, "application/json")
+                }
+            }
+            
+            if (response.status.isSuccess()) {
+                val azureVoices = response.body<List<AzureVoiceDto>>()
+                logger.info { "Fetched ${azureVoices.size} voices from Azure" }
+                return azureVoices.map { it.toDomain() }
+            } else {
+                val body = response.bodyAsText()
+                logger.error { "Failed to fetch voices: ${response.status} - $body" }
+                throw RuntimeException("Failed to fetch voices: ${response.status}")
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Error fetching voices" }
+            throw e
+        }
+    }
+    
+    @kotlinx.serialization.Serializable
+    private data class AzureVoiceDto(
+        val Name: String,
+        val ShortName: String,
+        val Gender: String,
+        val Locale: String,
+        val LocalName: String? = null,
+        val DisplayName: String? = null
+    ) {
+        fun toDomain(): Voice {
+            val display = if (LocalName != null && DisplayName != null) {
+                "$LocalName ($DisplayName)" 
+            } else {
+                DisplayName ?: LocalName ?: ShortName
+            }
+            
+            return Voice(
+                name = ShortName,
+                displayName = display,
+                primaryLanguage = Locale,
+                gender = Gender,
+                // Assume 1.0 default pitch/rate
+                pitch = 1.0, 
+                rate = 1.0
+            )
         }
     }
 }

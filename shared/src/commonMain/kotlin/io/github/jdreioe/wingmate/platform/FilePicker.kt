@@ -18,4 +18,11 @@ interface FilePicker {
      * @return The file contents as a string
      */
     suspend fun readFileAsText(path: String): String?
+    
+    /**
+     * Reads all entries from a ZIP file.
+     * @param path The file path
+     * @return Map of entry name to content bytes, or null if failed
+     */
+    suspend fun readZipEntries(path: String): Map<String, ByteArray>?
 }
