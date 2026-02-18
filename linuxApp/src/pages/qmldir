@@ -2,3 +2,4 @@ module pages
 SettingsPage 1.0 SettingsPage.qml
 PronunciationDictionaryPage 1.0 PronunciationDictionaryPage.qml
 AddPronunciationEntryPage 1.0 AddPronunciationEntryPage.qml
+WelcomeWizard 1.0 WelcomeWizard.qml

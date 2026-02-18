@@ -1,40 +1,47 @@
 pragma Singleton
 import QtQuick
-import org.kde.kirigami as Kirigami
 
-// Theme singleton that proxies the user's OS/KDE theme (Breeze, Breeze Dark, etc.)
-// via Kirigami.Theme attached properties.
+// Theme singleton using Qt SystemPalette for true OS theme matching.
+// Now backed by Kirigami.ApplicationWindow and org.kde.desktop style in main.rs.
 Item {
-    Kirigami.Theme.inherit: false
+    SystemPalette {
+        id: activePalette
+        colorGroup: SystemPalette.Active
+    }
 
-    // --- Colors (from OS theme, with contrast adjustments) ---
-    readonly property color background: Kirigami.Theme.backgroundColor
-    readonly property color surface: Qt.lighter(Kirigami.Theme.backgroundColor, 1.25)
-    readonly property color surfaceHighlight: Qt.lighter(Kirigami.Theme.backgroundColor, 1.5)
-    readonly property color surfaceLight: Qt.lighter(Kirigami.Theme.backgroundColor, 1.8)
-    readonly property color text: Kirigami.Theme.textColor
-    readonly property color subText: Kirigami.Theme.disabledTextColor
-    readonly property color primary: Kirigami.Theme.highlightColor
-    readonly property color primaryLight: Qt.lighter(Kirigami.Theme.highlightColor, 1.2)
-    readonly property color primaryDark: Qt.darker(Kirigami.Theme.highlightColor, 1.2)
-    readonly property color secondary: Kirigami.Theme.linkColor
-    readonly property color accent: Kirigami.Theme.activeTextColor
-    readonly property color error: Kirigami.Theme.negativeTextColor
-    readonly property color success: Kirigami.Theme.positiveTextColor
-    readonly property color warning: Kirigami.Theme.neutralTextColor
+    // --- Colors (Dynamic from OS) ---
+    readonly property color background: activePalette.window
+    readonly property color surface: activePalette.base // Views usually use 'base' (white/dark grey)
+    // Use proper alpha tinting for variations
+    readonly property color surfaceHighlight: Qt.tint(activePalette.window, Qt.rgba(1, 1, 1, 0.1)) 
+    readonly property color surfaceLight: Qt.tint(activePalette.window, Qt.rgba(1, 1, 1, 0.2))
+    
+    readonly property color text: activePalette.windowText
+    readonly property color subText: activePalette.mid
+    
+    readonly property color primary: activePalette.highlight
+    readonly property color primaryLight: Qt.lighter(activePalette.highlight, 1.2)
+    readonly property color primaryDark: Qt.darker(activePalette.highlight, 1.2)
+    
+    readonly property color secondary: activePalette.highlight
+    readonly property color accent: activePalette.highlight
+    
+    readonly property color error: "#ed8796" // Keep safe defaults for status colors if not in palette
+    readonly property color success: "#a6da95"
+    readonly property color warning: "#eed49f"
 
     // --- Dimensions ---
-    readonly property int radius: 12
-    readonly property int smallRadius: 8
-    readonly property int largeRadius: 16
+    readonly property int radius: 6
+    readonly property int smallRadius: 4
+    readonly property int largeRadius: 8
 
-    // --- Fonts (use system default) ---
-    readonly property int fontSizeSmall: 12
-    readonly property int fontSizeNormal: 14
-    readonly property int fontSizeMedium: 16
-    readonly property int fontSizeHeader: 24
-    readonly property int fontSizeLarge: 32
-    readonly property int fontSizeTitle: 36
+    // --- Fonts ---
+    readonly property int fontSizeSmall: 11
+    readonly property int fontSizeNormal: 13
+    readonly property int fontSizeMedium: 15
+    readonly property int fontSizeHeader: 22
+    readonly property int fontSizeLarge: 28
+    readonly property int fontSizeTitle: 32
 
     // --- Spacing ---
     readonly property int spacingSmall: 4

@@ -59,4 +59,62 @@ Button {
             Layout.maximumWidth: parent.width - 16
         }
     }
+    
+    signal editRequested()
+    signal deleteRequested()
+
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        // Propagate left clicks to parent Button
+        propagateComposedEvents: true
+        
+        onClicked: (mouse) => {
+            if (mouse.button === Qt.RightButton) {
+                contextMenu.popup();
+            } else {
+                mouse.accepted = false;
+            }
+        }
+        
+        onPressAndHold: contextMenu.popup()
+    }
+
+    Menu {
+        id: contextMenu
+        
+        MenuItem {
+            text: "Edit"
+            onTriggered: control.editRequested()
+            contentItem: Text {
+                text: parent.text
+                color: Theme.text
+                font.pixelSize: Theme.fontSizeNormal
+                padding: 12
+            }
+            background: Rectangle {
+                color: parent.highlighted ? Theme.surfaceHighlight : "transparent"
+            }
+        }
+        
+        MenuItem {
+            text: "Delete"
+            onTriggered: control.deleteRequested()
+            contentItem: Text {
+                text: parent.text
+                color: Theme.error
+                font.pixelSize: Theme.fontSizeNormal
+                padding: 12
+            }
+            background: Rectangle {
+                color: parent.highlighted ? Theme.surfaceHighlight : "transparent"
+            }
+        }
+        
+        background: Rectangle {
+            color: Theme.surface
+            border.color: Theme.surfaceHighlight
+            radius: Theme.radius
+        }
+    }
 }

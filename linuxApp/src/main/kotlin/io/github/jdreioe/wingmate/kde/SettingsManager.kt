@@ -36,10 +36,11 @@ class SettingsManager {
     
     fun updateSettings(newSettings: Settings) {
         scope.launch {
-            println("[PERSISTENCE] SettingsManager: Updating settings...")
+            println("[PERSISTENCE] SettingsManager: Updating settings... voice=${newSettings.voice}")
+            println("[PERSISTENCE] SettingsManager: Call stack: ${Thread.currentThread().stackTrace.take(8).joinToString(" -> ") { "${it.className}.${it.methodName}:${it.lineNumber}" }}")
             settingsRepository.update(newSettings)
             _settings.value = newSettings
-            println("[PERSISTENCE] SettingsManager: Settings updated.")
+            println("[PERSISTENCE] SettingsManager: Settings updated. voice=${newSettings.voice}")
         }
     }
     
@@ -50,7 +51,10 @@ class SettingsManager {
     }
     
     fun updateVoice(voice: String) {
+        println("[PERSISTENCE] SettingsManager.updateVoice called with: '$voice'")
+        println("[PERSISTENCE] updateVoice call stack: ${Thread.currentThread().stackTrace.take(8).joinToString(" -> ") { "${it.className}.${it.methodName}:${it.lineNumber}" }}")
         _settings.value?.let { current ->
+            println("[PERSISTENCE] Current voice before update: '${current.voice}'")
             updateSettings(current.copy(voice = voice))
         }
     }

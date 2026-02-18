@@ -2,3 +2,6 @@ module dialogs
 SpeechSettingsDialog 1.0 SpeechSettingsDialog.qml
 VoiceSelectionDialog 1.0 VoiceSelectionDialog.qml
 VoiceSettingsDialog 1.0 VoiceSettingsDialog.qml
+AddEditPhraseDialog 1.0 AddEditPhraseDialog.qml
+AddEditCategoryDialog 1.0 AddEditCategoryDialog.qml
+VoiceLanguageDialog 1.0 VoiceLanguageDialog.qml
