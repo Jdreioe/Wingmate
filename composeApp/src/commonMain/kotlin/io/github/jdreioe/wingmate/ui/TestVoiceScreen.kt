@@ -93,11 +93,12 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
             
             // Test text input
+            val showKeyboard = rememberShowKeyboardOnFocus()
             OutlinedTextField(
                 value = testText,
                 onValueChange = { testText = it },
                 label = { Text("Test Message") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().then(showKeyboard),
                 minLines = 2,
                 maxLines = 4
             )

@@ -855,13 +855,15 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
                             )) },
                             text = {
+                                val showKeyboard = rememberShowKeyboardOnFocus()
                                 OutlinedTextField(
                                     value = categoryName,
                                     onValueChange = { categoryName = it },
                                     placeholder = { Text("Category name", style = MaterialTheme.typography.bodyLarge.copy(
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) },
-                                    singleLine = true
+                                    singleLine = true,
+                                    modifier = Modifier.then(showKeyboard)
                                 )
                             },
                             confirmButton = {
@@ -1116,13 +1118,14 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             }
                             
                             // Textfield showing accumulated text
+                            val boardShowKeyboard = rememberShowKeyboardOnFocus()
                             OutlinedTextField(
                                 value = input,
                                 onValueChange = { newValue ->
                                     input = newValue
                                     io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newValue.text)
                                 },
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).then(boardShowKeyboard),
                                 placeholder = { Text("Tap buttons to build a sentence...") },
                                 trailingIcon = {
                                     if (input.text.isNotEmpty()) {
@@ -1361,12 +1364,14 @@ private fun SecondaryLanguageTextField(
                 placeholder?.invoke()
             }
 
+            val showKeyboardMod = rememberShowKeyboardOnFocus()
             val inputModifier = if (focusRequester != null) {
                 Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
+                    .then(showKeyboardMod)
             } else {
-                Modifier.fillMaxWidth()
+                Modifier.fillMaxWidth().then(showKeyboardMod)
             }
 
             BasicTextField(
