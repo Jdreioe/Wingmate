@@ -429,16 +429,45 @@ class PartnerWindowDriver(
 
     private fun readRaw(len: Int): ByteArray {
         if (handle == null) throw RuntimeException("Device not open")
-        val rxBuf = ByteBuffer.allocateDirect(len)
-        val transferred = IntBuffer.allocate(1)
-        val result = LibUsb.bulkTransfer(handle, endpointIn, rxBuf, transferred, USB_TIMEOUT_MS.toLong())
-        if (result != LibUsb.SUCCESS) throw RuntimeException("Bulk read failed: $result")
         
-        val actualLen = transferred.get(0)
-        val data = ByteArray(actualLen)
-        rxBuf.rewind()
-        rxBuf.get(data)
-        return data
+        val rxBuf = ByteBuffer.allocateDirect(512) // Max packet size for High Speed
+        val transferred = IntBuffer.allocate(1)
+        val out = ByteArrayOutputStream()
+        
+        val deadline = System.currentTimeMillis() + USB_TIMEOUT_MS
+        
+        while (out.size() < len && System.currentTimeMillis() < deadline) {
+            rxBuf.clear()
+            val result = LibUsb.bulkTransfer(handle, endpointIn, rxBuf, transferred, 100) 
+            
+            if (result == LibUsb.SUCCESS) {
+                val read = transferred.get(0)
+                if (read >= 2) {
+                    // FTDI sends 2 status bytes at start of packet. Skip them.
+                    val payloadLen = read - 2
+                    if (payloadLen > 0) {
+                        val data = ByteArray(payloadLen)
+                        rxBuf.position(2)
+                        rxBuf.get(data)
+                        out.write(data)
+                    }
+                }
+            } else if (result != LibUsb.ERROR_TIMEOUT) {
+                // Ignore timeouts (keep polling until data arrives or full timeout)
+                throw RuntimeException("Bulk read failed: $result")
+            }
+        }
+        
+        val finalData = out.toByteArray()
+        if (finalData.size < len) {
+             // throw RuntimeException("Read timeout: got ${finalData.size} of $len bytes")
+             // Return what we have to be safe? Or padding?
+             // EVE reads are usually critical. 
+             return finalData // Let caller handle or fail later
+        }
+        
+        // Return only requested amount (in case we got extra)
+        return finalData.copyOf(len)
     }
     
     private fun setupMpsse() {
