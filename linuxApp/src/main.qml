@@ -33,6 +33,7 @@ Kirigami.ApplicationWindow {
     property string selectedCategoryId: ""
     property bool speechControlsVisible: true
     property string currentSpeechText: ""
+    property bool partnerWindowEnabled: false
     
     // --- Logic ---
     
@@ -95,6 +96,7 @@ Kirigami.ApplicationWindow {
                     if (settings.voice) currentVoice = settings.voice;
                     if (settings.speechRate) speechRate = settings.speechRate;
                     if (settings.useSystemTts !== undefined) useSystemTts = settings.useSystemTts;
+                    if (settings.partnerWindowEnabled !== undefined) partnerWindowEnabled = settings.partnerWindowEnabled;
                     
                     // Check welcome flow
                     if (!settings.welcomeFlowCompleted && welcomeWizard) {
@@ -105,6 +107,24 @@ Kirigami.ApplicationWindow {
         }
         xhr.open("GET", baseUrl + "/api/settings");
         xhr.send();
+    }
+    
+    function setPartnerWindowEnabled(enabled) {
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", baseUrl + "/api/settings/partnerwindow");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ enabled: enabled }));
+        partnerWindowEnabled = enabled;
+        // If enabled, send current text immediately
+        if (enabled) updatePartnerWindowText(currentSpeechText);
+    }
+
+    function updatePartnerWindowText(text) {
+        if (!partnerWindowEnabled) return;
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", baseUrl + "/api/display-text");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ text: text }));
     }
     
     function speak(text) {
@@ -177,6 +197,8 @@ Kirigami.ApplicationWindow {
     function appendTextToInput(text) {
         root.currentSpeechText += text;
     }
+    
+
     
     Component.onCompleted: {
         print("QML: App Started. BaseURL: " + baseUrl);
@@ -291,7 +313,10 @@ Kirigami.ApplicationWindow {
                         wrapMode: TextInput.Wrap
                         verticalAlignment: TextInput.AlignTop
                         text: root.currentSpeechText
-                        onTextChanged: root.currentSpeechText = text
+                        onTextChanged: {
+                            root.currentSpeechText = text;
+                            root.updatePartnerWindowText(text);
+                        }
                         
                         Text {
                             text: "Enter text to speak..."

@@ -14,6 +14,7 @@ Item {
     property string currentVoice: "default"
     property real speechRate: 1.0
     property bool useSystemTts: false
+    property bool partnerWindowEnabled: false
     property real fontScale: 1.0
     
     // Azure data
@@ -135,6 +136,7 @@ Item {
                 if (settings.voice) currentVoice = settings.voice;
                 if (settings.speechRate) speechRate = settings.speechRate;
                 if (settings.useSystemTts !== undefined) useSystemTts = settings.useSystemTts;
+                if (settings.partnerWindowEnabled !== undefined) partnerWindowEnabled = settings.partnerWindowEnabled;
                 if (settings.fontSizeScale) fontScale = settings.fontSizeScale;
                 
                 settingsLoaded = true;
@@ -192,6 +194,18 @@ Item {
         xhr.setRequestHeader("Content-Type", "application/json");
         xhr.send(JSON.stringify({ useSystemTts: enabled }));
         useSystemTts = enabled;
+    }
+    
+    function updatePartnerWindow(enabled) {
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", baseUrl + "/api/settings/partnerwindow");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ enabled: enabled }));
+        partnerWindowEnabled = enabled;
+        // Also update main app state if possible, or let it sync next time
+        if (root && root.setPartnerWindowEnabled) {
+            root.setPartnerWindowEnabled(enabled);
+        }
     }
     
     // --- Layout ---
@@ -299,6 +313,20 @@ Item {
                             text: "Use Local TTS (Piper/eSpeak)"
                             checked: useSystemTts
                             onClicked: updateSystemTts(checked)
+                            
+                            contentItem: Text {
+                                text: parent.text
+                                color: Theme.text
+                                leftPadding: parent.indicator.width + parent.spacing
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+                        
+                        // Partner Window Mode
+                        Controls.CheckBox {
+                            text: "Enable Partner Window (Requires Device)"
+                            checked: partnerWindowEnabled
+                            onClicked: updatePartnerWindow(checked)
                             
                             contentItem: Text {
                                 text: parent.text
