@@ -87,6 +87,11 @@ fn main() {
         eprintln!("[Wingmate] WARNING: Bridge server failed to start. UI will load but backend won't work.");
     }
 
+
+
+    // Force KDE desktop style for Qt Quick Controls
+    env::set_var("QT_QUICK_CONTROLS_STYLE", "org.kde.desktop");
+
     // Initialize QML engine
     let mut engine = QmlEngine::new();
 

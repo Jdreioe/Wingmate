@@ -63,10 +63,29 @@ Item {
         xhr.send();
     }
     
+
+
+    // Trigger filter when language changes
+    onCurrentLanguageChanged: filterVoices()
+    
+    function saveAzureConfig() {
+        var xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) loadVoices();
+        }
+        xhr.open("POST", baseUrl + "/api/azure-config");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ endpoint: azureEndpoint, key: azureKey }));
+    }
+    
+    property bool settingsLoaded: false
+    
+    // ...
+    
     function filterVoices() {
         if (!allVoices || allVoices.length === 0) return;
         
-        console.log("Filtering voices for language: " + currentLanguage);
+        console.log("SettingsPage: Filtering voices for language: " + currentLanguage);
         
         var filtered = [];
         for (var i = 0; i < allVoices.length; i++) {
@@ -75,7 +94,7 @@ Item {
             }
         }
         
-        console.log("Found " + filtered.length + " voices for " + currentLanguage);
+        console.log("SettingsPage: Found " + filtered.length + " voices for " + currentLanguage);
         
         // Sort by display name
         filtered.sort(function(a, b) {
@@ -94,23 +113,15 @@ Item {
         }
         
         if (!found && filtered.length > 0) {
-            console.log("Current voice " + currentVoice + " not in filtered list. Switching to " + filtered[0].name);
-            updateVoice(filtered[0].name);
+            // Only update the LOCAL property — do NOT call updateVoice() here
+            // since that sends a PUT to the backend and causes race conditions.
+            // The user must explicitly select a voice to save it.
+            console.log("SettingsPage: Voice " + currentVoice + " not in filtered list. Setting local to " + filtered[0].name);
+            currentVoice = filtered[0].name;
         }
     }
-
-    // Trigger filter when language changes
-    onCurrentLanguageChanged: filterVoices()
     
-    function saveAzureConfig() {
-        var xhr = new XMLHttpRequest();
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) loadVoices();
-        }
-        xhr.open("POST", baseUrl + "/api/azure-config");
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.send(JSON.stringify({ endpoint: azureEndpoint, key: azureKey }));
-    }
+    // ...
     
     function loadSettings() {
         var xhr = new XMLHttpRequest();
@@ -125,6 +136,9 @@ Item {
                 if (settings.speechRate) speechRate = settings.speechRate;
                 if (settings.useSystemTts !== undefined) useSystemTts = settings.useSystemTts;
                 if (settings.fontSizeScale) fontScale = settings.fontSizeScale;
+                
+                settingsLoaded = true;
+                console.log("SettingsPage: Settings loaded. Voice=" + currentVoice);
                 
                 // If we have voices loaded but filter wasn't run for this language yet (race condition), run it now
                 if (allVoices.length > 0) filterVoices();

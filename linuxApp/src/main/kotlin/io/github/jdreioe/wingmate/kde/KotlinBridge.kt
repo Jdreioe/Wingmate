@@ -24,7 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 
 /**
  * HTTP server that bridges QML UI with Kotlin business logic.
@@ -40,6 +40,12 @@ class KotlinBridge(private val port: Int = 8765) {
     private val azureSpeechService = AzureSpeechService(configRepository)
     private val voiceRepository: VoiceRepository by lazy { GlobalContext.get().get() }
     private val pronunciationRepository: PronunciationDictionaryRepository by lazy { GlobalContext.get().get() }
+    
+    private val json = Json { 
+        ignoreUnknownKeys = true 
+        isLenient = true
+        encodeDefaults = true
+    }
     
     private val server = embeddedServer(Netty, port = port) {
         install(ContentNegotiation) {
@@ -66,8 +72,11 @@ class KotlinBridge(private val port: Int = 8765) {
             }
             
             post("/api/phrases") {
-                val request = call.receive<AddPhraseRequest>()
-                phraseViewModel.addPhrase(request.text, request.imageUrl)
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val text = jsonObj["text"]?.jsonPrimitive?.contentOrNull ?: ""
+                val imageUrl = jsonObj["imageUrl"]?.jsonPrimitive?.contentOrNull
+                phraseViewModel.addPhrase(text, imageUrl)
                 call.respond(HttpStatusCode.Created, mapOf("status" to "ok"))
             }
             
@@ -84,14 +93,18 @@ class KotlinBridge(private val port: Int = 8765) {
             }
             
             post("/api/categories") {
-                val request = call.receive<AddCategoryRequest>()
-                phraseViewModel.addCategory(request.name)
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val name = jsonObj["name"]?.jsonPrimitive?.contentOrNull ?: ""
+                phraseViewModel.addCategory(name)
                 call.respond(HttpStatusCode.Created, mapOf("status" to "ok"))
             }
             
             post("/api/categories/select") {
-                val request = call.receive<SelectCategoryRequest>()
-                phraseViewModel.selectCategory(request.categoryId)
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val categoryId = jsonObj["categoryId"]?.jsonPrimitive?.contentOrNull
+                phraseViewModel.selectCategory(categoryId)
                 call.respond(HttpStatusCode.OK)
             }
             
@@ -101,16 +114,55 @@ class KotlinBridge(private val port: Int = 8765) {
                 call.respond(settings ?: mapOf("status" to "loading"))
             }
             
+            put("/api/settings") {
+                val body = call.receiveText()
+                println("[API] PUT /api/settings payload: $body")
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val current = settingsManager.settings.value ?: io.github.jdreioe.wingmate.domain.Settings()
+                var newSettings = current
+                
+                if (jsonObj.containsKey("welcomeFlowCompleted")) {
+                    val completed = jsonObj["welcomeFlowCompleted"]?.jsonPrimitive?.booleanOrNull ?: false
+                    newSettings = newSettings.copy(welcomeFlowCompleted = completed)
+                }
+                
+                if (jsonObj.containsKey("primaryLanguage")) {
+                    val lang = jsonObj["primaryLanguage"]?.jsonPrimitive?.contentOrNull
+                    if (lang != null) newSettings = newSettings.copy(primaryLanguage = lang, language = lang)
+                }
+                
+                if (jsonObj.containsKey("secondaryLanguage")) {
+                    val lang = jsonObj["secondaryLanguage"]?.jsonPrimitive?.contentOrNull
+                    if (lang != null) newSettings = newSettings.copy(secondaryLanguage = lang)
+                }
+                
+                println("[API] Updating settings to: $newSettings")
+                settingsManager.updateSettings(newSettings)
+                call.respond(HttpStatusCode.OK)
+            }
+            
             put("/api/settings/language") {
-                val request = call.receive<UpdateLanguageRequest>()
-                settingsManager.updateLanguage(request.language)
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val language = jsonObj["language"]?.jsonPrimitive?.contentOrNull ?: "en-US"
+                settingsManager.updateLanguage(language)
                 call.respond(HttpStatusCode.OK)
             }
             
             put("/api/settings/voice") {
-                val request = call.receive<UpdateVoiceRequest>()
-                settingsManager.updateVoice(request.voice)
-                call.respond(HttpStatusCode.OK)
+                try {
+                    val body = call.receiveText()
+                    println("[API] PUT /api/settings/voice RAW body: '$body'")
+                    val jsonObj = json.parseToJsonElement(body).jsonObject
+                    val voice = jsonObj["voice"]?.jsonPrimitive?.contentOrNull ?: "default"
+                    println("[API] PUT /api/settings/voice parsed voice: '$voice'")
+                    settingsManager.updateVoice(voice)
+                    call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
+                } catch (e: Exception) {
+                    println("[API] PUT /api/settings/voice ERROR: ${e.message}")
+                    e.printStackTrace()
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "unknown")))
+                }
             }
             
             put("/api/settings/rate") {
@@ -130,36 +182,53 @@ class KotlinBridge(private val port: Int = 8765) {
             
             // Speech
             post("/api/speak") {
-                val request = call.receive<SpeakRequest>()
-                println("[SPEECH] API /api/speak called with text: '${request.text}'")
-                
-                scope.launch {
-                    try {
-                        val settings = settingsManager.settings.value
-                        
-                        // Resolve voice
-                        val currentVoiceName = settings?.voice ?: "default"
-                        println("[SPEECH] Resolving voice. Content: '$currentVoiceName'")
-                        
-                        val voices = voiceRepository.getVoices()
-                        val voice = voices.find { it.name == currentVoiceName } 
-                            ?: voices.firstOrNull() 
-                            ?: Voice(name="en-US-JennyNeural", selectedLanguage="en-US") // Default fallback
+                try {
+                    val body = call.receiveText()
+                    println("[SPEECH] API /api/speak RAW body: '$body'")
+                    
+                    val jsonObj = json.parseToJsonElement(body).jsonObject
+                    val text = jsonObj["text"]?.jsonPrimitive?.contentOrNull ?: ""
+                    println("[SPEECH] API /api/speak parsed text: '$text'")
+                    
+                    scope.launch {
+                        try {
+                            val settings = settingsManager.settings.value
                             
-                        println("[SPEECH] Selected voice: ${voice.name}, Language: ${voice.selectedLanguage.ifEmpty { voice.primaryLanguage }}")
+                            // Resolve voice
+                            val currentVoiceName = settings?.voice ?: "default"
+                            val settingsLanguage = settings?.language ?: "en-US"
+                            println("[SPEECH] Resolving voice. Content: '$currentVoiceName', Settings language: '$settingsLanguage'")
+                            
+                            val voices = voiceRepository.getVoices()
+                            val foundVoice = voices.find { it.name == currentVoiceName } 
+                                ?: voices.firstOrNull() 
+                                ?: Voice(name="en-US-JennyNeural", selectedLanguage="en-US") // Default fallback
+                            
+                            // Set selectedLanguage to the user's settings language so SSML uses correct lang
+                            val voice = foundVoice.copy(selectedLanguage = settingsLanguage)
+                                
+                            println("[SPEECH] Selected voice: ${voice.name}, Language: ${voice.selectedLanguage}")
 
-                        // Logic: useSystemTts=true -> Piper/Local. useSystemTts=false -> Azure.
-                        // Default is false, which means Azure.
-                        if (settings?.useSystemTts == false) {
-                            azureSpeechService.speak(request.text, voice)
-                        } else {
-                            speechService.speak(request.text, voice)
+                            // Logic: useSystemTts=true -> Piper/Local. useSystemTts=false -> Azure.
+                            // Default is false, which means Azure.
+                            if (settings?.useSystemTts == true) { // Use explicit true check
+                                println("[SPEECH] Using System TTS (LinuxSpeechService)")
+                                speechService.speak(text, voice)
+                            } else {
+                                println("[SPEECH] Using Azure TTS (AzureSpeechService)")
+                                azureSpeechService.speak(text, voice)
+                            }
+                        } catch (e: Exception) {
+                            println("Speech error inside launch: ${e.message}")
+                            e.printStackTrace()
                         }
-                    } catch (e: Exception) {
-                        println("Speech error: ${e.message}")
                     }
+                    call.respond(HttpStatusCode.OK, mapOf("status" to "speaking"))
+                } catch (e: Exception) {
+                    println("[SPEECH] /api/speak error: ${e.message}")
+                    e.printStackTrace()
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
                 }
-                call.respond(HttpStatusCode.OK, mapOf("status" to "speaking"))
             }
             
             // Azure Config

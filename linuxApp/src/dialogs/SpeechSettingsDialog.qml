@@ -15,6 +15,7 @@ Popup {
     property real uiScale: 1.0
     
     signal saved()
+    signal languageSettingsRequested()
     
     anchors.centerIn: parent
     width: 560
@@ -51,6 +52,20 @@ Popup {
             text: "Text-to-Speech Engine"
             font.pixelSize: Theme.fontSizeNormal
             color: Theme.subText
+        }
+        
+        RowLayout {
+            Layout.fillWidth: true
+            
+
+            
+            ModernButton {
+                text: "Language Settings"
+                Layout.fillWidth: false
+                onClicked: root.languageSettingsRequested()
+            }
+            
+            Item { Layout.fillWidth: true }
         }
         
         RowLayout {

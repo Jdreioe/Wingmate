@@ -45,7 +45,7 @@ Button {
             if (!control.enabled) return Theme.surfaceHighlight;
             if (control.down) return control.primary ? Qt.darker(Theme.primary, 1.1) : Theme.surfaceHighlight;
             if (control.hovered) return control.primary ? Qt.lighter(Theme.primary, 1.1) : Theme.surfaceHighlight;
-            return control.primary ? Theme.primary : Theme.surface;
+            return control.primary ? Theme.primary : Theme.surfaceHighlight;
         }
         
         border.color: control.primary ? "transparent" : Theme.surfaceHighlight
