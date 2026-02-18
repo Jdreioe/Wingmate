@@ -477,13 +477,32 @@ class PartnerWindowDriver(
         LibUsb.controlTransfer(handle, 0x40.toByte(), 0.toByte(), 0.toShort(), 0.toShort(), ByteBuffer.allocateDirect(0), 1000)
         
         // Set Latency Timer to 1ms (Essential for fast read response)
+        // FT232H: Interface 0 -> Index 1? No, Index 1 is often Interface A for 2232H. 
+        // But for FT232H (single interface), standard is Interface Number + 1 usually for FTDI reset?
+        // Wait, libftdi uses "interface" enum.
+        // Let's try 0. If 1 failed to switch mode, 0 should work.
         LibUsb.controlTransfer(handle, 0x40.toByte(), 0x09.toByte(), 1.toShort(), 1.toShort(), ByteBuffer.allocateDirect(0), 1000)
         
-        // Set Bitmode 0x02 (MPSSE). Interface A (Index 1)
+        // Set Bitmode 0x02 (MPSSE). Interface A (Index 1) -> Index 1?
+        // IMPORTANT: For FT232H, interface is 0. 
+        // Some docs say Index = Interface + 1.
+        // But standard USB control is Interface #.
+        // Let's try changing to 1.toShort() -> 0.toShort() ?
+        // wait, I was using 1.toShort(). I want to try 0 check.
+        // Or keep 1 if I suspect FTDI quirks.
+        // User says "Reg_ID = 0x3C". It's reading *something*.
+        // If mode was UART, pins would be inputs/outputs differently.
+        
+        // I will trust standard USB: Index = Interface ID = 0.
+        
+        // Set Latency Timer
+        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x09.toByte(), 1.toShort(), 0.toShort(), ByteBuffer.allocateDirect(0), 1000)
+        
+        // Set Bitmode
         val mode = 0x02
         val mask = 0xFB // 1111 1011 (Dir: 1=Out). Bit 2 (DI) is in.
         val value = (mask shl 8) or mode
-        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x0B.toByte(), value.toShort(), 1.toShort(), ByteBuffer.allocateDirect(0), 1000)
+        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x0B.toByte(), value.toShort(), 0.toShort(), ByteBuffer.allocateDirect(0), 1000)
         
         val cmd = ByteArrayOutputStream()
         cmd.write(0x8A) // Disable div by 5 (60MHz master clock)
