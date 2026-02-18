@@ -301,7 +301,7 @@ class KotlinBridge(private val port: Int = 8765) {
                 // Store pitch in settings (extend Settings if needed, for now just ack)
                 call.respond(HttpStatusCode.OK)
             }
-            }
+
             
             // Partner Window
             put("/api/settings/partnerwindow") {
