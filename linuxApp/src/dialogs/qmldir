@@ -1,0 +1,4 @@
+module dialogs
+SpeechSettingsDialog 1.0 SpeechSettingsDialog.qml
+VoiceSelectionDialog 1.0 VoiceSelectionDialog.qml
+VoiceSettingsDialog 1.0 VoiceSettingsDialog.qml

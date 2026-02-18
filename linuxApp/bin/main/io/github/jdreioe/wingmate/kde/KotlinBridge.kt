@@ -13,6 +13,8 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
+import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceRepository
@@ -37,6 +39,7 @@ class KotlinBridge(private val port: Int = 8765) {
     private val speechService = LinuxSpeechService()
     private val azureSpeechService = AzureSpeechService(configRepository)
     private val voiceRepository: VoiceRepository by lazy { GlobalContext.get().get() }
+    private val pronunciationRepository: PronunciationDictionaryRepository by lazy { GlobalContext.get().get() }
     
     private val server = embeddedServer(Netty, port = port) {
         install(ContentNegotiation) {
@@ -199,6 +202,34 @@ class KotlinBridge(private val port: Int = 8765) {
                     "playing" to (speechService.isPlaying() || azureSpeechService.isPlaying()),
                     "paused" to (speechService.isPaused() || azureSpeechService.isPaused())
                 ))
+            }
+            
+            // Pronunciation Dictionary
+            get("/api/pronunciation") {
+                val entries = pronunciationRepository.getAll()
+                call.respond(entries)
+            }
+            
+            post("/api/pronunciation") {
+                val params = call.receive<Map<String, String>>()
+                val word = params["word"] ?: return@post call.respond(HttpStatusCode.BadRequest)
+                val phoneme = params["phoneme"] ?: return@post call.respond(HttpStatusCode.BadRequest)
+                pronunciationRepository.add(PronunciationEntry(word = word, phoneme = phoneme))
+                call.respond(HttpStatusCode.Created, mapOf("status" to "ok"))
+            }
+            
+            delete("/api/pronunciation/{word}") {
+                val word = call.parameters["word"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                pronunciationRepository.delete(word)
+                call.respond(HttpStatusCode.OK)
+            }
+            
+            // Pitch setting
+            put("/api/settings/pitch") {
+                val params = call.receive<Map<String, Float>>()
+                val pitch = params["pitch"] ?: 1.0f
+                // Store pitch in settings (extend Settings if needed, for now just ack)
+                call.respond(HttpStatusCode.OK)
             }
         }
     }
