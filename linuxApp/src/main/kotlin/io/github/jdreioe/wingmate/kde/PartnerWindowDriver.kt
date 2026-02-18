@@ -415,45 +415,142 @@ class PartnerWindowDriver(
 
     // ──────────── Low-level SPI ────────────
 
-    private fun spiExchange(data: ByteArray): ByteArray {
+    // ──────────── Low-level SPI ────────────
+    
+    private fun writeRaw(data: ByteArray) {
         if (handle == null) throw RuntimeException("Device not open")
-
-        // TX: wrap into direct ByteBuffer
         val txBuf = ByteBuffer.allocateDirect(data.size)
         txBuf.put(data)
         txBuf.rewind()
-        val txTransferred = IntBuffer.allocate(1)
+        val transferred = IntBuffer.allocate(1)
+        val result = LibUsb.bulkTransfer(handle, endpointOut, txBuf, transferred, USB_TIMEOUT_MS.toLong())
+        if (result != LibUsb.SUCCESS) throw RuntimeException("Bulk write failed: $result")
+    }
 
-        val result = LibUsb.bulkTransfer(
-            handle, endpointOut, txBuf, txTransferred, USB_TIMEOUT_MS.toLong()
-        )
-        if (result != LibUsb.SUCCESS) {
-            throw RuntimeException("SPI tx failed: $result")
-        }
-
-        // RX: allocate direct buffer for response
-        val rxBuf = ByteBuffer.allocateDirect(data.size)
-        val rxTransferred = IntBuffer.allocate(1)
-        val rxResult = LibUsb.bulkTransfer(
-            handle, endpointIn, rxBuf, rxTransferred, USB_TIMEOUT_MS.toLong()
-        )
-        if (rxResult != LibUsb.SUCCESS) {
-            throw RuntimeException("SPI rx failed: $rxResult")
-        }
-
-        val bytesRead = rxTransferred.get(0)
-        val response = ByteArray(bytesRead)
+    private fun readRaw(len: Int): ByteArray {
+        if (handle == null) throw RuntimeException("Device not open")
+        val rxBuf = ByteBuffer.allocateDirect(len)
+        val transferred = IntBuffer.allocate(1)
+        val result = LibUsb.bulkTransfer(handle, endpointIn, rxBuf, transferred, USB_TIMEOUT_MS.toLong())
+        if (result != LibUsb.SUCCESS) throw RuntimeException("Bulk read failed: $result")
+        
+        val actualLen = transferred.get(0)
+        val data = ByteArray(actualLen)
         rxBuf.rewind()
-        rxBuf.get(response, 0, bytesRead)
-        return response
+        rxBuf.get(data)
+        return data
+    }
+    
+    private fun setupMpsse() {
+        if (handle == null) return
+        
+        // Reset
+        LibUsb.controlTransfer(handle, 0x40.toByte(), 0.toByte(), 0.toShort(), 0.toShort(), ByteBuffer.allocateDirect(0), 1000)
+        
+        // Set Latency Timer to 1ms (Essential for fast read response)
+        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x09.toByte(), 1.toShort(), 1.toShort(), ByteBuffer.allocateDirect(0), 1000)
+        
+        // Set Bitmode 0x02 (MPSSE). Interface A (Index 1)
+        val mode = 0x02
+        val mask = 0xFB // 1111 1011 (Dir: 1=Out). Bit 2 (DI) is in.
+        val value = (mask shl 8) or mode
+        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x0B.toByte(), value.toShort(), 1.toShort(), ByteBuffer.allocateDirect(0), 1000)
+        
+        val cmd = ByteArrayOutputStream()
+        cmd.write(0x8A) // Disable div by 5 (60MHz master clock)
+        cmd.write(0x97) // Turn off adaptive clocking
+        cmd.write(0x8D) // Disable 3-phase clocking
+        cmd.write(0x86) // Set clock divisor
+        cmd.write(0x01) // Value L (Div=1 -> 15MHz)
+        cmd.write(0x00) // Value H
+        cmd.write(0x85) // Disable loopback
+        
+        // Set Low Byte (ADBUS) - CS High
+        cmd.write(0x80)
+        cmd.write(0x08) // Val: CS=1
+        cmd.write(0xFB) // Dir: 1111 1011
+        
+        // Set High Byte (ACBUS) - PD# High (Bit 6)
+        cmd.write(0x82)
+        cmd.write(0x40) // Val: PD# High
+        cmd.write(0x40) // Dir: Bit 6 Out
+        
+        writeRaw(cmd.toByteArray())
+        Thread.sleep(50)
+    }
+
+    private fun csLow() {
+        // Opcode 0x80, Val 0x00 (CS=0), Dir 0xFB
+        writeRaw(byteArrayOf(0x80.toByte(), 0x00, 0xFB.toByte()))
+    }
+    
+    private fun csHigh() {
+        // Opcode 0x80, Val 0x08 (CS=1), Dir 0xFB
+        writeRaw(byteArrayOf(0x80.toByte(), 0x08, 0xFB.toByte()))
+    }
+
+    private fun spiWrite(bytes: ByteArray) {
+        csLow()
+        
+        val len = bytes.size - 1
+        val cmd = ByteArrayOutputStream()
+        // 0x11: Data Out, -ve clock edge
+        cmd.write(0x11)
+        cmd.write(len and 0xFF)
+        cmd.write((len shr 8) and 0xFF)
+        cmd.write(bytes)
+        
+        writeRaw(cmd.toByteArray())
+        
+        csHigh()
+    }
+    
+    private fun spiRead(writeBytes: ByteArray, readLen: Int): ByteArray {
+        csLow()
+        
+        val cmd = ByteArrayOutputStream()
+        
+        // Write phase
+        if (writeBytes.isNotEmpty()) {
+            val wLen = writeBytes.size - 1
+            cmd.write(0x11)
+            cmd.write(wLen and 0xFF)
+            cmd.write((wLen shr 8) and 0xFF)
+            cmd.write(writeBytes)
+        }
+        
+        // Read phase
+        if (readLen > 0) {
+            val rLen = readLen - 1
+            // 0x20: Data In, +ve clock edge
+            cmd.write(0x20)
+            cmd.write(rLen and 0xFF)
+            cmd.write((rLen shr 8) and 0xFF)
+            
+            // Send immediate to force flush (0x87) ?
+            // Usually not needed if latency timer is low, but let's send it to be safe
+            cmd.write(0x87)
+        }
+        
+        writeRaw(cmd.toByteArray())
+        
+        var result = ByteArray(0)
+        if (readLen > 0) {
+           result = readRaw(readLen)
+        }
+        
+        csHigh()
+        return result
     }
 
     fun hostCmd(cmd: Int) {
-        spiExchange(byteArrayOf(cmd.toByte(), 0x00, 0x00))
+        // Host Command: 3 bytes: Cmd, 00, 00
+        spiWrite(byteArrayOf(cmd.toByte(), 0x00, 0x00))
     }
 
     fun wr8(addr: Int, value: Int) {
-        spiExchange(byteArrayOf(
+        // Write: Addr(2,1,0 with bit 7 set) + Data
+        spiWrite(byteArrayOf(
             (0x80 or ((addr shr 16) and 0x3F)).toByte(),
             ((addr shr 8) and 0xFF).toByte(),
             (addr and 0xFF).toByte(),
@@ -462,21 +559,25 @@ class PartnerWindowDriver(
     }
 
     fun wr16(addr: Int, value: Int) {
-        val buf = ByteBuffer.allocate(5).order(ByteOrder.LITTLE_ENDIAN)
-        buf.put((0x80 or ((addr shr 16) and 0x3F)).toByte())
-        buf.put(((addr shr 8) and 0xFF).toByte())
-        buf.put((addr and 0xFF).toByte())
-        buf.putShort((value and 0xFFFF).toShort())
-        spiExchange(buf.array())
+        spiWrite(byteArrayOf(
+            (0x80 or ((addr shr 16) and 0x3F)).toByte(),
+            ((addr shr 8) and 0xFF).toByte(),
+            (addr and 0xFF).toByte(),
+            (value and 0xFF).toByte(),
+            ((value shr 8) and 0xFF).toByte()
+        ))
     }
 
     fun wr32(addr: Int, value: Int) {
-        val buf = ByteBuffer.allocate(7).order(ByteOrder.LITTLE_ENDIAN)
-        buf.put((0x80 or ((addr shr 16) and 0x3F)).toByte())
-        buf.put(((addr shr 8) and 0xFF).toByte())
-        buf.put((addr and 0xFF).toByte())
-        buf.putInt(value)
-        spiExchange(buf.array())
+        spiWrite(byteArrayOf(
+            (0x80 or ((addr shr 16) and 0x3F)).toByte(),
+            ((addr shr 8) and 0xFF).toByte(),
+            (addr and 0xFF).toByte(),
+            (value and 0xFF).toByte(),
+            ((value shr 8) and 0xFF).toByte(),
+            ((value shr 16) and 0xFF).toByte(),
+            ((value shr 24) and 0xFF).toByte()
+        ))
     }
 
     fun wrBulk(addr: Int, data: ByteArray) {
@@ -485,38 +586,42 @@ class PartnerWindowDriver(
             ((addr shr 8) and 0xFF).toByte(),
             (addr and 0xFF).toByte()
         )
-        spiExchange(header + data)
+        spiWrite(header + data)
     }
 
     fun rd8(addr: Int): Int {
-        val resp = spiExchange(byteArrayOf(
+        // Read: Addr(2,1,0) + Dummy(0) -> Read 1 byte
+        val writeBytes = byteArrayOf(
             ((addr shr 16) and 0x3F).toByte(),
             ((addr shr 8) and 0xFF).toByte(),
             (addr and 0xFF).toByte(),
             0x00
-        ))
+        )
+        val resp = spiRead(writeBytes, 1)
         return if (resp.isNotEmpty()) resp[0].toInt() and 0xFF else 0
     }
 
     fun rd16(addr: Int): Int {
-        val resp = spiExchange(byteArrayOf(
+        val writeBytes = byteArrayOf(
             ((addr shr 16) and 0x3F).toByte(),
             ((addr shr 8) and 0xFF).toByte(),
             (addr and 0xFF).toByte(),
             0x00
-        ))
+        )
+        val resp = spiRead(writeBytes, 2)
         return if (resp.size >= 2) {
             (resp[0].toInt() and 0xFF) or ((resp[1].toInt() and 0xFF) shl 8)
         } else 0
     }
 
     fun rd32(addr: Int): Int {
-        val resp = spiExchange(byteArrayOf(
+        val writeBytes = byteArrayOf(
             ((addr shr 16) and 0x3F).toByte(),
             ((addr shr 8) and 0xFF).toByte(),
             (addr and 0xFF).toByte(),
             0x00
-        ))
+        )
+        val resp = spiRead(writeBytes, 4)
         return if (resp.size >= 4) {
             (resp[0].toInt() and 0xFF) or
                     ((resp[1].toInt() and 0xFF) shl 8) or
@@ -822,48 +927,5 @@ class PartnerWindowDriver(
     }
 
 
-    private fun writeRaw(data: ByteArray) {
-        if (handle == null) throw RuntimeException("Device not open")
-        val txBuf = ByteBuffer.allocateDirect(data.size)
-        txBuf.put(data)
-        txBuf.rewind()
-        val transferred = IntBuffer.allocate(1)
-        val result = LibUsb.bulkTransfer(handle, endpointOut, txBuf, transferred, USB_TIMEOUT_MS.toLong())
-        if (result != LibUsb.SUCCESS) throw RuntimeException("Bulk write failed: $result")
-    }
-
-    private fun setupMpsse() {
-        if (handle == null) return
-        
-        // Reset
-        LibUsb.controlTransfer(handle, 0x40.toByte(), 0.toByte(), 0.toShort(), 0.toShort(), ByteBuffer.allocateDirect(0), 1000)
-        
-        // Set Bitmode 0x02 (MPSSE). Interface A (Index 1)
-        val mode = 0x02
-        val mask = 0xFB // 1111 1011 (Dir: 1=Out). Bit 2 (DI) is in.
-        val value = (mask shl 8) or mode
-        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x0B.toByte(), value.toShort(), 1.toShort(), ByteBuffer.allocateDirect(0), 1000)
-        
-        val cmd = ByteArrayOutputStream()
-        cmd.write(0x8A) // Disable div by 5 (60MHz master clock)
-        cmd.write(0x97) // Turn off adaptive clocking
-        cmd.write(0x8D) // Disable 3-phase clocking
-        cmd.write(0x86) // Set clock divisor
-        cmd.write(0x01) // Value L (Div=1 -> 15MHz)
-        cmd.write(0x00) // Value H
-        cmd.write(0x85) // Disable loopback
-        
-        // Set Low Byte (ADBUS) - CS High
-        cmd.write(0x80)
-        cmd.write(0x08) // Val: CS=1
-        cmd.write(0xFB) // Dir: 1111 1011
-        
-        // Set High Byte (ACBUS) - PD# High (Bit 6)
-        cmd.write(0x82)
-        cmd.write(0x40) // Val: PD# High
-        cmd.write(0x40) // Dir: Bit 6 Out
-        
-        writeRaw(cmd.toByteArray())
-        Thread.sleep(50)
     }
 }
