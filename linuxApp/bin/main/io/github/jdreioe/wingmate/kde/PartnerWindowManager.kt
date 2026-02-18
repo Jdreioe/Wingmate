@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.*
  * Polls USB for FTDI device presence, reacts to [SettingsManager] changes,
  * and mirrors text to the EVE display when enabled and connected.
  */
+@OptIn(FlowPreview::class)
 class PartnerWindowManager(
     private val settingsManager: SettingsManager
 ) {
