@@ -915,6 +915,12 @@ class PartnerWindowDriver(
         displayBitmapRgb565(compressed)
     }
 
+    private fun drivePdLow() {
+        // Set High Byte (ACBUS) - PD# Low (Bit 6)
+        // Val: 0x00, Dir: 0x40
+        writeRaw(byteArrayOf(0x82.toByte(), 0x00, 0x40))
+    }
+
     fun shutdown() {
         println("\n=== Shutting down ===")
         clearScreen(0, 0, 0)
@@ -924,8 +930,8 @@ class PartnerWindowDriver(
         wr8(REG_GPIO, gpioOld and 0x7F.inv())
         wr8(REG_PCLK, 0)
         println("[+] Display off")
-    }
-
-
+        
+        drivePdLow()
+        println("[+] EVE PD# -> Low (Power Down)")
     }
 }
