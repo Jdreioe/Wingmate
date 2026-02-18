@@ -10,7 +10,7 @@ kotlin {
     jvmToolchain(21)
     
     androidLibrary {
-        namespace = "io.github.jdreioe.wingmate.compose"
+        namespace = "com.hojmoseit.wingmate.compose"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
     }
@@ -59,6 +59,9 @@ kotlin {
                 implementation("org.xerial:sqlite-jdbc:3.41.2.1")
                 runtimeOnly("org.slf4j:slf4j-simple:2.0.9")
                 runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.8.15")
+                // Partner window display driver (FTDI FT232H USB/SPI)
+                implementation("org.usb4java:usb4java:1.3.0")
+                implementation("org.usb4java:usb4java-javax:1.3.0")
             }
         }
     }
