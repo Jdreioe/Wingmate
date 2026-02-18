@@ -77,3 +77,4 @@ iosApp/Pods/
 **/tmp/
 **/intermediates/
 **/.cxx/
+**/*.properties
