@@ -202,7 +202,6 @@ class PartnerWindowDriver(
     private var device: Device? = null
     private var handle: DeviceHandle? = null
     private var cmdWritePtr: Int = 0
-    private var cmdWritePtr: Int = 0
     private var dlOffset: Int = 0
     
     // Default endpoints (standard FT232H usually 0x02 OUT, 0x81 IN)

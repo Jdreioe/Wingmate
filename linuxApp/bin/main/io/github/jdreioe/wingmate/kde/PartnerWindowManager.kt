@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.kde
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.FlowPreview
 
 /**
  * Manages the partner window display lifecycle for the Linux/KDE app.
