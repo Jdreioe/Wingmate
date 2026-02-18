@@ -40,6 +40,7 @@ class KotlinBridge(private val port: Int = 8765) {
     private val azureSpeechService = AzureSpeechService(configRepository)
     private val voiceRepository: VoiceRepository by lazy { GlobalContext.get().get() }
     private val pronunciationRepository: PronunciationDictionaryRepository by lazy { GlobalContext.get().get() }
+    private val partnerWindowManager = PartnerWindowManager(settingsManager)
     
     private val json = Json { 
         ignoreUnknownKeys = true 
@@ -300,17 +301,41 @@ class KotlinBridge(private val port: Int = 8765) {
                 // Store pitch in settings (extend Settings if needed, for now just ack)
                 call.respond(HttpStatusCode.OK)
             }
+            }
+            
+            // Partner Window
+            put("/api/settings/partnerwindow") {
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val enabled = jsonObj["enabled"]?.jsonPrimitive?.booleanOrNull ?: false
+                
+                val current = settingsManager.settings.value ?: io.github.jdreioe.wingmate.domain.Settings()
+                settingsManager.updateSettings(current.copy(partnerWindowEnabled = enabled))
+                
+                call.respond(HttpStatusCode.OK)
+            }
+            
+            put("/api/display-text") {
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val text = jsonObj["text"]?.jsonPrimitive?.contentOrNull ?: ""
+                
+                partnerWindowManager.updateText(text)
+                call.respond(HttpStatusCode.OK)
+            }
         }
     }
     
     fun start() {
         server.start(wait = false)
+        partnerWindowManager.start()
         println("Kotlin bridge server started on http://localhost:$port")
     }
     
     fun stop() {
         phraseViewModel.cleanup()
         settingsManager.cleanup()
+        partnerWindowManager.stop()
         server.stop(1000, 2000)
     }
 }
