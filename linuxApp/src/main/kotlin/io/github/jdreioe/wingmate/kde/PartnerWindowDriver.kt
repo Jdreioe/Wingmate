@@ -202,7 +202,12 @@ class PartnerWindowDriver(
     private var device: Device? = null
     private var handle: DeviceHandle? = null
     private var cmdWritePtr: Int = 0
+    private var cmdWritePtr: Int = 0
     private var dlOffset: Int = 0
+    
+    // Default endpoints (standard FT232H usually 0x02 OUT, 0x81 IN)
+    private var endpointIn: Byte = 0x81.toByte()
+    private var endpointOut: Byte = 0x02.toByte()
 
     companion object {
         const val EVE_PD_PIN = 0x4000  // Bit 14 = ACBUS6
@@ -365,6 +370,31 @@ class PartnerWindowDriver(
             }
 
             println("[+] FTDI device opened")
+            
+            // Detect endpoints
+            val config = ConfigDescriptor()
+            if (LibUsb.getActiveConfigDescriptor(device, config) == LibUsb.SUCCESS) {
+                try {
+                    val iface = config.iface()[0] // Interface 0
+                    val alt = iface.altsetting()[0] // Alt setting 0
+                    
+                    for (k in 0 until alt.bNumEndpoints()) {
+                        val ep = alt.endpoint()[k]
+                        val addr = ep.bEndpointAddress()
+                        val attr = ep.bmAttributes()
+                        if ((attr.toInt() and LibUsb.TRANSFER_TYPE_MASK.toInt()) == LibUsb.TRANSFER_TYPE_BULK.toInt()) {
+                            if ((addr.toInt() and LibUsb.ENDPOINT_DIR_MASK.toInt()) == LibUsb.ENDPOINT_IN.toInt()) {
+                                endpointIn = addr
+                            } else {
+                                endpointOut = addr
+                            }
+                        }
+                    }
+                } finally {
+                    LibUsb.freeConfigDescriptor(config)
+                }
+            }
+            println("[+] Endpoints detected: IN=0x${endpointIn.toString(16)}, OUT=0x${endpointOut.toString(16)}")
         } finally {
             LibUsb.freeDeviceList(deviceList, true)
         }
@@ -395,7 +425,7 @@ class PartnerWindowDriver(
         val txTransferred = IntBuffer.allocate(1)
 
         val result = LibUsb.bulkTransfer(
-            handle, 0x01.toByte(), txBuf, txTransferred, USB_TIMEOUT_MS.toLong()
+            handle, endpointOut, txBuf, txTransferred, USB_TIMEOUT_MS.toLong()
         )
         if (result != LibUsb.SUCCESS) {
             throw RuntimeException("SPI tx failed: $result")
@@ -405,7 +435,7 @@ class PartnerWindowDriver(
         val rxBuf = ByteBuffer.allocateDirect(data.size)
         val rxTransferred = IntBuffer.allocate(1)
         val rxResult = LibUsb.bulkTransfer(
-            handle, 0x82.toByte(), rxBuf, rxTransferred, USB_TIMEOUT_MS.toLong()
+            handle, endpointIn, rxBuf, rxTransferred, USB_TIMEOUT_MS.toLong()
         )
         if (rxResult != LibUsb.SUCCESS) {
             throw RuntimeException("SPI rx failed: $rxResult")
