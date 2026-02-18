@@ -1,0 +1,13 @@
+[package]
+name = "wingmate-kde"
+version = "1.0.0"
+edition = "2021"
+description = "Wingmate Desktop - Communication Aid (KDE/Qt)"
+
+[[bin]]
+name = "wingmate-kde"
+path = "src/main.rs"
+
+[dependencies]
+qmetaobject = "0.2"
+cstr = "0.2"

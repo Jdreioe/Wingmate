@@ -4,3 +4,6 @@ ModernCard 1.0 ModernCard.qml
 Sidebar 1.0 Sidebar.qml
 ModernButton 1.0 ModernButton.qml
 PhraseButton 1.0 PhraseButton.qml
+Chip 1.0 Chip.qml
+BottomBar 1.0 BottomBar.qml
+SpeechControlsSidebar 1.0 SpeechControlsSidebar.qml
