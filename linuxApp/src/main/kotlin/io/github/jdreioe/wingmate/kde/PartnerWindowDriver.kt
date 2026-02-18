@@ -508,68 +508,66 @@ class PartnerWindowDriver(
         Thread.sleep(50)
     }
 
-    private fun csLow() {
-        // Opcode 0x80, Val 0x00 (CS=0), Dir 0xFB
-        writeRaw(byteArrayOf(0x80.toByte(), 0x00, 0xFB.toByte()))
-    }
-    
-    private fun csHigh() {
-        // Opcode 0x80, Val 0x08 (CS=1), Dir 0xFB
-        writeRaw(byteArrayOf(0x80.toByte(), 0x08, 0xFB.toByte()))
-    }
-
     private fun spiWrite(bytes: ByteArray) {
-        csLow()
+        val buffer = ByteArrayOutputStream()
         
+        // CS Low (Val 0x00, Dir 0xFB)
+        buffer.write(0x80)
+        buffer.write(0x00)
+        buffer.write(0xFB)
+        
+        // Write Data (0x11)
         val len = bytes.size - 1
-        val cmd = ByteArrayOutputStream()
-        // 0x11: Data Out, -ve clock edge
-        cmd.write(0x11)
-        cmd.write(len and 0xFF)
-        cmd.write((len shr 8) and 0xFF)
-        cmd.write(bytes)
+        buffer.write(0x11)
+        buffer.write(len and 0xFF)
+        buffer.write((len shr 8) and 0xFF)
+        buffer.write(bytes)
         
-        writeRaw(cmd.toByteArray())
+        // CS High (Val 0x08, Dir 0xFB)
+        buffer.write(0x80)
+        buffer.write(0x08)
+        buffer.write(0xFB)
         
-        csHigh()
+        writeRaw(buffer.toByteArray())
     }
     
     private fun spiRead(writeBytes: ByteArray, readLen: Int): ByteArray {
-        csLow()
+        val buffer = ByteArrayOutputStream()
         
-        val cmd = ByteArrayOutputStream()
+        // CS Low
+        buffer.write(0x80)
+        buffer.write(0x00)
+        buffer.write(0xFB)
         
-        // Write phase
+        // Write Address/Dummy
         if (writeBytes.isNotEmpty()) {
             val wLen = writeBytes.size - 1
-            cmd.write(0x11)
-            cmd.write(wLen and 0xFF)
-            cmd.write((wLen shr 8) and 0xFF)
-            cmd.write(writeBytes)
+            buffer.write(0x11)
+            buffer.write(wLen and 0xFF)
+            buffer.write((wLen shr 8) and 0xFF)
+            buffer.write(writeBytes)
         }
         
-        // Read phase
+        // Read Data
         if (readLen > 0) {
             val rLen = readLen - 1
-            // 0x20: Data In, +ve clock edge
-            cmd.write(0x20)
-            cmd.write(rLen and 0xFF)
-            cmd.write((rLen shr 8) and 0xFF)
-            
-            // Send immediate to force flush (0x87) ?
-            // Usually not needed if latency timer is low, but let's send it to be safe
-            cmd.write(0x87)
+            buffer.write(0x20)
+            buffer.write(rLen and 0xFF)
+            buffer.write((rLen shr 8) and 0xFF)
+            buffer.write(0x87) // Flush
         }
         
-        writeRaw(cmd.toByteArray())
+        // CS High (Executed after read)
+        buffer.write(0x80)
+        buffer.write(0x08)
+        buffer.write(0xFB)
         
-        var result = ByteArray(0)
+        writeRaw(buffer.toByteArray())
+        
         if (readLen > 0) {
-           result = readRaw(readLen)
+            return readRaw(readLen)
         }
-        
-        csHigh()
-        return result
+        return ByteArray(0)
     }
 
     fun hostCmd(cmd: Int) {
