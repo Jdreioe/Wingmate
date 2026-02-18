@@ -148,17 +148,20 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                     // Azure Configuration (only show when Azure TTS is selected)
                     if (!useSystemTts) {
                         Spacer(modifier = Modifier.height(16.dp))
+                        val showKeyboard = rememberShowKeyboardOnFocus()
                         OutlinedTextField(
                             value = endpoint,
                             onValueChange = { endpoint = it },
                             label = { Text("Region / Endpoint") },
-                            placeholder = { Text("e.g., eastus") }
+                            placeholder = { Text("e.g., eastus") },
+                            modifier = Modifier.then(showKeyboard)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = subscriptionKey,
                             onValueChange = { subscriptionKey = it },
-                            label = { Text("Subscription Key") }
+                            label = { Text("Subscription Key") },
+                            modifier = Modifier.then(showKeyboard)
                         )
                     }
 

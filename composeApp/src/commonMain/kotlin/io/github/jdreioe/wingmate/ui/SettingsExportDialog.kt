@@ -100,11 +100,12 @@ fun SettingsExportDialog(
                 Text("Import", style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
                 
+                val showKeyboard = rememberShowKeyboardOnFocus()
                 OutlinedTextField(
                     value = importText,
                     onValueChange = { importText = it },
                     label = { Text("Paste JSON here") },
-                    modifier = Modifier.fillMaxWidth().height(120.dp),
+                    modifier = Modifier.fillMaxWidth().height(120.dp).then(showKeyboard),
                     maxLines = 10
                 )
                 
