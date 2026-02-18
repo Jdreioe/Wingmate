@@ -23,6 +23,9 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.41.2.1")
     runtimeOnly("org.slf4j:slf4j-simple:2.0.9")
     runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.8.15")
+    // Partner window display driver (FTDI FT232H USB/SPI)
+    implementation("org.usb4java:usb4java:1.3.0")
+    implementation("org.usb4java:usb4java-javax:1.3.0")
     
     // Koin
     implementation("io.insert-koin:koin-core:3.5.6")

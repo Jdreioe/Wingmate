@@ -16,6 +16,8 @@ import io.github.jdreioe.wingmate.infrastructure.DesktopSqlCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import io.github.jdreioe.wingmate.infrastructure.JvmImageCacher
+import io.github.jdreioe.wingmate.infrastructure.PartnerWindowManager
+import io.github.jdreioe.wingmate.ui.PartnerWindowAvailability
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.module
 import kotlinx.coroutines.runBlocking
@@ -52,5 +54,17 @@ fun overrideDesktopSpeechService() {
     val repo = org.koin.core.context.GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SettingsRepository>()
     val settings = runBlocking { repo.get() }
         org.slf4j.LoggerFactory.getLogger("DesktopDi").info("Virtual mic enabled: {}", settings.virtualMicEnabled)
+    }
+
+    // Partner window display manager (TD-I13 via FTDI FT232H)
+    runCatching {
+        val settingsStateManager = org.koin.core.context.GlobalContext.get().get<io.github.jdreioe.wingmate.application.SettingsStateManager>()
+        val manager = PartnerWindowManager.initialize(settingsStateManager)
+        manager.start()
+        // Wire device detection into common UI bridge
+        PartnerWindowAvailability.bind(manager.deviceConnected)
+        org.slf4j.LoggerFactory.getLogger("DesktopDi").info("PartnerWindowManager started")
+    }.onFailure { t ->
+        org.slf4j.LoggerFactory.getLogger("DesktopDi").error("Failed to start PartnerWindowManager", t)
     }
 }

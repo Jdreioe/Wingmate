@@ -55,7 +55,9 @@ data class Settings(
     val primaryColor: String? = null, // hex color for custom primary color
     val useCustomColors: Boolean = false, // enable custom color theming
     // Welcome flow completion
-    val welcomeFlowCompleted: Boolean = false
+    val welcomeFlowCompleted: Boolean = false,
+    // Partner window display (TD-I13 via FTDI FT232H) — desktop only
+    val partnerWindowEnabled: Boolean = false
 )
 
 @Serializable

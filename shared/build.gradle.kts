@@ -12,7 +12,7 @@ kotlin {
     jvmToolchain(21)
     
     androidLibrary {
-        namespace = "io.github.jdreioe.wingmate.shared"
+        namespace = "com.hojmoseit.wingmate.shared"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
     }
