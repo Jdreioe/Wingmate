@@ -3,6 +3,7 @@ name = "wingmate-kde"
 version = "1.0.0"
 edition = "2021"
 description = "Wingmate Desktop - Communication Aid (KDE/Qt)"
+default-run = "wingmate-kde"
 
 [lib]
 name = "wingmate_kde"
@@ -28,3 +29,6 @@ miniz_oxide = "0.8"
 
 # CLI test binary
 clap = { version = "4", features = ["derive"] }
+
+# Signal handling for graceful shutdown
+ctrlc = "3.4"

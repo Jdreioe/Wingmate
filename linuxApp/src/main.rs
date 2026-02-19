@@ -1,8 +1,10 @@
 use qmetaobject::prelude::*;
+use qmetaobject::QObjectBox;
 use std::env;
 use std::path::PathBuf;
 use std::process::{Child, Command};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use wingmate_kde::partner_window_bridge::PartnerWindowBridge;
 
@@ -83,6 +85,25 @@ fn find_qml_dir() -> PathBuf {
 }
 
 fn main() {
+    // ── Signal handling for graceful shutdown ──
+    // The partner window bridge's Drop impl will shut down the EVE display
+    // and release the FTDI device even on SIGINT/SIGTERM/SIGHUP.
+    let shutdown_flag = Arc::new(AtomicBool::new(false));
+    let shutdown_flag_clone = shutdown_flag.clone();
+    ctrlc::set_handler(move || {
+        eprintln!("\n[Wingmate] Signal received, shutting down...");
+        shutdown_flag_clone.store(true, Ordering::SeqCst);
+        // The QML engine.exec() won't return from a signal handler,
+        // but the Drop impls will run when the process exits.
+        // Force exit after a short grace period.
+        std::thread::spawn(|| {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            eprintln!("[Wingmate] Forced exit after timeout");
+            std::process::exit(0);
+        });
+    })
+    .expect("Failed to set signal handler");
+
     // Start the Kotlin bridge server
     let mut bridge_process = start_bridge_server();
 
@@ -96,21 +117,13 @@ fn main() {
     // Initialize QML engine
     let mut engine = QmlEngine::new();
 
-    // Expose the API URL to QML (same as the C++ version)
+    // Expose the API URL to QML
     engine.set_property("apiUrl".into(), QVariant::from(QString::from("http://localhost:8765")));
 
     // ── Partner Window bridge (Rust → FTDI → EVE display) ──
-    let pw_bridge = QObjectPinned::new(create_partner_window_bridge());
-    let pw_bridge_ptr = pw_bridge.pinned();
-    engine.set_object_property("partnerWindow".into(), pw_bridge_ptr);
+    let pw_bridge = QObjectBox::new(create_partner_window_bridge());
+    engine.set_object_property("partnerWindow".into(), pw_bridge.pinned());
     println!("[Wingmate] Partner window bridge registered");
-
-    // Poll partner window state periodically (every 1s) via a timer
-    // so QML properties stay in sync with the background thread.
-    let pw_bridge_for_timer = pw_bridge.clone();
-    let timer = qmetaobject::connections::QTimer::default();
-    // We'll use invoke_method to poll; for now just start the timer
-    // The QObject poll happens in the QML side with a Timer component.
 
     // Load the main QML file
     let qml_dir = find_qml_dir();
@@ -123,15 +136,16 @@ fn main() {
 
     println!("[Wingmate] Wingmate KDE started successfully");
 
-    // Run the Qt event loop
+    // Run the Qt event loop (blocks until window closes or signal received)
     engine.exec();
 
-    // Cleanup: shut down partner window
-    // pw_bridge will be dropped, which closes the channel and exits the bg thread
+    // ── Cleanup ──
+    // Drop the bridge first — this sends Shutdown to the bg thread,
+    // which powers off the EVE display and releases the FTDI device.
     println!("[Wingmate] Shutting down partner window...");
     drop(pw_bridge);
 
-    // Cleanup: terminate the bridge process
+    // Terminate the Kotlin bridge process
     if let Some(ref mut process) = bridge_process {
         println!("[Wingmate] Stopping Kotlin bridge server...");
         let _ = process.kill();

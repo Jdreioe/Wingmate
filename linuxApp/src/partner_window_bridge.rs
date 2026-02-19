@@ -71,9 +71,9 @@ pub struct PartnerWindowBridge {
     #[allow(dead_code)]
     tx: Option<mpsc::Sender<PwCommand>>,
     shared: Option<Arc<Mutex<SharedState>>>,
-    poll_timer: Option<Box<dyn std::any::Any>>,
 }
 
+#[allow(non_snake_case)]
 impl PartnerWindowBridge {
     /// Start the background driver thread. Call once after constructing the QObject.
     pub fn start(&mut self) {
@@ -92,6 +92,7 @@ impl PartnerWindowBridge {
     }
 
     // ── QML-callable methods ────────────────────────────────────────────
+    // camelCase names required by QML convention
 
     fn updateText(&mut self, text: QString) {
         let text = text.to_string();
@@ -134,6 +135,20 @@ impl PartnerWindowBridge {
                     self.activeChanged();
                 }
             }
+        }
+    }
+}
+
+/// Ensure the FTDI device is released and the EVE display is powered off
+/// when the bridge is dropped (app close, signal, panic unwind, etc.).
+impl Drop for PartnerWindowBridge {
+    fn drop(&mut self) {
+        println!("[PartnerWindow] Bridge dropping — sending shutdown to driver thread");
+        if let Some(tx) = self.tx.take() {
+            let _ = tx.send(PwCommand::Shutdown);
+            // Give the background thread a moment to cleanly power off the display
+            // before the process exits and tears down the USB handle.
+            std::thread::sleep(Duration::from_millis(500));
         }
     }
 }
