@@ -81,6 +81,7 @@ pub struct PartnerWindowBridge {
     setEnabled: qt_method!(fn(&mut self, enabled: bool)),
     clear: qt_method!(fn(&self)),
     shutdown: qt_method!(fn(&self)),
+    pollState: qt_method!(fn(&mut self)),
 
     // ── Internal ──
     #[allow(dead_code)]
@@ -143,8 +144,8 @@ impl PartnerWindowBridge {
     }
 
     /// Poll shared state and update QObject properties.
-    /// Called periodically from the QML timer or from Rust.
-    pub fn poll_state(&mut self) {
+    /// Called periodically from the QML Timer component.
+    fn pollState(&mut self) {
         if let Some(shared) = &self.shared {
             if let Ok(state) = shared.lock() {
                 if self.deviceConnected != state.device_connected {
@@ -236,50 +237,52 @@ fn driver_thread(rx: mpsc::Receiver<PwCommand>, shared: Arc<Mutex<SharedState>>)
         }
 
         // Periodic device connection check (every 3 seconds)
+        // ONLY check when the driver is NOT open — is_device_connected()
+        // tries to open the device which conflicts with an existing handle.
         if last_device_check.elapsed() >= Duration::from_secs(3) {
             last_device_check = std::time::Instant::now();
-            let connected = partner_window::is_device_connected();
-            if let Ok(mut s) = shared.lock() {
-                s.device_connected = connected;
-            }
 
-            // Auto-connect if enabled and device appeared
-            if enabled && connected && driver.is_none() {
-                match partner_window::open_ftdi() {
-                    Ok(mut pw) => {
-                        match pw.init() {
-                            Ok(()) => {
-                                println!("[PartnerWindow] Display initialized successfully");
-                                // Send current text immediately
-                                if !last_text.is_empty() {
-                                    let _ = pw.display_text(
-                                        &last_text, None, None, 31, (255, 255, 255),
-                                    );
+            if driver.is_some() {
+                // Driver already open — assume connected.
+                // If the device physically disappears, the next SPI write
+                // will fail and we'll drop the driver then.
+                if let Ok(mut s) = shared.lock() {
+                    s.device_connected = true;
+                }
+            } else {
+                // No driver — safe to probe for the device
+                let connected = partner_window::is_device_connected();
+                if let Ok(mut s) = shared.lock() {
+                    s.device_connected = connected;
+                }
+
+                // Auto-connect if enabled and device appeared
+                if enabled && connected {
+                    match partner_window::open_ftdi() {
+                        Ok(mut pw) => {
+                            match pw.init() {
+                                Ok(()) => {
+                                    println!("[PartnerWindow] Display initialized successfully");
+                                    if !last_text.is_empty() {
+                                        let _ = pw.display_text(
+                                            &last_text, None, None, 31, (255, 255, 255),
+                                        );
+                                    }
+                                    driver = Some(pw);
+                                    if let Ok(mut s) = shared.lock() {
+                                        s.active = true;
+                                    }
                                 }
-                                driver = Some(pw);
-                                if let Ok(mut s) = shared.lock() {
-                                    s.active = true;
+                                Err(e) => {
+                                    eprintln!("[PartnerWindow] Init failed: {e}");
+                                    let _ = pw.shutdown();
                                 }
-                            }
-                            Err(e) => {
-                                eprintln!("[PartnerWindow] Init failed: {e}");
-                                let _ = pw.shutdown();
                             }
                         }
+                        Err(e) => {
+                            eprintln!("[PartnerWindow] Failed to open FTDI: {e}");
+                        }
                     }
-                    Err(e) => {
-                        eprintln!("[PartnerWindow] Failed to open FTDI: {e}");
-                    }
-                }
-            }
-
-            // Auto-disconnect if device disappeared
-            if !connected && driver.is_some() {
-                println!("[PartnerWindow] Device disconnected");
-                // Don't try shutdown — device is gone
-                driver = None;
-                if let Ok(mut s) = shared.lock() {
-                    s.active = false;
                 }
             }
         }
