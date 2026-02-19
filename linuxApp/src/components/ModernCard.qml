@@ -13,7 +13,7 @@ Item {
     property bool glass: false
     
     implicitWidth: 300
-    implicitHeight: 200
+    implicitHeight: mainLayout.implicitHeight + 32 // 16px margin top + bottom
 
     Rectangle {
         id: bg
@@ -36,7 +36,9 @@ Item {
     
     ColumnLayout {
         id: mainLayout
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
         anchors.margins: 16
         spacing: 12
         

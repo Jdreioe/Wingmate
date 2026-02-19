@@ -57,7 +57,13 @@ data class Settings(
     // Welcome flow completion
     val welcomeFlowCompleted: Boolean = false,
     // Partner window display (TD-I13 via FTDI FT232H) — desktop only
-    val partnerWindowEnabled: Boolean = false
+    val partnerWindowEnabled: Boolean = false,
+    // EVE ROM font index (16-34); 31 = largest standard ROM font
+    val partnerWindowFontSize: Int = 31,
+    // Number of text lines to show (1-4); word-wrapping is done in software
+    val partnerWindowMaxLines: Int = 2,
+    // Show idle face on partner window after 10s of no text input
+    val partnerWindowIdleEnabled: Boolean = true
 )
 
 @Serializable

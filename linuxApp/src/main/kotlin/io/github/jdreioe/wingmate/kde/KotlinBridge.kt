@@ -314,6 +314,23 @@ class KotlinBridge(private val port: Int = 8765) {
                 
                 call.respond(HttpStatusCode.OK)
             }
+
+            put("/api/settings/partnerwindow-display") {
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val fontSize = jsonObj["fontSize"]?.jsonPrimitive?.intOrNull
+                val maxLines = jsonObj["maxLines"]?.jsonPrimitive?.intOrNull
+                val idleEnabled = jsonObj["idleEnabled"]?.jsonPrimitive?.booleanOrNull
+
+                val current = settingsManager.settings.value ?: io.github.jdreioe.wingmate.domain.Settings()
+                settingsManager.updateSettings(current.copy(
+                    partnerWindowFontSize = fontSize ?: current.partnerWindowFontSize,
+                    partnerWindowMaxLines = maxLines ?: current.partnerWindowMaxLines,
+                    partnerWindowIdleEnabled = idleEnabled ?: current.partnerWindowIdleEnabled
+                ))
+
+                call.respond(HttpStatusCode.OK)
+            }
             
             put("/api/display-text") {
                 val body = call.receiveText()
