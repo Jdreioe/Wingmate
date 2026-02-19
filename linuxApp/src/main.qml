@@ -110,25 +110,32 @@ Kirigami.ApplicationWindow {
     }
     
     function setPartnerWindowEnabled(enabled) {
+        // Persist to Kotlin bridge settings
         var xhr = new XMLHttpRequest();
         xhr.open("PUT", baseUrl + "/api/settings/partnerwindow");
         xhr.setRequestHeader("Content-Type", "application/json");
         xhr.send(JSON.stringify({ enabled: enabled }));
         partnerWindowEnabled = enabled;
+        // Drive the Rust partner window bridge directly
+        if (typeof partnerWindow !== 'undefined') {
+            partnerWindow.setEnabled(enabled);
+        }
         // If enabled, send current text immediately
         if (enabled) updatePartnerWindowText(currentSpeechText);
     }
 
     function updatePartnerWindowText(text) {
         if (!partnerWindowEnabled) return;
-        var xhr = new XMLHttpRequest();
-        xhr.open("PUT", baseUrl + "/api/display-text");
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.send(JSON.stringify({ text: text }));
+        // Drive the Rust partner window bridge directly (no HTTP roundtrip)
+        if (typeof partnerWindow !== 'undefined') {
+            partnerWindow.updateText(text);
+        }
     }
     
     function speak(text) {
         print("QML: Speaking: " + text);
+        // Mirror spoken text to partner window display
+        updatePartnerWindowText(text);
         var xhr = new XMLHttpRequest();
         xhr.open("POST", baseUrl + "/api/speak");
         xhr.setRequestHeader("Content-Type", "application/json");
@@ -713,6 +720,20 @@ Kirigami.ApplicationWindow {
         onCompleted: {
              // Reload settings or just proceed
              loadSettings();
+        }
+    }
+
+    // ── Partner Window state polling ──
+    // The Rust PartnerWindowBridge background thread updates shared state;
+    // this timer syncs QML-visible properties with that state.
+    Timer {
+        interval: 2000
+        running: true
+        repeat: true
+        onTriggered: {
+            if (typeof partnerWindow !== 'undefined') {
+                partnerWindow.pollState();
+            }
         }
     }
     

@@ -2,6 +2,9 @@ use qmetaobject::prelude::*;
 use std::env;
 use std::path::PathBuf;
 use std::process::{Child, Command};
+use std::sync::{Arc, Mutex};
+
+use wingmate_kde::partner_window_bridge::PartnerWindowBridge;
 
 /// Locate the fat JAR for the Kotlin bridge server.
 /// Priority: WINGMATE_LINUXAPP_JAR env var > default build path.
@@ -87,8 +90,6 @@ fn main() {
         eprintln!("[Wingmate] WARNING: Bridge server failed to start. UI will load but backend won't work.");
     }
 
-
-
     // Force KDE desktop style for Qt Quick Controls
     env::set_var("QT_QUICK_CONTROLS_STYLE", "org.kde.desktop");
 
@@ -97,6 +98,19 @@ fn main() {
 
     // Expose the API URL to QML (same as the C++ version)
     engine.set_property("apiUrl".into(), QVariant::from(QString::from("http://localhost:8765")));
+
+    // ── Partner Window bridge (Rust → FTDI → EVE display) ──
+    let pw_bridge = QObjectPinned::new(create_partner_window_bridge());
+    let pw_bridge_ptr = pw_bridge.pinned();
+    engine.set_object_property("partnerWindow".into(), pw_bridge_ptr);
+    println!("[Wingmate] Partner window bridge registered");
+
+    // Poll partner window state periodically (every 1s) via a timer
+    // so QML properties stay in sync with the background thread.
+    let pw_bridge_for_timer = pw_bridge.clone();
+    let timer = qmetaobject::connections::QTimer::default();
+    // We'll use invoke_method to poll; for now just start the timer
+    // The QObject poll happens in the QML side with a Timer component.
 
     // Load the main QML file
     let qml_dir = find_qml_dir();
@@ -112,6 +126,11 @@ fn main() {
     // Run the Qt event loop
     engine.exec();
 
+    // Cleanup: shut down partner window
+    // pw_bridge will be dropped, which closes the channel and exits the bg thread
+    println!("[Wingmate] Shutting down partner window...");
+    drop(pw_bridge);
+
     // Cleanup: terminate the bridge process
     if let Some(ref mut process) = bridge_process {
         println!("[Wingmate] Stopping Kotlin bridge server...");
@@ -120,4 +139,11 @@ fn main() {
     }
 
     println!("[Wingmate] Shutdown complete.");
+}
+
+/// Create and start the partner window bridge.
+fn create_partner_window_bridge() -> PartnerWindowBridge {
+    let mut bridge = PartnerWindowBridge::default();
+    bridge.start();
+    bridge
 }
