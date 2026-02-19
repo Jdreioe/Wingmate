@@ -20,6 +20,21 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+/// Global shutdown sender — the signal handler uses this to tell the
+/// background thread to power off the EVE display and release the FTDI
+/// device before the process exits.
+static SHUTDOWN_TX: Mutex<Option<mpsc::Sender<PwCommand>>> = Mutex::new(None);
+
+/// Send a shutdown command to the background driver thread from anywhere
+/// (signal handler, Drop, etc.). Safe to call multiple times.
+pub fn send_global_shutdown() {
+    if let Ok(mut guard) = SHUTDOWN_TX.lock() {
+        if let Some(tx) = guard.take() {
+            let _ = tx.send(PwCommand::Shutdown);
+        }
+    }
+}
+
 // ─── Commands sent from QML thread to background thread ─────────────────────
 
 enum PwCommand {
@@ -80,8 +95,14 @@ impl PartnerWindowBridge {
         let (tx, rx) = mpsc::channel::<PwCommand>();
         let shared = Arc::new(Mutex::new(SharedState::default()));
 
-        self.tx = Some(tx);
+        self.tx = Some(tx.clone());
         self.shared = Some(shared.clone());
+
+        // Store a clone of the sender globally so the signal handler can
+        // trigger shutdown even if Drop doesn't run (e.g. process::exit).
+        if let Ok(mut guard) = SHUTDOWN_TX.lock() {
+            *guard = Some(tx);
+        }
 
         // Spawn the background driver loop
         thread::spawn(move || {

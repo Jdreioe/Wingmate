@@ -3,10 +3,8 @@ use qmetaobject::QObjectBox;
 use std::env;
 use std::path::PathBuf;
 use std::process::{Child, Command};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
-use wingmate_kde::partner_window_bridge::PartnerWindowBridge;
+use wingmate_kde::partner_window_bridge::{self, PartnerWindowBridge};
 
 /// Locate the fat JAR for the Kotlin bridge server.
 /// Priority: WINGMATE_LINUXAPP_JAR env var > default build path.
@@ -86,22 +84,17 @@ fn find_qml_dir() -> PathBuf {
 }
 
 fn main() {
-    // ── Signal handling for graceful shutdown ──
-    // The partner window bridge's Drop impl will shut down the EVE display
-    // and release the FTDI device even on SIGINT/SIGTERM/SIGHUP.
-    let shutdown_flag = Arc::new(AtomicBool::new(false));
-    let shutdown_flag_clone = shutdown_flag.clone();
-    ctrlc::set_handler(move || {
-        eprintln!("\n[Wingmate] Signal received, shutting down...");
-        shutdown_flag_clone.store(true, Ordering::SeqCst);
-        // The QML engine.exec() won't return from a signal handler,
-        // but the Drop impls will run when the process exits.
-        // Force exit after a short grace period.
-        std::thread::spawn(|| {
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            eprintln!("[Wingmate] Forced exit after timeout");
-            std::process::exit(0);
-        });
+    // ── Signal handling for graceful FTDI release ──
+    // On Ctrl+C / SIGTERM / SIGHUP: send Shutdown to the bg driver thread
+    // via a global channel clone, then force-exit after a grace period.
+    ctrlc::set_handler(|| {
+        eprintln!("\n[Wingmate] Signal received, shutting down partner window...");
+        // Tell the bg thread to power off EVE and release FTDI
+        partner_window_bridge::send_global_shutdown();
+        // Give it a moment to complete the SPI shutdown sequence
+        std::thread::sleep(std::time::Duration::from_millis(800));
+        eprintln!("[Wingmate] Exiting.");
+        std::process::exit(0);
     })
     .expect("Failed to set signal handler");
 

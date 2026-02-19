@@ -1,0 +1,19 @@
+# Wingmate: Unbind the kernel ftdi_sio driver from FT232H devices used for
+# the Tobii Partner Window display (FTDI FT232H: VID 0403, PID 6014).
+#
+# Without this, the kernel driver claims the interface and blocks libftdi/libusb
+# from opening the device — especially after an unclean exit.
+#
+# Install:
+#   sudo cp 99-wingmate-ftdi.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger
+#
+# To undo:
+#   sudo rm /etc/udev/rules.d/99-wingmate-ftdi.rules
+#   sudo udevadm control --reload-rules
+
+# FTDI FT232H — unbind ftdi_sio, allow non-root access via plugdev group
+SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="6014", \
+    MODE="0666", GROUP="plugdev", \
+    RUN+="/bin/sh -c 'echo $kernel > /sys/bus/usb/drivers/ftdi_sio/unbind 2>/dev/null || true'"
