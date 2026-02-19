@@ -4,10 +4,27 @@ version = "1.0.0"
 edition = "2021"
 description = "Wingmate Desktop - Communication Aid (KDE/Qt)"
 
+[lib]
+name = "wingmate_kde"
+path = "src/lib.rs"
+
 [[bin]]
 name = "wingmate-kde"
 path = "src/main.rs"
 
+[[bin]]
+name = "partner-window-test"
+path = "src/bin/partner_window_test.rs"
+
 [dependencies]
 qmetaobject = "0.2"
 cstr = "0.2"
+
+# EVE display driver via FTDI FT232H
+ftdi-embedded-hal = { version = "0.24", features = ["ftdi"] }
+ftdi = "0.1"
+embedded-hal = "1.0"
+miniz_oxide = "0.8"
+
+# CLI test binary
+clap = { version = "4", features = ["derive"] }
