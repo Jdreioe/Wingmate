@@ -847,7 +847,7 @@ where
 /// Open the FTDI FT232H device and return a ready-to-use PartnerWindow.
 ///
 /// Uses the open-source `ftdi` (libftdi) backend.
-/// CS is on D3, PD_N is on ACBUS6 (ac6).
+/// CS is on D3, PD_N is on ADBUS6 (D6).
 pub fn open_ftdi() -> Result<
     PartnerWindow<
         hal::SpiDevice<ftdi::Device>,
@@ -861,7 +861,7 @@ pub fn open_ftdi() -> Result<
 
     let hal = hal::FtHal::init_freq(device, SPI_FREQ)?;
     let spi = hal.spi_device(3)?; // D3 = CS0
-    let pd_pin = hal.ac6();       // ACBUS6 = PD_N
+    let pd_pin = hal.ad6()?;       // ADBUS6 = PD_N (D6)
 
     println!("[+] FTDI FT232H connected via libftdi");
     println!("    SPI frequency: {:.1} MHz", SPI_FREQ as f64 / 1e6);
