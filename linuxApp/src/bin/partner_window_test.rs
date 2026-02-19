@@ -88,7 +88,7 @@ fn main() {
                 std::thread::sleep(std::time::Duration::from_secs(60));
             }
         }
-        Commands::Text { message, font } => {
+        Commands::Text { ref message, font } => {
             pw.display_text(&message, None, None, font, (255, 255, 255))
         }
         Commands::Color { r, g, b } => pw.clear_screen(r, g, b),
