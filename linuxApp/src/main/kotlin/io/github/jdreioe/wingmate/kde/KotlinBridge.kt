@@ -326,9 +326,11 @@ class KotlinBridge(private val port: Int = 8765) {
         }
     }
     
-    fun start() {
+    fun start(skipPartnerWindow: Boolean = false) {
         server.start(wait = false)
-        partnerWindowManager.start()
+        if (!skipPartnerWindow) {
+            partnerWindowManager.start()
+        }
         println("Kotlin bridge server started on http://localhost:$port")
     }
     
@@ -363,8 +365,13 @@ data class SpeakRequest(val text: String)
 /**
  * Main entry point for the Kotlin bridge service.
  */
-fun main() {
+fun main(args: Array<String>) {
+    val noPartnerWindow = "--no-partner-window" in args
+
     println("[PERSISTENCE] Starting Wingmate Linux Bridge...")
+    if (noPartnerWindow) {
+        println("[PartnerWindow] Disabled (managed by Rust driver)")
+    }
     // Defines persistence module
     val persistenceModule = module {
         single<io.github.jdreioe.wingmate.domain.SettingsRepository> { JsonFileSettingsRepository() }
@@ -376,7 +383,7 @@ fun main() {
     initKoin(persistenceModule)
     
     val bridge = KotlinBridge()
-    bridge.start()
+    bridge.start(skipPartnerWindow = noPartnerWindow)
     
     // Keep running
     Runtime.getRuntime().addShutdownHook(Thread {
