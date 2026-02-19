@@ -322,18 +322,7 @@ Item {
                             }
                         }
                         
-                        // Partner Window Mode
-                        Controls.CheckBox {
-                            text: "Enable Partner Window (Requires Device)"
-                            checked: partnerWindowEnabled
-                            onClicked: updatePartnerWindow(checked)
-                            
-                            contentItem: Text {
-                                text: parent.text
-                                color: Theme.text
-                                leftPadding: parent.indicator.width + parent.spacing
-                                verticalAlignment: Text.AlignVCenter
-                            }
+
                         }
                     }
                 }
@@ -401,7 +390,33 @@ Item {
                         }
                     }
                 }
-                
+                // Partner Window settings:
+                ModernCard {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    title: "Partner Window Configuration"
+                    content: ColumnLayout {
+                        spacing: 8
+                            Text {
+                                Controls.CheckBox {
+                                text: "Enable Partner Window mirroring"
+                                checked: partnerWindowEnabled
+                                onClicked: updatePartnerWindow(checked)
+                                
+                                contentItem: Text {
+                                    text: parent.text
+                                    color: Theme.text
+                                    leftPadding: parent.indicator.width + parent.spacing
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+
+
+                            }
+                        }
+                    }
+                }
+
+
                 // About
                 ModernCard {
                     Layout.fillWidth: true
