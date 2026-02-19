@@ -321,9 +321,6 @@ Item {
                                 verticalAlignment: Text.AlignVCenter
                             }
                         }
-                        
-
-                        }
                     }
                 }
                 
@@ -390,28 +387,33 @@ Item {
                         }
                     }
                 }
-                // Partner Window settings:
+                // Partner Window settings
                 ModernCard {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    title: "Partner Window Configuration"
+                    title: "Partner Window"
+
                     content: ColumnLayout {
                         spacing: 8
-                            Text {
-                                Controls.CheckBox {
-                                text: "Enable Partner Window mirroring"
-                                checked: partnerWindowEnabled
-                                onClicked: updatePartnerWindow(checked)
-                                
-                                contentItem: Text {
-                                    text: parent.text
-                                    color: Theme.text
-                                    leftPadding: parent.indicator.width + parent.spacing
-                                    verticalAlignment: Text.AlignVCenter
-                                }
 
+                        Controls.CheckBox {
+                            text: "Enable Partner Window mirroring"
+                            checked: partnerWindowEnabled
+                            onClicked: updatePartnerWindow(checked)
 
+                            contentItem: Text {
+                                text: parent.text
+                                color: Theme.text
+                                leftPadding: parent.indicator.width + parent.spacing
+                                verticalAlignment: Text.AlignVCenter
                             }
+                        }
+
+                        Text {
+                            text: "Mirrors spoken text to an external Tobii partner window display via FTDI/SPI."
+                            color: Theme.subText
+                            font.pixelSize: Theme.fontSizeSmall
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
                         }
                     }
                 }
