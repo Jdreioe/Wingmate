@@ -679,6 +679,81 @@ where
         self.cmd_wait(Duration::from_secs(2))
     }
 
+    /// Display word-wrapped text with configurable font and max lines.
+    ///
+    /// Performs software word-wrapping to fit within the 480px-wide display,
+    /// then renders each line using CMD_TEXT. If the text exceeds `max_lines`,
+    /// only the last `max_lines` lines are shown (scrolling behavior — the
+    /// audience always sees the most recent text).
+    ///
+    /// EVE ROM font approximate character widths (monospace-ish):
+    ///   Font 20: ~10px/char    Font 25: ~13px/char
+    ///   Font 26: ~8px/char     Font 27: ~11px/char
+    ///   Font 28: ~14px/char    Font 29: ~16px/char
+    ///   Font 30: ~18px/char    Font 31: ~20px/char
+    ///   Font 32: ~24px/char    Font 33: ~32px/char
+    ///   Font 34: ~40px/char
+    pub fn display_text_wrapped(
+        &mut self,
+        text: &str,
+        font: i16,
+        color: (u8, u8, u8),
+    ) -> Result<(), PwError> {
+        // Compute layout automatically from font metrics and display size.
+        let (chars_per_line, max_lines) = auto_layout(font);
+        let (_char_w, line_h) = font_metrics(font);
+
+        // Word-wrap into lines
+        let lines = word_wrap(text, chars_per_line);
+
+        // Take last N lines — so the user always sees the most recent text (at cursor)
+        let visible: Vec<&str> = if lines.len() > max_lines {
+            lines[lines.len() - max_lines..].iter().map(|s| s.as_str()).collect()
+        } else {
+            lines.iter().map(|s| s.as_str()).collect()
+        };
+
+        // Calculate vertical positioning: center the block vertically
+        let total_h = visible.len() as i16 * line_h;
+        let y_start = (DISPLAY_HEIGHT as i16 - total_h) / 2 + line_h / 2;
+
+        // Build display list
+        self.cmd_begin()?;
+        self.cmd_word(CMD_DLSTART)?;
+        self.cmd_word(clear_color_rgb(0, 0, 0))?;
+        self.cmd_word(clear(true, true, true))?;
+        self.cmd_word(color_rgb(color.0, color.1, color.2))?;
+
+        for (i, line) in visible.iter().enumerate() {
+            if line.is_empty() {
+                continue;
+            }
+            let y = y_start + (i as i16) * line_h;
+            // OPT_CENTERX (0x0200) — center horizontally, explicit Y
+            self.cmd_word(CMD_TEXT)?;
+            let cx = DISPLAY_WIDTH as i16 / 2;
+            self.cmd_word(u32::from_le_bytes([
+                cx as u8,
+                (cx >> 8) as u8,
+                y as u8,
+                (y >> 8) as u8,
+            ]))?;
+            let options: u16 = 0x0200; // OPT_CENTERX
+            self.cmd_word(u32::from_le_bytes([
+                font as u8,
+                (font >> 8) as u8,
+                options as u8,
+                (options >> 8) as u8,
+            ]))?;
+            self.cmd_string(line)?;
+        }
+
+        self.cmd_word(display())?;
+        self.cmd_word(CMD_SWAP)?;
+        self.cmd_end()?;
+        self.cmd_wait(Duration::from_secs(2))
+    }
+
     /// Display a number using the EVE coprocessor.
     pub fn display_number(
         &mut self,
@@ -875,6 +950,155 @@ pub fn is_device_connected() -> bool {
         .interface(ftdi::Interface::A)
         .open()
         .is_ok()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FONT METRICS & WORD WRAP HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Compute (chars_per_line, max_lines) that fit on the 480×128 display for a given font.
+///
+/// Automatically calculates both the horizontal character count and the
+/// number of vertical lines from the font metrics. The display area is
+/// inset by 8px on each side (16px total) for comfortable margins.
+pub fn auto_layout(font: i16) -> (usize, usize) {
+    let (char_w, line_h) = font_metrics(font);
+    let usable_w = (DISPLAY_WIDTH as usize).saturating_sub(16); // 8px margin each side
+    let usable_h = (DISPLAY_HEIGHT as usize).saturating_sub(8); // 4px margin top+bottom
+    let chars_per_line = usable_w / char_w.max(1);
+    let max_lines = (usable_h / line_h.max(1) as usize).max(1);
+    (chars_per_line, max_lines)
+}
+
+/// Returns ASCII art for a face with the given mouth openness stage.
+///
+/// - Stage 0: closed mouth (idle)
+/// - Stage 1: barely open
+/// - Stage 2: medium open
+/// - Stage 3: wide open
+pub fn face_art(stage: u8) -> &'static str {
+    match stage {
+        1 => "  .---------.\n |  O    O  |\n |    __    |\n |   /  \\   |\n  '---------'",
+        2 => "  .---------.\n |  O    O  |\n |   /--\\   |\n |   |  |   |\n  '---------'",
+        3 => "  .---------.\n |  O    O  |\n |  /----\\  |\n |  |    |  |\n  '---------'",
+        _ => "  .---------.\n |  O    O  |\n |    __    |\n |   |__|   |\n  '---------'",
+    }
+}
+
+/// Determine mouth opening stage from the number of text updates since
+/// the transition from idle started.
+///
+/// Returns 0 (closed), 1-3 (opening), or 4 (enough—show actual text).
+pub fn mouth_stage(updates: u32) -> u8 {
+    match updates {
+        0 => 0,
+        1..=3 => 1,
+        4..=7 => 2,
+        8..=12 => 3,
+        _ => 4,
+    }
+}
+
+/// Strip HTML/XML-style `<tags>` from text.
+/// Removes anything matching `<...>` (non-greedy).
+pub fn strip_tags(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut in_tag = false;
+    for ch in text.chars() {
+        if ch == '<' {
+            in_tag = true;
+        } else if ch == '>' && in_tag {
+            in_tag = false;
+        } else if !in_tag {
+            result.push(ch);
+        }
+    }
+    // Collapse multiple spaces left by stripped tags
+    let collapsed: String = result.split_whitespace().collect::<Vec<_>>().join(" ");
+    collapsed.trim().to_string()
+}
+
+/// Returns (approx_char_width, line_height) for an EVE ROM font index.
+///
+/// EVE ROM fonts 16-34 are built-in. These are approximate average widths
+/// (the fonts are proportional, but for wrapping purposes an average works).
+pub fn font_metrics(font: i16) -> (usize, i16) {
+    match font {
+        16 => (8, 16),
+        17 => (8, 16),
+        18 => (8, 16),      // 8×8
+        19 => (8, 16),
+        20 => (10, 20),     // Larger sans
+        21 => (11, 20),
+        22 => (12, 24),
+        23 => (13, 26),
+        24 => (14, 28),
+        25 => (13, 26),
+        26 => (8, 22),      // Small serif
+        27 => (11, 24),     // Medium serif
+        28 => (14, 28),     // Large sans
+        29 => (16, 32),
+        30 => (18, 36),
+        31 => (20, 40),     // Largest standard ROM font
+        32 => (24, 49),     // Extra large (if available on BT81x)
+        33 => (32, 58),
+        34 => (40, 70),
+        _ => (20, 40),      // Fallback to font 31 metrics
+    }
+}
+
+/// Simple word-wrapping: splits text into lines that fit within `max_chars`.
+///
+/// Respects existing `\n` in the input. Breaks on word boundaries when possible;
+/// hard-breaks a word only if a single word exceeds `max_chars`.
+pub fn word_wrap(text: &str, max_chars: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    if max_chars == 0 {
+        return lines;
+    }
+
+    for paragraph in text.split('\n') {
+        let words: Vec<&str> = paragraph.split_whitespace().collect();
+        if words.is_empty() {
+            lines.push(String::new());
+            continue;
+        }
+
+        let mut current_line = String::new();
+        for word in words {
+            if current_line.is_empty() {
+                // First word on this line
+                if word.len() > max_chars {
+                    // Hard-break long word
+                    let mut remaining = word;
+                    while remaining.len() > max_chars {
+                        lines.push(remaining[..max_chars].to_string());
+                        remaining = &remaining[max_chars..];
+                    }
+                    current_line = remaining.to_string();
+                } else {
+                    current_line = word.to_string();
+                }
+            } else if current_line.len() + 1 + word.len() <= max_chars {
+                current_line.push(' ');
+                current_line.push_str(word);
+            } else {
+                lines.push(current_line);
+                if word.len() > max_chars {
+                    let mut remaining = word;
+                    while remaining.len() > max_chars {
+                        lines.push(remaining[..max_chars].to_string());
+                        remaining = &remaining[max_chars..];
+                    }
+                    current_line = remaining.to_string();
+                } else {
+                    current_line = word.to_string();
+                }
+            }
+        }
+        lines.push(current_line);
+    }
+    lines
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

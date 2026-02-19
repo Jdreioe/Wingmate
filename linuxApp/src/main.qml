@@ -103,6 +103,15 @@ Kirigami.ApplicationWindow {
                             partnerWindow.setEnabled(partnerWindowEnabled);
                         }
                     }
+                    // Sync partner window display settings to Rust bridge
+                    if (typeof partnerWindow !== 'undefined') {
+                        if (settings.partnerWindowFontSize !== undefined) {
+                            partnerWindow.setFontSize(settings.partnerWindowFontSize);
+                        }
+                        if (settings.partnerWindowIdleEnabled !== undefined) {
+                            partnerWindow.setIdleEnabled(settings.partnerWindowIdleEnabled);
+                        }
+                    }
                     
                     // Check welcome flow
                     if (!settings.welcomeFlowCompleted && welcomeWizard) {

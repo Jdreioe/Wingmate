@@ -15,6 +15,8 @@ Item {
     property real speechRate: 1.0
     property bool useSystemTts: false
     property bool partnerWindowEnabled: false
+    property int partnerWindowFontSize: 31
+    property bool partnerWindowIdleEnabled: true
     property real fontScale: 1.0
     
     // Azure data
@@ -137,6 +139,8 @@ Item {
                 if (settings.speechRate) speechRate = settings.speechRate;
                 if (settings.useSystemTts !== undefined) useSystemTts = settings.useSystemTts;
                 if (settings.partnerWindowEnabled !== undefined) partnerWindowEnabled = settings.partnerWindowEnabled;
+                if (settings.partnerWindowFontSize !== undefined) partnerWindowFontSize = settings.partnerWindowFontSize;
+                if (settings.partnerWindowIdleEnabled !== undefined) partnerWindowIdleEnabled = settings.partnerWindowIdleEnabled;
                 if (settings.fontSizeScale) fontScale = settings.fontSizeScale;
                 
                 settingsLoaded = true;
@@ -205,6 +209,30 @@ Item {
         // Also update main app state if possible, or let it sync next time
         if (root && root.setPartnerWindowEnabled) {
             root.setPartnerWindowEnabled(enabled);
+        }
+    }
+
+    function updatePartnerWindowDisplay(fontSize) {
+        partnerWindowFontSize = fontSize;
+        // Persist to Kotlin backend
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", baseUrl + "/api/settings/partnerwindow-display");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ fontSize: fontSize }));
+        // Push directly to Rust bridge
+        if (typeof partnerWindow !== 'undefined') {
+            partnerWindow.setFontSize(fontSize);
+        }
+    }
+
+    function updatePartnerWindowIdle(enabled) {
+        partnerWindowIdleEnabled = enabled;
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", baseUrl + "/api/settings/partnerwindow-display");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ idleEnabled: enabled }));
+        if (typeof partnerWindow !== 'undefined') {
+            partnerWindow.setIdleEnabled(enabled);
         }
     }
     
@@ -327,6 +355,7 @@ Item {
                 // Azure Config
                 ModernCard {
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
                     title: "Azure Speech"
                     visible: !useSystemTts
                     
@@ -393,7 +422,7 @@ Item {
                     title: "Partner Window"
 
                     content: ColumnLayout {
-                        spacing: 8
+                        spacing: 12
 
                         Controls.CheckBox {
                             text: "Enable Partner Window mirroring"
@@ -409,11 +438,76 @@ Item {
                         }
 
                         Text {
-                            text: "Mirrors spoken text to an external Tobii partner window display via FTDI/SPI."
+                            text: "Mirrors spoken text to an Tobii partner window display."
                             color: Theme.subText
                             font.pixelSize: Theme.fontSizeSmall
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
+                        }
+
+                        // Font Size
+                        RowLayout {
+                            Layout.fillWidth: true
+                            enabled: partnerWindowEnabled
+                            opacity: partnerWindowEnabled ? 1.0 : 0.4
+
+                            Text {
+                                text: "Font Size"
+                                color: Theme.text
+                                Layout.preferredWidth: 150
+                            }
+                            Controls.ComboBox {
+                                id: pwFontCombo
+                                Layout.fillWidth: true
+                                model: [
+                                    { text: "Small",       value: 26 },
+                                    { text: "Medium",      value: 28 },
+                                    { text: "Large",       value: 31 },
+                                    { text: "Extra Large", value: 29 }
+                                ]
+                                textRole: "text"
+                                valueRole: "value"
+                                currentIndex: {
+                                    for (var i = 0; i < model.length; i++) {
+                                        if (model[i].value === partnerWindowFontSize) return i;
+                                    }
+                                    return 2; // default to Large (font 31)
+                                }
+                                onActivated: updatePartnerWindowDisplay(currentValue)
+                            }
+                        }
+
+                        // Auto-computed layout info
+                        Text {
+                            visible: partnerWindowEnabled
+                            text: {
+                                // Approximate layout for each font (must match Rust auto_layout)
+                                var f = partnerWindowFontSize;
+                                var cpl, lines;
+                                if (f <= 26)      { cpl = 58; lines = 5; }
+                                else if (f <= 28) { cpl = 33; lines = 4; }
+                                else if (f === 29) { cpl = 29; lines = 3; }
+                                else              { cpl = 23; lines = 3; }
+                                return "Auto layout: " + lines + " lines × ~" + cpl + " chars/line";
+                            }
+                            color: Theme.subText
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+
+                        // Idle face
+                        Controls.CheckBox {
+                            text: "Show idle face after 10s of inactivity"
+                            checked: partnerWindowIdleEnabled
+                            enabled: partnerWindowEnabled
+                            opacity: partnerWindowEnabled ? 1.0 : 0.4
+                            onClicked: updatePartnerWindowIdle(checked)
+
+                            contentItem: Text {
+                                text: parent.text
+                                color: Theme.text
+                                leftPadding: parent.indicator.width + parent.spacing
+                                verticalAlignment: Text.AlignVCenter
+                            }
                         }
                     }
                 }
@@ -422,6 +516,7 @@ Item {
                 // About
                 ModernCard {
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
                     title: "About Wingmate"
                     
                     content: ColumnLayout {
