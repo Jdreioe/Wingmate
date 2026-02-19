@@ -225,6 +225,7 @@ pub const LINE_STRIP: u8 = 4;
 pub const RECTS: u8      = 9;
 
 // Bitmap formats
+pub const L8: u8 = 3;
 pub const RGB565: u8 = 7;
 
 // DL swap modes
@@ -747,6 +748,110 @@ where
             ]))?;
             self.cmd_string(line)?;
         }
+
+        self.cmd_word(display())?;
+        self.cmd_word(CMD_SWAP)?;
+        self.cmd_end()?;
+        self.cmd_wait(Duration::from_secs(2))
+    }
+
+    /// Upload a bitmap to EVE graphics RAM (RAM_G) and configure a bitmap handle.
+    ///
+    /// - `handle`: EVE bitmap handle 0-14 (15 is scratch)
+    /// - `addr`: Address in RAM_G to upload to
+    /// - `data`: Raw pixel data
+    /// - `format`: Pixel format (e.g. L8 = 3, RGB565 = 7)
+    /// - `width`, `height`: Bitmap dimensions
+    pub fn upload_bitmap(
+        &mut self,
+        handle: u8,
+        addr: u32,
+        data: &[u8],
+        format: u8,
+        width: u16,
+        height: u16,
+    ) -> Result<(), PwError> {
+        // Write pixel data to RAM_G
+        // SPI bulk write may have size limits, so chunk if needed
+        let chunk_size = 4096;
+        for (i, chunk) in data.chunks(chunk_size).enumerate() {
+            let offset = addr + (i * chunk_size) as u32;
+            self.wr_bulk(offset, chunk)?;
+        }
+
+        // Compute stride (bytes per row)
+        let stride = match format {
+            3 => width,  // L8: 1 byte per pixel
+            7 => width * 2, // RGB565: 2 bytes per pixel
+            _ => width,
+        };
+
+        // Configure bitmap via display list
+        self.cmd_begin()?;
+        self.cmd_word(bitmap_handle(handle))?;
+        self.cmd_word(bitmap_source(addr))?;
+        self.cmd_word(bitmap_layout(format, stride, height))?;
+        self.cmd_word(bitmap_size(false, false, false, width, height))?;
+        self.cmd_end()?;
+
+        println!("[EVE] Bitmap handle={handle} uploaded: {width}x{height} fmt={format} @ 0x{addr:06X}");
+        Ok(())
+    }
+
+    /// Display the idle face with the app logo in the bottom-right corner.
+    ///
+    /// Renders the ASCII art face centered, plus a small bitmap logo
+    /// in the corner. Call `upload_bitmap()` once before using this.
+    pub fn display_idle_with_logo(
+        &mut self,
+        face_text: &str,
+        face_font: i16,
+        face_color: (u8, u8, u8),
+        logo_handle: u8,
+        logo_x: i16,
+        logo_y: i16,
+    ) -> Result<(), PwError> {
+        let (chars_per_line, max_lines) = auto_layout(face_font);
+        let (_char_w, line_h) = font_metrics(face_font);
+        let lines = word_wrap(face_text, chars_per_line);
+        let visible: Vec<&str> = if lines.len() > max_lines {
+            lines[lines.len() - max_lines..].iter().map(|s| s.as_str()).collect()
+        } else {
+            lines.iter().map(|s| s.as_str()).collect()
+        };
+        let total_h = visible.len() as i16 * line_h;
+        let y_start = (DISPLAY_HEIGHT as i16 - total_h) / 2 + line_h / 2;
+
+        self.cmd_begin()?;
+        self.cmd_word(CMD_DLSTART)?;
+        self.cmd_word(clear_color_rgb(0, 0, 0))?;
+        self.cmd_word(clear(true, true, true))?;
+
+        // Draw face text
+        self.cmd_word(color_rgb(face_color.0, face_color.1, face_color.2))?;
+        for (i, line) in visible.iter().enumerate() {
+            if line.is_empty() { continue; }
+            let y = y_start + (i as i16) * line_h;
+            self.cmd_word(CMD_TEXT)?;
+            let cx = DISPLAY_WIDTH as i16 / 2;
+            self.cmd_word(u32::from_le_bytes([
+                cx as u8, (cx >> 8) as u8,
+                y as u8, (y >> 8) as u8,
+            ]))?;
+            let options: u16 = 0x0200;
+            self.cmd_word(u32::from_le_bytes([
+                face_font as u8, (face_font >> 8) as u8,
+                options as u8, (options >> 8) as u8,
+            ]))?;
+            self.cmd_string(line)?;
+        }
+
+        // Draw logo bitmap in corner
+        self.cmd_word(color_rgb(255, 255, 255))?; // Full brightness for bitmap
+        self.cmd_word(bitmap_handle(logo_handle))?;
+        self.cmd_word(begin(BITMAPS))?;
+        self.cmd_word(vertex2ii(logo_x as u16, logo_y as u16, logo_handle, 0))?;
+        self.cmd_word(end())?;
 
         self.cmd_word(display())?;
         self.cmd_word(CMD_SWAP)?;
