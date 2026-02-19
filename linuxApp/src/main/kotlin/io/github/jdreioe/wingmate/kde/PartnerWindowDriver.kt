@@ -470,61 +470,94 @@ class PartnerWindowDriver(
         return finalData.copyOf(len)
     }
     
+    // FTDI FT232H vendor commands require wIndex = interface + 1 = 1
+    // (same convention used by libftdi and pyftdi)
+    private val FTDI_INDEX: Short = 1
+
+    private fun purgeBuffers() {
+        val empty = ByteBuffer.allocateDirect(0)
+        // SIO_RESET_PURGE_RX = 1
+        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x00.toByte(), 1.toShort(), FTDI_INDEX, empty, 1000)
+        // SIO_RESET_PURGE_TX = 2
+        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x00.toByte(), 2.toShort(), FTDI_INDEX, empty, 1000)
+    }
+
+    private fun drainRx() {
+        val rxBuf = ByteBuffer.allocateDirect(512)
+        val transferred = IntBuffer.allocate(1)
+        // Read and discard any stale data (short timeout, non-blocking loop)
+        for (i in 0..4) {
+            rxBuf.clear()
+            val result = LibUsb.bulkTransfer(handle, endpointIn, rxBuf, transferred, 30)
+            if (result != LibUsb.SUCCESS || transferred.get(0) <= 2) break
+        }
+    }
+
     private fun setupMpsse() {
         if (handle == null) return
-        
-        // Reset
-        LibUsb.controlTransfer(handle, 0x40.toByte(), 0.toByte(), 0.toShort(), 0.toShort(), ByteBuffer.allocateDirect(0), 1000)
-        
-        // Set Latency Timer to 1ms (Essential for fast read response)
-        // FT232H: Interface 0 -> Index 1? No, Index 1 is often Interface A for 2232H. 
-        // But for FT232H (single interface), standard is Interface Number + 1 usually for FTDI reset?
-        // Wait, libftdi uses "interface" enum.
-        // Let's try 0. If 1 failed to switch mode, 0 should work.
-        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x09.toByte(), 1.toShort(), 1.toShort(), ByteBuffer.allocateDirect(0), 1000)
-        
-        // Set Bitmode 0x02 (MPSSE). Interface A (Index 1) -> Index 1?
-        // IMPORTANT: For FT232H, interface is 0. 
-        // Some docs say Index = Interface + 1.
-        // But standard USB control is Interface #.
-        // Let's try changing to 1.toShort() -> 0.toShort() ?
-        // wait, I was using 1.toShort(). I want to try 0 check.
-        // Or keep 1 if I suspect FTDI quirks.
-        // User says "Reg_ID = 0x3C". It's reading *something*.
-        // If mode was UART, pins would be inputs/outputs differently.
-        
-        // I will trust standard USB: Index = Interface ID = 0.
-        
-        // Set Latency Timer
-        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x09.toByte(), 1.toShort(), 0.toShort(), ByteBuffer.allocateDirect(0), 1000)
-        
-        // Set Bitmode
-        val mode = 0x02
-        val mask = 0xFB // 1111 1011 (Dir: 1=Out). Bit 2 (DI) is in.
-        val value = (mask shl 8) or mode
-        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x0B.toByte(), value.toShort(), 0.toShort(), ByteBuffer.allocateDirect(0), 1000)
-        
+        val empty = ByteBuffer.allocateDirect(0)
+
+        // Step 1: SIO Reset
+        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x00.toByte(), 0.toShort(), FTDI_INDEX, empty, 1000)
+        Thread.sleep(10)
+
+        // Step 2: Purge RX and TX buffers
+        purgeBuffers()
+
+        // Step 3: Reset bitmode to 0 before entering MPSSE (pyftdi does this)
+        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x0B.toByte(), 0x0000.toShort(), FTDI_INDEX, empty, 1000)
+        Thread.sleep(10)
+
+        // Step 4: Set Latency Timer to 2 ms
+        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x09.toByte(), 2.toShort(), FTDI_INDEX, empty, 1000)
+
+        // Step 5: Enter MPSSE mode (0x02).  Upper byte = initial pin direction.
+        val mpsseMode = 0x02
+        val pinDir = 0xFB  // Bit 2 (MISO/DI) = input, rest output
+        val bmValue = ((pinDir shl 8) or mpsseMode).toShort()
+        LibUsb.controlTransfer(handle, 0x40.toByte(), 0x0B.toByte(), bmValue, FTDI_INDEX, empty, 1000)
+        Thread.sleep(20)
+
+        // Step 6: Purge again after mode switch
+        purgeBuffers()
+        Thread.sleep(10)
+
+        // Step 7: MPSSE synchronization — send bad command 0xAA,
+        //         expect error response 0xFA 0xAA (same as pyftdi)
+        drainRx()
+        writeRaw(byteArrayOf(0xAA.toByte()))
+        Thread.sleep(20)
+        val syncResp = readRaw(2)
+        if (syncResp.size >= 2 && syncResp[0] == 0xFA.toByte() && syncResp[1] == 0xAA.toByte()) {
+            println("[+] MPSSE synchronized")
+        } else {
+            println("[!] MPSSE sync: expected FA AA, got ${syncResp.joinToString(" ") { "%02X".format(it) }}")
+        }
+
+        // Step 8: Configure MPSSE engine
         val cmd = ByteArrayOutputStream()
-        cmd.write(0x8A) // Disable div by 5 (60MHz master clock)
+        cmd.write(0x8A) // Disable div-by-5 → 60 MHz master clock
         cmd.write(0x97) // Turn off adaptive clocking
         cmd.write(0x8D) // Disable 3-phase clocking
         cmd.write(0x86) // Set clock divisor
-        cmd.write(0x01) // Value L (Div=1 -> 15MHz)
-        cmd.write(0x00) // Value H
+        cmd.write(0x01) // ValueL (divisor = 1 → 60 / (1+1) / 2 = 15 MHz)
+        cmd.write(0x00) // ValueH
         cmd.write(0x85) // Disable loopback
-        
-        // Set Low Byte (ADBUS) - CS High
+
+        // Set Low Byte (ADBUS) — CS HIGH initially
         cmd.write(0x80)
-        cmd.write(0x08) // Val: CS=1
-        cmd.write(0xFB) // Dir: 1111 1011
-        
-        // Set High Byte (ACBUS) - PD# High (Bit 6)
+        cmd.write(0x08) // Val: SCK=0, CS=1
+        cmd.write(0xFB) // Dir: 1111 1011 (bit 2 MISO = input)
+
+        // Set High Byte (ACBUS) — PD# HIGH (power on EVE)
         cmd.write(0x82)
-        cmd.write(0x40) // Val: PD# High
-        cmd.write(0x40) // Dir: Bit 6 Out
-        
+        cmd.write(0x40) // Val: ACBUS6 (PD#) = HIGH
+        cmd.write(0x40) // Dir: ACBUS6 = output
+
         writeRaw(cmd.toByteArray())
         Thread.sleep(50)
+        drainRx()  // discard any stale response
+        println("[+] MPSSE configured: SPI Mode 0, 15 MHz")
     }
 
     private fun spiWrite(bytes: ByteArray) {
@@ -552,46 +585,41 @@ class PartnerWindowDriver(
     
     private fun spiRead(writeBytes: ByteArray, readLen: Int): ByteArray {
         val buffer = ByteArrayOutputStream()
-        
+
         // CS Low
         buffer.write(0x80)
         buffer.write(0x00)
         buffer.write(0xFB)
-        
-        // Full-duplex SPI using 0x31 (Clock Out on -ve, In on +ve, MSB first).
-        // Using a single command for the entire transaction avoids stray clock
-        // edges at the boundary between separate write/read MPSSE commands,
-        // which caused a 3-bit shift (0x7C read as 0x0F).
-        val totalLen = writeBytes.size + readLen
-        if (totalLen > 0) {
-            val tLen = totalLen - 1
-            buffer.write(0x31) // Simultaneous read+write, MSB first
-            buffer.write(tLen and 0xFF)
-            buffer.write((tLen shr 8) and 0xFF)
-            // Address + dummy bytes followed by zero-padding for the read phase
+
+        // Write phase: 0x11 = clock bytes out on -ve edge, MSB first
+        // (matches pyftdi's WRITE_BYTES_NVE_MSB)
+        if (writeBytes.isNotEmpty()) {
+            val wLen = writeBytes.size - 1
+            buffer.write(0x11)
+            buffer.write(wLen and 0xFF)
+            buffer.write((wLen shr 8) and 0xFF)
             buffer.write(writeBytes)
-            for (i in 0 until readLen) buffer.write(0x00)
-            buffer.write(0x87) // Send Immediate (flush read data to host)
         }
-        
-        // CS High (Executed after read)
+
+        // Read phase: 0x20 = clock bytes in on +ve edge, MSB first
+        // (matches pyftdi's READ_BYTES_PVE_MSB)
+        if (readLen > 0) {
+            val rLen = readLen - 1
+            buffer.write(0x20)
+            buffer.write(rLen and 0xFF)
+            buffer.write((rLen shr 8) and 0xFF)
+            buffer.write(0x87) // Send Immediate (flush read buffer to host)
+        }
+
+        // CS High
         buffer.write(0x80)
         buffer.write(0x08)
         buffer.write(0xFB)
-        
+
         writeRaw(buffer.toByteArray())
-        
-        if (totalLen > 0) {
-            // Full-duplex returns bytes for the entire transaction;
-            // discard the first writeBytes.size bytes (received during address/dummy phase)
-            val all = readRaw(totalLen)
-            return if (all.size >= totalLen) {
-                all.copyOfRange(writeBytes.size, totalLen)
-            } else if (all.size > writeBytes.size) {
-                all.copyOfRange(writeBytes.size, all.size)
-            } else {
-                ByteArray(readLen) // fallback: all zeros
-            }
+
+        if (readLen > 0) {
+            return readRaw(readLen)
         }
         return ByteArray(0)
     }
@@ -685,41 +713,66 @@ class PartnerWindowDriver(
 
     // ──────────── EVE Initialization ────────────
 
+    /**
+     * Drive ACBUS6 (EVE PD_N) HIGH to power on the EVE chip.
+     * Equivalent to Python reference's power_on().
+     */
+    fun powerOn() {
+        writeRaw(byteArrayOf(0x82.toByte(), 0x40, 0x40))
+        Thread.sleep(50)
+        println("[+] EVE PD_N → HIGH (powered on)")
+    }
+
+    /**
+     * Drive ACBUS6 (EVE PD_N) LOW to power off the EVE chip.
+     * Equivalent to Python reference's power_off().
+     */
+    fun powerOff() {
+        writeRaw(byteArrayOf(0x82.toByte(), 0x00, 0x40))
+        Thread.sleep(20)
+        println("[+] EVE PD_N → LOW (powered off)")
+    }
+
     fun init() {
         println("\n=== Initializing Partner Window ===")
 
-        // Step 1: Host commands – wake the EVE *before* any register access
-        hostCmd(HOST_CLKEXT)
-        hostCmd(HOST_ACTIVE)
-        Thread.sleep(300)
-        println("[+] Host CLKEXT + ACTIVE sent")
+        // Step 1: Power on EVE (PD# HIGH) — matches Python reference
+        powerOn()
 
-        // Step 2: Poll REG_ID (EVE chip ID should be 0x7C)
-        var chipId = rd8(REG_ID)
-        println("[+] REG_ID = 0x${chipId.toString(16).padStart(2, '0')} (Expected 0x7C)")
-
-        // Retry for any unexpected value, not just 0
-        if (chipId != 0x7C) {
-            for (i in 1..10) {
-                Thread.sleep(50)
-                chipId = rd8(REG_ID)
-                println("[+] Retry #$i REG_ID = 0x${chipId.toString(16).padStart(2, '0')}")
-                if (chipId == 0x7C) break
-            }
-        }
-
-        if (chipId != 0x7C) {
-             println("[!] Warning: Chip ID 0x${chipId.toString(16)} != 0x7C. Proceeding anyway.")
-             // throw RuntimeException("EVE chip not responding")
-        }
-
-        // Step 3: Reset coprocessor (now that the chip is confirmed alive)
+        // Step 2: Reset EVE CPU + coprocessor ring buffer pointers
+        // (from pcap transactions 1-3, BEFORE host commands)
         wr8(REG_CPURESET, 0x01)
         wr16(REG_CMD_READ, 0x0000)
         wr16(REG_CMD_WRITE, 0x0000)
         wr8(REG_CPURESET, 0x00)
         Thread.sleep(20)
         println("[+] CPU reset complete")
+
+        // Step 3: Host commands — external clock + wake up
+        hostCmd(HOST_CLKEXT)
+        hostCmd(HOST_ACTIVE)
+        Thread.sleep(300)
+        println("[+] Host CLKEXT + ACTIVE sent")
+
+        // Step 4: Poll REG_ID — should read 0x7C when chip is alive
+        var chipId = rd8(REG_ID)
+        println("[+] REG_ID = 0x${chipId.toString(16).padStart(2, '0')} (Expected 0x7C)")
+
+        // Retry with 2-second timeout (matches Python _poll_reg_id)
+        if (chipId != 0x7C) {
+            val deadline = System.currentTimeMillis() + 2000
+            while (System.currentTimeMillis() < deadline) {
+                Thread.sleep(50)
+                chipId = rd8(REG_ID)
+                if (chipId == 0x7C) break
+            }
+            println("[+] Final REG_ID = 0x${chipId.toString(16).padStart(2, '0')}")
+        }
+
+        if (chipId != 0x7C) {
+             println("[!] Warning: Chip ID 0x${chipId.toString(16)} != 0x7C. Proceeding anyway.")
+             // throw RuntimeException("EVE chip not responding")
+        }
 
         // Step 4: Display timing registers
         wr16(REG_HCYCLE, HCYCLE)
@@ -967,23 +1020,23 @@ class PartnerWindowDriver(
         displayBitmapRgb565(compressed)
     }
 
-    private fun drivePdLow() {
-        // Set High Byte (ACBUS) - PD# Low (Bit 6)
-        // Val: 0x00, Dir: 0x40
-        writeRaw(byteArrayOf(0x82.toByte(), 0x00, 0x40))
-    }
-
     fun shutdown() {
         println("\n=== Shutting down ===")
+
+        // Clear screen
         clearScreen(0, 0, 0)
         Thread.sleep(50)
 
+        // Turn off backlight: clear bit 7 — Python: gpio_val & ~0x80 = gpio_val & 0x7F
         val gpioOld = rd8(REG_GPIO)
-        wr8(REG_GPIO, gpioOld and 0x7F.inv())
+        wr8(REG_GPIO, gpioOld and 0x7F)
+
+        // Stop pixel clock
         wr8(REG_PCLK, 0)
-        println("[+] Display off")
-        
-        drivePdLow()
-        println("[+] EVE PD# -> Low (Power Down)")
+        println("[+] Pixel clock stopped, backlight off")
+
+        // Power down EVE
+        powerOff()
+        println("=== Shutdown complete ===")
     }
 }
