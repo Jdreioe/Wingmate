@@ -558,22 +558,20 @@ class PartnerWindowDriver(
         buffer.write(0x00)
         buffer.write(0xFB)
         
-        // Write Address/Dummy
-        if (writeBytes.isNotEmpty()) {
-            val wLen = writeBytes.size - 1
-            buffer.write(0x11)
-            buffer.write(wLen and 0xFF)
-            buffer.write((wLen shr 8) and 0xFF)
+        // Full-duplex SPI using 0x31 (Clock Out on -ve, In on +ve, MSB first).
+        // Using a single command for the entire transaction avoids stray clock
+        // edges at the boundary between separate write/read MPSSE commands,
+        // which caused a 3-bit shift (0x7C read as 0x0F).
+        val totalLen = writeBytes.size + readLen
+        if (totalLen > 0) {
+            val tLen = totalLen - 1
+            buffer.write(0x31) // Simultaneous read+write, MSB first
+            buffer.write(tLen and 0xFF)
+            buffer.write((tLen shr 8) and 0xFF)
+            // Address + dummy bytes followed by zero-padding for the read phase
             buffer.write(writeBytes)
-        }
-        
-        // Read Data
-        if (readLen > 0) {
-            val rLen = readLen - 1
-            buffer.write(0x20)
-            buffer.write(rLen and 0xFF)
-            buffer.write((rLen shr 8) and 0xFF)
-            buffer.write(0x87) // Flush
+            for (i in 0 until readLen) buffer.write(0x00)
+            buffer.write(0x87) // Send Immediate (flush read data to host)
         }
         
         // CS High (Executed after read)
@@ -583,8 +581,17 @@ class PartnerWindowDriver(
         
         writeRaw(buffer.toByteArray())
         
-        if (readLen > 0) {
-            return readRaw(readLen)
+        if (totalLen > 0) {
+            // Full-duplex returns bytes for the entire transaction;
+            // discard the first writeBytes.size bytes (received during address/dummy phase)
+            val all = readRaw(totalLen)
+            return if (all.size >= totalLen) {
+                all.copyOfRange(writeBytes.size, totalLen)
+            } else if (all.size > writeBytes.size) {
+                all.copyOfRange(writeBytes.size, all.size)
+            } else {
+                ByteArray(readLen) // fallback: all zeros
+            }
         }
         return ByteArray(0)
     }
@@ -681,39 +688,38 @@ class PartnerWindowDriver(
     fun init() {
         println("\n=== Initializing Partner Window ===")
 
-        // Step 1: Reset EVE CPU
+        // Step 1: Host commands – wake the EVE *before* any register access
+        hostCmd(HOST_CLKEXT)
+        hostCmd(HOST_ACTIVE)
+        Thread.sleep(300)
+        println("[+] Host CLKEXT + ACTIVE sent")
+
+        // Step 2: Poll REG_ID (EVE chip ID should be 0x7C)
+        var chipId = rd8(REG_ID)
+        println("[+] REG_ID = 0x${chipId.toString(16).padStart(2, '0')} (Expected 0x7C)")
+
+        // Retry for any unexpected value, not just 0
+        if (chipId != 0x7C) {
+            for (i in 1..10) {
+                Thread.sleep(50)
+                chipId = rd8(REG_ID)
+                println("[+] Retry #$i REG_ID = 0x${chipId.toString(16).padStart(2, '0')}")
+                if (chipId == 0x7C) break
+            }
+        }
+
+        if (chipId != 0x7C) {
+             println("[!] Warning: Chip ID 0x${chipId.toString(16)} != 0x7C. Proceeding anyway.")
+             // throw RuntimeException("EVE chip not responding")
+        }
+
+        // Step 3: Reset coprocessor (now that the chip is confirmed alive)
         wr8(REG_CPURESET, 0x01)
         wr16(REG_CMD_READ, 0x0000)
         wr16(REG_CMD_WRITE, 0x0000)
         wr8(REG_CPURESET, 0x00)
         Thread.sleep(20)
         println("[+] CPU reset complete")
-
-        // Step 2: Host commands
-        hostCmd(HOST_CLKEXT)
-        hostCmd(HOST_ACTIVE)
-        Thread.sleep(300)
-
-        // Step 3: Poll REG_ID
-        // Step 3: Poll REG_ID
-        // Hardcoded check per user request (EVE chip ID should be 0x7C)
-        var chipId = rd8(REG_ID)
-        println("[+] REG_ID = 0x${chipId.toString(16).padStart(2, '0')} (Expected 0x7C)")
-        
-        // Retry a few times if 0 (reading garbage initially)
-        if (chipId == 0) {
-            for (i in 0..5) {
-                Thread.sleep(50)
-                chipId = rd8(REG_ID)
-                if (chipId == 0x7C) break
-            }
-            println("[+] Retry REG_ID = 0x${chipId.toString(16).padStart(2, '0')}")
-        }
-        
-        if (chipId != 0x7C) {
-             println("[!] Warning: Chip ID 0x${chipId.toString(16)} != 0x7C. Proceeding anyway.")
-             // throw RuntimeException("EVE chip not responding") 
-        }
 
         // Step 4: Display timing registers
         wr16(REG_HCYCLE, HCYCLE)
