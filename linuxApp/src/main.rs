@@ -50,6 +50,7 @@ fn start_bridge_server() -> Option<Child> {
     match Command::new("java")
         .arg("-jar")
         .arg(&jar_path)
+        .arg("--no-partner-window") // Rust side owns the FTDI/EVE driver
         .spawn()
     {
         Ok(child) => {

@@ -96,7 +96,13 @@ Kirigami.ApplicationWindow {
                     if (settings.voice) currentVoice = settings.voice;
                     if (settings.speechRate) speechRate = settings.speechRate;
                     if (settings.useSystemTts !== undefined) useSystemTts = settings.useSystemTts;
-                    if (settings.partnerWindowEnabled !== undefined) partnerWindowEnabled = settings.partnerWindowEnabled;
+                    if (settings.partnerWindowEnabled !== undefined) {
+                        partnerWindowEnabled = settings.partnerWindowEnabled;
+                        // Sync persisted setting to Rust partner window bridge
+                        if (typeof partnerWindow !== 'undefined') {
+                            partnerWindow.setEnabled(partnerWindowEnabled);
+                        }
+                    }
                     
                     // Check welcome flow
                     if (!settings.welcomeFlowCompleted && welcomeWizard) {
@@ -110,13 +116,13 @@ Kirigami.ApplicationWindow {
     }
     
     function setPartnerWindowEnabled(enabled) {
-        // Persist to Kotlin bridge settings
+        partnerWindowEnabled = enabled;
+        // Persist setting to Kotlin bridge (for storage only, not partner window control)
         var xhr = new XMLHttpRequest();
         xhr.open("PUT", baseUrl + "/api/settings/partnerwindow");
         xhr.setRequestHeader("Content-Type", "application/json");
         xhr.send(JSON.stringify({ enabled: enabled }));
-        partnerWindowEnabled = enabled;
-        // Drive the Rust partner window bridge directly
+        // Drive the Rust partner window bridge directly (owns the FTDI device)
         if (typeof partnerWindow !== 'undefined') {
             partnerWindow.setEnabled(enabled);
         }
@@ -126,7 +132,7 @@ Kirigami.ApplicationWindow {
 
     function updatePartnerWindowText(text) {
         if (!partnerWindowEnabled) return;
-        // Drive the Rust partner window bridge directly (no HTTP roundtrip)
+        // Rust partner window bridge — no HTTP roundtrip
         if (typeof partnerWindow !== 'undefined') {
             partnerWindow.updateText(text);
         }
