@@ -339,8 +339,9 @@ fn driver_thread(rx: mpsc::Receiver<PwCommand>, shared: Arc<Mutex<SharedState>>)
             if let Some(ref mut d) = driver {
                 let art = partner_window::face_art(stage);
                 let result = if logo_uploaded {
-                    let lx = (partner_window::DISPLAY_WIDTH - logo_data::LOGO_WIDTH - 4) as i16;
-                    let ly = (partner_window::DISPLAY_HEIGHT - logo_data::LOGO_HEIGHT - 4) as i16;
+                    // Place logo to the right of the face, vertically centered
+                    let lx = (partner_window::DISPLAY_WIDTH / 2 + 80) as i16;
+                    let ly = ((partner_window::DISPLAY_HEIGHT - logo_data::LOGO_HEIGHT) / 2) as i16;
                     d.display_idle_with_logo(
                         art, 26, (100, 100, 100),
                         0, lx, ly,
@@ -472,9 +473,9 @@ fn driver_thread(rx: mpsc::Receiver<PwCommand>, shared: Arc<Mutex<SharedState>>)
             if let Some(ref mut d) = driver {
                 let idle_art = partner_window::face_art(0); // Closed mouth
                 let result = if logo_uploaded {
-                    // Show face + logo in bottom-right corner
-                    let lx = (partner_window::DISPLAY_WIDTH - logo_data::LOGO_WIDTH - 4) as i16;
-                    let ly = (partner_window::DISPLAY_HEIGHT - logo_data::LOGO_HEIGHT - 4) as i16;
+                    // Place logo to the right of the face, vertically centered
+                    let lx = (partner_window::DISPLAY_WIDTH / 2 + 80) as i16;
+                    let ly = ((partner_window::DISPLAY_HEIGHT - logo_data::LOGO_HEIGHT) / 2) as i16;
                     d.display_idle_with_logo(
                         idle_art, 26, (100, 100, 100),
                         0, lx, ly,
