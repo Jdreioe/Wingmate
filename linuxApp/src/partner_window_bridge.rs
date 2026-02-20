@@ -11,7 +11,6 @@
 //! The QObject methods (called from the QML main thread) simply push commands
 //! through a channel — they never block on SPI.
 
-use crate::logo_data;
 use crate::partner_window;
 
 use qmetaobject::prelude::*;
@@ -222,7 +221,6 @@ fn driver_thread(rx: mpsc::Receiver<PwCommand>, shared: Arc<Mutex<SharedState>>)
     let mut last_text = String::new();
     let mut last_device_check = std::time::Instant::now();
     let mut font: i16 = 31;
-    let mut logo_uploaded = false;
     let mut idle_enabled = true;
     let mut showing_idle = false;
     let mut last_text_time = std::time::Instant::now();
@@ -338,18 +336,7 @@ fn driver_thread(rx: mpsc::Receiver<PwCommand>, shared: Arc<Mutex<SharedState>>)
             current_face_stage = stage;
             if let Some(ref mut d) = driver {
                 let art = partner_window::face_art(stage);
-                let result = if logo_uploaded {
-                    // Place logo to the right of the face, vertically centered
-                    let lx = (partner_window::DISPLAY_WIDTH / 2 + 80) as i16;
-                    let ly = ((partner_window::DISPLAY_HEIGHT - logo_data::LOGO_HEIGHT) / 2) as i16;
-                    d.display_idle_with_logo(
-                        art, 26, (100, 100, 100),
-                        0, lx, ly,
-                    )
-                } else {
-                    d.display_text_wrapped(art, 26, (100, 100, 100))
-                };
-                match result {
+                match d.display_text_wrapped(art, 26, (100, 100, 100)) {
                     Ok(()) => {}
                     Err(e) => {
                         eprintln!("[PartnerWindow] Face display error: {e}");
@@ -389,18 +376,6 @@ fn driver_thread(rx: mpsc::Receiver<PwCommand>, shared: Arc<Mutex<SharedState>>)
                             match pw.init() {
                                 Ok(()) => {
                                     println!("[PartnerWindow] Display initialized successfully");
-                                    // Upload app logo to RAM_G for idle display
-                                    match pw.upload_bitmap(
-                                        0, // handle 0
-                                        partner_window::RAM_G, // start of graphics RAM
-                                        &logo_data::LOGO_32X32_L8,
-                                        partner_window::L8,
-                                        logo_data::LOGO_WIDTH,
-                                        logo_data::LOGO_HEIGHT,
-                                    ) {
-                                        Ok(()) => { logo_uploaded = true; }
-                                        Err(e) => { eprintln!("[PartnerWindow] Logo upload failed: {e}"); }
-                                    }
                                     if !last_text.is_empty() {
                                         let _ = pw.display_text_wrapped(
                                             &last_text, font, (255, 255, 255),
@@ -472,18 +447,7 @@ fn driver_thread(rx: mpsc::Receiver<PwCommand>, shared: Arc<Mutex<SharedState>>)
 
             if let Some(ref mut d) = driver {
                 let idle_art = partner_window::face_art(0); // Closed mouth
-                let result = if logo_uploaded {
-                    // Place logo to the right of the face, vertically centered
-                    let lx = (partner_window::DISPLAY_WIDTH / 2 + 80) as i16;
-                    let ly = ((partner_window::DISPLAY_HEIGHT - logo_data::LOGO_HEIGHT) / 2) as i16;
-                    d.display_idle_with_logo(
-                        idle_art, 26, (100, 100, 100),
-                        0, lx, ly,
-                    )
-                } else {
-                    d.display_text_wrapped(idle_art, 26, (100, 100, 100))
-                };
-                match result {
+                match d.display_text_wrapped(idle_art, 26, (100, 100, 100)) {
                     Ok(()) => {
                         showing_idle = true;
                         println!("[PartnerWindow] Showing idle face");
