@@ -16,8 +16,12 @@ import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.TextPredictionService
+import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceRepository
+import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
+import io.github.jdreioe.wingmate.infrastructure.DictionaryLoader
 import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +44,9 @@ class KotlinBridge(private val port: Int = 8765) {
     private val azureSpeechService = AzureSpeechService(configRepository)
     private val voiceRepository: VoiceRepository by lazy { GlobalContext.get().get() }
     private val pronunciationRepository: PronunciationDictionaryRepository by lazy { GlobalContext.get().get() }
+    private val predictionService: TextPredictionService by lazy { GlobalContext.get().get() }
+    private val saidTextRepository: SaidTextRepository by lazy { GlobalContext.get().get() }
+    private val dictionaryLoader: DictionaryLoader by lazy { GlobalContext.get().get() }
     private val partnerWindowManager = PartnerWindowManager(settingsManager)
     
     private val json = Json { 
@@ -340,6 +347,83 @@ class KotlinBridge(private val port: Int = 8765) {
                 partnerWindowManager.updateText(text)
                 call.respond(HttpStatusCode.OK)
             }
+
+            // OSK settings
+            put("/api/settings/osk") {
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val oskScale = jsonObj["oskKeyboardScale"]?.jsonPrimitive?.floatOrNull
+
+                val current = settingsManager.settings.value ?: io.github.jdreioe.wingmate.domain.Settings()
+                settingsManager.updateSettings(current.copy(
+                    oskKeyboardScale = oskScale ?: current.oskKeyboardScale
+                ))
+
+                call.respond(HttpStatusCode.OK)
+            }
+
+            // Text Prediction
+            post("/api/predict") {
+                try {
+                    val body = call.receiveText()
+                    val jsonObj = json.parseToJsonElement(body).jsonObject
+                    val context = jsonObj["context"]?.jsonPrimitive?.contentOrNull ?: ""
+                    val maxWords = jsonObj["maxWords"]?.jsonPrimitive?.intOrNull ?: 5
+                    val maxLetters = jsonObj["maxLetters"]?.jsonPrimitive?.intOrNull ?: 5
+
+                    val result = predictionService.predict(context, maxWords, maxLetters)
+                    call.respond(mapOf(
+                        "words" to result.words,
+                        "letters" to result.letters.map { it.toString() }
+                    ))
+                } catch (e: Exception) {
+                    println("[PREDICT] Error: ${e.message}")
+                    call.respond(HttpStatusCode.OK, mapOf("words" to emptyList<String>(), "letters" to emptyList<String>()))
+                }
+            }
+
+            post("/api/predict/train") {
+                scope.launch {
+                    try {
+                        val history = saidTextRepository.list()
+                        predictionService.train(history)
+                        println("[PREDICT] Trained on ${history.size} entries")
+
+                        // Also load base language dictionary
+                        val settings = settingsManager.settings.value
+                        val lang = settings?.language ?: settings?.primaryLanguage ?: "en-US"
+                        try {
+                            val words = dictionaryLoader.loadDictionary(lang)
+                            if (words.isNotEmpty() && predictionService is SimpleNGramPredictionService) {
+                                (predictionService as SimpleNGramPredictionService).setBaseLanguage(words)
+                                // Re-train user history on top
+                                (predictionService as SimpleNGramPredictionService).train(history, false)
+                            }
+                        } catch (e: Exception) {
+                            println("[PREDICT] Dictionary load failed (non-fatal): ${e.message}")
+                        }
+                    } catch (e: Exception) {
+                        println("[PREDICT] Training error: ${e.message}")
+                    }
+                }
+                call.respond(HttpStatusCode.OK, mapOf("status" to "training"))
+            }
+
+            post("/api/predict/learn") {
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val text = jsonObj["text"]?.jsonPrimitive?.contentOrNull ?: ""
+                if (text.isNotBlank() && predictionService is SimpleNGramPredictionService) {
+                    scope.launch {
+                        (predictionService as SimpleNGramPredictionService).learnPhrase(text)
+                    }
+                }
+                call.respond(HttpStatusCode.OK)
+            }
+
+            get("/api/predict/status") {
+                call.respond(mapOf("trained" to predictionService.isTrained()))
+            }
         }
     }
     
@@ -394,6 +478,7 @@ fun main(args: Array<String>) {
         single<io.github.jdreioe.wingmate.domain.SettingsRepository> { JsonFileSettingsRepository() }
         single<io.github.jdreioe.wingmate.domain.ConfigRepository> { JsonFileConfigRepository() }
         single<io.github.jdreioe.wingmate.domain.VoiceRepository> { JsonFileVoiceRepository() }
+        single<io.github.jdreioe.wingmate.domain.TextPredictionService> { SimpleNGramPredictionService() }
     }
 
     // Initialize Koin DI with overrides
