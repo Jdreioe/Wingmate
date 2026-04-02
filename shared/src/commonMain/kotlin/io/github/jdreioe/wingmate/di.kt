@@ -12,29 +12,31 @@ import io.github.jdreioe.wingmate.domain.*
 import io.github.jdreioe.wingmate.infrastructure.*
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
+import org.koin.core.module.dsl.bind
 import org.koin.dsl.module
+import org.koin.core.module.dsl.singleOf
 
 import io.github.jdreioe.wingmate.di.appModule
 
 @Suppress("unused")
 fun initKoin(extra: Module? = null) {
-    val baseModule: Module = module {
-    single<PhraseRepository> { InMemoryPhraseRepository() }
-    single<CategoryRepository> { InMemoryCategoryRepository() }
-        single<SettingsRepository> { InMemorySettingsRepository() }
-        single<VoiceRepository> { InMemoryVoiceRepository() }
-        single<SaidTextRepository> { InMemorySaidTextRepository() }
-        single<ConfigRepository> { InMemoryConfigRepository() }
-        single<PronunciationDictionaryRepository> { InMemoryPronunciationDictionaryRepository() }
-        single<SpeechService> { NoopSpeechService() } // Android overrides this
-        single { AzureVoiceCatalog(get<ConfigRepository>()) }
+    val coreDataModule: Module = module {
+        singleOf(::InMemoryPhraseRepository) { bind<PhraseRepository>() }
+        singleOf(::InMemoryCategoryRepository) { bind<CategoryRepository>() }
+        singleOf(::InMemorySettingsRepository) { bind<SettingsRepository>() }
+        singleOf(::InMemoryVoiceRepository) { bind<VoiceRepository>() }
+        singleOf(::InMemorySaidTextRepository) { bind<SaidTextRepository>() }
+        singleOf(::InMemoryConfigRepository) { bind<ConfigRepository>() }
+        singleOf(::InMemoryPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
+        singleOf(::NoopSpeechService) { bind<SpeechService>() } // Android overrides this
+        singleOf(::AzureVoiceCatalog)
         single { DictionaryLoader(getOrNull<io.github.jdreioe.wingmate.domain.FileStorage>()) } // For language dictionary pretraining and caching
-        single { PhraseUseCase(get<PhraseRepository>()) }
-    single { CategoryUseCase(get<io.github.jdreioe.wingmate.domain.CategoryRepository>()) }
-        single { SettingsUseCase(get<SettingsRepository>()) }
-        single { UserDataManager(get<SaidTextRepository>()) }
-        single { SettingsStateManager(get<SettingsRepository>()) }
-        single { VoiceUseCase(get<VoiceRepository>(), get<AzureVoiceCatalog>(), get<ConfigRepository>()) }
+        singleOf(::PhraseUseCase)
+        singleOf(::CategoryUseCase)
+        singleOf(::SettingsUseCase)
+        singleOf(::UserDataManager)
+        singleOf(::SettingsStateManager)
+        singleOf(::VoiceUseCase)
         factory { PhraseBloc(get<PhraseUseCase>()) }
         factory { SettingsBloc(get<SettingsUseCase>()) }
         factory { VoiceBloc(get<VoiceUseCase>()) }
@@ -43,7 +45,7 @@ fun initKoin(extra: Module? = null) {
     startKoin {
         allowOverride(true)
         // Include base bindings, MVIKotlin store module, and any extra platform-specific modules
-        val modulesList = listOf(baseModule, appModule) + listOfNotNull(extra)
+        val modulesList = listOf(coreDataModule, appModule) + listOfNotNull(extra)
         modules(modulesList)
     }
 }

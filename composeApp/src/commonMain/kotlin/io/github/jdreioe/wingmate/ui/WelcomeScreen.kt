@@ -12,10 +12,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.unit.dp
+import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @Composable
 fun WelcomeScreen(onContinue: () -> Unit) {
+    val boardImportService = koinInject<BoardImportService>()
+
     var step by remember { mutableStateOf(0) }
     var showUiSettings by remember { mutableStateOf(false) }
     
@@ -72,8 +76,7 @@ fun WelcomeScreen(onContinue: () -> Unit) {
                         scope.launch {
                             isImporting = true
                             try {
-                                val service = org.koin.core.context.GlobalContext.get().get<io.github.jdreioe.wingmate.infrastructure.BoardImportService>()
-                                val result = service.importBoards(isModern = false)
+                                val result = boardImportService.importBoards(isModern = false)
                                 if (result) {
                                     // Move to next step if successful
                                     step = 2
@@ -92,8 +95,7 @@ fun WelcomeScreen(onContinue: () -> Unit) {
                          scope.launch {
                             isImporting = true
                             try {
-                                val service = org.koin.core.context.GlobalContext.get().get<io.github.jdreioe.wingmate.infrastructure.BoardImportService>()
-                                val result = service.importBoards(isModern = true)
+                                val result = boardImportService.importBoards(isModern = true)
                                 if (result) {
                                     step = 2
                                 }

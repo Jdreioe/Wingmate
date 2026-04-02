@@ -1,9 +1,18 @@
 package io.github.jdreioe.wingmate
 
 import android.content.Context
+import io.github.jdreioe.wingmate.domain.CategoryRepository
+import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.FileStorage
+import io.github.jdreioe.wingmate.domain.PhraseRepository
+import io.github.jdreioe.wingmate.domain.SaidTextRepository
+import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.TextPredictionService
+import io.github.jdreioe.wingmate.domain.VoiceRepository
+import io.github.jdreioe.wingmate.infrastructure.AndroidFileStorage
 import io.github.jdreioe.wingmate.infrastructure.AndroidSpeechService
-import io.github.jdreioe.wingmate.infrastructure.AndroidConfigRepository
+import io.github.jdreioe.wingmate.infrastructure.AndroidImageCacher
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlCategoryRepository
@@ -11,32 +20,41 @@ import io.github.jdreioe.wingmate.infrastructure.AndroidSqlVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSaidTextRepository
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
+import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
+import io.github.jdreioe.wingmate.infrastructure.ImageCacher
+import io.github.jdreioe.wingmate.platform.AndroidAudioClipboard
+import io.github.jdreioe.wingmate.platform.AndroidFilePicker
+import io.github.jdreioe.wingmate.platform.AndroidShareService
+import io.github.jdreioe.wingmate.platform.AudioClipboard
+import io.github.jdreioe.wingmate.platform.FilePicker
+import io.github.jdreioe.wingmate.platform.ShareService
 import org.koin.core.context.loadKoinModules
+import org.koin.core.module.dsl.bind
+import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
-import io.github.jdreioe.wingmate.domain.TextPredictionService
 
 fun overrideAndroidSpeechService(context: Context) {
     loadKoinModules(
         module {
             single<Context> { context }
-            single<SpeechService> { AndroidSpeechService(context) }
-            single<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider> { io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider() }
+            singleOf(::AndroidSpeechService) { bind<SpeechService>() }
+            singleOf(::SystemVoiceProvider)
             // Prefer SQLite-backed repositories on Android for parity with desktop
-            single<io.github.jdreioe.wingmate.domain.ConfigRepository> { AndroidSqlConfigRepository(context) }
+            singleOf(::AndroidSqlConfigRepository) { bind<ConfigRepository>() }
             // Audio clipboard support
-            single<io.github.jdreioe.wingmate.platform.AudioClipboard> { io.github.jdreioe.wingmate.platform.AndroidAudioClipboard(context) }
+            singleOf(::AndroidAudioClipboard) { bind<AudioClipboard>() }
             // Share service for Android share sheet
-            single<io.github.jdreioe.wingmate.platform.ShareService> { io.github.jdreioe.wingmate.platform.AndroidShareService(context) }
-            single<io.github.jdreioe.wingmate.domain.PhraseRepository> { AndroidSqlPhraseRepository(context) }
-            single<io.github.jdreioe.wingmate.domain.CategoryRepository> { AndroidSqlCategoryRepository(context) }
-            single<io.github.jdreioe.wingmate.domain.VoiceRepository> { AndroidSqlVoiceRepository(context) }
-            single<io.github.jdreioe.wingmate.domain.SettingsRepository> { AndroidSqlSettingsRepository(context) }
-            single<io.github.jdreioe.wingmate.domain.SaidTextRepository> { AndroidSqlSaidTextRepository(context) }
+            singleOf(::AndroidShareService) { bind<ShareService>() }
+            singleOf(::AndroidSqlPhraseRepository) { bind<PhraseRepository>() }
+            singleOf(::AndroidSqlCategoryRepository) { bind<CategoryRepository>() }
+            singleOf(::AndroidSqlVoiceRepository) { bind<VoiceRepository>() }
+            singleOf(::AndroidSqlSettingsRepository) { bind<SettingsRepository>() }
+            singleOf(::AndroidSqlSaidTextRepository) { bind<SaidTextRepository>() }
             // Text prediction service using n-grams trained on user's history
-            single<io.github.jdreioe.wingmate.domain.FileStorage> { io.github.jdreioe.wingmate.infrastructure.AndroidFileStorage(context) }
-            single<io.github.jdreioe.wingmate.platform.FilePicker> { io.github.jdreioe.wingmate.platform.AndroidFilePicker(context) }
-            single<io.github.jdreioe.wingmate.infrastructure.ImageCacher> { io.github.jdreioe.wingmate.infrastructure.AndroidImageCacher(context) }
-            single<TextPredictionService> { SimpleNGramPredictionService() }
+            singleOf(::AndroidFileStorage) { bind<FileStorage>() }
+            singleOf(::AndroidFilePicker) { bind<FilePicker>() }
+            singleOf(::AndroidImageCacher) { bind<ImageCacher>() }
+            singleOf(::SimpleNGramPredictionService) { bind<TextPredictionService>() }
         }
     )
 }

@@ -13,7 +13,7 @@ import io.github.jdreioe.wingmate.application.SettingsUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
-import org.koin.core.context.GlobalContext
+import org.koin.compose.koinInject
 
 @Composable
 fun VoiceEngineSelectorScreen(
@@ -21,21 +21,17 @@ fun VoiceEngineSelectorScreen(
     onCancel: () -> Unit,
     onAzureSelected: () -> Unit = {}
 ) {
-    val settingsUseCase = remember {
-        GlobalContext.getOrNull()?.let { koin -> runCatching { koin.get<SettingsUseCase>() }.getOrNull() }
-    }
+    val settingsUseCase = koinInject<SettingsUseCase>()
 
     var useSystemTts by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(settingsUseCase) {
-        if (settingsUseCase != null) {
-            val settings = withContext(Dispatchers.Default) {
-                runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-            }
-            useSystemTts = settings.useSystemTts
+        val settings = withContext(Dispatchers.Default) {
+            runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
         }
+        useSystemTts = settings.useSystemTts
 
         loading = false
     }
@@ -231,13 +227,11 @@ fun VoiceEngineSelectorScreen(
                         onClick = {
                             scope.launch {
                                 // Save the selected TTS engine setting
-                                settingsUseCase?.let { useCase ->
-                                    val currentSettings: Settings = withContext(Dispatchers.Default) {
-                                        runCatching { useCase.get() }.getOrNull() ?: Settings()
-                                    }
-                                    runCatching {
-                                        useCase.update(currentSettings.copy(useSystemTts = useSystemTts))
-                                    }
+                                val currentSettings: Settings = withContext(Dispatchers.Default) {
+                                    runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
+                                }
+                                runCatching {
+                                    settingsUseCase.update(currentSettings.copy(useSystemTts = useSystemTts))
                                 }
 
                                 // Navigate to appropriate next screen based on selection

@@ -36,7 +36,9 @@ kotlin {
                 @Suppress("DEPRECATION")
                 implementation(compose.materialIconsExtended)
                 
-                implementation("io.insert-koin:koin-core:3.5.6")
+                implementation(libs.koin.core)
+                implementation(libs.koin.compose)
+                implementation(libs.androidx.lifecycle.runtimeCompose)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
             }

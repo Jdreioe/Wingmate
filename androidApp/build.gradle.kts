@@ -75,6 +75,7 @@ dependencies {
     // Common AndroidX helpers
     implementation("androidx.core:core-ktx:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:${libs.versions.androidx.lifecycle.get()}")
 
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.compose.ui:ui")
@@ -90,8 +91,8 @@ dependencies {
 
 
     // DI
-    implementation("io.insert-koin:koin-core:4.1.0")
-    implementation("io.insert-koin:koin-android:4.1.0")
+    implementation(libs.koin.core)
+    implementation(libs.koin.android)
 
     // Dual-screen / WindowManager (API 34+ rear display & window area APIs)
     implementation("androidx.window:window:1.3.0")

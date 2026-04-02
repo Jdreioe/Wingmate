@@ -30,7 +30,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -45,7 +45,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.ui.Modifier
 import androidx.window.core.ExperimentalWindowApi
 import org.koin.core.context.GlobalContext
-import org.koin.dsl.module
 import io.github.jdreioe.wingmate.App
 import io.github.jdreioe.wingmate.ui.AppTheme
 import io.github.jdreioe.wingmate.ui.FullScreenDisplay
@@ -84,14 +83,6 @@ class MainActivity : ComponentActivity() {
         
         // Ensure IME insets can be detected correctly
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        
-        // Initialize Koin if not already done
-        if (GlobalContext.getOrNull() == null) {
-            initKoin(module { })
-        }
-        
-        // Register Android-specific implementations (TTS, SharedPreferences config)
-        overrideAndroidSpeechService(this)
 
         // Initialize FilePicker bridge
         runCatching {
@@ -194,7 +185,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AppTheme {
-                val show by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsState(initial = false)
+                val show by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsStateWithLifecycle()
                 Box(Modifier.fillMaxSize()) {
                     // Main app content - this will be mirrored to rear display when session is active
                     App()

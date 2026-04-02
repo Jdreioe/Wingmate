@@ -16,13 +16,12 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.koin.core.context.GlobalContext
+import org.koin.compose.koinInject
 
 @Composable
 fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
-    val koinContext = remember { GlobalContext.getOrNull() }
-    val speechService = remember { koinContext?.get<SpeechService>() }
-    val voiceUseCase = remember { koinContext?.get<VoiceUseCase>() }
+    val speechService = koinInject<SpeechService>()
+    val voiceUseCase = koinInject<VoiceUseCase>()
     
     var selectedVoice by remember { mutableStateOf<Voice?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
@@ -34,7 +33,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
     LaunchedEffect(voiceUseCase) {
         try {
             selectedVoice = withContext(Dispatchers.IO) {
-                voiceUseCase?.selected()
+                voiceUseCase.selected()
             }
         } catch (e: Exception) {
             println("Failed to load selected voice: $e")
@@ -112,7 +111,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                         // Stop current playback
                         scope.launch {
                             try {
-                                speechService?.stop()
+                                    speechService.stop()
                             } catch (e: Exception) {
                                 println("Failed to stop speech: $e")
                             } finally {
@@ -125,7 +124,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                             try {
                                 isPlaying = true
                                 withContext(Dispatchers.IO) {
-                                    speechService?.speak(
+                                        speechService.speak(
                                         text = testText,
                                         voice = selectedVoice,
                                         pitch = selectedVoice?.pitch,
@@ -143,7 +142,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = testText.isNotBlank() && speechService != null
+                    enabled = testText.isNotBlank()
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
@@ -176,7 +175,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                         // Stop any ongoing speech before going back
                         scope.launch {
                             try {
-                                speechService?.stop()
+                                    speechService.stop()
                             } catch (e: Exception) {
                                 println("Failed to stop speech: $e")
                             }
@@ -193,7 +192,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                         // Stop any ongoing speech before proceeding
                         scope.launch {
                             try {
-                                speechService?.stop()
+                                    speechService.stop()
                             } catch (e: Exception) {
                                 println("Failed to stop speech: $e")
                             }

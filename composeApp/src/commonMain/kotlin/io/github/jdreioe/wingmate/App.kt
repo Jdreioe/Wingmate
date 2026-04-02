@@ -8,7 +8,7 @@ import io.github.jdreioe.wingmate.ui.WelcomeScreen
 import io.github.jdreioe.wingmate.ui.PhraseScreen
 import io.github.jdreioe.wingmate.ui.AppTheme
 import io.github.jdreioe.wingmate.domain.SettingsRepository
-import org.koin.core.context.GlobalContext
+import org.koin.compose.koinInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -21,6 +21,8 @@ enum class Screen { Welcome, Phrases }
 @OptIn(ExperimentalMaterial3Api::class )
 @Composable
 fun App() {
+    val settingsRepository = koinInject<SettingsRepository>()
+
     AppTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -32,11 +34,8 @@ fun App() {
             val scope = rememberCoroutineScope()
             
             LaunchedEffect(Unit) {
-                val settingsRepo = GlobalContext.getOrNull()?.get<SettingsRepository>()
-                val settings = settingsRepo?.let { 
-                    withContext(Dispatchers.Default) { 
-                        runCatching { it.get() }.getOrNull() 
-                    }
+                val settings = withContext(Dispatchers.Default) {
+                    runCatching { settingsRepository.get() }.getOrNull()
                 }
                 welcomeCompleted = settings?.welcomeFlowCompleted ?: false
                 currentScreen = if (welcomeCompleted == true) "phrase" else "welcome"
@@ -48,12 +47,9 @@ fun App() {
                         WelcomeScreen {
                             // Mark welcome flow as completed
                             scope.launch(Dispatchers.Default) {
-                                val settingsRepo = GlobalContext.getOrNull()?.get<SettingsRepository>()
-                                settingsRepo?.let { repo ->
-                                    val currentSettings = runCatching { repo.get() }.getOrNull()
-                                    currentSettings?.let { settings ->
-                                        repo.update(settings.copy(welcomeFlowCompleted = true))
-                                    }
+                                val currentSettings = runCatching { settingsRepository.get() }.getOrNull()
+                                currentSettings?.let { settings ->
+                                    settingsRepository.update(settings.copy(welcomeFlowCompleted = true))
                                 }
                             }
                             currentScreen = "phrase"

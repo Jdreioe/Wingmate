@@ -3,9 +3,33 @@ package io.github.jdreioe.wingmate
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.github.jdreioe.wingmate.domain.CategoryRepository
+import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.PhraseRepository
+import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
+import io.github.jdreioe.wingmate.domain.SaidTextRepository
+import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.TextPredictionService
+import io.github.jdreioe.wingmate.domain.VoiceRepository
+import io.github.jdreioe.wingmate.infrastructure.IosAudioClipboard
+import io.github.jdreioe.wingmate.infrastructure.IosCategoryRepository
+import io.github.jdreioe.wingmate.infrastructure.IosConfigRepository
+import io.github.jdreioe.wingmate.infrastructure.IosPhraseRepository
+import io.github.jdreioe.wingmate.infrastructure.IosPronunciationDictionaryRepository
+import io.github.jdreioe.wingmate.infrastructure.IosSaidTextRepository
+import io.github.jdreioe.wingmate.infrastructure.IosSettingsRepository
+import io.github.jdreioe.wingmate.infrastructure.IosShareService
+import io.github.jdreioe.wingmate.infrastructure.IosSpeechService
+import io.github.jdreioe.wingmate.infrastructure.IosVoiceRepository
+import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
+import io.github.jdreioe.wingmate.platform.AudioClipboard
+import io.github.jdreioe.wingmate.platform.ShareService
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.koin.core.context.loadKoinModules
+import org.koin.core.module.dsl.bind
+import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
 
 // Call this from iOS host after the Kotlin framework is initialized to register iOS-specific implementations.
@@ -21,31 +45,24 @@ fun overrideIosSpeechService() {
                 }
             }
             // Persist speech config and selected voice on iOS
-            single<io.github.jdreioe.wingmate.domain.SettingsRepository> { io.github.jdreioe.wingmate.infrastructure.IosSettingsRepository() }
-            single<io.github.jdreioe.wingmate.domain.ConfigRepository> { io.github.jdreioe.wingmate.infrastructure.IosConfigRepository() }
-            single<io.github.jdreioe.wingmate.domain.VoiceRepository> { io.github.jdreioe.wingmate.infrastructure.IosVoiceRepository() }
-            single<io.github.jdreioe.wingmate.domain.SaidTextRepository> { io.github.jdreioe.wingmate.infrastructure.IosSaidTextRepository() }
+            singleOf(::IosSettingsRepository) { bind<SettingsRepository>() }
+            singleOf(::IosConfigRepository) { bind<ConfigRepository>() }
+            singleOf(::IosVoiceRepository) { bind<VoiceRepository>() }
+            singleOf(::IosSaidTextRepository) { bind<SaidTextRepository>() }
             // Persist phrases and categories on iOS as well
-            single<io.github.jdreioe.wingmate.domain.PhraseRepository> { io.github.jdreioe.wingmate.infrastructure.IosPhraseRepository() }
-            single<io.github.jdreioe.wingmate.domain.CategoryRepository> { io.github.jdreioe.wingmate.infrastructure.IosCategoryRepository() }
-            single<io.github.jdreioe.wingmate.domain.SpeechService> {
-                io.github.jdreioe.wingmate.infrastructure.IosSpeechService(
-                    httpClient = get(),
-                    configRepository = get(),
-                    voiceUseCase = get(),
-                    saidRepo = get()
-                )
-            }
+            singleOf(::IosPhraseRepository) { bind<PhraseRepository>() }
+            singleOf(::IosCategoryRepository) { bind<CategoryRepository>() }
+            singleOf(::IosSpeechService) { bind<SpeechService>() }
             // Text prediction service
-            single<io.github.jdreioe.wingmate.domain.TextPredictionService> { io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService() }
+            singleOf(::SimpleNGramPredictionService) { bind<TextPredictionService>() }
             
             // Share service
-            single<io.github.jdreioe.wingmate.platform.ShareService> { io.github.jdreioe.wingmate.infrastructure.IosShareService() }
+            singleOf(::IosShareService) { bind<ShareService>() }
             // Clipboard
-            single<io.github.jdreioe.wingmate.platform.AudioClipboard> { io.github.jdreioe.wingmate.infrastructure.IosAudioClipboard() }
+            singleOf(::IosAudioClipboard) { bind<AudioClipboard>() }
             
             // Pronunciation dictionary (persisted)
-            single<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository> { io.github.jdreioe.wingmate.infrastructure.IosPronunciationDictionaryRepository() }
+            singleOf(::IosPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
         }
     )
 }

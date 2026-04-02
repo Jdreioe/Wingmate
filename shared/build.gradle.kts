@@ -29,7 +29,7 @@ kotlin {
                 baseName = "Shared"
                 isStatic = false
                 // Export Koin for Swift interop
-                export("io.insert-koin:koin-core:3.5.6")
+                export("io.insert-koin:koin-core:${libs.versions.koin.get()}")
             }
         }
     }
@@ -40,7 +40,7 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
                 implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
-                api("io.insert-koin:koin-core:3.5.6")
+                api(libs.koin.core)
                 implementation("io.ktor:ktor-client-core:2.3.12")
                 implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
@@ -82,7 +82,7 @@ kotlin {
             dependencies {
                 implementation("io.ktor:ktor-client-darwin:2.3.12")
                 // Ensure Koin is resolved for iOS binaries too
-                api("io.insert-koin:koin-core:3.5.6")
+                api(libs.koin.core)
                 // Compose Multiplatform for iOS UI
                 implementation(compose.runtime)
                 implementation(compose.foundation)

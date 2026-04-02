@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.produceState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -68,7 +69,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
     // Ensure Koin is initialized
     require(GlobalContext.getOrNull() != null) { "Koin not initialized. Call initKoin() before starting the app." }
     val bloc = remember { GlobalContext.get().get<PhraseBloc>() }
-    val state by bloc.state.collectAsState()
+    val state by bloc.state.collectAsStateWithLifecycle()
 
     // Ensure initial list loads on first composition
     LaunchedEffect(bloc) {
@@ -218,7 +219,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         )) },
                         actions = {
                             // Fullscreen toggle: mirrors the current input text
-                            val showFullscreen by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsState()
+                            val showFullscreen by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsStateWithLifecycle()
                             IconButton(onClick = {
                                 // Always mirror current text first
                                 io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(input.text)

@@ -12,13 +12,11 @@ import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
-import org.koin.core.context.GlobalContext
+import org.koin.compose.koinInject
 
 @Composable
 fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
-    val configRepo = remember {
-        GlobalContext.getOrNull()?.let { koin -> runCatching { koin.get<ConfigRepository>() }.getOrNull() }
-    }
+    val configRepo = koinInject<ConfigRepository>()
     
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
@@ -26,12 +24,10 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(configRepo) {
-        if (configRepo != null) {
-            val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfig() }
-            cfg?.let { 
-                endpoint = it.endpoint
-                subscriptionKey = it.subscriptionKey
-            }
+        val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfig() }
+        cfg?.let {
+            endpoint = it.endpoint
+            subscriptionKey = it.subscriptionKey
         }
         loading = false
     }
@@ -130,14 +126,12 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
                 Button(
                     onClick = {
                         scope.launch {
-                            configRepo?.let { repo ->
-                                val config = SpeechServiceConfig(
-                                    endpoint = endpoint,
-                                    subscriptionKey = subscriptionKey
-                                )
-                                withContext(Dispatchers.Default) {
-                                    runCatching { repo.saveSpeechConfig(config) }
-                                }
+                            val config = SpeechServiceConfig(
+                                endpoint = endpoint,
+                                subscriptionKey = subscriptionKey
+                            )
+                            withContext(Dispatchers.Default) {
+                                runCatching { configRepo.saveSpeechConfig(config) }
                             }
                             onNext()
                         }

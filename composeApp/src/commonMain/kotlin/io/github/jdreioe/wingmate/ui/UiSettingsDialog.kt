@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -14,7 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.koin.core.context.GlobalContext
+import org.koin.compose.koinInject
 
 /**
  * Bridge for desktop-only partner window detection.
@@ -36,9 +37,8 @@ object PartnerWindowAvailability {
 
 @Composable
 fun UiSettingsDialog(onDismissRequest: () -> Unit) {
-    val koin = GlobalContext.getOrNull()
-    val settingsUseCase = remember { koin?.let { runCatching { it.get<SettingsUseCase>() }.getOrNull() } }
-    val settingsStateManager = remember { koin?.let { runCatching { it.get<SettingsStateManager>() }.getOrNull() } }
+    val settingsUseCase = koinInject<SettingsUseCase>()
+    val settingsStateManager = koinInject<SettingsStateManager>()
 
     var virtualMic by remember { mutableStateOf(false) }
     var autoUpdateEnabled by remember { mutableStateOf(true) }
@@ -47,32 +47,21 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     // Partner window device detection (desktop-only, always false on other platforms)
-    val partnerDeviceConnected by PartnerWindowAvailability.deviceConnected.collectAsState()
+    val partnerDeviceConnected by PartnerWindowAvailability.deviceConnected.collectAsStateWithLifecycle()
 
     // Helper function to update settings with reactive updates
     fun updateSettings(update: (Settings) -> Settings) {
         scope.launch {
-            if (settingsStateManager != null) {
-                // Use reactive state manager for immediate UI updates
-                settingsStateManager.updateSettings(update)
-            } else if (settingsUseCase != null) {
-                // Fallback to direct use case
-                withContext(Dispatchers.Default) {
-                    val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                    val updated = update(current)
-                    settingsUseCase.update(updated)
-                }
-            }
+            // Use reactive state manager for immediate UI updates
+            settingsStateManager.updateSettings(update)
         }
     }
 
     LaunchedEffect(Unit) {
-        if (settingsUseCase != null) {
-            val s = withContext(Dispatchers.Default) { runCatching { settingsUseCase.get() }.getOrNull() ?: Settings() }
-            virtualMic = s.virtualMicEnabled
-            autoUpdateEnabled = s.autoUpdateEnabled
-            partnerWindowEnabled = s.partnerWindowEnabled
-        }
+        val s = withContext(Dispatchers.Default) { runCatching { settingsUseCase.get() }.getOrNull() ?: Settings() }
+        virtualMic = s.virtualMicEnabled
+        autoUpdateEnabled = s.autoUpdateEnabled
+        partnerWindowEnabled = s.partnerWindowEnabled
         loading = false
     }
 
