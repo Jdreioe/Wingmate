@@ -13,7 +13,8 @@ import io.github.jdreioe.wingmate.application.SettingsStateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
-
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 @Composable
 fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
     if (!show) return
@@ -69,6 +70,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
     var forceDarkTheme by remember { mutableStateOf<Boolean?>(null) }
     var useCustomColors by remember { mutableStateOf(false) }
     var primaryColor by remember { mutableStateOf("") }
+    var puckSpeedThreshold by remember { mutableStateOf(15000f) }
     
     val scope = rememberCoroutineScope()
 
@@ -96,6 +98,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
             forceDarkTheme = settings.forceDarkTheme
             useCustomColors = settings.useCustomColors
             primaryColor = settings.primaryColor ?: "#7C4DFF"
+            puckSpeedThreshold = settings.puckSpeedThreshold.toFloat()
         }
         loading = false
     }
@@ -179,6 +182,118 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                        }
+                    }
+
+                    // Android Puck.js Toggle
+                    if (!isDesktop()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        var puckRunning by remember {
+                            mutableStateOf(
+                                runCatching {
+                                    Class.forName("io.github.jdreioe.wingmate.puck.PuckJsService")
+                                        .getField("Companion").get(null)?.let { companion ->
+                                            companion.javaClass.getMethod("isRunning").invoke(companion) as? Boolean
+                                        } ?: false
+                                }.getOrDefault(false)
+                            )
+                        }
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            val context = remember {
+                                runCatching { 
+                                    Class.forName("org.koin.core.context.GlobalContext")
+                                        .getMethod("get", Class.forName("org.koin.core.KoinApplication").kotlin.java)
+                                        .declaringClass // fallback, easier to just use Koin directly if we can, but let's just get context via App wrapper or typical Android means
+                                        null // We'll just use the activity context via LocalContext if this wasn't common code.
+                                }.getOrNull()
+                                // Actually, instead of Koin, let's just find the AndroidApp instance or MainActivity if needed, 
+                                // but we are in common module. The safest way is to use a platform expect/actual or just use Koin properly:
+                                runCatching {
+                                    val koin = org.koin.core.context.GlobalContext.get()
+                                    // Koin has a get() but we can't easily resolve the inline reified version via reflection easily without kotlin-reflect.
+                                    // Let's use a known KotlinBridge or App context if available.
+                                    // Alternatively, since we know it's Android if isDesktop() is false:
+                                    val activityThread = Class.forName("android.app.ActivityThread")
+                                    val currentActivityThread = activityThread.getMethod("currentActivityThread").invoke(null)
+                                    val app = activityThread.getMethod("getApplication").invoke(currentActivityThread)
+                                    app
+                                }.getOrNull()
+                            }
+                            Switch(
+                                checked = puckRunning,
+                                onCheckedChange = { start ->
+                                    puckRunning = start
+                                    context?.let { ctx ->
+                                        try {
+                                            val serviceClass = Class.forName("io.github.jdreioe.wingmate.puck.PuckJsService")
+                                            val intentClass = Class.forName("android.content.Intent")
+                                            val contextClass = Class.forName("android.content.Context")
+                                            val intent = intentClass.getConstructor(contextClass, Class::class.java).newInstance(ctx, serviceClass)
+                                            
+                                            val buildClass = Class.forName("android.os.Build\$VERSION")
+                                            val sdkInt = buildClass.getField("SDK_INT").getInt(null)
+                                            val codesClass = Class.forName("android.os.Build\$VERSION_CODES")
+                                            val oCode = codesClass.getField("O").getInt(null)
+                                            
+                                            if (start) {
+                                                if (sdkInt >= oCode) {
+                                                    contextClass.getMethod("startForegroundService", intentClass).invoke(ctx, intent)
+                                                } else {
+                                                    contextClass.getMethod("startService", intentClass).invoke(ctx, intent)
+                                                }
+                                            } else {
+                                                contextClass.getMethod("stopService", intentClass).invoke(ctx, intent)
+                                            }
+                                        } catch (e: Exception) {
+                                            println("Failed to toggle Puck.js service: ${e.message}")
+                                        }
+                                    }
+                                }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("Enable Puck.js Integration")
+                                Text(
+                                    if (puckRunning) "BLE Service is running" else "Connect Puck.js via BLE",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        
+                        // Puck.js Speed Threshold Slider
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                            ) {
+                                Text("Puck.js Speed Threshold", style = MaterialTheme.typography.bodyMedium)
+                                // Map threshold variance to approx km/h for display
+                                // 1000 threshold -> ~15 km/h (very sensitive)
+                                // 100000 threshold -> ~0.5 km/h (very low sensitivity)
+                                // We'll use a simpler inverse linear display: 
+                                // approx km/h = 100000 / threshold (clamped)
+                                val approxKmh = (100000.0 / puckSpeedThreshold.toDouble()).coerceIn(0.5, 15.0)
+                                Text("${"%.1f".format(approxKmh)} km/h", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Slider(
+                                value = puckSpeedThreshold,
+                                onValueChange = { newValue ->
+                                    puckSpeedThreshold = newValue
+                                    scope.launch {
+                                        updateSettings { it.copy(puckSpeedThreshold = newValue.toDouble()) }
+                                    }
+                                },
+                                valueRange = 1000f..100000f,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(
+                                "Adjust if the app triggers 'Moving' actions too easily or not enough.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                     
@@ -333,7 +448,8 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                                 playbackIconScale = playbackIconScale,
                                 categoryChipScale = categoryChipScale,
                                 buttonScale = buttonScale,
-                                inputFieldScale = inputFieldScale
+                                inputFieldScale = inputFieldScale,
+                                puckSpeedThreshold = puckSpeedThreshold.toDouble()
                             )
                             settingsUseCase.update(updated)
                         }

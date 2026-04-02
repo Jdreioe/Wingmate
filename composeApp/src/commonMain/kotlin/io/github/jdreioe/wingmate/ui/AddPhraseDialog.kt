@@ -43,6 +43,18 @@ fun AddPhraseDialog(
     var imageUrl by remember { mutableStateOf(initialPhrase?.imageUrl ?: "") }
     var selectedColor by remember { mutableStateOf(initialPhrase?.backgroundColor?.let { parseHexToColor(it) } ?: Color.Blue) }
     var useColor by remember { mutableStateOf(initialPhrase?.backgroundColor != null) }
+    val puckOptions = listOf(
+        "None" to null,
+        "Short press (Static)" to "short",
+        "Short press (Moving)" to "short_fast",
+        "Double press (Static)" to "double",
+        "Double press (Moving)" to "double_fast",
+        "Triple press (Static)" to "triple",
+        "Triple press (Moving)" to "triple_fast",
+        "Long press (Static)" to "long",
+        "Long press (Moving)" to "long_fast"
+    )
+    var selectedPuckAction by remember { mutableStateOf(initialPhrase?.puckAction) }
     var hue by remember { mutableStateOf(0f) }
     var value by remember { mutableStateOf(1f) }
     var selectedCategory by remember {
@@ -224,6 +236,39 @@ fun AddPhraseDialog(
                         }
                     }
                 }
+
+                // Puck.js action dropdown
+                Spacer(modifier = Modifier.height(8.dp))
+                var puckExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = puckExpanded,
+                    onExpandedChange = { puckExpanded = !puckExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = puckOptions.firstOrNull { it.second == selectedPuckAction }?.first ?: "None",
+                        onValueChange = {},
+                        label = { Text("Puck.js Button") },
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = puckExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = puckExpanded,
+                        onDismissRequest = { puckExpanded = false }
+                    ) {
+                        puckOptions.forEach { (label, action) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    selectedPuckAction = action
+                                    puckExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -242,7 +287,8 @@ fun AddPhraseDialog(
                     backgroundColor = hex,
                     imageUrl = imageUrl.trim().ifEmpty { null },
                     parentId = selectedCategory?.id,
-                    createdAt = initialPhrase?.createdAt ?: System.currentTimeMillis()
+                    createdAt = initialPhrase?.createdAt ?: System.currentTimeMillis(),
+                    puckAction = selectedPuckAction
                 )
                 onSave(phrase)
                 onDismiss()

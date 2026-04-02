@@ -16,7 +16,9 @@ data class Phrase(
     val recordingPath: String? = null,
     // Layout preference: if true, this item (even if it is a folder) appears in the grid.
     // If null, defaults to true for items (linkedBoardId == null) and false for folders (linkedBoardId != null).
-    val isGridItem: Boolean? = null
+    val isGridItem: Boolean? = null,
+    // Puck.js button action mapping: "short", "double", "triple", "long", or null
+    val puckAction: String? = null
 )
 
 @Serializable
@@ -63,7 +65,11 @@ data class Settings(
     // Number of text lines to show (1-4); word-wrapping is done in software
     val partnerWindowMaxLines: Int = 2,
     // Show idle face on partner window after 10s of no text input
-    val partnerWindowIdleEnabled: Boolean = true
+    val partnerWindowIdleEnabled: Boolean = true,
+    // On-screen keyboard scale (0.5 = half, 1.0 = normal, 2.0 = double)
+    val oskKeyboardScale: Float = 1.0f,
+    // Puck.js speed threshold (variance of accelerometer magnitude)
+    val puckSpeedThreshold: Double = 15000.0
 )
 
 @Serializable
