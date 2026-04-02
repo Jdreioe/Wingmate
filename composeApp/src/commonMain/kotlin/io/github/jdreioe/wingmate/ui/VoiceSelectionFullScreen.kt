@@ -22,14 +22,17 @@ import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
-import org.koin.core.context.GlobalContext
+import org.koin.compose.koinInject
 
 @Composable
 fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToWelcome: (() -> Unit)? = null) {
-    // Get dependencies once and cache them to avoid repeated GlobalContext access
-    val koinContext = remember { GlobalContext.getOrNull() }
-    val useCase = remember { koinContext?.get<VoiceUseCase>() }
-    val settingsUseCase = remember { koinContext?.let { runCatching { it.get<SettingsUseCase>() }.getOrNull() } }
+    val useCase = koinInject<VoiceUseCase>()
+    val settingsUseCase = koinInject<SettingsUseCase>()
+    val systemVoiceProvider: io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider? = try {
+        koinInject<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>()
+    } catch (_: Exception) {
+        null
+    }
     
     var loading by remember { mutableStateOf(true) }
     var voices by remember { mutableStateOf<List<Voice>>(emptyList()) }
@@ -43,21 +46,13 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
 
     LaunchedEffect(useCase, settingsUseCase) {
         // Check TTS preference first
-        if (settingsUseCase != null) {
-            val settings = withContext(Dispatchers.IO) { 
-                runCatching { settingsUseCase.get() }.getOrNull() 
-            }
-            useSystemTts = settings?.useSystemTts ?: false
-            
-            // If using system TTS, skip voice loading and go straight to next
-            if (useSystemTts) {
-                loading = false
-                return@LaunchedEffect
-            }
+        val settings = withContext(Dispatchers.IO) {
+            runCatching { settingsUseCase.get() }.getOrNull()
         }
-        
-        if (useCase == null) {
-            error = "Voice service not available"
+        useSystemTts = settings?.useSystemTts ?: false
+
+        // If using system TTS, skip voice loading and go straight to next
+        if (useSystemTts) {
             loading = false
             return@LaunchedEffect
         }
@@ -174,16 +169,6 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
             
-            // Get system voice provider
-            val systemVoiceProvider = remember {
-                try {
-                    val koin = GlobalContext.getOrNull()
-                    koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>() }.getOrNull() }
-                } catch (e: Exception) {
-                    null
-                }
-            }
-            
             var systemVoices by remember { mutableStateOf<List<Voice>>(emptyList()) }
             var systemVoicesLoading by remember { mutableStateOf(true) }
             
@@ -247,7 +232,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                                 .clickable {
                                     scope.launch {
                                         try {
-                                            useCase?.select(voice)
+                                            useCase.select(voice)
                                             onNext()
                                         } catch (e: Exception) {
                                             // Handle error
@@ -378,7 +363,6 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
                                 .clickable {
-                                    if (useCase == null) return@clickable
                                     scope.launch {
                                         try {
                                             val currentFilter = selectedLanguageFilter

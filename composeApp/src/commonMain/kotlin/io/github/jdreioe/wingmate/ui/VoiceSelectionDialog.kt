@@ -17,15 +17,18 @@ import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
-import org.koin.core.context.GlobalContext
+import org.koin.compose.koinInject
 
 @Composable
 fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow: (() -> Unit)? = null) {
     if (!show) return
 
-    val koin = GlobalContext.get()
-    val useCase = remember { koin.get<VoiceUseCase>() }
-    val settingsUseCase = remember { runCatching { koin.get<SettingsUseCase>() }.getOrNull() }
+    val useCase = koinInject<VoiceUseCase>()
+    val settingsUseCase: SettingsUseCase? = try {
+        koinInject<SettingsUseCase>()
+    } catch (_: Exception) {
+        null
+    }
     var loading by remember { mutableStateOf(true) }
     var voices by remember { mutableStateOf<List<Voice>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -39,14 +42,10 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
     var showLanguageFilter by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    // Get system voice provider from Koin
-    val systemVoiceProvider = remember {
-        try {
-            val koin = GlobalContext.getOrNull()
-            koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>() }.getOrNull() }
-        } catch (e: Exception) {
-            null
-        }
+    val systemVoiceProvider: io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider? = try {
+        koinInject<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>()
+    } catch (_: Exception) {
+        null
     }
 
     LaunchedEffect(Unit) {
