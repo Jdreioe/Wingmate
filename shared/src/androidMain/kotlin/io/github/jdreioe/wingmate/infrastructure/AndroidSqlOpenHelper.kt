@@ -35,7 +35,8 @@ internal class AndroidSqlOpenHelper(
                 is_category INTEGER DEFAULT 0,
                 created_at INTEGER,
                 recording_path TEXT,
-                ordering INTEGER
+                ordering INTEGER,
+                puck_action TEXT
             );
         """.trimIndent())
 
@@ -157,9 +158,16 @@ internal class AndroidSqlOpenHelper(
                 // ignore
             }
         }
+        if (oldVersion < 6 && newVersion >= 6) {
+            try {
+                db.execSQL("ALTER TABLE phrases ADD COLUMN puck_action TEXT")
+            } catch (_: Throwable) {
+                // ignore if column already exists
+            }
+        }
     }
 
     companion object {
-        private const val DB_VERSION = 5
+        private const val DB_VERSION = 6
     }
 }
