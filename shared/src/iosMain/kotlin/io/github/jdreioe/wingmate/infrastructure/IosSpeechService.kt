@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
@@ -10,11 +11,15 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import kotlinx.cinterop.*
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import platform.AVFAudio.AVAudioPlayer
 import platform.AVFAudio.AVAudioSession
 import platform.Foundation.*
+import kotlin.time.Clock
 
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -28,9 +33,11 @@ class IosSpeechService(
     private val configRepository: ConfigRepository,
     private val voiceUseCase: VoiceUseCase? = null,
     private val saidRepo: SaidTextRepository? = null,
+    private val pronunciationRepository: PronunciationDictionaryRepository? = null,
 ) : SpeechService {
 
     private var audioPlayer: AVAudioPlayer? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // Cache/History TTL: 30 days
     private val CACHE_TTL_MS: Long = 30L * 24 * 60 * 60 * 1000
@@ -40,7 +47,7 @@ class IosSpeechService(
         // Opportunistic cleanup on initialization
         runCatching {
             // Best-effort cleanup without blocking init; actual pruning happens during speak as well
-            kotlinx.coroutines.GlobalScope.launch(Dispatchers.Default) { cleanupExpiredFiles() }
+            serviceScope.launch { cleanupExpiredFiles() }
         }
     }
 
@@ -103,7 +110,7 @@ class IosSpeechService(
                 
                 // Fetch dictionary entries to apply
                 val dict = runCatching { 
-                    GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().getAll() 
+                    pronunciationRepository?.getAll().orEmpty()
                 }.getOrDefault(emptyList())
 
                 val ssml = AzureTtsClient.generateSsml(normalizedText, voiceToUse, dict)
@@ -155,7 +162,7 @@ class IosSpeechService(
                 
                 // Fetch dictionary entries
                 val dict = runCatching { 
-                    GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().getAll() 
+                    pronunciationRepository?.getAll().orEmpty()
                 }.getOrDefault(emptyList())
 
                 val ssml = AzureTtsClient.generateSsml(segments, effectiveVoice, dict)
@@ -174,7 +181,7 @@ class IosSpeechService(
 
     private var lastCleanupAtMs: Long = 0L
     private suspend fun cleanupExpiredFiles() {
-        val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+        val now = Clock.System.now().toEpochMilliseconds()
         if (now - lastCleanupAtMs < 24L * 60 * 60 * 1000) return
         withContext(Dispatchers.Default) {
             try {
@@ -186,7 +193,7 @@ class IosSpeechService(
                     val name = nameAny as? String ?: return@forEach
                     val path = "$dir/$name"
                     val attrs = fm.attributesOfItemAtPath(path, error = null)
-                    val mtime = attrs?.objectForKey(NSFileModificationDate) as? NSDate
+                    val mtime = attrs?.get(NSFileModificationDate) as? NSDate
                     val baseTime = mtime?.timeIntervalSince1970?.times(1000.0)?.toLong() ?: 0L
                     val age = now - baseTime
                     if (age > CACHE_TTL_MS) runCatching { fm.removeItemAtPath(path, error = null) }
@@ -198,7 +205,7 @@ class IosSpeechService(
                     items.forEach { item ->
                         val path = item.audioFilePath ?: return@forEach
                         val attrs = fm.attributesOfItemAtPath(path, error = null)
-                        val mtime = attrs?.objectForKey(NSFileModificationDate) as? NSDate
+                        val mtime = attrs?.get(NSFileModificationDate) as? NSDate
                         val base = (item.createdAt ?: item.date) ?: mtime?.timeIntervalSince1970?.times(1000.0)?.toLong()
                         val age = if (base != null) now - base else Long.MAX_VALUE
                         if (age > CACHE_TTL_MS) runCatching { fm.removeItemAtPath(path, error = null) }
@@ -212,7 +219,7 @@ class IosSpeechService(
         val repo = saidRepo ?: return false
         return try {
             val items = withContext(Dispatchers.Default) { repo.list() }
-            val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+            val now = Clock.System.now().toEpochMilliseconds()
             // Prefer most recent match by text and (if present) language
             val match = items
                 .asSequence()
@@ -350,7 +357,7 @@ class IosSpeechService(
         val dir = iosCacheDir()
         val path = "$dir/$key.m4a"
         if (!NSFileManager.defaultManager.fileExistsAtPath(path)) return null
-        val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+        val now = Clock.System.now().toEpochMilliseconds()
         return if (isFileFresh(path, now, null)) path else null
     } catch (_: Throwable) { null }
 
@@ -370,7 +377,7 @@ class IosSpeechService(
         // Prefer provided createdAt; otherwise check file modification date
         val baseTime = createdAtMsOrNull ?: runCatching {
             val attrs = NSFileManager.defaultManager.attributesOfItemAtPath(path, error = null)
-            val mtime = attrs?.objectForKey(NSFileModificationDate) as? NSDate
+            val mtime = attrs?.get(NSFileModificationDate) as? NSDate
             if (mtime != null) (mtime.timeIntervalSince1970 * 1000.0).toLong() else null
         }.getOrNull()
         val age = if (baseTime != null) nowMs - baseTime else Long.MAX_VALUE
@@ -382,7 +389,7 @@ class IosSpeechService(
     private suspend fun trySaveHistory(text: String, voice: Voice?, pitch: Double?, rate: Double?, filePath: String?) {
         val repo = saidRepo ?: return
         try {
-            val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+            val now = Clock.System.now().toEpochMilliseconds()
             val item = SaidText(
                 date = now,
                 saidText = text,

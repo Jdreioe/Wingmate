@@ -6,6 +6,7 @@ import com.arkivanov.mvikotlin.core.store.Store
 import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.arkivanov.mvikotlin.extensions.coroutines.CoroutineExecutor
 import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
+import io.github.jdreioe.wingmate.application.usecase.AddCategoryUseCase
 import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
 import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
@@ -18,6 +19,7 @@ class PhraseListStoreFactory(
     private val storeFactory: StoreFactory,
     private val getPhrasesAndCategoriesUseCase: GetPhrasesAndCategoriesUseCase,
     private val addPhraseUseCase: AddPhraseUseCase,
+    private val addCategoryUseCase: AddCategoryUseCase,
     private val deletePhraseUseCase: DeletePhraseUseCase,
     private val updatePhraseUseCase: UpdatePhraseUseCase,
     private val movePhraseUseCase: MovePhraseUseCase,
@@ -54,7 +56,7 @@ class PhraseListStoreFactory(
         override fun executeIntent(intent: PhraseListStore.Intent, getState: () -> PhraseListStore.State) {
             when (intent) {
                 is PhraseListStore.Intent.AddPhrase -> addPhrase(intent.text, getState().selectedCategoryId)
-                is PhraseListStore.Intent.AddCategory -> { /* no-op after model unification */ }
+                is PhraseListStore.Intent.AddCategory -> addCategory(intent.name)
                 is PhraseListStore.Intent.SelectCategory -> dispatch(Msg.CategorySelected(intent.categoryId))
                 is PhraseListStore.Intent.DeletePhrase -> deletePhrase(intent.phraseId)
                 is PhraseListStore.Intent.DeleteCategory -> { /* no-op */ }
@@ -84,6 +86,17 @@ class PhraseListStoreFactory(
                     loadPhrasesAndCategories()
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to add phrase"))
+                }
+            }
+        }
+
+        private fun addCategory(name: String) {
+            scope.launch {
+                try {
+                    addCategoryUseCase(name)
+                    loadPhrasesAndCategories()
+                } catch (e: Exception) {
+                    dispatch(Msg.ErrorOccurred(e.message ?: "Failed to add category"))
                 }
             }
         }

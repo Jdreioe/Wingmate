@@ -5,6 +5,7 @@ import com.arkivanov.mvikotlin.main.store.DefaultStoreFactory
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStoreFactory
 import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
+import io.github.jdreioe.wingmate.application.usecase.AddCategoryUseCase
 import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
 import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
@@ -19,6 +20,7 @@ val appModule = module {
     single<io.github.jdreioe.wingmate.domain.BoardRepository> { io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository() }
 
     factory { AddPhraseUseCase(get()) }
+    factory { AddCategoryUseCase(get()) }
     factory { GetPhrasesAndCategoriesUseCase(get()) }
     factory { DeletePhraseUseCase(get()) }
     factory { UpdatePhraseUseCase(get()) }
@@ -32,8 +34,8 @@ val appModule = module {
             storeFactory = get(),
             getPhrasesAndCategoriesUseCase = get(),
             addPhraseUseCase = get(),
+            addCategoryUseCase = get(),
             deletePhraseUseCase = get(),
-            // legacy addCategory/deleteCategory removed after model unification
             updatePhraseUseCase = get(),
             movePhraseUseCase = get(),
             getAllItemsUseCase = get()

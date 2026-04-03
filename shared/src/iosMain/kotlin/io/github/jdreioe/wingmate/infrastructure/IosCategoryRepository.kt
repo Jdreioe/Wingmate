@@ -53,4 +53,14 @@ class IosCategoryRepository : CategoryRepository {
         saveAll(newList)
         Unit
     }
+
+    override suspend fun move(fromIndex: Int, toIndex: Int) {
+        val list = loadAll()
+        if (fromIndex !in list.indices) return
+        val item = list.removeAt(fromIndex)
+        val insertIndex = toIndex.coerceIn(0, list.size)
+        list.add(insertIndex, item)
+        saveAll(list)
+        Unit
+    }
 }

@@ -58,11 +58,13 @@
 "toolbar.settings_panel" = "Indstillingspanel";
 
 "categories.all" = "Alle";
+"categories.history" = "Historik";
 "category.new.title" = "Ny kategori";
 "category.name.placeholder" = "Kategori navn";
 "category.save" = "Gem";
 "category.close" = "Luk";
 "category.delete" = "Slet kategori";
+"category.history" = "Historik";
 
 "phrase.new.title" = "Ny frase";
 "phrase.text.placeholder" = "Frase tekst";
@@ -77,7 +79,8 @@
 
 "azure.settings.title" = "Azure Indstillinger";
 "azure.endpoint.placeholder" = "Region";
-"azure.key.placeholder" = "Subscription Key";
+"azure.key.placeholder" = "Abonnomentsnøgle";
+
 "common.error" = "FEJL";
 "common.ok" = "OK";
 "common.saving" = "Gemmmer";

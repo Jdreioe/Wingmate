@@ -38,6 +38,12 @@ class IosPronunciationDictionaryRepository : PronunciationDictionaryRepository {
         }
     }
 
+    override suspend fun clear() {
+        withContext(Dispatchers.Default) {
+            saveAll(emptyList())
+        }
+    }
+
     private fun loadAll(): List<PronunciationEntry> {
         val text = defaults.stringForKey(storageKey) ?: return emptyList()
         return try {

@@ -58,6 +58,7 @@
 "toolbar.settings_panel" = "Einstellungs-Panel";
 
 "categories.all" = "Alle";
+"categories.history" = "Verlauf";
 "category.new.title" = "Neue Kategorie";
 "category.name.placeholder" = "Kategoriename";
 "category.save" = "Speichern";

@@ -7,7 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import platform.Foundation.NSUserDefaults
 
 private val saidLogger = KotlinLogging.logger {}
@@ -34,6 +34,16 @@ class IosSaidTextRepository : SaidTextRepository {
     }
 
     override suspend fun list(): List<SaidText> = withContext(Dispatchers.Default) { loadAll() }
+
+    override suspend fun deleteAll() = withContext(Dispatchers.Default) {
+        saveAll(emptyList())
+    }
+
+    override suspend fun addAll(items: List<SaidText>) = withContext(Dispatchers.Default) {
+        if (items.isEmpty()) return@withContext
+        val merged = loadAll().toMutableList().apply { addAll(items) }
+        saveAll(merged)
+    }
 
     private fun loadAll(): List<SaidText> {
         val text = defaults.stringForKey(storageKey) ?: return emptyList()

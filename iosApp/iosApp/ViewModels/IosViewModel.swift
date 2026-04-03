@@ -108,17 +108,7 @@ final class IosViewModel: ObservableObject {
     refreshVoiceAndLanguages()
 
         // Determine if Azure is configured (endpoint + key)
-        do {
-            if let cfg = try await bridge.getSpeechConfig() {
-                let ep = cfg.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-                let key = cfg.subscriptionKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                azureConfigured = !ep.isEmpty && !key.isEmpty
-            } else {
-                azureConfigured = false
-            }
-        } catch {
-            azureConfigured = false
-        }
+        await refreshAzureConfiguration()
 
         // Start connectivity monitoring
         ConnectivityMonitor.shared.onChange { [weak self] online in
@@ -133,9 +123,23 @@ final class IosViewModel: ObservableObject {
     // Preload history once Koin is up
     await loadHistory()
     // Train prediction model on history
-    await bridge.trainPredictionModel()
+    _ = try? await bridge.trainPredictionModel()
     // Load pronunciations
     await loadPronunciations()
+    }
+
+    func refreshAzureConfiguration() async {
+        do {
+            if let cfg = try await bridge.getSpeechConfig() {
+                let ep = cfg.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+                let key = cfg.subscriptionKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                azureConfigured = !ep.isEmpty && !key.isEmpty
+            } else {
+                azureConfigured = false
+            }
+        } catch {
+            azureConfigured = false
+        }
     }
 
     func deletePhrase(id: String) {
@@ -171,7 +175,7 @@ final class IosViewModel: ObservableObject {
         guard !t.isEmpty else { return }
         input.append(t)
         // Incremental learning
-        Task { await bridge.learnPhrase(text: t) }
+        Task { _ = try? await bridge.learnPhrase(text: t) }
     }
 
     func speak(_ text: String) {
@@ -409,7 +413,7 @@ final class IosViewModel: ObservableObject {
         guard !trimmed.isEmpty else { return }
         store?.accept(intent: Shared.PhraseListStoreIntent.AddPhrase(text: trimmed))
         // Incremental learning
-        Task { await bridge.learnPhrase(text: trimmed) }
+        Task { _ = try? await bridge.learnPhrase(text: trimmed) }
     }
     
     // MARK: - Prediction
@@ -419,7 +423,7 @@ final class IosViewModel: ObservableObject {
         predictionJob = Task {
             try? await Task.sleep(nanoseconds: 100_000_000) // 100ms debounce
             if Task.isCancelled { return }
-            let res = await bridge.predict(context: newValue, maxWords: 5, maxLetters: 5)
+            let res = (try? await bridge.predict(context: newValue, maxWords: 5, maxLetters: 5)) ?? Shared.PredictionResult(words: [], letters: [])
             await MainActor.run { self.predictions = res }
         }
     }
@@ -473,7 +477,8 @@ final class IosViewModel: ObservableObject {
             ($0.text == input || $0.name == input) && $0.recordingPath != nil && !$0.recordingPath!.isEmpty
         }) {
              if let path = match.recordingPath {
-                bridge.copyAudio(path: path)
+                // Fallback to share action until copy bridge API is available in generated Swift bindings.
+                bridge.shareAudio(path: path)
             }
         }
     }

@@ -39,7 +39,7 @@ class DictionaryLoader(private val fileStorage: io.github.jdreioe.wingmate.domai
         }
         
         // Use NonCancellable to ensure loading finishes even if UI recomposes
-        return withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
+        return withContext(Dispatchers.Default + kotlinx.coroutines.NonCancellable) {
             // Check disk cache first
             if (fileStorage != null) {
                 val fileName = "$baseName.combined"

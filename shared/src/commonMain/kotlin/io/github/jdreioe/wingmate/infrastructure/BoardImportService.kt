@@ -8,8 +8,8 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.platform.FilePicker
-import kotlinx.datetime.Clock
-import java.util.UUID
+import kotlin.random.Random
+import kotlin.time.Clock
 
 class BoardImportService(
     private val obfParser: ObfParser,
@@ -17,6 +17,8 @@ class BoardImportService(
     private val categoryRepository: CategoryRepository,
     private val filePicker: FilePicker
 ) {
+
+    private fun randomId(): String = "${Clock.System.now().toEpochMilliseconds()}-${Random.nextLong().toString(16)}"
 
     suspend fun importBoards(isModern: Boolean): Boolean {
         // 1. Pick file
@@ -89,7 +91,7 @@ class BoardImportService(
         val idMap = mutableMapOf<String, String>()
         boards.forEach { (board, _) ->
             if (board.id.isNotEmpty()) {
-                idMap[board.id] = UUID.randomUUID().toString()
+                idMap[board.id] = randomId()
             }
         }
 
@@ -108,7 +110,7 @@ class BoardImportService(
     ) {
         // Resolve new Board ID
         val originalBoardId = board.id
-        val newBoardId = idMap[originalBoardId] ?: UUID.randomUUID().toString()
+        val newBoardId = idMap[originalBoardId] ?: randomId()
         val boardName = board.name ?: "Imported Board"
         
         val createCategoryChip = isModern
@@ -171,15 +173,15 @@ class BoardImportService(
             // Manifest logic uses IDs.
             
             val newLinkId = if (originalLinkId != null) {
-                idMap[originalLinkId] ?: UUID.randomUUID().toString() // Fallback if unknown
+                 idMap[originalLinkId] ?: randomId() // Fallback if unknown
             } else {
-                 UUID.randomUUID().toString()
+                  randomId()
             }
             
             val folderName = button.label ?: loadBoard.name ?: "Folder"
             
             val folderPhrase = Phrase(
-                id = UUID.randomUUID().toString(),
+                id = randomId(),
                 text = folderName,
                 imageUrl = imageUrl,
                 backgroundColor = button.backgroundColor,
@@ -191,7 +193,7 @@ class BoardImportService(
             phraseRepository.add(folderPhrase)
         } else {
              val phrase = Phrase(
-                id = UUID.randomUUID().toString(), // Always new UUID for buttons to avoid collision
+            id = randomId(), // Always new id for buttons to avoid collision
                 text = button.label ?: "",
                 name = button.vocalization,
                 imageUrl = imageUrl,

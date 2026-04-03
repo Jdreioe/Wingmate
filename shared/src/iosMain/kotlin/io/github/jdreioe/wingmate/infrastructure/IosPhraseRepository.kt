@@ -8,7 +8,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import platform.Foundation.NSUserDefaults
 import kotlin.random.Random
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 class IosPhraseRepository : PhraseRepository {
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = false }

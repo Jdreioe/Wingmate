@@ -145,13 +145,12 @@ struct MainContentView: View {
             // Grid of phrases
             let phrasesToShow = showingHistory ? model.historyPhrases : currentPhrases
             PhrasesGridView(columns: columns,
-                             phrases: phrasesToShow,
-                             onAdd: { showAddPhrase = true },
-                             onItemFramesChange: { frames in itemFrames = frames },
-                             isWiggleMode: wiggleMode,
-                             hideAddButton: showingHistory) { p in
-                phraseCell(for: p)
-            }
+                            phrases: phrasesToShow,
+                            onAdd: { showAddPhrase = true },
+                            onItemFramesChange: { frames in itemFrames = frames },
+                            cell: { p in phraseCell(for: p) },
+                            isWiggleMode: wiggleMode,
+                            hideAddButton: showingHistory)
             .overlay {
                 if showingHistory && model.historyPhrases.isEmpty {
                     VStack(spacing: 8) {

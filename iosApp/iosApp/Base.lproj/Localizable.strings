@@ -47,6 +47,7 @@
 "toolbar.settings_panel" = "Settings Panel";
 
 "categories.all" = "All";
+"categories.history" = "History";
 "category.new.title" = "New Category";
 "category.name.placeholder" = "Category name";
 "category.save" = "Save";

@@ -39,16 +39,10 @@ class CategoryUseCase(private val repo: io.github.jdreioe.wingmate.domain.Catego
 class SettingsUseCase(private val repo: SettingsRepository) {
     suspend fun get(): Settings = repo.get()
     suspend fun update(settings: Settings): Settings = repo.update(settings)
-    
-    // Get the state manager from DI to trigger reactive updates
+
+    // Keep backward-compatible entry point, but rely on repository directly for KMP safety.
     suspend fun updateWithNotification(settings: Settings): Settings {
-        val stateManager = org.koin.core.context.GlobalContext.getOrNull()?.get<SettingsStateManager>()
-        return if (stateManager != null) {
-            stateManager.updateSettings(settings)
-        } else {
-            // Fallback to direct repository update
-            repo.update(settings)
-        }
+        return repo.update(settings)
     }
 }
 
