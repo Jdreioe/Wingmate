@@ -53,6 +53,27 @@ struct MainContentView: View {
             commitMove: { id, idx in commitMove(id, idx) }
         )
     }
+
+    private var inputBinding: Binding<String> {
+        Binding(
+            get: { model.input },
+            set: { newValue in
+                model.onInputChanged(newValue)
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var predictionBar: some View {
+        if !model.predictions.words.isEmpty || !model.predictions.letters.isEmpty {
+            PredictionBar(
+                result: model.predictions,
+                onWordSelected: { model.applyWordPrediction($0) },
+                onLetterSelected: { model.applyLetterPrediction($0) },
+                fontSizeScale: 1.0
+            )
+        }
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -113,11 +134,22 @@ struct MainContentView: View {
             }
             if model.state.isLoading { ProgressView().frame(maxWidth: .infinity, alignment: .center) }
 
+            predictionBar
+
             // Input field
-            MultiLineInput(text: $model.input,
+            MultiLineInput(text: inputBinding,
                            placeholder: NSLocalizedString("tts.placeholder", comment: ""),
                            fontSize: CGFloat(uiInputFontSize),
-                           minHeight: CGFloat(uiTextFieldHeight))
+                           minHeight: CGFloat(uiTextFieldHeight),
+                           secondaryLanguage: model.secondaryLanguage,
+                           secondaryLanguageRanges: model.secondaryLanguageRanges,
+                           allowsSecondaryLanguageAction: model.secondaryLanguage != model.primaryLanguage,
+                           onTextEdited: { range, replacement in
+                               model.adjustSecondaryLanguageRangesAfterEdit(range: range, replacementText: replacement)
+                           },
+                           onMarkSelectionAsSecondaryLanguage: { range in
+                               model.markSelectionAsSecondaryLanguage(range: range)
+                           })
 
             // Categories Row
             CategoriesRowView(
@@ -168,16 +200,22 @@ struct MainContentView: View {
                         .font(.system(size: CGFloat(uiPlayIconSize)))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text("Play"))
+                .accessibilityHint(Text("Speaks the text in the input field"))
                 Button(action: { model.pauseTts() }) {
                     Image(systemName: "pause.circle")
                         .font(.system(size: CGFloat(uiPlayIconSize - 4)))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text("Pause"))
+                .accessibilityHint(Text("Pauses speech playback"))
                 Button(action: { model.stopTts() }) {
                     Image(systemName: "stop.circle")
                         .font(.system(size: CGFloat(uiPlayIconSize - 4)))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text("Stop"))
+                .accessibilityHint(Text("Stops speech playback"))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)

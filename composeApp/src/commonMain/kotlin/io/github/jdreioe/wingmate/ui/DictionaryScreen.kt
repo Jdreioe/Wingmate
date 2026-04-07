@@ -198,12 +198,13 @@ private fun AddDictionaryEntryDialog(
                     )
                 }
 
+                val showKeyboard = rememberShowKeyboardOnFocus()
                 OutlinedTextField(
                     value = word,
                     onValueChange = { word = it },
                     label = { Text("Word") },
                     placeholder = { Text("e.g., tomato") },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().then(showKeyboard),
                     singleLine = true
                 )
 
@@ -216,7 +217,7 @@ private fun AddDictionaryEntryDialog(
                         onValueChange = { phoneme = it },
                         label = { Text("Phoneme") },
                         placeholder = { Text("e.g., /təˈmɑːtoʊ/") },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).then(showKeyboard),
                         singleLine = true
                     )
                     

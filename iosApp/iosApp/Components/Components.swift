@@ -1,5 +1,7 @@
 import SwiftUI
 import Shared
+import UIKit
+import Foundation
 
 struct CategoryChip: View {
     let title: String
@@ -41,6 +43,13 @@ struct MultiLineInput: View {
     var placeholder: String
     var fontSize: CGFloat
     var minHeight: CGFloat
+    var secondaryLanguage: String
+    var secondaryLanguageRanges: [NSRange]
+    var allowsSecondaryLanguageAction: Bool
+    var onTextChanged: ((String) -> Void)? = nil
+    var onTextEdited: ((NSRange, String) -> Void)? = nil
+    var onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)? = nil
+    @State private var selectedRange: NSRange = NSRange(location: NSNotFound, length: 0)
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -51,13 +60,169 @@ struct MultiLineInput: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 12)
             }
-            TextEditor(text: $text)
-                .font(.system(size: fontSize))
-                .scrollContentBackground(.hidden)
-                .background(Color.clear)
-                .padding(8)
+            SelectableTextView(
+                text: $text,
+                selectedRange: $selectedRange,
+                fontSize: fontSize,
+                secondaryLanguage: secondaryLanguage,
+                secondaryLanguageRanges: secondaryLanguageRanges,
+                allowsSecondaryLanguageAction: allowsSecondaryLanguageAction,
+                onTextChanged: onTextChanged,
+                onTextEdited: onTextEdited,
+                onMarkSelectionAsSecondaryLanguage: { range in
+                    onMarkSelectionAsSecondaryLanguage?(range)
+                }
+            )
+            .padding(6)
         }
         .frame(height: minHeight)
+    }
+}
+
+struct SelectableTextView: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var selectedRange: NSRange
+    let fontSize: CGFloat
+    let secondaryLanguage: String
+    let secondaryLanguageRanges: [NSRange]
+    let allowsSecondaryLanguageAction: Bool
+    let onTextChanged: ((String) -> Void)?
+    let onTextEdited: ((NSRange, String) -> Void)?
+    let onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)?
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            text: $text,
+            selectedRange: $selectedRange,
+            onTextChanged: onTextChanged,
+            onTextEdited: onTextEdited,
+            onMarkSelectionAsSecondaryLanguage: onMarkSelectionAsSecondaryLanguage
+        )
+    }
+
+    func makeUIView(context: Context) -> UITextView {
+        let textView = MenuAwareTextView()
+        textView.delegate = context.coordinator
+        textView.backgroundColor = .clear
+        textView.isScrollEnabled = true
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.textContainerInset = UIEdgeInsets(top: 10, left: 8, bottom: 10, right: 8)
+        textView.font = UIFont.systemFont(ofSize: fontSize)
+        textView.secondaryLanguageActionTitle = NSLocalizedString("textfield.mark_secondary_language", comment: "")
+        textView.allowsSecondaryLanguageAction = allowsSecondaryLanguageAction
+        textView.onMarkSelectionAsSecondaryLanguage = { [weak textView] in
+            guard let selectedRange = textView?.selectedRange, selectedRange.location != NSNotFound, selectedRange.length > 0 else { return }
+            onMarkSelectionAsSecondaryLanguage?(selectedRange)
+        }
+        applyHighlighting(to: textView)
+        return textView
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        applyHighlighting(to: uiView)
+        uiView.font = UIFont.systemFont(ofSize: fontSize)
+        if let menuAwareView = uiView as? MenuAwareTextView {
+            menuAwareView.secondaryLanguageActionTitle = NSLocalizedString("textfield.mark_secondary_language", comment: "")
+            menuAwareView.allowsSecondaryLanguageAction = allowsSecondaryLanguageAction
+        }
+    }
+
+    private func applyHighlighting(to textView: UITextView) {
+        let selected = textView.selectedRange
+        let full = text as NSString
+        let attributed = NSMutableAttributedString(string: text)
+        attributed.addAttributes([
+            .font: UIFont.systemFont(ofSize: fontSize),
+            .foregroundColor: UIColor.label
+        ], range: NSRange(location: 0, length: full.length))
+
+        for range in secondaryLanguageRanges {
+            if range.location != NSNotFound,
+               range.length > 0,
+               range.location + range.length <= full.length {
+                attributed.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.35), range: range)
+            }
+        }
+
+        if textView.attributedText.string != text {
+            textView.attributedText = attributed
+        } else {
+            textView.textStorage.setAttributedString(attributed)
+        }
+
+        let maxPos = textView.text.utf16.count
+        let safeLocation = min(max(0, selected.location), maxPos)
+        let safeLength = min(max(0, selected.length), max(0, maxPos - safeLocation))
+        textView.selectedRange = NSRange(location: safeLocation, length: safeLength)
+        textView.typingAttributes = [
+            .font: UIFont.systemFont(ofSize: fontSize),
+            .foregroundColor: UIColor.label
+        ]
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        @Binding var text: String
+        @Binding var selectedRange: NSRange
+        let onTextChanged: ((String) -> Void)?
+        let onTextEdited: ((NSRange, String) -> Void)?
+        let onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)?
+
+        init(
+            text: Binding<String>,
+            selectedRange: Binding<NSRange>,
+            onTextChanged: ((String) -> Void)?,
+            onTextEdited: ((NSRange, String) -> Void)?,
+            onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)?
+        ) {
+            self._text = text
+            self._selectedRange = selectedRange
+            self.onTextChanged = onTextChanged
+            self.onTextEdited = onTextEdited
+            self.onMarkSelectionAsSecondaryLanguage = onMarkSelectionAsSecondaryLanguage
+        }
+
+        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {
+            onTextEdited?(range, replacement)
+            return true
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            text = textView.text ?? ""
+            onTextChanged?(text)
+        }
+
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            selectedRange = textView.selectedRange
+        }
+    }
+}
+
+final class MenuAwareTextView: UITextView {
+    var secondaryLanguageActionTitle: String = NSLocalizedString("textfield.mark_secondary_language", comment: "")
+    var allowsSecondaryLanguageAction: Bool = true
+    var onMarkSelectionAsSecondaryLanguage: (() -> Void)?
+
+    override var canBecomeFirstResponder: Bool { true }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(markSelectedTextAsSecondaryLanguage) {
+            return allowsSecondaryLanguageAction && selectedRange.length > 0
+        }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
+    override func buildMenu(with builder: UIMenuBuilder) {
+        super.buildMenu(with: builder)
+        guard allowsSecondaryLanguageAction, selectedRange.length > 0 else { return }
+        let action = UIAction(title: secondaryLanguageActionTitle, image: UIImage(systemName: "globe.badge.chevron.backward")) { [weak self] _ in
+            self?.markSelectedTextAsSecondaryLanguage()
+        }
+        builder.insertSibling(UIMenu(title: "", children: [action]), afterMenu: .standardEdit)
+    }
+
+    @objc func markSelectedTextAsSecondaryLanguage() {
+        onMarkSelectionAsSecondaryLanguage?()
     }
 }
 
@@ -137,6 +302,8 @@ struct PhraseItemView: View {
     let useDefaultBg = bgHex == "#00000000"
     let bgColor = useDefaultBg ? Color(.secondarySystemBackground) : Color(hex: bgHex)
     let tileShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        let title = phrase.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let accessibleName = (title?.isEmpty == false ? title : phrase.text).trimmingCharacters(in: .whitespacesAndNewlines)
 
         Button(action: { model.insertPhraseText(phrase) }) {
             VStack(alignment: .leading, spacing: 6) {
@@ -153,6 +320,19 @@ struct PhraseItemView: View {
             .contentShape(tileShape)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(accessibleName.isEmpty ? NSLocalizedString("common.no_name", comment: "") : accessibleName))
+        .accessibilityHint(Text(wiggle ? "Double tap to activate. Use accessibility actions to move this phrase." : "Double tap to insert this phrase into the input field."))
+        .accessibilityAction(named: Text("Speak phrase")) { model.speak(phrase.text) }
+        .accessibilityAction(named: Text("Edit phrase")) {
+            if !phrase.id.hasPrefix("history-") {
+                onEdit()
+            }
+        }
+        .accessibilityAction(named: Text("Delete phrase")) {
+            if !phrase.id.hasPrefix("history-") {
+                onDelete(phrase.id)
+            }
+        }
         .modifier(WiggleEffect(active: wiggle))
         .contextMenu {
             // Hide edit/record/delete for history items

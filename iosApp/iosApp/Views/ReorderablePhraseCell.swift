@@ -52,6 +52,13 @@ struct ReorderablePhraseCell: View {
     let isHistory = phrase.id.hasPrefix("history-")
     if wiggleMode && !isHistory {
             baseView
+                .accessibilityHint(Text("Double tap to activate. Swipe up or down to move this phrase."))
+                .accessibilityAction(named: Text("Move earlier")) {
+                    movePhrase(by: -1)
+                }
+                .accessibilityAction(named: Text("Move later")) {
+                    movePhrase(by: 1)
+                }
                 .gesture(
                     DragGesture(coordinateSpace: .named("gridSpace"))
                         .onChanged { value in
@@ -65,6 +72,18 @@ struct ReorderablePhraseCell: View {
         } else {
             baseView
         }
+    }
+
+    private func movePhrase(by delta: Int) {
+        guard let currentIndex = gridLocal.firstIndex(where: { $0.id == phrase.id }) else { return }
+        let targetIndex = currentIndex + delta
+        guard gridLocal.indices.contains(targetIndex) else { return }
+
+        withAnimation(.easeInOut(duration: 0.15)) {
+            let item = gridLocal.remove(at: currentIndex)
+            gridLocal.insert(item, at: targetIndex)
+        }
+        commitMove(phrase.id, targetIndex)
     }
     
     private func handleDragChanged(_ value: DragGesture.Value) {

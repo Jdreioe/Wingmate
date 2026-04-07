@@ -40,6 +40,7 @@
 "tts.placeholder" = "Type text to speak";
 "toolbar.language" = "Language";
 "toolbar.voice" = "Voice";
+"toolbar.second_language" = "Second Language";
 "toolbar.add_category" = "Add Category";
 "toolbar.ui_size" = "UI Size";
 "toolbar.reorder" = "Reorder";
@@ -108,3 +109,4 @@
 "phrase.edit" = "Edit";
 "phrase.play_tts" = "Play";
 "phrase.record" = "Record";
+"textfield.mark_secondary_language" = "Mark for second language";

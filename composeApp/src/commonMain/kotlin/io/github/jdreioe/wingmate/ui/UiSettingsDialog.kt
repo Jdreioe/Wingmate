@@ -10,9 +10,29 @@ import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.domain.Settings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.core.context.GlobalContext
+
+/**
+ * Bridge for desktop-only partner window detection.
+ * Desktop code sets [deviceConnected] to the PartnerWindowManager's flow;
+ * on other platforms this stays false so the toggle never shows.
+ */
+object PartnerWindowAvailability {
+    private val _deviceConnected = MutableStateFlow(false)
+
+    /** Readable from common UI. */
+    var deviceConnected: StateFlow<Boolean> = _deviceConnected
+        private set
+
+    /** Called from desktop DI to wire the real device detection flow. */
+    fun bind(flow: StateFlow<Boolean>) {
+        deviceConnected = flow
+    }
+}
 
 @Composable
 fun UiSettingsDialog(onDismissRequest: () -> Unit) {
@@ -22,8 +42,12 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
 
     var virtualMic by remember { mutableStateOf(false) }
     var autoUpdateEnabled by remember { mutableStateOf(true) }
+    var partnerWindowEnabled by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
+
+    // Partner window device detection (desktop-only, always false on other platforms)
+    val partnerDeviceConnected by PartnerWindowAvailability.deviceConnected.collectAsState()
 
     // Helper function to update settings with reactive updates
     fun updateSettings(update: (Settings) -> Settings) {
@@ -47,6 +71,7 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
             val s = withContext(Dispatchers.Default) { runCatching { settingsUseCase.get() }.getOrNull() ?: Settings() }
             virtualMic = s.virtualMicEnabled
             autoUpdateEnabled = s.autoUpdateEnabled
+            partnerWindowEnabled = s.partnerWindowEnabled
         }
         loading = false
     }
@@ -104,6 +129,30 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
                         )
                     }
                 }
+
+                // Partner window display setting — only shown when FTDI device detected
+                if (partnerDeviceConnected) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = partnerWindowEnabled,
+                            onCheckedChange = { checked ->
+                                partnerWindowEnabled = checked
+                                updateSettings { it.copy(partnerWindowEnabled = checked) }
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Partner window display", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "Mirror typed text to the connected TD-I13 partner display.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -113,3 +162,4 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
         }
     )
 }
+

@@ -27,10 +27,11 @@ fun AddCategoryDialog(existingNames: List<String> = emptyList(), availableLangua
     var selectedLanguage by remember { mutableStateOf(availableLanguages.firstOrNull() ?: "") }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Add category") }, text = {
         Column(modifier = Modifier.fillMaxWidth()) {
+            val showKeyboard = rememberShowKeyboardOnFocus()
             OutlinedTextField(value = name, onValueChange = {
                 name = it
                 error = null
-            }, label = { Text("Category name") }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
+            }, label = { Text("Category name") }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).then(showKeyboard))
             if (availableLanguages.isNotEmpty()) {
                 ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
                     TextField(value = selectedLanguage, onValueChange = {}, readOnly = true, label = { Text("Language") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) })

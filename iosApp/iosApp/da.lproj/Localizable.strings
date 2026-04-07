@@ -52,6 +52,7 @@
 "tts.placeholder" = "Tekst der skal oplæses";
 "toolbar.language" = "Sprog";
 "toolbar.voice" = "Stemme";
+"toolbar.second_language" = "Andet sprog";
 "toolbar.add_category" = "Tilføj kategori";
 "toolbar.ui_size" = "Størrelse på UI";
 "toolbar.welcome_flow" = "Konfigurationsguide";
@@ -107,3 +108,4 @@
 "phrase.edit" = "Rediger";
 "phrase.play_tts" = "Afspil";
 "phrase.record" = "Optag";
+"textfield.mark_secondary_language" = "Markér til andet sprog";

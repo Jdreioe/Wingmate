@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "io.github.jdreioe.wingmate"
+    namespace = "com.hojmoseit.wingmate"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     val versionPropsFile = project.file("../version.properties")
@@ -18,7 +18,7 @@ android {
     val vName = versionProps.getProperty("versionName") ?: "1.0"
 
     defaultConfig {
-        applicationId = "io.github.jdreioe.wingmate"
+        applicationId = "com.hojmoseit.wingmate"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = vCode
@@ -57,6 +57,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
 }
 
 dependencies {
@@ -89,7 +94,7 @@ dependencies {
     implementation("io.insert-koin:koin-android:4.1.0")
 
     // Dual-screen / WindowManager (API 34+ rear display & window area APIs)
-    implementation("androidx.window:window:1.2.0-beta03")
+    implementation("androidx.window:window:1.3.0")
 }
 
 kotlin {

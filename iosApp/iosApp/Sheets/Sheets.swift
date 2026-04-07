@@ -620,9 +620,16 @@ struct VoiceSelectionSheet: View {
                         List {
                             ForEach(filteredVoices.indices, id: \.self) { idx in
                                 let v = filteredVoices[idx]
-                                VoiceRow(v: v, isSelected: v.name == selected?.name)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { selected = v }
+                                Button {
+                                    selected = v
+                                } label: {
+                                    VoiceRow(v: v, isSelected: v.name == selected?.name)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(Text(v.displayName ?? v.name ?? NSLocalizedString("common.no_name", comment: "")))
+                                .accessibilityValue(Text(v.primaryLanguage ?? ""))
+                                .accessibilityHint(Text("Double tap to select this voice"))
+                                .accessibilityAddTraits(v.name == selected?.name ? .isSelected : [])
                             }
                         }
                     }
@@ -689,13 +696,20 @@ struct LanguageSelectionSheet: View {
     var body: some View {
         NavigationStack {
             List(languages, id: \.self) { lang in
-                HStack {
-                    Text(lang)
-                    Spacer()
-                    if lang == selected { Image(systemName: "checkmark").foregroundColor(.accentColor) }
+                Button {
+                    onSelect(lang)
+                } label: {
+                    HStack {
+                        Text(lang)
+                        Spacer()
+                        if lang == selected { Image(systemName: "checkmark").foregroundColor(.accentColor) }
+                    }
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
-                .onTapGesture { onSelect(lang) }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(lang))
+                .accessibilityHint(Text("Double tap to select this language"))
+                .accessibilityAddTraits(lang == selected ? .isSelected : [])
             }
             .navigationTitle(Text("toolbar.language"))
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) } }

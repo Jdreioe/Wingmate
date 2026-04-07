@@ -57,18 +57,19 @@ fun AddPhraseDialog(
         title = { Text(if (initialPhrase == null) "Add New Phrase" else "Edit Phrase") },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
+                val showKeyboard = rememberShowKeyboardOnFocus()
                 OutlinedTextField(
                     value = altText,
                     onValueChange = { altText = it },
                     label = { Text("Vocalization (what to speak)") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().then(showKeyboard)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
                     label = { Text("New phrase text") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().then(showKeyboard)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 

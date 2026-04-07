@@ -52,6 +52,7 @@
 "tts.placeholder" = "Text zum Sprechen eingeben";
 "toolbar.language" = "Sprache";
 "toolbar.voice" = "Stimme";
+"toolbar.second_language" = "Zweitsprache";
 "toolbar.add_category" = "Kategorie hinzufügen";
 "toolbar.ui_size" = "UI-Größe";
 "toolbar.welcome_flow" = "Einrichtungsassistent";
@@ -104,3 +105,4 @@
 "phrase.edit" = "Bearbeiten";
 "phrase.play_tts" = "Abspielen";
 "phrase.record" = "Aufnehmen";
+"textfield.mark_secondary_language" = "Für Zweitsprache markieren";

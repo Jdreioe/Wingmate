@@ -7,6 +7,7 @@ struct ContentView: View {
     @StateObject private var model = IosViewModel()
     @State private var showVoiceSheet = false
     @State private var showLanguageSheet = false
+    @State private var showSecondaryLanguageSheet = false
     @State private var showWelcomeFlow = false
     @State private var hasCompletedWelcome = UserDefaults.standard.bool(forKey: "welcome_flow_completed")
     @State private var isWideLayout = true
@@ -72,6 +73,7 @@ struct ContentView: View {
             model: model,
             showVoiceSheet: $showVoiceSheet,
             showLanguageSheet: $showLanguageSheet,
+            showSecondaryLanguageSheet: $showSecondaryLanguageSheet,
             showAddCategory: $showAddCategory,
             showAddPhrase: $showAddPhrase,
             showUiSizeSheet: $showUiSizeSheet,
@@ -147,16 +149,6 @@ struct ContentView: View {
                                     .animation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.1), value: showRightPanel)
                                 } else {
                                     VStack(spacing: 0) {
-                                        if !model.predictions.words.isEmpty || !model.predictions.letters.isEmpty {
-                                            PredictionBar(
-                                                result: model.predictions,
-                                                onWordSelected: { model.applyWordPrediction($0) },
-                                                onLetterSelected: { model.applyLetterPrediction($0) },
-                                                fontSizeScale: 1.0
-                                            )
-                                            .transition(.move(edge: .top).combined(with: .opacity))
-                                        }
-
                                         mainContent(columns: cols)
                                             .padding(16)
                                     }
@@ -235,6 +227,9 @@ struct ContentView: View {
                             if !isWideLayout || !showRightPanel {
                                 Button(action: { showLanguageSheet = true }) {
                                     Label("toolbar.language", systemImage: "globe")
+                                }
+                                Button(action: { showSecondaryLanguageSheet = true }) {
+                                    Label("toolbar.second_language", systemImage: "globe.badge.chevron.backward")
                                 }
                                 Button(action: { showVoiceSheet = true }) {
                                     Image(systemName: "gearshape").accessibilityLabel(Text("toolbar.voice"))

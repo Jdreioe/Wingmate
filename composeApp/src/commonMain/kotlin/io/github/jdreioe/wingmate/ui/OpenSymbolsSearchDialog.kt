@@ -42,6 +42,7 @@ fun OpenSymbolsSearchDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth().heightIn(min = 300.dp, max = 500.dp)) {
                 // Search input
+                val showKeyboard = rememberShowKeyboardOnFocus()
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -60,7 +61,7 @@ fun OpenSymbolsSearchDialog(
                             Icon(Icons.Filled.Search, contentDescription = "Search")
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().then(showKeyboard)
                 )
                 
                 Spacer(modifier = Modifier.height(12.dp))

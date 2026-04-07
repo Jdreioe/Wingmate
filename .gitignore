@@ -46,6 +46,7 @@ shared/build/
 
 ## Linux App
 linuxApp/build/
+linuxApp/target/
 
 ## iOS / Xcode
 iosApp/build/
@@ -77,3 +78,4 @@ iosApp/Pods/
 **/tmp/
 **/intermediates/
 **/.cxx/
+**/*.properties

@@ -268,12 +268,13 @@ fun AzureSettingsFullScreen(
                 if (configRepo == null) {
                     Text("Config repository not available")
                 } else {
+                    val showKeyboard = rememberShowKeyboardOnFocus()
                     OutlinedTextField(
                         value = endpoint,
                         onValueChange = { endpoint = it },
                         label = { Text("Region / Endpoint") },
                         placeholder = { Text("e.g., eastus") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().then(showKeyboard)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -281,7 +282,7 @@ fun AzureSettingsFullScreen(
                         onValueChange = { subscriptionKey = it },
                         label = { Text("Subscription Key") },
                         placeholder = { Text("Your Azure Speech service key") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().then(showKeyboard)
                     )
                 }
             }

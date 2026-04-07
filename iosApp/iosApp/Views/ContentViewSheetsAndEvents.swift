@@ -6,6 +6,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
     @ObservedObject var model: IosViewModel
     @Binding var showVoiceSheet: Bool
     @Binding var showLanguageSheet: Bool
+    @Binding var showSecondaryLanguageSheet: Bool
     @Binding var showAddCategory: Bool
     @Binding var showAddPhrase: Bool
     @Binding var showUiSizeSheet: Bool
@@ -40,6 +41,16 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                                        onClose: { showLanguageSheet = false }) { lang in
                     model.updateLanguage(lang)
                     showLanguageSheet = false
+                }
+                .presentationDetents([.height(300), .medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: Binding(get: { !isPad && showSecondaryLanguageSheet }, set: { if !$0 { showSecondaryLanguageSheet = false } })) {
+                LanguageSelectionSheet(languages: model.availableLanguages.isEmpty ? [model.secondaryLanguage] : model.availableLanguages.filter { $0 != model.primaryLanguage },
+                                       selected: model.secondaryLanguage,
+                                       onClose: { showSecondaryLanguageSheet = false }) { lang in
+                    model.updateSecondaryLanguage(lang)
+                    showSecondaryLanguageSheet = false
                 }
                 .presentationDetents([.height(300), .medium, .large])
                 .presentationDragIndicator(.visible)

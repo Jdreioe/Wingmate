@@ -14,6 +14,9 @@ Item {
     property string currentVoice: "default"
     property real speechRate: 1.0
     property bool useSystemTts: false
+    property bool partnerWindowEnabled: false
+    property int partnerWindowFontSize: 31
+    property bool partnerWindowIdleEnabled: true
     property real fontScale: 1.0
     
     // Azure data
@@ -63,10 +66,29 @@ Item {
         xhr.send();
     }
     
+
+
+    // Trigger filter when language changes
+    onCurrentLanguageChanged: filterVoices()
+    
+    function saveAzureConfig() {
+        var xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) loadVoices();
+        }
+        xhr.open("POST", baseUrl + "/api/azure-config");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ endpoint: azureEndpoint, key: azureKey }));
+    }
+    
+    property bool settingsLoaded: false
+    
+    // ...
+    
     function filterVoices() {
         if (!allVoices || allVoices.length === 0) return;
         
-        console.log("Filtering voices for language: " + currentLanguage);
+        console.log("SettingsPage: Filtering voices for language: " + currentLanguage);
         
         var filtered = [];
         for (var i = 0; i < allVoices.length; i++) {
@@ -75,7 +97,7 @@ Item {
             }
         }
         
-        console.log("Found " + filtered.length + " voices for " + currentLanguage);
+        console.log("SettingsPage: Found " + filtered.length + " voices for " + currentLanguage);
         
         // Sort by display name
         filtered.sort(function(a, b) {
@@ -94,23 +116,15 @@ Item {
         }
         
         if (!found && filtered.length > 0) {
-            console.log("Current voice " + currentVoice + " not in filtered list. Switching to " + filtered[0].name);
-            updateVoice(filtered[0].name);
+            // Only update the LOCAL property — do NOT call updateVoice() here
+            // since that sends a PUT to the backend and causes race conditions.
+            // The user must explicitly select a voice to save it.
+            console.log("SettingsPage: Voice " + currentVoice + " not in filtered list. Setting local to " + filtered[0].name);
+            currentVoice = filtered[0].name;
         }
     }
-
-    // Trigger filter when language changes
-    onCurrentLanguageChanged: filterVoices()
     
-    function saveAzureConfig() {
-        var xhr = new XMLHttpRequest();
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) loadVoices();
-        }
-        xhr.open("POST", baseUrl + "/api/azure-config");
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.send(JSON.stringify({ endpoint: azureEndpoint, key: azureKey }));
-    }
+    // ...
     
     function loadSettings() {
         var xhr = new XMLHttpRequest();
@@ -124,7 +138,13 @@ Item {
                 if (settings.voice) currentVoice = settings.voice;
                 if (settings.speechRate) speechRate = settings.speechRate;
                 if (settings.useSystemTts !== undefined) useSystemTts = settings.useSystemTts;
+                if (settings.partnerWindowEnabled !== undefined) partnerWindowEnabled = settings.partnerWindowEnabled;
+                if (settings.partnerWindowFontSize !== undefined) partnerWindowFontSize = settings.partnerWindowFontSize;
+                if (settings.partnerWindowIdleEnabled !== undefined) partnerWindowIdleEnabled = settings.partnerWindowIdleEnabled;
                 if (settings.fontSizeScale) fontScale = settings.fontSizeScale;
+                
+                settingsLoaded = true;
+                console.log("SettingsPage: Settings loaded. Voice=" + currentVoice);
                 
                 // If we have voices loaded but filter wasn't run for this language yet (race condition), run it now
                 if (allVoices.length > 0) filterVoices();
@@ -178,6 +198,42 @@ Item {
         xhr.setRequestHeader("Content-Type", "application/json");
         xhr.send(JSON.stringify({ useSystemTts: enabled }));
         useSystemTts = enabled;
+    }
+    
+    function updatePartnerWindow(enabled) {
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", baseUrl + "/api/settings/partnerwindow");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ enabled: enabled }));
+        partnerWindowEnabled = enabled;
+        // Also update main app state if possible, or let it sync next time
+        if (root && root.setPartnerWindowEnabled) {
+            root.setPartnerWindowEnabled(enabled);
+        }
+    }
+
+    function updatePartnerWindowDisplay(fontSize) {
+        partnerWindowFontSize = fontSize;
+        // Persist to Kotlin backend
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", baseUrl + "/api/settings/partnerwindow-display");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ fontSize: fontSize }));
+        // Push directly to Rust bridge
+        if (typeof partnerWindow !== 'undefined') {
+            partnerWindow.setFontSize(fontSize);
+        }
+    }
+
+    function updatePartnerWindowIdle(enabled) {
+        partnerWindowIdleEnabled = enabled;
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", baseUrl + "/api/settings/partnerwindow-display");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ idleEnabled: enabled }));
+        if (typeof partnerWindow !== 'undefined') {
+            partnerWindow.setIdleEnabled(enabled);
+        }
     }
     
     // --- Layout ---
@@ -299,6 +355,7 @@ Item {
                 // Azure Config
                 ModernCard {
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
                     title: "Azure Speech"
                     visible: !useSystemTts
                     
@@ -359,10 +416,107 @@ Item {
                         }
                     }
                 }
-                
+                // Partner Window settings
+                ModernCard {
+                    Layout.fillWidth: true
+                    title: "Partner Window"
+
+                    content: ColumnLayout {
+                        spacing: 12
+
+                        Controls.CheckBox {
+                            text: "Enable Partner Window mirroring"
+                            checked: partnerWindowEnabled
+                            onClicked: updatePartnerWindow(checked)
+
+                            contentItem: Text {
+                                text: parent.text
+                                color: Theme.text
+                                leftPadding: parent.indicator.width + parent.spacing
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+
+                        Text {
+                            text: "Mirrors spoken text to an Tobii partner window display."
+                            color: Theme.subText
+                            font.pixelSize: Theme.fontSizeSmall
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+
+                        // Font Size
+                        RowLayout {
+                            Layout.fillWidth: true
+                            enabled: partnerWindowEnabled
+                            opacity: partnerWindowEnabled ? 1.0 : 0.4
+
+                            Text {
+                                text: "Font Size"
+                                color: Theme.text
+                                Layout.preferredWidth: 150
+                            }
+                            Controls.ComboBox {
+                                id: pwFontCombo
+                                Layout.fillWidth: true
+                                model: [
+                                    { text: "Small",       value: 26 },
+                                    { text: "Medium",      value: 28 },
+                                    { text: "Large",       value: 31 },
+                                    { text: "Extra Large", value: 29 }
+                                ]
+                                textRole: "text"
+                                valueRole: "value"
+                                currentIndex: {
+                                    for (var i = 0; i < model.length; i++) {
+                                        if (model[i].value === partnerWindowFontSize) return i;
+                                    }
+                                    return 2; // default to Large (font 31)
+                                }
+                                onActivated: updatePartnerWindowDisplay(currentValue)
+                            }
+                        }
+
+                        // Auto-computed layout info
+                        Text {
+                            visible: partnerWindowEnabled
+                            text: {
+                                // Approximate layout for each font (must match Rust auto_layout)
+                                var f = partnerWindowFontSize;
+                                var cpl, lines;
+                                if (f <= 26)      { cpl = 58; lines = 5; }
+                                else if (f <= 28) { cpl = 33; lines = 4; }
+                                else if (f === 29) { cpl = 29; lines = 3; }
+                                else              { cpl = 23; lines = 3; }
+                                return "Auto layout: " + lines + " lines × ~" + cpl + " chars/line";
+                            }
+                            color: Theme.subText
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+
+                        // Idle face
+                        Controls.CheckBox {
+                            text: "Show idle face after 10s of inactivity"
+                            checked: partnerWindowIdleEnabled
+                            enabled: partnerWindowEnabled
+                            opacity: partnerWindowEnabled ? 1.0 : 0.4
+                            onClicked: updatePartnerWindowIdle(checked)
+
+                            contentItem: Text {
+                                text: parent.text
+                                color: Theme.text
+                                leftPadding: parent.indicator.width + parent.spacing
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+                    }
+                }
+
+
                 // About
                 ModernCard {
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
                     title: "About Wingmate"
                     
                     content: ColumnLayout {

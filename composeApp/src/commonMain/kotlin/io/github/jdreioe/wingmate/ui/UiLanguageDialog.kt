@@ -41,7 +41,8 @@ fun UiLanguageDialog(show: Boolean, onDismiss: () -> Unit) {
             Column(Modifier.fillMaxWidth()) {
                 Text("Filter languages")
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = filter, onValueChange = { filter = it }, modifier = Modifier.fillMaxWidth())
+                val showKeyboard = rememberShowKeyboardOnFocus()
+                OutlinedTextField(value = filter, onValueChange = { filter = it }, modifier = Modifier.fillMaxWidth().then(showKeyboard))
                 Spacer(Modifier.height(12.dp))
 
                 Text("Primary language")

@@ -45,6 +45,8 @@ final class IosViewModel: ObservableObject {
     // UI state
     @Published var input: String = ""
     @Published var primaryLanguage: String = "en-US"
+    @Published var secondaryLanguage: String = "en-US"
+    @Published var secondaryLanguageRanges: [NSRange] = []
     @Published var selectedVoice: Shared.Voice? = nil
     @Published var availableLanguages: [String] = []
     // Predictions
@@ -107,6 +109,8 @@ final class IosViewModel: ObservableObject {
     // Load selected voice and languages for welcome gating and UI
     refreshVoiceAndLanguages()
 
+        await refreshLanguagePreferences()
+
         // Determine if Azure is configured (endpoint + key)
         await refreshAzureConfiguration()
 
@@ -142,6 +146,21 @@ final class IosViewModel: ObservableObject {
         }
     }
 
+    func refreshLanguagePreferences() async {
+        do {
+            let settings = try await bridge.getSettings()
+            await MainActor.run {
+                self.primaryLanguage = settings.primaryLanguage
+                self.secondaryLanguage = settings.secondaryLanguage
+            }
+        } catch {
+            await MainActor.run {
+                self.primaryLanguage = self.primaryLanguage
+                self.secondaryLanguage = self.secondaryLanguage
+            }
+        }
+    }
+
     func deletePhrase(id: String) {
         if let path = recordingPath(for: id) {
             try? FileManager.default.removeItem(atPath: path)
@@ -174,17 +193,22 @@ final class IosViewModel: ObservableObject {
         let t = phrase.text
         guard !t.isEmpty else { return }
         input.append(t)
+        onInputChanged(input)
         // Incremental learning
         Task { _ = try? await bridge.learnPhrase(text: t) }
     }
 
     func speak(_ text: String) {
-        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
+        let plain = text
+        guard !plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         AudioSessionHelper.activatePlayback()
+
+        // Only convert hidden ranges for the live input text and Azure path.
+        let t = (text == input) ? textWithSecondaryLanguageMarkup(from: plain) : plain
+
         // Hybrid mixing: splice recorded phrase audio into sentence
         if mixRecordedPhrasesInSentences {
-            let segments = buildHybridSegments(for: t)
+            let segments = buildHybridSegments(for: plain)
             if !segments.isEmpty {
                 // Decide engine for TTS segments: Azure vs local
                 let shouldUseAzure = azureConfigured && isOnline || (azureConfigured && !useSystemTtsWhenOffline)
@@ -205,21 +229,52 @@ final class IosViewModel: ObservableObject {
 
         // If user prefers system TTS, use it directly
         if useSystemTts {
-            SystemTtsManager.shared.speak(t, language: primaryLanguage)
+            SystemTtsManager.shared.speak(plain, language: primaryLanguage)
             return
         }
         
         // If Azure is not configured, always use on-device TTS to keep the app working
         if !azureConfigured {
-            SystemTtsManager.shared.speak(t, language: primaryLanguage)
+            SystemTtsManager.shared.speak(plain, language: primaryLanguage)
             return
         }
         // Otherwise, allow offline fallback when enabled
         if !isOnline && useSystemTtsWhenOffline {
-            SystemTtsManager.shared.speak(t, language: primaryLanguage)
+            SystemTtsManager.shared.speak(plain, language: primaryLanguage)
             return
         }
         Task { _ = try? await bridge.speak(text: t) }
+    }
+
+    private func textWithSecondaryLanguageMarkup(from plainText: String) -> String {
+        let locale = secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !locale.isEmpty,
+              locale != primaryLanguage,
+              !secondaryLanguageRanges.isEmpty else {
+            return plainText
+        }
+
+        let ns = plainText as NSString
+        let validRanges = secondaryLanguageRanges
+            .filter { $0.location != NSNotFound && $0.length > 0 && $0.location + $0.length <= ns.length }
+            .sorted { $0.location < $1.location }
+
+        guard !validRanges.isEmpty else { return plainText }
+
+        var cursor = 0
+        var out = ""
+        for range in validRanges {
+            if range.location > cursor {
+                out += ns.substring(with: NSRange(location: cursor, length: range.location - cursor))
+            }
+            let selected = ns.substring(with: range)
+            out += "<lang xml:lang=\"\(locale)\">\(selected)</lang>"
+            cursor = range.location + range.length
+        }
+        if cursor < ns.length {
+            out += ns.substring(from: cursor)
+        }
+        return out
     }
 
     // MARK: - History
@@ -376,8 +431,118 @@ final class IosViewModel: ObservableObject {
         Task {
             _ = try? await bridge.updateSelectedVoiceLanguage(lang: lang)
             self.primaryLanguage = lang
+            if lang == self.secondaryLanguage {
+                self.secondaryLanguageRanges = []
+            }
             refreshVoiceAndLanguages()
         }
+    }
+
+    func updateSecondaryLanguage(_ lang: String) {
+        Task {
+            _ = try? await bridge.updateSecondaryLanguage(lang: lang)
+            self.secondaryLanguage = lang
+            if lang == self.primaryLanguage {
+                self.secondaryLanguageRanges = []
+            }
+        }
+    }
+
+    func markSelectionAsSecondaryLanguage(range: NSRange) {
+        let locale = secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !locale.isEmpty, locale != primaryLanguage else { return }
+
+        let currentText = input as NSString
+        guard range.location != NSNotFound,
+              range.length > 0,
+              range.location + range.length <= currentText.length else { return }
+
+        secondaryLanguageRanges = mergeRanges(secondaryLanguageRanges + [range], maxLength: currentText.length)
+    }
+
+    func adjustSecondaryLanguageRangesAfterEdit(range: NSRange, replacementText: String) {
+        guard !secondaryLanguageRanges.isEmpty else { return }
+        let currentLength = (input as NSString).length
+        let replacementLength = (replacementText as NSString).length
+        let delta = replacementLength - range.length
+
+        let editStart = range.location
+        let editEnd = range.location + range.length
+
+        var updated: [NSRange] = []
+        for r in secondaryLanguageRanges {
+            let rStart = r.location
+            let rEnd = r.location + r.length
+
+            // Edit completely before range: shift
+            if editEnd <= rStart {
+                updated.append(NSRange(location: max(0, rStart + delta), length: r.length))
+                continue
+            }
+
+            // Edit completely after range: unchanged
+            if editStart >= rEnd {
+                updated.append(r)
+                continue
+            }
+
+            // Overlap cases
+            if editStart <= rStart && editEnd >= rEnd {
+                // Range removed entirely
+                continue
+            }
+
+            if editStart <= rStart {
+                // Overlap starts before (or at) marked range start
+                let newStart = max(0, editStart + replacementLength)
+                let newLen = max(0, rEnd - editEnd)
+                if newLen > 0 {
+                    updated.append(NSRange(location: newStart, length: newLen))
+                }
+                continue
+            }
+
+            if editEnd >= rEnd {
+                // Overlap ends after (or at) marked range end
+                let newLen = max(0, editStart - rStart)
+                if newLen > 0 {
+                    updated.append(NSRange(location: rStart, length: newLen))
+                }
+                continue
+            }
+
+            // Edit fully inside marked range: keep one merged range with adjusted length
+            let newLen = r.length + delta
+            if newLen > 0 {
+                updated.append(NSRange(location: rStart, length: newLen))
+            }
+        }
+
+        let newMaxLength = max(0, currentLength + delta)
+        secondaryLanguageRanges = mergeRanges(updated, maxLength: newMaxLength)
+    }
+
+    private func mergeRanges(_ ranges: [NSRange], maxLength: Int) -> [NSRange] {
+        let sorted = ranges
+            .filter { $0.location != NSNotFound && $0.length > 0 && $0.location + $0.length <= maxLength }
+            .sorted { $0.location < $1.location }
+
+        guard !sorted.isEmpty else { return [] }
+        var merged: [NSRange] = []
+        for r in sorted {
+            if let last = merged.last {
+                let lastEnd = last.location + last.length
+                let rEnd = r.location + r.length
+                if r.location <= lastEnd {
+                    merged[merged.count - 1] = NSRange(location: last.location, length: max(lastEnd, rEnd) - last.location)
+                } else {
+                    merged.append(r)
+                }
+            } else {
+                merged.append(r)
+            }
+        }
+        return merged
     }
 
     func refreshVoiceAndLanguages() {
@@ -417,7 +582,7 @@ final class IosViewModel: ObservableObject {
     }
     
     // MARK: - Prediction
-    func onInputChanged(_ newValue: String) {
+    func onInputChanged(_ newValue: String, preserveSecondaryRanges: Bool = false) {
         input = newValue
         predictionJob?.cancel()
         predictionJob = Task {

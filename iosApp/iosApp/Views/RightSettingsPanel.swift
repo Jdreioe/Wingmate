@@ -18,6 +18,11 @@ struct RightSettingsPanel: View {
         return langs.isEmpty ? [model.primaryLanguage] : langs
     }
 
+    private var secondaryLanguages: [String] {
+        let langs = languages.filter { $0 != model.primaryLanguage }
+        return langs.isEmpty ? [model.secondaryLanguage] : langs
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -61,6 +66,19 @@ struct RightSettingsPanel: View {
                     set: { model.updateLanguage($0) }
                 )) {
                     ForEach(languages, id: \.self) { lang in
+                        Text(lang).tag(lang)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("toolbar.second_language").font(.headline)
+                Picker("toolbar.second_language", selection: Binding(
+                    get: { model.secondaryLanguage },
+                    set: { model.updateSecondaryLanguage($0) }
+                )) {
+                    ForEach(secondaryLanguages, id: \.self) { lang in
                         Text(lang).tag(lang)
                     }
                 }

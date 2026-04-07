@@ -118,19 +118,29 @@ class MainActivity : ComponentActivity() {
         // Initialize Window Area Controller for rear display
         if (Build.VERSION.SDK_INT >= 34) {
             displayExecutor = ContextCompat.getMainExecutor(this)
-            windowAreaController = WindowAreaController.getOrCreate()
+            try {
+                windowAreaController = WindowAreaController.getOrCreate()
+            } catch (e: Throwable) {
+                Log.w("MainActivity", "WindowAreaController not compatible on this device, skipping rear display support", e)
+            }
             
-            lifecycleScope.launch(Dispatchers.Main) {
-                lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    windowAreaController.windowAreaInfos
-                        .map { info -> info.firstOrNull { it.type == WindowAreaInfo.Type.TYPE_REAR_FACING } }
-                        .onEach { info -> windowAreaInfo = info }
-                        .map { it?.getCapability(rearDisplayOperation)?.status ?: WindowAreaCapability.Status.WINDOW_AREA_STATUS_UNSUPPORTED }
-                        .distinctUntilChanged()
-                        .collect {
-                            capabilityStatus = it
-                            Log.d("MainActivity", "Rear display capability status: $it")
+            if (::windowAreaController.isInitialized) {
+                lifecycleScope.launch(Dispatchers.Main) {
+                    try {
+                        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            windowAreaController.windowAreaInfos
+                                .map { info -> info.firstOrNull { it.type == WindowAreaInfo.Type.TYPE_REAR_FACING } }
+                                .onEach { info -> windowAreaInfo = info }
+                                .map { it?.getCapability(rearDisplayOperation)?.status ?: WindowAreaCapability.Status.WINDOW_AREA_STATUS_UNSUPPORTED }
+                                .distinctUntilChanged()
+                                .collect {
+                                    capabilityStatus = it
+                                    Log.d("MainActivity", "Rear display capability status: $it")
+                                }
                         }
+                    } catch (e: Throwable) {
+                        Log.w("MainActivity", "WindowAreaController error during observation, skipping rear display", e)
+                    }
                 }
             }
         }

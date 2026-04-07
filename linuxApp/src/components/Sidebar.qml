@@ -53,6 +53,7 @@ Rectangle {
         Repeater {
             model: [
                 { name: "Home", icon: "home", page: "qrc:/main.qml", id: "home" },
+                { name: "Dictionary", icon: "document-edit", page: "qrc:/pages/PronunciationDictionaryPage.qml", id: "dictionary" },
                 { name: "Settings", icon: "settings-configure", page: "qrc:/pages/SettingsPage.qml", id: "settings" }
             ]
             

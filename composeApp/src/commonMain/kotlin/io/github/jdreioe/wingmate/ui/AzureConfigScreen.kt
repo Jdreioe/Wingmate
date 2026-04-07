@@ -65,12 +65,13 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
             CircularProgressIndicator()
         } else {
             // Endpoint Input
+            val showKeyboard = rememberShowKeyboardOnFocus()
             OutlinedTextField(
                 value = endpoint,
                 onValueChange = { endpoint = it },
                 label = { Text("Azure Endpoint") },
                 placeholder = { Text("https://your-region.api.cognitive.microsoft.com/") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().then(showKeyboard),
                 singleLine = true
             )
 
@@ -82,7 +83,7 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
                 onValueChange = { subscriptionKey = it },
                 label = { Text("Subscription Key") },
                 placeholder = { Text("Your Azure subscription key") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().then(showKeyboard),
                 visualTransformation = PasswordVisualTransformation(),
                 singleLine = true
             )

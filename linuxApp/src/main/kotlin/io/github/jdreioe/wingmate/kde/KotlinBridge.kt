@@ -13,6 +13,8 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
+import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceRepository
@@ -22,7 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 
 /**
  * HTTP server that bridges QML UI with Kotlin business logic.
@@ -37,6 +39,14 @@ class KotlinBridge(private val port: Int = 8765) {
     private val speechService = LinuxSpeechService()
     private val azureSpeechService = AzureSpeechService(configRepository)
     private val voiceRepository: VoiceRepository by lazy { GlobalContext.get().get() }
+    private val pronunciationRepository: PronunciationDictionaryRepository by lazy { GlobalContext.get().get() }
+    private val partnerWindowManager = PartnerWindowManager(settingsManager)
+    
+    private val json = Json { 
+        ignoreUnknownKeys = true 
+        isLenient = true
+        encodeDefaults = true
+    }
     
     private val server = embeddedServer(Netty, port = port) {
         install(ContentNegotiation) {
@@ -63,8 +73,11 @@ class KotlinBridge(private val port: Int = 8765) {
             }
             
             post("/api/phrases") {
-                val request = call.receive<AddPhraseRequest>()
-                phraseViewModel.addPhrase(request.text, request.imageUrl)
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val text = jsonObj["text"]?.jsonPrimitive?.contentOrNull ?: ""
+                val imageUrl = jsonObj["imageUrl"]?.jsonPrimitive?.contentOrNull
+                phraseViewModel.addPhrase(text, imageUrl)
                 call.respond(HttpStatusCode.Created, mapOf("status" to "ok"))
             }
             
@@ -81,14 +94,18 @@ class KotlinBridge(private val port: Int = 8765) {
             }
             
             post("/api/categories") {
-                val request = call.receive<AddCategoryRequest>()
-                phraseViewModel.addCategory(request.name)
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val name = jsonObj["name"]?.jsonPrimitive?.contentOrNull ?: ""
+                phraseViewModel.addCategory(name)
                 call.respond(HttpStatusCode.Created, mapOf("status" to "ok"))
             }
             
             post("/api/categories/select") {
-                val request = call.receive<SelectCategoryRequest>()
-                phraseViewModel.selectCategory(request.categoryId)
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val categoryId = jsonObj["categoryId"]?.jsonPrimitive?.contentOrNull
+                phraseViewModel.selectCategory(categoryId)
                 call.respond(HttpStatusCode.OK)
             }
             
@@ -98,16 +115,55 @@ class KotlinBridge(private val port: Int = 8765) {
                 call.respond(settings ?: mapOf("status" to "loading"))
             }
             
+            put("/api/settings") {
+                val body = call.receiveText()
+                println("[API] PUT /api/settings payload: $body")
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val current = settingsManager.settings.value ?: io.github.jdreioe.wingmate.domain.Settings()
+                var newSettings = current
+                
+                if (jsonObj.containsKey("welcomeFlowCompleted")) {
+                    val completed = jsonObj["welcomeFlowCompleted"]?.jsonPrimitive?.booleanOrNull ?: false
+                    newSettings = newSettings.copy(welcomeFlowCompleted = completed)
+                }
+                
+                if (jsonObj.containsKey("primaryLanguage")) {
+                    val lang = jsonObj["primaryLanguage"]?.jsonPrimitive?.contentOrNull
+                    if (lang != null) newSettings = newSettings.copy(primaryLanguage = lang, language = lang)
+                }
+                
+                if (jsonObj.containsKey("secondaryLanguage")) {
+                    val lang = jsonObj["secondaryLanguage"]?.jsonPrimitive?.contentOrNull
+                    if (lang != null) newSettings = newSettings.copy(secondaryLanguage = lang)
+                }
+                
+                println("[API] Updating settings to: $newSettings")
+                settingsManager.updateSettings(newSettings)
+                call.respond(HttpStatusCode.OK)
+            }
+            
             put("/api/settings/language") {
-                val request = call.receive<UpdateLanguageRequest>()
-                settingsManager.updateLanguage(request.language)
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val language = jsonObj["language"]?.jsonPrimitive?.contentOrNull ?: "en-US"
+                settingsManager.updateLanguage(language)
                 call.respond(HttpStatusCode.OK)
             }
             
             put("/api/settings/voice") {
-                val request = call.receive<UpdateVoiceRequest>()
-                settingsManager.updateVoice(request.voice)
-                call.respond(HttpStatusCode.OK)
+                try {
+                    val body = call.receiveText()
+                    println("[API] PUT /api/settings/voice RAW body: '$body'")
+                    val jsonObj = json.parseToJsonElement(body).jsonObject
+                    val voice = jsonObj["voice"]?.jsonPrimitive?.contentOrNull ?: "default"
+                    println("[API] PUT /api/settings/voice parsed voice: '$voice'")
+                    settingsManager.updateVoice(voice)
+                    call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
+                } catch (e: Exception) {
+                    println("[API] PUT /api/settings/voice ERROR: ${e.message}")
+                    e.printStackTrace()
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "unknown")))
+                }
             }
             
             put("/api/settings/rate") {
@@ -127,36 +183,53 @@ class KotlinBridge(private val port: Int = 8765) {
             
             // Speech
             post("/api/speak") {
-                val request = call.receive<SpeakRequest>()
-                println("[SPEECH] API /api/speak called with text: '${request.text}'")
-                
-                scope.launch {
-                    try {
-                        val settings = settingsManager.settings.value
-                        
-                        // Resolve voice
-                        val currentVoiceName = settings?.voice ?: "default"
-                        println("[SPEECH] Resolving voice. Content: '$currentVoiceName'")
-                        
-                        val voices = voiceRepository.getVoices()
-                        val voice = voices.find { it.name == currentVoiceName } 
-                            ?: voices.firstOrNull() 
-                            ?: Voice(name="en-US-JennyNeural", selectedLanguage="en-US") // Default fallback
+                try {
+                    val body = call.receiveText()
+                    println("[SPEECH] API /api/speak RAW body: '$body'")
+                    
+                    val jsonObj = json.parseToJsonElement(body).jsonObject
+                    val text = jsonObj["text"]?.jsonPrimitive?.contentOrNull ?: ""
+                    println("[SPEECH] API /api/speak parsed text: '$text'")
+                    
+                    scope.launch {
+                        try {
+                            val settings = settingsManager.settings.value
                             
-                        println("[SPEECH] Selected voice: ${voice.name}, Language: ${voice.selectedLanguage.ifEmpty { voice.primaryLanguage }}")
+                            // Resolve voice
+                            val currentVoiceName = settings?.voice ?: "default"
+                            val settingsLanguage = settings?.language ?: "en-US"
+                            println("[SPEECH] Resolving voice. Content: '$currentVoiceName', Settings language: '$settingsLanguage'")
+                            
+                            val voices = voiceRepository.getVoices()
+                            val foundVoice = voices.find { it.name == currentVoiceName } 
+                                ?: voices.firstOrNull() 
+                                ?: Voice(name="en-US-JennyNeural", selectedLanguage="en-US") // Default fallback
+                            
+                            // Set selectedLanguage to the user's settings language so SSML uses correct lang
+                            val voice = foundVoice.copy(selectedLanguage = settingsLanguage)
+                                
+                            println("[SPEECH] Selected voice: ${voice.name}, Language: ${voice.selectedLanguage}")
 
-                        // Logic: useSystemTts=true -> Piper/Local. useSystemTts=false -> Azure.
-                        // Default is false, which means Azure.
-                        if (settings?.useSystemTts == false) {
-                            azureSpeechService.speak(request.text, voice)
-                        } else {
-                            speechService.speak(request.text, voice)
+                            // Logic: useSystemTts=true -> Piper/Local. useSystemTts=false -> Azure.
+                            // Default is false, which means Azure.
+                            if (settings?.useSystemTts == true) { // Use explicit true check
+                                println("[SPEECH] Using System TTS (LinuxSpeechService)")
+                                speechService.speak(text, voice)
+                            } else {
+                                println("[SPEECH] Using Azure TTS (AzureSpeechService)")
+                                azureSpeechService.speak(text, voice)
+                            }
+                        } catch (e: Exception) {
+                            println("Speech error inside launch: ${e.message}")
+                            e.printStackTrace()
                         }
-                    } catch (e: Exception) {
-                        println("Speech error: ${e.message}")
                     }
+                    call.respond(HttpStatusCode.OK, mapOf("status" to "speaking"))
+                } catch (e: Exception) {
+                    println("[SPEECH] /api/speak error: ${e.message}")
+                    e.printStackTrace()
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
                 }
-                call.respond(HttpStatusCode.OK, mapOf("status" to "speaking"))
             }
             
             // Azure Config
@@ -200,17 +273,88 @@ class KotlinBridge(private val port: Int = 8765) {
                     "paused" to (speechService.isPaused() || azureSpeechService.isPaused())
                 ))
             }
+            
+            // Pronunciation Dictionary
+            get("/api/pronunciation") {
+                val entries = pronunciationRepository.getAll()
+                call.respond(entries)
+            }
+            
+            post("/api/pronunciation") {
+                val params = call.receive<Map<String, String>>()
+                val word = params["word"] ?: return@post call.respond(HttpStatusCode.BadRequest)
+                val phoneme = params["phoneme"] ?: return@post call.respond(HttpStatusCode.BadRequest)
+                pronunciationRepository.add(PronunciationEntry(word = word, phoneme = phoneme))
+                call.respond(HttpStatusCode.Created, mapOf("status" to "ok"))
+            }
+            
+            delete("/api/pronunciation/{word}") {
+                val word = call.parameters["word"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                pronunciationRepository.delete(word)
+                call.respond(HttpStatusCode.OK)
+            }
+            
+            // Pitch setting
+            put("/api/settings/pitch") {
+                val params = call.receive<Map<String, Float>>()
+                val pitch = params["pitch"] ?: 1.0f
+                // Store pitch in settings (extend Settings if needed, for now just ack)
+                call.respond(HttpStatusCode.OK)
+            }
+
+            
+            // Partner Window
+            put("/api/settings/partnerwindow") {
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val enabled = jsonObj["enabled"]?.jsonPrimitive?.booleanOrNull ?: false
+                
+                val current = settingsManager.settings.value ?: io.github.jdreioe.wingmate.domain.Settings()
+                settingsManager.updateSettings(current.copy(partnerWindowEnabled = enabled))
+                
+                call.respond(HttpStatusCode.OK)
+            }
+
+            put("/api/settings/partnerwindow-display") {
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val fontSize = jsonObj["fontSize"]?.jsonPrimitive?.intOrNull
+                val maxLines = jsonObj["maxLines"]?.jsonPrimitive?.intOrNull
+                val idleEnabled = jsonObj["idleEnabled"]?.jsonPrimitive?.booleanOrNull
+
+                val current = settingsManager.settings.value ?: io.github.jdreioe.wingmate.domain.Settings()
+                settingsManager.updateSettings(current.copy(
+                    partnerWindowFontSize = fontSize ?: current.partnerWindowFontSize,
+                    partnerWindowMaxLines = maxLines ?: current.partnerWindowMaxLines,
+                    partnerWindowIdleEnabled = idleEnabled ?: current.partnerWindowIdleEnabled
+                ))
+
+                call.respond(HttpStatusCode.OK)
+            }
+            
+            put("/api/display-text") {
+                val body = call.receiveText()
+                val jsonObj = json.parseToJsonElement(body).jsonObject
+                val text = jsonObj["text"]?.jsonPrimitive?.contentOrNull ?: ""
+                
+                partnerWindowManager.updateText(text)
+                call.respond(HttpStatusCode.OK)
+            }
         }
     }
     
-    fun start() {
+    fun start(skipPartnerWindow: Boolean = false) {
         server.start(wait = false)
+        if (!skipPartnerWindow) {
+            partnerWindowManager.start()
+        }
         println("Kotlin bridge server started on http://localhost:$port")
     }
     
     fun stop() {
         phraseViewModel.cleanup()
         settingsManager.cleanup()
+        partnerWindowManager.stop()
         server.stop(1000, 2000)
     }
 }
@@ -238,8 +382,13 @@ data class SpeakRequest(val text: String)
 /**
  * Main entry point for the Kotlin bridge service.
  */
-fun main() {
+fun main(args: Array<String>) {
+    val noPartnerWindow = "--no-partner-window" in args
+
     println("[PERSISTENCE] Starting Wingmate Linux Bridge...")
+    if (noPartnerWindow) {
+        println("[PartnerWindow] Disabled (managed by Rust driver)")
+    }
     // Defines persistence module
     val persistenceModule = module {
         single<io.github.jdreioe.wingmate.domain.SettingsRepository> { JsonFileSettingsRepository() }
@@ -251,7 +400,7 @@ fun main() {
     initKoin(persistenceModule)
     
     val bridge = KotlinBridge()
-    bridge.start()
+    bridge.start(skipPartnerWindow = noPartnerWindow)
     
     // Keep running
     Runtime.getRuntime().addShutdownHook(Thread {
