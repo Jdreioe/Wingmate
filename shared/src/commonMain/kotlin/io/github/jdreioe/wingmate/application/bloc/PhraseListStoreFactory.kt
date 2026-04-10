@@ -59,12 +59,12 @@ class PhraseListStoreFactory(
 
         override fun executeIntent(intent: PhraseListStore.Intent, getState: () -> PhraseListStore.State) {
             when (intent) {
-                is PhraseListStore.Intent.AddPhrase -> addPhrase(intent.text, getState().selectedCategoryId)
+                is PhraseListStore.Intent.AddPhrase -> addPhrase(intent.text, getState().selectedCategoryId, intent.name, intent.imageUrl)
                 is PhraseListStore.Intent.AddCategory -> addCategory(intent.name)
                 is PhraseListStore.Intent.SelectCategory -> dispatch(Msg.CategorySelected(intent.categoryId))
                 is PhraseListStore.Intent.DeletePhrase -> deletePhrase(intent.phraseId)
                 is PhraseListStore.Intent.DeleteCategory -> deleteCategory(intent.categoryId)
-                is PhraseListStore.Intent.UpdatePhrase -> updatePhrase(intent.id, intent.text, intent.name)
+                is PhraseListStore.Intent.UpdatePhrase -> updatePhrase(intent.id, intent.text, intent.name, intent.imageUrl)
                 is PhraseListStore.Intent.UpdatePhraseRecording -> updatePhraseRecording(intent.id, intent.recordingPath)
                 is PhraseListStore.Intent.MovePhrase -> movePhrase(intent.fromIndex, intent.toIndex)
                 is PhraseListStore.Intent.MoveCategory -> moveCategory(intent.fromIndex, intent.toIndex)
@@ -83,10 +83,10 @@ class PhraseListStoreFactory(
             }
         }
 
-        private fun addPhrase(text: String, categoryId: String?) {
+        private fun addPhrase(text: String, categoryId: String?, name: String?, imageUrl: String?) {
             scope.launch {
                 try {
-                    addPhraseUseCase(text, categoryId)
+                    addPhraseUseCase(text, categoryId, name, imageUrl)
                     loadPhrasesAndCategories()
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to add phrase"))
@@ -130,10 +130,10 @@ class PhraseListStoreFactory(
         }
 
 
-        private fun updatePhrase(id: String, text: String?, name: String?) {
+        private fun updatePhrase(id: String, text: String?, name: String?, imageUrl: String?) {
             scope.launch {
                 try {
-                    val updated = updatePhraseUseCase(id, text, name, null)
+                    val updated = updatePhraseUseCase(id, text, name, imageUrl, null)
                     // Just reload to keep ordering consistent
                     loadPhrasesAndCategories()
                     dispatch(Msg.PhraseUpdated(updated))
@@ -146,7 +146,7 @@ class PhraseListStoreFactory(
         private fun updatePhraseRecording(id: String, recordingPath: String?) {
             scope.launch {
                 try {
-                    val updated = updatePhraseUseCase(id, null, null, recordingPath)
+                    val updated = updatePhraseUseCase(id, null, null, null, recordingPath)
                     loadPhrasesAndCategories()
                     dispatch(Msg.PhraseUpdated(updated))
                 } catch (e: Exception) {

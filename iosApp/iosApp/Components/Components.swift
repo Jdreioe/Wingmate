@@ -319,6 +319,26 @@ struct PhraseItemView: View {
 
         Button(action: { model.insertPhraseText(phrase) }) {
             VStack(alignment: .leading, spacing: 6) {
+                if let imageUrl = phrase.imageUrl,
+                   let url = URL(string: imageUrl) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: .infinity, maxHeight: 80)
+                        case .failure(_):
+                            EmptyView()
+                        case .empty:
+                            ProgressView()
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                }
+
                 Text(phrase.name ?? phrase.text)
                     .font(.body)
                     .lineLimit(3)

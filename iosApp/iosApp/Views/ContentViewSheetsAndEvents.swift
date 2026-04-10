@@ -67,8 +67,8 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                 .presentationCornerRadius(20)
             }
             .sheet(isPresented: $showAddPhrase) {
-                AddPhraseSheet(onClose: { showAddPhrase = false }, recorder: recorder, saveRecordingPath: saveRecordingPath) { text in
-                    model.addPhrase(text: text)
+                AddPhraseSheet(onClose: { showAddPhrase = false }, recorder: recorder, saveRecordingPath: saveRecordingPath) { text, alternativeText, imageUrl in
+                    model.addPhrase(text: text, alternativeText: alternativeText, imageUrl: imageUrl)
                     showAddPhrase = false
                 }
                 .presentationDetents([.height(400), .medium, .large])
@@ -112,8 +112,8 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                     EditPhraseSheet(
                         phrase: phrase,
                         onClose: { editingPhrase = nil },
-                        onSave: { updatedText, updatedName in
-                            model.updatePhrase(id: phrase.id, text: updatedText, name: updatedName)
+                        onSave: { updatedText, updatedName, updatedImageUrl in
+                            model.updatePhrase(id: phrase.id, text: updatedText, name: updatedName, imageUrl: updatedImageUrl)
                             editingPhrase = nil
                         },
                         recorder: recorder,

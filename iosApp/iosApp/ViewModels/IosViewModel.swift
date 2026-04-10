@@ -577,8 +577,9 @@ final class IosViewModel: ObservableObject {
         store?.accept(intent: Shared.PhraseListStoreIntent.DeleteCategory(categoryId: id))
     }
 
-    func updatePhrase(id: String, text: String?, name: String?) {
-        store?.accept(intent: Shared.PhraseListStoreIntent.UpdatePhrase(id: id, text: text, name: name))
+    func updatePhrase(id: String, text: String?, name: String?, imageUrl: String? = nil) {
+        let normalizedImageUrl = imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+        store?.accept(intent: Shared.PhraseListStoreIntent.UpdatePhrase(id: id, text: text, name: name, imageUrl: normalizedImageUrl))
     }
 
     func movePhrase(from: Int, to: Int) {
@@ -592,10 +593,14 @@ final class IosViewModel: ObservableObject {
         store?.accept(intent: Shared.PhraseListStoreIntent.AddCategory(name: trimmed))
     }
 
-    func addPhrase(text: String) {
+    func addPhrase(text: String, alternativeText: String? = nil, imageUrl: String? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        store?.accept(intent: Shared.PhraseListStoreIntent.AddPhrase(text: trimmed))
+        let normalizedAlternative = alternativeText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalAlternative = (normalizedAlternative?.isEmpty == false) ? normalizedAlternative : nil
+        let normalizedImageUrl = imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalImageUrl = (normalizedImageUrl?.isEmpty == false) ? normalizedImageUrl : nil
+        store?.accept(intent: Shared.PhraseListStoreIntent.AddPhrase(text: trimmed, name: finalAlternative, imageUrl: finalImageUrl))
         // Incremental learning
         Task { _ = try? await bridge.learnPhrase(text: trimmed) }
     }

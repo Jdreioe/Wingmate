@@ -106,3 +106,37 @@
 "phrase.play_tts" = "Abspielen";
 "phrase.record" = "Aufnehmen";
 "textfield.mark_secondary_language" = "Für Zweitsprache markieren";
+"phrase.title" = "Titel";
+"phrase.title.placeholder" = "Titel";
+"phrase.pronunciation" = "Aussprache";
+"common.search" = "Suchen";
+"common.clear" = "Löschen";
+"common.stop" = "Stopp";
+
+"phrase.recording" = "Aufnahme";
+"phrase.mic_permission_denied" = "Mikrofonberechtigung verweigert. Aktiviere sie in den Einstellungen.";
+"phrase.alternative_text.optional" = "Alternativer Phrasentext (optional)";
+"phrase.alternative_text.placeholder" = "Was stattdessen gesprochen werden soll";
+
+"phrase.symbol.section" = "Symbol (OpenSymbols)";
+"phrase.symbol.source" = "Symbolquelle";
+"phrase.symbol.source.opensymbols" = "OpenSymbols";
+"phrase.symbol.source.user_photos" = "Meine Fotos";
+"phrase.symbol.search.placeholder" = "Symbole suchen";
+"phrase.symbol.selected" = "Ausgewähltes Symbol";
+"phrase.symbol.error.token_url" = "OpenSymbols-Token-URL konnte nicht erstellt werden";
+"phrase.symbol.error.auth_failed" = "OpenSymbols-Authentifizierung fehlgeschlagen";
+"phrase.symbol.error.search_url" = "OpenSymbols-Such-URL konnte nicht erstellt werden";
+"phrase.symbol.error.search_failed" = "OpenSymbols-Suche fehlgeschlagen";
+"phrase.symbol.error.missing_secret" = "OpenSymbols ist für diesen Build nicht konfiguriert";
+"phrase.symbol.pick_photo" = "Foto wählen";
+"phrase.symbol.import_file" = "Bild importieren";
+"phrase.symbol.error.photo_load_failed" = "Ausgewähltes Foto konnte nicht geladen werden";
+"phrase.symbol.error.import_failed" = "Ausgewähltes Bild konnte nicht importiert werden";
+
+"voice.system_tts.enabled_info" = "System-TTS ist aktiviert. Die Stimmauswahl wird in den iOS-Einstellungen verwaltet.";
+"voice.system_tts.using" = "System-Text-zu-Sprache wird verwendet";
+"voice.system_tts.settings_info" = "Stimmoptionen werden in iOS Einstellungen > Bedienungshilfen > Gesprochene Inhalte > Stimmen verwaltet";
+
+"accessibility.double_tap_select_voice" = "Doppeltippen, um diese Stimme auszuwählen";
+"accessibility.double_tap_select_language" = "Doppeltippen, um diese Sprache auszuwählen";

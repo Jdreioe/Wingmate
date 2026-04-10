@@ -109,3 +109,37 @@
 "phrase.play_tts" = "Afspil";
 "phrase.record" = "Optag";
 "textfield.mark_secondary_language" = "Markér til andet sprog";
+"phrase.title" = "Titel";
+"phrase.title.placeholder" = "Titel";
+"phrase.pronunciation" = "Udtale";
+"common.search" = "Søg";
+"common.clear" = "Ryd";
+"common.stop" = "Stop";
+
+"phrase.recording" = "Optagelse";
+"phrase.mic_permission_denied" = "Mikrofontilladelse afvist. Aktiver den i Indstillinger.";
+"phrase.alternative_text.optional" = "Alternativ frasetekst (valgfri)";
+"phrase.alternative_text.placeholder" = "Hvad skal siges i stedet";
+
+"phrase.symbol.section" = "Symbol ";
+"phrase.symbol.source" = "Symbolkilde";
+"phrase.symbol.source.opensymbols" = "OpenSymbols";
+"phrase.symbol.source.user_photos" = "Mine fotos";
+"phrase.symbol.search.placeholder" = "Søg symboler";
+"phrase.symbol.selected" = "Valgt symbol";
+"phrase.symbol.error.token_url" = "Kunne ikke oprette OpenSymbols token-URL";
+"phrase.symbol.error.auth_failed" = "OpenSymbols godkendelse mislykkedes";
+"phrase.symbol.error.search_url" = "Kunne ikke oprette OpenSymbols søge-URL";
+"phrase.symbol.error.search_failed" = "OpenSymbols søgning mislykkedes";
+"phrase.symbol.error.missing_secret" = "OpenSymbols er ikke konfigureret til denne build";
+"phrase.symbol.pick_photo" = "Vælg foto";
+"phrase.symbol.import_file" = "Importer billede";
+"phrase.symbol.error.photo_load_failed" = "Kunne ikke indlæse det valgte foto";
+"phrase.symbol.error.import_failed" = "Kunne ikke importere det valgte billede";
+
+"voice.system_tts.enabled_info" = "System-TTS er aktiveret. Valg af stemme håndteres i iOS-indstillinger.";
+"voice.system_tts.using" = "Bruger System tekst-til-tale";
+"voice.system_tts.settings_info" = "Stemmeindstillinger håndteres i iOS Indstillinger > Tilgængelighed > Talt indhold > Stemmer";
+
+"accessibility.double_tap_select_voice" = "Dobbelttryk for at vælge denne stemme";
+"accessibility.double_tap_select_language" = "Dobbelttryk for at vælge dette sprog";

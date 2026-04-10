@@ -19,8 +19,8 @@ object OpenSymbolsClient {
     private const val TOKEN_ENDPOINT = "$BASE_URL/api/v2/token"
     private const val SYMBOLS_ENDPOINT = "$BASE_URL/api/v2/symbols"
     
-    // User's shared secret - TODO: move to secure config
-    private var sharedSecret: String = "6a1ee5b773c69533b82d5166"
+    // Must be provided at runtime via setSharedSecret().
+    private var sharedSecret: String = ""
     
     private var cachedToken: String? = null
     private var tokenExpiry: Long = 0L
@@ -41,6 +41,9 @@ object OpenSymbolsClient {
      * Get access token (cached if still valid)
      */
     private suspend fun getAccessToken(): String? = withContext(Dispatchers.Default) {
+        if (sharedSecret.isBlank()) {
+            return@withContext null
+        }
         // Return cached token if still valid (with 30s buffer)
         val currentTime = Clock.System.now().toEpochMilliseconds()
         if (cachedToken != null && currentTime < tokenExpiry - 30000) {

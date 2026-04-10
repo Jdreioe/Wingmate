@@ -110,3 +110,37 @@
 "phrase.play_tts" = "Play";
 "phrase.record" = "Record";
 "textfield.mark_secondary_language" = "Mark for second language";
+"phrase.title" = "Title";
+"phrase.title.placeholder" = "Title";
+"phrase.pronunciation" = "Pronunciation";
+"common.search" = "Search";
+"common.clear" = "Clear";
+"common.stop" = "Stop";
+
+"phrase.recording" = "Recording";
+"phrase.mic_permission_denied" = "Microphone permission denied. Enable it in Settings.";
+"phrase.alternative_text.optional" = "Alternative phrase text (optional)";
+"phrase.alternative_text.placeholder" = "What to speak instead";
+
+"phrase.symbol.section" = "Symbol";
+"phrase.symbol.source" = "Symbol source";
+"phrase.symbol.source.opensymbols" = "OpenSymbols";
+"phrase.symbol.source.user_photos" = "My Photos";
+"phrase.symbol.search.placeholder" = "Search symbols";
+"phrase.symbol.selected" = "Selected symbol";
+"phrase.symbol.error.token_url" = "Failed to build OpenSymbols token URL";
+"phrase.symbol.error.auth_failed" = "OpenSymbols authentication failed";
+"phrase.symbol.error.search_url" = "Failed to build OpenSymbols search URL";
+"phrase.symbol.error.search_failed" = "OpenSymbols search failed";
+"phrase.symbol.error.missing_secret" = "OpenSymbols is not configured for this build";
+"phrase.symbol.pick_photo" = "Pick Photo";
+"phrase.symbol.import_file" = "Import Image";
+"phrase.symbol.error.photo_load_failed" = "Failed to load selected photo";
+"phrase.symbol.error.import_failed" = "Failed to import selected image";
+
+"voice.system_tts.enabled_info" = "System TTS is enabled. Voice selection is handled through iOS Settings.";
+"voice.system_tts.using" = "Using System Text-to-Speech";
+"voice.system_tts.settings_info" = "Voice options are managed in iOS Settings > Accessibility > Spoken Content > Voices";
+
+"accessibility.double_tap_select_voice" = "Double tap to select this voice";
+"accessibility.double_tap_select_language" = "Double tap to select this language";

@@ -4,5 +4,7 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>OPEN_SYMBOLS_SECRET</key>
+	<string></string>
 </dict>
 </plist>
