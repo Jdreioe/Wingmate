@@ -23,6 +23,10 @@ struct RightSettingsPanel: View {
         return langs.isEmpty ? [model.secondaryLanguage] : langs
     }
 
+    private var showsLanguageSettings: Bool {
+        model.canChangeVoiceLanguage
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -59,30 +63,32 @@ struct RightSettingsPanel: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Language").font(.headline)
-                Picker("Language", selection: Binding(
-                    get: { model.primaryLanguage },
-                    set: { model.updateLanguage($0) }
-                )) {
-                    ForEach(languages, id: \.self) { lang in
-                        Text(lang).tag(lang)
+            if showsLanguageSettings {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Language").font(.headline)
+                    Picker("Language", selection: Binding(
+                        get: { model.primaryLanguage },
+                        set: { model.updateLanguage($0) }
+                    )) {
+                        ForEach(languages, id: \.self) { lang in
+                            Text(lang).tag(lang)
+                        }
                     }
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.menu)
-            }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("toolbar.second_language").font(.headline)
-                Picker("toolbar.second_language", selection: Binding(
-                    get: { model.secondaryLanguage },
-                    set: { model.updateSecondaryLanguage($0) }
-                )) {
-                    ForEach(secondaryLanguages, id: \.self) { lang in
-                        Text(lang).tag(lang)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("toolbar.second_language").font(.headline)
+                    Picker("toolbar.second_language", selection: Binding(
+                        get: { model.secondaryLanguage },
+                        set: { model.updateSecondaryLanguage($0) }
+                    )) {
+                        ForEach(secondaryLanguages, id: \.self) { lang in
+                            Text(lang).tag(lang)
+                        }
                     }
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.menu)
             }
 
             Divider().padding(.vertical, 4)

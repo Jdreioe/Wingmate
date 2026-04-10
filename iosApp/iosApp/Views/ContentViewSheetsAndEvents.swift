@@ -4,6 +4,7 @@ import Shared
 
 struct ContentViewSheetsAndEvents<Content: View>: View {
     @ObservedObject var model: IosViewModel
+    @Binding var showWelcomeFlow: Bool
     @Binding var showVoiceSheet: Bool
     @Binding var showLanguageSheet: Bool
     @Binding var showSecondaryLanguageSheet: Bool
@@ -11,6 +12,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
     @Binding var showAddPhrase: Bool
     @Binding var showUiSizeSheet: Bool
     @Binding var showPronunciationSheet: Bool
+    @Binding var showSettingsPanel: Bool
     @Binding var editingPhrase: Shared.Phrase?
     let uiTextFieldHeight: Binding<Double>
     let uiInputFontSize: Binding<Double>
@@ -87,6 +89,22 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                     PronunciationDictionaryView(model: model)
                 }
                 .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: Binding(get: { !isPad && showSettingsPanel }, set: { if !$0 { showSettingsPanel = false } })) {
+                NavigationStack {
+                    RightSettingsPanel(
+                        model: model,
+                        uiTextFieldHeight: uiTextFieldHeight,
+                        uiInputFontSize: uiInputFontSize,
+                        uiChipFontSize: uiChipFontSize,
+                        uiPlayIconSize: uiPlayIconSize,
+                        openVoicePicker: { showVoiceSheet = true },
+                        openWelcomeFlow: { showWelcomeFlow = true },
+                        openPronunciation: { showPronunciationSheet = true }
+                    )
+                }
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: Binding(get: { editingPhrase != nil }, set: { if !$0 { editingPhrase = nil } })) {

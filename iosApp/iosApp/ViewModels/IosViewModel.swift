@@ -7,10 +7,16 @@ import Network
 final class IosViewModel: ObservableObject {
     private final class StoreObserver: NSObject, Shared.RxObserver {
         private let onNextState: (Shared.PhraseListStoreState) -> Void
+        private let onCompleteState: () -> Void
         init(onNext: @escaping (Shared.PhraseListStoreState) -> Void) {
             self.onNextState = onNext
+            self.onCompleteState = {}
         }
-        func onComplete() { /* no-op */ }
+        init(onNext: @escaping (Shared.PhraseListStoreState) -> Void, onComplete: @escaping () -> Void) {
+            self.onNextState = onNext
+            self.onCompleteState = onComplete
+        }
+        func onComplete() { onCompleteState() }
         func onNext(value: Any?) {
             if let s = value as? Shared.PhraseListStoreState {
                 onNextState(s)
@@ -86,20 +92,33 @@ final class IosViewModel: ObservableObject {
         return self.primaryLanguage
     }
 
+    var canChangeVoiceLanguage: Bool {
+        let languages = availableLanguages
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return Set(languages).count > 1
+    }
+
     func start() async {
         await MainActor.run { IosDiBridge().startKoinWithOverridesBridge() }
         let repoNameBefore = KoinBridge().debugVoiceRepositoryName()
         print("DEBUG: After startKoinWithOverrides: Bound VoiceRepository = \(repoNameBefore)")
         if let phraseStore = KoinBridge().phraseListStoreOrNull() {
             self.store = phraseStore
-            let observer = StoreObserver { [weak self] newState in self?.state = newState }
+            let observer = StoreObserver(onNext: { [weak self] newState in self?.state = newState }, onComplete: { [weak self] in
+                self?.disposable = nil
+                self?.store = nil
+            })
             self.disposable = store?.states(observer: observer)
         } else {
             print("DEBUG: phraseListStoreOrNull() returned nil — Koin not ready or store not bound")
             try? await Task.sleep(nanoseconds: 150_000_000)
             if let retryStore = KoinBridge().phraseListStoreOrNull() {
                 self.store = retryStore
-                let observer = StoreObserver { [weak self] newState in self?.state = newState }
+                let observer = StoreObserver(onNext: { [weak self] newState in self?.state = newState }, onComplete: { [weak self] in
+                    self?.disposable = nil
+                    self?.store = nil
+                })
                 self.disposable = store?.states(observer: observer)
                 print("DEBUG: Store resolved on retry")
             } else {
@@ -622,30 +641,55 @@ final class IosViewModel: ObservableObject {
         input.append(char)
         onInputChanged(input)
     }
+
+    private func hasAudioPath(_ path: String?) -> Bool {
+        guard let path = path else { return false }
+        return !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func resolveLastAudioPath() -> String? {
+        let normalizedInput = input.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // 1) Prefer an exact match to current input if available.
+        if !normalizedInput.isEmpty,
+           let byText = historyPhrases.first(where: {
+               let t = ($0.text).trimmingCharacters(in: .whitespacesAndNewlines)
+               let n = ($0.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+               return (t == normalizedInput || n == normalizedInput) && hasAudioPath($0.recordingPath)
+           }),
+           let path = byText.recordingPath {
+            return path
+        }
+
+        // 2) Fall back to the most recent history entry with audio.
+        if let fromHistory = historyPhrases.first(where: { hasAudioPath($0.recordingPath) }),
+           let path = fromHistory.recordingPath {
+            return path
+        }
+
+        // 3) Last fallback: any stored phrase recording.
+        if let fromPhrases = state.phrases.first(where: { hasAudioPath($0.recordingPath) }),
+           let path = fromPhrases.recordingPath {
+            return path
+        }
+
+        return nil
+    }
+
+    var hasShareableAudio: Bool {
+        resolveLastAudioPath() != nil
+    }
     
     // MARK: - Sharing
     func shareLastAudio() {
-        guard !input.isEmpty else { return }
-        // Find most recent history item with matching text and audio path
-        if let match = historyPhrases.first(where: {
-            ($0.text == input || $0.name == input) && $0.recordingPath != nil && !$0.recordingPath!.isEmpty
-        }) {
-            if let path = match.recordingPath {
-                bridge.shareAudio(path: path)
-            }
-        }
+        guard let path = resolveLastAudioPath() else { return }
+        bridge.shareAudio(path: path)
     }
 
     func copyLastAudio() {
-        guard !input.isEmpty else { return }
-        if let match = historyPhrases.first(where: {
-            ($0.text == input || $0.name == input) && $0.recordingPath != nil && !$0.recordingPath!.isEmpty
-        }) {
-             if let path = match.recordingPath {
-                // Fallback to share action until copy bridge API is available in generated Swift bindings.
-                bridge.shareAudio(path: path)
-            }
-        }
+        guard let path = resolveLastAudioPath() else { return }
+        // Fallback to share to avoid framework symbol mismatch when copyAudio is not exported in current build.
+        bridge.shareAudio(path: path)
     }
     
     // MARK: - Pronunciations

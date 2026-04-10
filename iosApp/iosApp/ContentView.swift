@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var showAddPhrase = false
     @State private var showUiSizeSheet = false
     @State private var showPronunciationSheet = false
+    @State private var showSettingsPanel = false
     @State private var editingPhrase: Shared.Phrase? = nil
 
     @State private var recorder = AudioRecorder()
@@ -49,6 +50,7 @@ struct ContentView: View {
             recorder: recorder,
             recordingForPhraseId: $recordingForPhraseId,
             editingPhrase: $editingPhrase,
+            showAddCategory: $showAddCategory,
             showAddPhrase: $showAddPhrase,
             wiggleMode: $wiggleMode,
             gridLocal: $gridLocal,
@@ -71,6 +73,7 @@ struct ContentView: View {
     var body: some View {
         ContentViewSheetsAndEvents(
             model: model,
+            showWelcomeFlow: $showWelcomeFlow,
             showVoiceSheet: $showVoiceSheet,
             showLanguageSheet: $showLanguageSheet,
             showSecondaryLanguageSheet: $showSecondaryLanguageSheet,
@@ -78,6 +81,7 @@ struct ContentView: View {
             showAddPhrase: $showAddPhrase,
             showUiSizeSheet: $showUiSizeSheet,
             showPronunciationSheet: $showPronunciationSheet,
+            showSettingsPanel: $showSettingsPanel,
             editingPhrase: $editingPhrase,
             uiTextFieldHeight: $uiTextFieldHeight,
             uiInputFontSize: $uiInputFontSize,
@@ -181,81 +185,16 @@ struct ContentView: View {
                 .toolbar {
                     if !shouldShowWelcomeFlow {
                         ToolbarItemGroup(placement: .topBarTrailing) {
-                            Button(action: { showWelcomeFlow = true }) {
-                                Image(systemName: "questionmark.circle")
-                                    .accessibilityLabel(Text("toolbar.welcome_flow"))
-                            }
-
-                            if isWideLayout {
-                                Button(action: {
-                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.85, blendDuration: 0.1)) {
-                                        showRightPanel.toggle()
-                                    }
-                                }) {
-                                    Image(systemName: "sidebar.right")
-                                        .accessibilityLabel(Text("toolbar.settings_panel"))
-                                }
-                            }
-
-                            if wiggleMode {
-                                Button("common.done") {
-                                    withAnimation(.easeOut(duration: 0.3)) {
-                                        wiggleMode = false
-                                        draggingId = nil
-                                        draggingOffset = .zero
-                                        dragStartFrame = nil
-                                        gridLocal.removeAll()
+                            Button(action: {
+                                withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.1)) {
+                                    showSettingsPanel = true
+                                    if isWideLayout {
+                                        showRightPanel = true
                                     }
                                 }
-                                .foregroundStyle(.red)
-                                .bold()
-                            } else {
-                                Button(action: {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        wiggleMode = true
-                                        gridLocal = model.filteredPhrases
-                                        draggingId = nil
-                                        draggingOffset = .zero
-                                        dragStartFrame = nil
-                                    }
-                                }) {
-                                    Image(systemName: "square.grid.3x3.fill")
-                                        .accessibilityLabel(Text("toolbar.wiggle_mode"))
-                                }
-                            }
-
-                            if !isWideLayout || !showRightPanel {
-                                Button(action: { showLanguageSheet = true }) {
-                                    Label("toolbar.language", systemImage: "globe")
-                                }
-                                Button(action: { showSecondaryLanguageSheet = true }) {
-                                    Label("toolbar.second_language", systemImage: "globe.badge.chevron.backward")
-                                }
-                                Button(action: { showVoiceSheet = true }) {
-                                    Image(systemName: "gearshape").accessibilityLabel(Text("toolbar.voice"))
-                                }
-                                Button(action: { showUiSizeSheet = true }) {
-                                    Image(systemName: "textformat.size").accessibilityLabel(Text("toolbar.ui_size"))
-                                }
-                                Button(action: { showPronunciationSheet = true }) {
-                                    Image(systemName: "character.book.closed").accessibilityLabel(Text("toolbar.pronunciation"))
-                                }
-                            }
-
-                            Button(action: { showAddCategory = true }) {
-                                Image(systemName: "folder.badge.plus").accessibilityLabel(Text("toolbar.add_category"))
-                            }
-
-                            Menu {
-                                Button(action: { model.shareLastAudio() }) {
-                                    Label("Share last audio", systemImage: "square.and.arrow.up")
-                                }
-                                Button(action: { model.copyLastAudio() }) {
-                                    Label("Copy last audio", systemImage: "doc.on.doc")
-                                }
-                            } label: {
-                                Image(systemName: "ellipsis.circle")
-                                    .accessibilityLabel(Text("toolbar.more_actions"))
+                            }) {
+                                Image(systemName: "slider.horizontal.3")
+                                    .accessibilityLabel(Text("toolbar.settings_panel"))
                             }
                         }
                     }
@@ -284,6 +223,26 @@ struct ContentView: View {
     }
 
     private func requestMicAndStart(for phraseId: String) {
+        func stopAndSaveCurrentRecording() {
+            Task { @MainActor in
+                guard let activePhraseId = recordingForPhraseId else { return }
+                if let url = try? await recorder.stopRecording() {
+                    model.setRecordingPath(url.path, for: activePhraseId)
+                }
+                recordingForPhraseId = nil
+            }
+        }
+
+        if recorder.isRecording {
+            // Tapping mic while recording toggles stop/save. If a different phrase is tapped,
+            // stop current recording first and then begin for the new phrase.
+            let currentId = recordingForPhraseId
+            stopAndSaveCurrentRecording()
+            if currentId == phraseId {
+                return
+            }
+        }
+
         if #available(iOS 17.0, *) {
             AVAudioApplication.requestRecordPermission { granted in
                 if granted {
@@ -333,3 +292,4 @@ struct ContentView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View { ContentView() }
 }
+

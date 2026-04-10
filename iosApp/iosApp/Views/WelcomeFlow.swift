@@ -352,7 +352,7 @@ struct WelcomeFlow: View {
             .padding(.horizontal)
         }
     }
-    
+
     @ViewBuilder
     private var navigationButtons: some View {
         HStack(spacing: 16) {

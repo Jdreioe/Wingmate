@@ -6,6 +6,7 @@ struct MainContentView: View {
     let recorder: AudioRecorder
     @Binding var recordingForPhraseId: String?
     @Binding var editingPhrase: Shared.Phrase?
+    @Binding var showAddCategory: Bool
     @Binding var showAddPhrase: Bool
     @Binding var wiggleMode: Bool
     @Binding var gridLocal: [Shared.Phrase]
@@ -162,7 +163,8 @@ struct MainContentView: View {
                     isHistorySelected = false
                     model.selectCategory(id: id)
                 },
-                onDelete: { id in model.deleteCategory(id: id) }
+                onDelete: { id in model.deleteCategory(id: id) },
+                onAddCategory: { showAddCategory = true }
             ,
                 showHistoryChip: !model.historyPhrases.isEmpty,
                 isHistorySelected: isHistorySelected,

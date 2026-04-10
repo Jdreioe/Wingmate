@@ -233,6 +233,7 @@ struct CategoriesRowView: View {
     let chipVPadding: CGFloat
     let onSelect: (String?) -> Void
     let onDelete: (String) -> Void
+    let onAddCategory: () -> Void
     // Optional History chip
     var showHistoryChip: Bool = false
     var isHistorySelected: Bool = false
@@ -262,6 +263,16 @@ struct CategoriesRowView: View {
                         Button(role: .destructive) { onDelete(cat.id) } label: { Label("category.delete", systemImage: "trash") }
                     }
                 }
+                Button(action: onAddCategory) {
+                    Image(systemName: "plus")
+                        .font(.system(size: max(14, chipFontSize * 0.85), weight: .semibold))
+                        .padding(.horizontal, chipHPadding)
+                        .padding(.vertical, chipVPadding)
+                        .background(Capsule().fill(Color(.secondarySystemBackground)))
+                        .overlay(Capsule().stroke(Color(.separator), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("toolbar.add_category"))
             }
             .padding(.horizontal, 4)
             .padding(.bottom, 4)
@@ -303,7 +314,8 @@ struct PhraseItemView: View {
     let bgColor = useDefaultBg ? Color(.secondarySystemBackground) : Color(hex: bgHex)
     let tileShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         let title = phrase.name?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let accessibleName = (title?.isEmpty == false ? title : phrase.text).trimmingCharacters(in: .whitespacesAndNewlines)
+        let accessibleName = ((title?.isEmpty == false ? title : phrase.text) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         Button(action: { model.insertPhraseText(phrase) }) {
             VStack(alignment: .leading, spacing: 6) {

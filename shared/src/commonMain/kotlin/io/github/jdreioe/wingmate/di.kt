@@ -4,6 +4,7 @@ import io.github.jdreioe.wingmate.application.PhraseBloc
 import io.github.jdreioe.wingmate.application.SettingsBloc
 import io.github.jdreioe.wingmate.application.VoiceBloc
 import io.github.jdreioe.wingmate.application.PhraseUseCase
+import io.github.jdreioe.wingmate.application.usecase.AddCategoryUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.CategoryUseCase
@@ -35,7 +36,7 @@ fun initKoin(extra: Module? = null) {
         single { UserDataManager(get<SaidTextRepository>()) }
         single { SettingsStateManager(get<SettingsRepository>()) }
         single { VoiceUseCase(get<VoiceRepository>(), get<AzureVoiceCatalog>(), get<ConfigRepository>()) }
-        factory { PhraseBloc(get<PhraseUseCase>()) }
+        factory { PhraseBloc(get<PhraseUseCase>(), AddCategoryUseCase(get<PhraseRepository>())) }
         factory { SettingsBloc(get<SettingsUseCase>()) }
         factory { VoiceBloc(get<VoiceUseCase>()) }
     }
