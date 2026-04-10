@@ -73,6 +73,20 @@ iosApp/Pods/
 *.log
 *.crashlog
 
+## Local secrets/config (keep out of OSS)
+.env
+.env.*
+!.env.example
+**/*Secrets.xcconfig
+iosApp/Configuration/Secrets.xcconfig
+iosApp/iosApp/Info-Local.plist
+iosApp/iosApp/Info.local.plist
+
+## iOS local build/export artifacts
+iosApp/*.xcresult
+iosApp/*.xcarchive/
+iosApp/iosApp 20*/
+
 ## Generated files
 **/generated/
 **/tmp/

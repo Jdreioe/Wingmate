@@ -22,12 +22,12 @@ private enum PhraseSymbolSource: String, CaseIterable, Identifiable {
 }
 
 private func resolveOpenSymbolsSecret() -> String? {
-    let fromInfo = (Bundle.main.object(forInfoDictionaryKey: "OPEN_SYMBOLS_SECRET") as? String)
-        ?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let fromInfoRaw = Bundle.main.object(forInfoDictionaryKey: "OPEN_SYMBOLS_SECRET") as? String
+    let fromInfo = fromInfoRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
     if let fromInfo, !fromInfo.isEmpty { return fromInfo }
 
-    let fromEnv = ProcessInfo.processInfo.environment["OPEN_SYMBOLS_SECRET"]?
-        .trimmingCharacters(in: .whitespacesAndNewlines)
+    let fromEnvRaw = ProcessInfo.processInfo.environment["OPEN_SYMBOLS_SECRET"]
+    let fromEnv = fromEnvRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
     if let fromEnv, !fromEnv.isEmpty { return fromEnv }
 
     return nil
