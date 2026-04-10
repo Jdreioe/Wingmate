@@ -139,6 +139,10 @@ struct MainContentView: View {
 
             // Input field
             MultiLineInput(text: inputBinding,
+                           selectedRange: Binding(
+                               get: { model.inputSelectionRange },
+                               set: { model.inputSelectionRange = $0 }
+                           ),
                            placeholder: NSLocalizedString("tts.placeholder", comment: ""),
                            fontSize: CGFloat(uiInputFontSize),
                            minHeight: CGFloat(uiTextFieldHeight),

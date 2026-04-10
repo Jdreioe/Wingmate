@@ -50,6 +50,7 @@ final class IosViewModel: ObservableObject {
 
     // UI state
     @Published var input: String = ""
+    var inputSelectionRange: NSRange = NSRange(location: 0, length: 0)
     @Published var primaryLanguage: String = "en-US"
     @Published var secondaryLanguage: String = "en-US"
     @Published var secondaryLanguageRanges: [NSRange] = []
@@ -211,13 +212,39 @@ final class IosViewModel: ObservableObject {
     func insertPhraseText(_ phrase: Shared.Phrase) {
         let t = phrase.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        input += t + " "
+        let nsInput = input as NSString
+        let inputLength = nsInput.length
+
+        var range = inputSelectionRange
+        if range.location == NSNotFound {
+            range = NSRange(location: inputLength, length: 0)
+        }
+
+        let safeLocation = min(max(0, range.location), inputLength)
+        let safeLength = min(max(0, range.length), max(0, inputLength - safeLocation))
+        let safeRange = NSRange(location: safeLocation, length: safeLength)
+
+        var prefix = ""
+        if safeLocation > 0 {
+            let previousChar = nsInput.substring(with: NSRange(location: safeLocation - 1, length: 1))
+            if previousChar.rangeOfCharacter(from: .whitespacesAndNewlines) == nil {
+                prefix = " "
+            }
+        }
+
+        let insertion = prefix + t + " "
+
+        input = nsInput.replacingCharacters(in: safeRange, with: insertion)
+        let insertionLength = (insertion as NSString).length
+        inputSelectionRange = NSRange(location: safeLocation + insertionLength, length: 0)
+
         onInputChanged(input)
         // Incremental learning
         Task { _ = try? await bridge.learnPhrase(text: t) }
     }
     func deleteText() {
         input = ""
+        inputSelectionRange = NSRange(location: 0, length: 0)
         onInputChanged(input)
     }
     func speak(_ text: String) {

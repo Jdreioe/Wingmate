@@ -40,6 +40,7 @@ struct LanguageChip: View {
 
 struct MultiLineInput: View {
     @Binding var text: String
+    @Binding var selectedRange: NSRange
     var placeholder: String
     var fontSize: CGFloat
     var minHeight: CGFloat
@@ -49,7 +50,6 @@ struct MultiLineInput: View {
     var onTextChanged: ((String) -> Void)? = nil
     var onTextEdited: ((NSRange, String) -> Void)? = nil
     var onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)? = nil
-    @State private var selectedRange: NSRange = NSRange(location: NSNotFound, length: 0)
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -115,21 +115,25 @@ struct SelectableTextView: UIViewRepresentable {
             guard let selectedRange = textView?.selectedRange, selectedRange.location != NSNotFound, selectedRange.length > 0 else { return }
             onMarkSelectionAsSecondaryLanguage?(selectedRange)
         }
-        applyHighlighting(to: textView)
+        context.coordinator.isProgrammaticUpdate = true
+        applyHighlighting(to: textView, desiredSelectedRange: selectedRange)
+        context.coordinator.isProgrammaticUpdate = false
         return textView
     }
 
     func updateUIView(_ uiView: UITextView, context: Context) {
-        applyHighlighting(to: uiView)
+        context.coordinator.isProgrammaticUpdate = true
+        applyHighlighting(to: uiView, desiredSelectedRange: selectedRange)
         uiView.font = UIFont.systemFont(ofSize: fontSize)
         if let menuAwareView = uiView as? MenuAwareTextView {
             menuAwareView.secondaryLanguageActionTitle = NSLocalizedString("textfield.mark_secondary_language", comment: "")
             menuAwareView.allowsSecondaryLanguageAction = allowsSecondaryLanguageAction
         }
+        context.coordinator.isProgrammaticUpdate = false
     }
 
-    private func applyHighlighting(to textView: UITextView) {
-        let selected = textView.selectedRange
+    private func applyHighlighting(to textView: UITextView, desiredSelectedRange: NSRange) {
+        let selected = (desiredSelectedRange.location == NSNotFound) ? textView.selectedRange : desiredSelectedRange
         let full = text as NSString
         let attributed = NSMutableAttributedString(string: text)
         attributed.addAttributes([
@@ -154,7 +158,10 @@ struct SelectableTextView: UIViewRepresentable {
         let maxPos = textView.text.utf16.count
         let safeLocation = min(max(0, selected.location), maxPos)
         let safeLength = min(max(0, selected.length), max(0, maxPos - safeLocation))
-        textView.selectedRange = NSRange(location: safeLocation, length: safeLength)
+        let clamped = NSRange(location: safeLocation, length: safeLength)
+        if !NSEqualRanges(textView.selectedRange, clamped) {
+            textView.selectedRange = clamped
+        }
         textView.typingAttributes = [
             .font: UIFont.systemFont(ofSize: fontSize),
             .foregroundColor: UIColor.label
@@ -167,6 +174,7 @@ struct SelectableTextView: UIViewRepresentable {
         let onTextChanged: ((String) -> Void)?
         let onTextEdited: ((NSRange, String) -> Void)?
         let onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)?
+        var isProgrammaticUpdate: Bool = false
 
         init(
             text: Binding<String>,
@@ -183,17 +191,25 @@ struct SelectableTextView: UIViewRepresentable {
         }
 
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {
+            if isProgrammaticUpdate { return true }
             onTextEdited?(range, replacement)
             return true
         }
 
         func textViewDidChange(_ textView: UITextView) {
+            if isProgrammaticUpdate { return }
             text = textView.text ?? ""
             onTextChanged?(text)
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {
-            selectedRange = textView.selectedRange
+            if isProgrammaticUpdate { return }
+            let latestSelection = textView.selectedRange
+            DispatchQueue.main.async {
+                if !NSEqualRanges(self.selectedRange, latestSelection) {
+                    self.selectedRange = latestSelection
+                }
+            }
         }
     }
 }
