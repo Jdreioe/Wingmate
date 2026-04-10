@@ -209,14 +209,17 @@ final class IosViewModel: ObservableObject {
     }
 
     func insertPhraseText(_ phrase: Shared.Phrase) {
-        let t = phrase.text
+        let t = phrase.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        input.append(t)
+        input += t + " "
         onInputChanged(input)
         // Incremental learning
         Task { _ = try? await bridge.learnPhrase(text: t) }
     }
-
+    func deleteText() {
+        input = ""
+        onInputChanged(input)
+    }
     func speak(_ text: String) {
         let plain = text
         guard !plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }

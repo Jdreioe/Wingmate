@@ -206,18 +206,25 @@ struct MainContentView: View {
                 .accessibilityHint(Text("Speaks the text in the input field"))
                 Button(action: { model.pauseTts() }) {
                     Image(systemName: "pause.circle")
-                        .font(.system(size: CGFloat(uiPlayIconSize - 4)))
+                        .font(.system(size: CGFloat(uiPlayIconSize)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("Pause"))
                 .accessibilityHint(Text("Pauses speech playback"))
                 Button(action: { model.stopTts() }) {
                     Image(systemName: "stop.circle")
-                        .font(.system(size: CGFloat(uiPlayIconSize - 4)))
+                        .font(.system(size: CGFloat(uiPlayIconSize)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("Stop"))
                 .accessibilityHint(Text("Stops speech playback"))
+                Button(action: { model.deleteText() }) {
+                    Image(systemName: "trash.circle")
+                        .font(.system(size: CGFloat(uiPlayIconSize)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Clear"))
+                .accessibilityHint(Text("Clears the text in the input field"))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
