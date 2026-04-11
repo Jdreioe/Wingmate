@@ -79,3 +79,4 @@ iosApp/Pods/
 **/intermediates/
 **/.cxx/
 **/*.properties
+*.hprof
