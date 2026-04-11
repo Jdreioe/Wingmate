@@ -56,6 +56,18 @@ data class Settings(
     val useCustomColors: Boolean = false, // enable custom color theming
     // Welcome flow completion
     val welcomeFlowCompleted: Boolean = false,
+    // Accessibility scanning settings
+    val scanningEnabled: Boolean = false,
+    val scanPlaybackAreaEnabled: Boolean = true,
+    val scanInputFieldEnabled: Boolean = true,
+    val scanPhraseGridEnabled: Boolean = true,
+    val scanCategoryItemsEnabled: Boolean = true,
+    val scanTopBarEnabled: Boolean = true,
+    // Allowed values: row-major, column-major, linear
+    val scanPhraseGridOrder: String = "row-major",
+    // Timing controls in seconds
+    val scanDwellTimeSeconds: Float = 1.0f,
+    val scanAutoAdvanceSeconds: Float = 1.2f,
     // Partner window display (TD-I13 via FTDI FT232H) — desktop only
     val partnerWindowEnabled: Boolean = false,
     // EVE ROM font index (16-34); 31 = largest standard ROM font

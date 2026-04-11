@@ -64,6 +64,22 @@ struct MainContentView: View {
         )
     }
 
+    private var hideInputFromScanning: Bool {
+        model.scanningEnabled && !model.scanInputFieldEnabled
+    }
+
+    private var hideCategoriesFromScanning: Bool {
+        model.scanningEnabled && !model.scanCategoryItemsEnabled
+    }
+
+    private var hideGridFromScanning: Bool {
+        model.scanningEnabled && !model.scanPhraseGridEnabled
+    }
+
+    private var hidePlaybackFromScanning: Bool {
+        model.scanningEnabled && !model.scanPlaybackAreaEnabled
+    }
+
     @ViewBuilder
     private var predictionBar: some View {
         if !model.predictions.words.isEmpty || !model.predictions.letters.isEmpty {
@@ -84,15 +100,15 @@ struct MainContentView: View {
                     Image(systemName: "hand.draw.fill")
                         .foregroundColor(.orange)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Reorder Mode")
+                        Text("reorder.banner.title")
                             .font(.headline)
                             .bold()
-                        Text("Drag phrases to reorder them")
+                        Text("reorder.banner.subtitle")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Text("Tap Done when finished")
+                    Text("reorder.banner.done_hint")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -108,8 +124,8 @@ struct MainContentView: View {
                     HStack(alignment: .top) {
                         Image(systemName: "info.circle.fill").foregroundStyle(.blue)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("You are offline").bold()
-                            Text("Azure voices won’t work offline. Enable System TTS to use on-device speech while offline.")
+                            Text("offline.title").bold()
+                            Text("offline.azure_unavailable_hint")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -120,7 +136,7 @@ struct MainContentView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    Toggle("Use System TTS when offline", isOn: Binding(
+                    Toggle("settings.tts.system_when_offline", isOn: Binding(
                         get: { model.useSystemTtsWhenOffline },
                         set: { model.setUseSystemTtsWhenOffline($0) }
                     ))
@@ -146,6 +162,8 @@ struct MainContentView: View {
                            placeholder: NSLocalizedString("tts.placeholder", comment: ""),
                            fontSize: CGFloat(uiInputFontSize),
                            minHeight: CGFloat(uiTextFieldHeight),
+                           scanEnabled: model.scanningEnabled,
+                           includeInScanArea: model.scanInputFieldEnabled,
                            secondaryLanguage: model.secondaryLanguage,
                            secondaryLanguageRanges: model.secondaryLanguageRanges,
                            allowsSecondaryLanguageAction: model.secondaryLanguage != model.primaryLanguage,
@@ -155,6 +173,8 @@ struct MainContentView: View {
                            onMarkSelectionAsSecondaryLanguage: { range in
                                model.markSelectionAsSecondaryLanguage(range: range)
                            })
+            .accessibilityElement(children: .contain)
+            .accessibilityHidden(hideInputFromScanning)
 
             // Categories Row
             CategoriesRowView(
@@ -179,6 +199,8 @@ struct MainContentView: View {
                     Task { await model.loadHistory() }
                 }
             )
+            .accessibilityElement(children: .contain)
+            .accessibilityHidden(hideCategoriesFromScanning)
 
             // Grid of phrases
             let phrasesToShow = showingHistory ? model.historyPhrases : currentPhrases
@@ -188,12 +210,17 @@ struct MainContentView: View {
                             onItemFramesChange: { frames in itemFrames = frames },
                             cell: { p in phraseCell(for: p) },
                             isWiggleMode: wiggleMode,
-                            hideAddButton: showingHistory)
+                            hideAddButton: showingHistory,
+                            scanEnabled: model.scanningEnabled,
+                            includeInScanArea: model.scanPhraseGridEnabled,
+                            scanOrder: model.scanPhraseGridOrder)
+            .accessibilityElement(children: .contain)
+            .accessibilityHidden(hideGridFromScanning)
             .overlay {
                 if showingHistory && model.historyPhrases.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "clock.arrow.circlepath").font(.system(size: 32)).foregroundStyle(.secondary)
-                        Text("No history yet").foregroundStyle(.secondary)
+                        Text("history.empty").foregroundStyle(.secondary)
                     }
                     .padding(.top, 40)
                 }
@@ -201,37 +228,46 @@ struct MainContentView: View {
 
             // Playback controls
             HStack(spacing: 20) {
+                Button(action: { model.toggleHoldThatThought() }) {
+                    Image(systemName: model.hasHeldThought ? "arrow.uturn.backward.circle.fill" : "arrow.down.circle.fill")
+                        .font(.system(size: CGFloat(uiPlayIconSize)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(model.hasHeldThought ? "playback.restore_thought" : "playback.hold_thought"))
+                .accessibilityHint(Text(model.hasHeldThought ? "accessibility.playback.restore_thought_hint" : "accessibility.playback.hold_thought_hint"))
                 Button(action: { model.speak(model.input) }) {
                     Image(systemName: "play.circle.fill")
                         .font(.system(size: CGFloat(uiPlayIconSize)))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Play"))
-                .accessibilityHint(Text("Speaks the text in the input field"))
+                .accessibilityLabel(Text("playback.play"))
+                .accessibilityHint(Text("accessibility.playback.play_hint"))
                 Button(action: { model.pauseTts() }) {
                     Image(systemName: "pause.circle")
                         .font(.system(size: CGFloat(uiPlayIconSize)))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Pause"))
-                .accessibilityHint(Text("Pauses speech playback"))
+                .accessibilityLabel(Text("playback.pause"))
+                .accessibilityHint(Text("accessibility.playback.pause_hint"))
                 Button(action: { model.stopTts() }) {
                     Image(systemName: "stop.circle")
                         .font(.system(size: CGFloat(uiPlayIconSize)))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Stop"))
-                .accessibilityHint(Text("Stops speech playback"))
+                .accessibilityLabel(Text("playback.stop"))
+                .accessibilityHint(Text("accessibility.playback.stop_hint"))
                 Button(action: { model.deleteText() }) {
                     Image(systemName: "trash.circle")
                         .font(.system(size: CGFloat(uiPlayIconSize)))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Clear"))
-                .accessibilityHint(Text("Clears the text in the input field"))
+                .accessibilityLabel(Text("common.clear"))
+                .accessibilityHint(Text("accessibility.playback.clear_hint"))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
+            .accessibilityElement(children: .contain)
+            .accessibilityHidden(hidePlaybackFromScanning)
         }
     }
 }

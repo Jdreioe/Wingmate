@@ -10,7 +10,7 @@ struct PronunciationDictionaryView: View {
     var body: some View {
         List {
             if model.pronunciations.isEmpty {
-                Text("No custom pronunciations.")
+                Text("pronunciation.empty")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(model.pronunciations, id: \.word) { entry in
@@ -34,7 +34,7 @@ struct PronunciationDictionaryView: View {
                 }
             }
         }
-        .navigationTitle("Pronunciations")
+        .navigationTitle(Text("pronunciation.title"))
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: { showAddSheet = true }) {
@@ -60,40 +60,73 @@ struct AddPronunciationSheet: View {
     @State private var alphabet = "ipa"
     
     let alphabets = ["ipa", "x-sampa", "sapi", "ups"]
+    private let ipaSymbols = [
+        "i", "y", "ɨ", "ʉ", "ɯ", "u",
+        "ɪ", "ʏ", "ʊ", "e", "ø", "ɘ", "ɵ", "ɤ", "o",
+        "ə", "ɛ", "œ", "ɜ", "ɞ", "ʌ", "ɔ",
+        "æ", "ɐ", "a", "ɶ", "ɑ", "ɒ",
+        "p", "b", "t", "d", "k", "g",
+        "f", "v", "θ", "ð", "s", "z", "ʃ", "ʒ", "h",
+        "m", "n", "ŋ", "l", "ɹ", "j", "w",
+        "tʃ", "dʒ", "ˈ", "ˌ", ".", "ː", "ˑ", " "
+    ]
     
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("Word")) {
-                    TextField("Ex: Wingmate", text: $word)
+                Section(header: Text("pronunciation.word")) {
+                    TextField("pronunciation.word.placeholder", text: $word)
                         .autocorrectionDisabled()
                 }
                 
-                Section(header: Text("Phoneme")) {
-                    TextField("Ex: w ɪ ŋ m eɪ t", text: $phoneme)
+                Section(header: Text("pronunciation.phoneme")) {
+                    TextField("pronunciation.phoneme.placeholder", text: $phoneme)
                         .autocorrectionDisabled()
                 }
                 
-                Section(header: Text("Alphabet")) {
-                    Picker("Alphabet", selection: $alphabet) {
+                Section(header: Text("pronunciation.alphabet")) {
+                    Picker("pronunciation.alphabet", selection: $alphabet) {
                         ForEach(alphabets, id: \.self) { a in
                             Text(a.uppercased()).tag(a)
                         }
                     }
                 }
+
+                if alphabet == "ipa" {
+                    Section(header: Text("pronunciation.ipa_palette")) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 42), spacing: 8)], spacing: 8) {
+                            ForEach(ipaSymbols, id: \.self) { symbol in
+                                Button(symbol == " " ? "␠" : symbol) {
+                                    phoneme.append(symbol)
+                                }
+                                .buttonStyle(.bordered)
+                                .font(.system(.body, design: .monospaced))
+                            }
+                        }
+
+                        HStack {
+                            Spacer()
+                            Button("pronunciation.delete_last") {
+                                _ = phoneme.popLast()
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(phoneme.isEmpty)
+                        }
+                    }
+                }
                 
                 Section {
-                    Button("Save") {
+                    Button("common.save") {
                         model.addPronunciation(word: word, phoneme: phoneme, alphabet: alphabet)
                         dismiss()
                     }
                     .disabled(word.isEmpty || phoneme.isEmpty)
                 }
             }
-            .navigationTitle("Add Pronunciation")
+            .navigationTitle(Text("pronunciation.add_title"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("common.cancel") { dismiss() }
                 }
             }
         }

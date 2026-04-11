@@ -143,3 +143,88 @@
 
 "accessibility.double_tap_select_voice" = "Dobbelttryk for at vælge denne stemme";
 "accessibility.double_tap_select_language" = "Dobbelttryk for at vælge dette sprog";
+
+"debug.voice_with_lang" = "Stemme: %@ [%@]";
+"debug.voice.none" = "Stemme: (ingen)";
+
+"common.cancel" = "Annuller";
+"common.change" = "Skift...";
+"common.unknown" = "Ukendt";
+"common.unknown_language" = "Ukendt sprog";
+
+"settings.title" = "Indstillinger";
+"settings.tts.title" = "Tekst-til-tale motor";
+"settings.tts.use_system" = "Brug System TTS";
+"settings.tts.system_when_offline" = "Brug System TTS når offline";
+"settings.restart_setup" = "Genstart opsætningsguide";
+
+"settings.playback.title" = "Afspilning";
+"settings.playback.mix_recorded" = "Bland optagede fraser i sætninger";
+"settings.playback.mix.help" = "Når slået til, indsætter appen lyd fra dine optagede fraser i oplæste sætninger, hvor frasenavnet optræder.";
+
+"settings.scanning.title" = "Scanning";
+"settings.scanning.enable" = "Aktiver scanning";
+"settings.scanning.playback_area" = "Afspilningsområde";
+"settings.scanning.input_field" = "Inputfelt";
+"settings.scanning.phrase_grid" = "Frasegitter";
+"settings.scanning.category_items" = "Kategori-elementer";
+"settings.scanning.topbar" = "Toplinje/indstillinger";
+"settings.scanning.grid_order" = "Frasegitter-rækkefølge";
+"settings.scanning.grid_order.row_major" = "Rækkevis";
+"settings.scanning.grid_order.column_major" = "Kolonnevis";
+"settings.scanning.grid_order.linear" = "Lineær";
+"settings.scanning.dwell" = "Dvæl (s)";
+"settings.scanning.auto_advance" = "Auto-frem (s)";
+
+"settings.ui_size.input_height" = "Inputhøjde";
+"settings.ui_size.input_font" = "Inputskrift";
+"settings.ui_size.chip_font" = "Chip-skrift";
+"settings.ui_size.playback_icon" = "Afspilningsikon";
+
+"reorder.banner.title" = "Omarrangeringstilstand";
+"reorder.banner.subtitle" = "Træk fraser for at omarrangere dem";
+"reorder.banner.done_hint" = "Tryk Færdig når du er done";
+
+"history.empty" = "Ingen historik endnu";
+"offline.title" = "Du er offline";
+"offline.azure_unavailable_hint" = "Azure-stemmer virker ikke offline. Aktivér System TTS for at bruge enhedens tale offline.";
+
+"playback.play" = "Afspil";
+"playback.pause" = "Pause";
+"playback.stop" = "Stop";
+"playback.hold_thought" = "Gem tanken";
+"playback.restore_thought" = "Gendan tanke";
+
+"accessibility.playback.play_hint" = "Oplæser teksten i inputfeltet";
+"accessibility.playback.pause_hint" = "Pauser taleafspilning";
+"accessibility.playback.stop_hint" = "Stopper taleafspilning";
+"accessibility.playback.clear_hint" = "Rydder teksten i inputfeltet";
+"accessibility.playback.hold_thought_hint" = "Gemmer den nuværende input og rydder inputfeltet.";
+"accessibility.playback.restore_thought_hint" = "Gendanner den gemte input og gemmer nuværende tekst som holdt tanke.";
+
+"accessibility.phrase.wiggle_hint" = "Dobbelttryk for at aktivere. Brug tilgængelighedshandlinger til at flytte denne frase.";
+"accessibility.phrase.insert_hint" = "Dobbelttryk for at indsætte denne frase i inputfeltet.";
+"accessibility.phrase.speak_action" = "Sig frase";
+"accessibility.phrase.edit_action" = "Rediger frase";
+"accessibility.phrase.delete_action" = "Slet frase";
+
+"accessibility.reorder.move_hint" = "Dobbelttryk for at aktivere. Stryg op eller ned for at flytte denne frase.";
+"accessibility.reorder.move_earlier" = "Flyt tidligere";
+"accessibility.reorder.move_later" = "Flyt senere";
+
+"pronunciation.title" = "Udtaleordbog";
+"pronunciation.empty" = "Ingen brugerdefinerede udtaler.";
+"pronunciation.word" = "Ord";
+"pronunciation.word.placeholder" = "Fx: Wingmate";
+"pronunciation.phoneme" = "Fonem";
+"pronunciation.phoneme.placeholder" = "Fx: w i ng m ey t";
+"pronunciation.alphabet" = "Alfabet";
+"pronunciation.add_title" = "Tilføj udtale";
+"pronunciation.ipa_palette" = "IPA-symboler";
+"pronunciation.delete_last" = "Slet sidste";
+
+"welcome_flow.choose_primary_language" = "Vælg primært sprog til denne stemme";
+"welcome_flow.select_language" = "Vælg sprog";
+"welcome_flow.pros" = "Fordele";
+"welcome_flow.cons" = "Ulemper";
+"welcome_flow.preview_text.placeholder" = "Indtast tekst til forhåndsvisning...";

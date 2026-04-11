@@ -140,3 +140,88 @@
 
 "accessibility.double_tap_select_voice" = "Doppeltippen, um diese Stimme auszuwählen";
 "accessibility.double_tap_select_language" = "Doppeltippen, um diese Sprache auszuwählen";
+
+"debug.voice_with_lang" = "Stimme: %@ [%@]";
+"debug.voice.none" = "Stimme: (keine)";
+
+"common.cancel" = "Abbrechen";
+"common.change" = "Ändern...";
+"common.unknown" = "Unbekannt";
+"common.unknown_language" = "Unbekannte Sprache";
+
+"settings.title" = "Einstellungen";
+"settings.tts.title" = "Text-zu-Sprache-Engine";
+"settings.tts.use_system" = "System-TTS verwenden";
+"settings.tts.system_when_offline" = "System-TTS offline verwenden";
+"settings.restart_setup" = "Einrichtungsassistent neu starten";
+
+"settings.playback.title" = "Wiedergabe";
+"settings.playback.mix_recorded" = "Aufgenommene Phrasen in Sätze mischen";
+"settings.playback.mix.help" = "Wenn aktiviert, mischt die App deine aufgenommenen Phrasen-Audios in gesprochene Sätze, wenn der Phrasenname vorkommt.";
+
+"settings.scanning.title" = "Scanning";
+"settings.scanning.enable" = "Scanning aktivieren";
+"settings.scanning.playback_area" = "Wiedergabebereich";
+"settings.scanning.input_field" = "Eingabefeld";
+"settings.scanning.phrase_grid" = "Phrasengitter";
+"settings.scanning.category_items" = "Kategorieelemente";
+"settings.scanning.topbar" = "Top-Leiste/Einstellungen";
+"settings.scanning.grid_order" = "Phrasengitter-Reihenfolge";
+"settings.scanning.grid_order.row_major" = "Zeilenweise";
+"settings.scanning.grid_order.column_major" = "Spaltenweise";
+"settings.scanning.grid_order.linear" = "Linear";
+"settings.scanning.dwell" = "Verweilen (s)";
+"settings.scanning.auto_advance" = "Auto-Wechsel (s)";
+
+"settings.ui_size.input_height" = "Eingabehöhe";
+"settings.ui_size.input_font" = "Eingabeschrift";
+"settings.ui_size.chip_font" = "Chip-Schrift";
+"settings.ui_size.playback_icon" = "Wiedergabesymbol";
+
+"reorder.banner.title" = "Neuordnungsmodus";
+"reorder.banner.subtitle" = "Phrasen ziehen, um sie neu anzuordnen";
+"reorder.banner.done_hint" = "Tippe auf Fertig, wenn du fertig bist";
+
+"history.empty" = "Noch kein Verlauf";
+"offline.title" = "Du bist offline";
+"offline.azure_unavailable_hint" = "Azure-Stimmen funktionieren offline nicht. Aktiviere System-TTS, um Offline-Sprachausgabe zu nutzen.";
+
+"playback.play" = "Abspielen";
+"playback.pause" = "Pause";
+"playback.stop" = "Stopp";
+"playback.hold_thought" = "Gedanken merken";
+"playback.restore_thought" = "Gedanken wiederherstellen";
+
+"accessibility.playback.play_hint" = "Spricht den Text im Eingabefeld";
+"accessibility.playback.pause_hint" = "Pausiert die Sprachausgabe";
+"accessibility.playback.stop_hint" = "Stoppt die Sprachausgabe";
+"accessibility.playback.clear_hint" = "Löscht den Text im Eingabefeld";
+"accessibility.playback.hold_thought_hint" = "Merkt sich die aktuelle Eingabe und leert das Eingabefeld.";
+"accessibility.playback.restore_thought_hint" = "Stellt die gemerkte Eingabe wieder her und legt den aktuellen Text zurück.";
+
+"accessibility.phrase.wiggle_hint" = "Doppeltippen zum Aktivieren. Verwende Bedienungshilfen-Aktionen, um diese Phrase zu verschieben.";
+"accessibility.phrase.insert_hint" = "Doppeltippen, um diese Phrase in das Eingabefeld einzufügen.";
+"accessibility.phrase.speak_action" = "Phrase sprechen";
+"accessibility.phrase.edit_action" = "Phrase bearbeiten";
+"accessibility.phrase.delete_action" = "Phrase löschen";
+
+"accessibility.reorder.move_hint" = "Doppeltippen zum Aktivieren. Nach oben oder unten streichen, um diese Phrase zu verschieben.";
+"accessibility.reorder.move_earlier" = "Früher verschieben";
+"accessibility.reorder.move_later" = "Später verschieben";
+
+"pronunciation.title" = "Aussprache-Wörterbuch";
+"pronunciation.empty" = "Keine benutzerdefinierten Aussprachen.";
+"pronunciation.word" = "Wort";
+"pronunciation.word.placeholder" = "Z. B.: Wingmate";
+"pronunciation.phoneme" = "Phonem";
+"pronunciation.phoneme.placeholder" = "Z. B.: w i ng m ey t";
+"pronunciation.alphabet" = "Alphabet";
+"pronunciation.add_title" = "Aussprache hinzufügen";
+"pronunciation.ipa_palette" = "IPA-Symbole";
+"pronunciation.delete_last" = "Letztes löschen";
+
+"welcome_flow.choose_primary_language" = "Primäre Sprache für diese Stimme wählen";
+"welcome_flow.select_language" = "Sprache wählen";
+"welcome_flow.pros" = "Vorteile";
+"welcome_flow.cons" = "Nachteile";
+"welcome_flow.preview_text.placeholder" = "Text für Vorschau eingeben...";

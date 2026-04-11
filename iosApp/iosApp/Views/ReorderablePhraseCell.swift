@@ -52,11 +52,11 @@ struct ReorderablePhraseCell: View {
     let isHistory = phrase.id.hasPrefix("history-")
     if wiggleMode && !isHistory {
             baseView
-                .accessibilityHint(Text("Double tap to activate. Swipe up or down to move this phrase."))
-                .accessibilityAction(named: Text("Move earlier")) {
+                .accessibilityHint(Text("accessibility.reorder.move_hint"))
+                .accessibilityAction(named: Text("accessibility.reorder.move_earlier")) {
                     movePhrase(by: -1)
                 }
-                .accessibilityAction(named: Text("Move later")) {
+                .accessibilityAction(named: Text("accessibility.reorder.move_later")) {
                     movePhrase(by: 1)
                 }
                 .gesture(

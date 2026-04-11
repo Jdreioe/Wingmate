@@ -124,6 +124,85 @@ class KoinBridge : KoinComponent {
 
     suspend fun getSettings(): Settings = get<SettingsUseCase>().get()
 
+    suspend fun updateScanningEnabled(enabled: Boolean) {
+        val settingsUseCase: SettingsUseCase = get()
+        val current = settingsUseCase.get()
+        if (current.scanningEnabled != enabled) {
+            settingsUseCase.update(current.copy(scanningEnabled = enabled))
+        }
+    }
+
+    suspend fun updateScanPlaybackAreaEnabled(enabled: Boolean) {
+        val settingsUseCase: SettingsUseCase = get()
+        val current = settingsUseCase.get()
+        if (current.scanPlaybackAreaEnabled != enabled) {
+            settingsUseCase.update(current.copy(scanPlaybackAreaEnabled = enabled))
+        }
+    }
+
+    suspend fun updateScanInputFieldEnabled(enabled: Boolean) {
+        val settingsUseCase: SettingsUseCase = get()
+        val current = settingsUseCase.get()
+        if (current.scanInputFieldEnabled != enabled) {
+            settingsUseCase.update(current.copy(scanInputFieldEnabled = enabled))
+        }
+    }
+
+    suspend fun updateScanPhraseGridEnabled(enabled: Boolean) {
+        val settingsUseCase: SettingsUseCase = get()
+        val current = settingsUseCase.get()
+        if (current.scanPhraseGridEnabled != enabled) {
+            settingsUseCase.update(current.copy(scanPhraseGridEnabled = enabled))
+        }
+    }
+
+    suspend fun updateScanCategoryItemsEnabled(enabled: Boolean) {
+        val settingsUseCase: SettingsUseCase = get()
+        val current = settingsUseCase.get()
+        if (current.scanCategoryItemsEnabled != enabled) {
+            settingsUseCase.update(current.copy(scanCategoryItemsEnabled = enabled))
+        }
+    }
+
+    suspend fun updateScanTopBarEnabled(enabled: Boolean) {
+        val settingsUseCase: SettingsUseCase = get()
+        val current = settingsUseCase.get()
+        if (current.scanTopBarEnabled != enabled) {
+            settingsUseCase.update(current.copy(scanTopBarEnabled = enabled))
+        }
+    }
+
+    suspend fun updateScanPhraseGridOrder(order: String) {
+        val normalized = when (order.lowercase()) {
+            "column-major" -> "column-major"
+            "linear" -> "linear"
+            else -> "row-major"
+        }
+        val settingsUseCase: SettingsUseCase = get()
+        val current = settingsUseCase.get()
+        if (current.scanPhraseGridOrder != normalized) {
+            settingsUseCase.update(current.copy(scanPhraseGridOrder = normalized))
+        }
+    }
+
+    suspend fun updateScanDwellTimeSeconds(seconds: Float) {
+        val clamped = seconds.coerceIn(0.3f, 2.0f)
+        val settingsUseCase: SettingsUseCase = get()
+        val current = settingsUseCase.get()
+        if (current.scanDwellTimeSeconds != clamped) {
+            settingsUseCase.update(current.copy(scanDwellTimeSeconds = clamped))
+        }
+    }
+
+    suspend fun updateScanAutoAdvanceSeconds(seconds: Float) {
+        val clamped = seconds.coerceIn(0.5f, 3.0f)
+        val settingsUseCase: SettingsUseCase = get()
+        val current = settingsUseCase.get()
+        if (current.scanAutoAdvanceSeconds != clamped) {
+            settingsUseCase.update(current.copy(scanAutoAdvanceSeconds = clamped))
+        }
+    }
+
     suspend fun saveSpeechConfig(config: SpeechServiceConfig) {
         get<ConfigRepository>().saveSpeechConfig(config)
     }

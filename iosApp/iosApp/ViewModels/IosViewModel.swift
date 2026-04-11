@@ -51,6 +51,7 @@ final class IosViewModel: ObservableObject {
     // UI state
     @Published var input: String = ""
     var inputSelectionRange: NSRange = NSRange(location: 0, length: 0)
+    @Published private(set) var hasHeldThought: Bool = false
     @Published var primaryLanguage: String = "en-US"
     @Published var secondaryLanguage: String = "en-US"
     @Published var secondaryLanguageRanges: [NSRange] = []
@@ -71,6 +72,16 @@ final class IosViewModel: ObservableObject {
     @Published var useSystemTtsWhenOffline: Bool = UserDefaults.standard.bool(forKey: "use_system_tts_when_offline")
     // Mix recorded phrases inside sentences
     @Published var mixRecordedPhrasesInSentences: Bool = UserDefaults.standard.bool(forKey: "mix_recorded_phrases")
+    // Accessibility scanning configuration (persisted in shared Settings)
+    @Published var scanningEnabled: Bool = false
+    @Published var scanPlaybackAreaEnabled: Bool = true
+    @Published var scanInputFieldEnabled: Bool = true
+    @Published var scanPhraseGridEnabled: Bool = true
+    @Published var scanCategoryItemsEnabled: Bool = true
+    @Published var scanTopBarEnabled: Bool = true
+    @Published var scanPhraseGridOrder: String = "row-major"
+    @Published var scanDwellTimeSeconds: Double = 1.0
+    @Published var scanAutoAdvanceSeconds: Double = 1.2
     private var hasShownOfflineBanner: Bool = UserDefaults.standard.bool(forKey: "offline_banner_shown")
     private var isOnline: Bool = true
 
@@ -82,6 +93,14 @@ final class IosViewModel: ObservableObject {
     @Published var debugPersistedVoiceName: String = ""
     // Azure availability (subscription configured)
     @Published var azureConfigured: Bool = false
+
+    private struct InputSnapshot {
+        let text: String
+        let selection: NSRange
+        let secondaryRanges: [NSRange]
+    }
+
+    private var heldThoughtSnapshot: InputSnapshot? = nil
 
     func effectiveLanguage(for v: Shared.Voice) -> String {
         func nonEmpty(_ s: String?) -> String? {
@@ -130,6 +149,7 @@ final class IosViewModel: ObservableObject {
     refreshVoiceAndLanguages()
 
         await refreshLanguagePreferences()
+        await refreshScanningSettings()
 
         // Determine if Azure is configured (endpoint + key)
         await refreshAzureConfiguration()
@@ -177,6 +197,29 @@ final class IosViewModel: ObservableObject {
             await MainActor.run {
                 self.primaryLanguage = self.primaryLanguage
                 self.secondaryLanguage = self.secondaryLanguage
+            }
+        }
+    }
+
+    func refreshScanningSettings() async {
+        do {
+            let settings = try await bridge.getSettings()
+            await MainActor.run {
+                self.scanningEnabled = settings.scanningEnabled
+                self.scanPlaybackAreaEnabled = settings.scanPlaybackAreaEnabled
+                self.scanInputFieldEnabled = settings.scanInputFieldEnabled
+                self.scanPhraseGridEnabled = settings.scanPhraseGridEnabled
+                self.scanCategoryItemsEnabled = settings.scanCategoryItemsEnabled
+                self.scanTopBarEnabled = settings.scanTopBarEnabled
+                self.scanPhraseGridOrder = self.normalizedScanGridOrder(settings.scanPhraseGridOrder)
+                self.scanDwellTimeSeconds = Double(self.clampedDwellSeconds(settings.scanDwellTimeSeconds))
+                self.scanAutoAdvanceSeconds = Double(self.clampedAutoAdvanceSeconds(settings.scanAutoAdvanceSeconds))
+            }
+        } catch {
+            await MainActor.run {
+                self.scanPhraseGridOrder = self.normalizedScanGridOrder(self.scanPhraseGridOrder)
+                self.scanDwellTimeSeconds = Double(self.clampedDwellSeconds(Float(self.scanDwellTimeSeconds)))
+                self.scanAutoAdvanceSeconds = Double(self.clampedAutoAdvanceSeconds(Float(self.scanAutoAdvanceSeconds)))
             }
         }
     }
@@ -247,6 +290,23 @@ final class IosViewModel: ObservableObject {
         inputSelectionRange = NSRange(location: 0, length: 0)
         onInputChanged(input)
     }
+
+    func toggleHoldThatThought() {
+        let current = makeCurrentInputSnapshot()
+
+        if let held = heldThoughtSnapshot {
+            heldThoughtSnapshot = current
+            applyInputSnapshot(held)
+        } else {
+            heldThoughtSnapshot = current
+            input = ""
+            inputSelectionRange = NSRange(location: 0, length: 0)
+            secondaryLanguageRanges = []
+            onInputChanged(input)
+        }
+
+        hasHeldThought = heldThoughtSnapshot != nil
+    }
     func speak(_ text: String) {
         let plain = text
         guard !plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -276,20 +336,37 @@ final class IosViewModel: ObservableObject {
             }
         }
 
+        let isInputText = (text == input)
+
         // If user prefers system TTS, use it directly
         if useSystemTts {
-            SystemTtsManager.shared.speak(plain, language: primaryLanguage)
+            SystemTtsManager.shared.speak(
+                plain,
+                language: primaryLanguage,
+                secondaryLanguage: isInputText ? secondaryLanguage : nil,
+                secondaryLanguageRanges: isInputText ? secondaryLanguageRanges : []
+            )
             return
         }
         
         // If Azure is not configured, always use on-device TTS to keep the app working
         if !azureConfigured {
-            SystemTtsManager.shared.speak(plain, language: primaryLanguage)
+            SystemTtsManager.shared.speak(
+                plain,
+                language: primaryLanguage,
+                secondaryLanguage: isInputText ? secondaryLanguage : nil,
+                secondaryLanguageRanges: isInputText ? secondaryLanguageRanges : []
+            )
             return
         }
         // Otherwise, allow offline fallback when enabled
         if !isOnline && useSystemTtsWhenOffline {
-            SystemTtsManager.shared.speak(plain, language: primaryLanguage)
+            SystemTtsManager.shared.speak(
+                plain,
+                language: primaryLanguage,
+                secondaryLanguage: isInputText ? secondaryLanguage : nil,
+                secondaryLanguageRanges: isInputText ? secondaryLanguageRanges : []
+            )
             return
         }
         Task { _ = try? await bridge.speak(text: t) }
@@ -438,6 +515,73 @@ final class IosViewModel: ObservableObject {
     func setMixRecordedPhrases(_ enabled: Bool) {
         self.mixRecordedPhrasesInSentences = enabled
         UserDefaults.standard.set(enabled, forKey: "mix_recorded_phrases")
+    }
+
+    func setScanningEnabled(_ enabled: Bool) {
+        self.scanningEnabled = enabled
+        Task { _ = try? await bridge.updateScanningEnabled(enabled: enabled) }
+    }
+
+    func setScanPlaybackAreaEnabled(_ enabled: Bool) {
+        self.scanPlaybackAreaEnabled = enabled
+        Task { _ = try? await bridge.updateScanPlaybackAreaEnabled(enabled: enabled) }
+    }
+
+    func setScanInputFieldEnabled(_ enabled: Bool) {
+        self.scanInputFieldEnabled = enabled
+        Task { _ = try? await bridge.updateScanInputFieldEnabled(enabled: enabled) }
+    }
+
+    func setScanPhraseGridEnabled(_ enabled: Bool) {
+        self.scanPhraseGridEnabled = enabled
+        Task { _ = try? await bridge.updateScanPhraseGridEnabled(enabled: enabled) }
+    }
+
+    func setScanCategoryItemsEnabled(_ enabled: Bool) {
+        self.scanCategoryItemsEnabled = enabled
+        Task { _ = try? await bridge.updateScanCategoryItemsEnabled(enabled: enabled) }
+    }
+
+    func setScanTopBarEnabled(_ enabled: Bool) {
+        self.scanTopBarEnabled = enabled
+        Task { _ = try? await bridge.updateScanTopBarEnabled(enabled: enabled) }
+    }
+
+    func setScanPhraseGridOrder(_ order: String) {
+        let normalized = normalizedScanGridOrder(order)
+        self.scanPhraseGridOrder = normalized
+        Task { _ = try? await bridge.updateScanPhraseGridOrder(order: normalized) }
+    }
+
+    func setScanDwellTimeSeconds(_ value: Double) {
+        let clamped = Double(clampedDwellSeconds(Float(value)))
+        self.scanDwellTimeSeconds = clamped
+        Task { _ = try? await bridge.updateScanDwellTimeSeconds(seconds: Float(clamped)) }
+    }
+
+    func setScanAutoAdvanceSeconds(_ value: Double) {
+        let clamped = Double(clampedAutoAdvanceSeconds(Float(value)))
+        self.scanAutoAdvanceSeconds = clamped
+        Task { _ = try? await bridge.updateScanAutoAdvanceSeconds(seconds: Float(clamped)) }
+    }
+
+    private func normalizedScanGridOrder(_ value: String) -> String {
+        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "column-major":
+            return "column-major"
+        case "linear":
+            return "linear"
+        default:
+            return "row-major"
+        }
+    }
+
+    private func clampedDwellSeconds(_ value: Float) -> Float {
+        value.clamped(to: 0.3...2.0)
+    }
+
+    private func clampedAutoAdvanceSeconds(_ value: Float) -> Float {
+        value.clamped(to: 0.5...3.0)
     }
 
     // MARK: - Recording path (persisted in shared Phrase)
@@ -594,6 +738,31 @@ final class IosViewModel: ObservableObject {
         return merged
     }
 
+    private func makeCurrentInputSnapshot() -> InputSnapshot {
+        let length = (input as NSString).length
+        let selection = clampedSelectionRange(inputSelectionRange, maxLength: length)
+        let secondary = mergeRanges(secondaryLanguageRanges, maxLength: length)
+        return InputSnapshot(text: input, selection: selection, secondaryRanges: secondary)
+    }
+
+    private func applyInputSnapshot(_ snapshot: InputSnapshot) {
+        input = snapshot.text
+        onInputChanged(snapshot.text)
+
+        let length = (snapshot.text as NSString).length
+        inputSelectionRange = clampedSelectionRange(snapshot.selection, maxLength: length)
+        secondaryLanguageRanges = mergeRanges(snapshot.secondaryRanges, maxLength: length)
+    }
+
+    private func clampedSelectionRange(_ range: NSRange, maxLength: Int) -> NSRange {
+        if range.location == NSNotFound {
+            return NSRange(location: maxLength, length: 0)
+        }
+        let safeLocation = min(max(0, range.location), maxLength)
+        let safeLength = min(max(0, range.length), max(0, maxLength - safeLocation))
+        return NSRange(location: safeLocation, length: safeLength)
+    }
+
     func refreshVoiceAndLanguages() {
         Task {
             let v = try? await bridge.selectedVoice()
@@ -623,14 +792,16 @@ final class IosViewModel: ObservableObject {
         store?.accept(intent: Shared.PhraseListStoreIntent.AddCategory(name: trimmed))
     }
 
-    func addPhrase(text: String, alternativeText: String? = nil, imageUrl: String? = nil) {
+    func addPhrase(text: String, alternativeText: String? = nil, imageUrl: String? = nil, recordingPath: String? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let normalizedAlternative = alternativeText?.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalAlternative = (normalizedAlternative?.isEmpty == false) ? normalizedAlternative : nil
         let normalizedImageUrl = imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalImageUrl = (normalizedImageUrl?.isEmpty == false) ? normalizedImageUrl : nil
-        store?.accept(intent: Shared.PhraseListStoreIntent.AddPhrase(text: trimmed, name: finalAlternative, imageUrl: finalImageUrl))
+        let normalizedRecordingPath = recordingPath?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalRecordingPath = (normalizedRecordingPath?.isEmpty == false) ? normalizedRecordingPath : nil
+        store?.accept(intent: Shared.PhraseListStoreIntent.AddPhrase(text: trimmed, name: finalAlternative, imageUrl: finalImageUrl, recordingPath: finalRecordingPath))
         // Incremental learning
         Task { _ = try? await bridge.learnPhrase(text: trimmed) }
     }
@@ -749,5 +920,11 @@ final class IosViewModel: ObservableObject {
             try? await bridge.deletePronunciation(word: word)
             await loadPronunciations()
         }
+    }
+}
+
+private extension Float {
+    func clamped(to range: ClosedRange<Float>) -> Float {
+        min(max(self, range.lowerBound), range.upperBound)
     }
 }

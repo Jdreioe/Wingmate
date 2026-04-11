@@ -44,6 +44,8 @@ struct MultiLineInput: View {
     var placeholder: String
     var fontSize: CGFloat
     var minHeight: CGFloat
+    var scanEnabled: Bool = false
+    var includeInScanArea: Bool = true
     var secondaryLanguage: String
     var secondaryLanguageRanges: [NSRange]
     var allowsSecondaryLanguageAction: Bool
@@ -76,6 +78,8 @@ struct MultiLineInput: View {
             .padding(6)
         }
         .frame(height: minHeight)
+        .accessibilityElement(children: .contain)
+        .accessibilityHidden(scanEnabled && !includeInScanArea)
     }
 }
 
@@ -254,6 +258,11 @@ struct CategoriesRowView: View {
     var showHistoryChip: Bool = false
     var isHistorySelected: Bool = false
     var onSelectHistory: (() -> Void)? = nil
+
+    private func priorityForIndex(_ index: Int) -> Double {
+        Double(10_000 - index)
+    }
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
@@ -262,19 +271,23 @@ struct CategoriesRowView: View {
                              fontSize: chipFontSize,
                              hPadding: chipHPadding,
                              vPadding: chipVPadding) { onSelect(nil) }
+                .accessibilitySortPriority(priorityForIndex(0))
                 if showHistoryChip {
                     CategoryChip(title: NSLocalizedString("categories.history", comment: "History"),
                                  selected: isHistorySelected,
                                  fontSize: chipFontSize,
                                  hPadding: chipHPadding,
                                  vPadding: chipVPadding) { onSelectHistory?() }
+                    .accessibilitySortPriority(priorityForIndex(1))
                 }
-                ForEach(state.categories, id: \.id) { cat in
+                let categoryStartIndex = showHistoryChip ? 2 : 1
+                ForEach(Array(state.categories.enumerated()), id: \.element.id) { offset, cat in
                     CategoryChip(title: cat.name ?? NSLocalizedString("common.no_name", comment: ""),
                                  selected: state.selectedCategoryId == cat.id,
                                  fontSize: chipFontSize,
                                  hPadding: chipHPadding,
                                  vPadding: chipVPadding) { onSelect(cat.id) }
+                    .accessibilitySortPriority(priorityForIndex(categoryStartIndex + offset))
                     .contextMenu {
                         Button(role: .destructive) { onDelete(cat.id) } label: { Label("category.delete", systemImage: "trash") }
                     }
@@ -289,9 +302,11 @@ struct CategoriesRowView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("toolbar.add_category"))
+                .accessibilitySortPriority(priorityForIndex(categoryStartIndex + state.categories.count))
             }
             .padding(.horizontal, 4)
             .padding(.bottom, 4)
+            .accessibilityElement(children: .contain)
         }
     }
 }
@@ -369,14 +384,14 @@ struct PhraseItemView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(accessibleName.isEmpty ? NSLocalizedString("common.no_name", comment: "") : accessibleName))
-        .accessibilityHint(Text(wiggle ? "Double tap to activate. Use accessibility actions to move this phrase." : "Double tap to insert this phrase into the input field."))
-        .accessibilityAction(named: Text("Speak phrase")) { model.speak(phrase.text) }
-        .accessibilityAction(named: Text("Edit phrase")) {
+        .accessibilityHint(Text(wiggle ? "accessibility.phrase.wiggle_hint" : "accessibility.phrase.insert_hint"))
+        .accessibilityAction(named: Text("accessibility.phrase.speak_action")) { model.speak(phrase.text) }
+        .accessibilityAction(named: Text("accessibility.phrase.edit_action")) {
             if !phrase.id.hasPrefix("history-") {
                 onEdit()
             }
         }
-        .accessibilityAction(named: Text("Delete phrase")) {
+        .accessibilityAction(named: Text("accessibility.phrase.delete_action")) {
             if !phrase.id.hasPrefix("history-") {
                 onDelete(phrase.id)
             }

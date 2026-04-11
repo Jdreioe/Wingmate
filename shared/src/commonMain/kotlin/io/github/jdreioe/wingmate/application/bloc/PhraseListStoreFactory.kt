@@ -59,7 +59,7 @@ class PhraseListStoreFactory(
 
         override fun executeIntent(intent: PhraseListStore.Intent, getState: () -> PhraseListStore.State) {
             when (intent) {
-                is PhraseListStore.Intent.AddPhrase -> addPhrase(intent.text, getState().selectedCategoryId, intent.name, intent.imageUrl)
+                is PhraseListStore.Intent.AddPhrase -> addPhrase(intent.text, getState().selectedCategoryId, intent.name, intent.imageUrl, intent.recordingPath)
                 is PhraseListStore.Intent.AddCategory -> addCategory(intent.name)
                 is PhraseListStore.Intent.SelectCategory -> dispatch(Msg.CategorySelected(intent.categoryId))
                 is PhraseListStore.Intent.DeletePhrase -> deletePhrase(intent.phraseId)
@@ -83,10 +83,10 @@ class PhraseListStoreFactory(
             }
         }
 
-        private fun addPhrase(text: String, categoryId: String?, name: String?, imageUrl: String?) {
+        private fun addPhrase(text: String, categoryId: String?, name: String?, imageUrl: String?, recordingPath: String?) {
             scope.launch {
                 try {
-                    addPhraseUseCase(text, categoryId, name, imageUrl)
+                    addPhraseUseCase(text, categoryId, name, imageUrl, recordingPath)
                     loadPhrasesAndCategories()
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to add phrase"))

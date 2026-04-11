@@ -278,10 +278,10 @@ struct WelcomeFlow: View {
 
                     if pendingLanguageSelection {
                         VStack(spacing: 8) {
-                            Text("Choose primary language for this voice")
+                            Text("welcome_flow.choose_primary_language")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                            Button("Select Language") {
+                            Button("welcome_flow.select_language") {
                                 showLanguagePicker = true
                             }
                             .buttonStyle(.borderedProminent)
@@ -478,7 +478,7 @@ struct TtsOptionCard: View {
                 
                 HStack(alignment: .top, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Pros")
+                        Text("welcome_flow.pros")
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(.green)
@@ -494,7 +494,7 @@ struct TtsOptionCard: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Cons")
+                        Text("welcome_flow.cons")
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(.orange)
@@ -534,9 +534,9 @@ struct SelectedVoiceCard: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(voice.displayName ?? voice.name ?? "Unknown")
+                Text(voice.displayName ?? voice.name ?? NSLocalizedString("common.unknown", comment: ""))
                     .font(.headline)
-                Text(voice.primaryLanguage ?? "Unknown Language")
+                Text(voice.primaryLanguage ?? NSLocalizedString("common.unknown_language", comment: ""))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -568,14 +568,14 @@ struct VoicePreviewCard: View {
             Text(title)
                 .font(.headline)
             
-            TextField("Enter text to preview...", text: $previewText)
+            TextField("welcome_flow.preview_text.placeholder", text: $previewText)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
             
             HStack {
                 Button(action: onSpeak) {
                     HStack {
                         Image(systemName: "play.fill")
-                        Text("Play")
+                        Text("playback.play")
                     }
                     .font(.subheadline)
                     .foregroundColor(.white)
@@ -588,7 +588,7 @@ struct VoicePreviewCard: View {
                 Button(action: onStop) {
                     HStack {
                         Image(systemName: "stop.fill")
-                        Text("Stop")
+                        Text("playback.stop")
                     }
                     .font(.subheadline)
                     .foregroundColor(.white)

@@ -36,7 +36,7 @@ struct ContentView: View {
     private var chipHPadding: CGFloat { CGFloat(max(12, uiChipFontSize * 0.75)) }
     private var chipVPadding: CGFloat { CGFloat(max(8, uiChipFontSize * 0.45)) }
 
-    @State private var showRightPanel: Bool = UIDevice.current.userInterfaceIdiom == .pad
+    @State private var showRightPanel: Bool = false
     @State private var autoCollapsedRightPanel: Bool = false
 
     private var shouldShowWelcomeFlow: Bool {
@@ -187,28 +187,30 @@ struct ContentView: View {
                         ToolbarItemGroup(placement: .topBarTrailing) {
                             Button(action: {
                                 withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.1)) {
-                                    showSettingsPanel = true
                                     if isWideLayout {
-                                        showRightPanel = true
+                                        showRightPanel.toggle()
+                                    } else {
+                                        showSettingsPanel.toggle()
                                     }
                                 }
                             }) {
                                 Image(systemName: "slider.horizontal.3")
                                     .accessibilityLabel(Text("toolbar.settings_panel"))
                             }
+                            .accessibilityHidden(model.scanningEnabled && !model.scanTopBarEnabled)
                         }
                     }
                 }
                 #if DEBUG
                 .overlay(alignment: .topLeading) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("DEBUG: ContentView loaded")
+                        Text("debug.content_loaded")
                         if let v = model.selectedVoice {
                             let name = (v.displayName ?? v.name) ?? "—"
                             let lang = (v.selectedLanguage.isEmpty ? v.primaryLanguage : v.selectedLanguage) ?? "-"
-                            Text("Voice: \(name) [\(lang)]")
+                            Text(String(format: NSLocalizedString("debug.voice_with_lang", comment: ""), name, lang))
                         } else {
-                            Text("Voice: (none)")
+                            Text("debug.voice.none")
                         }
                     }
                     .font(.caption2)

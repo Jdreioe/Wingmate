@@ -65,6 +65,8 @@
 
 "debug.content_loaded" = "DEBUG: ContentView loaded";
 "debug.voice" = "Voice";
+"debug.voice_with_lang" = "Voice: %@ [%@]";
+"debug.voice.none" = "Voice: (none)";
 
 "azure.settings.title" = "Azure Settings";
 "azure.endpoint.placeholder" = "Endpoint (https://<region>.tts.speech.microsoft.com)";
@@ -144,3 +146,85 @@
 
 "accessibility.double_tap_select_voice" = "Double tap to select this voice";
 "accessibility.double_tap_select_language" = "Double tap to select this language";
+
+"common.cancel" = "Cancel";
+"common.change" = "Change...";
+"common.unknown" = "Unknown";
+"common.unknown_language" = "Unknown Language";
+
+"settings.title" = "Settings";
+"settings.tts.title" = "Text-to-Speech Engine";
+"settings.tts.use_system" = "Use System TTS";
+"settings.tts.system_when_offline" = "Use System TTS when offline";
+"settings.restart_setup" = "Restart Setup Guide";
+
+"settings.playback.title" = "Playback";
+"settings.playback.mix_recorded" = "Mix recorded phrases in sentences";
+"settings.playback.mix.help" = "When on, the app will splice your recorded phrase audio into spoken sentences where the phrase name appears.";
+
+"settings.scanning.title" = "Scanning";
+"settings.scanning.enable" = "Enable scanning";
+"settings.scanning.playback_area" = "Playback area";
+"settings.scanning.input_field" = "Input field";
+"settings.scanning.phrase_grid" = "Phrase grid";
+"settings.scanning.category_items" = "Category items";
+"settings.scanning.topbar" = "Top app bar/settings";
+"settings.scanning.grid_order" = "Phrase grid order";
+"settings.scanning.grid_order.row_major" = "Row-major";
+"settings.scanning.grid_order.column_major" = "Column-major";
+"settings.scanning.grid_order.linear" = "Linear";
+"settings.scanning.dwell" = "Dwell (s)";
+"settings.scanning.auto_advance" = "Auto-advance (s)";
+
+"settings.ui_size.input_height" = "Input Height";
+"settings.ui_size.input_font" = "Input Font";
+"settings.ui_size.chip_font" = "Chip Font";
+"settings.ui_size.playback_icon" = "Playback Icon";
+
+"reorder.banner.title" = "Reorder Mode";
+"reorder.banner.subtitle" = "Drag phrases to reorder them";
+"reorder.banner.done_hint" = "Tap Done when finished";
+
+"history.empty" = "No history yet";
+"offline.title" = "You are offline";
+"offline.azure_unavailable_hint" = "Azure voices won't work offline. Enable System TTS to use on-device speech while offline.";
+
+"playback.play" = "Play";
+"playback.pause" = "Pause";
+"playback.stop" = "Stop";
+"playback.hold_thought" = "Hold that thought";
+"playback.restore_thought" = "Restore thought";
+
+"accessibility.playback.play_hint" = "Speaks the text in the input field";
+"accessibility.playback.pause_hint" = "Pauses speech playback";
+"accessibility.playback.stop_hint" = "Stops speech playback";
+"accessibility.playback.clear_hint" = "Clears the text in the input field";
+"accessibility.playback.hold_thought_hint" = "Saves the current input and clears the input field.";
+"accessibility.playback.restore_thought_hint" = "Restores the held input and keeps current text on hold.";
+
+"accessibility.phrase.wiggle_hint" = "Double tap to activate. Use accessibility actions to move this phrase.";
+"accessibility.phrase.insert_hint" = "Double tap to insert this phrase into the input field.";
+"accessibility.phrase.speak_action" = "Speak phrase";
+"accessibility.phrase.edit_action" = "Edit phrase";
+"accessibility.phrase.delete_action" = "Delete phrase";
+
+"accessibility.reorder.move_hint" = "Double tap to activate. Swipe up or down to move this phrase.";
+"accessibility.reorder.move_earlier" = "Move earlier";
+"accessibility.reorder.move_later" = "Move later";
+
+"pronunciation.title" = "Pronunciation Dictionary";
+"pronunciation.empty" = "No custom pronunciations.";
+"pronunciation.word" = "Word";
+"pronunciation.word.placeholder" = "Ex: Wingmate";
+"pronunciation.phoneme" = "Phoneme";
+"pronunciation.phoneme.placeholder" = "Ex: w i ng m ey t";
+"pronunciation.alphabet" = "Alphabet";
+"pronunciation.add_title" = "Add Pronunciation";
+"pronunciation.ipa_palette" = "IPA Symbols";
+"pronunciation.delete_last" = "Delete Last";
+
+"welcome_flow.choose_primary_language" = "Choose primary language for this voice";
+"welcome_flow.select_language" = "Select Language";
+"welcome_flow.pros" = "Pros";
+"welcome_flow.cons" = "Cons";
+"welcome_flow.preview_text.placeholder" = "Enter text to preview...";

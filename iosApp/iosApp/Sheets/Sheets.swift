@@ -146,8 +146,8 @@ struct AddPhraseSheet: View {
     let onClose: () -> Void
     let recorder: AudioRecorder?
     // (phraseId, path)
-    let saveRecordingPath: ((String,String) -> Void)?
-    let onSave: (String, String?, String?) -> Void
+    let saveRecordingPath: ((String, String?) -> Void)?
+    let onSave: (String, String?, String?, String?) -> Void
 
     var body: some View {
         NavigationStack {
@@ -161,8 +161,7 @@ struct AddPhraseSheet: View {
                         .bold()
                     Spacer()
                     Button("phrase.save") {
-                        onSave(text, alternativeText, selectedSymbolUrl)
-                        // We don't have the phrase ID here; ContentView persists later after store update
+                        Task { await savePhrase() }
                     }
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .fontWeight(.semibold)
@@ -503,6 +502,15 @@ struct AddPhraseSheet: View {
         }
     }
 
+    @MainActor
+    private func savePhrase() async {
+        if isRecording, let url = try? await recorder?.stopRecording() {
+            recordingUrl = url
+            isRecording = false
+        }
+        onSave(text, alternativeText, selectedSymbolUrl, recordingUrl?.path)
+    }
+
     private func searchOpenSymbols() async {
         let trimmed = symbolQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -645,7 +653,7 @@ struct EditPhraseSheet: View {
     let onSave: (String?, String?, String?) -> Void
     let recorder: AudioRecorder?
     // (phraseId, path)
-    let saveRecordingPath: ((String,String) -> Void)?
+    let saveRecordingPath: ((String, String?) -> Void)?
     @State private var text: String = ""
     @State private var name: String = ""
     @State private var symbolSource: PhraseSymbolSource = .openSymbols
@@ -958,6 +966,26 @@ struct EditPhraseSheet: View {
                                             .background(Color(.tertiarySystemBackground))
                                             .cornerRadius(20)
                                         }
+
+                                        Button(role: .destructive) {
+                                            recorder?.stopPlayback()
+                                            if FileManager.default.fileExists(atPath: url.path) {
+                                                try? FileManager.default.removeItem(at: url)
+                                            }
+                                            recordingUrl = nil
+                                            saveRecordingPath?(phrase.id, nil)
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "trash")
+                                                Text("phrase.delete")
+                                            }
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.red)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(Color.red.opacity(0.12))
+                                            .cornerRadius(20)
+                                        }
                                         
                                         Spacer()
                                     }
@@ -990,6 +1018,11 @@ struct EditPhraseSheet: View {
                 name = phrase.name ?? ""
                 selectedSymbolUrl = phrase.imageUrl
                 symbolSource = (phrase.imageUrl?.hasPrefix("http") == true) ? .openSymbols : .userPhotos
+                if let path = phrase.recordingPath,
+                   !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   FileManager.default.fileExists(atPath: path) {
+                    recordingUrl = URL(fileURLWithPath: path)
+                }
             }
         }
         .interactiveDismissDisabled(false)

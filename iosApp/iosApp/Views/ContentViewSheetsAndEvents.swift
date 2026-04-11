@@ -20,7 +20,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
     let uiPlayIconSize: Binding<Double>
     // Recording surface
     var recorder: AudioRecorder? = nil
-    var saveRecordingPath: ((String,String) -> Void)? = nil
+    var saveRecordingPath: ((String, String?) -> Void)? = nil
     let content: () -> Content
 
     var body: some View {
@@ -67,8 +67,8 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                 .presentationCornerRadius(20)
             }
             .sheet(isPresented: $showAddPhrase) {
-                AddPhraseSheet(onClose: { showAddPhrase = false }, recorder: recorder, saveRecordingPath: saveRecordingPath) { text, alternativeText, imageUrl in
-                    model.addPhrase(text: text, alternativeText: alternativeText, imageUrl: imageUrl)
+                AddPhraseSheet(onClose: { showAddPhrase = false }, recorder: recorder, saveRecordingPath: saveRecordingPath) { text, alternativeText, imageUrl, recordingPath in
+                    model.addPhrase(text: text, alternativeText: alternativeText, imageUrl: imageUrl, recordingPath: recordingPath)
                     showAddPhrase = false
                 }
                 .presentationDetents([.height(400), .medium, .large])

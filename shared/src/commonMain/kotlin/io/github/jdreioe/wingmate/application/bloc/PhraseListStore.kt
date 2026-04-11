@@ -10,7 +10,8 @@ interface PhraseListStore : Store<PhraseListStore.Intent, PhraseListStore.State,
         data class AddPhrase(
             val text: String,
             val name: String? = null,
-            val imageUrl: String? = null
+            val imageUrl: String? = null,
+            val recordingPath: String? = null
         ) : Intent()
         data class AddCategory(val name: String) : Intent()
         data class SelectCategory(val categoryId: String?) : Intent()
