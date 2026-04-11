@@ -14,11 +14,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import kotlinx.coroutines.launch
-import org.koin.compose.koinInject
+import org.koin.compose.getKoin
 
 @Composable
 fun WelcomeScreen(onContinue: () -> Unit) {
-    val boardImportService = koinInject<BoardImportService>()
+    val enableBoardImport = !isReleaseBuild()
+    val koin = getKoin()
+    val boardImportService = remember(enableBoardImport, koin) {
+        if (enableBoardImport) koin.getOrNull<BoardImportService>() else null
+    }
 
     var step by remember { mutableStateOf(0) }
     var showUiSettings by remember { mutableStateOf(false) }
@@ -54,7 +58,7 @@ fun WelcomeScreen(onContinue: () -> Unit) {
                         Text("UI Settings") 
                     }
                     Spacer(modifier = Modifier.height(24.dp))
-                    Button(onClick = { step = 1 }) { Text("Next") }
+                    Button(onClick = { step = if (enableBoardImport) 1 else 2 }) { Text("Next") }
                 }
             }
         }
@@ -76,7 +80,7 @@ fun WelcomeScreen(onContinue: () -> Unit) {
                         scope.launch {
                             isImporting = true
                             try {
-                                val result = boardImportService.importBoards(isModern = false)
+                                val result = boardImportService?.importBoards(isModern = false) == true
                                 if (result) {
                                     // Move to next step if successful
                                     step = 2
@@ -95,7 +99,7 @@ fun WelcomeScreen(onContinue: () -> Unit) {
                          scope.launch {
                             isImporting = true
                             try {
-                                val result = boardImportService.importBoards(isModern = true)
+                                val result = boardImportService?.importBoards(isModern = true) == true
                                 if (result) {
                                     step = 2
                                 }
@@ -114,7 +118,7 @@ fun WelcomeScreen(onContinue: () -> Unit) {
             // Voice engine selector screen
             VoiceEngineSelectorScreen(
                 onNext = { step = 4 }, // Skip to voice selection if System TTS
-                onCancel = { step = 1 }, // Back to Import
+                onCancel = { step = if (enableBoardImport) 1 else 0 }, // Back to Import or Intro
                 onAzureSelected = { step = 3 } // Go to Azure config if Azure selected
             )
         }

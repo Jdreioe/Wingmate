@@ -35,8 +35,7 @@ internal class AndroidSqlOpenHelper(
                 is_category INTEGER DEFAULT 0,
                 created_at INTEGER,
                 recording_path TEXT,
-                ordering INTEGER,
-                puck_action TEXT
+                ordering INTEGER
             );
         """.trimIndent())
 
@@ -156,13 +155,6 @@ internal class AndroidSqlOpenHelper(
                 db.execSQL("ALTER TABLE phrases ADD COLUMN linked_board_id TEXT")
             } catch (_: Throwable) {
                 // ignore
-            }
-        }
-        if (oldVersion < 6 && newVersion >= 6) {
-            try {
-                db.execSQL("ALTER TABLE phrases ADD COLUMN puck_action TEXT")
-            } catch (_: Throwable) {
-                // ignore if column already exists
             }
         }
     }

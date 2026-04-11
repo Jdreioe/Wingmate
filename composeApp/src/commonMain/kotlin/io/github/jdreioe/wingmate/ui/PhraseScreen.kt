@@ -55,20 +55,18 @@ import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
-import org.koin.core.context.GlobalContext
-import io.github.jdreioe.wingmate.application.SettingsUseCase
-import io.github.jdreioe.wingmate.application.SettingsStateManager
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import org.koin.compose.getKoin
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
-    // Ensure Koin is initialized
-    require(GlobalContext.getOrNull() != null) { "Koin not initialized. Call initKoin() before starting the app." }
-    val bloc = remember { GlobalContext.get().get<PhraseBloc>() }
+    val koin = getKoin()
+    val bloc = koinInject<PhraseBloc>()
     val state by bloc.state.collectAsStateWithLifecycle()
 
     // Ensure initial list loads on first composition
@@ -78,12 +76,21 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
 
     // Load settings for UI scaling using reactive state manager
     val settings by rememberReactiveSettings()
-    
-    val uiSettingsUseCase = remember {
-        org.koin.core.context.GlobalContext.getOrNull()?.let { koin ->
-            runCatching { koin.get<io.github.jdreioe.wingmate.application.SettingsUseCase>() }.getOrNull()
-        }
-    }
+
+    val speechService = koinInject<io.github.jdreioe.wingmate.domain.SpeechService>()
+    val saidRepo = koinInject<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+    val voiceUseCase = koinInject<VoiceUseCase>()
+    val boardRepo = koinInject<io.github.jdreioe.wingmate.domain.BoardRepository>()
+    val obfParser = koinInject<io.github.jdreioe.wingmate.infrastructure.ObfParser>()
+    val dictionaryRepo = koinInject<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>()
+    val predictionService = remember(koin) { koin.getOrNull<TextPredictionService>() }
+    val dictionaryLoader = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.DictionaryLoader>() }
+    val updateService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.UpdateService>() }
+    val filePicker = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.FilePicker>() }
+    val phraseRepo = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.PhraseRepository>() }
+    val audioClipboard = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.AudioClipboard>() }
+    val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
+    val enableObfObzImport = !isReleaseBuild()
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showVoiceSelection by remember { mutableStateOf(false) }
@@ -108,16 +115,6 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             val refocusInput = remember(textFieldFocusRequester) {
                 { textFieldFocusRequester.requestFocus() }
             }
-
-            // Dependencies for playback controls
-            val speechService = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SpeechService>() }
-            val saidRepo = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>() }
-            val voiceUseCase = remember { GlobalContext.get().get<VoiceUseCase>() }
-            
-            // Text prediction service (optional - may not be available on all platforms)
-            val predictionService = remember { 
-                runCatching { GlobalContext.get().get<TextPredictionService>() }.getOrNull() 
-            }
             var predictions by remember { mutableStateOf(PredictionResult()) }
 
             // Speech service state tracking
@@ -139,9 +136,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             var historyItems by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.SaidText>>(emptyList()) }
             
             // OBF Board State
-            val boardRepo = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.BoardRepository>() }
             var currentBoard by remember { mutableStateOf<ObfBoard?>(null) }
-            val obfParser = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.infrastructure.ObfParser>() }
             // Map of all boards (ID -> Board) for linking support in OBZ files
             var boardsMap by remember { mutableStateOf<Map<String, ObfBoard>>(emptyMap()) }
             // Navigation stack for going back to previous boards
@@ -163,11 +158,6 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     // Train prediction model: first load base language dictionary, then user history
                     val ngramService = predictionService as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
                     if (ngramService != null) {
-                        // Load dictionary for primary language
-                        val dictionaryLoader = runCatching { 
-                            org.koin.core.context.GlobalContext.get().get<io.github.jdreioe.wingmate.infrastructure.DictionaryLoader>() 
-                        }.getOrNull()
-                        
                         if (dictionaryLoader != null) {
                             val dictWords = dictionaryLoader.loadDictionary(primaryLanguageState.value)
                             if (dictWords.isNotEmpty()) {
@@ -257,14 +247,12 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         showOverflow = false
                                         uiScope.launch(Dispatchers.IO) {
                                             runCatching {
-                                                val repo = GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
-                                                val last = repo.list()
+                                                val last = saidRepo.list()
                                                     .filter { it.saidText == input.text && !it.audioFilePath.isNullOrBlank() }
                                                     .maxByOrNull { it.date ?: it.createdAt ?: 0L }
                                                 val path = last?.audioFilePath
                                                 if (!path.isNullOrBlank()) {
-                                                    GlobalContext.get().get<io.github.jdreioe.wingmate.platform.AudioClipboard>()
-                                                        .copyAudioFile(path)
+                                                    audioClipboard?.copyAudioFile(path)
                                                 }
                                             }
                                         }
@@ -276,14 +264,12 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         showOverflow = false
                                         uiScope.launch(Dispatchers.IO) {
                                             runCatching {
-                                                val repo = GlobalContext.get().get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
-                                                val last = repo.list()
+                                                val last = saidRepo.list()
                                                     .filter { it.saidText == input.text && !it.audioFilePath.isNullOrBlank() }
                                                     .maxByOrNull { it.date ?: it.createdAt ?: 0L }
                                                 val path = last?.audioFilePath
                                                 if (!path.isNullOrBlank()) {
-                                                    GlobalContext.get().get<io.github.jdreioe.wingmate.platform.ShareService>()
-                                                        .shareAudio(path)
+                                                    shareService?.shareAudio(path)
                                                 }
                                             }
                                         }
@@ -305,9 +291,6 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     text = { Text("Check for updates", style = MaterialTheme.typography.bodyMedium) },
                                     onClick = { 
                                         showOverflow = false
-                                        val updateService = runCatching { 
-                                            GlobalContext.get().get<io.github.jdreioe.wingmate.domain.UpdateService>() 
-                                        }.getOrNull()
                                         if (updateService != null) {
                                             uiScope.launch(Dispatchers.IO) {
                                                 runCatching { updateService.checkForUpdates() }
@@ -322,121 +305,120 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 
                                 Divider()
 
-                                DropdownMenuItem(
-                                    text = { Text(if (currentBoard == null) "Load Sample Board" else "Close Board", style = MaterialTheme.typography.bodyMedium) },
-                                    onClick = { 
-                                        showOverflow = false
-                                        if (currentBoard == null) {
-                                            uiScope.launch {
-                                                // Load a sample board for demonstration
-                                                val sampleJson = """
-                                                    {
-                                                      "format": "open-board-0.1",
-                                                      "id": "sample_1",
-                                                      "name": "Sample Board",
-                                                      "grid": { "rows": 3, "columns": 2, "order": [["b1", "b2"], ["b3", "b4"], ["b5", "b6"]] },
-                                                      "buttons": [
-                                                        {"id": "b1", "label": "Hello", "background_color": "#ffcccc"},
-                                                        {"id": "b2", "label": "How are you?", "background_color": "#ccffcc"},
-                                                        {"id": "b3", "label": "Yes", "background_color": "#ccccff"},
-                                                        {"id": "b4", "label": "No", "background_color": "#ffffcc"},
-                                                        {"id": "b5", "label": "Thank you", "background_color": "#ffccff"},
-                                                        {"id": "b6", "label": "Please", "background_color": "#ccffff"}
-                                                      ]
+                                if (enableObfObzImport) {
+                                    DropdownMenuItem(
+                                        text = { Text(if (currentBoard == null) "Load Sample Board" else "Close Board", style = MaterialTheme.typography.bodyMedium) },
+                                        onClick = { 
+                                            showOverflow = false
+                                            if (currentBoard == null) {
+                                                uiScope.launch {
+                                                    // Load a sample board for demonstration
+                                                    val sampleJson = """
+                                                        {
+                                                          "format": "open-board-0.1",
+                                                          "id": "sample_1",
+                                                          "name": "Sample Board",
+                                                          "grid": { "rows": 3, "columns": 2, "order": [["b1", "b2"], ["b3", "b4"], ["b5", "b6"]] },
+                                                          "buttons": [
+                                                            {"id": "b1", "label": "Hello", "background_color": "#ffcccc"},
+                                                            {"id": "b2", "label": "How are you?", "background_color": "#ccffcc"},
+                                                            {"id": "b3", "label": "Yes", "background_color": "#ccccff"},
+                                                            {"id": "b4", "label": "No", "background_color": "#ffffcc"},
+                                                            {"id": "b5", "label": "Thank you", "background_color": "#ffccff"},
+                                                            {"id": "b6", "label": "Please", "background_color": "#ccffff"}
+                                                          ]
+                                                        }
+                                                    """.trimIndent()
+                                                    val boardRes = obfParser.parseBoard(sampleJson)
+                                                    if (boardRes.isSuccess) {
+                                                        val board = boardRes.getOrThrow()
+                                                        boardRepo.saveBoard(board)
+                                                        currentBoard = board
                                                     }
-                                                """.trimIndent()
-                                                val boardRes = obfParser.parseBoard(sampleJson)
-                                                if (boardRes.isSuccess) {
-                                                    val board = boardRes.getOrThrow()
-                                                    boardRepo.saveBoard(board)
-                                                    currentBoard = board
                                                 }
+                                            } else {
+                                                currentBoard = null
                                             }
-                                        } else {
-                                            currentBoard = null
                                         }
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Import OBF/OBZ Board...", style = MaterialTheme.typography.bodyMedium) },
-                                    onClick = { 
-                                        showOverflow = false
-                                        uiScope.launch(Dispatchers.IO) {
-                                            val filePicker = runCatching { 
-                                                GlobalContext.get().get<io.github.jdreioe.wingmate.platform.FilePicker>() 
-                                            }.getOrNull()
-                                            if (filePicker != null) {
-                                                val path = filePicker.pickFile("Select OBF/OBZ Board", listOf("obf", "obz", "json"))
-                                                if (path != null) {
-                                                    val isObz = path.lowercase().endsWith(".obz")
-                                                    if (isObz) {
-                                                        // Handle OBZ (zip archive)
-                                                        runCatching {
-                                                            val zipFile = java.util.zip.ZipFile(path)
-                                                            // Read manifest.json to find root board
-                                                            val manifestEntry = zipFile.getEntry("manifest.json")
-                                                            if (manifestEntry != null) {
-                                                                val manifestContent = zipFile.getInputStream(manifestEntry).bufferedReader().readText()
-                                                                val manifest = obfParser.parseManifest(manifestContent).getOrNull()
-                                                                if (manifest != null) {
-                                                                    // Load ALL boards from manifest into map
-                                                                    val loadedBoards = mutableMapOf<String, ObfBoard>()
-                                                                    manifest.paths.boards.forEach { (boardId, boardPath) ->
-                                                                        val entry = zipFile.getEntry(boardPath)
-                                                                        if (entry != null) {
-                                                                            val content = zipFile.getInputStream(entry).bufferedReader().readText()
-                                                                            obfParser.parseBoard(content).getOrNull()?.let { board ->
-                                                                                loadedBoards[boardId] = board
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Import OBF/OBZ Board...", style = MaterialTheme.typography.bodyMedium) },
+                                        onClick = { 
+                                            showOverflow = false
+                                            uiScope.launch(Dispatchers.IO) {
+                                                if (filePicker != null) {
+                                                    val path = filePicker.pickFile("Select OBF/OBZ Board", listOf("obf", "obz", "json"))
+                                                    if (path != null) {
+                                                        val isObz = path.lowercase().endsWith(".obz")
+                                                        if (isObz) {
+                                                            // Handle OBZ (zip archive)
+                                                            runCatching {
+                                                                val zipFile = java.util.zip.ZipFile(path)
+                                                                // Read manifest.json to find root board
+                                                                val manifestEntry = zipFile.getEntry("manifest.json")
+                                                                if (manifestEntry != null) {
+                                                                    val manifestContent = zipFile.getInputStream(manifestEntry).bufferedReader().readText()
+                                                                    val manifest = obfParser.parseManifest(manifestContent).getOrNull()
+                                                                    if (manifest != null) {
+                                                                        // Load ALL boards from manifest into map
+                                                                        val loadedBoards = mutableMapOf<String, ObfBoard>()
+                                                                        manifest.paths.boards.forEach { (boardId, boardPath) ->
+                                                                            val entry = zipFile.getEntry(boardPath)
+                                                                            if (entry != null) {
+                                                                                val content = zipFile.getInputStream(entry).bufferedReader().readText()
+                                                                                obfParser.parseBoard(content).getOrNull()?.let { board ->
+                                                                                    loadedBoards[boardId] = board
+                                                                                }
                                                                             }
                                                                         }
-                                                                    }
-                                                                    // Extract ALL images from manifest
-                                                                    val loadedImages = mutableMapOf<String, ByteArray>()
-                                                                    manifest.paths.images.forEach { (imageId, imagePath) ->
-                                                                        val entry = zipFile.getEntry(imagePath)
-                                                                        if (entry != null) {
-                                                                            val bytes = zipFile.getInputStream(entry).readBytes()
-                                                                            loadedImages[imagePath] = bytes
+                                                                        // Extract ALL images from manifest
+                                                                        val loadedImages = mutableMapOf<String, ByteArray>()
+                                                                        manifest.paths.images.forEach { (imageId, imagePath) ->
+                                                                            val entry = zipFile.getEntry(imagePath)
+                                                                            if (entry != null) {
+                                                                                val bytes = zipFile.getInputStream(entry).readBytes()
+                                                                                loadedImages[imagePath] = bytes
+                                                                            }
                                                                         }
-                                                                    }
-                                                                    // Also load root board if not in paths
-                                                                    val rootEntry = zipFile.getEntry(manifest.root)
-                                                                    if (rootEntry != null) {
-                                                                        val boardContent = zipFile.getInputStream(rootEntry).bufferedReader().readText()
-                                                                        val boardRes = obfParser.parseBoard(boardContent)
-                                                                        if (boardRes.isSuccess) {
-                                                                            val board = boardRes.getOrThrow()
-                                                                            loadedBoards[board.id] = board
-                                                                            boardRepo.saveBoard(board)
-                                                                            uiScope.launch { 
-                                                                                boardsMap = loadedBoards
-                                                                                boardStack = emptyList()
-                                                                                extractedImages = loadedImages
-                                                                                currentBoard = board 
+                                                                        // Also load root board if not in paths
+                                                                        val rootEntry = zipFile.getEntry(manifest.root)
+                                                                        if (rootEntry != null) {
+                                                                            val boardContent = zipFile.getInputStream(rootEntry).bufferedReader().readText()
+                                                                            val boardRes = obfParser.parseBoard(boardContent)
+                                                                            if (boardRes.isSuccess) {
+                                                                                val board = boardRes.getOrThrow()
+                                                                                loadedBoards[board.id] = board
+                                                                                boardRepo.saveBoard(board)
+                                                                                uiScope.launch { 
+                                                                                    boardsMap = loadedBoards
+                                                                                    boardStack = emptyList()
+                                                                                    extractedImages = loadedImages
+                                                                                    currentBoard = board 
+                                                                                }
                                                                             }
                                                                         }
                                                                     }
                                                                 }
+                                                                zipFile.close()
                                                             }
-                                                            zipFile.close()
-                                                        }
-                                                    } else {
-                                                        // Handle plain OBF file
-                                                        val content = filePicker.readFileAsText(path)
-                                                        if (content != null) {
-                                                            val boardRes = obfParser.parseBoard(content)
-                                                            if (boardRes.isSuccess) {
-                                                                val board = boardRes.getOrThrow()
-                                                                boardRepo.saveBoard(board)
-                                                                uiScope.launch { currentBoard = board }
+                                                        } else {
+                                                            // Handle plain OBF file
+                                                            val content = filePicker.readFileAsText(path)
+                                                            if (content != null) {
+                                                                val boardRes = obfParser.parseBoard(content)
+                                                                if (boardRes.isSuccess) {
+                                                                    val board = boardRes.getOrThrow()
+                                                                    boardRepo.saveBoard(board)
+                                                                    uiScope.launch { currentBoard = board }
+                                                                }
                                                             }
                                                         }
                                                     }
                                                 }
                                             }
                                         }
-                                    }
-                                )
+                                    )
+                                }
 
                             }
                         }
@@ -544,7 +526,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         // Retry until available (or stop after some attempts if desired)
                         repeat(30) {
                             if (categoryUseCaseState.value != null) return@repeat
-                            categoryUseCaseState.value = runCatching { GlobalContext.get().get<io.github.jdreioe.wingmate.application.CategoryUseCase>() }.getOrNull()
+                            categoryUseCaseState.value = koin.getOrNull<io.github.jdreioe.wingmate.application.CategoryUseCase>()
                             if (categoryUseCaseState.value == null) delay(250)
                         }
                     }
@@ -872,7 +854,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     onClick = {
                                         val name = categoryName.trim()
                                         if (name.isNotBlank() && !categories.any { it.name.equals(name, ignoreCase = true) }) {
-                                            val ucImmediate = categoryUseCaseState.value ?: runCatching { GlobalContext.get().get<io.github.jdreioe.wingmate.application.CategoryUseCase>() }.getOrNull()?.also { categoryUseCaseState.value = it }
+                                            val ucImmediate = categoryUseCaseState.value ?: koin.getOrNull<io.github.jdreioe.wingmate.application.CategoryUseCase>()?.also { categoryUseCaseState.value = it }
                                             // Always create an ephemeral chip so user sees immediate feedback
                                             val temp = io.github.jdreioe.wingmate.domain.CategoryItem(id = "temp_${name}_${System.currentTimeMillis()}", name = name, selectedLanguage = primaryLanguageState.value)
                                             categories = categories + temp
@@ -883,7 +865,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                                 var attempts = 0
                                                 while (uc == null && attempts < 40) { // up to ~10s
                                                     kotlinx.coroutines.delay(250)
-                                                    uc = categoryUseCaseState.value ?: runCatching { GlobalContext.get().get<io.github.jdreioe.wingmate.application.CategoryUseCase>() }.getOrNull()?.also { categoryUseCaseState.value = it }
+                                                    uc = categoryUseCaseState.value ?: koin.getOrNull<io.github.jdreioe.wingmate.application.CategoryUseCase>()?.also { categoryUseCaseState.value = it }
                                                     attempts++
                                                 }
                                                 if (uc != null) {
@@ -944,7 +926,6 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         if (uc != null) {
                                             coroutineScope.launch(Dispatchers.IO) {
                                                 // Delete phrases under this category (PhraseRepo)
-                                                val phraseRepo = runCatching { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PhraseRepository>() }.getOrNull()
                                                 val allPhrases = runCatching { phraseRepo?.getAll() }.getOrNull().orEmpty()
                                                 val toDelete = allPhrases.filter { it.parentId == cat.id }
                                                 toDelete.forEach { runCatching { phraseRepo?.delete(it.id) } }
@@ -1061,8 +1042,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         onCopyAudio = { filePath ->
                             // Try to copy soundfile via platform clipboard
                             runCatching {
-                                val ac = GlobalContext.get().get<io.github.jdreioe.wingmate.platform.AudioClipboard>()
-                                ac.copyAudioFile(filePath)
+                                audioClipboard?.copyAudioFile(filePath)
                             }
                         }
                     )
@@ -1217,7 +1197,6 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                 UiLanguageDialog(show = true, onDismiss = { showUiLanguageDialog = false })
             }
             if (showDictionaryScreen) {
-                val dictionaryRepo = remember { GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>() }
                 val scope = rememberCoroutineScope()
                 var entries by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.PronunciationEntry>>(emptyList()) }
                 

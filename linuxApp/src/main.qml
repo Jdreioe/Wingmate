@@ -9,7 +9,7 @@ import "pages" as Pages
 Kirigami.ApplicationWindow {
     id: root
     
-    title: "Wingmate - Communication Aid"
+    title: "Wingmate"
     
     width: 1280
     height: 800

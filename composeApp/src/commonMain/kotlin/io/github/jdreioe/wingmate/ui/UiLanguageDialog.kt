@@ -11,13 +11,14 @@ import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.Voice
-import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
+
 @Composable
 fun UiLanguageDialog(show: Boolean, onDismiss: () -> Unit) {
     if (!show) return
-    val voiceUseCase = remember { GlobalContext.get().get<VoiceUseCase>() }
-    val settingsUseCase = remember { GlobalContext.get().get<SettingsUseCase>() }
+    val voiceUseCase = koinInject<VoiceUseCase>()
+    val settingsUseCase = koinInject<SettingsUseCase>()
     val scope = rememberCoroutineScope()
 
     var available by remember { mutableStateOf<List<String>>(emptyList()) }

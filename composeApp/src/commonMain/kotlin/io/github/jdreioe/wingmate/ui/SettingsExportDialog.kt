@@ -12,9 +12,9 @@ import io.github.jdreioe.wingmate.domain.UserDataManager
 import io.github.jdreioe.wingmate.platform.ShareService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.koin.core.context.GlobalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import org.koin.compose.koinInject
 
 @Composable
 fun SettingsExportDialog(
@@ -22,9 +22,9 @@ fun SettingsExportDialog(
 ) {
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
-    
-    val userDataManager = remember { GlobalContext.get().get<UserDataManager>() }
-    val shareService = remember { GlobalContext.get().get<ShareService>() }
+
+    val userDataManager = koinInject<UserDataManager>()
+    val shareService = koinInject<ShareService>()
 
     var statusMessage by remember { mutableStateOf("") }
     var importText by remember { mutableStateOf("") }

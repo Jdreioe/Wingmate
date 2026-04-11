@@ -55,7 +55,7 @@ fun main() {
     application {
         Window(
             onCloseRequest = { exitApplication() },
-            title = "Wingmate Desktop",
+            title = "Wingmate",
             resizable = true,
             state = rememberWindowState()
         ) {

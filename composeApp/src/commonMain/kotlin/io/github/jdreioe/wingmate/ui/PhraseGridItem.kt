@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.SmallFloatingActionButton
 import io.github.jdreioe.wingmate.domain.Phrase
-import org.koin.core.context.GlobalContext
+import org.koin.compose.getKoin
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -59,6 +59,11 @@ fun PhraseGridItem(
     readOnly: Boolean = false,
     onCopyAudio: ((filePath: String) -> Unit)? = null,
 ) {
+    val koin = getKoin()
+    val shareService = remember(koin) {
+        koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>()
+    }
+
     val infiniteTransition = rememberInfiniteTransition()
     val angle = infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -121,8 +126,7 @@ fun PhraseGridItem(
                                 DropdownMenuItem(text = { Text("Share soundfile") }, onClick = {
                                     showMenu = false
                                     runCatching {
-                                        GlobalContext.get().get<io.github.jdreioe.wingmate.platform.ShareService>()
-                                            .shareAudio(audioPath)
+                                        shareService?.shareAudio(audioPath)
                                     }
                                 })
                             }

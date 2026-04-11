@@ -14,8 +14,8 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.application.SettingsUseCase
-import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @Composable
 fun VoiceSettingsDialog(
@@ -31,17 +31,15 @@ fun VoiceSettingsDialog(
     var pitch by remember { mutableStateOf(voice.pitch ?: 1.0) }
     var rate by remember { mutableStateOf(voice.rate ?: 1.0) }
     var showEngineComparison by remember { mutableStateOf(false) }
-    val speechService = remember { GlobalContext.get().get<SpeechService>() }
-    val settingsUseCase = remember { GlobalContext.getOrNull()?.let { runCatching { it.get<SettingsUseCase>() }.getOrNull() } }
+    val speechService = koinInject<SpeechService>()
+    val settingsUseCase = koinInject<SettingsUseCase>()
     val scope = rememberCoroutineScope()
     
     // Get current TTS engine setting
     var useSystemTts by remember { mutableStateOf(false) }
     LaunchedEffect(settingsUseCase) {
-        if (settingsUseCase != null) {
-            val settings = runCatching { settingsUseCase.get() }.getOrNull()
-            useSystemTts = settings?.useSystemTts ?: false
-        }
+        val settings = runCatching { settingsUseCase.get() }.getOrNull()
+        useSystemTts = settings?.useSystemTts ?: false
     }
 
     AlertDialog(

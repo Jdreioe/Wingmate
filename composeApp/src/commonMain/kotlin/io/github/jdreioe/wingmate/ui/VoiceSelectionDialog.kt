@@ -17,18 +17,16 @@ import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import org.koin.compose.getKoin
 import org.koin.compose.koinInject
 
 @Composable
 fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow: (() -> Unit)? = null) {
     if (!show) return
 
+    val koin = getKoin()
     val useCase = koinInject<VoiceUseCase>()
-    val settingsUseCase: SettingsUseCase? = try {
-        koinInject<SettingsUseCase>()
-    } catch (_: Exception) {
-        null
-    }
+    val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
     var loading by remember { mutableStateOf(true) }
     var voices by remember { mutableStateOf<List<Voice>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -42,11 +40,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
     var showLanguageFilter by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    val systemVoiceProvider: io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider? = try {
-        koinInject<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>()
-    } catch (_: Exception) {
-        null
-    }
+    val systemVoiceProvider = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>() }
 
     LaunchedEffect(Unit) {
         // Check TTS preference first

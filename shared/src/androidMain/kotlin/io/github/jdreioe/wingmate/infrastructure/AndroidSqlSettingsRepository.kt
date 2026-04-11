@@ -9,7 +9,10 @@ import kotlinx.serialization.json.Json
 
 class AndroidSqlSettingsRepository(private val context: Context) : SettingsRepository {
     private val helper by lazy { AndroidSqlOpenHelper(context) }
-    private val json = Json { prettyPrint = true }
+    private val json = Json {
+        prettyPrint = true
+        ignoreUnknownKeys = true
+    }
 
     init {
         // ensure ui_settings table exists (AndroidSqlOpenHelper currently doesn't create it)

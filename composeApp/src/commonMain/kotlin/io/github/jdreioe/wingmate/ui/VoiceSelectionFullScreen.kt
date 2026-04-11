@@ -22,17 +22,15 @@ import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import org.koin.compose.getKoin
 import org.koin.compose.koinInject
 
 @Composable
 fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToWelcome: (() -> Unit)? = null) {
+    val koin = getKoin()
     val useCase = koinInject<VoiceUseCase>()
-    val settingsUseCase = koinInject<SettingsUseCase>()
-    val systemVoiceProvider: io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider? = try {
-        koinInject<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>()
-    } catch (_: Exception) {
-        null
-    }
+    val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
+    val systemVoiceProvider = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>() }
     
     var loading by remember { mutableStateOf(true) }
     var voices by remember { mutableStateOf<List<Voice>>(emptyList()) }
@@ -46,10 +44,12 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
 
     LaunchedEffect(useCase, settingsUseCase) {
         // Check TTS preference first
-        val settings = withContext(Dispatchers.IO) {
-            runCatching { settingsUseCase.get() }.getOrNull()
+        if (settingsUseCase != null) {
+            val settings = withContext(Dispatchers.IO) {
+                runCatching { settingsUseCase.get() }.getOrNull()
+            }
+            useSystemTts = settings?.useSystemTts ?: false
         }
-        useSystemTts = settings?.useSystemTts ?: false
 
         // If using system TTS, skip voice loading and go straight to next
         if (useSystemTts) {

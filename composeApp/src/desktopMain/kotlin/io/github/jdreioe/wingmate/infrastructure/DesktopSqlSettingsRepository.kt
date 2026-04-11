@@ -20,7 +20,10 @@ class DesktopSqlSettingsRepository : SettingsRepository {
         return DriverManager.getConnection("jdbc:sqlite:${dbPath.toAbsolutePath()}")
     }
 
-    private val json = Json { prettyPrint = true }
+    private val json = Json {
+        prettyPrint = true
+        ignoreUnknownKeys = true
+    }
 
     init {
         connection().use { conn ->
