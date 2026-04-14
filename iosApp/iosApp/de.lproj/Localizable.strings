@@ -225,3 +225,71 @@
 "welcome_flow.pros" = "Vorteile";
 "welcome_flow.cons" = "Nachteile";
 "welcome_flow.preview_text.placeholder" = "Text für Vorschau eingeben...";
+
+"toolbar.switch_symbol_mode" = "Zum Symbol-Arbeitsbereich wechseln";
+"toolbar.switch_phrase_mode" = "Zum Phrasen-Arbeitsbereich wechseln";
+
+"symbol.workspace.title" = "Symbol-Arbeitsbereich";
+"symbol.workspace.subtitle" = "Boardsets erstellen und verwalten";
+
+"boardset.create" = "Neues Boardset";
+"boardset.create_first" = "Erstes Boardset erstellen";
+"boardset.empty" = "Noch keine Boardsets";
+"boardset.default_name" = "Neues Boardset";
+"boardset.name" = "Boardset-Name";
+"boardset.name_placeholder" = "Alltagskommunikation";
+"boardset.grid" = "Raster";
+"boardset.rows" = "Zeilen: %d";
+"boardset.columns" = "Spalten: %d";
+"boardset.board_name" = "Tafelname";
+"boardset.board_name_placeholder" = "Essens-Tafel";
+"boardset.board_picker" = "Tafel";
+"boardset.add_board" = "Tafel hinzufügen";
+"boardset.save" = "Boardset speichern";
+"boardset.lock" = "Boardset sperren";
+"boardset.unlock" = "Boardset entsperren";
+"boardset.locked_banner" = "Boardset ist gesperrt. Zum Bearbeiten entsperren.";
+"boardset.untitled_board" = "Unbenannte Tafel";
+"boardset.grid_summary" = "%d x %d Raster, %d Schaltflächen";
+
+"boardset.status.created" = "Boardset erstellt.";
+"boardset.status.board_added" = "Tafel zum Boardset hinzugefügt.";
+"boardset.status.saved" = "Boardset gespeichert.";
+"boardset.status.locked" = "Boardset gesperrt.";
+"boardset.status.unlocked" = "Boardset entsperrt.";
+"boardset.status.cell_saved" = "Zelle gespeichert.";
+"boardset.status.cell_cleared" = "Zelle geleert.";
+
+"boardset.error.create_failed" = "Boardset konnte nicht erstellt werden.";
+"boardset.error.locked" = "Dieses Boardset ist gesperrt.";
+"boardset.error.no_board" = "Keine Tafel ausgewählt.";
+"boardset.error.save_failed" = "Boardset konnte nicht gespeichert werden.";
+"boardset.error.cell_update_failed" = "Zelle konnte nicht aktualisiert werden.";
+"boardset.error.cell_clear_failed" = "Zelle konnte nicht geleert werden.";
+
+"boardset.unlock.failed_title" = "Entsperren nicht möglich";
+"boardset.unlock.not_available" = "Geräteauthentifizierung ist nicht verfügbar.";
+"boardset.unlock.reason" = "Entsperre dieses Boardset, um Symbole und Layout zu bearbeiten.";
+"boardset.unlock.failed" = "Authentifizierung fehlgeschlagen.";
+
+"boardset.edit" = "Zellen bearbeiten";
+"boardset.edit_done" = "Bearbeiten beenden";
+"boardset.cell.empty" = "Leere Zelle";
+"boardset.cell.edit_title" = "Zelle bearbeiten";
+"boardset.cell.label" = "Beschriftung";
+"boardset.cell.vocalization" = "Vokalisation";
+"boardset.cell.linked_board" = "Verknüpfte Tafel";
+"boardset.cell.no_link" = "Keine Verknüpfung";
+"boardset.cell.colors" = "Farben";
+"boardset.cell.background_enabled" = "Hintergrundfarbe setzen";
+"boardset.cell.background_picker" = "Hintergrundfarbe";
+"boardset.cell.border_enabled" = "Randfarbe setzen";
+"boardset.cell.border_picker" = "Randfarbe";
+"boardset.cell.background_hex" = "Hintergrundfarbe (HEX)";
+"boardset.cell.border_hex" = "Randfarbe (HEX)";
+"boardset.cell.clear" = "Zelle leeren";
+"boardset.cell.delete" = "Zelle loschen";
+
+"sentence.box.title" = "Satzfeld";
+"sentence.box.delete_phrase" = "Phrase aus Satz loschen";
+"sentence.box.speak" = "Satz sprechen";

@@ -83,6 +83,124 @@ struct MultiLineInput: View {
     }
 }
 
+struct SentenceBoxView: View {
+    let phrases: [SentencePhraseToken]
+    let onDelete: (Int) -> Void
+    var onSpeak: (() -> Void)? = nil
+    var animationNamespace: Namespace.ID? = nil
+    var animatedTokenId: String? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("sentence.box.title")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(phrases.enumerated()), id: \.element.id) { index, token in
+                        sentenceTokenCard(index: index, token: token)
+                    }
+
+                    if let onSpeak, !phrases.isEmpty {
+                        Button(action: onSpeak) {
+                            VStack(alignment: .center, spacing: 8) {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 28, weight: .semibold))
+                                Text("sentence.box.speak")
+                                    .font(.caption)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 10)
+                            .frame(width: 108)
+                            .frame(minHeight: 94)
+                            .background(Color.accentColor.opacity(0.16))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("sentence.box.speak"))
+                    }
+                }
+                .padding(.horizontal, 2)
+                .padding(.vertical, 2)
+                .animation(.spring(response: 0.38, dampingFraction: 0.82), value: phrases.map(\.id))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sentenceTokenCard(index: Int, token: SentencePhraseToken) -> some View {
+        let card = ZStack(alignment: .topTrailing) {
+            VStack(alignment: .center, spacing: 8) {
+                if let imageUrl = token.imageUrl,
+                   let url = URL(string: imageUrl) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 42, height: 42)
+                        case .failure(_):
+                            Image(systemName: "photo")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 42, height: 42)
+                        case .empty:
+                            ProgressView()
+                                .frame(width: 42, height: 42)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                }
+
+                Text(token.title)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .frame(width: 108)
+            .frame(minHeight: 94)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color(.separator), lineWidth: 1)
+            )
+
+            Button {
+                onDelete(index)
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                    .background(Color(.systemBackground), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .padding(4)
+            .accessibilityLabel(Text("sentence.box.delete_phrase"))
+        }
+
+        if let animationNamespace, animatedTokenId == token.id {
+            card
+                .matchedGeometryEffect(id: token.id, in: animationNamespace, isSource: false)
+                .zIndex(2)
+        } else {
+            card
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+        }
+    }
+}
+
 struct SelectableTextView: UIViewRepresentable {
     @Binding var text: String
     @Binding var selectedRange: NSRange

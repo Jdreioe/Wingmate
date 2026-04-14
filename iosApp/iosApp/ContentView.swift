@@ -45,29 +45,33 @@ struct ContentView: View {
 
     @ViewBuilder
     private func mainContent(columns: [GridItem]) -> some View {
-        MainContentView(
-            model: model,
-            recorder: recorder,
-            recordingForPhraseId: $recordingForPhraseId,
-            editingPhrase: $editingPhrase,
-            showAddCategory: $showAddCategory,
-            showAddPhrase: $showAddPhrase,
-            wiggleMode: $wiggleMode,
-            gridLocal: $gridLocal,
-            draggingId: $draggingId,
-            draggingOffset: $draggingOffset,
-            dragStartFrame: $dragStartFrame,
-            itemFrames: $itemFrames,
-            columns: columns,
-            uiInputFontSize: uiInputFontSize,
-            uiTextFieldHeight: uiTextFieldHeight,
-            uiChipFontSize: uiChipFontSize,
-            chipHPadding: chipHPadding,
-            chipVPadding: chipVPadding,
-            uiPlayIconSize: uiPlayIconSize,
-            requestMicAndStart: requestMicAndStart,
-            commitMove: commitMove
-        )
+        if model.boardModeEnabled {
+            SymbolBoardWorkspaceView(model: model)
+        } else {
+            MainContentView(
+                model: model,
+                recorder: recorder,
+                recordingForPhraseId: $recordingForPhraseId,
+                editingPhrase: $editingPhrase,
+                showAddCategory: $showAddCategory,
+                showAddPhrase: $showAddPhrase,
+                wiggleMode: $wiggleMode,
+                gridLocal: $gridLocal,
+                draggingId: $draggingId,
+                draggingOffset: $draggingOffset,
+                dragStartFrame: $dragStartFrame,
+                itemFrames: $itemFrames,
+                columns: columns,
+                uiInputFontSize: uiInputFontSize,
+                uiTextFieldHeight: uiTextFieldHeight,
+                uiChipFontSize: uiChipFontSize,
+                chipHPadding: chipHPadding,
+                chipVPadding: chipVPadding,
+                uiPlayIconSize: uiPlayIconSize,
+                requestMicAndStart: requestMicAndStart,
+                commitMove: commitMove
+            )
+        }
     }
 
     var body: some View {
@@ -181,10 +185,20 @@ struct ContentView: View {
                     }
                 }
                 .background(Color(.systemBackground))
-                .navigationTitle(Text("app.title"))
+                .navigationTitle(Text(model.boardModeEnabled ? "symbol.workspace.title" : "app.title"))
                 .toolbar {
                     if !shouldShowWelcomeFlow {
                         ToolbarItemGroup(placement: .topBarTrailing) {
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    model.boardModeEnabled.toggle()
+                                }
+                            }) {
+                                Image(systemName: model.boardModeEnabled ? "text.bubble" : "square.grid.3x3.fill")
+                                    .accessibilityLabel(Text(model.boardModeEnabled ? "toolbar.switch_phrase_mode" : "toolbar.switch_symbol_mode"))
+                            }
+                            .accessibilityHidden(model.scanningEnabled && !model.scanTopBarEnabled)
+
                             Button(action: {
                                 withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.1)) {
                                     if isWideLayout {

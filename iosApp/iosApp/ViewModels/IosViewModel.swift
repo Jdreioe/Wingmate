@@ -3,6 +3,38 @@ import Shared
 import AVFoundation
 import Network
 
+struct BoardSetInfo: Codable, Identifiable, Equatable {
+    var id: String
+    var name: String
+    var rootBoardId: String
+    var boardIds: [String]
+    var isLocked: Bool
+    var updatedAt: TimeInterval
+}
+
+struct BoardCellInfo: Identifiable, Equatable {
+    var row: Int
+    var col: Int
+    var buttonId: String
+    var label: String?
+    var vocalization: String?
+    var backgroundColor: String?
+    var borderColor: String?
+    var linkedBoardId: String?
+    var imageId: String?
+    var imageUrl: String?
+
+    var id: String { "\(row):\(col)" }
+}
+
+struct SentencePhraseToken: Identifiable, Equatable {
+    var id: String = UUID().uuidString
+    var phraseId: String
+    var text: String
+    var title: String
+    var imageUrl: String?
+}
+
 @MainActor
 final class IosViewModel: ObservableObject {
     private final class StoreObserver: NSObject, Shared.RxObserver {
@@ -94,6 +126,20 @@ final class IosViewModel: ObservableObject {
     // Azure availability (subscription configured)
     @Published var azureConfigured: Bool = false
 
+    // Symbol-first boardset mode
+    @Published var boardModeEnabled: Bool = false
+    @Published var boardSets: [BoardSetInfo] = []
+    @Published var selectedBoardSetId: String? = nil
+    @Published var selectedBoardId: String? = nil
+    @Published var selectedBoard: Shared.ObfBoard? = nil
+    @Published var boardCells: [BoardCellInfo] = []
+    @Published var boardNamesById: [String: String] = [:]
+    @Published var boardStatusMessage: String? = nil
+    @Published var sentencePhrases: [SentencePhraseToken] = []
+
+    private let boardSetsDefaultsKey = "obf_boardsets_v1"
+    private var isApplyingSentencePhraseInput: Bool = false
+
     private struct InputSnapshot {
         let text: String
         let selection: NSRange
@@ -101,6 +147,36 @@ final class IosViewModel: ObservableObject {
     }
 
     private var heldThoughtSnapshot: InputSnapshot? = nil
+
+    var selectedBoardSet: BoardSetInfo? {
+        guard let id = selectedBoardSetId else { return nil }
+        return boardSets.first(where: { $0.id == id })
+    }
+
+    var selectedBoardSetLocked: Bool {
+        selectedBoardSet?.isLocked ?? false
+    }
+
+    var canEditSelectedBoardSet: Bool {
+        !selectedBoardSetLocked
+    }
+
+    func boardDisplayName(id: String) -> String {
+        if let selectedBoard, selectedBoard.id == id {
+            let selectedName = selectedBoard.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !selectedName.isEmpty {
+                return selectedName
+            }
+        }
+        if let cachedName = boardNamesById[id], !cachedName.isEmpty {
+            return cachedName
+        }
+        return id
+    }
+
+    func cellAt(row: Int, col: Int) -> BoardCellInfo? {
+        boardCells.first(where: { $0.row == row && $0.col == col })
+    }
 
     func effectiveLanguage(for v: Shared.Voice) -> String {
         func nonEmpty(_ s: String?) -> String? {
@@ -170,6 +246,8 @@ final class IosViewModel: ObservableObject {
     _ = try? await bridge.trainPredictionModel()
     // Load pronunciations
     await loadPronunciations()
+    // Load boardsets and selected board for symbol mode
+    await loadBoardSets()
     }
 
     func refreshAzureConfiguration() async {
@@ -281,13 +359,42 @@ final class IosViewModel: ObservableObject {
         let insertionLength = (insertion as NSString).length
         inputSelectionRange = NSRange(location: safeLocation + insertionLength, length: 0)
 
+        let title = (phrase.name?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? t
+        let imageUrl = phrase.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+        sentencePhrases.append(
+            SentencePhraseToken(
+                phraseId: phrase.id,
+                text: t,
+                title: title,
+                imageUrl: (imageUrl?.isEmpty == false) ? imageUrl : nil
+            )
+        )
+
+        isApplyingSentencePhraseInput = true
         onInputChanged(input)
+        isApplyingSentencePhraseInput = false
         // Incremental learning
         Task { _ = try? await bridge.learnPhrase(text: t) }
     }
+
+    func removeSentencePhrase(at index: Int) {
+        guard sentencePhrases.indices.contains(index) else { return }
+        sentencePhrases.remove(at: index)
+
+        let rebuilt = sentencePhrases.map { $0.text }.joined(separator: " ")
+        input = rebuilt.isEmpty ? "" : rebuilt + " "
+        inputSelectionRange = NSRange(location: (input as NSString).length, length: 0)
+        secondaryLanguageRanges = []
+
+        isApplyingSentencePhraseInput = true
+        onInputChanged(input)
+        isApplyingSentencePhraseInput = false
+    }
+
     func deleteText() {
         input = ""
         inputSelectionRange = NSRange(location: 0, length: 0)
+        sentencePhrases = []
         onInputChanged(input)
     }
 
@@ -809,6 +916,18 @@ final class IosViewModel: ObservableObject {
     // MARK: - Prediction
     func onInputChanged(_ newValue: String, preserveSecondaryRanges: Bool = false) {
         input = newValue
+
+        if !isApplyingSentencePhraseInput && !sentencePhrases.isEmpty {
+            let normalizedInput = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedSentence = sentencePhrases
+                .map { $0.text }
+                .joined(separator: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if normalizedInput != normalizedSentence {
+                sentencePhrases = []
+            }
+        }
+
         predictionJob?.cancel()
         predictionJob = Task {
             try? await Task.sleep(nanoseconds: 100_000_000) // 100ms debounce
@@ -920,6 +1039,367 @@ final class IosViewModel: ObservableObject {
             try? await bridge.deletePronunciation(word: word)
             await loadPronunciations()
         }
+    }
+
+    // MARK: - Boardsets (Symbol-First)
+    private func loadBoardSetsFromDefaults() -> [BoardSetInfo] {
+        guard let data = UserDefaults.standard.data(forKey: boardSetsDefaultsKey) else {
+            return []
+        }
+        let decoded = (try? JSONDecoder().decode([BoardSetInfo].self, from: data)) ?? []
+        return decoded
+    }
+
+    private func persistBoardSets() {
+        guard let data = try? JSONEncoder().encode(boardSets) else { return }
+        UserDefaults.standard.set(data, forKey: boardSetsDefaultsKey)
+    }
+
+    private func updateBoardSet(_ updated: BoardSetInfo) {
+        guard let idx = boardSets.firstIndex(where: { $0.id == updated.id }) else { return }
+        boardSets[idx] = updated
+        persistBoardSets()
+    }
+
+    private func normalizedBoardsetName(_ input: String) -> String {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? NSLocalizedString("boardset.default_name", comment: "") : trimmed
+    }
+
+    private func normalizedOptionalText(_ input: String?) -> String? {
+        let trimmed = (input ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func touchSelectedBoardSet(statusKey: String) {
+        if var set = selectedBoardSet {
+            set.updatedAt = Date().timeIntervalSince1970
+            updateBoardSet(set)
+        }
+        boardStatusMessage = NSLocalizedString(statusKey, comment: "")
+    }
+
+    private func refreshBoardNames(for set: BoardSetInfo?) async {
+        guard let set else {
+            boardNamesById = [:]
+            return
+        }
+
+        var cache = boardNamesById
+        for boardId in set.boardIds {
+            if let selectedBoard, selectedBoard.id == boardId {
+                let selectedName = selectedBoard.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if !selectedName.isEmpty {
+                    cache[boardId] = selectedName
+                }
+                continue
+            }
+
+            do {
+                if let board = try await bridge.getBoard(id: boardId) {
+                    let name = board.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    if !name.isEmpty {
+                        cache[boardId] = name
+                    }
+                }
+            } catch {
+                // Keep existing cache value if lookup fails.
+            }
+        }
+
+        boardNamesById = cache
+    }
+
+    func loadBoardSets() async {
+        boardSets = loadBoardSetsFromDefaults().sorted { $0.updatedAt > $1.updatedAt }
+
+        if selectedBoardSetId == nil || !boardSets.contains(where: { $0.id == selectedBoardSetId }) {
+            selectedBoardSetId = boardSets.first?.id
+        }
+
+        if let set = selectedBoardSet {
+            if selectedBoardId == nil || !set.boardIds.contains(selectedBoardId ?? "") {
+                selectedBoardId = set.rootBoardId
+            }
+            await loadSelectedBoard()
+            await refreshBoardNames(for: set)
+        } else {
+            selectedBoardId = nil
+            selectedBoard = nil
+            boardCells = []
+            boardNamesById = [:]
+        }
+    }
+
+    func createBoardSet(name: String, rows: Int, columns: Int) async {
+        let boardsetName = normalizedBoardsetName(name)
+        let safeRows = min(max(rows, 1), 12)
+        let safeColumns = min(max(columns, 1), 12)
+
+        do {
+            guard let rootBoard = try await bridge.createEmptyBoard(
+                name: boardsetName,
+                rows: Int32(safeRows),
+                columns: Int32(safeColumns),
+                locale: primaryLanguage
+            ) else {
+                boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+                return
+            }
+
+            let now = Date().timeIntervalSince1970
+            let set = BoardSetInfo(
+                id: UUID().uuidString,
+                name: boardsetName,
+                rootBoardId: rootBoard.id,
+                boardIds: [rootBoard.id],
+                isLocked: false,
+                updatedAt: now
+            )
+
+            boardSets.insert(set, at: 0)
+            selectedBoardSetId = set.id
+            selectedBoardId = rootBoard.id
+            selectedBoard = rootBoard
+            boardNamesById[rootBoard.id] = boardsetName
+            await refreshBoardCells()
+            persistBoardSets()
+            boardStatusMessage = NSLocalizedString("boardset.status.created", comment: "")
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+        }
+    }
+
+    func addBoardToSelectedSet(name: String, rows: Int, columns: Int) async {
+        guard var set = selectedBoardSet else { return }
+        guard !set.isLocked else {
+            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
+            return
+        }
+
+        let boardName = normalizedBoardsetName(name)
+        let safeRows = min(max(rows, 1), 12)
+        let safeColumns = min(max(columns, 1), 12)
+
+        do {
+            guard let board = try await bridge.createEmptyBoard(
+                name: boardName,
+                rows: Int32(safeRows),
+                columns: Int32(safeColumns),
+                locale: primaryLanguage
+            ) else {
+                boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+                return
+            }
+
+            if !set.boardIds.contains(board.id) {
+                set.boardIds.append(board.id)
+            }
+            set.updatedAt = Date().timeIntervalSince1970
+
+            updateBoardSet(set)
+            selectedBoardSetId = set.id
+            selectedBoardId = board.id
+            selectedBoard = board
+            boardNamesById[board.id] = boardName
+            await refreshBoardCells()
+            boardStatusMessage = NSLocalizedString("boardset.status.board_added", comment: "")
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+        }
+    }
+
+    func selectBoardSet(id: String) async {
+        guard boardSets.contains(where: { $0.id == id }) else { return }
+        selectedBoardSetId = id
+        if let set = selectedBoardSet {
+            if selectedBoardId == nil || !set.boardIds.contains(selectedBoardId ?? "") {
+                selectedBoardId = set.rootBoardId
+            }
+            await loadSelectedBoard()
+            await refreshBoardNames(for: set)
+        }
+    }
+
+    func selectBoard(id: String) async {
+        if let set = selectedBoardSet, !set.boardIds.contains(id) {
+            return
+        }
+        selectedBoardId = id
+        await loadSelectedBoard()
+    }
+
+    func loadSelectedBoard() async {
+        guard let id = selectedBoardId else {
+            selectedBoard = nil
+            boardCells = []
+            return
+        }
+        do {
+            selectedBoard = try await bridge.getBoard(id: id)
+            let boardName = selectedBoard?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !boardName.isEmpty {
+                boardNamesById[id] = boardName
+            }
+            await refreshBoardCells()
+        } catch {
+            selectedBoard = nil
+            boardCells = []
+        }
+    }
+
+    func refreshBoardCells() async {
+        guard let boardId = selectedBoardId else {
+            boardCells = []
+            return
+        }
+
+        do {
+            let cells = try await bridge.listBoardCells(boardId: boardId)
+            boardCells = cells.map { cell in
+                BoardCellInfo(
+                    row: Int(cell.row),
+                    col: Int(cell.col),
+                    buttonId: cell.buttonId,
+                    label: cell.label,
+                    vocalization: cell.vocalization,
+                    backgroundColor: cell.backgroundColor,
+                    borderColor: cell.borderColor,
+                    linkedBoardId: cell.linkedBoardId,
+                    imageId: cell.imageId,
+                    imageUrl: cell.imageUrl
+                )
+            }
+        } catch {
+            boardCells = []
+        }
+    }
+
+    func upsertSelectedBoardCell(
+        row: Int,
+        col: Int,
+        label: String?,
+        vocalization: String?,
+        backgroundColor: String?,
+        borderColor: String?,
+        linkedBoardId: String?,
+        imageUrl: String?,
+        clearImage: Bool
+    ) async {
+        guard let boardId = selectedBoardId else {
+            boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
+            return
+        }
+        guard canEditSelectedBoardSet else {
+            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
+            return
+        }
+
+        let normalizedLabel = normalizedOptionalText(label)
+        let normalizedVocalization = normalizedOptionalText(vocalization)
+        let normalizedBackground = normalizedOptionalText(backgroundColor)
+        let normalizedBorder = normalizedOptionalText(borderColor)
+        let normalizedLink = normalizedOptionalText(linkedBoardId)
+        let normalizedImageUrl = normalizedOptionalText(imageUrl)
+
+        do {
+            guard let updatedBoard = try await bridge.upsertBoardCellButton(
+                boardId: boardId,
+                row: Int32(row),
+                col: Int32(col),
+                label: normalizedLabel,
+                vocalization: normalizedVocalization,
+                backgroundColor: normalizedBackground,
+                borderColor: normalizedBorder,
+                linkedBoardId: normalizedLink,
+                imageUrl: normalizedImageUrl,
+                clearImage: clearImage
+            ) else {
+                boardStatusMessage = NSLocalizedString("boardset.error.cell_update_failed", comment: "")
+                return
+            }
+
+            selectedBoard = updatedBoard
+            await refreshBoardCells()
+            touchSelectedBoardSet(statusKey: "boardset.status.cell_saved")
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.cell_update_failed", comment: "")
+        }
+    }
+
+    func clearSelectedBoardCell(row: Int, col: Int) async {
+        guard let boardId = selectedBoardId else {
+            boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
+            return
+        }
+        guard canEditSelectedBoardSet else {
+            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
+            return
+        }
+
+        do {
+            guard let updatedBoard = try await bridge.clearBoardCellButton(
+                boardId: boardId,
+                row: Int32(row),
+                col: Int32(col)
+            ) else {
+                boardStatusMessage = NSLocalizedString("boardset.error.cell_clear_failed", comment: "")
+                return
+            }
+
+            selectedBoard = updatedBoard
+            await refreshBoardCells()
+            touchSelectedBoardSet(statusKey: "boardset.status.cell_cleared")
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.cell_clear_failed", comment: "")
+        }
+    }
+
+    func activateSelectedBoardCell(row: Int, col: Int) async {
+        guard let cell = cellAt(row: row, col: col) else { return }
+
+        if let linkedBoardId = normalizedOptionalText(cell.linkedBoardId),
+           let set = selectedBoardSet,
+           set.boardIds.contains(linkedBoardId) {
+            await selectBoard(id: linkedBoardId)
+            return
+        }
+
+        if let textToSpeak = normalizedOptionalText(cell.vocalization) ?? normalizedOptionalText(cell.label) {
+            speak(textToSpeak)
+        }
+    }
+
+    func saveSelectedBoardSet() async {
+        guard let board = selectedBoard else {
+            boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
+            return
+        }
+        guard !selectedBoardSetLocked else {
+            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
+            return
+        }
+
+        do {
+            let saved = try await bridge.saveBoard(board: board)
+            if saved.boolValue {
+                touchSelectedBoardSet(statusKey: "boardset.status.saved")
+            } else {
+                boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
+            }
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
+        }
+    }
+
+    func setSelectedBoardSetLocked(_ locked: Bool) {
+        guard var set = selectedBoardSet else { return }
+        set.isLocked = locked
+        set.updatedAt = Date().timeIntervalSince1970
+        updateBoardSet(set)
+        boardStatusMessage = locked
+            ? NSLocalizedString("boardset.status.locked", comment: "")
+            : NSLocalizedString("boardset.status.unlocked", comment: "")
     }
 }
 

@@ -228,3 +228,73 @@
 "welcome_flow.pros" = "Pros";
 "welcome_flow.cons" = "Cons";
 "welcome_flow.preview_text.placeholder" = "Enter text to preview...";
+
+"toolbar.switch_symbol_mode" = "Switch to Symbol Workspace";
+"toolbar.switch_phrase_mode" = "Switch to Phrase Workspace";
+
+"symbol.workspace.title" = "Symbol Workspace";
+"symbol.workspace.subtitle" = "Build and manage boardsets";
+
+"boardset.create" = "New Boardset";
+"boardset.create_first" = "Create Your First Boardset";
+"boardset.empty" = "No boardsets yet";
+"boardset.default_name" = "New Boardset";
+"boardset.name" = "Boardset Name";
+"boardset.name_placeholder" = "Everyday Communication";
+"boardset.grid" = "Grid";
+"boardset.rows" = "Rows: %d";
+"boardset.columns" = "Columns: %d";
+"boardset.board_name" = "Board Name";
+"boardset.board_name_placeholder" = "Food Board";
+"boardset.board_picker" = "Board";
+"boardset.add_board" = "Add Board";
+"boardset.save" = "Save Boardset";
+"boardset.lock" = "Lock Boardset";
+"boardset.unlock" = "Unlock Boardset";
+"boardset.locked_banner" = "Boardset is locked. Unlock to edit.";
+"boardset.untitled_board" = "Untitled Board";
+"boardset.grid_summary" = "%d x %d grid, %d buttons";
+
+"boardset.status.created" = "Boardset created.";
+"boardset.status.board_added" = "Board added to boardset.";
+"boardset.status.saved" = "Boardset saved.";
+"boardset.status.locked" = "Boardset locked.";
+"boardset.status.unlocked" = "Boardset unlocked.";
+
+"boardset.error.create_failed" = "Could not create boardset.";
+"boardset.error.locked" = "This boardset is locked.";
+"boardset.error.no_board" = "No board selected.";
+"boardset.error.save_failed" = "Could not save boardset.";
+
+"boardset.unlock.failed_title" = "Unable to Unlock";
+"boardset.unlock.not_available" = "Device authentication is not available.";
+"boardset.unlock.reason" = "Unlock this boardset to edit symbols and layout.";
+"boardset.unlock.failed" = "Authentication failed.";
+
+"boardset.edit" = "Edit Cells";
+"boardset.edit_done" = "Done Editing";
+"boardset.cell.empty" = "Empty Cell";
+"boardset.cell.edit_title" = "Edit Cell";
+"boardset.cell.label" = "Label";
+"boardset.cell.vocalization" = "Vocalization";
+"boardset.cell.linked_board" = "Linked Board";
+"boardset.cell.no_link" = "No Link";
+"boardset.cell.colors" = "Colors";
+"boardset.cell.background_enabled" = "Set background color";
+"boardset.cell.background_picker" = "Background color";
+"boardset.cell.border_enabled" = "Set border color";
+"boardset.cell.border_picker" = "Border color";
+"boardset.cell.background_hex" = "Background Color (HEX)";
+"boardset.cell.border_hex" = "Border Color (HEX)";
+"boardset.cell.clear" = "Clear Cell";
+"boardset.cell.delete" = "Delete Cell";
+
+"boardset.status.cell_saved" = "Cell saved.";
+"boardset.status.cell_cleared" = "Cell cleared.";
+
+"boardset.error.cell_update_failed" = "Could not update cell.";
+"boardset.error.cell_clear_failed" = "Could not clear cell.";
+
+"sentence.box.title" = "Sentence Box";
+"sentence.box.delete_phrase" = "Delete phrase from sentence";
+"sentence.box.speak" = "Speak sentence";

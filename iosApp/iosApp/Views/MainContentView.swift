@@ -153,6 +153,17 @@ struct MainContentView: View {
 
             predictionBar
 
+            if !model.sentencePhrases.isEmpty {
+                SentenceBoxView(
+                    phrases: model.sentencePhrases,
+                    onDelete: { index in
+                        model.removeSentencePhrase(at: index)
+                    }
+                )
+                .accessibilityElement(children: .contain)
+                .accessibilityHidden(hideInputFromScanning)
+            }
+
             // Input field
             MultiLineInput(text: inputBinding,
                            selectedRange: Binding(

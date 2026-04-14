@@ -11,11 +11,33 @@ import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
+import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfButton
+import io.github.jdreioe.wingmate.domain.obf.ObfGrid
+import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfManifest
+import io.github.jdreioe.wingmate.infrastructure.ObfParser
+import kotlin.random.Random
 import kotlin.time.Clock
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
+
+data class BoardCellSummary(
+    val row: Int,
+    val col: Int,
+    val buttonId: String,
+    val label: String?,
+    val vocalization: String?,
+    val backgroundColor: String?,
+    val borderColor: String?,
+    val linkedBoardId: String?,
+    val imageId: String?,
+    val imageUrl: String?
+)
 
 class KoinBridge : KoinComponent {
     fun phraseListStore(): PhraseListStore = get()
@@ -205,6 +227,283 @@ class KoinBridge : KoinComponent {
 
     suspend fun saveSpeechConfig(config: SpeechServiceConfig) {
         get<ConfigRepository>().saveSpeechConfig(config)
+    }
+
+    // --- OBF/OBZ helpers for iOS symbol-first workspace ---
+    private fun randomBoardId(): String {
+        val now = Clock.System.now().toEpochMilliseconds()
+        return "board-$now-${Random.nextInt(1000, 9999)}"
+    }
+
+    private fun randomImageId(): String {
+        val now = Clock.System.now().toEpochMilliseconds()
+        return "image-$now-${Random.nextInt(1000, 9999)}"
+    }
+
+    private fun imageContentTypeFromUrl(imageUrl: String): String? {
+        val normalized = imageUrl.substringBefore("?").lowercase()
+        return when {
+            normalized.endsWith(".png") -> "image/png"
+            normalized.endsWith(".jpg") || normalized.endsWith(".jpeg") -> "image/jpeg"
+            normalized.endsWith(".gif") -> "image/gif"
+            normalized.endsWith(".webp") -> "image/webp"
+            normalized.endsWith(".svg") -> "image/svg+xml"
+            else -> null
+        }
+    }
+
+    suspend fun listBoards(): List<ObfBoard> {
+        return try {
+            get<BoardRepository>().listBoards()
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    suspend fun getBoard(id: String): ObfBoard? {
+        return try {
+            get<BoardRepository>().getBoard(id)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    suspend fun saveBoard(board: ObfBoard): Boolean {
+        return try {
+            get<BoardRepository>().saveBoard(board)
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    suspend fun deleteBoard(id: String): Boolean {
+        return try {
+            get<BoardRepository>().deleteBoard(id)
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    suspend fun createEmptyBoard(name: String, rows: Int, columns: Int, locale: String): ObfBoard? {
+        return try {
+            val safeRows = rows.coerceIn(1, 12)
+            val safeColumns = columns.coerceIn(1, 12)
+            val order = List(safeRows) { List<String?>(safeColumns) { null } }
+            val board = ObfBoard(
+                format = "open-board-0.1",
+                id = randomBoardId(),
+                locale = locale.ifBlank { "en" },
+                name = name.ifBlank { "New Board" },
+                buttons = emptyList(),
+                grid = ObfGrid(rows = safeRows, columns = safeColumns, order = order),
+                images = emptyList(),
+                sounds = emptyList()
+            )
+            get<BoardRepository>().saveBoard(board)
+            board
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun normalizedGridOrder(grid: ObfGrid): MutableList<MutableList<String?>> {
+        return MutableList(grid.rows) { row ->
+            MutableList(grid.columns) { col ->
+                grid.order.getOrNull(row)?.getOrNull(col)
+            }
+        }
+    }
+
+    suspend fun listBoardCells(boardId: String): List<BoardCellSummary> {
+        return try {
+            val board = get<BoardRepository>().getBoard(boardId) ?: return emptyList()
+            val grid = board.grid ?: return emptyList()
+            val order = normalizedGridOrder(grid)
+            val buttonMap = board.buttons.associateBy { it.id }
+            val imageMap = board.images.associateBy { it.id }
+
+            val cells = mutableListOf<BoardCellSummary>()
+            for (row in 0 until grid.rows) {
+                for (col in 0 until grid.columns) {
+                    val buttonId = order[row][col] ?: continue
+                    val button = buttonMap[buttonId] ?: continue
+                    cells.add(
+                        BoardCellSummary(
+                            row = row,
+                            col = col,
+                            buttonId = button.id,
+                            label = button.label,
+                            vocalization = button.vocalization,
+                            backgroundColor = button.backgroundColor,
+                            borderColor = button.borderColor,
+                            linkedBoardId = button.loadBoard?.id,
+                            imageId = button.imageId,
+                            imageUrl = button.imageId?.let { imageId ->
+                                imageMap[imageId]?.url
+                                    ?: imageMap[imageId]?.path
+                                    ?: imageMap[imageId]?.data
+                            }
+                        )
+                    )
+                }
+            }
+            cells
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    suspend fun upsertBoardCellButton(
+        boardId: String,
+        row: Int,
+        col: Int,
+        label: String?,
+        vocalization: String?,
+        backgroundColor: String?,
+        borderColor: String?,
+        linkedBoardId: String?,
+        imageUrl: String?,
+        clearImage: Boolean
+    ): ObfBoard? {
+        return try {
+            val board = get<BoardRepository>().getBoard(boardId) ?: return null
+            val grid = board.grid ?: return null
+
+            if (row !in 0 until grid.rows || col !in 0 until grid.columns) {
+                return null
+            }
+
+            val order = normalizedGridOrder(grid)
+            val existingButtonId = order[row][col]
+            val buttonId = existingButtonId ?: randomBoardId()
+            val existingButton = board.buttons.firstOrNull { it.id == buttonId }
+            val normalizedLinkId = linkedBoardId?.takeIf { it.isNotBlank() }
+            val normalizedImageUrl = imageUrl?.takeIf { it.isNotBlank() }
+            val images = board.images.toMutableList()
+            val existingImageId = existingButton?.imageId
+
+            var nextImageId = existingImageId
+            if (clearImage) {
+                nextImageId = null
+            } else if (normalizedImageUrl != null) {
+                val targetImageId = existingImageId ?: randomImageId()
+                val contentType = imageContentTypeFromUrl(normalizedImageUrl)
+                val existingImage = images.firstOrNull { it.id == targetImageId }
+                val updatedImage = if (existingImage != null) {
+                    existingImage.copy(
+                        url = normalizedImageUrl,
+                        path = null,
+                        data = null,
+                        contentType = contentType ?: existingImage.contentType
+                    )
+                } else {
+                    ObfImage(
+                        id = targetImageId,
+                        contentType = contentType,
+                        url = normalizedImageUrl,
+                        path = null,
+                        data = null
+                    )
+                }
+                val imageIdx = images.indexOfFirst { it.id == targetImageId }
+                if (imageIdx >= 0) {
+                    images[imageIdx] = updatedImage
+                } else {
+                    images.add(updatedImage)
+                }
+                nextImageId = targetImageId
+            }
+
+            val updatedButton = if (existingButton != null) {
+                existingButton.copy(
+                    label = label,
+                    vocalization = vocalization,
+                    backgroundColor = backgroundColor,
+                    borderColor = borderColor,
+                    imageId = nextImageId,
+                    loadBoard = normalizedLinkId?.let { ObfLoadBoard(id = it) }
+                )
+            } else {
+                ObfButton(
+                    id = buttonId,
+                    label = label,
+                    vocalization = vocalization,
+                    backgroundColor = backgroundColor,
+                    borderColor = borderColor,
+                    imageId = nextImageId,
+                    loadBoard = normalizedLinkId?.let { ObfLoadBoard(id = it) }
+                )
+            }
+
+            val updatedButtons = if (existingButton != null) {
+                board.buttons.map { if (it.id == buttonId) updatedButton else it }
+            } else {
+                board.buttons + updatedButton
+            }
+
+            order[row][col] = buttonId
+            val updatedGrid = grid.copy(order = order)
+            val updatedImages = if (clearImage && existingImageId != null && updatedButtons.none { it.imageId == existingImageId }) {
+                images.filterNot { it.id == existingImageId }
+            } else {
+                images
+            }
+            val updatedBoard = board.copy(buttons = updatedButtons, grid = updatedGrid, images = updatedImages)
+            get<BoardRepository>().saveBoard(updatedBoard)
+            updatedBoard
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    suspend fun clearBoardCellButton(boardId: String, row: Int, col: Int): ObfBoard? {
+        return try {
+            val board = get<BoardRepository>().getBoard(boardId) ?: return null
+            val grid = board.grid ?: return null
+
+            if (row !in 0 until grid.rows || col !in 0 until grid.columns) {
+                return null
+            }
+
+            val order = normalizedGridOrder(grid)
+            val buttonId = order[row][col] ?: return board
+            order[row][col] = null
+
+            val buttonIsReferenced = order.any { orderRow -> orderRow.any { it == buttonId } }
+            val updatedButtons = if (buttonIsReferenced) {
+                board.buttons
+            } else {
+                board.buttons.filterNot { it.id == buttonId }
+            }
+
+            val removedImageId = board.buttons.firstOrNull { it.id == buttonId }?.imageId
+            val updatedImages = if (removedImageId != null && updatedButtons.none { it.imageId == removedImageId }) {
+                board.images.filterNot { it.id == removedImageId }
+            } else {
+                board.images
+            }
+
+            val updatedGrid = grid.copy(order = order)
+            val updatedBoard = board.copy(buttons = updatedButtons, grid = updatedGrid, images = updatedImages)
+            get<BoardRepository>().saveBoard(updatedBoard)
+            updatedBoard
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    fun parseBoardJson(jsonContent: String): ObfBoard? {
+        return runCatching {
+            get<ObfParser>().parseBoard(jsonContent).getOrNull()
+        }.getOrNull()
+    }
+
+    fun parseManifestJson(jsonContent: String): ObfManifest? {
+        return runCatching {
+            get<ObfParser>().parseManifest(jsonContent).getOrNull()
+        }.getOrNull()
     }
 
     // Swift-friendly bridge to update phrase recording path
