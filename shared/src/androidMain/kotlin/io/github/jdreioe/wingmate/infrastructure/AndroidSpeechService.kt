@@ -6,6 +6,9 @@ import android.media.MediaPlayer
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.AudioFocusRequest
+import android.media.MediaMetadata
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -37,6 +40,7 @@ import android.os.Environment
 import androidx.annotation.RequiresPermission
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
 
 /**
@@ -65,7 +69,8 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     }
     private val ttsAudioAttributes: AudioAttributes by lazy {
         AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+            // Android Auto routes generic app playback most reliably on media usage.
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
     }
@@ -113,6 +118,82 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     private var pausedAtSegment = false
     private var isPlaying = false
     private var isPaused = false
+    private val pendingTtsUtterances = AtomicInteger(0)
+    private val mediaSession: MediaSession by lazy {
+        MediaSession(context, "WingmateSpeechSession").apply {
+            setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
+            setCallback(object : MediaSession.Callback() {
+                override fun onPause() {
+                    scope.launch { runCatching { pause() } }
+                }
+
+                override fun onPlay() {
+                    scope.launch { runCatching { resume() } }
+                }
+
+                override fun onStop() {
+                    scope.launch { runCatching { stop() } }
+                }
+            })
+            isActive = true
+            setPlaybackState(buildPlaybackState(PlaybackState.STATE_NONE))
+        }
+    }
+
+    private fun buildPlaybackState(state: Int): PlaybackState {
+        val actions =
+            PlaybackState.ACTION_PLAY or
+            PlaybackState.ACTION_PAUSE or
+            PlaybackState.ACTION_PLAY_PAUSE or
+            PlaybackState.ACTION_STOP
+        return PlaybackState.Builder()
+            .setActions(actions)
+            .setState(state, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f, System.currentTimeMillis())
+            .build()
+    }
+
+    private fun updatePlaybackState(state: Int) {
+        runCatching {
+            mediaSession.isActive = state != PlaybackState.STATE_NONE
+            mediaSession.setPlaybackState(buildPlaybackState(state))
+        }
+    }
+
+    private fun updateNowPlaying(text: String?, voice: Voice?) {
+        runCatching {
+            val title = text?.trim()?.takeIf { it.isNotEmpty() }?.take(80) ?: "Wingmate Speech"
+            val speaker = voice?.displayName?.takeIf { it.isNotBlank() }
+                ?: voice?.name?.takeIf { it.isNotBlank() }
+                ?: "Speech"
+            val metadata = MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, speaker)
+                .build()
+            mediaSession.setMetadata(metadata)
+        }
+    }
+
+    private fun markPlaybackStarted(text: String?, voice: Voice?) {
+        isPlaying = true
+        isPaused = false
+        updateNowPlaying(text, voice)
+        updatePlaybackState(PlaybackState.STATE_PLAYING)
+    }
+
+    private fun finishPlayback() {
+        isPlaying = false
+        isPaused = false
+        pausedAtSegment = false
+        updatePlaybackState(PlaybackState.STATE_STOPPED)
+        abandonAudioFocus()
+    }
+
+    private fun onTtsUtteranceFinished() {
+        val remaining = pendingTtsUtterances.updateAndGet { count -> if (count > 0) count - 1 else 0 }
+        if (remaining == 0) {
+            finishPlayback()
+        }
+    }
 
     private fun ensureTts(): TextToSpeech {
         val cur = tts
@@ -123,10 +204,22 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             }
         }
         created.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) {}
+            override fun onStart(utteranceId: String?) {
+                updatePlaybackState(PlaybackState.STATE_PLAYING)
+            }
+
+            override fun onDone(utteranceId: String?) {
+                onTtsUtteranceFinished()
+            }
+
+            override fun onError(utteranceId: String?, errorCode: Int) {
+                onTtsUtteranceFinished()
+            }
+
             @Deprecated("Deprecated in Java")
-            override fun onError(utteranceId: String?) {}
+            override fun onError(utteranceId: String?) {
+                onTtsUtteranceFinished()
+            }
         })
         tts = created
         return created
@@ -342,9 +435,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                                 }
                             }
                         } finally {
-                            isPlaying = false
-                            isPaused = false
-                            abandonAudioFocus()
+                            finishPlayback()
                             if (cont.isActive) cont.resume(success)
                         }
                     }
@@ -381,8 +472,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                     }
 
                     try {
-                        isPlaying = true
-                        isPaused = false
+                        updateNowPlaying(textForHistory ?: file.nameWithoutExtension, voice)
                         try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
                         player.setDataSource(file.absolutePath)
                         player.prepare()
@@ -390,6 +480,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                             mediaPlayer?.let { try { it.stop(); it.release() } catch (_: Throwable) {} }
                             mediaPlayer = player
                         }
+                        markPlaybackStarted(textForHistory ?: file.nameWithoutExtension, voice)
                         player.start()
                     } catch (_: Throwable) {
                         finalizePlayback(false)
@@ -397,8 +488,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 }
             }
         }.getOrElse {
-            isPlaying = false
-            isPaused = false
+            finishPlayback()
             false
         }
 
@@ -413,6 +503,9 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     
     private fun startPlayback(file: File, voice: Voice) {
         val player = MediaPlayer()
+        if (!requestAudioFocus()) {
+            // Best effort only; continue even if focus isn't granted.
+        }
         player.setOnCompletionListener { mp ->
             try {
                 synchronized(playerLock) {
@@ -422,11 +515,13 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                         mediaPlayer = null
                     }
                 }
+                finishPlayback()
             } catch (_: Throwable) {}
         }
         player.setOnErrorListener { mp, _, _ ->
             try { synchronized(playerLock) { if (mediaPlayer === mp) { mp.reset(); mp.release(); mediaPlayer = null } } } catch (_: Throwable) {}
-            false
+            finishPlayback()
+            true
         }
         try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
         player.setDataSource(file.absolutePath)
@@ -435,6 +530,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             mediaPlayer?.let { try { it.stop(); it.release() } catch (_: Throwable) {} }
             mediaPlayer = player
         }
+        markPlaybackStarted(file.nameWithoutExtension, voice)
         player.start()
     }
 
@@ -543,24 +639,31 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                             mediaPlayer = null
                         }
                     }
-                    abandonAudioFocus()
+                    finishPlayback()
                 } catch (_: Throwable) {}
             }
             player.setOnErrorListener { mp, _, _ ->
                 try { synchronized(playerLock) { if (mediaPlayer === mp) { mp.reset(); mp.release(); mediaPlayer = null } } } catch (_: Throwable) {}
-                abandonAudioFocus()
+                finishPlayback()
+                true
+            }
+            // Ensure proper routing for car/AA through media usage speech attributes.
+            try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
+            try {
+                player.setDataSource(file.absolutePath)
+                player.prepare()
+                synchronized(playerLock) {
+                    mediaPlayer?.let { try { it.stop(); it.release() } catch (_: Throwable) {} }
+                    mediaPlayer = player
+                }
+                markPlaybackStarted(text, v)
+                player.start()
+                true
+            } catch (_: Throwable) {
+                try { player.release() } catch (_: Throwable) {}
+                finishPlayback()
                 false
             }
-            // Ensure proper routing for car/AA: use navigation guidance speech attributes
-            try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
-            player.setDataSource(file.absolutePath)
-            player.prepare()
-            synchronized(playerLock) {
-                mediaPlayer?.let { try { it.stop(); it.release() } catch (_: Throwable) {} }
-                mediaPlayer = player
-            }
-            player.start()
-            true
         }.getOrElse { false }
     }
 
@@ -574,10 +677,17 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             t.language = loc
             t.setPitch((pitch ?: 1.0).toFloat())
             t.setSpeechRate((rate ?: 1.0).toFloat())
-            // Route TTS through car audio properly by setting AudioAttributes and requesting focus
+            // Route TTS through media channel to keep Android Auto routing consistent.
             try { t.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
             requestAudioFocus()
-            t.speak(cleanText, TextToSpeech.QUEUE_FLUSH, null, "wingmate-${System.currentTimeMillis()}")
+            val utteranceId = "wingmate-${System.currentTimeMillis()}"
+            pendingTtsUtterances.set(1)
+            markPlaybackStarted(cleanText, voice)
+            val result = t.speak(cleanText, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+            if (result != TextToSpeech.SUCCESS) {
+                pendingTtsUtterances.set(0)
+                finishPlayback()
+            }
         }
     }
 
@@ -620,10 +730,14 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             mediaPlayer?.let { if (it.isPlaying) it.pause() }
         }
         try { tts?.stop() } catch (_: Throwable) {}
+        pendingTtsUtterances.set(0)
         
         // Mark as paused for segmented playback
         isPaused = true
         pausedAtSegment = true
+        isPlaying = false
+        updatePlaybackState(PlaybackState.STATE_PAUSED)
+        abandonAudioFocus()
     }
 
     override suspend fun stop() {
@@ -635,6 +749,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             }
         }
         try { tts?.stop() } catch (_: Throwable) {}
+        pendingTtsUtterances.set(0)
         abandonAudioFocus()
         
         // Reset state
@@ -643,6 +758,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         pausedAtSegment = false
         currentSegments = emptyList()
         currentSegmentIndex = 0
+        updatePlaybackState(PlaybackState.STATE_STOPPED)
         
         // Reset offline warning for next session
         offlineWarningShown.set(false)
@@ -722,6 +838,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             isPlaying = false
             currentSegments = emptyList()
             currentSegmentIndex = 0
+            updatePlaybackState(PlaybackState.STATE_STOPPED)
         }
     }
 
@@ -734,6 +851,12 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     private suspend fun playSegmentsWithPlatformTts(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
         withContext(Dispatchers.Main) {
             val t = ensureTts()
+            try { t.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
+            requestAudioFocus()
+
+            val combinedText = segments.joinToString(" ") { it.text }.trim()
+            pendingTtsUtterances.set(0)
+            markPlaybackStarted(combinedText, voice)
             
             // Iterate segments to handle breaks correctly for platform TTS
             for ((index, segment) in segments.withIndex()) {
@@ -754,31 +877,47 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                     
                     // Queue the speech
                     val params = android.os.Bundle()
-                    params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "wingmate-${System.currentTimeMillis()}-$index")
+                    val utteranceId = "wingmate-${System.currentTimeMillis()}-$index"
+                    params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
                     
                     // Use QUEUE_ADD to chain segments seamlessly
                     val queueMode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-                    t.speak(segment.text, queueMode, params, "wingmate-${System.currentTimeMillis()}-$index")
+                    pendingTtsUtterances.incrementAndGet()
+                    val speakResult = t.speak(segment.text, queueMode, params, utteranceId)
+                    if (speakResult != TextToSpeech.SUCCESS) {
+                        onTtsUtteranceFinished()
+                    }
                 }
                 
                 // 2. Play silence for break (if any)
                 if (segment.pauseDurationMs > 0) {
                     // playSilentUtterance is available API 21+ (Wingmate is min 24/26 usually)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        t.playSilentUtterance(
-                            segment.pauseDurationMs, 
-                            TextToSpeech.QUEUE_ADD, 
-                            "silence-${System.currentTimeMillis()}-$index"
+                        val silenceId = "silence-${System.currentTimeMillis()}-$index"
+                        pendingTtsUtterances.incrementAndGet()
+                        val silenceResult = t.playSilentUtterance(
+                            segment.pauseDurationMs,
+                            TextToSpeech.QUEUE_ADD,
+                            silenceId
                         )
+                        if (silenceResult != TextToSpeech.SUCCESS) {
+                            onTtsUtteranceFinished()
+                        }
                     } else {
                         // Fallback using Thread.sleep is NOT safe on main thread, but pre-Lollipop is ancient.
                         // Just ignore or use playSilence (deprecated but works).
                         @Suppress("DEPRECATION")
-                        t.playSilence(
-                             segment.pauseDurationMs, 
-                             TextToSpeech.QUEUE_ADD, 
-                             null
-                        )
+                        run {
+                            pendingTtsUtterances.incrementAndGet()
+                            val silenceResult = t.playSilence(
+                                segment.pauseDurationMs,
+                                TextToSpeech.QUEUE_ADD,
+                                null
+                            )
+                            if (silenceResult != TextToSpeech.SUCCESS) {
+                                onTtsUtteranceFinished()
+                            }
+                        }
                     }
                 }
                 
@@ -786,6 +925,10 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 // The queuing handles the timing. But for UI sync (highlighting), we're limited.
                 // Since this method was previously using delay() which blocked the coroutine but not the TTS, 
                 // we'll remove manual delay to let TTS handle timing properly.
+            }
+
+            if (pendingTtsUtterances.get() == 0) {
+                finishPlayback()
             }
         }
     }
