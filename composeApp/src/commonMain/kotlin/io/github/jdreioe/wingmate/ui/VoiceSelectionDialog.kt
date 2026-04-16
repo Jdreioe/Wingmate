@@ -17,8 +17,28 @@ import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.common_close
+import wingmatekmp.composeapp.generated.resources.language_all
+import wingmatekmp.composeapp.generated.resources.voice_all_languages
+import wingmatekmp.composeapp.generated.resources.voice_azure_title
+import wingmatekmp.composeapp.generated.resources.voice_azure_title_with_lang
+import wingmatekmp.composeapp.generated.resources.voice_error
+import wingmatekmp.composeapp.generated.resources.voice_filter_languages_content_desc
+import wingmatekmp.composeapp.generated.resources.voice_gender_label
+import wingmatekmp.composeapp.generated.resources.voice_no_azure_match
+import wingmatekmp.composeapp.generated.resources.voice_no_system_match
+import wingmatekmp.composeapp.generated.resources.voice_search_label
+import wingmatekmp.composeapp.generated.resources.voice_search_placeholder
+import wingmatekmp.composeapp.generated.resources.voice_select_title
+import wingmatekmp.composeapp.generated.resources.voice_selected
+import wingmatekmp.composeapp.generated.resources.voice_settings
+import wingmatekmp.composeapp.generated.resources.voice_showing_count
+import wingmatekmp.composeapp.generated.resources.voice_system_title
+import wingmatekmp.composeapp.generated.resources.voice_system_title_with_lang
 
 @Composable
 fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow: (() -> Unit)? = null) {
@@ -38,6 +58,9 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
     var selectedLanguage by remember { mutableStateOf<String?>(null) }
     var availableLanguages by remember { mutableStateOf<List<String>>(emptyList()) }
     var showLanguageFilter by remember { mutableStateOf(false) }
+    var showGenderFilter by remember { mutableStateOf(false) }
+    var voiceSearch by remember { mutableStateOf("") }
+    var genderFilter by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     val systemVoiceProvider = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>() }
@@ -96,55 +119,101 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
         loading = false
     }
 
-    // Filter voices based on selected language
-    val filteredSystemVoices = if (selectedLanguage != null) {
+    val queryTerms = remember(voiceSearch) {
+        voiceSearch
+            .trim()
+            .lowercase()
+            .split(Regex("\\s+"))
+            .filter { it.isNotEmpty() }
+    }
+
+    // Filter voices by exact language selection first.
+    val languageFilteredSystemVoices = if (selectedLanguage != null) {
         systemVoices.filter { it.primaryLanguage == selectedLanguage }
     } else {
         systemVoices
     }
-    
-    val filteredAzureVoices = if (selectedLanguage != null) {
+
+    val languageFilteredAzureVoices = if (selectedLanguage != null) {
         voices.filter { voice ->
-            voice.primaryLanguage == selectedLanguage || 
-            voice.supportedLanguages?.contains(selectedLanguage) == true
+            voice.primaryLanguage == selectedLanguage ||
+                voice.supportedLanguages?.contains(selectedLanguage) == true
         }
     } else {
         voices
     }
 
+    val activeLanguageFilteredVoices = if (useSystemTts) languageFilteredSystemVoices else languageFilteredAzureVoices
+    val allLabel = stringResource(Res.string.language_all)
+    val availableGenders = remember(activeLanguageFilteredVoices) {
+        activeLanguageFilteredVoices
+            .mapNotNull { it.gender?.trim()?.takeIf { gender -> gender.isNotEmpty() } }
+            .distinct()
+            .sorted()
+    }
+
+    LaunchedEffect(availableGenders, genderFilter) {
+        if (genderFilter != null && !availableGenders.contains(genderFilter)) {
+            genderFilter = null
+        }
+    }
+
+    val filteredSystemVoices = remember(languageFilteredSystemVoices, queryTerms, genderFilter) {
+        languageFilteredSystemVoices.filter { voice ->
+            matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter)
+        }
+    }
+
+    val filteredAzureVoices = remember(languageFilteredAzureVoices, queryTerms, genderFilter) {
+        languageFilteredAzureVoices.filter { voice ->
+            matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter)
+        }
+    }
+
+    val visibleVoiceCount = if (useSystemTts) filteredSystemVoices.size else filteredAzureVoices.size
+    val totalVoiceCount = if (useSystemTts) systemVoices.size else voices.size
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select Voice") },
+        title = { Text(stringResource(Res.string.voice_select_title)) },
         text = {
             Column(Modifier.fillMaxWidth()) {
-                // Language filter section
-                if (!loading && error == null && availableLanguages.isNotEmpty()) {
+                // Voice search and filter section.
+                if (!loading && error == null) {
+                    val showKeyboard = rememberShowKeyboardOnFocus()
+                    OutlinedTextField(
+                        value = voiceSearch,
+                        onValueChange = { voiceSearch = it },
+                        label = { Text(stringResource(Res.string.voice_search_label)) },
+                        placeholder = { Text(stringResource(Res.string.voice_search_placeholder)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().then(showKeyboard)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            "Filter by Language:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        
-                        Box {
+                        Box(modifier = Modifier.weight(1f)) {
                             OutlinedButton(
                                 onClick = { showLanguageFilter = !showLanguageFilter },
-                                modifier = Modifier.height(36.dp)
+                                modifier = Modifier
+                                    .height(36.dp)
+                                    .fillMaxWidth(),
+                                enabled = availableLanguages.isNotEmpty()
                             ) {
                                 Icon(
                                     Icons.Default.FilterList,
-                                    contentDescription = "Filter languages",
+                                    contentDescription = stringResource(Res.string.voice_filter_languages_content_desc),
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(Modifier.width(4.dp))
                                 Text(
-                                    selectedLanguage ?: "All Languages",
+                                    selectedLanguage ?: stringResource(Res.string.voice_all_languages),
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 1
                                 )
@@ -152,10 +221,13 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                             
                             DropdownMenu(
                                 expanded = showLanguageFilter,
-                                onDismissRequest = { showLanguageFilter = false }
+                                onDismissRequest = { showLanguageFilter = false },
+                                modifier = Modifier
+                                    .widthIn(min = 220.dp, max = 420.dp)
+                                    .heightIn(max = 320.dp)
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("All Languages") },
+                                    text = { Text(stringResource(Res.string.voice_all_languages)) },
                                     onClick = {
                                         selectedLanguage = null
                                         showLanguageFilter = false
@@ -172,7 +244,53 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                                 }
                             }
                         }
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedButton(
+                                onClick = { showGenderFilter = !showGenderFilter },
+                                modifier = Modifier
+                                    .height(36.dp)
+                                    .fillMaxWidth()
+                            ) {
+                                Text(
+                                    stringResource(Res.string.voice_gender_label, genderFilter ?: allLabel),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showGenderFilter,
+                                onDismissRequest = { showGenderFilter = false },
+                                modifier = Modifier
+                                    .widthIn(min = 180.dp, max = 320.dp)
+                                    .heightIn(max = 300.dp)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(allLabel) },
+                                    onClick = {
+                                        genderFilter = null
+                                        showGenderFilter = false
+                                    }
+                                )
+                                availableGenders.forEach { gender ->
+                                    DropdownMenuItem(
+                                        text = { Text(gender) },
+                                        onClick = {
+                                            genderFilter = gender
+                                            showGenderFilter = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
+
+                    Text(
+                        text = stringResource(Res.string.voice_showing_count, visibleVoiceCount, totalVoiceCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 }
@@ -180,18 +298,22 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                 if (loading) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() }
                 } else if (error != null) {
-                    Text("Error: $error")
+                    Text(stringResource(Res.string.voice_error, error ?: ""))
                 } else if (useSystemTts) {
                     // Show system voices
                     Text(
-                        "System TTS Voices" + if (selectedLanguage != null) " (${selectedLanguage})" else "",
+                        text = if (selectedLanguage != null) {
+                            stringResource(Res.string.voice_system_title_with_lang, selectedLanguage ?: "")
+                        } else {
+                            stringResource(Res.string.voice_system_title)
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                     
-                    if (filteredSystemVoices.isEmpty() && selectedLanguage != null) {
+                    if (filteredSystemVoices.isEmpty()) {
                         Text(
-                            "No system voices found for $selectedLanguage",
+                            stringResource(Res.string.voice_no_system_match),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(16.dp)
@@ -229,7 +351,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                                         Text(text = v.primaryLanguage ?: "", modifier = Modifier.padding(top = 2.dp))
                                         if (selected?.name == v.name) {
                                             Text(
-                                                text = "✓ Selected", 
+                                                text = stringResource(Res.string.voice_selected),
                                                 color = MaterialTheme.colorScheme.primary,
                                                 style = MaterialTheme.typography.bodySmall
                                             )
@@ -242,14 +364,18 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                 } else {
                     // Show Azure voices
                     Text(
-                        "Azure TTS Voices" + if (selectedLanguage != null) " (${selectedLanguage})" else "",
+                        text = if (selectedLanguage != null) {
+                            stringResource(Res.string.voice_azure_title_with_lang, selectedLanguage ?: "")
+                        } else {
+                            stringResource(Res.string.voice_azure_title)
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                     
-                    if (filteredAzureVoices.isEmpty() && selectedLanguage != null) {
+                    if (filteredAzureVoices.isEmpty()) {
                         Text(
-                            "No Azure voices found for $selectedLanguage",
+                            stringResource(Res.string.voice_no_azure_match),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(16.dp)
@@ -266,7 +392,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                                                 println("User selected voice: ${v.name} (primary=${v.primaryLanguage}, selected=${v.selectedLanguage})")
                                                 useCase.select(v)
                                                 // also persist UI primary language when selecting a voice
-                                                val primary = v.selectedLanguage.ifBlank { v.selectedLanguage ?: "" }
+                                                val primary = v.selectedLanguage.ifBlank { v.primaryLanguage ?: "" }
                                                 if (primary.isNotBlank() && settingsUseCase != null) {
                                                     try {
                                                         println("Persisting primaryLanguage='$primary' to Settings")
@@ -293,7 +419,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                                         editingVoice = v
                                         showVoiceSettings = true
                                     }) {
-                                        Text("Settings")
+                                        Text(stringResource(Res.string.voice_settings))
                                     }
                                 }
                             }
@@ -303,7 +429,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_close)) }
         }
     )
 
@@ -347,4 +473,38 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
             onOpenWelcomeFlow = onOpenWelcomeFlow
         )
     }
+}
+
+private fun matchesVoiceFilters(
+    voice: Voice,
+    queryTerms: List<String>,
+    genderFilter: String?
+): Boolean {
+    if (genderFilter != null && !voice.gender.equals(genderFilter, ignoreCase = true)) {
+        return false
+    }
+
+    if (queryTerms.isEmpty()) {
+        return true
+    }
+
+    val searchable = buildVoiceSearchText(voice)
+    return queryTerms.all { term -> searchable.contains(term) }
+}
+
+private fun buildVoiceSearchText(voice: Voice): String {
+    val supported = voice.supportedLanguages ?: emptyList()
+    return buildString {
+        append(voice.displayName.orEmpty())
+        append(' ')
+        append(voice.name.orEmpty())
+        append(' ')
+        append(voice.primaryLanguage.orEmpty())
+        append(' ')
+        append(voice.gender.orEmpty())
+        if (supported.isNotEmpty()) {
+            append(' ')
+            append(supported.joinToString(" "))
+        }
+    }.lowercase()
 }

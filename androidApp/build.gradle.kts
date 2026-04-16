@@ -1,8 +1,10 @@
 import java.util.Properties
+import org.gradle.api.tasks.Sync
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -42,6 +44,12 @@ android {
 
 
     buildFeatures { compose = true }
+
+    sourceSets {
+        getByName("main") {
+            assets.srcDir("$buildDir/generated/composeAppComposeResources")
+        }
+    }
     
     composeOptions {
         // Compiler extension version must match the Compose compiler compatible with the project's Kotlin plugin.
@@ -64,6 +72,20 @@ android {
     }
 }
 
+val syncComposeAppComposeResources by tasks.registering(Sync::class) {
+    dependsOn(":composeApp:copyAndroidMainComposeResourcesToAndroidAssets")
+    from(
+        project(":composeApp").layout.buildDirectory.dir(
+            "generated/compose/resourceGenerator/androidAssets/copyAndroidMainComposeResourcesToAndroidAssets"
+        )
+    )
+    into(layout.buildDirectory.dir("generated/composeAppComposeResources"))
+}
+
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn(syncComposeAppComposeResources)
+}
+
 dependencies {
     implementation(project(":shared"))
     implementation(project(":composeApp"))
@@ -71,6 +93,9 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
 
     // Common AndroidX helpers
     implementation("androidx.core:core-ktx:1.10.1")

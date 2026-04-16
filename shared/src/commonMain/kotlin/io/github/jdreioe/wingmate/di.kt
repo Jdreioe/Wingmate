@@ -7,6 +7,8 @@ import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.CategoryUseCase
+import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.application.NoopFeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.domain.*
 import io.github.jdreioe.wingmate.infrastructure.*
@@ -29,6 +31,7 @@ fun initKoin(extra: Module? = null) {
         singleOf(::InMemoryConfigRepository) { bind<ConfigRepository>() }
         singleOf(::InMemoryPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
         singleOf(::NoopSpeechService) { bind<SpeechService>() } // Android overrides this
+        singleOf(::NoopFeatureUsageReporter) { bind<FeatureUsageReporter>() }
         singleOf(::AzureVoiceCatalog)
         single { DictionaryLoader(getOrNull<io.github.jdreioe.wingmate.domain.FileStorage>()) } // For language dictionary pretraining and caching
         singleOf(::PhraseUseCase)
@@ -37,7 +40,7 @@ fun initKoin(extra: Module? = null) {
         singleOf(::UserDataManager)
         singleOf(::SettingsStateManager)
         singleOf(::VoiceUseCase)
-        factory { PhraseBloc(get<PhraseUseCase>()) }
+        factory { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>(), get<CategoryUseCase>()) }
         factory { SettingsBloc(get<SettingsUseCase>()) }
         factory { VoiceBloc(get<VoiceUseCase>()) }
     }

@@ -13,11 +13,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.import_options_classic_desc
+import wingmatekmp.composeapp.generated.resources.import_options_classic_title
+import wingmatekmp.composeapp.generated.resources.import_options_modern_desc
+import wingmatekmp.composeapp.generated.resources.import_options_modern_title
+import wingmatekmp.composeapp.generated.resources.import_options_recommended
+import wingmatekmp.composeapp.generated.resources.import_options_scratch_desc
+import wingmatekmp.composeapp.generated.resources.import_options_scratch_title
+import wingmatekmp.composeapp.generated.resources.import_options_skip
+import wingmatekmp.composeapp.generated.resources.import_options_subtitle
+import wingmatekmp.composeapp.generated.resources.import_options_title
 
 @Composable
 fun ImportOptionsScreen(
     onImportClassic: () -> Unit,
     onImportModern: () -> Unit,
+    onCreateFromScratch: () -> Unit,
     onSkip: () -> Unit
 ) {
     Surface(
@@ -33,13 +46,13 @@ fun ImportOptionsScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                "Import Boards",
+                stringResource(Res.string.import_options_title),
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "Do you have existing OBF/OBZ boards? Import them now to kickstart your communication.",
+                stringResource(Res.string.import_options_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -48,24 +61,32 @@ fun ImportOptionsScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             ImportOptionCard(
-                title = "Classic Mode",
-                description = "Exact replica of your existing boards. Preserves the original layout and navigation structure. Best if you want to keep everything familiar.",
+                title = stringResource(Res.string.import_options_classic_title),
+                description = stringResource(Res.string.import_options_classic_desc),
                 onClick = onImportClassic
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             ImportOptionCard(
-                title = "Modern Mode",
-                description = "Optimized for Wingmate. Converts your boards into Category Chips for faster navigation and a cleaner look.",
+                title = stringResource(Res.string.import_options_modern_title),
+                description = stringResource(Res.string.import_options_modern_desc),
                 onClick = onImportModern,
                 isRecommended = true
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            ImportOptionCard(
+                title = stringResource(Res.string.import_options_scratch_title),
+                description = stringResource(Res.string.import_options_scratch_desc),
+                onClick = onCreateFromScratch
             )
 
             Spacer(modifier = Modifier.height(32.dp))
 
             TextButton(onClick = onSkip) {
-                Text("Skip for now")
+                Text(stringResource(Res.string.import_options_skip))
             }
         }
     }
@@ -109,7 +130,7 @@ fun ImportOptionCard(
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            "Recommended",
+                            stringResource(Res.string.import_options_recommended),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimary
                         )

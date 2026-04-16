@@ -79,3 +79,29 @@ compose.desktop {
         mainClass = "io.github.jdreioe.wingmate.desktop.MainKt"
     }
 }
+
+tasks.matching { it.name == "copyAndroidMainComposeResourcesToAndroidAssets" }.configureEach {
+    val outputDirectoryGetter = javaClass.methods.firstOrNull {
+        it.name == "getOutputDirectory" && it.parameterCount == 0
+    } ?: return@configureEach
+
+    val outputDirectoryProperty = outputDirectoryGetter.invoke(this) ?: return@configureEach
+    val outputFile = layout.buildDirectory
+        .dir("generated/compose/resourceGenerator/androidAssets/${name}")
+        .get()
+        .asFile
+
+    val fileValueMethod = outputDirectoryProperty.javaClass.methods.firstOrNull {
+        it.name == "fileValue" && it.parameterCount == 1
+    }
+    if (fileValueMethod != null) {
+        fileValueMethod.invoke(outputDirectoryProperty, outputFile)
+        return@configureEach
+    }
+
+    val setMethod = outputDirectoryProperty.javaClass.methods.firstOrNull {
+        it.name == "set" && it.parameterCount == 1
+    } ?: return@configureEach
+
+    setMethod.invoke(outputDirectoryProperty, outputFile)
+}

@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_language">Language</string>
+    <string name="common_save">Save</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_close">Close</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_clear">Clear</string>
+    <string name="common_ok">OK</string>
+    <string name="common_no_name">No Name</string>
+    <string name="common_back">Back</string>
+    <string name="common_continue">Continue</string>
+
+    <string name="language_dialog_title">Language</string>
+    <string name="language_filter_languages">Filter languages</string>
+    <string name="language_search_label">Search (example: da or DK)</string>
+    <string name="language_filter_code">Language code</string>
+    <string name="language_filter_region">Region</string>
+    <string name="language_primary">Primary language</string>
+    <string name="language_secondary">Secondary language</string>
+    <string name="language_all">All</string>
+    <string name="language_no_available">No languages available</string>
+    <string name="language_no_match">No languages match filters</string>
+
+    <string name="voice_select_title">Select Voice</string>
+    <string name="voice_search_label">Search voices</string>
+    <string name="voice_search_placeholder">Name, locale, or gender</string>
+    <string name="voice_filter_languages_content_desc">Filter languages</string>
+    <string name="voice_all_languages">All languages</string>
+    <string name="voice_gender_label">Gender: %1$s</string>
+    <string name="voice_showing_count">Showing %1$d of %2$d voices</string>
+    <string name="voice_error">Error: %1$s</string>
+    <string name="voice_system_title">System TTS Voices</string>
+    <string name="voice_system_title_with_lang">System TTS Voices (%1$s)</string>
+    <string name="voice_azure_title">Azure TTS Voices</string>
+    <string name="voice_azure_title_with_lang">Azure TTS Voices (%1$s)</string>
+    <string name="voice_no_system_match">No system voices match the current filters</string>
+    <string name="voice_no_azure_match">No Azure voices match the current filters</string>
+    <string name="voice_selected">✓ Selected</string>
+    <string name="voice_settings">Settings</string>
+
+    <string name="phrase_add_title">Add New Phrase</string>
+    <string name="phrase_edit_title">Edit Phrase</string>
+    <string name="phrase_vocalization_label">Vocalization (what to speak)</string>
+    <string name="phrase_new_text_label">New phrase text</string>
+    <string name="phrase_image_label">Image</string>
+    <string name="phrase_clear_image_cd">Clear image</string>
+    <string name="phrase_select_image_title">Select Image</string>
+    <string name="phrase_pick_file">Pick File</string>
+    <string name="phrase_open_symbols">OpenSymbols</string>
+    <string name="phrase_recording_label">Recording</string>
+    <string name="phrase_record_hint">phrase</string>
+    <string name="phrase_recording_unavailable">Recording is unavailable on this platform.</string>
+    <string name="phrase_recording_start_failed">Could not start recording.</string>
+    <string name="phrase_recording_finalize_failed">Could not finalize recording.</string>
+    <string name="phrase_recording_play_failed">Could not play recording.</string>
+    <string name="phrase_record_button">Record</string>
+    <string name="phrase_replace_button">Replace</string>
+    <string name="phrase_stop_button">Stop</string>
+    <string name="phrase_play_button">Play</string>
+    <string name="phrase_clear_button">Clear</string>
+    <string name="phrase_recording_in_progress">Recording in progress...</string>
+    <string name="phrase_color_label">Color</string>
+    <string name="phrase_pick_color">Pick color</string>
+    <string name="phrase_none">None</string>
+    <string name="phrase_use_color">Use color</string>
+    <string name="phrase_belongs_to_category">Belongs to category</string>
+
+    <string name="color_picker_title">Pick color</string>
+    <string name="color_picker_brightness">Bright</string>
+
+    <string name="import_options_title">Import Boards</string>
+    <string name="import_options_subtitle">Do you have existing OBF/OBZ boards? Import them now to kickstart your communication.</string>
+    <string name="import_options_classic_title">Classic Mode</string>
+    <string name="import_options_classic_desc">Exact replica of your existing boards. Preserves the original layout and navigation structure. Best if you want to keep everything familiar.</string>
+    <string name="import_options_modern_title">Modern Mode</string>
+    <string name="import_options_modern_desc">Optimized for Wingmate. Converts your boards into Category Chips for faster navigation and a cleaner look.</string>
+    <string name="import_options_scratch_title">Create From Scratch</string>
+    <string name="import_options_scratch_desc">Start with a new boardset and build your own boards using Wingmate's boardset manager.</string>
+    <string name="import_options_skip">Skip for now</string>
+    <string name="import_options_recommended">Recommended</string>
+
+    <string name="opensymbols_search_title">Search OpenSymbols</string>
+    <string name="opensymbols_search_label">Search for pictogram...</string>
+    <string name="opensymbols_search_cd">Search</string>
+    <string name="opensymbols_not_configured">OpenSymbols is not configured on this device.\nSet WINGMATE_OPENSYMBOLS_SECRET in env or local.properties.</string>
+    <string name="opensymbols_no_results">No results found</string>
+
+    <string name="data_management_title">Data Management</string>
+    <string name="data_management_description">Export or import your speech history and trained model data as JSON.</string>
+    <string name="data_management_export">Export</string>
+    <string name="data_management_import">Import</string>
+    <string name="data_management_status_exporting">Exporting...</string>
+    <string name="data_management_status_export_ready">Export ready (shared)</string>
+    <string name="data_management_status_copied_clipboard">Copied to clipboard!</string>
+    <string name="data_management_status_export_failed">Export failed: %1$s</string>
+    <string name="data_management_button_share_copy_history">Share / Copy History</string>
+    <string name="data_management_paste_json_label">Paste JSON here</string>
+    <string name="data_management_status_importing">Importing...</string>
+    <string name="data_management_status_import_success">Import successful! Restart app to see changes.</string>
+    <string name="data_management_status_import_failed_invalid">Import failed: Invalid JSON</string>
+    <string name="data_management_button_overwrite_history">Overwrite History</string>
+
+    <string name="category_add_title">Add category</string>
+    <string name="category_name_label">Category name</string>
+    <string name="category_error_name_empty">Name cannot be empty</string>
+    <string name="category_error_exists">Category with this name already exists</string>
+    <string name="category_selector_title">Category for %1$s</string>
+    <string name="category_add_cd">Add category</string>
+
+    <string name="phrase_item_edit">Edit</string>
+    <string name="phrase_item_speak_secondary">Speak (secondary)</string>
+    <string name="phrase_item_copy_soundfile">Copy soundfile</string>
+    <string name="phrase_item_share_soundfile">Share soundfile</string>
+    <string name="phrase_item_move_up">Move up</string>
+    <string name="phrase_item_move_down">Move down</string>
+    <string name="phrase_add_cd">Add phrase</string>
+
+    <string name="ui_settings_title">Settings</string>
+    <string name="ui_settings_note_scaling_moved">Note: UI Scaling settings have been moved to Speech Settings dialog.</string>
+    <string name="ui_settings_virtual_mic_title">Use virtual microphone for calls</string>
+    <string name="ui_settings_virtual_mic_desc">Routes TTS audio to a virtual device you can pick as mic in Zoom/Meet.</string>
+    <string name="ui_settings_auto_updates_title">Automatic updates</string>
+    <string name="ui_settings_auto_updates_desc">Automatically check for and install updates from GitHub.</string>
+    <string name="ui_settings_feature_reporting_title">Feature usage reporting</string>
+    <string name="ui_settings_feature_reporting_desc">Help improve Wingmate by sharing anonymous feature usage events. No phrase text, keys, or file paths are reported.</string>
+    <string name="ui_settings_partner_window_title">Partner window display</string>
+    <string name="ui_settings_partner_window_desc">Mirror typed text to the connected TD-I13 partner display.</string>
+
+    <string name="test_voice_default_text">Hello! This is how I sound. Welcome to Wingmate!</string>
+    <string name="test_voice_title">Test Your Voice</string>
+    <string name="test_voice_selected_voice">Selected Voice:</string>
+    <string name="test_voice_unknown_voice">Unknown Voice</string>
+    <string name="test_voice_unknown_language">Unknown Language</string>
+    <string name="test_voice_message_label">Test Message</string>
+    <string name="test_voice_stop">Stop</string>
+    <string name="test_voice_play">Play</string>
+    <string name="test_voice_test_button">Test Voice</string>
+    <string name="test_voice_info">Listen to how your selected voice sounds. You can change the test message above and try different phrases.</string>
+
+    <string name="dictionary_title">Pronunciation Dictionary</string>
+    <string name="dictionary_back_cd">Back</string>
+    <string name="dictionary_add_entry_cd">Add entry</string>
+    <string name="dictionary_description">Global pronunciation rules applied to all speech</string>
+    <string name="dictionary_empty_title">No dictionary entries</string>
+    <string name="dictionary_empty_subtitle">Tap + to add pronunciation rules</string>
+    <string name="dictionary_alphabet_format">Alphabet: %1$s</string>
+    <string name="dictionary_test_cd">Test</string>
+    <string name="dictionary_delete_cd">Delete</string>
+    <string name="dictionary_add_entry_title">Add Pronunciation Entry</string>
+    <string name="dictionary_word_label">Word</string>
+    <string name="dictionary_word_placeholder">e.g., tomato</string>
+    <string name="dictionary_phoneme_label">Phoneme</string>
+    <string name="dictionary_phoneme_placeholder">e.g., /təˈmɑːtoʊ/</string>
+    <string name="dictionary_guess_failed">Could not find pronunciation</string>
+    <string name="dictionary_guess">Guess</string>
+    <string name="dictionary_common_ipa">Common IPA Symbols</string>
+    <string name="dictionary_alphabet_label">Alphabet</string>
+    <string name="dictionary_test_pronunciation">Test Pronunciation</string>
+    <string name="dictionary_global_entries_note">Global entries apply to all speech synthesis</string>
+
+    <string name="welcome_title">Welcome to Wingmate</string>
+    <string name="welcome_subtitle">Congratulations on your new voice! </string>
+    <string name="welcome_ui_settings">UI Settings</string>
+    <string name="welcome_importing_board">Importing board...</string>
+
+    <string name="common_add">Add</string>
+    <string name="common_next">Next</string>
+
+    <string name="phrase_screen_toggle_fullscreen_cd">Toggle fullscreen</string>
+    <string name="phrase_screen_menu_cd">Menu</string>
+    <string name="phrase_screen_voice_settings">Voice settings</string>
+    <string name="phrase_screen_pronunciation_dictionary">Pronunciation dictionary</string>
+    <string name="phrase_screen_copy_last_soundfile">Copy last soundfile</string>
+    <string name="phrase_screen_share_last_soundfile">Share last soundfile</string>
+    <string name="phrase_screen_app_settings">App settings</string>
+    <string name="phrase_screen_import_export_data">Import/Export Data</string>
+    <string name="phrase_screen_check_updates">Check for updates</string>
+    <string name="phrase_screen_welcome_screen">Welcome screen</string>
+    <string name="phrase_screen_boardset_manager">Boardset Manager</string>
+    <string name="phrase_screen_load_sample_board">Load Sample Board</string>
+    <string name="phrase_screen_close_board">Close Board</string>
+    <string name="phrase_screen_import_board">Import OBF/OBZ Board...</string>
+    <string name="phrase_screen_select_board_title">Select OBF/OBZ Board</string>
+    <string name="phrase_screen_loading">Loading...</string>
+    <string name="phrase_screen_error">Error: %1$s</string>
+    <string name="phrase_screen_enter_text_placeholder">Enter text to speak</string>
+    <string name="phrase_screen_ssml_controls">SSML Controls</string>
+</resources>

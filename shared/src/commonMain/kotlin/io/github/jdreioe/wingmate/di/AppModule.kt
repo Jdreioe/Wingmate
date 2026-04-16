@@ -11,8 +11,11 @@ import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.MovePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetAllItemsUseCase
 import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.domain.BoardSetRepository
+import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
+import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.factoryOf
@@ -24,6 +27,8 @@ val appModule = module {
     
     singleOf(::ObfParser)
     singleOf(::InMemoryBoardRepository) { bind<BoardRepository>() }
+    singleOf(::InMemoryBoardSetRepository) { bind<BoardSetRepository>() }
+    singleOf(::BoardSetUseCase)
 
     singleOf(::AddPhraseUseCase)
     singleOf(::GetPhrasesAndCategoriesUseCase)

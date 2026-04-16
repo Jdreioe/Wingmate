@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.infrastructure
 
+import android.Manifest
 import android.content.Context
 import android.media.MediaPlayer
 import android.media.AudioAttributes
@@ -29,11 +30,14 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.koin.core.context.GlobalContext
 import java.io.File
 import android.os.Environment
+import androidx.annotation.RequiresPermission
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.resume
 
 /**
  * AndroidSpeechService prefers using Azure TTS when a persisted SpeechServiceConfig exists.
@@ -131,6 +135,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     /**
      * Check if device has active internet connection
      */
+    @RequiresPermission(Manifest.permission.ACCESS_NETWORK_STATE)
     private fun isOnline(): Boolean {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork ?: return false
@@ -311,6 +316,99 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 speakWithPlatformTts(combinedText, voice, pitch, rate)
             }
         }
+    }
+
+    override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean {
+        val file = File(audioFilePath)
+        if (!file.exists() || file.length() <= 0L) return false
+
+        val played = runCatching {
+            stop()
+
+            withContext(Dispatchers.Main) {
+                suspendCancellableCoroutine<Boolean> { cont ->
+                    val player = MediaPlayer()
+                    var finished = false
+
+                    fun finalizePlayback(success: Boolean) {
+                        if (finished) return
+                        finished = true
+                        try {
+                            synchronized(playerLock) {
+                                if (mediaPlayer === player) {
+                                    try { player.reset() } catch (_: Throwable) {}
+                                    try { player.release() } catch (_: Throwable) {}
+                                    mediaPlayer = null
+                                }
+                            }
+                        } finally {
+                            isPlaying = false
+                            isPaused = false
+                            abandonAudioFocus()
+                            if (cont.isActive) cont.resume(success)
+                        }
+                    }
+
+                    if (!requestAudioFocus()) {
+                        // Best effort: continue playback even if focus request was denied.
+                    }
+
+                    player.setOnCompletionListener {
+                        finalizePlayback(true)
+                    }
+                    player.setOnErrorListener { _, _, _ ->
+                        finalizePlayback(false)
+                        true
+                    }
+
+                    cont.invokeOnCancellation {
+                        if (finished) return@invokeOnCancellation
+                        finished = true
+                        try {
+                            synchronized(playerLock) {
+                                if (mediaPlayer === player) {
+                                    try { player.stop() } catch (_: Throwable) {}
+                                    try { player.reset() } catch (_: Throwable) {}
+                                    try { player.release() } catch (_: Throwable) {}
+                                    mediaPlayer = null
+                                }
+                            }
+                        } finally {
+                            isPlaying = false
+                            isPaused = false
+                            abandonAudioFocus()
+                        }
+                    }
+
+                    try {
+                        isPlaying = true
+                        isPaused = false
+                        try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
+                        player.setDataSource(file.absolutePath)
+                        player.prepare()
+                        synchronized(playerLock) {
+                            mediaPlayer?.let { try { it.stop(); it.release() } catch (_: Throwable) {} }
+                            mediaPlayer = player
+                        }
+                        player.start()
+                    } catch (_: Throwable) {
+                        finalizePlayback(false)
+                    }
+                }
+            }
+        }.getOrElse {
+            isPlaying = false
+            isPaused = false
+            false
+        }
+
+        if (played) {
+            textForHistory?.takeIf { it.isNotBlank() }?.let {
+                recordHistory(it, voice, file.absolutePath)
+            }
+        }
+
+        return played
     }
     
     private fun startPlayback(file: File, voice: Voice) {

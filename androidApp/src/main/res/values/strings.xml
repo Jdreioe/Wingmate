@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Wingmate</string>
+
+    <string name="language">Language</string>
+    <string name="select_voice">Select Voice</string>
+    <string name="search_voices">Search voices</string>
+    <string name="filter_languages">Filter languages</string>
+    <string name="all_languages">All languages</string>
+    <string name="gender">Gender</string>
+    <string name="showing_voices">Showing %1$d of %2$d voices</string>
+    <string name="no_system_voices_match">No system voices match the current filters</string>
+    <string name="no_azure_voices_match">No Azure voices match the current filters</string>
+    <string name="close">Close</string>
+</resources>

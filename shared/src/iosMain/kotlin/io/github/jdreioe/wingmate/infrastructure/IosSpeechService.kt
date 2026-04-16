@@ -172,6 +172,25 @@ class IosSpeechService(
         playAudio(audioBytes)
     }
 
+    override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean {
+        if (!NSFileManager.defaultManager.fileExistsAtPath(audioFilePath)) return false
+
+        return runCatching {
+            playFile(audioFilePath)
+
+            val spokenText = textForHistory?.trim().orEmpty()
+            if (spokenText.isNotEmpty()) {
+                val v = voice ?: runCatching { voiceUseCase?.selected() }.getOrNull()
+                trySaveHistory(spokenText, v, v?.pitch, v?.rate, audioFilePath)
+            }
+
+            true
+        }.getOrElse { t ->
+            logger.warn(t) { "Failed to play recorded audio file" }
+            false
+        }
+    }
+
     private var lastCleanupAtMs: Long = 0L
     private suspend fun cleanupExpiredFiles() {
         val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()

@@ -6,9 +6,9 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlin.time.Clock
 
 /**
  * Client for OpenSymbols API - searches for pictograms/symbols.
@@ -19,8 +19,8 @@ object OpenSymbolsClient {
     private const val TOKEN_ENDPOINT = "$BASE_URL/api/v2/token"
     private const val SYMBOLS_ENDPOINT = "$BASE_URL/api/v2/symbols"
     
-    // User's shared secret - TODO: move to secure config
-    private var sharedSecret: String = "6a1ee5b773c69533b82d5166"
+    // Runtime-provided shared secret. Never commit this value in source.
+    private var sharedSecret: String? = null
     
     private var cachedToken: String? = null
     private var tokenExpiry: Long = 0L
@@ -32,15 +32,18 @@ object OpenSymbolsClient {
         isLenient = true
     }
     
-    fun setSharedSecret(secret: String) {
-        sharedSecret = secret
+    fun setSharedSecret(secret: String?) {
+        sharedSecret = secret?.trim()?.takeIf { it.isNotEmpty() }
         cachedToken = null // Invalidate cached token
     }
+
+    fun isConfigured(): Boolean = !sharedSecret.isNullOrBlank()
     
     /**
      * Get access token (cached if still valid)
      */
     private suspend fun getAccessToken(): String? = withContext(Dispatchers.Default) {
+        val configuredSecret = sharedSecret ?: return@withContext null
         // Return cached token if still valid (with 30s buffer)
         val currentTime = Clock.System.now().toEpochMilliseconds()
         if (cachedToken != null && currentTime < tokenExpiry - 30000) {
@@ -50,7 +53,7 @@ object OpenSymbolsClient {
         runCatching {
             val response: HttpResponse = httpClient.post(TOKEN_ENDPOINT) {
                 contentType(ContentType.Application.FormUrlEncoded)
-                setBody("secret=$sharedSecret")
+                setBody("secret=$configuredSecret")
             }
             
             if (response.status == HttpStatusCode.OK) {

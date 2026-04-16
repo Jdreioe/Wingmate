@@ -2,12 +2,20 @@ package io.github.jdreioe.wingmate.domain
 
 
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 
 interface BoardRepository {
     suspend fun getBoard(id: String): ObfBoard?
     suspend fun saveBoard(board: ObfBoard)
     suspend fun listBoards(): List<ObfBoard>
     suspend fun deleteBoard(id: String)
+}
+
+interface BoardSetRepository {
+    suspend fun getBoardSet(id: String): ObfBoardSet?
+    suspend fun saveBoardSet(boardSet: ObfBoardSet)
+    suspend fun listBoardSets(): List<ObfBoardSet>
+    suspend fun deleteBoardSet(id: String)
 }
 
 interface PhraseRepository {
@@ -53,6 +61,7 @@ interface ConfigRepository {
 interface SpeechService {
     suspend fun speak(text: String, voice: Voice? = null, pitch: Double? = null, rate: Double? = null)
     suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice? = null, pitch: Double? = null, rate: Double? = null)
+    suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String? = null, voice: Voice? = null): Boolean = false
     suspend fun pause()
     suspend fun stop()
     suspend fun resume()

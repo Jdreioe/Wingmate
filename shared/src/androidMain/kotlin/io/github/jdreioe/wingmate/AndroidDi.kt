@@ -5,14 +5,18 @@ import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.PhraseRepository
+import io.github.jdreioe.wingmate.domain.PhraseRecordingService
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
+import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.infrastructure.AndroidFileStorage
+import io.github.jdreioe.wingmate.infrastructure.AndroidFirebaseFeatureUsageReporter
 import io.github.jdreioe.wingmate.infrastructure.AndroidSpeechService
 import io.github.jdreioe.wingmate.infrastructure.AndroidImageCacher
+import io.github.jdreioe.wingmate.infrastructure.AndroidPhraseRecordingService
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlCategoryRepository
@@ -38,6 +42,7 @@ fun overrideAndroidSpeechService(context: Context) {
         module {
             single<Context> { context }
             singleOf(::AndroidSpeechService) { bind<SpeechService>() }
+            singleOf(::AndroidPhraseRecordingService) { bind<PhraseRecordingService>() }
             singleOf(::SystemVoiceProvider)
             // Prefer SQLite-backed repositories on Android for parity with desktop
             singleOf(::AndroidSqlConfigRepository) { bind<ConfigRepository>() }
@@ -55,6 +60,7 @@ fun overrideAndroidSpeechService(context: Context) {
             singleOf(::AndroidFilePicker) { bind<FilePicker>() }
             singleOf(::AndroidImageCacher) { bind<ImageCacher>() }
             singleOf(::SimpleNGramPredictionService) { bind<TextPredictionService>() }
+            singleOf(::AndroidFirebaseFeatureUsageReporter) { bind<FeatureUsageReporter>() }
         }
     )
 }

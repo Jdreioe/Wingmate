@@ -166,7 +166,7 @@ class KoinBridge : KoinComponent {
     // Bridge to TextPredictionService
     suspend fun predict(context: String, maxWords: Int, maxLetters: Int): io.github.jdreioe.wingmate.domain.PredictionResult {
         return try {
-            get<io.github.jdreioe.wingmate.domain.TextPredictionService>().predict(context, maxWords, maxWords)
+            get<io.github.jdreioe.wingmate.domain.TextPredictionService>().predict(context, maxWords, maxLetters)
         } catch (_: Throwable) {
             io.github.jdreioe.wingmate.domain.PredictionResult()
         }

@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_language">Sprog</string>
+    <string name="common_save">Gem</string>
+    <string name="common_cancel">Annuller</string>
+    <string name="common_close">Luk</string>
+    <string name="common_delete">Slet</string>
+    <string name="common_clear">Ryd</string>
+    <string name="common_ok">OK</string>
+    <string name="common_no_name">Intet navn</string>
+    <string name="common_back">Tilbage</string>
+    <string name="common_continue">Fortsæt</string>
+
+    <string name="language_dialog_title">Sprog</string>
+    <string name="language_filter_languages">Filtrer sprog</string>
+    <string name="language_search_label">Soeg (eksempel: da eller DK)</string>
+    <string name="language_filter_code">Sprogkode</string>
+    <string name="language_filter_region">Region</string>
+    <string name="language_primary">Primaert sprog</string>
+    <string name="language_secondary">Sekundaert sprog</string>
+    <string name="language_all">Alle</string>
+    <string name="language_no_available">Ingen sprog tilgaengelige</string>
+    <string name="language_no_match">Ingen sprog matcher filtrene</string>
+
+    <string name="voice_select_title">Vaelg stemme</string>
+    <string name="voice_search_label">Soeg stemmer</string>
+    <string name="voice_search_placeholder">Navn, sprogkode eller koen</string>
+    <string name="voice_filter_languages_content_desc">Filtrer sprog</string>
+    <string name="voice_all_languages">Alle sprog</string>
+    <string name="voice_gender_label">Koen: %1$s</string>
+    <string name="voice_showing_count">Viser %1$d af %2$d stemmer</string>
+    <string name="voice_error">Fejl: %1$s</string>
+    <string name="voice_system_title">System TTS-stemmer</string>
+    <string name="voice_system_title_with_lang">System TTS-stemmer (%1$s)</string>
+    <string name="voice_azure_title">Azure TTS-stemmer</string>
+    <string name="voice_azure_title_with_lang">Azure TTS-stemmer (%1$s)</string>
+    <string name="voice_no_system_match">Ingen systemstemmer matcher de aktuelle filtre</string>
+    <string name="voice_no_azure_match">Ingen Azure-stemmer matcher de aktuelle filtre</string>
+    <string name="voice_selected">✓ Valgt</string>
+    <string name="voice_settings">Indstillinger</string>
+
+    <string name="phrase_add_title">Tilfoej ny frase</string>
+    <string name="phrase_edit_title">Rediger frase</string>
+    <string name="phrase_vocalization_label">Vokalisering (det der skal siges)</string>
+    <string name="phrase_new_text_label">Ny frasetekst</string>
+    <string name="phrase_image_label">Billede</string>
+    <string name="phrase_clear_image_cd">Ryd billede</string>
+    <string name="phrase_select_image_title">Vaelg billede</string>
+    <string name="phrase_pick_file">Vaelg fil</string>
+    <string name="phrase_open_symbols">OpenSymbols</string>
+    <string name="phrase_recording_label">Optagelse</string>
+    <string name="phrase_record_hint">frase</string>
+    <string name="phrase_recording_unavailable">Optagelse er ikke tilgaengelig paa denne platform.</string>
+    <string name="phrase_recording_start_failed">Kunne ikke starte optagelse.</string>
+    <string name="phrase_recording_finalize_failed">Kunne ikke afslutte optagelse.</string>
+    <string name="phrase_recording_play_failed">Kunne ikke afspille optagelse.</string>
+    <string name="phrase_record_button">Optag</string>
+    <string name="phrase_replace_button">Erstat</string>
+    <string name="phrase_stop_button">Stop</string>
+    <string name="phrase_play_button">Afspil</string>
+    <string name="phrase_clear_button">Ryd</string>
+    <string name="phrase_recording_in_progress">Optagelse i gang...</string>
+    <string name="phrase_color_label">Farve</string>
+    <string name="phrase_pick_color">Vaelg farve</string>
+    <string name="phrase_none">Ingen</string>
+    <string name="phrase_use_color">Brug farve</string>
+    <string name="phrase_belongs_to_category">Tilhoerer kategori</string>
+
+    <string name="color_picker_title">Vaelg farve</string>
+    <string name="color_picker_brightness">Lysstyrke</string>
+
+    <string name="import_options_title">Importer tavler</string>
+    <string name="import_options_subtitle">Har du eksisterende OBF/OBZ-tavler? Importer dem nu for hurtigt at komme i gang.</string>
+    <string name="import_options_classic_title">Klassisk tilstand</string>
+    <string name="import_options_classic_desc">Praecis kopi af dine eksisterende tavler. Bevarer originalt layout og navigation. Bedst hvis alt skal foeles velkendt.</string>
+    <string name="import_options_modern_title">Moderne tilstand</string>
+    <string name="import_options_modern_desc">Optimeret til Wingmate. Konverterer tavler til kategorichips for hurtigere navigation og renere udtryk.</string>
+    <string name="import_options_scratch_title">Start fra bunden</string>
+    <string name="import_options_scratch_desc">Start med et nyt tavlesaet og byg dine egne tavler i Wingmates tavlesaet-manager.</string>
+    <string name="import_options_skip">Spring over for nu</string>
+    <string name="import_options_recommended">Anbefalet</string>
+
+    <string name="opensymbols_search_title">Soeg OpenSymbols</string>
+    <string name="opensymbols_search_label">Soeg efter piktogram...</string>
+    <string name="opensymbols_search_cd">Soeg</string>
+    <string name="opensymbols_not_configured">OpenSymbols er ikke konfigureret paa denne enhed.\nSaet WINGMATE_OPENSYMBOLS_SECRET i env eller local.properties.</string>
+    <string name="opensymbols_no_results">Ingen resultater fundet</string>
+
+    <string name="data_management_title">Datahaandtering</string>
+    <string name="data_management_description">Eksporter eller importer din talehistorik og traenet modeldata som JSON.</string>
+    <string name="data_management_export">Eksporter</string>
+    <string name="data_management_import">Importer</string>
+    <string name="data_management_status_exporting">Eksporterer...</string>
+    <string name="data_management_status_export_ready">Eksport klar (delt)</string>
+    <string name="data_management_status_copied_clipboard">Kopieret til udklipsholder!</string>
+    <string name="data_management_status_export_failed">Eksport fejlede: %1$s</string>
+    <string name="data_management_button_share_copy_history">Del / kopier historik</string>
+    <string name="data_management_paste_json_label">Indsaet JSON her</string>
+    <string name="data_management_status_importing">Importerer...</string>
+    <string name="data_management_status_import_success">Import lykkedes! Genstart appen for at se aendringer.</string>
+    <string name="data_management_status_import_failed_invalid">Import fejlede: Ugyldig JSON</string>
+    <string name="data_management_button_overwrite_history">Overskriv historik</string>
+
+    <string name="category_add_title">Tilfoej kategori</string>
+    <string name="category_name_label">Kategorinavn</string>
+    <string name="category_error_name_empty">Navn maa ikke vaere tomt</string>
+    <string name="category_error_exists">Kategori med dette navn findes allerede</string>
+    <string name="category_selector_title">Kategori for %1$s</string>
+    <string name="category_add_cd">Tilfoej kategori</string>
+
+    <string name="phrase_item_edit">Rediger</string>
+    <string name="phrase_item_speak_secondary">Tal (sekundaer)</string>
+    <string name="phrase_item_copy_soundfile">Kopier lydfil</string>
+    <string name="phrase_item_share_soundfile">Del lydfil</string>
+    <string name="phrase_item_move_up">Flyt op</string>
+    <string name="phrase_item_move_down">Flyt ned</string>
+    <string name="phrase_add_cd">Tilfoej frase</string>
+
+    <string name="ui_settings_title">Indstillinger</string>
+    <string name="ui_settings_note_scaling_moved">Bemærk: UI-skalering er flyttet til dialogen Taleindstillinger.</string>
+    <string name="ui_settings_virtual_mic_title">Brug virtuel mikrofon til opkald</string>
+    <string name="ui_settings_virtual_mic_desc">Ruter TTS-lyd til en virtuel enhed, som du kan vaelge som mikrofon i Zoom/Meet.</string>
+    <string name="ui_settings_auto_updates_title">Automatiske opdateringer</string>
+    <string name="ui_settings_auto_updates_desc">Soeg automatisk efter og installer opdateringer fra GitHub.</string>
+    <string name="ui_settings_feature_reporting_title">Rapportering af funktionsbrug</string>
+    <string name="ui_settings_feature_reporting_desc">Hjaelp med at forbedre Wingmate ved at dele anonyme haendelser om funktionsbrug. Ingen frasetekst, noegler eller filstier rapporteres.</string>
+    <string name="ui_settings_partner_window_title">Partnerdisplay</string>
+    <string name="ui_settings_partner_window_desc">Spejl skrevet tekst til det tilsluttede TD-I13 partnerdisplay.</string>
+
+    <string name="test_voice_default_text">Hej! Saadan lyder jeg. Velkommen til Wingmate!</string>
+    <string name="test_voice_title">Test din stemme</string>
+    <string name="test_voice_selected_voice">Valgt stemme:</string>
+    <string name="test_voice_unknown_voice">Ukendt stemme</string>
+    <string name="test_voice_unknown_language">Ukendt sprog</string>
+    <string name="test_voice_message_label">Testbesked</string>
+    <string name="test_voice_stop">Stop</string>
+    <string name="test_voice_play">Afspil</string>
+    <string name="test_voice_test_button">Test stemme</string>
+    <string name="test_voice_info">Lyt til, hvordan din valgte stemme lyder. Du kan aendre testbeskeden ovenfor og proeve forskellige sætninger.</string>
+
+    <string name="dictionary_title">Udtaleordbog</string>
+    <string name="dictionary_back_cd">Tilbage</string>
+    <string name="dictionary_add_entry_cd">Tilfoej post</string>
+    <string name="dictionary_description">Globale udtaleregler anvendt paa al tale</string>
+    <string name="dictionary_empty_title">Ingen ordbogsposter</string>
+    <string name="dictionary_empty_subtitle">Tryk + for at tilfoeje udtaleregler</string>
+    <string name="dictionary_alphabet_format">Alfabet: %1$s</string>
+    <string name="dictionary_test_cd">Test</string>
+    <string name="dictionary_delete_cd">Slet</string>
+    <string name="dictionary_add_entry_title">Tilfoej udtalepost</string>
+    <string name="dictionary_word_label">Ord</string>
+    <string name="dictionary_word_placeholder">f.eks. tomat</string>
+    <string name="dictionary_phoneme_label">Fonem</string>
+    <string name="dictionary_phoneme_placeholder">f.eks. /toˈmaːd/</string>
+    <string name="dictionary_guess_failed">Kunne ikke finde udtale</string>
+    <string name="dictionary_guess">Gaet</string>
+    <string name="dictionary_common_ipa">Almindelige IPA-symboler</string>
+    <string name="dictionary_alphabet_label">Alfabet</string>
+    <string name="dictionary_test_pronunciation">Test udtale</string>
+    <string name="dictionary_global_entries_note">Globale poster bruges for al talesyntese</string>
+
+    <string name="welcome_title">Velkommen til Wingmate</string>
+    <string name="welcome_subtitle">Tillykke med din nye stemme!</string>
+    <string name="welcome_ui_settings">UI-indstillinger</string>
+    <string name="welcome_importing_board">Importerer tavle...</string>
+
+    <string name="common_add">Tilfoej</string>
+    <string name="common_next">Naeste</string>
+
+    <string name="phrase_screen_toggle_fullscreen_cd">Skift fuldskaerm</string>
+    <string name="phrase_screen_menu_cd">Menu</string>
+    <string name="phrase_screen_voice_settings">Stemmeindstillinger</string>
+    <string name="phrase_screen_pronunciation_dictionary">Udtaleordbog</string>
+    <string name="phrase_screen_copy_last_soundfile">Kopier sidste lydfil</string>
+    <string name="phrase_screen_share_last_soundfile">Del sidste lydfil</string>
+    <string name="phrase_screen_app_settings">App-indstillinger</string>
+    <string name="phrase_screen_import_export_data">Importer/eksporter data</string>
+    <string name="phrase_screen_check_updates">Soeg efter opdateringer</string>
+    <string name="phrase_screen_welcome_screen">Velkomstskaerm</string>
+    <string name="phrase_screen_boardset_manager">Tavlesaet-manager</string>
+    <string name="phrase_screen_load_sample_board">Indlaes eksempeltavle</string>
+    <string name="phrase_screen_close_board">Luk tavle</string>
+    <string name="phrase_screen_import_board">Importer OBF/OBZ-tavle...</string>
+    <string name="phrase_screen_select_board_title">Vaelg OBF/OBZ-tavle</string>
+    <string name="phrase_screen_loading">Indlaeser...</string>
+    <string name="phrase_screen_error">Fejl: %1$s</string>
+    <string name="phrase_screen_enter_text_placeholder">Indtast tekst der skal tales</string>
+    <string name="phrase_screen_ssml_controls">SSML-kontroller</string>
+</resources>

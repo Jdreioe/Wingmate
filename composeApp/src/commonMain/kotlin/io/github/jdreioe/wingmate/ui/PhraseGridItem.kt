@@ -38,7 +38,16 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.SmallFloatingActionButton
 import io.github.jdreioe.wingmate.domain.Phrase
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.common_delete
+import wingmatekmp.composeapp.generated.resources.phrase_item_copy_soundfile
+import wingmatekmp.composeapp.generated.resources.phrase_item_edit
+import wingmatekmp.composeapp.generated.resources.phrase_item_move_down
+import wingmatekmp.composeapp.generated.resources.phrase_item_move_up
+import wingmatekmp.composeapp.generated.resources.phrase_item_share_soundfile
+import wingmatekmp.composeapp.generated.resources.phrase_item_speak_secondary
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -63,13 +72,13 @@ fun PhraseGridItem(
     val shareService = remember(koin) {
         koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>()
     }
-
-    val infiniteTransition = rememberInfiniteTransition()
-    val angle = infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(animation = tween(durationMillis = 300, easing = LinearEasing), repeatMode = RepeatMode.Reverse)
-    )
+    val editLabel = stringResource(Res.string.phrase_item_edit)
+    val speakSecondaryLabel = stringResource(Res.string.phrase_item_speak_secondary)
+    val deleteLabel = stringResource(Res.string.common_delete)
+    val copySoundfileLabel = stringResource(Res.string.phrase_item_copy_soundfile)
+    val shareSoundfileLabel = stringResource(Res.string.phrase_item_share_soundfile)
+    val moveUpLabel = stringResource(Res.string.phrase_item_move_up)
+    val moveDownLabel = stringResource(Res.string.phrase_item_move_down)
 
     val bgColor = item.backgroundColor?.let { try { parseHexToColor(it) } catch (_: Throwable) { MaterialTheme.colorScheme.surface } } ?: MaterialTheme.colorScheme.surface
 
@@ -96,20 +105,20 @@ fun PhraseGridItem(
                             modifier = Modifier.align(Alignment.TopEnd)
                         ) {
                             if (!readOnly) {
-                                DropdownMenuItem(text = { Text("Edit") }, onClick = {
+                                DropdownMenuItem(text = { Text(editLabel) }, onClick = {
                                     showMenu = false
                                     try { onLongPress() } catch (_: Throwable) {}
                                 })
                             }
                             // secondary language speak option
                             if (onSpeakSecondary != null && !readOnly) {
-                                DropdownMenuItem(text = { Text("Speak (secondary)") }, onClick = {
+                                DropdownMenuItem(text = { Text(speakSecondaryLabel) }, onClick = {
                                     showMenu = false
                                     try { onSpeakSecondary.invoke() } catch (_: Throwable) {}
                                 })
                             }
                             if (onDelete != null && !readOnly) {
-                                DropdownMenuItem(text = { Text("Delete") }, onClick = {
+                                DropdownMenuItem(text = { Text(deleteLabel) }, onClick = {
                                     showMenu = false
                                     try { onDelete.invoke() } catch (_: Throwable) {}
                                 })
@@ -117,13 +126,13 @@ fun PhraseGridItem(
                             // Copy/share audio file if available
                             val audioPath = item.recordingPath
                             if (!audioPath.isNullOrBlank() && onCopyAudio != null) {
-                                DropdownMenuItem(text = { Text("Copy soundfile") }, onClick = {
+                                DropdownMenuItem(text = { Text(copySoundfileLabel) }, onClick = {
                                     showMenu = false
                                     try { onCopyAudio.invoke(audioPath) } catch (_: Throwable) {}
                                 })
                             }
                             if (!audioPath.isNullOrBlank()) {
-                                DropdownMenuItem(text = { Text("Share soundfile") }, onClick = {
+                                DropdownMenuItem(text = { Text(shareSoundfileLabel) }, onClick = {
                                     showMenu = false
                                     runCatching {
                                         shareService?.shareAudio(audioPath)
@@ -143,8 +152,21 @@ fun PhraseGridItem(
                                 .padding(4.dp)
                         )
                     }
-                    // wiggle rotation applied to content
-                    val rotation = if (isEditMode) (angle.value - 0.5f) * 6f else 0f
+                    // Only allocate and drive the infinite animation while edit mode is active.
+                    val rotation = if (isEditMode) {
+                        val infiniteTransition = rememberInfiniteTransition()
+                        val angle by infiniteTransition.animateFloat(
+                            initialValue = -3f,
+                            targetValue = 3f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(durationMillis = 300, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            )
+                        )
+                        angle
+                    } else {
+                        0f
+                    }
             Box(modifier = Modifier
                 .align(Alignment.Center)
                 .fillMaxSize()
@@ -203,14 +225,14 @@ fun PhraseGridItem(
                 // Show material-style move up / move down / delete buttons
                 Column(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) {
                     IconButton(onClick = { if (index > 0) onMove?.invoke(index, index - 1) }) {
-                        Icon(imageVector = Icons.Filled.ArrowDropUp, contentDescription = "Move up", tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(imageVector = Icons.Filled.ArrowDropUp, contentDescription = moveUpLabel, tint = MaterialTheme.colorScheme.onSurface)
                     }
                     IconButton(onClick = { if (index < total - 1) onMove?.invoke(index, index + 1) }) {
-                        Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = "Move down", tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = moveDownLabel, tint = MaterialTheme.colorScheme.onSurface)
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     IconButton(onClick = { onDelete?.invoke() }) {
-                        Icon(imageVector = Icons.Filled.Close, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(imageVector = Icons.Filled.Close, contentDescription = deleteLabel, tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }

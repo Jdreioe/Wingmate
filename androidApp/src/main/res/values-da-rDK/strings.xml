@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Wingmate</string>
+
+    <string name="language">Sprog</string>
+    <string name="select_voice">Vaelg stemme</string>
+    <string name="search_voices">Soeg stemmer</string>
+    <string name="filter_languages">Filtrer sprog</string>
+    <string name="all_languages">Alle sprog</string>
+    <string name="gender">Koen</string>
+    <string name="showing_voices">Viser %1$d af %2$d stemmer</string>
+    <string name="no_system_voices_match">Ingen systemstemmer matcher de aktuelle filtre</string>
+    <string name="no_azure_voices_match">Ingen Azure-stemmer matcher de aktuelle filtre</string>
+    <string name="close">Luk</string>
+</resources>

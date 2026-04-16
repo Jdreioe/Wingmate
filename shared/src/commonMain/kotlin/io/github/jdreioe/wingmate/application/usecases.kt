@@ -22,17 +22,36 @@ class PhraseUseCase(private val repo: PhraseRepository) {
     }
 }
 
-class CategoryUseCase(private val repo: io.github.jdreioe.wingmate.domain.CategoryRepository) {
+class CategoryUseCase(
+    private val repo: io.github.jdreioe.wingmate.domain.CategoryRepository,
+    private val featureUsageReporter: FeatureUsageReporter
+) {
     suspend fun list(): List<io.github.jdreioe.wingmate.domain.CategoryItem> = repo.getAll()
-    suspend fun add(category: io.github.jdreioe.wingmate.domain.CategoryItem): io.github.jdreioe.wingmate.domain.CategoryItem = repo.add(category)
+    suspend fun add(category: io.github.jdreioe.wingmate.domain.CategoryItem): io.github.jdreioe.wingmate.domain.CategoryItem {
+        val added = repo.add(category)
+        featureUsageReporter.reportEvent(
+            FeatureUsageEvents.CATEGORY_ADDED,
+            "has_name" to (!added.name.isNullOrBlank()).toString()
+        )
+        return added
+    }
     suspend fun update(category: io.github.jdreioe.wingmate.domain.CategoryItem): io.github.jdreioe.wingmate.domain.CategoryItem = repo.update(category)
     suspend fun delete(id: String) {
         println("[DEBUG] CategoryUseCase.delete() deleting category with id: $id")
         repo.delete(id)
+        featureUsageReporter.reportEvent(
+            FeatureUsageEvents.CATEGORY_DELETED,
+            "source" to "category_use_case"
+        )
     }
     suspend fun move(fromIndex: Int, toIndex: Int) {
         println("[DEBUG] CategoryUseCase.move() moving category from index $fromIndex to $toIndex")
         repo.move(fromIndex, toIndex)
+        featureUsageReporter.reportEvent(
+            FeatureUsageEvents.CATEGORY_MOVED,
+            "from_index" to fromIndex.toString(),
+            "to_index" to toIndex.toString()
+        )
     }
 }
 
@@ -56,17 +75,28 @@ class VoiceUseCase(
     private val repo: VoiceRepository,
     private val azure: AzureVoiceCatalog,
     private val configRepo: ConfigRepository,
+    private val featureUsageReporter: FeatureUsageReporter
 ) {
     suspend fun list(): List<Voice> = repo.getVoices()
     suspend fun selected(): Voice? = repo.getSelected()
     suspend fun select(voice: Voice) {
         try { println("DEBUG: VoiceUseCase.select() called for '${voice.name}' selectedLang='${voice.selectedLanguage}'") } catch (_: Throwable) {}
         repo.saveSelected(voice)
+        featureUsageReporter.reportEvent(
+            FeatureUsageEvents.VOICE_SELECTED,
+            "provider" to if (voice.name?.contains("Neural", ignoreCase = true) == true) "azure" else "system",
+            "primary_language" to voice.primaryLanguage,
+            "selected_language" to voice.selectedLanguage
+        )
     }
     suspend fun refreshFromAzure(): List<Voice> {
         val list = azure.list()
         // Cache list for offline/next launch
         repo.saveVoices(list)
+        featureUsageReporter.reportEvent(
+            FeatureUsageEvents.VOICE_REFRESHED,
+            "count" to list.size.toString()
+        )
         return list
     }
 }

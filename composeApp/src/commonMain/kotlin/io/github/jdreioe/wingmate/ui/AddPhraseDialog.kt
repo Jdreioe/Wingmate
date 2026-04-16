@@ -3,6 +3,8 @@ package io.github.jdreioe.wingmate.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -28,7 +30,45 @@ import io.github.jdreioe.wingmate.ui.parseHexToColor
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
+import io.github.jdreioe.wingmate.domain.PhraseRecordingService
+import io.github.jdreioe.wingmate.domain.SpeechService
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.color_picker_brightness
+import wingmatekmp.composeapp.generated.resources.color_picker_title
+import wingmatekmp.composeapp.generated.resources.common_cancel
+import wingmatekmp.composeapp.generated.resources.common_clear
+import wingmatekmp.composeapp.generated.resources.common_delete
+import wingmatekmp.composeapp.generated.resources.common_no_name
+import wingmatekmp.composeapp.generated.resources.common_ok
+import wingmatekmp.composeapp.generated.resources.common_save
+import wingmatekmp.composeapp.generated.resources.phrase_add_title
+import wingmatekmp.composeapp.generated.resources.phrase_belongs_to_category
+import wingmatekmp.composeapp.generated.resources.phrase_clear_button
+import wingmatekmp.composeapp.generated.resources.phrase_clear_image_cd
+import wingmatekmp.composeapp.generated.resources.phrase_color_label
+import wingmatekmp.composeapp.generated.resources.phrase_edit_title
+import wingmatekmp.composeapp.generated.resources.phrase_image_label
+import wingmatekmp.composeapp.generated.resources.phrase_new_text_label
+import wingmatekmp.composeapp.generated.resources.phrase_none
+import wingmatekmp.composeapp.generated.resources.phrase_open_symbols
+import wingmatekmp.composeapp.generated.resources.phrase_pick_color
+import wingmatekmp.composeapp.generated.resources.phrase_pick_file
+import wingmatekmp.composeapp.generated.resources.phrase_play_button
+import wingmatekmp.composeapp.generated.resources.phrase_record_button
+import wingmatekmp.composeapp.generated.resources.phrase_record_hint
+import wingmatekmp.composeapp.generated.resources.phrase_recording_finalize_failed
+import wingmatekmp.composeapp.generated.resources.phrase_recording_in_progress
+import wingmatekmp.composeapp.generated.resources.phrase_recording_label
+import wingmatekmp.composeapp.generated.resources.phrase_recording_play_failed
+import wingmatekmp.composeapp.generated.resources.phrase_recording_start_failed
+import wingmatekmp.composeapp.generated.resources.phrase_recording_unavailable
+import wingmatekmp.composeapp.generated.resources.phrase_replace_button
+import wingmatekmp.composeapp.generated.resources.phrase_select_image_title
+import wingmatekmp.composeapp.generated.resources.phrase_stop_button
+import wingmatekmp.composeapp.generated.resources.phrase_use_color
+import wingmatekmp.composeapp.generated.resources.phrase_vocalization_label
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +83,9 @@ fun AddPhraseDialog(
     var text by remember { mutableStateOf(initialPhrase?.text ?: "") }
     var altText by remember { mutableStateOf(initialPhrase?.name ?: "") }
     var imageUrl by remember { mutableStateOf(initialPhrase?.imageUrl ?: "") }
+    var recordingPath by remember { mutableStateOf(initialPhrase?.recordingPath.orEmpty()) }
+    var recordingInProgress by remember { mutableStateOf(false) }
+    var recordingError by remember { mutableStateOf<String?>(null) }
     var selectedColor by remember { mutableStateOf(initialPhrase?.backgroundColor?.let { parseHexToColor(it) } ?: Color.Blue) }
     var useColor by remember { mutableStateOf(initialPhrase?.backgroundColor != null) }
     var hue by remember { mutableStateOf(0f) }
@@ -60,34 +103,55 @@ fun AddPhraseDialog(
     val imageCacher = remember(koin) {
         koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.ImageCacher>()
     }
+    val recordingService = remember(koin) {
+        koin.getOrNull<PhraseRecordingService>()
+    }
+    val speechService = remember(koin) {
+        koin.getOrNull<SpeechService>()
+    }
+    val scope = rememberCoroutineScope()
+    val recordingHintFallback = stringResource(Res.string.phrase_record_hint)
+    val recordingUnavailable = stringResource(Res.string.phrase_recording_unavailable)
+    val recordingStartFailed = stringResource(Res.string.phrase_recording_start_failed)
+    val recordingFinalizeFailed = stringResource(Res.string.phrase_recording_finalize_failed)
+    val recordingPlayFailed = stringResource(Res.string.phrase_recording_play_failed)
+    val selectImageTitle = stringResource(Res.string.phrase_select_image_title)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initialPhrase == null) "Add New Phrase" else "Edit Phrase") },
+        title = {
+            Text(
+                if (initialPhrase == null) {
+                    stringResource(Res.string.phrase_add_title)
+                } else {
+                    stringResource(Res.string.phrase_edit_title)
+                }
+            )
+        },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            val scrollState = rememberScrollState()
+            Column(modifier = Modifier.fillMaxWidth().verticalScroll(scrollState)) {
                 val showKeyboard = rememberShowKeyboardOnFocus()
                 OutlinedTextField(
                     value = altText,
                     onValueChange = { altText = it },
-                    label = { Text("Vocalization (what to speak)") },
+                    label = { Text(stringResource(Res.string.phrase_vocalization_label)) },
                     modifier = Modifier.fillMaxWidth().then(showKeyboard)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    label = { Text("New phrase text") },
+                    label = { Text(stringResource(Res.string.phrase_new_text_label)) },
                     modifier = Modifier.fillMaxWidth().then(showKeyboard)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 // Image selection
                 var showSymbolSearch by remember { mutableStateOf(false) }
-                val scope = rememberCoroutineScope()
                 
                 Column {
-                    Text("Image", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(Res.string.phrase_image_label), style = MaterialTheme.typography.labelMedium)
                     Spacer(modifier = Modifier.height(4.dp))
                     
                     if (imageUrl.isNotBlank()) {
@@ -100,7 +164,7 @@ fun AddPhraseDialog(
                                 maxLines = 1
                             )
                             IconButton(onClick = { imageUrl = "" }) {
-                                Icon(Icons.Filled.Close, "Clear image")
+                                Icon(Icons.Filled.Close, stringResource(Res.string.phrase_clear_image_cd))
                             }
                         }
                     }
@@ -111,7 +175,7 @@ fun AddPhraseDialog(
                             OutlinedButton(
                                 onClick = {
                                     scope.launch {
-                                        val picked = filePicker.pickFile("Select Image", listOf("png", "jpg", "jpeg", "svg"))
+                                        val picked = filePicker.pickFile(selectImageTitle, listOf("png", "jpg", "jpeg", "svg"))
                                         if (picked != null) {
                                             // Ensure file protocol for local files
                                             imageUrl = if (picked.startsWith("http")) picked else "file://$picked"
@@ -120,7 +184,7 @@ fun AddPhraseDialog(
                                 },
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("Pick File")
+                                Text(stringResource(Res.string.phrase_pick_file))
                             }
                         }
                         
@@ -129,7 +193,7 @@ fun AddPhraseDialog(
                             onClick = { showSymbolSearch = true },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("OpenSymbols")
+                            Text(stringResource(Res.string.phrase_open_symbols))
                         }
                     }
                 }
@@ -153,10 +217,127 @@ fun AddPhraseDialog(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
 
+                val canRecord = recordingService?.isSupported == true
+                if (canRecord || recordingPath.isNotBlank()) {
+                    Column {
+                        Text(stringResource(Res.string.phrase_recording_label), style = MaterialTheme.typography.labelMedium)
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        if (recordingPath.isNotBlank()) {
+                            Text(
+                                text = recordingPath.takeLast(40).let { if (recordingPath.length > 40) "...$it" else it },
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (canRecord && !recordingInProgress) {
+                                OutlinedButton(
+                                    onClick = {
+                                        scope.launch {
+                                            recordingError = null
+                                            val hint = initialPhrase?.id ?: text.ifBlank { altText }.ifBlank { recordingHintFallback }
+                                            val result = recordingService?.startRecording(hint)
+                                            if (result == null) {
+                                                recordingError = recordingUnavailable
+                                                return@launch
+                                            }
+                                            result
+                                                .onSuccess { recordingInProgress = true }
+                                                .onFailure {
+                                                    recordingInProgress = false
+                                                    recordingError = it.message ?: recordingStartFailed
+                                                }
+                                        }
+                                    }
+                                ) {
+                                    Text(
+                                        if (recordingPath.isBlank()) {
+                                            stringResource(Res.string.phrase_record_button)
+                                        } else {
+                                            stringResource(Res.string.phrase_replace_button)
+                                        }
+                                    )
+                                }
+                            }
+
+                            if (canRecord && recordingInProgress) {
+                                OutlinedButton(
+                                    onClick = {
+                                        scope.launch {
+                                            recordingError = null
+                                            val result = recordingService?.stopRecording()
+                                            recordingInProgress = false
+                                            if (result == null) {
+                                                recordingError = recordingUnavailable
+                                                return@launch
+                                            }
+                                            result
+                                                .onSuccess { path -> recordingPath = path }
+                                                .onFailure {
+                                                    recordingError = it.message ?: recordingFinalizeFailed
+                                                }
+                                        }
+                                    }
+                                ) {
+                                    Text(stringResource(Res.string.phrase_stop_button))
+                                }
+                            }
+
+                            if (recordingPath.isNotBlank()) {
+                                OutlinedButton(
+                                    onClick = {
+                                        scope.launch {
+                                            recordingError = null
+                                            val played = runCatching {
+                                                speechService?.speakRecordedAudio(
+                                                    audioFilePath = recordingPath,
+                                                    textForHistory = altText.trim().ifBlank { text.trim() }
+                                                )
+                                            }.getOrNull() == true
+                                            if (!played) {
+                                                recordingError = recordingPlayFailed
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Text(stringResource(Res.string.phrase_play_button))
+                                }
+
+                                OutlinedButton(onClick = {
+                                    recordingPath = ""
+                                    recordingError = null
+                                }) {
+                                    Text(stringResource(Res.string.phrase_clear_button))
+                                }
+                            }
+                        }
+
+                        if (recordingInProgress) {
+                            Text(
+                                text = stringResource(Res.string.phrase_recording_in_progress),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        recordingError?.let { message ->
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 // Color preview + nested color picker dialog trigger
                 var showColorDialog by remember { mutableStateOf(false) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Color", modifier = Modifier.weight(1f))
+                    Text(stringResource(Res.string.phrase_color_label), modifier = Modifier.weight(1f))
                     Spacer(modifier = Modifier.width(8.dp))
                     // preview
                     Box(modifier = Modifier
@@ -166,11 +347,11 @@ fun AddPhraseDialog(
                         .border(width = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f), shape = CircleShape))
                     Spacer(modifier = Modifier.width(8.dp))
                     if (useColor) {
-                        TextButton(onClick = { showColorDialog = true }) { Text("Pick color") }
+                        TextButton(onClick = { showColorDialog = true }) { Text(stringResource(Res.string.phrase_pick_color)) }
                         Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = { useColor = false }) { Text("None") }
+                        TextButton(onClick = { useColor = false }) { Text(stringResource(Res.string.phrase_none)) }
                     } else {
-                        TextButton(onClick = { useColor = true; showColorDialog = true }) { Text("Use color") }
+                        TextButton(onClick = { useColor = true; showColorDialog = true }) { Text(stringResource(Res.string.phrase_use_color)) }
                     }
                 }
                 if (showColorDialog) {
@@ -201,7 +382,7 @@ fun AddPhraseDialog(
                         OutlinedTextField(
                             value = selectedCategory?.name ?: "",
                             onValueChange = {},
-                            label = { Text("Belongs to category") },
+                            label = { Text(stringResource(Res.string.phrase_belongs_to_category)) },
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                             modifier = Modifier
@@ -214,7 +395,7 @@ fun AddPhraseDialog(
                         ) {
                             categories.forEach { cat ->
                                 DropdownMenuItem(
-                                    text = { Text(cat.name ?: "No Name") },
+                                    text = { Text(cat.name ?: stringResource(Res.string.common_no_name)) },
                                     onClick = {
                                         selectedCategory = cat
                                         expanded = false
@@ -229,37 +410,86 @@ fun AddPhraseDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                // Normalize to six-digit RRGGBB hex string (lowercase) or null when disabled
-                val hex = if (useColor) String.format("%06X", (selectedColor.toArgb() and 0xFFFFFF)).lowercase() else null
-                
-                val finalVocalization = altText.trim().ifEmpty { null }
-                // If Label (text) is empty, default to Vocalization (altText/finalVocalization) if available
-                val finalLabel = text.trim().ifEmpty { finalVocalization ?: "" }
-                
-                val phrase = Phrase(
-                    id = initialPhrase?.id ?: java.util.UUID.randomUUID().toString(),
-                    text = finalLabel,
-                    name = finalVocalization,
-                    backgroundColor = hex,
-                    imageUrl = imageUrl.trim().ifEmpty { null },
-                    parentId = selectedCategory?.id,
-                    createdAt = initialPhrase?.createdAt ?: System.currentTimeMillis()
-                )
-                onSave(phrase)
-                onDismiss()
+                scope.launch {
+                    recordingError = null
+
+                    var finalRecordingPath: String? = recordingPath.trim().ifEmpty { null }
+                    if (recordingInProgress) {
+                        val stopResult = recordingService?.stopRecording()
+                        recordingInProgress = false
+                        if (stopResult == null) {
+                            recordingError = recordingUnavailable
+                            return@launch
+                        }
+                        stopResult
+                            .onSuccess { path ->
+                                finalRecordingPath = path
+                                recordingPath = path
+                            }
+                            .onFailure {
+                                recordingError = it.message ?: recordingFinalizeFailed
+                                return@launch
+                            }
+                    }
+
+                    // Normalize to six-digit RRGGBB hex string (lowercase) or null when disabled
+                    val hex = if (useColor) String.format("%06X", (selectedColor.toArgb() and 0xFFFFFF)).lowercase() else null
+
+                    val finalVocalization = altText.trim().ifEmpty { null }
+                    // If Label (text) is empty, default to Vocalization (altText/finalVocalization) if available
+                    val finalLabel = text.trim().ifEmpty { finalVocalization ?: "" }
+
+                    val phrase = if (initialPhrase != null) {
+                        initialPhrase.copy(
+                            text = finalLabel,
+                            name = finalVocalization,
+                            backgroundColor = hex,
+                            imageUrl = imageUrl.trim().ifEmpty { null },
+                            parentId = selectedCategory?.id,
+                            recordingPath = finalRecordingPath
+                        )
+                    } else {
+                        Phrase(
+                            id = java.util.UUID.randomUUID().toString(),
+                            text = finalLabel,
+                            name = finalVocalization,
+                            backgroundColor = hex,
+                            imageUrl = imageUrl.trim().ifEmpty { null },
+                            parentId = selectedCategory?.id,
+                            createdAt = System.currentTimeMillis(),
+                            recordingPath = finalRecordingPath
+                        )
+                    }
+                    onSave(phrase)
+                    onDismiss()
+                }
             }) {
-                Text("Save")
+                Text(stringResource(Res.string.common_save))
             }
         },
         dismissButton = {
             Row {
                 if (initialPhrase != null && onDelete != null) {
                     TextButton(onClick = {
-                        onDelete(initialPhrase.id)
-                        onDismiss()
-                    }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                        scope.launch {
+                            if (recordingInProgress) {
+                                runCatching { recordingService?.stopRecording() }
+                                recordingInProgress = false
+                            }
+                            onDelete(initialPhrase.id)
+                            onDismiss()
+                        }
+                    }) { Text(stringResource(Res.string.common_delete), color = MaterialTheme.colorScheme.error) }
                 }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = {
+                    scope.launch {
+                        if (recordingInProgress) {
+                            runCatching { recordingService?.stopRecording() }
+                            recordingInProgress = false
+                        }
+                        onDismiss()
+                    }
+                }) { Text(stringResource(Res.string.common_cancel)) }
             }
         }
     )
@@ -322,23 +552,23 @@ fun ColorPickerDialog(initialColor: Color = Color.Blue, initialUse: Boolean = tr
         tempColor = hsvToColor(hue, 1f, value)
     }
 
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Pick color") }, text = {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(Res.string.color_picker_title)) }, text = {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             ColorWheel(hue = hue, value = value, onHueChange = { h -> hue = h; tempColor = hsvToColor(h, 1f, value) }, modifier = Modifier.size(200.dp))
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Bright", style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(Res.string.color_picker_brightness), style = MaterialTheme.typography.labelSmall)
                 Slider(value = value, onValueChange = { v -> value = v; tempColor = hsvToColor(hue, 1f, v) }, valueRange = 0.1f..1f, modifier = Modifier.width(180.dp))
             }
             Spacer(modifier = Modifier.height(8.dp))
             Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(tempColor))
         }
     }, confirmButton = {
-        TextButton(onClick = { onPick(tempColor) }) { Text("OK") }
+        TextButton(onClick = { onPick(tempColor) }) { Text(stringResource(Res.string.common_ok)) }
     }, dismissButton = {
         Row {
-            TextButton(onClick = { onPick(null) }) { Text("Clear") }
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = { onPick(null) }) { Text(stringResource(Res.string.common_clear)) }
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
         }
     })
 }

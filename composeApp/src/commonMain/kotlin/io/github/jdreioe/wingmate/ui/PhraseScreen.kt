@@ -45,6 +45,9 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.*
+import io.github.jdreioe.wingmate.application.FeatureUsageEvents
+import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.PhraseBloc
 import io.github.jdreioe.wingmate.application.PhraseEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -59,14 +62,44 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.common_language
+import wingmatekmp.composeapp.generated.resources.phrase_screen_app_settings
+import wingmatekmp.composeapp.generated.resources.phrase_screen_boardset_manager
+import wingmatekmp.composeapp.generated.resources.phrase_screen_check_updates
+import wingmatekmp.composeapp.generated.resources.phrase_screen_close_board
+import wingmatekmp.composeapp.generated.resources.phrase_screen_copy_last_soundfile
+import wingmatekmp.composeapp.generated.resources.phrase_screen_enter_text_placeholder
+import wingmatekmp.composeapp.generated.resources.phrase_screen_error
+import wingmatekmp.composeapp.generated.resources.phrase_screen_import_board
+import wingmatekmp.composeapp.generated.resources.phrase_screen_import_export_data
+import wingmatekmp.composeapp.generated.resources.phrase_screen_loading
+import wingmatekmp.composeapp.generated.resources.phrase_screen_load_sample_board
+import wingmatekmp.composeapp.generated.resources.phrase_screen_menu_cd
+import wingmatekmp.composeapp.generated.resources.phrase_screen_pronunciation_dictionary
+import wingmatekmp.composeapp.generated.resources.phrase_screen_select_board_title
+import wingmatekmp.composeapp.generated.resources.phrase_screen_share_last_soundfile
+import wingmatekmp.composeapp.generated.resources.phrase_screen_ssml_controls
+import wingmatekmp.composeapp.generated.resources.phrase_screen_toggle_fullscreen_cd
+import wingmatekmp.composeapp.generated.resources.phrase_screen_voice_settings
+import wingmatekmp.composeapp.generated.resources.phrase_screen_welcome_screen
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
-fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
+fun PhraseScreen(
+    onBackToWelcome: (() -> Unit)? = null,
+    onOpenBoardSetManager: (() -> Unit)? = null,
+    initialBoardId: String? = null
+) {
     val koin = getKoin()
     val bloc = koinInject<PhraseBloc>()
+    val featureUsageReporter = koinInject<FeatureUsageReporter>()
     val state by bloc.state.collectAsStateWithLifecycle()
 
     // Ensure initial list loads on first composition
@@ -98,8 +131,8 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
     var showDictionaryScreen by remember { mutableStateOf(false) }
     var showSettingsExportDialog by remember { mutableStateOf(false) }
     var showSsmlDialog by remember { mutableStateOf(false) }
-    var showOverflow by remember { mutableStateOf(false) }
-    // fullscreen state managed via DisplayWindowBus; no local state needed
+    val showFullscreen by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsStateWithLifecycle()
+    val selectBoardDialogTitle = stringResource(Res.string.phrase_screen_select_board_title)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         // Load persisted primary language for display in top bar
@@ -115,16 +148,28 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             val refocusInput = remember(textFieldFocusRequester) {
                 { textFieldFocusRequester.requestFocus() }
             }
+            val syncDisplayText = remember(showFullscreen) {
+                { text: String ->
+                    if (showFullscreen) {
+                        io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(text)
+                    }
+                }
+            }
             var predictions by remember { mutableStateOf(PredictionResult()) }
 
             // Speech service state tracking
-            var isSpeechPaused by remember { mutableStateOf(false) }
+            var isSpeechPaused by remember(speechService) { mutableStateOf(speechService.isPaused()) }
 
-            // Update speech state periodically
-            LaunchedEffect(Unit) {
+            // Polling this every 500ms caused avoidable background wakeups while typing.
+            // Keep it infrequent and let control actions update state immediately.
+            LaunchedEffect(speechService) {
                 while (true) {
-                    isSpeechPaused = speechService.isPaused()
-                    kotlinx.coroutines.delay(500) // Check every 500ms
+                    val paused = speechService.isPaused()
+                    if (paused != isSpeechPaused) {
+                        isSpeechPaused = paused
+                    }
+                    val pollDelay = if (speechService.isPlaying()) 1000L else 4000L
+                    kotlinx.coroutines.delay(pollDelay)
                 }
             }
 
@@ -144,6 +189,17 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             // Extracted images from OBZ (path -> bytes)
             var extractedImages by remember { mutableStateOf<Map<String, ByteArray>>(emptyMap()) }
 
+            LaunchedEffect(initialBoardId, boardRepo) {
+                if (initialBoardId.isNullOrBlank()) return@LaunchedEffect
+                val board = withContext(Dispatchers.IO) { boardRepo.getBoard(initialBoardId) }
+                if (board != null) {
+                    currentBoard = board
+                    boardsMap = mapOf(board.id to board)
+                    boardStack = emptyList()
+                    extractedImages = emptyMap()
+                }
+            }
+
             // Track model version to re-trigger predictions when training finishes
             var predictionModelVersion by remember { mutableStateOf(0) }
 
@@ -152,7 +208,6 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
             LaunchedEffect(saidRepo, primaryLanguageState.value) {
                 try {
                     val list = saidRepo.list()
-                    println("DEBUG: Loaded ${list.size} history entries for prediction training")
                     historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L }
                     
                     // Train prediction model: first load base language dictionary, then user history
@@ -173,76 +228,110 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         }
                         
                         predictionModelVersion++ // Trigger update
-                        println("DEBUG: Prediction model trained, isTrained=${ngramService.isTrained()}")
                     } else if (predictionService != null) {
                         predictionService.train(list)
                         predictionModelVersion++
-                        println("DEBUG: Prediction model trained (non-ngram service)")
-                    } else {
-                        println("DEBUG: No prediction service available")
                     }
                 } catch (e: Throwable) {
-                    println("DEBUG: Error loading history: ${e.message}")
-                    e.printStackTrace()
                     historyItems = emptyList()
                 }
             }
             
-            // Update predictions as user types or model retrains
-            LaunchedEffect(input.text, predictionModelVersion) {
+            // Update predictions as user types or model retrains.
+            // Debounce + minimum token length avoids running n-gram inference on every keypress.
+            LaunchedEffect(predictionService, predictionModelVersion) {
                 if (predictionService == null || !predictionService.isTrained()) {
                     predictions = PredictionResult()
                     return@LaunchedEffect
                 }
-                // Small debounce to avoid excessive calls
-                delay(100)
-                predictions = predictionService.predict(input.text, maxWords = 5, maxLetters = 4)
+
+                snapshotFlow { input.text }
+                    .debounce(250)
+                    .distinctUntilChanged()
+                    .collectLatest { currentText ->
+                        val activeTokenLength = currentText
+                            .trimEnd()
+                            .substringAfterLast(' ', "")
+                            .length
+
+                        val shouldPredict = currentText.isNotBlank() &&
+                            (currentText.lastOrNull() == ' ' || activeTokenLength >= 2)
+
+                        if (!shouldPredict) {
+                            predictions = PredictionResult()
+                            return@collectLatest
+                        }
+
+                        predictions = predictionService.predict(currentText, maxWords = 5, maxLetters = 4)
+                    }
             }
 
 
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 topBar = {
+                    var showOverflow by remember { mutableStateOf(false) }
                     TopAppBar(
                         title = { Text("Wingmate", style = MaterialTheme.typography.titleLarge.copy(
                             fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
                         )) },
                         actions = {
                             // Fullscreen toggle: mirrors the current input text
-                            val showFullscreen by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsStateWithLifecycle()
                             IconButton(onClick = {
                                 // Always mirror current text first
                                 io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(input.text)
                                 // Toggle the window state so it can be reopened reliably
                                 if (showFullscreen) io.github.jdreioe.wingmate.presentation.DisplayWindowBus.close()
                                 else io.github.jdreioe.wingmate.presentation.DisplayWindowBus.open()
-                            }) { Icon(imageVector = Icons.Filled.Fullscreen, contentDescription = "Toggle fullscreen") }
+                                featureUsageReporter.reportEvent(
+                                    FeatureUsageEvents.FULLSCREEN_TOGGLE,
+                                    "enabled" to (!showFullscreen).toString()
+                                )
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Fullscreen,
+                                    contentDescription = stringResource(Res.string.phrase_screen_toggle_fullscreen_cd)
+                                )
+                            }
 
                             // Overflow menu for the rest of actions
                             IconButton(onClick = { showOverflow = true }) {
-                                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Menu")
+                                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.phrase_screen_menu_cd))
                             }
                             DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
                                 // === VOICE & SPEECH ===
                                 DropdownMenuItem(
-                                    text = { Text("Language: " + (selectedVoiceState.value?.selectedLanguage?.takeIf { it.isNotBlank() }
-                                        ?: primaryLanguageState.value), style = MaterialTheme.typography.bodyMedium) },
+                                    text = { Text(stringResource(Res.string.common_language), style = MaterialTheme.typography.bodyMedium) },
                                     onClick = { showOverflow = false; showUiLanguageDialog = true }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Voice settings", style = MaterialTheme.typography.bodyMedium) },
-                                    onClick = { showOverflow = false; showVoiceSelection = true }
+                                    text = { Text(stringResource(Res.string.phrase_screen_voice_settings), style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = {
+                                        showOverflow = false
+                                        showVoiceSelection = true
+                                        featureUsageReporter.reportEvent(
+                                            FeatureUsageEvents.SETTINGS_UPDATED,
+                                            "action" to "open_voice_settings"
+                                        )
+                                    }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Pronunciation dictionary", style = MaterialTheme.typography.bodyMedium) },
-                                    onClick = { showOverflow = false; showDictionaryScreen = true }
+                                    text = { Text(stringResource(Res.string.phrase_screen_pronunciation_dictionary), style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = {
+                                        showOverflow = false
+                                        showDictionaryScreen = true
+                                        featureUsageReporter.reportEvent(
+                                            FeatureUsageEvents.SETTINGS_UPDATED,
+                                            "action" to "open_pronunciation_dictionary"
+                                        )
+                                    }
                                 )
                                 
                                 Divider()
                                 
                                 // === AUDIO FILES ===
                                 DropdownMenuItem(
-                                    text = { Text("Copy last soundfile", style = MaterialTheme.typography.bodyMedium) },
+                                    text = { Text(stringResource(Res.string.phrase_screen_copy_last_soundfile), style = MaterialTheme.typography.bodyMedium) },
                                     onClick = {
                                         showOverflow = false
                                         uiScope.launch(Dispatchers.IO) {
@@ -259,7 +348,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Share last soundfile", style = MaterialTheme.typography.bodyMedium) },
+                                    text = { Text(stringResource(Res.string.phrase_screen_share_last_soundfile), style = MaterialTheme.typography.bodyMedium) },
                                     onClick = {
                                         showOverflow = false
                                         uiScope.launch(Dispatchers.IO) {
@@ -280,17 +369,35 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 
                                 // === APP SETTINGS ===
                                 DropdownMenuItem(
-                                    text = { Text("App settings", style = MaterialTheme.typography.bodyMedium) },
-                                    onClick = { showOverflow = false; showSettingsDialog = true }
+                                    text = { Text(stringResource(Res.string.phrase_screen_app_settings), style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = {
+                                        showOverflow = false
+                                        showSettingsDialog = true
+                                        featureUsageReporter.reportEvent(
+                                            FeatureUsageEvents.SETTINGS_UPDATED,
+                                            "action" to "open_app_settings"
+                                        )
+                                    }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Import/Export Data", style = MaterialTheme.typography.bodyMedium) },
-                                    onClick = { showOverflow = false; showSettingsExportDialog = true }
+                                    text = { Text(stringResource(Res.string.phrase_screen_import_export_data), style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = {
+                                        showOverflow = false
+                                        showSettingsExportDialog = true
+                                        featureUsageReporter.reportEvent(
+                                            FeatureUsageEvents.SETTINGS_UPDATED,
+                                            "action" to "open_import_export"
+                                        )
+                                    }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Check for updates", style = MaterialTheme.typography.bodyMedium) },
+                                    text = { Text(stringResource(Res.string.phrase_screen_check_updates), style = MaterialTheme.typography.bodyMedium) },
                                     onClick = { 
                                         showOverflow = false
+                                        featureUsageReporter.reportEvent(
+                                            FeatureUsageEvents.SETTINGS_UPDATED,
+                                            "action" to "check_updates"
+                                        )
                                         if (updateService != null) {
                                             uiScope.launch(Dispatchers.IO) {
                                                 runCatching { updateService.checkForUpdates() }
@@ -299,15 +406,42 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Welcome screen", style = MaterialTheme.typography.bodyMedium) },
-                                    onClick = { showOverflow = false; onBackToWelcome?.invoke() }
+                                    text = { Text(stringResource(Res.string.phrase_screen_welcome_screen), style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = {
+                                        showOverflow = false
+                                        featureUsageReporter.reportEvent(
+                                            FeatureUsageEvents.SCREEN_VIEW,
+                                            "screen" to "welcome"
+                                        )
+                                        onBackToWelcome?.invoke()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(Res.string.phrase_screen_boardset_manager), style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = {
+                                        showOverflow = false
+                                        featureUsageReporter.reportEvent(
+                                            FeatureUsageEvents.SCREEN_VIEW,
+                                            "screen" to "boardsets"
+                                        )
+                                        onOpenBoardSetManager?.invoke()
+                                    }
                                 )
                                 
                                 Divider()
 
                                 if (enableObfObzImport) {
                                     DropdownMenuItem(
-                                        text = { Text(if (currentBoard == null) "Load Sample Board" else "Close Board", style = MaterialTheme.typography.bodyMedium) },
+                                        text = {
+                                            Text(
+                                                if (currentBoard == null) {
+                                                    stringResource(Res.string.phrase_screen_load_sample_board)
+                                                } else {
+                                                    stringResource(Res.string.phrase_screen_close_board)
+                                                },
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        },
                                         onClick = { 
                                             showOverflow = false
                                             if (currentBoard == null) {
@@ -334,6 +468,10 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                                         val board = boardRes.getOrThrow()
                                                         boardRepo.saveBoard(board)
                                                         currentBoard = board
+                                                        featureUsageReporter.reportEvent(
+                                                            FeatureUsageEvents.BOARD_IMPORT_COMPLETED,
+                                                            "mode" to "sample_board"
+                                                        )
                                                     }
                                                 }
                                             } else {
@@ -342,14 +480,18 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Import OBF/OBZ Board...", style = MaterialTheme.typography.bodyMedium) },
+                                        text = { Text(stringResource(Res.string.phrase_screen_import_board), style = MaterialTheme.typography.bodyMedium) },
                                         onClick = { 
                                             showOverflow = false
                                             uiScope.launch(Dispatchers.IO) {
                                                 if (filePicker != null) {
-                                                    val path = filePicker.pickFile("Select OBF/OBZ Board", listOf("obf", "obz", "json"))
+                                                    val path = filePicker.pickFile(selectBoardDialogTitle, listOf("obf", "obz", "json"))
                                                     if (path != null) {
                                                         val isObz = path.lowercase().endsWith(".obz")
+                                                        featureUsageReporter.reportEvent(
+                                                            FeatureUsageEvents.BOARD_IMPORT_STARTED,
+                                                            "mode" to if (isObz) "obz" else "obf"
+                                                        )
                                                         if (isObz) {
                                                             // Handle OBZ (zip archive)
                                                             runCatching {
@@ -395,6 +537,10 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                                                                     extractedImages = loadedImages
                                                                                     currentBoard = board 
                                                                                 }
+                                                                                featureUsageReporter.reportEvent(
+                                                                                    FeatureUsageEvents.BOARD_IMPORT_COMPLETED,
+                                                                                    "mode" to "obz"
+                                                                                )
                                                                             }
                                                                         }
                                                                     }
@@ -410,6 +556,10 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                                                     val board = boardRes.getOrThrow()
                                                                     boardRepo.saveBoard(board)
                                                                     uiScope.launch { currentBoard = board }
+                                                                    featureUsageReporter.reportEvent(
+                                                                        FeatureUsageEvents.BOARD_IMPORT_COMPLETED,
+                                                                        "mode" to "obf"
+                                                                    )
                                                                 }
                                                             }
                                                         }
@@ -442,24 +592,46 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     refocusInput()
                                     return@PlaybackControls
                                 }
+                                featureUsageReporter.reportEvent(
+                                    FeatureUsageEvents.PLAYBACK_PLAY,
+                                    "source" to "input",
+                                    "has_secondary_ranges" to secondaryLanguageRanges.isNotEmpty().toString()
+                                )
+                                isSpeechPaused = false
                                 uiScope.launch(Dispatchers.IO) {
                                     try {
                                         val selected = runCatching { voiceUseCase.selected() }.getOrNull()
                                         val secondaryLang = settings.secondaryLanguage
+                                        val inputText = input.text
                                         
-                                        val hasSSML = input.text.contains("<") && input.text.contains(">")
-                                        
-                                        // When SSML is present, bypass segmentation and speak directly
-                                        if (hasSSML) {
-                                            speechService.speak(input.text, selected, selected?.pitch, selected?.rate)
+                                        val hasSSML = inputText.contains("<") && inputText.contains(">")
+                                        val canUseRecordedMix = !hasSSML && secondaryLanguageRanges.isEmpty()
+                                        val playedRecording = if (canUseRecordedMix) {
+                                            runCatching {
+                                                trySpeakUsingRecordedPhrases(
+                                                    inputText = inputText,
+                                                    phrases = state.items,
+                                                    speechService = speechService,
+                                                    voice = selected
+                                                )
+                                            }.getOrDefault(false)
                                         } else {
-                                            val segments = if (secondaryLanguageRanges.isNotEmpty()) {
-                                                buildLanguageAwareSegments(input.text, secondaryLanguageRanges, secondaryLang)
-                                            } else emptyList()
-                                            if (segments.isNotEmpty()) {
-                                                speechService.speakSegments(segments, selected, selected?.pitch, selected?.rate)
+                                            false
+                                        }
+                                        
+                                        if (!playedRecording) {
+                                            // When SSML is present, bypass segmentation and speak directly
+                                            if (hasSSML) {
+                                                speechService.speak(inputText, selected, selected?.pitch, selected?.rate)
                                             } else {
-                                                speechService.speak(input.text, selected, selected?.pitch, selected?.rate)
+                                                val segments = if (secondaryLanguageRanges.isNotEmpty()) {
+                                                    buildLanguageAwareSegments(inputText, secondaryLanguageRanges, secondaryLang)
+                                                } else emptyList()
+                                                if (segments.isNotEmpty()) {
+                                                    speechService.speakSegments(segments, selected, selected?.pitch, selected?.rate)
+                                                } else {
+                                                    speechService.speak(inputText, selected, selected?.pitch, selected?.rate)
+                                                }
                                             }
                                         }
                                         
@@ -479,15 +651,39 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 refocusInput()
                             },
                             onPause = {
-                                uiScope.launch { speechService.pause() }
+                                featureUsageReporter.reportEvent(
+                                    FeatureUsageEvents.PLAYBACK_PAUSE,
+                                    "source" to "input"
+                                )
+                                isSpeechPaused = true
+                                uiScope.launch {
+                                    runCatching { speechService.pause() }
+                                        .onFailure { isSpeechPaused = speechService.isPaused() }
+                                }
                                 refocusInput()
                             },
                             onStop = { 
-                                uiScope.launch { speechService.stop() }
+                                featureUsageReporter.reportEvent(
+                                    FeatureUsageEvents.PLAYBACK_STOP,
+                                    "source" to "input"
+                                )
+                                isSpeechPaused = false
+                                uiScope.launch {
+                                    runCatching { speechService.stop() }
+                                        .onFailure { isSpeechPaused = speechService.isPaused() }
+                                }
                                 refocusInput()
                             },
                             onResume = {
-                                uiScope.launch { speechService.resume() }
+                                featureUsageReporter.reportEvent(
+                                    FeatureUsageEvents.PLAYBACK_RESUME,
+                                    "source" to "input"
+                                )
+                                isSpeechPaused = false
+                                uiScope.launch {
+                                    runCatching { speechService.resume() }
+                                        .onFailure { isSpeechPaused = speechService.isPaused() }
+                                }
                                 refocusInput()
                             },
                             isPaused = isSpeechPaused,
@@ -501,6 +697,10 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     normalizedSelection,
                                     input.text.length
                                 )
+                                featureUsageReporter.reportEvent(
+                                    FeatureUsageEvents.PLAYBACK_SECONDARY_TOGGLE,
+                                    "enabled" to (!selectionAlreadySecondary).toString()
+                                )
                                 refocusInput()
                             },
                             isSecondarySelectionActive = selectionAlreadySecondary,
@@ -513,10 +713,10 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     val isWide = maxWidth >= 900.dp
                     Row(Modifier.fillMaxSize()) {
                         Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(16.dp)) {
-                    if (state.loading) Text("Loading...", style = MaterialTheme.typography.bodyLarge.copy(
+                    if (state.loading) Text(stringResource(Res.string.phrase_screen_loading), style = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                     ))
-                    state.error?.let { Text("Error: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge.copy(
+                    state.error?.let { Text(stringResource(Res.string.phrase_screen_error, it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                     )) }
 
@@ -525,9 +725,10 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     LaunchedEffect(Unit) {
                         // Retry until available (or stop after some attempts if desired)
                         repeat(30) {
-                            if (categoryUseCaseState.value != null) return@repeat
+                            if (categoryUseCaseState.value != null) return@LaunchedEffect
                             categoryUseCaseState.value = koin.getOrNull<io.github.jdreioe.wingmate.application.CategoryUseCase>()
-                            if (categoryUseCaseState.value == null) delay(250)
+                            if (categoryUseCaseState.value != null) return@LaunchedEffect
+                            delay(250)
                         }
                     }
                     var categories by remember { mutableStateOf<List<CategoryItem>>(emptyList()) }
@@ -564,7 +765,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             val previous = input
                             secondaryLanguageRanges = adjustRangesAfterEdit(previous.text, newValue.text, secondaryLanguageRanges)
                             input = newValue
-                            io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newValue.text)
+                            syncDisplayText(newValue.text)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -582,7 +783,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         maxLines = 6,
                         placeholder = {
                             Text(
-                                "Enter text to speak",
+                                stringResource(Res.string.phrase_screen_enter_text_placeholder),
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -615,7 +816,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 }
                                 secondaryLanguageRanges = adjustRangesAfterEdit(text, newText, secondaryLanguageRanges)
                                 input = TextFieldValue(newText, selection = TextRange(newCursor.coerceAtMost(newText.length)))
-                                io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                                syncDisplayText(newText)
                             },
                             onLetterSelected = { letter ->
                                 val fv = input
@@ -624,7 +825,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 val newCursor = pos + 1
                                 secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
                                 input = TextFieldValue(newText, selection = TextRange(newCursor))
-                                io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                                syncDisplayText(newText)
                             },
                             fontSizeScale = settings.fontSizeScale,
                             modifier = Modifier.padding(vertical = 4.dp)
@@ -636,7 +837,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 .fillMaxWidth()
                                 .padding(vertical = 8.dp)
                         ) {
-                            Text("SSML Controls", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(Res.string.phrase_screen_ssml_controls), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                     
@@ -667,7 +868,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 }
                                 secondaryLanguageRanges = adjustRangesAfterEdit(text, newText, secondaryLanguageRanges)
                                 input = TextFieldValue(newText, selection = TextRange(newCursor.coerceAtMost(newText.length)))
-                                io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                                syncDisplayText(newText)
                             },
                             onLetterSelected = { letter ->
                                 val fv = input
@@ -676,7 +877,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 val newCursor = pos + 1
                                 secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
                                 input = TextFieldValue(newText, selection = TextRange(newCursor))
-                                io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                                syncDisplayText(newText)
                             },
                             fontSizeScale = settings.fontSizeScale
                         )
@@ -706,7 +907,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         }
                         
                         // Category chips
-                        itemsIndexed(categories) { index, category ->
+                        itemsIndexed(categories, key = { _, category -> category.id }) { index, category ->
                             var showCategoryMenu by remember { mutableStateOf(false) }
                             Box {
                                 FilterChip(
@@ -722,17 +923,23 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) },
                                     modifier = Modifier
-                                        .pointerInput(Unit) {
-                                            awaitPointerEventScope {
-                                                while (true) {
-                                                    val event = awaitPointerEvent()
-                                                    if (event.type == PointerEventType.Press &&
-                                                        event.buttons.isSecondaryPressed) {
-                                                        showCategoryMenu = true
+                                        .then(
+                                            if (isDesktop()) {
+                                                Modifier.pointerInput(Unit) {
+                                                    awaitPointerEventScope {
+                                                        while (true) {
+                                                            val event = awaitPointerEvent()
+                                                            if (event.type == PointerEventType.Press &&
+                                                                event.buttons.isSecondaryPressed) {
+                                                                showCategoryMenu = true
+                                                            }
+                                                        }
                                                     }
                                                 }
+                                            } else {
+                                                Modifier
                                             }
-                                        }
+                                        )
                                         .combinedClickable(
                                             onClick = {
                                                 if (selectedCategory?.id == category.id) {
@@ -953,21 +1160,27 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                     var editingPhrase by remember { mutableStateOf<Phrase?>(null) }
                     // Show only actual phrase items (not category markers), filtered by selected category
                     val isHistory = selectedCategory?.id == HistoryCategoryId
-                    val visiblePhrases = if (isHistory) {
-                        // Map history items to ephemeral Phrase objects to reuse the grid UI; hide Add tile for this view
-                        historyItems.mapIndexed { idx, s ->
-                            Phrase(
-                                id = "history_$idx",
-                                text = s.saidText ?: "",
-                                name = s.voiceName,
-                                backgroundColor = null,
-                                parentId = HistoryCategoryId,
-                                createdAt = s.date ?: s.createdAt ?: 0L,
-                                recordingPath = s.audioFilePath
-                            )
+                    val selectedCategoryId = selectedCategory?.id
+                    val visiblePhrases by remember(isHistory, historyItems, state.items, selectedCategoryId) {
+                        derivedStateOf {
+                            if (isHistory) {
+                                // Map history items to ephemeral Phrase objects to reuse the grid UI; hide Add tile for this view
+                                historyItems.mapIndexed { idx, s ->
+                                    val stableHistoryId = s.id?.toString() ?: (s.date ?: s.createdAt ?: idx.toLong()).toString()
+                                    Phrase(
+                                        id = "history_$stableHistoryId",
+                                        text = s.saidText ?: "",
+                                        name = s.voiceName,
+                                        backgroundColor = null,
+                                        parentId = HistoryCategoryId,
+                                        createdAt = s.date ?: s.createdAt ?: 0L,
+                                        recordingPath = s.audioFilePath
+                                    )
+                                }
+                            } else {
+                                state.items.filter { selectedCategoryId == null || it.parentId == selectedCategoryId }
+                            }
                         }
-                    } else {
-                        state.items.filter { selectedCategory?.id == null || it.parentId == selectedCategory?.id }
                     }
                     PhraseGrid(
                         phrases = visiblePhrases,
@@ -980,7 +1193,11 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                             val newCursor = pos + insertText.length
                             secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
                             input = TextFieldValue(newText, selection = TextRange(newCursor))
-                            io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                            syncDisplayText(newText)
+                            featureUsageReporter.reportEvent(
+                                FeatureUsageEvents.PHRASE_INSERTED,
+                                "source" to if (phrase.parentId == HistoryCategoryId) "history" else "grid"
+                            )
                         },
                         onPlay = { phrase ->
                             // Classic Folder Navigation: if item has a linked board, entering it updates the view
@@ -997,7 +1214,23 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     try {
                                         val selected = runCatching { voiceUseCase.selected() }.getOrNull()
                                         val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
-                                        speechService.speak(textToSpeak, selected)
+                                        val playedRecorded = phrase.recordingPath?.let { path ->
+                                            runCatching {
+                                                speechService.speakRecordedAudio(
+                                                    audioFilePath = path,
+                                                    textForHistory = textToSpeak,
+                                                    voice = selected
+                                                )
+                                            }.getOrDefault(false)
+                                        } ?: false
+                                        if (!playedRecorded) {
+                                            speechService.speak(textToSpeak, selected)
+                                        }
+                                        featureUsageReporter.reportEvent(
+                                            FeatureUsageEvents.PHRASE_PLAYED,
+                                            "source" to "grid",
+                                            "used_recording" to playedRecorded.toString()
+                                        )
                                         // Refresh history from repo
                                         try {
                                             val list = saidRepo.list()
@@ -1015,7 +1248,23 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     val fallbackLang2 = selected?.selectedLanguage ?: ""
                                     val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: fallbackLang2)
                                     val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
-                                    speechService.speak(textToSpeak, vForSecondary)
+                                    val playedRecorded = phrase.recordingPath?.let { path ->
+                                        runCatching {
+                                            speechService.speakRecordedAudio(
+                                                audioFilePath = path,
+                                                textForHistory = textToSpeak,
+                                                voice = vForSecondary
+                                            )
+                                        }.getOrDefault(false)
+                                    } ?: false
+                                    if (!playedRecorded) {
+                                        speechService.speak(textToSpeak, vForSecondary)
+                                    }
+                                    featureUsageReporter.reportEvent(
+                                        FeatureUsageEvents.PHRASE_PLAYED_SECONDARY,
+                                        "source" to "grid",
+                                        "used_recording" to playedRecorded.toString()
+                                    )
                                     // Refresh history from repo
                                     try {
                                         val list = saidRepo.list()
@@ -1084,7 +1333,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 Row {
                                     IconButton(onClick = { 
                                         input = TextFieldValue("")
-                                        io.github.jdreioe.wingmate.presentation.DisplayTextBus.set("")
+                                        syncDisplayText("")
                                     }) {
                                         Icon(Icons.Default.Delete, contentDescription = "Erase")
                                     }
@@ -1104,7 +1353,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                 value = input,
                                 onValueChange = { newValue ->
                                     input = newValue
-                                    io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newValue.text)
+                                    syncDisplayText(newValue.text)
                                 },
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).then(boardShowKeyboard),
                                 placeholder = { Text("Tap buttons to build a sentence...") },
@@ -1114,7 +1363,18 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                             // Speak the entire text
                                             uiScope.launch(Dispatchers.IO) {
                                                 val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                                speechService.speak(input.text, selected)
+                                                val inputText = input.text
+                                                val playedRecording = runCatching {
+                                                    trySpeakUsingRecordedPhrases(
+                                                        inputText = inputText,
+                                                        phrases = state.items,
+                                                        speechService = speechService,
+                                                        voice = selected
+                                                    )
+                                                }.getOrDefault(false)
+                                                if (!playedRecording) {
+                                                    speechService.speak(inputText, selected)
+                                                }
                                             }
                                         }) {
                                             Icon(Icons.Default.PlayArrow, contentDescription = "Speak")
@@ -1149,7 +1409,17 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                         if (!textToSpeak.isNullOrBlank()) {
                                             uiScope.launch(Dispatchers.IO) {
                                                 val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                                speechService.speak(textToSpeak, selected)
+                                                val playedRecording = runCatching {
+                                                    trySpeakUsingRecordedPhrases(
+                                                        inputText = textToSpeak,
+                                                        phrases = state.items,
+                                                        speechService = speechService,
+                                                        voice = selected
+                                                    )
+                                                }.getOrDefault(false)
+                                                if (!playedRecording) {
+                                                    speechService.speak(textToSpeak, selected)
+                                                }
                                             }
                                             val fv = input
                                             val pos = fv.selection.start.coerceIn(0, fv.text.length)
@@ -1157,7 +1427,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                             val newText = fv.text.substring(0, pos) + insertText + fv.text.substring(pos)
                                             val newCursor = pos + insertText.length
                                             input = TextFieldValue(newText, selection = TextRange(newCursor))
-                                            io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                                            syncDisplayText(newText)
                                         }
                                     }
                                 },
@@ -1179,7 +1449,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     val newCursor = pos + ssmlMarkup.length
                                     secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
                                     input = TextFieldValue(newText, selection = TextRange(newCursor))
-                                    io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                                    syncDisplayText(newText)
                                 }
                             )
                         }
@@ -1194,7 +1464,11 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                 VoiceSelectionDialog(show = true, onDismiss = { showVoiceSelection = false })
             }
             if (showUiLanguageDialog) {
-                UiLanguageDialog(show = true, onDismiss = { showUiLanguageDialog = false })
+                UiLanguageDialog(
+                    show = true,
+                    onDismiss = { showUiLanguageDialog = false },
+                    openPrimaryMenuInitially = true
+                )
             }
             if (showDictionaryScreen) {
                 val scope = rememberCoroutineScope()
@@ -1212,12 +1486,20 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                         scope.launch {
                             dictionaryRepo.add(io.github.jdreioe.wingmate.domain.PronunciationEntry(word, phoneme, alphabet))
                             entries = dictionaryRepo.getAll()
+                            featureUsageReporter.reportEvent(
+                                FeatureUsageEvents.DICTIONARY_ENTRY_ADDED,
+                                "alphabet" to alphabet
+                            )
                         }
                     },
                     onDeleteEntry = { entry ->
                         scope.launch {
                             dictionaryRepo.delete(entry.word)
                             entries = dictionaryRepo.getAll()
+                            featureUsageReporter.reportEvent(
+                                FeatureUsageEvents.DICTIONARY_ENTRY_DELETED,
+                                "alphabet" to entry.alphabet
+                            )
                         }
                     },
                     onTestEntry = { word, phoneme, alphabet ->
@@ -1279,7 +1561,7 @@ fun PhraseScreen(onBackToWelcome: (() -> Unit)? = null) {
                                     val newCursor = cursorPos + ssmlText.length
                                     secondaryLanguageRanges = adjustRangesAfterEdit(input.text, newText, secondaryLanguageRanges)
                                     input = TextFieldValue(newText, selection = TextRange(newCursor))
-                                    io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(newText)
+                                    syncDisplayText(newText)
                                 }
                             )
                         }
@@ -1582,5 +1864,182 @@ private fun parseDuration(durationStr: String?): Long {
             (seconds * 1000).toLong()
         }
         else -> clean.toDoubleOrNull()?.toLong() ?: 500L
+    }
+}
+
+private data class RecordedPhraseEntry(
+    val phraseId: String,
+    val spokenText: String,
+    val audioPath: String
+)
+
+private sealed interface MixedPlaybackChunk {
+    data class Recorded(val entry: RecordedPhraseEntry) : MixedPlaybackChunk
+    data class Text(val text: String) : MixedPlaybackChunk
+}
+
+private suspend fun trySpeakUsingRecordedPhrases(
+    inputText: String,
+    phrases: List<Phrase>,
+    speechService: io.github.jdreioe.wingmate.domain.SpeechService,
+    voice: io.github.jdreioe.wingmate.domain.Voice?
+): Boolean {
+    val normalizedInput = inputText.trim()
+    if (normalizedInput.isEmpty()) return false
+
+    val recordedEntries = phrases.mapNotNull { phrase ->
+        val spoken = phraseSpokenText(phrase) ?: return@mapNotNull null
+        val path = phrase.recordingPath?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+        RecordedPhraseEntry(
+            phraseId = phrase.id,
+            spokenText = spoken,
+            audioPath = path
+        )
+    }
+    if (recordedEntries.isEmpty()) return false
+
+    val plan = buildMixedPlaybackPlan(normalizedInput, recordedEntries) ?: return false
+    return playMixedPlan(plan, speechService, voice)
+}
+
+private fun phraseSpokenText(phrase: Phrase): String? {
+    val spoken = (phrase.name?.ifBlank { null } ?: phrase.text).trim()
+    return spoken.ifBlank { null }
+}
+
+private fun buildMixedPlaybackPlan(
+    inputText: String,
+    entries: List<RecordedPhraseEntry>
+): List<MixedPlaybackChunk>? {
+    if (entries.isEmpty()) return null
+
+    val matchPool = entries
+        .distinctBy { it.phraseId }
+        .sortedByDescending { it.spokenText.length }
+
+    val chunks = mutableListOf<MixedPlaybackChunk>()
+    val textBuffer = StringBuilder()
+    var usedRecording = false
+    var cursor = 0
+
+    fun flushTextBuffer() {
+        if (textBuffer.isEmpty()) return
+        chunks += MixedPlaybackChunk.Text(textBuffer.toString())
+        textBuffer.clear()
+    }
+
+    while (cursor < inputText.length) {
+        val match = matchPool.firstOrNull { entry ->
+            val candidate = entry.spokenText
+            if (candidate.isEmpty()) return@firstOrNull false
+            if (cursor + candidate.length > inputText.length) return@firstOrNull false
+            if (!inputText.regionMatches(cursor, candidate, 0, candidate.length, ignoreCase = true)) {
+                return@firstOrNull false
+            }
+
+            isRecordedBoundaryStart(inputText, cursor) &&
+                isRecordedBoundaryEnd(inputText, cursor + candidate.length)
+        }
+
+        if (match != null) {
+            flushTextBuffer()
+            chunks += MixedPlaybackChunk.Recorded(match)
+            usedRecording = true
+            cursor += match.spokenText.length
+        } else {
+            textBuffer.append(inputText[cursor])
+            cursor++
+        }
+    }
+
+    flushTextBuffer()
+
+    return chunks.takeIf { usedRecording }
+}
+
+private suspend fun playMixedPlan(
+    chunks: List<MixedPlaybackChunk>,
+    speechService: io.github.jdreioe.wingmate.domain.SpeechService,
+    voice: io.github.jdreioe.wingmate.domain.Voice?
+): Boolean {
+    var usedRecording = false
+
+    for (chunk in chunks) {
+        when (chunk) {
+            is MixedPlaybackChunk.Recorded -> {
+                val entry = chunk.entry
+                val played = speechService.speakRecordedAudio(
+                    audioFilePath = entry.audioPath,
+                    textForHistory = entry.spokenText,
+                    voice = voice
+                )
+                if (!played) return false
+                usedRecording = true
+            }
+
+            is MixedPlaybackChunk.Text -> {
+                val text = chunk.text
+                if (text.isBlank()) {
+                    val pause = pauseForSeparatorChunk(text)
+                    if (pause > 0L) delay(pause)
+                    continue
+                }
+
+                val hasSpeakableContent = text.any { it.isLetterOrDigit() }
+                if (!hasSpeakableContent) {
+                    val pause = pauseForSeparatorChunk(text)
+                    if (pause > 0L) delay(pause)
+                    continue
+                }
+
+                // Keep punctuation/whitespace around text so transition from recording sounds less abrupt.
+                speechService.speak(text, voice, voice?.pitch, voice?.rate)
+                waitForSpeechToFinish(speechService)
+            }
+        }
+    }
+
+    return usedRecording
+}
+
+private fun pauseForSeparatorChunk(text: String): Long {
+    val compact = text.trim()
+    if (compact.isEmpty()) {
+        return if (text.contains('\n')) 80L else 50L
+    }
+
+    return when {
+        compact.any { it == '.' || it == '!' || it == '?' } -> 100L
+        compact.any { it == ',' || it == ';' || it == ':' } -> 80L
+        else -> 50L
+    }
+}
+
+private suspend fun waitForSpeechToFinish(
+    speechService: io.github.jdreioe.wingmate.domain.SpeechService,
+    timeoutMs: Long = 15_000L
+) {
+    var elapsed = 0L
+    delay(100)
+    while (elapsed < timeoutMs && speechService.isPlaying()) {
+        delay(50)
+        elapsed += 50
+    }
+}
+
+private fun isRecordedBoundaryStart(text: String, index: Int): Boolean {
+    if (index <= 0) return true
+    return isRecordedPhraseSeparator(text[index - 1])
+}
+
+private fun isRecordedBoundaryEnd(text: String, indexExclusive: Int): Boolean {
+    if (indexExclusive >= text.length) return true
+    return isRecordedPhraseSeparator(text[indexExclusive])
+}
+
+private fun isRecordedPhraseSeparator(char: Char): Boolean {
+    return char.isWhitespace() || when (char) {
+        '.', ',', '!', '?', ';', ':', '-', '_', '/', '\\', '(', ')', '[', ']', '{', '}', '"', '\'' -> true
+        else -> false
     }
 }

@@ -14,7 +14,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.common_close
+import wingmatekmp.composeapp.generated.resources.data_management_button_overwrite_history
+import wingmatekmp.composeapp.generated.resources.data_management_button_share_copy_history
+import wingmatekmp.composeapp.generated.resources.data_management_description
+import wingmatekmp.composeapp.generated.resources.data_management_export
+import wingmatekmp.composeapp.generated.resources.data_management_import
+import wingmatekmp.composeapp.generated.resources.data_management_paste_json_label
+import wingmatekmp.composeapp.generated.resources.data_management_status_copied_clipboard
+import wingmatekmp.composeapp.generated.resources.data_management_status_export_failed
+import wingmatekmp.composeapp.generated.resources.data_management_status_export_ready
+import wingmatekmp.composeapp.generated.resources.data_management_status_exporting
+import wingmatekmp.composeapp.generated.resources.data_management_status_import_failed_invalid
+import wingmatekmp.composeapp.generated.resources.data_management_status_import_success
+import wingmatekmp.composeapp.generated.resources.data_management_status_importing
+import wingmatekmp.composeapp.generated.resources.data_management_title
 
 @Composable
 fun SettingsExportDialog(
@@ -31,6 +48,14 @@ fun SettingsExportDialog(
     var isExporting by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
 
+    val exportingLabel = stringResource(Res.string.data_management_status_exporting)
+    val exportReadyLabel = stringResource(Res.string.data_management_status_export_ready)
+    val copiedToClipboardLabel = stringResource(Res.string.data_management_status_copied_clipboard)
+    val exportFailedTemplate = stringResource(Res.string.data_management_status_export_failed)
+    val importingLabel = stringResource(Res.string.data_management_status_importing)
+    val importSuccessLabel = stringResource(Res.string.data_management_status_import_success)
+    val importInvalidJsonLabel = stringResource(Res.string.data_management_status_import_failed_invalid)
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
@@ -44,14 +69,14 @@ fun SettingsExportDialog(
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(
-                    "Data Management", 
+                    stringResource(Res.string.data_management_title),
                     style = MaterialTheme.typography.headlineSmall
                 )
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    "Export or import your speech history and trained model data as JSON.",
+                    stringResource(Res.string.data_management_description),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -59,27 +84,27 @@ fun SettingsExportDialog(
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 // === EXPORT SECTION ===
-                Text("Export", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(Res.string.data_management_export), style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 Button(
                     onClick = {
                         isExporting = true
-                        statusMessage = "Exporting..."
+                        statusMessage = exportingLabel
                         scope.launch(Dispatchers.Default) {
                             try {
                                 val json = userDataManager.exportData()
                                 try {
                                     // Try native share first
                                     shareService.shareText(json)
-                                    statusMessage = "Export ready (shared)"
+                                    statusMessage = exportReadyLabel
                                 } catch (e: Exception) {
                                     // Fallback to clipboard
                                     clipboardManager.setText(AnnotatedString(json))
-                                    statusMessage = "Copied to clipboard!"
+                                    statusMessage = copiedToClipboardLabel
                                 }
                             } catch (e: Exception) {
-                                statusMessage = "Export failed: ${e.message}"
+                                statusMessage = String.format(exportFailedTemplate, e.message ?: "")
                             } finally {
                                 isExporting = false
                             }
@@ -88,7 +113,7 @@ fun SettingsExportDialog(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isExporting
                 ) {
-                    Text(if (isExporting) "Exporting..." else "Share / Copy History")
+                    Text(if (isExporting) exportingLabel else stringResource(Res.string.data_management_button_share_copy_history))
                 }
                 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -97,14 +122,14 @@ fun SettingsExportDialog(
                 Divider()
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                Text("Import", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(Res.string.data_management_import), style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 val showKeyboard = rememberShowKeyboardOnFocus()
                 OutlinedTextField(
                     value = importText,
                     onValueChange = { importText = it },
-                    label = { Text("Paste JSON here") },
+                    label = { Text(stringResource(Res.string.data_management_paste_json_label)) },
                     modifier = Modifier.fillMaxWidth().height(120.dp).then(showKeyboard),
                     maxLines = 10
                 )
@@ -115,14 +140,14 @@ fun SettingsExportDialog(
                     onClick = {
                         if (importText.isBlank()) return@Button
                         isImporting = true
-                        statusMessage = "Importing..."
+                        statusMessage = importingLabel
                         scope.launch(Dispatchers.Default) {
                             try {
                                 userDataManager.importData(importText)
-                                statusMessage = "Import successful! Restart app to see changes."
+                                statusMessage = importSuccessLabel
                                 importText = ""
                             } catch (e: Exception) {
-                                statusMessage = "Import failed: Invalid JSON"
+                                statusMessage = importInvalidJsonLabel
                             } finally {
                                 isImporting = false
                             }
@@ -132,7 +157,7 @@ fun SettingsExportDialog(
                     enabled = !isImporting && importText.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text(if (isImporting) "Importing..." else "Overwrite History")
+                    Text(if (isImporting) importingLabel else stringResource(Res.string.data_management_button_overwrite_history))
                 }
                 
                 if (statusMessage.isNotEmpty()) {
@@ -150,7 +175,7 @@ fun SettingsExportDialog(
                     onClick = onDismiss,
                     modifier = Modifier.align(androidx.compose.ui.Alignment.End)
                 ) {
-                    Text("Close")
+                    Text(stringResource(Res.string.common_close))
                 }
             }
         }

@@ -22,8 +22,25 @@ import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.common_back
+import wingmatekmp.composeapp.generated.resources.common_continue
+import wingmatekmp.composeapp.generated.resources.language_filter_languages
+import wingmatekmp.composeapp.generated.resources.voice_all_languages
+import wingmatekmp.composeapp.generated.resources.voice_azure_title
+import wingmatekmp.composeapp.generated.resources.voice_azure_title_with_lang
+import wingmatekmp.composeapp.generated.resources.voice_error
+import wingmatekmp.composeapp.generated.resources.voice_filter_languages_content_desc
+import wingmatekmp.composeapp.generated.resources.voice_no_azure_match
+import wingmatekmp.composeapp.generated.resources.voice_no_system_match
+import wingmatekmp.composeapp.generated.resources.voice_select_title
+import wingmatekmp.composeapp.generated.resources.voice_selected
+import wingmatekmp.composeapp.generated.resources.voice_settings
+import wingmatekmp.composeapp.generated.resources.voice_system_title
+import wingmatekmp.composeapp.generated.resources.voice_system_title_with_lang
 
 @Composable
 fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToWelcome: (() -> Unit)? = null) {
@@ -98,13 +115,17 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
-        Text("Voice Selection", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(Res.string.voice_select_title), style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(16.dp))
 
         if (useSystemTts) {
             // System TTS selected - show available system voices for selection
             Text(
-                "System TTS Voices",
+                text = if (selectedLanguageFilter != null) {
+                    stringResource(Res.string.voice_system_title_with_lang, selectedLanguageFilter ?: "")
+                } else {
+                    stringResource(Res.string.voice_system_title)
+                },
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
@@ -119,7 +140,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        "Filter by Language:",
+                        stringResource(Res.string.language_filter_languages),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f)
                     )
@@ -131,12 +152,12 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                         ) {
                             Icon(
                                 Icons.Default.FilterList,
-                                contentDescription = "Filter languages",
+                                contentDescription = stringResource(Res.string.voice_filter_languages_content_desc),
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                selectedLanguageFilter ?: "All Languages",
+                                selectedLanguageFilter ?: stringResource(Res.string.voice_all_languages),
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 1
                             )
@@ -147,7 +168,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                             onDismissRequest = { showLanguageFilter = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("All Languages") },
+                                text = { Text(stringResource(Res.string.voice_all_languages)) },
                                 onClick = {
                                     selectedLanguageFilter = null
                                     showLanguageFilter = false
@@ -215,7 +236,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                 CircularProgressIndicator()
             } else if (filteredSystemVoices.isEmpty() && selectedLanguageFilter != null) {
                 Text(
-                    "No system voices found for $selectedLanguageFilter",
+                    stringResource(Res.string.voice_no_system_match),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp)
@@ -262,7 +283,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                                 if (selected?.name == voice.name) {
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        "✓ Selected",
+                                        stringResource(Res.string.voice_selected),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.primary
                                     )
@@ -275,7 +296,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
         } else if (loading) {
             CircularProgressIndicator()
         } else if (error != null) {
-            Text("Error: $error")
+            Text(stringResource(Res.string.voice_error, error ?: ""))
         } else {
             // Filter Azure voices based on selected language
             val filteredAzureVoices = if (selectedLanguageFilter != null) {
@@ -297,7 +318,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        "Filter by Language:",
+                        stringResource(Res.string.language_filter_languages),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f)
                     )
@@ -309,12 +330,12 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                         ) {
                             Icon(
                                 Icons.Default.FilterList,
-                                contentDescription = "Filter languages",
+                                contentDescription = stringResource(Res.string.voice_filter_languages_content_desc),
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                selectedLanguageFilter ?: "All Languages",
+                                selectedLanguageFilter ?: stringResource(Res.string.voice_all_languages),
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 1
                             )
@@ -325,7 +346,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                             onDismissRequest = { showLanguageFilter = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("All Languages") },
+                                text = { Text(stringResource(Res.string.voice_all_languages)) },
                                 onClick = {
                                     selectedLanguageFilter = null
                                     showLanguageFilter = false
@@ -350,12 +371,21 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
             // Show filtered voices or empty message
             if (filteredAzureVoices.isEmpty() && selectedLanguageFilter != null) {
                 Text(
-                    "No Azure voices found for $selectedLanguageFilter",
+                    stringResource(Res.string.voice_no_azure_match),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp)
                 )
             } else {
+                Text(
+                    text = if (selectedLanguageFilter != null) {
+                        stringResource(Res.string.voice_azure_title_with_lang, selectedLanguageFilter ?: "")
+                    } else {
+                        stringResource(Res.string.voice_azure_title)
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
                 LazyColumn(modifier = Modifier.weight(1f)) {
                     items(filteredAzureVoices) { voice ->
                         Card(
@@ -409,7 +439,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                                     if (selected?.name == voice.name) {
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(
-                                            "✓ Selected",
+                                            stringResource(Res.string.voice_selected),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )
@@ -419,7 +449,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                                 IconButton(onClick = {
                                     // Settings button for individual voice - placeholder
                                 }) {
-                                    Icon(Icons.Default.Settings, contentDescription = "Voice Settings")
+                                    Icon(Icons.Default.Settings, contentDescription = stringResource(Res.string.voice_settings))
                                 }
                             }
                         }
@@ -432,8 +462,8 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
         Spacer(modifier = Modifier.height(16.dp))
         
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = onCancel) { Text("Back") }
-            Button(onClick = onNext) { Text("Continue") }
+            TextButton(onClick = onCancel) { Text(stringResource(Res.string.common_back)) }
+            Button(onClick = onNext) { Text(stringResource(Res.string.common_continue)) }
         }
     }
 }

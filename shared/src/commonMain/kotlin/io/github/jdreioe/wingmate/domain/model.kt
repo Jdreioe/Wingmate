@@ -65,7 +65,9 @@ data class Settings(
     // Show idle face on partner window after 10s of no text input
     val partnerWindowIdleEnabled: Boolean = true,
     // On-screen keyboard scale (0.5 = half, 1.0 = normal, 2.0 = double)
-    val oskKeyboardScale: Float = 1.0f
+    val oskKeyboardScale: Float = 1.0f,
+    // Optional product analytics (Firebase on Android). Default is opt-out.
+    val featureUsageReportingEnabled: Boolean = false
 )
 
 @Serializable

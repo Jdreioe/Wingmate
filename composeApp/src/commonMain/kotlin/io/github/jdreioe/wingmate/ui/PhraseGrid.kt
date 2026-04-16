@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.Phrase
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.phrase_add_cd
 
 /**
  * PhraseGrid – a Compose port of the Flutter PhraseGrid.
@@ -59,7 +62,10 @@ fun PhraseGrid(
     var showAddDialog by remember { mutableStateOf(false) }
 
     LazyVerticalGrid(columns = GridCells.Fixed(3), contentPadding = PaddingValues(4.dp)) {
-        items(itemCount) { index ->
+        items(
+            count = itemCount,
+            key = { index -> if (showAdd && index == phrases.size) "add_tile" else phrases[index].id }
+        ) { index ->
             if (showAdd && index == phrases.size) {
                 // Add button as card
                 Card(
@@ -76,7 +82,7 @@ fun PhraseGrid(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Add,
-                            contentDescription = "Add phrase",
+                            contentDescription = stringResource(Res.string.phrase_add_cd),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(32.dp)
                         )

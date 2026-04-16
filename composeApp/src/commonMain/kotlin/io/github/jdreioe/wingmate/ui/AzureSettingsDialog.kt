@@ -8,12 +8,19 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.application.FeatureUsageEvents
+import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.SettingsStateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.ui_settings_feature_reporting_desc
+import wingmatekmp.composeapp.generated.resources.ui_settings_feature_reporting_title
 
 @Composable
 fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
@@ -24,6 +31,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
     val configRepo = remember(koin) { koin.getOrNull<ConfigRepository>() }
     val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
     val settingsStateManager = remember(koin) { koin.getOrNull<SettingsStateManager>() }
+    val featureUsageReporter = remember(koin) { koin.getOrNull<FeatureUsageReporter>() }
 
     // Log which ConfigRepository implementation we got (helps diagnose persistence)
     LaunchedEffect(configRepo) {
@@ -46,6 +54,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
     var subscriptionKey by remember { mutableStateOf("") }
     var useSystemTts by remember { mutableStateOf(false) }
     var virtualMic by remember { mutableStateOf(false) }
+    var featureUsageReportingEnabled by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     
     // UI Scaling state variables
@@ -78,6 +87,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
             }
             useSystemTts = settings.useSystemTts
             virtualMic = settings.virtualMicEnabled
+            featureUsageReportingEnabled = settings.featureUsageReportingEnabled
             fontSizeScale = settings.fontSizeScale
             playbackIconScale = settings.playbackIconScale
             categoryChipScale = settings.categoryChipScale
@@ -86,6 +96,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
             forceDarkTheme = settings.forceDarkTheme
             useCustomColors = settings.useCustomColors
             primaryColor = settings.primaryColor ?: "#7C4DFF"
+            featureUsageReporter?.setEnabled(settings.featureUsageReportingEnabled)
         }
         loading = false
     }
@@ -169,6 +180,34 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = featureUsageReportingEnabled,
+                            onCheckedChange = { checked ->
+                                featureUsageReportingEnabled = checked
+                                scope.launch {
+                                    updateSettings { it.copy(featureUsageReportingEnabled = checked) }
+                                    featureUsageReporter?.setEnabled(checked)
+                                    featureUsageReporter?.reportEvent(
+                                        FeatureUsageEvents.ANALYTICS_CONSENT_CHANGED,
+                                        "enabled" to checked.toString(),
+                                        "source" to "speech_settings_dialog"
+                                    )
+                                }
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(stringResource(Res.string.ui_settings_feature_reporting_title))
+                            Text(
+                                stringResource(Res.string.ui_settings_feature_reporting_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
 
@@ -319,6 +358,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                             val updated = current.copy(
                                 useSystemTts = useSystemTts, 
                                 virtualMicEnabled = virtualMic,
+                                featureUsageReportingEnabled = featureUsageReportingEnabled,
                                 fontSizeScale = fontSizeScale,
                                 playbackIconScale = playbackIconScale,
                                 categoryChipScale = categoryChipScale,
@@ -326,6 +366,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                                 inputFieldScale = inputFieldScale
                             )
                             settingsUseCase.update(updated)
+                            featureUsageReporter?.setEnabled(featureUsageReportingEnabled)
                         }
                         
                         // Save Azure config only if Azure TTS is selected

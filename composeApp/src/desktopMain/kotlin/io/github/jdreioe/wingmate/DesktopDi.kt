@@ -7,9 +7,12 @@ import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.PhraseRepository
+import io.github.jdreioe.wingmate.domain.PhraseRecordingService
 import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSpeechService
+import io.github.jdreioe.wingmate.infrastructure.DesktopPhraseRecordingService
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlVoiceRepository
@@ -17,6 +20,7 @@ import io.github.jdreioe.wingmate.infrastructure.DesktopSqlSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlBoardRepository
+import io.github.jdreioe.wingmate.infrastructure.DesktopSqlBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlSaidTextRepository
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import io.github.jdreioe.wingmate.infrastructure.JvmImageCacher
@@ -38,12 +42,15 @@ fun overrideDesktopSpeechService() {
     loadKoinModules(
         module {
             singleOf(::DesktopSpeechService) { bind<SpeechService>() }
+            singleOf(::DesktopPhraseRecordingService) { bind<PhraseRecordingService>() }
             // SQLite-backed repositories for durability
             singleOf(::DesktopSqlConfigRepository) { bind<ConfigRepository>() }
             singleOf(::DesktopSqlPhraseRepository) { bind<PhraseRepository>() }
             singleOf(::DesktopSqlCategoryRepository) { bind<CategoryRepository>() }
             // Persist imported OBF/OBZ boards on desktop
             singleOf(::DesktopSqlBoardRepository) { bind<BoardRepository>() }
+            // Persist boardset metadata on desktop
+            singleOf(::DesktopSqlBoardSetRepository) { bind<BoardSetRepository>() }
             // Persist UI settings on desktop
             singleOf(::DesktopSqlSettingsRepository) { bind<SettingsRepository>() }
             // Persist selected voice on desktop

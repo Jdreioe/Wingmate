@@ -1,9 +1,12 @@
 package io.github.jdreioe.wingmate
 
+import android.Manifest
 import android.os.Bundle
 import android.os.Build
 import android.hardware.display.DisplayManager
 import android.view.Display
+import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
@@ -13,6 +16,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.core.content.ContextCompat
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.FoldingFeature
@@ -27,21 +31,8 @@ import java.util.concurrent.Executor
 import io.github.jdreioe.wingmate.display.ExternalDisplayPresentation
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.Alignment
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.ui.Modifier
 import androidx.window.core.ExperimentalWindowApi
 import org.koin.core.context.GlobalContext
@@ -52,6 +43,9 @@ import io.github.jdreioe.wingmate.ui.FullScreenDisplay
 class MainActivity : ComponentActivity() {
     private var presentation: ExternalDisplayPresentation? = null
     private var isFoldableUnfolded = false
+    private val microphonePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> }
     
     // Window Area API variables for rear display and dual-screen mode
 
@@ -80,6 +74,10 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalWindowApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
         
         // Ensure IME insets can be detected correctly
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -151,7 +149,11 @@ class MainActivity : ComponentActivity() {
                         val dm = getSystemService(DISPLAY_SERVICE) as? DisplayManager
                         val hasExternal = dm?.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)?.isNotEmpty() == true
                         if (!hasExternal) {
-                            startActivity(android.content.Intent(this, io.github.jdreioe.wingmate.display.PrimaryDisplayActivity::class.java))
+                            startActivity(
+                                Intent(this, io.github.jdreioe.wingmate.display.PrimaryDisplayActivity::class.java).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                }
+                            )
                         }
                     }
                 } else {
@@ -169,7 +171,6 @@ class MainActivity : ComponentActivity() {
         
         setContent {
             AppTheme {
-                val show by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsStateWithLifecycle()
                 Box(Modifier.fillMaxSize()) {
                     // Main app content - this will be mirrored to rear display when session is active
                     App()
@@ -248,20 +249,16 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             WindowInfoTracker.getOrCreate(this@MainActivity)
                 .windowLayoutInfo(this@MainActivity)
-                .collect { windowLayoutInfo ->
-                    val wasUnfolded = isFoldableUnfolded
-                    
-                    // Check for foldable features
+                .map { windowLayoutInfo ->
                     val foldingFeatures = windowLayoutInfo.displayFeatures.filterIsInstance<FoldingFeature>()
-                    isFoldableUnfolded = foldingFeatures.any { feature ->
+                    foldingFeatures.any { feature ->
                         feature.state == FoldingFeature.State.FLAT || 
                         feature.state == FoldingFeature.State.HALF_OPENED
                     }
-                    
-                    Log.d("MainActivity", "Foldable state: wasUnfolded=$wasUnfolded, isUnfolded=$isFoldableUnfolded, features=${foldingFeatures.size}")
-                    
-                    // Don't auto-open fullscreen for foldables - let user manually activate
-                    // The rear display capability will be available when needed
+                }
+                .distinctUntilChanged()
+                .collect { unfolded ->
+                    isFoldableUnfolded = unfolded
                 }
         }
     }

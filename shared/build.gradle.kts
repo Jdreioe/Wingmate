@@ -67,6 +67,8 @@ kotlin {
             dependencies {
                 implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
                 implementation("io.ktor:ktor-client-okhttp:2.3.12")
+                implementation(platform("com.google.firebase:firebase-bom:${libs.versions.firebaseBom.get()}"))
+                implementation("com.google.firebase:firebase-analytics-ktx")
                 // Required for FileProvider and core Android helpers used in androidMain
                 implementation("androidx.core:core-ktx:1.13.1")
                 // Compose Multiplatform for Android UI

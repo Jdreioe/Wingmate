@@ -16,16 +16,31 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.common_back
+import wingmatekmp.composeapp.generated.resources.common_continue
+import wingmatekmp.composeapp.generated.resources.test_voice_default_text
+import wingmatekmp.composeapp.generated.resources.test_voice_info
+import wingmatekmp.composeapp.generated.resources.test_voice_message_label
+import wingmatekmp.composeapp.generated.resources.test_voice_play
+import wingmatekmp.composeapp.generated.resources.test_voice_selected_voice
+import wingmatekmp.composeapp.generated.resources.test_voice_stop
+import wingmatekmp.composeapp.generated.resources.test_voice_test_button
+import wingmatekmp.composeapp.generated.resources.test_voice_title
+import wingmatekmp.composeapp.generated.resources.test_voice_unknown_language
+import wingmatekmp.composeapp.generated.resources.test_voice_unknown_voice
 
 @Composable
 fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
+    val defaultTestText = stringResource(Res.string.test_voice_default_text)
     
     var selectedVoice by remember { mutableStateOf<Voice?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
-    var testText by remember { mutableStateOf("Hello! This is how I sound. Welcome to Wingmate!") }
+    var testText by remember(defaultTestText) { mutableStateOf(defaultTestText) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
@@ -54,7 +69,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                "Test Your Voice",
+                stringResource(Res.string.test_voice_title),
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -70,19 +85,19 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "Selected Voice:",
+                        stringResource(Res.string.test_voice_selected_voice),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        selectedVoice?.displayName ?: selectedVoice?.name ?: "Unknown Voice",
+                        selectedVoice?.displayName ?: selectedVoice?.name ?: stringResource(Res.string.test_voice_unknown_voice),
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        selectedVoice?.primaryLanguage ?: "Unknown Language",
+                        selectedVoice?.primaryLanguage ?: stringResource(Res.string.test_voice_unknown_language),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
@@ -96,7 +111,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
             OutlinedTextField(
                 value = testText,
                 onValueChange = { testText = it },
-                label = { Text("Test Message") },
+                label = { Text(stringResource(Res.string.test_voice_message_label)) },
                 modifier = Modifier.fillMaxWidth().then(showKeyboard),
                 minLines = 2,
                 maxLines = 4
@@ -146,17 +161,27 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "Stop" else "Play"
+                    contentDescription = if (isPlaying) {
+                        stringResource(Res.string.test_voice_stop)
+                    } else {
+                        stringResource(Res.string.test_voice_play)
+                    }
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(if (isPlaying) "Stop" else "Test Voice")
+                Text(
+                    if (isPlaying) {
+                        stringResource(Res.string.test_voice_stop)
+                    } else {
+                        stringResource(Res.string.test_voice_test_button)
+                    }
+                )
             }
             
             Spacer(modifier = Modifier.height(16.dp))
             
             // Info text
             Text(
-                "Listen to how your selected voice sounds. You can change the test message above and try different phrases.",
+                stringResource(Res.string.test_voice_info),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -184,7 +209,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                     },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Back")
+                    Text(stringResource(Res.string.common_back))
                 }
                 
                 Button(
@@ -201,7 +226,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                     },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Continue")
+                    Text(stringResource(Res.string.common_continue))
                 }
             }
         }

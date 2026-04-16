@@ -164,6 +164,57 @@ class DesktopSpeechService(
         playSegmentsFromIndex(0)
     }
 
+    override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean {
+        val file = File(audioFilePath)
+        if (!file.exists() || file.length() <= 0L) {
+            log.info("recorded audio file missing or empty: {}", audioFilePath)
+            return false
+        }
+
+        return runCatching {
+            if (isPlaying || currentPlayer != null || currentProcess != null) {
+                stop()
+            }
+            stopRequested.set(false)
+            pausedAtSegment = false
+            currentSegments = emptyList()
+            currentSegmentIndex = 0
+
+            withContext(Dispatchers.IO) { playAudioFile(file) }
+
+            val spokenText = textForHistory?.trim().orEmpty()
+            if (spokenText.isNotEmpty()) {
+                runCatching {
+                    val koin = GlobalContext.getOrNull()
+                    val repo = koin?.get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+                    val now = System.currentTimeMillis()
+                    val effectiveVoice = voice ?: Voice(name = "Recorded Phrase", primaryLanguage = null)
+                    repo?.add(
+                        io.github.jdreioe.wingmate.domain.SaidText(
+                            date = now,
+                            saidText = spokenText,
+                            voiceName = effectiveVoice.name,
+                            pitch = effectiveVoice.pitch,
+                            speed = effectiveVoice.rate,
+                            audioFilePath = file.absolutePath,
+                            createdAt = now,
+                            position = 0,
+                            primaryLanguage = effectiveVoice.selectedLanguage?.takeIf { it.isNotBlank() }
+                                ?: effectiveVoice.primaryLanguage
+                        )
+                    )
+                }.onFailure { t ->
+                    log.warn("failed to append history for recorded audio playback", t)
+                }
+            }
+
+            true
+        }.getOrElse { t ->
+            log.warn("failed to play recorded audio file", t)
+            false
+        }
+    }
+
     private suspend fun maybePlayFromCache(
         text: String,
         voice: Voice?,

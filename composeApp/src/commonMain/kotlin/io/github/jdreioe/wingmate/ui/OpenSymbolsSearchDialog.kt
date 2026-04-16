@@ -7,8 +7,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,9 +16,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.stringResource
 import java.net.URL
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.common_cancel
+import wingmatekmp.composeapp.generated.resources.opensymbols_no_results
+import wingmatekmp.composeapp.generated.resources.opensymbols_not_configured
+import wingmatekmp.composeapp.generated.resources.opensymbols_search_label
+import wingmatekmp.composeapp.generated.resources.opensymbols_search_title
 
 /**
  * Dialog to search OpenSymbols for pictograms.
@@ -34,11 +38,31 @@ fun OpenSymbolsSearchDialog(
     var searchQuery by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<OpenSymbolsClient.SymbolResult>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+    val isConfigured = OpenSymbolsClient.isConfigured()
+    val notConfiguredMessage = stringResource(Res.string.opensymbols_not_configured)
+    val normalizedQuery = searchQuery.trim()
+
+    LaunchedEffect(isConfigured, normalizedQuery) {
+        if (!isConfigured) {
+            isLoading = false
+            results = emptyList()
+            return@LaunchedEffect
+        }
+
+        if (normalizedQuery.isBlank()) {
+            isLoading = false
+            results = emptyList()
+            return@LaunchedEffect
+        }
+
+        isLoading = true
+        results = OpenSymbolsClient.search(normalizedQuery)
+        isLoading = false
+    }
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Search OpenSymbols") },
+        title = { Text(stringResource(Res.string.opensymbols_search_title)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth().heightIn(min = 300.dp, max = 500.dp)) {
                 // Search input
@@ -46,34 +70,28 @@ fun OpenSymbolsSearchDialog(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = { Text("Search for pictogram...") },
+                    label = { Text(stringResource(Res.string.opensymbols_search_label)) },
                     singleLine = true,
-                    trailingIcon = {
-                        IconButton(onClick = {
-                            if (searchQuery.isNotBlank()) {
-                                isLoading = true
-                                scope.launch {
-                                    results = OpenSymbolsClient.search(searchQuery)
-                                    isLoading = false
-                                }
-                            }
-                        }) {
-                            Icon(Icons.Filled.Search, contentDescription = "Search")
-                        }
-                    },
                     modifier = Modifier.fillMaxWidth().then(showKeyboard)
                 )
                 
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 // Results grid
-                if (isLoading) {
+                if (!isConfigured) {
+                    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                        Text(
+                            notConfiguredMessage,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } else if (isLoading) {
                     Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
-                } else if (results.isEmpty() && searchQuery.isNotBlank()) {
+                } else if (results.isEmpty() && normalizedQuery.isNotBlank()) {
                     Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                        Text("No results found", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(Res.string.opensymbols_no_results), style = MaterialTheme.typography.bodyMedium)
                     }
                 } else {
                     LazyVerticalGrid(
@@ -98,7 +116,7 @@ fun OpenSymbolsSearchDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
         }
     )
 }

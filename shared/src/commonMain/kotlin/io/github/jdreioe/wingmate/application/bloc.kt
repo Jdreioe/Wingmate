@@ -43,7 +43,7 @@ abstract class Bloc<E, S>(initial: S) {
 // App-specific blocs
 sealed class PhraseEvent {
     data class Add(val phrase: Phrase) : PhraseEvent()
-    // Legacy: categories are now stored in CategoryRepository; this event is no-op retained for binary compatibility
+    // Legacy event kept for binary compatibility; handled through CategoryUseCase.
     data class AddCategory(val category: io.github.jdreioe.wingmate.domain.CategoryItem) : PhraseEvent()
     data class Edit(val phrase: Phrase) : PhraseEvent()
     data class Delete(val id: String) : PhraseEvent()
@@ -57,9 +57,17 @@ data class PhraseState(
     val error: String? = null
 )
 
-class PhraseBloc(private val useCase: PhraseUseCase) : Bloc<PhraseEvent, PhraseState>(PhraseState()) {
+class PhraseBloc(
+    private val useCase: PhraseUseCase,
+    private val featureUsageReporter: FeatureUsageReporter,
+    private val categoryUseCase: CategoryUseCase
+) : Bloc<PhraseEvent, PhraseState>(PhraseState()) {
     // Backward-compatible constructor for existing DI setups that pass a repository
-    constructor(repo: PhraseRepository) : this(PhraseUseCase(repo))
+    constructor(repo: PhraseRepository) : this(
+        PhraseUseCase(repo),
+        NoopFeatureUsageReporter(),
+        CategoryUseCase(io.github.jdreioe.wingmate.infrastructure.InMemoryCategoryRepository(), NoopFeatureUsageReporter())
+    )
 
     override suspend fun handle(event: PhraseEvent) {
         when (event) {
@@ -76,17 +84,36 @@ class PhraseBloc(private val useCase: PhraseUseCase) : Bloc<PhraseEvent, PhraseS
                 setState { it.copy(loading = true, error = null) }
                 try {
                     useCase.add(event.phrase)
+                    featureUsageReporter.reportEvent(
+                        FeatureUsageEvents.PHRASE_ADDED,
+                        "has_category" to (!event.phrase.parentId.isNullOrBlank()).toString(),
+                        "has_recording" to (!event.phrase.recordingPath.isNullOrBlank()).toString()
+                    )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
             }
-            is PhraseEvent.AddCategory -> { /* no-op after model unification */ }
+            is PhraseEvent.AddCategory -> {
+                setState { it.copy(loading = true, error = null) }
+                try {
+                    categoryUseCase.add(event.category)
+                    val list = useCase.list()
+                    setState { it.copy(loading = false, items = list) }
+                } catch (t: Throwable) {
+                    setState { it.copy(loading = false, error = t.message) }
+                }
+            }
             is PhraseEvent.Edit -> {
                 setState { it.copy(loading = true, error = null) }
                 try {
                     useCase.update(event.phrase)
+                    featureUsageReporter.reportEvent(
+                        FeatureUsageEvents.PHRASE_EDITED,
+                        "has_category" to (!event.phrase.parentId.isNullOrBlank()).toString(),
+                        "has_recording" to (!event.phrase.recordingPath.isNullOrBlank()).toString()
+                    )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
                 } catch (t: Throwable) {
@@ -97,6 +124,10 @@ class PhraseBloc(private val useCase: PhraseUseCase) : Bloc<PhraseEvent, PhraseS
                 setState { it.copy(loading = true, error = null) }
                 try {
                     useCase.delete(event.id)
+                    featureUsageReporter.reportEvent(
+                        FeatureUsageEvents.PHRASE_DELETED,
+                        "source" to "phrase_bloc"
+                    )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
                 } catch (t: Throwable) {
@@ -107,6 +138,11 @@ class PhraseBloc(private val useCase: PhraseUseCase) : Bloc<PhraseEvent, PhraseS
                 setState { it.copy(loading = true, error = null) }
                 try {
                     useCase.move(event.fromIndex, event.toIndex)
+                    featureUsageReporter.reportEvent(
+                        FeatureUsageEvents.PHRASE_MOVED,
+                        "from_index" to event.fromIndex.toString(),
+                        "to_index" to event.toIndex.toString()
+                    )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
                 } catch (t: Throwable) {
@@ -173,7 +209,7 @@ class VoiceBloc(
     private val useCase: VoiceUseCase
 ) : Bloc<VoiceEvent, VoiceState>(VoiceState()) {
     constructor(repo: VoiceRepository, azure: AzureVoiceCatalog, configRepo: io.github.jdreioe.wingmate.domain.ConfigRepository) : this(
-        VoiceUseCase(repo, azure, configRepo)
+        VoiceUseCase(repo, azure, configRepo, NoopFeatureUsageReporter())
     )
 
     override suspend fun handle(event: VoiceEvent) {
