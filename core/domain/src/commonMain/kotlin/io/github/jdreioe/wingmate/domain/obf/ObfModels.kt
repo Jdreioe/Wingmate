@@ -45,8 +45,7 @@ data class ObfButton(
     // Linking to other boards
     @SerialName("load_board")
     val loadBoard: ObfLoadBoard? = null,
-    // Action overrides (proprietary or extensions, captured loosely if needed, or structured)
-    // For now we map common ones or leave extensions for specialized handling
+    val hidden: Boolean = false
 )
 
 @Serializable

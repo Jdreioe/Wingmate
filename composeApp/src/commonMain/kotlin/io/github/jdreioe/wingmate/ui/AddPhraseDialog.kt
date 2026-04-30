@@ -88,6 +88,7 @@ fun AddPhraseDialog(
     var recordingError by remember { mutableStateOf<String?>(null) }
     var selectedColor by remember { mutableStateOf(initialPhrase?.backgroundColor?.let { parseHexToColor(it) } ?: Color.Blue) }
     var useColor by remember { mutableStateOf(initialPhrase?.backgroundColor != null) }
+    var isHidden by remember { mutableStateOf(initialPhrase?.isHidden ?: false) }
     var hue by remember { mutableStateOf(0f) }
     var value by remember { mutableStateOf(1f) }
     var selectedCategory by remember {
@@ -370,7 +371,62 @@ fun AddPhraseDialog(
                         }
                     )
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Fitzgerald Key Presets
+                Text(stringResource(Res.string.phrase_color_label), style = MaterialTheme.typography.labelMedium)
                 Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val presets = listOf(
+                        Color(0xFFFFF176) to "People", // Yellow
+                        Color(0xFFAED581) to "Action", // Green
+                        Color(0xFFFFB74D) to "Things", // Orange
+                        Color(0xFF81D4FA) to "Descriptive", // Blue
+                        Color(0xFFF48FB1) to "Social", // Pink
+                        Color(0xFFE0E0E0) to "Misc" // Grey
+                    )
+                    presets.forEach { (color, _) ->
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .border(
+                                    width = if (useColor && selectedColor == color) 2.dp else 1.dp,
+                                    color = if (useColor && selectedColor == color) MaterialTheme.colorScheme.primary else Color.Gray,
+                                    shape = CircleShape
+                                )
+                                .clickable {
+                                    selectedColor = color
+                                    useColor = true
+                                }
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Hidden Toggle
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(
+                        checked = isHidden,
+                        onCheckedChange = { isHidden = it }
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(stringResource(Res.string.phrase_edit_hidden_title), style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            stringResource(Res.string.phrase_edit_hidden_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Category dropdown
                 if (categories.isNotEmpty()) {
@@ -446,7 +502,8 @@ fun AddPhraseDialog(
                             backgroundColor = hex,
                             imageUrl = imageUrl.trim().ifEmpty { null },
                             parentId = selectedCategory?.id,
-                            recordingPath = finalRecordingPath
+                            recordingPath = finalRecordingPath,
+                            isHidden = isHidden
                         )
                     } else {
                         Phrase(
@@ -457,7 +514,8 @@ fun AddPhraseDialog(
                             imageUrl = imageUrl.trim().ifEmpty { null },
                             parentId = selectedCategory?.id,
                             createdAt = System.currentTimeMillis(),
-                            recordingPath = finalRecordingPath
+                            recordingPath = finalRecordingPath,
+                            isHidden = isHidden
                         )
                     }
                     onSave(phrase)

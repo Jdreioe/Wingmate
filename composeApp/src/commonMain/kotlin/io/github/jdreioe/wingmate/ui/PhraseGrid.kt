@@ -55,18 +55,23 @@ fun PhraseGrid(
     readOnly: Boolean = false,
     onCopyAudio: ((filePath: String) -> Unit)? = null,
 ) {
+    val settings by rememberReactiveSettings()
+    // Filter out hidden phrases unless in wiggle mode
+    val visiblePhrases = remember(phrases, isWiggleMode) {
+        if (isWiggleMode) phrases else phrases.filter { !it.isHidden }
+    }
     // Build item list; when not in wiggle mode show an Add button as last tile
     val showAdd = !isWiggleMode && showAddTile
-    val itemCount = if (showAdd) phrases.size + 1 else phrases.size
+    val itemCount = if (showAdd) visiblePhrases.size + 1 else visiblePhrases.size
 
     var showAddDialog by remember { mutableStateOf(false) }
 
-    LazyVerticalGrid(columns = GridCells.Fixed(3), contentPadding = PaddingValues(4.dp)) {
+    LazyVerticalGrid(columns = GridCells.Fixed(settings.gridColumns), contentPadding = PaddingValues(4.dp)) {
         items(
             count = itemCount,
-            key = { index -> if (showAdd && index == phrases.size) "add_tile" else phrases[index].id }
+            key = { index -> if (showAdd && index == visiblePhrases.size) "add_tile" else visiblePhrases[index].id }
         ) { index ->
-            if (showAdd && index == phrases.size) {
+            if (showAdd && index == visiblePhrases.size) {
                 // Add button as card
                 Card(
                     modifier = Modifier
@@ -89,7 +94,7 @@ fun PhraseGrid(
                     }
                 }
             } else {
-                val item = phrases[index]
+                val item = visiblePhrases[index]
                 // When edit mode is active, expose move and delete buttons
                 val categoryName = categories.firstOrNull { it.id == item.parentId }?.name
                 PhraseGridItem(
@@ -105,7 +110,7 @@ fun PhraseGrid(
                     phraseHeight = phraseHeight,
                     phraseFontSize = phraseFontSize,
                     index = index,
-                    total = phrases.size,
+                    total = visiblePhrases.size,
                     readOnly = readOnly,
                     onCopyAudio = onCopyAudio,
                 )

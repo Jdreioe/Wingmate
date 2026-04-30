@@ -30,8 +30,15 @@ import wingmatekmp.composeapp.generated.resources.ui_settings_note_scaling_moved
 import wingmatekmp.composeapp.generated.resources.ui_settings_partner_window_desc
 import wingmatekmp.composeapp.generated.resources.ui_settings_partner_window_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_title
-import wingmatekmp.composeapp.generated.resources.ui_settings_virtual_mic_desc
 import wingmatekmp.composeapp.generated.resources.ui_settings_virtual_mic_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_accessibility_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_show_labels_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_show_symbols_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_label_at_top_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_hold_to_select_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_hold_to_select_desc
+import wingmatekmp.composeapp.generated.resources.ui_settings_grid_columns_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_high_contrast_title
 
 /**
  * Bridge for desktop-only partner window detection.
@@ -61,6 +68,12 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
     var autoUpdateEnabled by remember { mutableStateOf(true) }
     var featureUsageReportingEnabled by remember { mutableStateOf(false) }
     var partnerWindowEnabled by remember { mutableStateOf(false) }
+    var showLabels by remember { mutableStateOf(true) }
+    var showSymbols by remember { mutableStateOf(true) }
+    var labelAtTop by remember { mutableStateOf(false) }
+    var holdToSelectMillis by remember { mutableStateOf(0L) }
+    var gridColumns by remember { mutableStateOf(3) }
+    var highContrastMode by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
@@ -81,6 +94,12 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
         autoUpdateEnabled = s.autoUpdateEnabled
         featureUsageReportingEnabled = s.featureUsageReportingEnabled
         partnerWindowEnabled = s.partnerWindowEnabled
+        showLabels = s.showLabels
+        showSymbols = s.showSymbols
+        labelAtTop = s.labelAtTop
+        holdToSelectMillis = s.holdToSelectMillis
+        gridColumns = s.gridColumns
+        highContrastMode = s.highContrastMode
         featureUsageReporter.setEnabled(s.featureUsageReportingEnabled)
         loading = false
     }
@@ -189,6 +208,121 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
                             )
                         }
                     }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Accessibility Section
+                Text(
+                    stringResource(Res.string.ui_settings_accessibility_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                // Show Labels
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(
+                        checked = showLabels,
+                        onCheckedChange = { checked ->
+                            showLabels = checked
+                            updateSettings { it.copy(showLabels = checked) }
+                        }
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(stringResource(Res.string.ui_settings_show_labels_title))
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Show Symbols
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(
+                        checked = showSymbols,
+                        onCheckedChange = { checked ->
+                            showSymbols = checked
+                            updateSettings { it.copy(showSymbols = checked) }
+                        }
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(stringResource(Res.string.ui_settings_show_symbols_title))
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Label position (only if labels shown)
+                if (showLabels && showSymbols) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = labelAtTop,
+                            onCheckedChange = { checked ->
+                                labelAtTop = checked
+                                updateSettings { it.copy(labelAtTop = checked) }
+                            }
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(stringResource(Res.string.ui_settings_label_at_top_title))
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                // Hold to Select
+                Column {
+                    Text(
+                        stringResource(Res.string.ui_settings_hold_to_select_title) + ": $holdToSelectMillis",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        stringResource(Res.string.ui_settings_hold_to_select_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Slider(
+                        value = holdToSelectMillis.toFloat(),
+                        onValueChange = { 
+                            holdToSelectMillis = it.toLong()
+                        },
+                        onValueChangeFinished = {
+                            updateSettings { it.copy(holdToSelectMillis = holdToSelectMillis) }
+                        },
+                        valueRange = 0f..2000f,
+                        steps = 19 // 0, 100, 200, ..., 2000
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // High Contrast Mode
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(
+                        checked = highContrastMode,
+                        onCheckedChange = { checked ->
+                            highContrastMode = checked
+                            updateSettings { it.copy(highContrastMode = checked) }
+                        }
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(stringResource(Res.string.ui_settings_high_contrast_title))
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Grid Columns Slider
+                Column {
+                    Text(
+                        stringResource(Res.string.ui_settings_grid_columns_title) + ": $gridColumns",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Slider(
+                        value = gridColumns.toFloat(),
+                        onValueChange = { 
+                            gridColumns = it.toInt()
+                        },
+                        onValueChangeFinished = {
+                            updateSettings { it.copy(gridColumns = gridColumns) }
+                        },
+                        valueRange = 1f..6f,
+                        steps = 4 // 1, 2, 3, 4, 5, 6
+                    )
                 }
             }
         },

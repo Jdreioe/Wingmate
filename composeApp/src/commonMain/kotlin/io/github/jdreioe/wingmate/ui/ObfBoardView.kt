@@ -20,9 +20,11 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.net.URL
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import kotlinx.coroutines.withTimeoutOrNull
 
 // Simple in-memory cache for downloaded images
 private val imageCache = mutableMapOf<String, ByteArray>()
@@ -32,8 +34,10 @@ fun ObfBoardView(
     board: ObfBoard,
     onButtonClick: (ObfButton) -> Unit,
     modifier: Modifier = Modifier,
-    extractedImages: Map<String, ByteArray> = emptyMap()
+    extractedImages: Map<String, ByteArray> = emptyMap(),
+    isEditMode: Boolean = false // Added for hidden button visibility
 ) {
+    val settings by rememberReactiveSettings()
     // If grid is defined, use it. Otherwise, just listing buttons (fallback)
     val grid = board.grid
     val buttonsById = remember(board) { board.buttons.associateBy { it.id } }
@@ -57,10 +61,13 @@ fun ObfBoardView(
                         val buttonId = row.getOrNull(colIndex)
                         val button = buttonId?.let { buttonsById[it] }
                         
+                        // Filter hidden buttons unless in edit mode
+                        val isVisible = button != null && (!button.hidden || isEditMode)
+                        
                         Box(
                             modifier = Modifier.weight(1f).fillMaxHeight()
                         ) {
-                            if (button != null) {
+                            if (button != null && isVisible) {
                                 val image = button.imageId?.let { imagesById[it] }
                                 ObfButtonItem(
                                     button = button,
@@ -68,7 +75,8 @@ fun ObfBoardView(
                                     extractedImageBytes = button.imageId?.let { 
                                         image?.path?.let { path -> extractedImages[path] }
                                     },
-                                    onClick = { onButtonClick(button) }
+                                    onClick = { onButtonClick(button) },
+                                    isEditMode = isEditMode
                                 )
                             } else {
                                 Spacer(modifier = Modifier.fillMaxSize())
@@ -117,12 +125,29 @@ fun ObfButtonItem(
     button: ObfButton,
     image: ObfImage? = null,
     extractedImageBytes: ByteArray? = null,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isEditMode: Boolean = false
 ) {
-    val bgColor = button.backgroundColor?.let { runCatching { parseHexToColor(it) }.getOrNull() } 
-        ?: MaterialTheme.colorScheme.surfaceVariant
+    val settings by rememberReactiveSettings()
     
-    val borderColor = button.borderColor?.let { runCatching { parseHexToColor(it) }.getOrNull() }
+    // High Contrast Overrides
+    val highContrastContainer = if (MaterialTheme.colorScheme.surface == Color.Black || settings.forceDarkTheme == true) Color.Black else Color.White
+    val highContrastContent = if (highContrastContainer == Color.Black) Color.White else Color.Black
+    
+    val bgColor = if (settings.highContrastMode) {
+        highContrastContainer
+    } else {
+        button.backgroundColor?.let { runCatching { parseHexToColor(it) }.getOrNull() } 
+            ?: MaterialTheme.colorScheme.surfaceVariant
+    }
+    
+    val borderColor = if (settings.highContrastMode) {
+        highContrastContent
+    } else {
+        button.borderColor?.let { runCatching { parseHexToColor(it) }.getOrNull() }
+    }
+    
+    val contentColor = if (settings.highContrastMode) highContrastContent else MaterialTheme.colorScheme.onSurface
     
     // State for async-loaded image
     var urlLoadedBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -169,11 +194,39 @@ fun ObfButtonItem(
     val imageBitmap = syncBitmap ?: urlLoadedBitmap
     
     Card(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(if (settings.highContrastMode) 2.dp else 0.dp)
+            .alpha(if (button.hidden && isEditMode) 0.5f else 1f)
+            .let { baseModifier ->
+                val primaryAction = { onClick() }
+                
+                if (settings.holdToSelectMillis > 0 && !isEditMode) {
+                    baseModifier.pointerInput(settings.holdToSelectMillis) {
+                        detectTapGestures(
+                            onPress = {
+                                val completed = withTimeoutOrNull(settings.holdToSelectMillis) {
+                                    tryAwaitRelease()
+                                    false
+                                } ?: true
+                                if (completed) {
+                                    primaryAction()
+                                    tryAwaitRelease()
+                                }
+                            }
+                        )
+                    }
+                } else {
+                    baseModifier.combinedClickable(
+                        onClick = { primaryAction() }
+                    )
+                }
+            },
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = bgColor),
-        border = if (borderColor != null) androidx.compose.foundation.BorderStroke(2.dp, borderColor) else null,
-        onClick = onClick
+        border = if (borderColor != null || settings.highContrastMode) {
+             androidx.compose.foundation.BorderStroke(if (settings.highContrastMode) 3.dp else 2.dp, borderColor ?: highContrastContent)
+        } else null,
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(4.dp), contentAlignment = Alignment.Center) {
             Column(
@@ -181,24 +234,47 @@ fun ObfButtonItem(
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxSize()
             ) {
-                if (imageBitmap != null) {
-                    Image(
-                        bitmap = imageBitmap,
-                        contentDescription = button.label,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
-                    )
-                }
-                val labelText = button.label ?: button.vocalization
-                if (!labelText.isNullOrBlank()) {
+                val showImg = imageBitmap != null && settings.showSymbols
+                val showLbl = settings.showLabels && !(button.label.isNullOrBlank() && button.vocalization.isNullOrBlank())
+
+                if (settings.labelAtTop && showImg && showLbl) {
+                    // Label at Top
+                    val labelText = button.label ?: button.vocalization ?: ""
                     Text(
                         text = labelText,
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = if (imageBitmap != null) 1 else 2,
+                        color = contentColor,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    Image(
+                        bitmap = imageBitmap!!,
+                        contentDescription = button.label,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
+                    )
+                } else {
+                    // Normal order (Image at Top)
+                    if (showImg) {
+                        Image(
+                            bitmap = imageBitmap!!,
+                            contentDescription = button.label,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
+                        )
+                    }
+                    if (showLbl) {
+                        val labelText = button.label ?: button.vocalization ?: ""
+                        Text(
+                            text = labelText,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            color = contentColor,
+                            maxLines = if (imageBitmap != null) 1 else 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }

@@ -9,6 +9,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -80,8 +82,20 @@ fun PhraseGridItem(
     val moveUpLabel = stringResource(Res.string.phrase_item_move_up)
     val moveDownLabel = stringResource(Res.string.phrase_item_move_down)
 
-    val bgColor = item.backgroundColor?.let { try { parseHexToColor(it) } catch (_: Throwable) { MaterialTheme.colorScheme.surface } } ?: MaterialTheme.colorScheme.surface
-
+    val settings by rememberReactiveSettings()
+    
+    // High Contrast Overrides
+    val highContrastContainer = if (MaterialTheme.colorScheme.surface == Color.Black || settings.forceDarkTheme == true) Color.Black else Color.White
+    val highContrastContent = if (highContrastContainer == Color.Black) Color.White else Color.Black
+    
+    val bgColor = if (settings.highContrastMode) {
+        highContrastContainer
+    } else {
+        item.backgroundColor?.let { try { parseHexToColor(it) } catch (_: Throwable) { MaterialTheme.colorScheme.surface } } ?: MaterialTheme.colorScheme.surface
+    }
+    
+    val contentColor = if (settings.highContrastMode) highContrastContent else MaterialTheme.colorScheme.onSurface
+    
     var showMenu by remember { mutableStateOf(false) }
 
         Card(
@@ -89,12 +103,40 @@ fun PhraseGridItem(
             .padding(4.dp)
             .fillMaxWidth()
             .height(phraseHeight)
-            // long-press opens contextual menu; tap inserts if onTap provided
-            .combinedClickable(
-                onClick = { showMenu = false; try { onTap?.invoke() ?: onPlay() } catch (_: Throwable) {} },
-                onLongClick = { showMenu = true }
-            ),
-        shape = RoundedCornerShape(8.dp)
+            .alpha(if (item.isHidden) 0.5f else 1.0f)
+            .let { baseModifier ->
+                val primaryAction = {
+                    showMenu = false
+                    try { onTap?.invoke() ?: onPlay() } catch (_: Throwable) {}
+                }
+                
+                if (settings.holdToSelectMillis > 0 && !isEditMode) {
+                    baseModifier.pointerInput(settings.holdToSelectMillis) {
+                        detectTapGestures(
+                            onPress = {
+                                val completed = withTimeoutOrNull(settings.holdToSelectMillis) {
+                                    tryAwaitRelease()
+                                    false
+                                } ?: true
+                                if (completed) {
+                                    primaryAction()
+                                    tryAwaitRelease()
+                                }
+                            },
+                            onLongPress = { showMenu = true }
+                        )
+                    }
+                } else {
+                    baseModifier.combinedClickable(
+                        onClick = { primaryAction() },
+                        onLongClick = { showMenu = true }
+                    )
+                }
+            },
+        shape = RoundedCornerShape(8.dp),
+        border = if (settings.highContrastMode) {
+            androidx.compose.foundation.BorderStroke(3.dp, highContrastContent)
+        } else null
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                     // contextual menu (appears on long-press or right-click)
@@ -206,18 +248,37 @@ fun PhraseGridItem(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Show image if loaded
-                    if (imageBitmap != null) {
+                    val showImg = imageBitmap != null && settings.showSymbols
+                    val showLbl = settings.showLabels
+
+                    if (settings.labelAtTop && showImg && showLbl) {
+                        // Label at Top
+                        val baseLarge = MaterialTheme.typography.bodyLarge
+                        val effectiveLarge = if (phraseFontSize != TextUnit.Unspecified) baseLarge.copy(fontSize = phraseFontSize) else baseLarge
+                        Text(text = item.text, style = effectiveLarge, color = contentColor)
+                        
                         androidx.compose.foundation.Image(
                             bitmap = imageBitmap!!,
                             contentDescription = item.text,
                             contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(4.dp)
                         )
+                    } else {
+                        // Normal order (Image at Top)
+                        if (showImg) {
+                            androidx.compose.foundation.Image(
+                                bitmap = imageBitmap!!,
+                                contentDescription = item.text,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                modifier = Modifier.weight(1f).fillMaxWidth().padding(4.dp)
+                            )
+                        }
+                        if (showLbl) {
+                            val baseLarge = MaterialTheme.typography.bodyLarge
+                            val effectiveLarge = if (phraseFontSize != TextUnit.Unspecified) baseLarge.copy(fontSize = phraseFontSize) else baseLarge
+                            Text(text = item.text, style = effectiveLarge, color = contentColor)
+                        }
                     }
-                    val baseLarge = MaterialTheme.typography.bodyLarge
-                    val effectiveLarge = if (phraseFontSize != TextUnit.Unspecified) baseLarge.copy(fontSize = phraseFontSize) else baseLarge
-                    Text(text = item.text, style = effectiveLarge, color = MaterialTheme.colorScheme.onSurface)
                 }
             }
 

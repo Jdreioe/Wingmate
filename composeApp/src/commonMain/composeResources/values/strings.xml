@@ -186,4 +186,14 @@
     <string name="phrase_screen_error">Error: %1$s</string>
     <string name="phrase_screen_enter_text_placeholder">Enter text to speak</string>
     <string name="phrase_screen_ssml_controls">SSML Controls</string>
+    <string name="ui_settings_accessibility_title">Accessibility</string>
+    <string name="ui_settings_show_labels_title">Show button labels</string>
+    <string name="ui_settings_show_symbols_title">Show button symbols</string>
+    <string name="ui_settings_label_at_top_title">Put label at top of button</string>
+    <string name="ui_settings_hold_to_select_title">Hold to select (ms)</string>
+    <string name="ui_settings_hold_to_select_desc">Prevents accidental taps. Set to 0 to disable.</string>
+    <string name="ui_settings_grid_columns_title">Grid columns</string>
+    <string name="ui_settings_high_contrast_title">High contrast mode</string>
+    <string name="phrase_edit_hidden_title">Hidden</string>
+    <string name="phrase_edit_hidden_desc">Hide this phrase from the grid</string>
 </resources>

@@ -16,7 +16,8 @@ data class Phrase(
     val recordingPath: String? = null,
     // Layout preference: if true, this item (even if it is a folder) appears in the grid.
     // If null, defaults to true for items (linkedBoardId == null) and false for folders (linkedBoardId != null).
-    val isGridItem: Boolean? = null
+    val isGridItem: Boolean? = null,
+    val isHidden: Boolean = false
 )
 
 @Serializable
@@ -67,7 +68,14 @@ data class Settings(
     // On-screen keyboard scale (0.5 = half, 1.0 = normal, 2.0 = double)
     val oskKeyboardScale: Float = 1.0f,
     // Optional product analytics (Firebase on Android). Default is opt-out.
-    val featureUsageReportingEnabled: Boolean = false
+    val featureUsageReportingEnabled: Boolean = false,
+    // Accessibility settings (OpenAAC)
+    val showLabels: Boolean = true,
+    val showSymbols: Boolean = true,
+    val labelAtTop: Boolean = false,
+    val holdToSelectMillis: Long = 0,
+    val gridColumns: Int = 3,
+    val highContrastMode: Boolean = false
 )
 
 @Serializable
