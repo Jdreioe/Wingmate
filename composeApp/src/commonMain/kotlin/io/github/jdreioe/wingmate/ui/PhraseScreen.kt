@@ -90,6 +90,11 @@ import wingmatekmp.composeapp.generated.resources.phrase_screen_toggle_fullscree
 import wingmatekmp.composeapp.generated.resources.phrase_screen_voice_settings
 import wingmatekmp.composeapp.generated.resources.phrase_screen_welcome_screen
 
+private data class ThoughtDraft(
+    val input: TextFieldValue,
+    val secondaryLanguageRanges: List<TextRange>,
+)
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun PhraseScreen(
@@ -144,6 +149,8 @@ fun PhraseScreen(
             // Input state (hoisted so topBar History button can access it)
             var input by remember { mutableStateOf(TextFieldValue("")) }
             var secondaryLanguageRanges by remember { mutableStateOf<List<TextRange>>(emptyList()) }
+            var pinnedThoughtDraft by remember { mutableStateOf<ThoughtDraft?>(null) }
+            var scratchThoughtDraft by remember { mutableStateOf<ThoughtDraft?>(null) }
             val textFieldFocusRequester = remember { FocusRequester() }
             val refocusInput = remember(textFieldFocusRequester) {
                 { textFieldFocusRequester.requestFocus() }
@@ -587,6 +594,7 @@ fun PhraseScreen(
                         val selectionHasLength = normalizedSelection.spanLength() > 0
                         val selectionAlreadySecondary = selectionHasLength && isRangeFullySecondary(normalizedSelection, secondaryLanguageRanges)
                         PlaybackControls(
+                            
                             onPlay = {
                                 if (input.text.isBlank()) {
                                     refocusInput()
@@ -703,8 +711,40 @@ fun PhraseScreen(
                                 )
                                 refocusInput()
                             },
+                            onThatThought = {
+                                val activeDraft = ThoughtDraft(
+                                    input = input,
+                                    secondaryLanguageRanges = secondaryLanguageRanges
+                                )
+
+                                if (pinnedThoughtDraft == null) {
+                                    pinnedThoughtDraft = activeDraft
+                                    val draftToLoad = scratchThoughtDraft
+                                        ?: ThoughtDraft(TextFieldValue(""), emptyList())
+                                    input = draftToLoad.input
+                                    secondaryLanguageRanges = draftToLoad.secondaryLanguageRanges
+                                    featureUsageReporter.reportEvent(
+                                        FeatureUsageEvents.PLAYBACK_ON_THAT_THOUGHT,
+                                        "action" to "pin"
+                                    )
+                                } else {
+                                    scratchThoughtDraft = activeDraft
+                                    val restoredDraft = pinnedThoughtDraft ?: ThoughtDraft(TextFieldValue(""), emptyList())
+                                    pinnedThoughtDraft = null
+                                    input = restoredDraft.input
+                                    secondaryLanguageRanges = restoredDraft.secondaryLanguageRanges
+                                    featureUsageReporter.reportEvent(
+                                        FeatureUsageEvents.PLAYBACK_ON_THAT_THOUGHT,
+                                        "action" to "resume"
+                                    )
+                                }
+
+                                syncDisplayText(input.text)
+                                refocusInput()
+                            },
                             isSecondarySelectionActive = selectionAlreadySecondary,
-                            isSecondaryActionEnabled = selectionHasLength
+                            isSecondaryActionEnabled = selectionHasLength,
+                            isOnThatThoughtActive = pinnedThoughtDraft != null
                         )
                     }
                 }

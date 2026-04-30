@@ -37,6 +37,12 @@ kotlin {
     sourceSets {
     val commonMain by getting {
             dependencies {
+                api(project(":core:domain"))
+                api(project(":core:data"))
+                api(project(":core:presentation"))
+                api(project(":feature:communication:domain"))
+                api(project(":feature:communication:data"))
+                api(project(":feature:communication:presentation"))
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
                 implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")

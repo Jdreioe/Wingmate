@@ -35,7 +35,7 @@ import org.koin.dsl.module
 // Call this from iOS host after the Kotlin framework is initialized to register iOS-specific implementations.
 fun overrideIosSpeechService() {
     loadKoinModules(
-        module(createdAtStart = false, override = true) {
+        module(createdAtStart = false) {
             // Ktor client for iOS (Darwin engine)
             single<HttpClient> {
                 HttpClient(Darwin) {

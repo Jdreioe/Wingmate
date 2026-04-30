@@ -7,16 +7,29 @@ Wingmate is developed by Jonas, who has Cerebral Palsy (CP) and extensive experi
 
 ## Features:
 
-- Select voice
-- Native UI on iOS and Android
+### ✅ Implemented
+- Select voice (Azure Neural Voices, offline backup)
+- Native UI on iOS, Android, Desktop (Compose), Linux (Qt/QML)
 - Select primary language
-- Speak
-- Bring your own Speech Resource 
+- Speak (Azure TTS, system fallback)
+- Bring your own Speech Resource (Azure subscription)
 - Save Sentences & Categories
-- Cache Sentences
-- Offline Backup Voices
-- Hand Gesture Recognition: Long-term goal
-- Eye tracking support: Long-term goal
+- Cache Sentences (audio caching to reduce API costs)
+- Offline Backup Voices (download voices for offline use)
+- Text Prediction (n-gram based on user history)
+- Import OBF/OBZ boards (Open Board Format)
+- Partner Window (hand gesture recognition prototype)
+
+### 🔄 In Progress
+- Waterfall TTS (Cache → Azure → System fallback)
+- SQLDelight for audio cache metadata
+- Premium subscription (optional: managed Azure keys via token exchange)
+
+### 📋 Future Goals
+- Hand Gesture Recognition (full implementation)
+- Eye tracking support
+- Multi-user support
+- Cloud sync
 
 ## How to setup (the DYI version):
 

@@ -11,7 +11,6 @@ import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
-import kotlinx.datetime.Clock
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -145,7 +144,7 @@ class KoinBridge : KoinComponent {
     suspend fun listHistoryAsPhrases(): List<Phrase> {
         return try {
             val said = get<SaidTextRepository>().list()
-            val now = Clock.System.now().toEpochMilliseconds()
+            val now = 0L
             said.map { s ->
                 Phrase(
                     id = "history-" + (s.id?.toString() ?: (s.createdAt ?: s.date ?: now).toString()),

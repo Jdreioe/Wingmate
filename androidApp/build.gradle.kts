@@ -1,6 +1,13 @@
 import java.util.Properties
 import org.gradle.api.tasks.Sync
 
+fun toBuildConfigStringLiteral(value: String): String {
+    val escaped = value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+    return "\"$escaped\""
+}
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -19,12 +26,22 @@ android {
     val vCode = (versionProps.getProperty("versionCode") ?: "1").toInt()
     val vName = versionProps.getProperty("versionName") ?: "1.0"
 
+    val openSymbolsSecret = providers.environmentVariable("WINGMATE_OPENSYMBOLS_SECRET")
+        .orElse(providers.environmentVariable("OPENSYMBOLS_SECRET"))
+        .orElse(providers.environmentVariable("openSymbols"))
+        .orElse("")
+
     defaultConfig {
         applicationId = "com.hojmoseit.wingmate"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = vCode
         versionName = vName
+        buildConfigField(
+            "String",
+            "OPENSYMBOLS_SECRET",
+            toBuildConfigStringLiteral(openSymbolsSecret.get())
+        )
     }
 
     tasks.register("incrementVersionCode") {
@@ -43,7 +60,10 @@ android {
     }
 
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     sourceSets {
         getByName("main") {
@@ -83,6 +103,18 @@ val syncComposeAppComposeResources by tasks.registering(Sync::class) {
 }
 
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn(syncComposeAppComposeResources)
+}
+
+tasks.matching { it.name.endsWith("LintReportModel") || it.name.endsWith("LintVitalReportModel") }.configureEach {
+    dependsOn(syncComposeAppComposeResources)
+}
+
+tasks.matching { it.name.startsWith("lintAnalyze") }.configureEach {
+    dependsOn(syncComposeAppComposeResources)
+}
+
+tasks.matching { it.name == "lintVitalAnalyzeRelease" }.configureEach {
     dependsOn(syncComposeAppComposeResources)
 }
 

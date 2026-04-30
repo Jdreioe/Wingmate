@@ -141,11 +141,7 @@ private fun configureOpenSymbolsSecret() {
     OpenSymbolsClient.setSharedSecret(resolvedSecret)
 
     if (resolvedSecret.isNullOrBlank()) {
-        log.warn(
-            "OpenSymbols secret not configured. Configure Infisical (recommended), or set " +
-                "opensymbols_secret env var, wingmate.opensymbols.secret JVM property, " +
-                "or local.properties OPENSYMBOLS_SECRET."
-        )
+        log.warn("OpenSymbols secret is not configured; OpenSymbols search will be disabled")
     } else {
         log.info("OpenSymbols secret configured from runtime config")
     }
