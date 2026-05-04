@@ -58,6 +58,8 @@ import wingmatekmp.composeapp.generated.resources.phrase_pick_file
 import wingmatekmp.composeapp.generated.resources.phrase_play_button
 import wingmatekmp.composeapp.generated.resources.phrase_record_button
 import wingmatekmp.composeapp.generated.resources.phrase_record_hint
+import wingmatekmp.composeapp.generated.resources.phrase_edit_hidden_title
+import wingmatekmp.composeapp.generated.resources.phrase_edit_hidden_desc
 import wingmatekmp.composeapp.generated.resources.phrase_recording_finalize_failed
 import wingmatekmp.composeapp.generated.resources.phrase_recording_in_progress
 import wingmatekmp.composeapp.generated.resources.phrase_recording_label

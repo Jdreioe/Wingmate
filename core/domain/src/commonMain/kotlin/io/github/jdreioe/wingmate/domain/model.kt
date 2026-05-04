@@ -75,7 +75,11 @@ data class Settings(
     val labelAtTop: Boolean = false,
     val holdToSelectMillis: Long = 0,
     val gridColumns: Int = 3,
-    val highContrastMode: Boolean = false
+    val highContrastMode: Boolean = false,
+    val dwellToSelectMillis: Long = 0,
+    val selectionSoundEnabled: Boolean = false,
+    val auditoryFishingEnabled: Boolean = false,
+    val usageLoggingEnabled: Boolean = false
 )
 
 @Serializable

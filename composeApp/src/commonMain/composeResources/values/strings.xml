@@ -196,4 +196,11 @@
     <string name="ui_settings_high_contrast_title">High contrast mode</string>
     <string name="phrase_edit_hidden_title">Hidden</string>
     <string name="phrase_edit_hidden_desc">Hide this phrase from the grid</string>
+    <string name="ui_settings_dwell_to_select_title">Dwell to select (ms)</string>
+    <string name="ui_settings_dwell_to_select_desc">Select by hovering without clicking. Set to 0 to disable.</string>
+    <string name="ui_settings_selection_sound_title">Selection sound</string>
+    <string name="ui_settings_auditory_fishing_title">Auditory fishing</string>
+    <string name="ui_settings_auditory_fishing_desc">Whisper the label when a button is hovered or touched.</string>
+    <string name="ui_settings_usage_logging_title">Standardized logging (OBL)</string>
+    <string name="ui_settings_usage_logging_desc">Record usage data in Open Logging Format for clinical review.</string>
 </resources>

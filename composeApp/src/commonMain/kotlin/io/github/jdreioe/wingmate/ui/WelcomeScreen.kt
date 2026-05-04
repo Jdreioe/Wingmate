@@ -212,6 +212,6 @@ fun WelcomeScreen(
     }
 
     if (showUiSettings) {
-        UiSettingsDialog(onDismissRequest = { showUiSettings = false })
+        SettingsScreen(onDismiss = { showUiSettings = false })
     }
 }

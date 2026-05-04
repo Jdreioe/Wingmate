@@ -35,6 +35,9 @@ import io.github.jdreioe.wingmate.ui.PartnerWindowAvailability
 import org.koin.core.context.loadKoinModules
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
+import io.github.jdreioe.wingmate.infrastructure.DesktopPaths
+import okio.FileSystem
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import kotlinx.coroutines.runBlocking
 
@@ -66,6 +69,9 @@ fun overrideDesktopSpeechService() {
             // File picker for importing files
             singleOf(::DesktopFilePicker) { bind<FilePicker>() }
             singleOf(::JvmImageCacher) { bind<ImageCacher>() }
+            
+            single { FileSystem.SYSTEM }
+            single(named("logDir")) { DesktopPaths.dataDir().toAbsolutePath().toString() }
         }
     )
     // Optional: log the current virtual mic preference for visibility

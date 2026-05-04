@@ -58,6 +58,8 @@ import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfButton
+import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -118,6 +120,7 @@ fun PhraseScreen(
     val speechService = koinInject<io.github.jdreioe.wingmate.domain.SpeechService>()
     val saidRepo = koinInject<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
     val voiceUseCase = koinInject<VoiceUseCase>()
+    val aacLogger = koinInject<io.github.jdreioe.wingmate.domain.AacLogger>()
     val boardRepo = koinInject<io.github.jdreioe.wingmate.domain.BoardRepository>()
     val obfParser = koinInject<io.github.jdreioe.wingmate.infrastructure.ObfParser>()
     val dictionaryRepo = koinInject<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>()
@@ -140,7 +143,7 @@ fun PhraseScreen(
     val selectBoardDialogTitle = stringResource(Res.string.phrase_screen_select_board_title)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        // Load persisted primary language for display in top bar
+        // Load persisted primary language for display in top e
         // Use the reactive settings as key to ensure this updates when settings change
         val primaryLanguageState = produceState(initialValue = settings.primaryLanguage, key1 = settings.primaryLanguage) {
             value = settings.primaryLanguage
@@ -195,6 +198,9 @@ fun PhraseScreen(
             var boardStack by remember { mutableStateOf<List<ObfBoard>>(emptyList()) }
             // Extracted images from OBZ (path -> bytes)
             var extractedImages by remember { mutableStateOf<Map<String, ByteArray>>(emptyMap()) }
+            
+            // Selected buttons for Symbol Bar
+            var selectedObfButtons by remember { mutableStateOf<List<Pair<ObfButton, ImageBitmap?>>>(emptyList()) }
 
             LaunchedEffect(initialBoardId, boardRepo) {
                 if (initialBoardId.isNullOrBlank()) return@LaunchedEffect
@@ -306,22 +312,7 @@ fun PhraseScreen(
                                 Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.phrase_screen_menu_cd))
                             }
                             DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
-                                // === VOICE & SPEECH ===
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.common_language), style = MaterialTheme.typography.bodyMedium) },
-                                    onClick = { showOverflow = false; showUiLanguageDialog = true }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.phrase_screen_voice_settings), style = MaterialTheme.typography.bodyMedium) },
-                                    onClick = {
-                                        showOverflow = false
-                                        showVoiceSelection = true
-                                        featureUsageReporter.reportEvent(
-                                            FeatureUsageEvents.SETTINGS_UPDATED,
-                                            "action" to "open_voice_settings"
-                                        )
-                                    }
-                                )
+                                // === SPEECH TOOLS ===
                                 DropdownMenuItem(
                                     text = { Text(stringResource(Res.string.phrase_screen_pronunciation_dictionary), style = MaterialTheme.typography.bodyMedium) },
                                     onClick = {
@@ -1430,6 +1421,8 @@ fun PhraseScreen(
                             // Board grid
                             ObfBoardView(
                                 board = currentBoard!!,
+                                extractedImages = extractedImages,
+                                selectedButtons = selectedObfButtons,
                                 onButtonClick = { button ->
                                     // Check if this is a linking button
                                     val loadBoard = button.loadBoard
@@ -1447,6 +1440,13 @@ fun PhraseScreen(
                                         // Normal button - speak and append text
                                         val textToSpeak = button.vocalization ?: button.label
                                         if (!textToSpeak.isNullOrBlank()) {
+                                            // Append to main input text field for consistency
+                                            val newText = if (input.text.isEmpty()) textToSpeak else "${input.text} $textToSpeak"
+                                            input = TextFieldValue(newText, selection = TextRange(newText.length))
+                                            
+                                            // Append to Symbol Bar list
+                                            selectedObfButtons = selectedObfButtons + (button to null)
+                                            
                                             uiScope.launch(Dispatchers.IO) {
                                                 val selected = runCatching { voiceUseCase.selected() }.getOrNull()
                                                 val playedRecording = runCatching {
@@ -1461,18 +1461,45 @@ fun PhraseScreen(
                                                     speechService.speak(textToSpeak, selected)
                                                 }
                                             }
-                                            val fv = input
-                                            val pos = fv.selection.start.coerceIn(0, fv.text.length)
-                                            val insertText = "$textToSpeak "
-                                            val newText = fv.text.substring(0, pos) + insertText + fv.text.substring(pos)
-                                            val newCursor = pos + insertText.length
-                                            input = TextFieldValue(newText, selection = TextRange(newCursor))
                                             syncDisplayText(newText)
                                         }
                                     }
                                 },
-                                modifier = Modifier.weight(1f).fillMaxWidth(),
-                                extractedImages = extractedImages
+                                onSpeakSentence = {
+                                    if (input.text.isNotBlank()) {
+                                        aacLogger.logSentenceSpeak(input.text)
+                                        uiScope.launch(Dispatchers.IO) {
+                                            val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                                            speechService.speak(input.text, selected)
+                                        }
+                                    }
+                                },
+                                onDeleteLast = {
+                                    if (selectedObfButtons.isNotEmpty()) {
+                                        val last = selectedObfButtons.last().first
+                                        val textToRemove = last.vocalization ?: last.label ?: ""
+                                        selectedObfButtons = selectedObfButtons.dropLast(1)
+                                        
+                                        val currentText = input.text.trim()
+                                        val newText = if (currentText.endsWith(textToRemove)) {
+                                            currentText.removeSuffix(textToRemove).trim()
+                                        } else {
+                                            currentText.substringBeforeLast(" ").trim()
+                                        }
+                                        input = TextFieldValue(newText, selection = TextRange(newText.length))
+                                        syncDisplayText(newText)
+                                    } else if (input.text.isNotEmpty()) {
+                                        val newText = input.text.dropLast(1)
+                                        input = TextFieldValue(newText, selection = TextRange(newText.length))
+                                        syncDisplayText(newText)
+                                    }
+                                },
+                                onClearSentence = {
+                                    selectedObfButtons = emptyList()
+                                    input = TextFieldValue("")
+                                    syncDisplayText("")
+                                },
+                                modifier = Modifier.weight(1f).fillMaxWidth()
                             )
                         }
                     }
@@ -1498,7 +1525,7 @@ fun PhraseScreen(
             }
 
             if (showSettingsDialog) {
-                AzureSettingsDialog(show = true, onDismiss = { showSettingsDialog = false }, onSaved = { showSettingsDialog = false })
+                SettingsScreen(onDismiss = { showSettingsDialog = false }, onSaved = { showSettingsDialog = false })
             }
             if (showVoiceSelection) {
                 VoiceSelectionDialog(show = true, onDismiss = { showVoiceSelection = false })

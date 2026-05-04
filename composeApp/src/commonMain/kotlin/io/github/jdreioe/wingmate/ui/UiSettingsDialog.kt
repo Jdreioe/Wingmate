@@ -31,6 +31,7 @@ import wingmatekmp.composeapp.generated.resources.ui_settings_partner_window_des
 import wingmatekmp.composeapp.generated.resources.ui_settings_partner_window_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_virtual_mic_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_virtual_mic_desc
 import wingmatekmp.composeapp.generated.resources.ui_settings_accessibility_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_show_labels_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_show_symbols_title
@@ -39,6 +40,13 @@ import wingmatekmp.composeapp.generated.resources.ui_settings_hold_to_select_tit
 import wingmatekmp.composeapp.generated.resources.ui_settings_hold_to_select_desc
 import wingmatekmp.composeapp.generated.resources.ui_settings_grid_columns_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_high_contrast_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_dwell_to_select_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_dwell_to_select_desc
+import wingmatekmp.composeapp.generated.resources.ui_settings_selection_sound_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_auditory_fishing_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_auditory_fishing_desc
+import wingmatekmp.composeapp.generated.resources.ui_settings_usage_logging_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_usage_logging_desc
 
 /**
  * Bridge for desktop-only partner window detection.
@@ -74,6 +82,10 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
     var holdToSelectMillis by remember { mutableStateOf(0L) }
     var gridColumns by remember { mutableStateOf(3) }
     var highContrastMode by remember { mutableStateOf(false) }
+    var dwellToSelectMillis by remember { mutableStateOf(0L) }
+    var selectionSoundEnabled by remember { mutableStateOf(false) }
+    var auditoryFishingEnabled by remember { mutableStateOf(false) }
+    var usageLoggingEnabled by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
@@ -101,6 +113,10 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
         gridColumns = s.gridColumns
         highContrastMode = s.highContrastMode
         featureUsageReporter.setEnabled(s.featureUsageReportingEnabled)
+        dwellToSelectMillis = s.dwellToSelectMillis
+        selectionSoundEnabled = s.selectionSoundEnabled
+        auditoryFishingEnabled = s.auditoryFishingEnabled
+        usageLoggingEnabled = s.usageLoggingEnabled
         loading = false
     }
 
@@ -323,6 +339,81 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
                         valueRange = 1f..6f,
                         steps = 4 // 1, 2, 3, 4, 5, 6
                     )
+                }
+                
+                // Dwell to select
+                Text(
+                    "${stringResource(Res.string.ui_settings_dwell_to_select_title)}: ${dwellToSelectMillis.toInt()} ms",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    stringResource(Res.string.ui_settings_dwell_to_select_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Slider(
+                    value = dwellToSelectMillis.toFloat(),
+                    onValueChange = { dwellToSelectMillis = it.toLong() },
+                    onValueChangeFinished = {
+                        updateSettings { it.copy(dwellToSelectMillis = dwellToSelectMillis) }
+                    },
+                    valueRange = 0f..5000f,
+                    steps = 19 // 250ms steps
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Selection Sound
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = selectionSoundEnabled,
+                        onCheckedChange = { checked ->
+                            selectionSoundEnabled = checked
+                            updateSettings { it.copy(selectionSoundEnabled = checked) }
+                        }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(Res.string.ui_settings_selection_sound_title))
+                }
+
+                // Auditory Fishing
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = auditoryFishingEnabled,
+                        onCheckedChange = { checked ->
+                            auditoryFishingEnabled = checked
+                            updateSettings { it.copy(auditoryFishingEnabled = checked) }
+                        }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(stringResource(Res.string.ui_settings_auditory_fishing_title))
+                        Text(
+                            stringResource(Res.string.ui_settings_auditory_fishing_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Standardized Logging (OBL)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = usageLoggingEnabled,
+                        onCheckedChange = { checked ->
+                            usageLoggingEnabled = checked
+                            updateSettings { it.copy(usageLoggingEnabled = checked) }
+                        }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(stringResource(Res.string.ui_settings_usage_logging_title))
+                        Text(
+                            stringResource(Res.string.ui_settings_usage_logging_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         },

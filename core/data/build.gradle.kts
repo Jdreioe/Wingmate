@@ -30,6 +30,7 @@ kotlin {
                 implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
                 implementation("io.github.oshai:kotlin-logging:7.0.0")
+                implementation(libs.okio)
                 implementation("app.cash.sqldelight:runtime:2.0.2")
                 implementation("app.cash.sqldelight:coroutines-extensions:2.0.2")
             }

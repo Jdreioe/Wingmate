@@ -17,9 +17,13 @@ import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
+import io.github.jdreioe.wingmate.infrastructure.RealAacLogger
+import io.github.jdreioe.wingmate.domain.AacLogger
+import io.github.jdreioe.wingmate.domain.SettingsRepository
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 val appModule = module {
@@ -38,6 +42,8 @@ val appModule = module {
     singleOf(::GetAllItemsUseCase)
     
     singleOf(::BoardImportService)
+    
+    single<AacLogger> { RealAacLogger(get(), get(named("logDir")), get()) }
 
     factoryOf(::PhraseListStoreFactory)
 

@@ -192,4 +192,15 @@
     <string name="ui_settings_label_at_top_title">Placer tekst øverst på knappen</string>
     <string name="ui_settings_hold_to_select_title">Hold for at vælge (ms)</string>
     <string name="ui_settings_hold_to_select_desc">Forhindrer utilsigtede tryk. Sæt til 0 for at deaktivere.</string>
+    <string name="ui_settings_grid_columns_title">Gitterkolonner</string>
+    <string name="ui_settings_high_contrast_title">Højkontrast-tilstand</string>
+    <string name="phrase_edit_hidden_title">Skjult</string>
+    <string name="phrase_edit_hidden_desc">Skjul denne frase fra gitteret</string>
+    <string name="ui_settings_dwell_to_select_title">Dwell-valg (ms)</string>
+    <string name="ui_settings_dwell_to_select_desc">Vælg ved at holde over uden at klikke. Sæt til 0 for at deaktivere.</string>
+    <string name="ui_settings_selection_sound_title">Markeringslyd</string>
+    <string name="ui_settings_auditory_fishing_title">Auditiv bekræftelse</string>
+    <string name="ui_settings_auditory_fishing_desc">Hvisk mærkaten når en knap berøres eller holdes over.</string>
+    <string name="ui_settings_usage_logging_title">Standardiseret logning (OBL)</string>
+    <string name="ui_settings_usage_logging_desc">Optag brugsdata i Open Logging Format til klinisk gennemgang.</string>
 </resources>
