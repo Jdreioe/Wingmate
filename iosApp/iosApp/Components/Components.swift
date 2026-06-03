@@ -231,6 +231,12 @@ struct SelectableTextView: UIViewRepresentable {
         textView.isSelectable = true
         textView.textContainerInset = UIEdgeInsets(top: 10, left: 8, bottom: 10, right: 8)
         textView.font = UIFont.systemFont(ofSize: fontSize)
+        textView.autocorrectionType = .no
+        textView.autocapitalizationType = .none
+        textView.spellCheckingType = .no
+        textView.smartQuotesType = .no
+        textView.smartDashesType = .no
+        textView.smartInsertDeleteType = .no
         textView.secondaryLanguageActionTitle = NSLocalizedString("textfield.mark_secondary_language", comment: "")
         textView.allowsSecondaryLanguageAction = allowsSecondaryLanguageAction
         textView.onMarkSelectionAsSecondaryLanguage = { [weak textView] in
@@ -257,24 +263,43 @@ struct SelectableTextView: UIViewRepresentable {
     private func applyHighlighting(to textView: UITextView, desiredSelectedRange: NSRange) {
         let selected = (desiredSelectedRange.location == NSNotFound) ? textView.selectedRange : desiredSelectedRange
         let full = text as NSString
-        let attributed = NSMutableAttributedString(string: text)
-        attributed.addAttributes([
-            .font: UIFont.systemFont(ofSize: fontSize),
-            .foregroundColor: UIColor.label
-        ], range: NSRange(location: 0, length: full.length))
+        let length = full.length
 
-        for range in secondaryLanguageRanges {
-            if range.location != NSNotFound,
-               range.length > 0,
-               range.location + range.length <= full.length {
-                attributed.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.35), range: range)
+        guard length > 0 else {
+            if textView.attributedText.length != 0 {
+                textView.attributedText = NSAttributedString()
             }
+            return
         }
 
-        if textView.attributedText.string != text {
-            textView.attributedText = attributed
-        } else {
-            textView.textStorage.setAttributedString(attributed)
+        let hasHighlights = secondaryLanguageRanges.contains { $0.location != NSNotFound && $0.length > 0 && $0.location + $0.length <= length }
+        let currentStringMatches = textView.attributedText.string == text
+
+        if hasHighlights {
+            let attributed = NSMutableAttributedString(string: text)
+            attributed.addAttributes([
+                .font: UIFont.systemFont(ofSize: fontSize),
+                .foregroundColor: UIColor.label
+            ], range: NSRange(location: 0, length: length))
+
+            for range in secondaryLanguageRanges {
+                if range.location != NSNotFound,
+                   range.length > 0,
+                   range.location + range.length <= length {
+                    attributed.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.35), range: range)
+                }
+            }
+
+            if currentStringMatches {
+                textView.textStorage.setAttributedString(attributed)
+            } else {
+                textView.attributedText = attributed
+            }
+        } else if !currentStringMatches {
+            textView.attributedText = NSAttributedString(string: text, attributes: [
+                .font: UIFont.systemFont(ofSize: fontSize),
+                .foregroundColor: UIColor.label
+            ])
         }
 
         let maxPos = textView.text.utf16.count
@@ -326,12 +351,7 @@ struct SelectableTextView: UIViewRepresentable {
 
         func textViewDidChangeSelection(_ textView: UITextView) {
             if isProgrammaticUpdate { return }
-            let latestSelection = textView.selectedRange
-            DispatchQueue.main.async {
-                if !NSEqualRanges(self.selectedRange, latestSelection) {
-                    self.selectedRange = latestSelection
-                }
-            }
+            selectedRange = textView.selectedRange
         }
     }
 }

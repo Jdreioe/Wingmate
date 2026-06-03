@@ -208,7 +208,6 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                             items(filteredSystemVoices) { v ->
                                 Row(modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(8.dp)
                                     .clickable {
                                         scope.launch {
                                             try {
@@ -230,7 +229,8 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                                             }
                                             onDismiss()
                                         }
-                                    }) {
+                                    }
+                                    .padding(8.dp)) {
                                     Column(Modifier.weight(1f)) {
                                         Text(text = v.displayName ?: v.name ?: "Unknown")
                                         Text(text = v.primaryLanguage ?: "", modifier = Modifier.padding(top = 2.dp))
@@ -266,8 +266,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                             items(filteredAzureVoices) { v ->
                                 Row(modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(8.dp)
-                                    .clickable {
+                                    .clickable(enabled = true, onClickLabel = null) {
                                         scope.launch {
                                             try {
                                                 println("User selected voice: ${v.name} (primary=${v.primaryLanguage}, selected=${v.selectedLanguage})")
@@ -290,7 +289,8 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                                             }
                                             onDismiss()
                                         }
-                                    }) {
+                                    }
+                                    .padding(8.dp)) {
                                     Column(Modifier.weight(1f)) {
                                         Text(text = v.displayName ?: v.name ?: "Unknown")
                                         Text(text = v.primaryLanguage ?: "", modifier = Modifier.padding(top = 2.dp))
