@@ -25,6 +25,7 @@ fun overrideIosSpeechService() {
             single<io.github.jdreioe.wingmate.domain.ConfigRepository> { io.github.jdreioe.wingmate.infrastructure.IosConfigRepository() }
             single<io.github.jdreioe.wingmate.domain.VoiceRepository> { io.github.jdreioe.wingmate.infrastructure.IosVoiceRepository() }
             single<io.github.jdreioe.wingmate.domain.SaidTextRepository> { io.github.jdreioe.wingmate.infrastructure.IosSaidTextRepository() }
+            single<io.github.jdreioe.wingmate.domain.BoardRepository> { io.github.jdreioe.wingmate.infrastructure.IosBoardRepository() }
             // Persist phrases and categories on iOS as well
             single<io.github.jdreioe.wingmate.domain.PhraseRepository> { io.github.jdreioe.wingmate.infrastructure.IosPhraseRepository() }
             single<io.github.jdreioe.wingmate.domain.CategoryRepository> { io.github.jdreioe.wingmate.infrastructure.IosCategoryRepository() }
