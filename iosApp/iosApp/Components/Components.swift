@@ -351,7 +351,12 @@ struct SelectableTextView: UIViewRepresentable {
 
         func textViewDidChangeSelection(_ textView: UITextView) {
             if isProgrammaticUpdate { return }
-            selectedRange = textView.selectedRange
+            let latestSelection = textView.selectedRange
+            DispatchQueue.main.async {
+                if !NSEqualRanges(self.selectedRange, latestSelection) {
+                    self.selectedRange = latestSelection
+                }
+            }
         }
     }
 }
