@@ -15,7 +15,7 @@ Wingmate is developed by Jonas, who has Cerebral Palsy (CP) and extensive experi
 - Save Sentences & Categories
 - Cache Sentences
 - Offline Backup Voices
-- Hand Gesture Recognition: Long-term goal
+- Hand Gesture Recognition: Not feasable for a FOSS-project. Use Talkitale's solution instead
 - Eye tracking support: Long-term goal
 
 ## How to setup (the DYI version):
