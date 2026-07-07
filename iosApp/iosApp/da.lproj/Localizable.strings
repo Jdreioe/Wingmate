@@ -233,13 +233,13 @@
 "toolbar.switch_phrase_mode" = "Skift til frasearbejdsområde";
 
 "symbol.workspace.title" = "Symbolarbejdsområde";
-"symbol.workspace.subtitle" = "Byg og administrer tavlesaet";
+"symbol.workspace.subtitle" = "Byg og administrer tavlesæt";
 
-"boardset.create" = "Nyt tavlesaet";
-"boardset.create_first" = "Opret dit forste tavlesaet";
-"boardset.empty" = "Ingen tavlesaet endnu";
-"boardset.default_name" = "Nyt tavlesaet";
-"boardset.name" = "Tavlesaetnavn";
+"boardset.create" = "Nyt tavlesæt";
+"boardset.create_first" = "Opret dit forste tavlesæt";
+"boardset.empty" = "Ingen tavlesæt endnu";
+"boardset.default_name" = "Nyt tavlesæt";
+"boardset.name" = "Tavlesætnavn";
 "boardset.name_placeholder" = "Daglig kommunikation";
 "boardset.grid" = "Gitter";
 "boardset.rows" = "Rakker: %d";
@@ -248,35 +248,35 @@
 "boardset.board_name_placeholder" = "Madtavle";
 "boardset.board_picker" = "Tavle";
 "boardset.add_board" = "Tilfoj tavle";
-"boardset.save" = "Gem tavlesaet";
-"boardset.lock" = "Las tavlesaet";
-"boardset.unlock" = "Las op tavlesaet";
-"boardset.locked_banner" = "Tavlesaettet er last. Las op for at redigere.";
+"boardset.save" = "Gem tavlesæt";
+"boardset.lock" = "Las tavlesæt";
+"boardset.unlock" = "Las op tavlesæt";
+"boardset.locked_banner" = "Tavlesættet er last. Las op for at redigere.";
 "boardset.untitled_board" = "Tavle uden titel";
 "boardset.grid_summary" = "%d x %d gitter, %d knapper";
 
-"boardset.status.created" = "Tavlesaet oprettet.";
-"boardset.status.board_added" = "Tavle tilfojet til tavlesaet.";
-"boardset.status.saved" = "Tavlesaet gemt.";
-"boardset.status.locked" = "Tavlesaet last.";
-"boardset.status.unlocked" = "Tavlesaet last op.";
+"boardset.status.created" = "Tavlesæt oprettet.";
+"boardset.status.board_added" = "Tavle tilfojet til tavlesæt.";
+"boardset.status.saved" = "Tavlesæt gemt.";
+"boardset.status.locked" = "Tavlesæt last.";
+"boardset.status.unlocked" = "Tavlesæt last op.";
 "boardset.status.cell_saved" = "Celle gemt.";
 "boardset.status.cell_cleared" = "Celle ryddet.";
 
-"boardset.error.create_failed" = "Kunne ikke oprette tavlesaet.";
-"boardset.error.locked" = "Dette tavlesaet er last.";
+"boardset.error.create_failed" = "Kunne ikke oprette tavlesæt.";
+"boardset.error.locked" = "Dette tavlesæt er last.";
 "boardset.error.no_board" = "Ingen tavle valgt.";
-"boardset.error.save_failed" = "Kunne ikke gemme tavlesaet.";
+"boardset.error.save_failed" = "Kunne ikke gemme tavlesæt.";
 "boardset.error.cell_update_failed" = "Kunne ikke opdatere celle.";
 "boardset.error.cell_clear_failed" = "Kunne ikke rydde celle.";
 
 "boardset.unlock.failed_title" = "Kan ikke lase op";
-"boardset.unlock.not_available" = "Enhedsautentificering er ikke tilgaengelig.";
-"boardset.unlock.reason" = "Las dette tavlesaet op for at redigere symboler og layout.";
+"boardset.unlock.not_available" = "Enhedsautentificering er ikke tilgængelig.";
+"boardset.unlock.reason" = "Las dette tavlesæt op for at redigere symboler og layout.";
 "boardset.unlock.failed" = "Autentificering mislykkedes.";
 
 "boardset.edit" = "Rediger celler";
-"boardset.edit_done" = "Faerdig med redigering";
+"boardset.edit_done" = "Færdig med redigering";
 "boardset.cell.empty" = "Tom celle";
 "boardset.cell.edit_title" = "Rediger celle";
 "boardset.cell.label" = "Etiket";
@@ -284,15 +284,15 @@
 "boardset.cell.linked_board" = "Koblet tavle";
 "boardset.cell.no_link" = "Intet link";
 "boardset.cell.colors" = "Farver";
-"boardset.cell.background_enabled" = "Vaelg baggrundsfarve";
+"boardset.cell.background_enabled" = "Vælg baggrundsfarve";
 "boardset.cell.background_picker" = "Baggrundsfarve";
-"boardset.cell.border_enabled" = "Vaelg rammens farve";
+"boardset.cell.border_enabled" = "Vælg rammens farve";
 "boardset.cell.border_picker" = "Rammens farve";
 "boardset.cell.background_hex" = "Baggrundsfarve (HEX)";
 "boardset.cell.border_hex" = "Rammens farve (HEX)";
 "boardset.cell.clear" = "Ryd celle";
 "boardset.cell.delete" = "Slet celle";
 
-"sentence.box.title" = "Saetningsboks";
-"sentence.box.delete_phrase" = "Slet frase fra saetning";
-"sentence.box.speak" = "Sig saetning";
+"sentence.box.title" = "Sætningsboks";
+"sentence.box.delete_phrase" = "Slet frase fra sætning";
+"sentence.box.speak" = "Sig sætning";
