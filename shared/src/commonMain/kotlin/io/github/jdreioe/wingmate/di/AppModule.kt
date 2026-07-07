@@ -6,8 +6,10 @@ import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStoreFactory
 import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.AddCategoryUseCase
+import io.github.jdreioe.wingmate.application.usecase.DeleteCategoryUseCase
 import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
+import io.github.jdreioe.wingmate.application.usecase.MoveCategoryUseCase
 import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.MovePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetAllItemsUseCase
@@ -21,6 +23,8 @@ val appModule = module {
 
     factory { AddPhraseUseCase(get()) }
     factory { AddCategoryUseCase(get()) }
+    factory { DeleteCategoryUseCase(get(), get()) }
+    factory { MoveCategoryUseCase(get()) }
     factory { GetPhrasesAndCategoriesUseCase(get()) }
     factory { DeletePhraseUseCase(get()) }
     factory { UpdatePhraseUseCase(get()) }
@@ -35,6 +39,8 @@ val appModule = module {
             getPhrasesAndCategoriesUseCase = get(),
             addPhraseUseCase = get(),
             addCategoryUseCase = get(),
+            deleteCategoryUseCase = get(),
+            moveCategoryUseCase = get(),
             deletePhraseUseCase = get(),
             updatePhraseUseCase = get(),
             movePhraseUseCase = get(),

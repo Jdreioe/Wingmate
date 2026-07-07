@@ -3,14 +3,52 @@ import Shared
 import AVFoundation
 import Network
 
+struct BoardSetInfo: Codable, Identifiable, Equatable {
+    var id: String
+    var name: String
+    var rootBoardId: String
+    var boardIds: [String]
+    var isLocked: Bool
+    var updatedAt: TimeInterval
+}
+
+struct BoardCellInfo: Identifiable, Equatable {
+    var row: Int
+    var col: Int
+    var buttonId: String
+    var label: String?
+    var vocalization: String?
+    var backgroundColor: String?
+    var borderColor: String?
+    var linkedBoardId: String?
+    var imageId: String?
+    var imageUrl: String?
+
+    var id: String { "\(row):\(col)" }
+}
+
+struct SentencePhraseToken: Identifiable, Equatable {
+    var id: String = UUID().uuidString
+    var phraseId: String
+    var text: String
+    var title: String
+    var imageUrl: String?
+}
+
 @MainActor
 final class IosViewModel: ObservableObject {
     private final class StoreObserver: NSObject, Shared.RxObserver {
         private let onNextState: (Shared.PhraseListStoreState) -> Void
+        private let onCompleteState: () -> Void
         init(onNext: @escaping (Shared.PhraseListStoreState) -> Void) {
             self.onNextState = onNext
+            self.onCompleteState = {}
         }
-        func onComplete() { /* no-op */ }
+        init(onNext: @escaping (Shared.PhraseListStoreState) -> Void, onComplete: @escaping () -> Void) {
+            self.onNextState = onNext
+            self.onCompleteState = onComplete
+        }
+        func onComplete() { onCompleteState() }
         func onNext(value: Any?) {
             if let s = value as? Shared.PhraseListStoreState {
                 onNextState(s)
@@ -44,6 +82,8 @@ final class IosViewModel: ObservableObject {
 
     // UI state
     @Published var input: String = ""
+    var inputSelectionRange: NSRange = NSRange(location: 0, length: 0)
+    @Published private(set) var hasHeldThought: Bool = false
     @Published var primaryLanguage: String = "en-US"
     @Published var secondaryLanguage: String = "en-US"
     @Published var secondaryLanguageRanges: [NSRange] = []
@@ -64,6 +104,16 @@ final class IosViewModel: ObservableObject {
     @Published var useSystemTtsWhenOffline: Bool = UserDefaults.standard.bool(forKey: "use_system_tts_when_offline")
     // Mix recorded phrases inside sentences
     @Published var mixRecordedPhrasesInSentences: Bool = UserDefaults.standard.bool(forKey: "mix_recorded_phrases")
+    // Accessibility scanning configuration (persisted in shared Settings)
+    @Published var scanningEnabled: Bool = false
+    @Published var scanPlaybackAreaEnabled: Bool = true
+    @Published var scanInputFieldEnabled: Bool = true
+    @Published var scanPhraseGridEnabled: Bool = true
+    @Published var scanCategoryItemsEnabled: Bool = true
+    @Published var scanTopBarEnabled: Bool = true
+    @Published var scanPhraseGridOrder: String = "row-major"
+    @Published var scanDwellTimeSeconds: Double = 1.0
+    @Published var scanAutoAdvanceSeconds: Double = 1.2
     private var hasShownOfflineBanner: Bool = UserDefaults.standard.bool(forKey: "offline_banner_shown")
     private var isOnline: Bool = true
 
@@ -76,6 +126,58 @@ final class IosViewModel: ObservableObject {
     // Azure availability (subscription configured)
     @Published var azureConfigured: Bool = false
 
+    // Symbol-first boardset mode
+    @Published var boardModeEnabled: Bool = false
+    @Published var boardSets: [BoardSetInfo] = []
+    @Published var selectedBoardSetId: String? = nil
+    @Published var selectedBoardId: String? = nil
+    @Published var selectedBoard: Shared.ObfBoard? = nil
+    @Published var boardCells: [BoardCellInfo] = []
+    @Published var boardNamesById: [String: String] = [:]
+    @Published var boardStatusMessage: String? = nil
+    @Published var sentencePhrases: [SentencePhraseToken] = []
+
+    private let boardSetsDefaultsKey = "obf_boardsets_v1"
+    private var isApplyingSentencePhraseInput: Bool = false
+
+    private struct InputSnapshot {
+        let text: String
+        let selection: NSRange
+        let secondaryRanges: [NSRange]
+    }
+
+    private var heldThoughtSnapshot: InputSnapshot? = nil
+
+    var selectedBoardSet: BoardSetInfo? {
+        guard let id = selectedBoardSetId else { return nil }
+        return boardSets.first(where: { $0.id == id })
+    }
+
+    var selectedBoardSetLocked: Bool {
+        selectedBoardSet?.isLocked ?? false
+    }
+
+    var canEditSelectedBoardSet: Bool {
+        !selectedBoardSetLocked
+    }
+
+    func boardDisplayName(id: String) -> String {
+        if let selectedBoard, selectedBoard.id == id {
+            let selectedName = selectedBoard.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !selectedName.isEmpty {
+                return selectedName
+            }
+        }
+        if let cachedName = boardNamesById[id], !cachedName.isEmpty {
+            return cachedName
+        }
+        return id
+    }
+
+    func cellAt(row: Int, col: Int) -> BoardCellInfo? {
+        boardCells.first(where: { $0.row == row && $0.col == col })
+    }
+
     func effectiveLanguage(for v: Shared.Voice) -> String {
         func nonEmpty(_ s: String?) -> String? {
             let t = (s ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -86,20 +188,33 @@ final class IosViewModel: ObservableObject {
         return self.primaryLanguage
     }
 
+    var canChangeVoiceLanguage: Bool {
+        let languages = availableLanguages
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return Set(languages).count > 1
+    }
+
     func start() async {
         await MainActor.run { IosDiBridge().startKoinWithOverridesBridge() }
         let repoNameBefore = KoinBridge().debugVoiceRepositoryName()
         print("DEBUG: After startKoinWithOverrides: Bound VoiceRepository = \(repoNameBefore)")
         if let phraseStore = KoinBridge().phraseListStoreOrNull() {
             self.store = phraseStore
-            let observer = StoreObserver { [weak self] newState in self?.state = newState }
+            let observer = StoreObserver(onNext: { [weak self] newState in self?.state = newState }, onComplete: { [weak self] in
+                self?.disposable = nil
+                self?.store = nil
+            })
             self.disposable = store?.states(observer: observer)
         } else {
             print("DEBUG: phraseListStoreOrNull() returned nil — Koin not ready or store not bound")
             try? await Task.sleep(nanoseconds: 150_000_000)
             if let retryStore = KoinBridge().phraseListStoreOrNull() {
                 self.store = retryStore
-                let observer = StoreObserver { [weak self] newState in self?.state = newState }
+                let observer = StoreObserver(onNext: { [weak self] newState in self?.state = newState }, onComplete: { [weak self] in
+                    self?.disposable = nil
+                    self?.store = nil
+                })
                 self.disposable = store?.states(observer: observer)
                 print("DEBUG: Store resolved on retry")
             } else {
@@ -110,6 +225,7 @@ final class IosViewModel: ObservableObject {
     refreshVoiceAndLanguages()
 
         await refreshLanguagePreferences()
+        await refreshScanningSettings()
 
         // Determine if Azure is configured (endpoint + key)
         await refreshAzureConfiguration()
@@ -130,6 +246,8 @@ final class IosViewModel: ObservableObject {
     _ = try? await bridge.trainPredictionModel()
     // Load pronunciations
     await loadPronunciations()
+    // Load boardsets and selected board for symbol mode
+    await loadBoardSets()
     }
 
     func refreshAzureConfiguration() async {
@@ -157,6 +275,29 @@ final class IosViewModel: ObservableObject {
             await MainActor.run {
                 self.primaryLanguage = self.primaryLanguage
                 self.secondaryLanguage = self.secondaryLanguage
+            }
+        }
+    }
+
+    func refreshScanningSettings() async {
+        do {
+            let settings = try await bridge.getSettings()
+            await MainActor.run {
+                self.scanningEnabled = settings.scanningEnabled
+                self.scanPlaybackAreaEnabled = settings.scanPlaybackAreaEnabled
+                self.scanInputFieldEnabled = settings.scanInputFieldEnabled
+                self.scanPhraseGridEnabled = settings.scanPhraseGridEnabled
+                self.scanCategoryItemsEnabled = settings.scanCategoryItemsEnabled
+                self.scanTopBarEnabled = settings.scanTopBarEnabled
+                self.scanPhraseGridOrder = self.normalizedScanGridOrder(settings.scanPhraseGridOrder)
+                self.scanDwellTimeSeconds = Double(self.clampedDwellSeconds(settings.scanDwellTimeSeconds))
+                self.scanAutoAdvanceSeconds = Double(self.clampedAutoAdvanceSeconds(settings.scanAutoAdvanceSeconds))
+            }
+        } catch {
+            await MainActor.run {
+                self.scanPhraseGridOrder = self.normalizedScanGridOrder(self.scanPhraseGridOrder)
+                self.scanDwellTimeSeconds = Double(self.clampedDwellSeconds(Float(self.scanDwellTimeSeconds)))
+                self.scanAutoAdvanceSeconds = Double(self.clampedAutoAdvanceSeconds(Float(self.scanAutoAdvanceSeconds)))
             }
         }
     }
@@ -190,14 +331,89 @@ final class IosViewModel: ObservableObject {
     }
 
     func insertPhraseText(_ phrase: Shared.Phrase) {
-        let t = phrase.text
+        let t = phrase.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        input.append(t)
+        let nsInput = input as NSString
+        let inputLength = nsInput.length
+
+        var range = inputSelectionRange
+        if range.location == NSNotFound {
+            range = NSRange(location: inputLength, length: 0)
+        }
+
+        let safeLocation = min(max(0, range.location), inputLength)
+        let safeLength = min(max(0, range.length), max(0, inputLength - safeLocation))
+        let safeRange = NSRange(location: safeLocation, length: safeLength)
+
+        var prefix = ""
+        if safeLocation > 0 {
+            let previousChar = nsInput.substring(with: NSRange(location: safeLocation - 1, length: 1))
+            if previousChar.rangeOfCharacter(from: .whitespacesAndNewlines) == nil {
+                prefix = " "
+            }
+        }
+
+        let insertion = prefix + t + " "
+
+        input = nsInput.replacingCharacters(in: safeRange, with: insertion)
+        let insertionLength = (insertion as NSString).length
+        inputSelectionRange = NSRange(location: safeLocation + insertionLength, length: 0)
+
+        let title = (phrase.name?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? t
+        let imageUrl = phrase.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+        sentencePhrases.append(
+            SentencePhraseToken(
+                phraseId: phrase.id,
+                text: t,
+                title: title,
+                imageUrl: (imageUrl?.isEmpty == false) ? imageUrl : nil
+            )
+        )
+
+        isApplyingSentencePhraseInput = true
         onInputChanged(input)
+        isApplyingSentencePhraseInput = false
         // Incremental learning
         Task { _ = try? await bridge.learnPhrase(text: t) }
     }
 
+    func removeSentencePhrase(at index: Int) {
+        guard sentencePhrases.indices.contains(index) else { return }
+        sentencePhrases.remove(at: index)
+
+        let rebuilt = sentencePhrases.map { $0.text }.joined(separator: " ")
+        input = rebuilt.isEmpty ? "" : rebuilt + " "
+        inputSelectionRange = NSRange(location: (input as NSString).length, length: 0)
+        secondaryLanguageRanges = []
+
+        isApplyingSentencePhraseInput = true
+        onInputChanged(input)
+        isApplyingSentencePhraseInput = false
+    }
+
+    func deleteText() {
+        input = ""
+        inputSelectionRange = NSRange(location: 0, length: 0)
+        sentencePhrases = []
+        onInputChanged(input)
+    }
+
+    func toggleHoldThatThought() {
+        let current = makeCurrentInputSnapshot()
+
+        if let held = heldThoughtSnapshot {
+            heldThoughtSnapshot = current
+            applyInputSnapshot(held)
+        } else {
+            heldThoughtSnapshot = current
+            input = ""
+            inputSelectionRange = NSRange(location: 0, length: 0)
+            secondaryLanguageRanges = []
+            onInputChanged(input)
+        }
+
+        hasHeldThought = heldThoughtSnapshot != nil
+    }
     func speak(_ text: String) {
         let plain = text
         guard !plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -227,20 +443,37 @@ final class IosViewModel: ObservableObject {
             }
         }
 
+        let isInputText = (text == input)
+
         // If user prefers system TTS, use it directly
         if useSystemTts {
-            SystemTtsManager.shared.speak(plain, language: primaryLanguage)
+            SystemTtsManager.shared.speak(
+                plain,
+                language: primaryLanguage,
+                secondaryLanguage: isInputText ? secondaryLanguage : nil,
+                secondaryLanguageRanges: isInputText ? secondaryLanguageRanges : []
+            )
             return
         }
         
         // If Azure is not configured, always use on-device TTS to keep the app working
         if !azureConfigured {
-            SystemTtsManager.shared.speak(plain, language: primaryLanguage)
+            SystemTtsManager.shared.speak(
+                plain,
+                language: primaryLanguage,
+                secondaryLanguage: isInputText ? secondaryLanguage : nil,
+                secondaryLanguageRanges: isInputText ? secondaryLanguageRanges : []
+            )
             return
         }
         // Otherwise, allow offline fallback when enabled
         if !isOnline && useSystemTtsWhenOffline {
-            SystemTtsManager.shared.speak(plain, language: primaryLanguage)
+            SystemTtsManager.shared.speak(
+                plain,
+                language: primaryLanguage,
+                secondaryLanguage: isInputText ? secondaryLanguage : nil,
+                secondaryLanguageRanges: isInputText ? secondaryLanguageRanges : []
+            )
             return
         }
         Task { _ = try? await bridge.speak(text: t) }
@@ -389,6 +622,73 @@ final class IosViewModel: ObservableObject {
     func setMixRecordedPhrases(_ enabled: Bool) {
         self.mixRecordedPhrasesInSentences = enabled
         UserDefaults.standard.set(enabled, forKey: "mix_recorded_phrases")
+    }
+
+    func setScanningEnabled(_ enabled: Bool) {
+        self.scanningEnabled = enabled
+        Task { _ = try? await bridge.updateScanningEnabled(enabled: enabled) }
+    }
+
+    func setScanPlaybackAreaEnabled(_ enabled: Bool) {
+        self.scanPlaybackAreaEnabled = enabled
+        Task { _ = try? await bridge.updateScanPlaybackAreaEnabled(enabled: enabled) }
+    }
+
+    func setScanInputFieldEnabled(_ enabled: Bool) {
+        self.scanInputFieldEnabled = enabled
+        Task { _ = try? await bridge.updateScanInputFieldEnabled(enabled: enabled) }
+    }
+
+    func setScanPhraseGridEnabled(_ enabled: Bool) {
+        self.scanPhraseGridEnabled = enabled
+        Task { _ = try? await bridge.updateScanPhraseGridEnabled(enabled: enabled) }
+    }
+
+    func setScanCategoryItemsEnabled(_ enabled: Bool) {
+        self.scanCategoryItemsEnabled = enabled
+        Task { _ = try? await bridge.updateScanCategoryItemsEnabled(enabled: enabled) }
+    }
+
+    func setScanTopBarEnabled(_ enabled: Bool) {
+        self.scanTopBarEnabled = enabled
+        Task { _ = try? await bridge.updateScanTopBarEnabled(enabled: enabled) }
+    }
+
+    func setScanPhraseGridOrder(_ order: String) {
+        let normalized = normalizedScanGridOrder(order)
+        self.scanPhraseGridOrder = normalized
+        Task { _ = try? await bridge.updateScanPhraseGridOrder(order: normalized) }
+    }
+
+    func setScanDwellTimeSeconds(_ value: Double) {
+        let clamped = Double(clampedDwellSeconds(Float(value)))
+        self.scanDwellTimeSeconds = clamped
+        Task { _ = try? await bridge.updateScanDwellTimeSeconds(seconds: Float(clamped)) }
+    }
+
+    func setScanAutoAdvanceSeconds(_ value: Double) {
+        let clamped = Double(clampedAutoAdvanceSeconds(Float(value)))
+        self.scanAutoAdvanceSeconds = clamped
+        Task { _ = try? await bridge.updateScanAutoAdvanceSeconds(seconds: Float(clamped)) }
+    }
+
+    private func normalizedScanGridOrder(_ value: String) -> String {
+        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "column-major":
+            return "column-major"
+        case "linear":
+            return "linear"
+        default:
+            return "row-major"
+        }
+    }
+
+    private func clampedDwellSeconds(_ value: Float) -> Float {
+        value.clamped(to: 0.3...2.0)
+    }
+
+    private func clampedAutoAdvanceSeconds(_ value: Float) -> Float {
+        value.clamped(to: 0.5...3.0)
     }
 
     // MARK: - Recording path (persisted in shared Phrase)
@@ -545,6 +845,31 @@ final class IosViewModel: ObservableObject {
         return merged
     }
 
+    private func makeCurrentInputSnapshot() -> InputSnapshot {
+        let length = (input as NSString).length
+        let selection = clampedSelectionRange(inputSelectionRange, maxLength: length)
+        let secondary = mergeRanges(secondaryLanguageRanges, maxLength: length)
+        return InputSnapshot(text: input, selection: selection, secondaryRanges: secondary)
+    }
+
+    private func applyInputSnapshot(_ snapshot: InputSnapshot) {
+        input = snapshot.text
+        onInputChanged(snapshot.text)
+
+        let length = (snapshot.text as NSString).length
+        inputSelectionRange = clampedSelectionRange(snapshot.selection, maxLength: length)
+        secondaryLanguageRanges = mergeRanges(snapshot.secondaryRanges, maxLength: length)
+    }
+
+    private func clampedSelectionRange(_ range: NSRange, maxLength: Int) -> NSRange {
+        if range.location == NSNotFound {
+            return NSRange(location: maxLength, length: 0)
+        }
+        let safeLocation = min(max(0, range.location), maxLength)
+        let safeLength = min(max(0, range.length), max(0, maxLength - safeLocation))
+        return NSRange(location: safeLocation, length: safeLength)
+    }
+
     func refreshVoiceAndLanguages() {
         Task {
             let v = try? await bridge.selectedVoice()
@@ -558,8 +883,9 @@ final class IosViewModel: ObservableObject {
         store?.accept(intent: Shared.PhraseListStoreIntent.DeleteCategory(categoryId: id))
     }
 
-    func updatePhrase(id: String, text: String?, name: String?) {
-        store?.accept(intent: Shared.PhraseListStoreIntent.UpdatePhrase(id: id, text: text, name: name))
+    func updatePhrase(id: String, text: String?, name: String?, imageUrl: String? = nil) {
+        let normalizedImageUrl = imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+        store?.accept(intent: Shared.PhraseListStoreIntent.UpdatePhrase(id: id, text: text, name: name, imageUrl: normalizedImageUrl))
     }
 
     func movePhrase(from: Int, to: Int) {
@@ -573,10 +899,16 @@ final class IosViewModel: ObservableObject {
         store?.accept(intent: Shared.PhraseListStoreIntent.AddCategory(name: trimmed))
     }
 
-    func addPhrase(text: String) {
+    func addPhrase(text: String, alternativeText: String? = nil, imageUrl: String? = nil, recordingPath: String? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        store?.accept(intent: Shared.PhraseListStoreIntent.AddPhrase(text: trimmed))
+        let normalizedAlternative = alternativeText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalAlternative = (normalizedAlternative?.isEmpty == false) ? normalizedAlternative : nil
+        let normalizedImageUrl = imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalImageUrl = (normalizedImageUrl?.isEmpty == false) ? normalizedImageUrl : nil
+        let normalizedRecordingPath = recordingPath?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalRecordingPath = (normalizedRecordingPath?.isEmpty == false) ? normalizedRecordingPath : nil
+        store?.accept(intent: Shared.PhraseListStoreIntent.AddPhrase(text: trimmed, name: finalAlternative, imageUrl: finalImageUrl, recordingPath: finalRecordingPath))
         // Incremental learning
         Task { _ = try? await bridge.learnPhrase(text: trimmed) }
     }
@@ -584,6 +916,18 @@ final class IosViewModel: ObservableObject {
     // MARK: - Prediction
     func onInputChanged(_ newValue: String, preserveSecondaryRanges: Bool = false) {
         input = newValue
+
+        if !isApplyingSentencePhraseInput && !sentencePhrases.isEmpty {
+            let normalizedInput = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedSentence = sentencePhrases
+                .map { $0.text }
+                .joined(separator: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if normalizedInput != normalizedSentence {
+                sentencePhrases = []
+            }
+        }
+
         predictionJob?.cancel()
         predictionJob = Task {
             try? await Task.sleep(nanoseconds: 100_000_000) // 100ms debounce
@@ -622,30 +966,55 @@ final class IosViewModel: ObservableObject {
         input.append(char)
         onInputChanged(input)
     }
+
+    private func hasAudioPath(_ path: String?) -> Bool {
+        guard let path = path else { return false }
+        return !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func resolveLastAudioPath() -> String? {
+        let normalizedInput = input.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // 1) Prefer an exact match to current input if available.
+        if !normalizedInput.isEmpty,
+           let byText = historyPhrases.first(where: {
+               let t = ($0.text).trimmingCharacters(in: .whitespacesAndNewlines)
+               let n = ($0.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+               return (t == normalizedInput || n == normalizedInput) && hasAudioPath($0.recordingPath)
+           }),
+           let path = byText.recordingPath {
+            return path
+        }
+
+        // 2) Fall back to the most recent history entry with audio.
+        if let fromHistory = historyPhrases.first(where: { hasAudioPath($0.recordingPath) }),
+           let path = fromHistory.recordingPath {
+            return path
+        }
+
+        // 3) Last fallback: any stored phrase recording.
+        if let fromPhrases = state.phrases.first(where: { hasAudioPath($0.recordingPath) }),
+           let path = fromPhrases.recordingPath {
+            return path
+        }
+
+        return nil
+    }
+
+    var hasShareableAudio: Bool {
+        resolveLastAudioPath() != nil
+    }
     
     // MARK: - Sharing
     func shareLastAudio() {
-        guard !input.isEmpty else { return }
-        // Find most recent history item with matching text and audio path
-        if let match = historyPhrases.first(where: {
-            ($0.text == input || $0.name == input) && $0.recordingPath != nil && !$0.recordingPath!.isEmpty
-        }) {
-            if let path = match.recordingPath {
-                bridge.shareAudio(path: path)
-            }
-        }
+        guard let path = resolveLastAudioPath() else { return }
+        bridge.shareAudio(path: path)
     }
 
     func copyLastAudio() {
-        guard !input.isEmpty else { return }
-        if let match = historyPhrases.first(where: {
-            ($0.text == input || $0.name == input) && $0.recordingPath != nil && !$0.recordingPath!.isEmpty
-        }) {
-             if let path = match.recordingPath {
-                // Fallback to share action until copy bridge API is available in generated Swift bindings.
-                bridge.shareAudio(path: path)
-            }
-        }
+        guard let path = resolveLastAudioPath() else { return }
+        // Fallback to share to avoid framework symbol mismatch when copyAudio is not exported in current build.
+        bridge.shareAudio(path: path)
     }
     
     // MARK: - Pronunciations
@@ -670,5 +1039,372 @@ final class IosViewModel: ObservableObject {
             try? await bridge.deletePronunciation(word: word)
             await loadPronunciations()
         }
+    }
+
+    // MARK: - Boardsets (Symbol-First)
+    private func loadBoardSetsFromDefaults() -> [BoardSetInfo] {
+        guard let data = UserDefaults.standard.data(forKey: boardSetsDefaultsKey) else {
+            return []
+        }
+        let decoded = (try? JSONDecoder().decode([BoardSetInfo].self, from: data)) ?? []
+        return decoded
+    }
+
+    private func persistBoardSets() {
+        guard let data = try? JSONEncoder().encode(boardSets) else { return }
+        UserDefaults.standard.set(data, forKey: boardSetsDefaultsKey)
+    }
+
+    private func updateBoardSet(_ updated: BoardSetInfo) {
+        guard let idx = boardSets.firstIndex(where: { $0.id == updated.id }) else { return }
+        boardSets[idx] = updated
+        persistBoardSets()
+    }
+
+    private func normalizedBoardsetName(_ input: String) -> String {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? NSLocalizedString("boardset.default_name", comment: "") : trimmed
+    }
+
+    private func normalizedOptionalText(_ input: String?) -> String? {
+        let trimmed = (input ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func touchSelectedBoardSet(statusKey: String) {
+        if var set = selectedBoardSet {
+            set.updatedAt = Date().timeIntervalSince1970
+            updateBoardSet(set)
+        }
+        boardStatusMessage = NSLocalizedString(statusKey, comment: "")
+    }
+
+    private func refreshBoardNames(for set: BoardSetInfo?) async {
+        guard let set else {
+            boardNamesById = [:]
+            return
+        }
+
+        var cache = boardNamesById
+        for boardId in set.boardIds {
+            if let selectedBoard, selectedBoard.id == boardId {
+                let selectedName = selectedBoard.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if !selectedName.isEmpty {
+                    cache[boardId] = selectedName
+                }
+                continue
+            }
+
+            do {
+                if let board = try await bridge.getBoard(id: boardId) {
+                    let name = board.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    if !name.isEmpty {
+                        cache[boardId] = name
+                    }
+                }
+            } catch {
+                // Keep existing cache value if lookup fails.
+            }
+        }
+
+        boardNamesById = cache
+    }
+
+    func loadBoardSets() async {
+        boardSets = loadBoardSetsFromDefaults().sorted { $0.updatedAt > $1.updatedAt }
+
+        if selectedBoardSetId == nil || !boardSets.contains(where: { $0.id == selectedBoardSetId }) {
+            selectedBoardSetId = boardSets.first?.id
+        }
+
+        if let set = selectedBoardSet {
+            if selectedBoardId == nil || !set.boardIds.contains(selectedBoardId ?? "") {
+                selectedBoardId = set.rootBoardId
+            }
+            await loadSelectedBoard()
+            await refreshBoardNames(for: set)
+        } else {
+            selectedBoardId = nil
+            selectedBoard = nil
+            boardCells = []
+            boardNamesById = [:]
+        }
+    }
+
+    func createBoardSet(name: String, rows: Int, columns: Int) async {
+        let boardsetName = normalizedBoardsetName(name)
+        let safeRows = min(max(rows, 1), 12)
+        let safeColumns = min(max(columns, 1), 12)
+
+        do {
+            guard let rootBoard = try await bridge.createEmptyBoard(
+                name: boardsetName,
+                rows: Int32(safeRows),
+                columns: Int32(safeColumns),
+                locale: primaryLanguage
+            ) else {
+                boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+                return
+            }
+
+            let now = Date().timeIntervalSince1970
+            let set = BoardSetInfo(
+                id: UUID().uuidString,
+                name: boardsetName,
+                rootBoardId: rootBoard.id,
+                boardIds: [rootBoard.id],
+                isLocked: false,
+                updatedAt: now
+            )
+
+            boardSets.insert(set, at: 0)
+            selectedBoardSetId = set.id
+            selectedBoardId = rootBoard.id
+            selectedBoard = rootBoard
+            boardNamesById[rootBoard.id] = boardsetName
+            await refreshBoardCells()
+            persistBoardSets()
+            boardStatusMessage = NSLocalizedString("boardset.status.created", comment: "")
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+        }
+    }
+
+    func addBoardToSelectedSet(name: String, rows: Int, columns: Int) async {
+        guard var set = selectedBoardSet else { return }
+        guard !set.isLocked else {
+            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
+            return
+        }
+
+        let boardName = normalizedBoardsetName(name)
+        let safeRows = min(max(rows, 1), 12)
+        let safeColumns = min(max(columns, 1), 12)
+
+        do {
+            guard let board = try await bridge.createEmptyBoard(
+                name: boardName,
+                rows: Int32(safeRows),
+                columns: Int32(safeColumns),
+                locale: primaryLanguage
+            ) else {
+                boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+                return
+            }
+
+            if !set.boardIds.contains(board.id) {
+                set.boardIds.append(board.id)
+            }
+            set.updatedAt = Date().timeIntervalSince1970
+
+            updateBoardSet(set)
+            selectedBoardSetId = set.id
+            selectedBoardId = board.id
+            selectedBoard = board
+            boardNamesById[board.id] = boardName
+            await refreshBoardCells()
+            boardStatusMessage = NSLocalizedString("boardset.status.board_added", comment: "")
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+        }
+    }
+
+    func selectBoardSet(id: String) async {
+        guard boardSets.contains(where: { $0.id == id }) else { return }
+        selectedBoardSetId = id
+        if let set = selectedBoardSet {
+            if selectedBoardId == nil || !set.boardIds.contains(selectedBoardId ?? "") {
+                selectedBoardId = set.rootBoardId
+            }
+            await loadSelectedBoard()
+            await refreshBoardNames(for: set)
+        }
+    }
+
+    func selectBoard(id: String) async {
+        if let set = selectedBoardSet, !set.boardIds.contains(id) {
+            return
+        }
+        selectedBoardId = id
+        await loadSelectedBoard()
+    }
+
+    func loadSelectedBoard() async {
+        guard let id = selectedBoardId else {
+            selectedBoard = nil
+            boardCells = []
+            return
+        }
+        do {
+            selectedBoard = try await bridge.getBoard(id: id)
+            let boardName = selectedBoard?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !boardName.isEmpty {
+                boardNamesById[id] = boardName
+            }
+            await refreshBoardCells()
+        } catch {
+            selectedBoard = nil
+            boardCells = []
+        }
+    }
+
+    func refreshBoardCells() async {
+        guard let boardId = selectedBoardId else {
+            boardCells = []
+            return
+        }
+
+        do {
+            let cells = try await bridge.listBoardCells(boardId: boardId)
+            boardCells = cells.map { cell in
+                BoardCellInfo(
+                    row: Int(cell.row),
+                    col: Int(cell.col),
+                    buttonId: cell.buttonId,
+                    label: cell.label,
+                    vocalization: cell.vocalization,
+                    backgroundColor: cell.backgroundColor,
+                    borderColor: cell.borderColor,
+                    linkedBoardId: cell.linkedBoardId,
+                    imageId: cell.imageId,
+                    imageUrl: cell.imageUrl
+                )
+            }
+        } catch {
+            boardCells = []
+        }
+    }
+
+    func upsertSelectedBoardCell(
+        row: Int,
+        col: Int,
+        label: String?,
+        vocalization: String?,
+        backgroundColor: String?,
+        borderColor: String?,
+        linkedBoardId: String?,
+        imageUrl: String?,
+        clearImage: Bool
+    ) async {
+        guard let boardId = selectedBoardId else {
+            boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
+            return
+        }
+        guard canEditSelectedBoardSet else {
+            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
+            return
+        }
+
+        let normalizedLabel = normalizedOptionalText(label)
+        let normalizedVocalization = normalizedOptionalText(vocalization)
+        let normalizedBackground = normalizedOptionalText(backgroundColor)
+        let normalizedBorder = normalizedOptionalText(borderColor)
+        let normalizedLink = normalizedOptionalText(linkedBoardId)
+        let normalizedImageUrl = normalizedOptionalText(imageUrl)
+
+        do {
+            guard let updatedBoard = try await bridge.upsertBoardCellButton(
+                boardId: boardId,
+                row: Int32(row),
+                col: Int32(col),
+                label: normalizedLabel,
+                vocalization: normalizedVocalization,
+                backgroundColor: normalizedBackground,
+                borderColor: normalizedBorder,
+                linkedBoardId: normalizedLink,
+                imageUrl: normalizedImageUrl,
+                clearImage: clearImage
+            ) else {
+                boardStatusMessage = NSLocalizedString("boardset.error.cell_update_failed", comment: "")
+                return
+            }
+
+            selectedBoard = updatedBoard
+            await refreshBoardCells()
+            touchSelectedBoardSet(statusKey: "boardset.status.cell_saved")
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.cell_update_failed", comment: "")
+        }
+    }
+
+    func clearSelectedBoardCell(row: Int, col: Int) async {
+        guard let boardId = selectedBoardId else {
+            boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
+            return
+        }
+        guard canEditSelectedBoardSet else {
+            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
+            return
+        }
+
+        do {
+            guard let updatedBoard = try await bridge.clearBoardCellButton(
+                boardId: boardId,
+                row: Int32(row),
+                col: Int32(col)
+            ) else {
+                boardStatusMessage = NSLocalizedString("boardset.error.cell_clear_failed", comment: "")
+                return
+            }
+
+            selectedBoard = updatedBoard
+            await refreshBoardCells()
+            touchSelectedBoardSet(statusKey: "boardset.status.cell_cleared")
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.cell_clear_failed", comment: "")
+        }
+    }
+
+    func activateSelectedBoardCell(row: Int, col: Int) async {
+        guard let cell = cellAt(row: row, col: col) else { return }
+
+        if let linkedBoardId = normalizedOptionalText(cell.linkedBoardId),
+           let set = selectedBoardSet,
+           set.boardIds.contains(linkedBoardId) {
+            await selectBoard(id: linkedBoardId)
+            return
+        }
+
+        if let textToSpeak = normalizedOptionalText(cell.vocalization) ?? normalizedOptionalText(cell.label) {
+            speak(textToSpeak)
+        }
+    }
+
+    func saveSelectedBoardSet() async {
+        guard let board = selectedBoard else {
+            boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
+            return
+        }
+        guard !selectedBoardSetLocked else {
+            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
+            return
+        }
+
+        do {
+            let saved = try await bridge.saveBoard(board: board)
+            if saved.boolValue {
+                touchSelectedBoardSet(statusKey: "boardset.status.saved")
+            } else {
+                boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
+            }
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
+        }
+    }
+
+    func setSelectedBoardSetLocked(_ locked: Bool) {
+        guard var set = selectedBoardSet else { return }
+        set.isLocked = locked
+        set.updatedAt = Date().timeIntervalSince1970
+        updateBoardSet(set)
+        boardStatusMessage = locked
+            ? NSLocalizedString("boardset.status.locked", comment: "")
+            : NSLocalizedString("boardset.status.unlocked", comment: "")
+    }
+}
+
+private extension Float {
+    func clamped(to range: ClosedRange<Float>) -> Float {
+        min(max(self, range.lowerBound), range.upperBound)
     }
 }

@@ -106,3 +106,190 @@
 "phrase.play_tts" = "Abspielen";
 "phrase.record" = "Aufnehmen";
 "textfield.mark_secondary_language" = "Für Zweitsprache markieren";
+"phrase.title" = "Titel";
+"phrase.title.placeholder" = "Titel";
+"phrase.pronunciation" = "Aussprache";
+"common.search" = "Suchen";
+"common.clear" = "Löschen";
+"common.stop" = "Stopp";
+
+"phrase.recording" = "Aufnahme";
+"phrase.mic_permission_denied" = "Mikrofonberechtigung verweigert. Aktiviere sie in den Einstellungen.";
+"phrase.alternative_text.optional" = "Alternativer Phrasentext (optional)";
+"phrase.alternative_text.placeholder" = "Was stattdessen gesprochen werden soll";
+
+"phrase.symbol.section" = "Symbol (OpenSymbols)";
+"phrase.symbol.source" = "Symbolquelle";
+"phrase.symbol.source.opensymbols" = "OpenSymbols";
+"phrase.symbol.source.user_photos" = "Meine Fotos";
+"phrase.symbol.search.placeholder" = "Symbole suchen";
+"phrase.symbol.selected" = "Ausgewähltes Symbol";
+"phrase.symbol.error.token_url" = "OpenSymbols-Token-URL konnte nicht erstellt werden";
+"phrase.symbol.error.auth_failed" = "OpenSymbols-Authentifizierung fehlgeschlagen";
+"phrase.symbol.error.search_url" = "OpenSymbols-Such-URL konnte nicht erstellt werden";
+"phrase.symbol.error.search_failed" = "OpenSymbols-Suche fehlgeschlagen";
+"phrase.symbol.error.missing_secret" = "OpenSymbols ist für diesen Build nicht konfiguriert";
+"phrase.symbol.pick_photo" = "Foto wählen";
+"phrase.symbol.import_file" = "Bild importieren";
+"phrase.symbol.error.photo_load_failed" = "Ausgewähltes Foto konnte nicht geladen werden";
+"phrase.symbol.error.import_failed" = "Ausgewähltes Bild konnte nicht importiert werden";
+
+"voice.system_tts.enabled_info" = "System-TTS ist aktiviert. Die Stimmauswahl wird in den iOS-Einstellungen verwaltet.";
+"voice.system_tts.using" = "System-Text-zu-Sprache wird verwendet";
+"voice.system_tts.settings_info" = "Stimmoptionen werden in iOS Einstellungen > Bedienungshilfen > Gesprochene Inhalte > Stimmen verwaltet";
+
+"accessibility.double_tap_select_voice" = "Doppeltippen, um diese Stimme auszuwählen";
+"accessibility.double_tap_select_language" = "Doppeltippen, um diese Sprache auszuwählen";
+
+"debug.voice_with_lang" = "Stimme: %@ [%@]";
+"debug.voice.none" = "Stimme: (keine)";
+
+"common.cancel" = "Abbrechen";
+"common.change" = "Ändern...";
+"common.unknown" = "Unbekannt";
+"common.unknown_language" = "Unbekannte Sprache";
+
+"settings.title" = "Einstellungen";
+"settings.tts.title" = "Text-zu-Sprache-Engine";
+"settings.tts.use_system" = "System-TTS verwenden";
+"settings.tts.system_when_offline" = "System-TTS offline verwenden";
+"settings.restart_setup" = "Einrichtungsassistent neu starten";
+
+"settings.playback.title" = "Wiedergabe";
+"settings.playback.mix_recorded" = "Aufgenommene Phrasen in Sätze mischen";
+"settings.playback.mix.help" = "Wenn aktiviert, mischt die App deine aufgenommenen Phrasen-Audios in gesprochene Sätze, wenn der Phrasenname vorkommt.";
+
+"settings.scanning.title" = "Scanning";
+"settings.scanning.enable" = "Scanning aktivieren";
+"settings.scanning.playback_area" = "Wiedergabebereich";
+"settings.scanning.input_field" = "Eingabefeld";
+"settings.scanning.phrase_grid" = "Phrasengitter";
+"settings.scanning.category_items" = "Kategorieelemente";
+"settings.scanning.topbar" = "Top-Leiste/Einstellungen";
+"settings.scanning.grid_order" = "Phrasengitter-Reihenfolge";
+"settings.scanning.grid_order.row_major" = "Zeilenweise";
+"settings.scanning.grid_order.column_major" = "Spaltenweise";
+"settings.scanning.grid_order.linear" = "Linear";
+"settings.scanning.dwell" = "Verweilen (s)";
+"settings.scanning.auto_advance" = "Auto-Wechsel (s)";
+
+"settings.ui_size.input_height" = "Eingabehöhe";
+"settings.ui_size.input_font" = "Eingabeschrift";
+"settings.ui_size.chip_font" = "Chip-Schrift";
+"settings.ui_size.playback_icon" = "Wiedergabesymbol";
+
+"reorder.banner.title" = "Neuordnungsmodus";
+"reorder.banner.subtitle" = "Phrasen ziehen, um sie neu anzuordnen";
+"reorder.banner.done_hint" = "Tippe auf Fertig, wenn du fertig bist";
+
+"history.empty" = "Noch kein Verlauf";
+"offline.title" = "Du bist offline";
+"offline.azure_unavailable_hint" = "Azure-Stimmen funktionieren offline nicht. Aktiviere System-TTS, um Offline-Sprachausgabe zu nutzen.";
+
+"playback.play" = "Abspielen";
+"playback.pause" = "Pause";
+"playback.stop" = "Stopp";
+"playback.hold_thought" = "Gedanken merken";
+"playback.restore_thought" = "Gedanken wiederherstellen";
+
+"accessibility.playback.play_hint" = "Spricht den Text im Eingabefeld";
+"accessibility.playback.pause_hint" = "Pausiert die Sprachausgabe";
+"accessibility.playback.stop_hint" = "Stoppt die Sprachausgabe";
+"accessibility.playback.clear_hint" = "Löscht den Text im Eingabefeld";
+"accessibility.playback.hold_thought_hint" = "Merkt sich die aktuelle Eingabe und leert das Eingabefeld.";
+"accessibility.playback.restore_thought_hint" = "Stellt die gemerkte Eingabe wieder her und legt den aktuellen Text zurück.";
+
+"accessibility.phrase.wiggle_hint" = "Doppeltippen zum Aktivieren. Verwende Bedienungshilfen-Aktionen, um diese Phrase zu verschieben.";
+"accessibility.phrase.insert_hint" = "Doppeltippen, um diese Phrase in das Eingabefeld einzufügen.";
+"accessibility.phrase.speak_action" = "Phrase sprechen";
+"accessibility.phrase.edit_action" = "Phrase bearbeiten";
+"accessibility.phrase.delete_action" = "Phrase löschen";
+
+"accessibility.reorder.move_hint" = "Doppeltippen zum Aktivieren. Nach oben oder unten streichen, um diese Phrase zu verschieben.";
+"accessibility.reorder.move_earlier" = "Früher verschieben";
+"accessibility.reorder.move_later" = "Später verschieben";
+
+"pronunciation.title" = "Aussprache-Wörterbuch";
+"pronunciation.empty" = "Keine benutzerdefinierten Aussprachen.";
+"pronunciation.word" = "Wort";
+"pronunciation.word.placeholder" = "Z. B.: Wingmate";
+"pronunciation.phoneme" = "Phonem";
+"pronunciation.phoneme.placeholder" = "Z. B.: w i ng m ey t";
+"pronunciation.alphabet" = "Alphabet";
+"pronunciation.add_title" = "Aussprache hinzufügen";
+"pronunciation.ipa_palette" = "IPA-Symbole";
+"pronunciation.delete_last" = "Letztes löschen";
+
+"welcome_flow.choose_primary_language" = "Primäre Sprache für diese Stimme wählen";
+"welcome_flow.select_language" = "Sprache wählen";
+"welcome_flow.pros" = "Vorteile";
+"welcome_flow.cons" = "Nachteile";
+"welcome_flow.preview_text.placeholder" = "Text für Vorschau eingeben...";
+
+"toolbar.switch_symbol_mode" = "Zum Symbol-Arbeitsbereich wechseln";
+"toolbar.switch_phrase_mode" = "Zum Phrasen-Arbeitsbereich wechseln";
+
+"symbol.workspace.title" = "Symbol-Arbeitsbereich";
+"symbol.workspace.subtitle" = "Boardsets erstellen und verwalten";
+
+"boardset.create" = "Neues Boardset";
+"boardset.create_first" = "Erstes Boardset erstellen";
+"boardset.empty" = "Noch keine Boardsets";
+"boardset.default_name" = "Neues Boardset";
+"boardset.name" = "Boardset-Name";
+"boardset.name_placeholder" = "Alltagskommunikation";
+"boardset.grid" = "Raster";
+"boardset.rows" = "Zeilen: %d";
+"boardset.columns" = "Spalten: %d";
+"boardset.board_name" = "Tafelname";
+"boardset.board_name_placeholder" = "Essens-Tafel";
+"boardset.board_picker" = "Tafel";
+"boardset.add_board" = "Tafel hinzufügen";
+"boardset.save" = "Boardset speichern";
+"boardset.lock" = "Boardset sperren";
+"boardset.unlock" = "Boardset entsperren";
+"boardset.locked_banner" = "Boardset ist gesperrt. Zum Bearbeiten entsperren.";
+"boardset.untitled_board" = "Unbenannte Tafel";
+"boardset.grid_summary" = "%d x %d Raster, %d Schaltflächen";
+
+"boardset.status.created" = "Boardset erstellt.";
+"boardset.status.board_added" = "Tafel zum Boardset hinzugefügt.";
+"boardset.status.saved" = "Boardset gespeichert.";
+"boardset.status.locked" = "Boardset gesperrt.";
+"boardset.status.unlocked" = "Boardset entsperrt.";
+"boardset.status.cell_saved" = "Zelle gespeichert.";
+"boardset.status.cell_cleared" = "Zelle geleert.";
+
+"boardset.error.create_failed" = "Boardset konnte nicht erstellt werden.";
+"boardset.error.locked" = "Dieses Boardset ist gesperrt.";
+"boardset.error.no_board" = "Keine Tafel ausgewählt.";
+"boardset.error.save_failed" = "Boardset konnte nicht gespeichert werden.";
+"boardset.error.cell_update_failed" = "Zelle konnte nicht aktualisiert werden.";
+"boardset.error.cell_clear_failed" = "Zelle konnte nicht geleert werden.";
+
+"boardset.unlock.failed_title" = "Entsperren nicht möglich";
+"boardset.unlock.not_available" = "Geräteauthentifizierung ist nicht verfügbar.";
+"boardset.unlock.reason" = "Entsperre dieses Boardset, um Symbole und Layout zu bearbeiten.";
+"boardset.unlock.failed" = "Authentifizierung fehlgeschlagen.";
+
+"boardset.edit" = "Zellen bearbeiten";
+"boardset.edit_done" = "Bearbeiten beenden";
+"boardset.cell.empty" = "Leere Zelle";
+"boardset.cell.edit_title" = "Zelle bearbeiten";
+"boardset.cell.label" = "Beschriftung";
+"boardset.cell.vocalization" = "Vokalisation";
+"boardset.cell.linked_board" = "Verknüpfte Tafel";
+"boardset.cell.no_link" = "Keine Verknüpfung";
+"boardset.cell.colors" = "Farben";
+"boardset.cell.background_enabled" = "Hintergrundfarbe setzen";
+"boardset.cell.background_picker" = "Hintergrundfarbe";
+"boardset.cell.border_enabled" = "Randfarbe setzen";
+"boardset.cell.border_picker" = "Randfarbe";
+"boardset.cell.background_hex" = "Hintergrundfarbe (HEX)";
+"boardset.cell.border_hex" = "Randfarbe (HEX)";
+"boardset.cell.clear" = "Zelle leeren";
+"boardset.cell.delete" = "Zelle loschen";
+
+"sentence.box.title" = "Satzfeld";
+"sentence.box.delete_phrase" = "Phrase aus Satz loschen";
+"sentence.box.speak" = "Satz sprechen";

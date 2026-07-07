@@ -7,6 +7,7 @@ import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
+import io.github.jdreioe.wingmate.application.usecase.AddCategoryUseCase
 import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -43,7 +44,6 @@ abstract class Bloc<E, S>(initial: S) {
 // App-specific blocs
 sealed class PhraseEvent {
     data class Add(val phrase: Phrase) : PhraseEvent()
-    // Legacy: categories are now stored in CategoryRepository; this event is no-op retained for binary compatibility
     data class AddCategory(val category: io.github.jdreioe.wingmate.domain.CategoryItem) : PhraseEvent()
     data class Edit(val phrase: Phrase) : PhraseEvent()
     data class Delete(val id: String) : PhraseEvent()
@@ -57,7 +57,10 @@ data class PhraseState(
     val error: String? = null
 )
 
-class PhraseBloc(private val useCase: PhraseUseCase) : Bloc<PhraseEvent, PhraseState>(PhraseState()) {
+class PhraseBloc(
+    private val useCase: PhraseUseCase,
+    private val addCategoryUseCase: AddCategoryUseCase? = null,
+) : Bloc<PhraseEvent, PhraseState>(PhraseState()) {
     // Backward-compatible constructor for existing DI setups that pass a repository
     constructor(repo: PhraseRepository) : this(PhraseUseCase(repo))
 
@@ -82,7 +85,16 @@ class PhraseBloc(private val useCase: PhraseUseCase) : Bloc<PhraseEvent, PhraseS
                     setState { it.copy(loading = false, error = t.message) }
                 }
             }
-            is PhraseEvent.AddCategory -> { /* no-op after model unification */ }
+            is PhraseEvent.AddCategory -> {
+                setState { it.copy(loading = true, error = null) }
+                try {
+                    addCategoryUseCase?.invoke(event.category.name.orEmpty())
+                    val list = useCase.list()
+                    setState { it.copy(loading = false, items = list) }
+                } catch (t: Throwable) {
+                    setState { it.copy(loading = false, error = t.message) }
+                }
+            }
             is PhraseEvent.Edit -> {
                 setState { it.copy(loading = true, error = null) }
                 try {

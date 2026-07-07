@@ -109,3 +109,190 @@
 "phrase.play_tts" = "Afspil";
 "phrase.record" = "Optag";
 "textfield.mark_secondary_language" = "Markér til andet sprog";
+"phrase.title" = "Titel";
+"phrase.title.placeholder" = "Titel";
+"phrase.pronunciation" = "Udtale";
+"common.search" = "Søg";
+"common.clear" = "Ryd";
+"common.stop" = "Stop";
+
+"phrase.recording" = "Optagelse";
+"phrase.mic_permission_denied" = "Mikrofontilladelse afvist. Aktiver den i Indstillinger.";
+"phrase.alternative_text.optional" = "Alternativ frasetekst (valgfri)";
+"phrase.alternative_text.placeholder" = "Hvad skal siges i stedet";
+
+"phrase.symbol.section" = "Symbol ";
+"phrase.symbol.source" = "Symbolkilde";
+"phrase.symbol.source.opensymbols" = "OpenSymbols";
+"phrase.symbol.source.user_photos" = "Mine fotos";
+"phrase.symbol.search.placeholder" = "Søg symboler";
+"phrase.symbol.selected" = "Valgt symbol";
+"phrase.symbol.error.token_url" = "Kunne ikke oprette OpenSymbols token-URL";
+"phrase.symbol.error.auth_failed" = "OpenSymbols godkendelse mislykkedes";
+"phrase.symbol.error.search_url" = "Kunne ikke oprette OpenSymbols søge-URL";
+"phrase.symbol.error.search_failed" = "OpenSymbols søgning mislykkedes";
+"phrase.symbol.error.missing_secret" = "OpenSymbols er ikke konfigureret til denne build";
+"phrase.symbol.pick_photo" = "Vælg foto";
+"phrase.symbol.import_file" = "Importer billede";
+"phrase.symbol.error.photo_load_failed" = "Kunne ikke indlæse det valgte foto";
+"phrase.symbol.error.import_failed" = "Kunne ikke importere det valgte billede";
+
+"voice.system_tts.enabled_info" = "System-TTS er aktiveret. Valg af stemme håndteres i iOS-indstillinger.";
+"voice.system_tts.using" = "Bruger System tekst-til-tale";
+"voice.system_tts.settings_info" = "Stemmeindstillinger håndteres i iOS Indstillinger > Tilgængelighed > Talt indhold > Stemmer";
+
+"accessibility.double_tap_select_voice" = "Dobbelttryk for at vælge denne stemme";
+"accessibility.double_tap_select_language" = "Dobbelttryk for at vælge dette sprog";
+
+"debug.voice_with_lang" = "Stemme: %@ [%@]";
+"debug.voice.none" = "Stemme: (ingen)";
+
+"common.cancel" = "Annuller";
+"common.change" = "Skift...";
+"common.unknown" = "Ukendt";
+"common.unknown_language" = "Ukendt sprog";
+
+"settings.title" = "Indstillinger";
+"settings.tts.title" = "Tekst-til-tale motor";
+"settings.tts.use_system" = "Brug System TTS";
+"settings.tts.system_when_offline" = "Brug System TTS når offline";
+"settings.restart_setup" = "Genstart opsætningsguide";
+
+"settings.playback.title" = "Afspilning";
+"settings.playback.mix_recorded" = "Bland optagede fraser i sætninger";
+"settings.playback.mix.help" = "Når slået til, indsætter appen lyd fra dine optagede fraser i oplæste sætninger, hvor frasenavnet optræder.";
+
+"settings.scanning.title" = "Scanning";
+"settings.scanning.enable" = "Aktiver scanning";
+"settings.scanning.playback_area" = "Afspilningsområde";
+"settings.scanning.input_field" = "Inputfelt";
+"settings.scanning.phrase_grid" = "Frasegitter";
+"settings.scanning.category_items" = "Kategori-elementer";
+"settings.scanning.topbar" = "Toplinje/indstillinger";
+"settings.scanning.grid_order" = "Frasegitter-rækkefølge";
+"settings.scanning.grid_order.row_major" = "Rækkevis";
+"settings.scanning.grid_order.column_major" = "Kolonnevis";
+"settings.scanning.grid_order.linear" = "Lineær";
+"settings.scanning.dwell" = "Dvæl (s)";
+"settings.scanning.auto_advance" = "Auto-frem (s)";
+
+"settings.ui_size.input_height" = "Inputhøjde";
+"settings.ui_size.input_font" = "Inputskrift";
+"settings.ui_size.chip_font" = "Chip-skrift";
+"settings.ui_size.playback_icon" = "Afspilningsikon";
+
+"reorder.banner.title" = "Omarrangeringstilstand";
+"reorder.banner.subtitle" = "Træk fraser for at omarrangere dem";
+"reorder.banner.done_hint" = "Tryk Færdig når du er done";
+
+"history.empty" = "Ingen historik endnu";
+"offline.title" = "Du er offline";
+"offline.azure_unavailable_hint" = "Azure-stemmer virker ikke offline. Aktivér System TTS for at bruge enhedens tale offline.";
+
+"playback.play" = "Afspil";
+"playback.pause" = "Pause";
+"playback.stop" = "Stop";
+"playback.hold_thought" = "Gem tanken";
+"playback.restore_thought" = "Gendan tanke";
+
+"accessibility.playback.play_hint" = "Oplæser teksten i inputfeltet";
+"accessibility.playback.pause_hint" = "Pauser taleafspilning";
+"accessibility.playback.stop_hint" = "Stopper taleafspilning";
+"accessibility.playback.clear_hint" = "Rydder teksten i inputfeltet";
+"accessibility.playback.hold_thought_hint" = "Gemmer den nuværende input og rydder inputfeltet.";
+"accessibility.playback.restore_thought_hint" = "Gendanner den gemte input og gemmer nuværende tekst som holdt tanke.";
+
+"accessibility.phrase.wiggle_hint" = "Dobbelttryk for at aktivere. Brug tilgængelighedshandlinger til at flytte denne frase.";
+"accessibility.phrase.insert_hint" = "Dobbelttryk for at indsætte denne frase i inputfeltet.";
+"accessibility.phrase.speak_action" = "Sig frase";
+"accessibility.phrase.edit_action" = "Rediger frase";
+"accessibility.phrase.delete_action" = "Slet frase";
+
+"accessibility.reorder.move_hint" = "Dobbelttryk for at aktivere. Stryg op eller ned for at flytte denne frase.";
+"accessibility.reorder.move_earlier" = "Flyt tidligere";
+"accessibility.reorder.move_later" = "Flyt senere";
+
+"pronunciation.title" = "Udtaleordbog";
+"pronunciation.empty" = "Ingen brugerdefinerede udtaler.";
+"pronunciation.word" = "Ord";
+"pronunciation.word.placeholder" = "Fx: Wingmate";
+"pronunciation.phoneme" = "Fonem";
+"pronunciation.phoneme.placeholder" = "Fx: w i ng m ey t";
+"pronunciation.alphabet" = "Alfabet";
+"pronunciation.add_title" = "Tilføj udtale";
+"pronunciation.ipa_palette" = "IPA-symboler";
+"pronunciation.delete_last" = "Slet sidste";
+
+"welcome_flow.choose_primary_language" = "Vælg primært sprog til denne stemme";
+"welcome_flow.select_language" = "Vælg sprog";
+"welcome_flow.pros" = "Fordele";
+"welcome_flow.cons" = "Ulemper";
+"welcome_flow.preview_text.placeholder" = "Indtast tekst til forhåndsvisning...";
+
+"toolbar.switch_symbol_mode" = "Skift til symbolarbejdsområde";
+"toolbar.switch_phrase_mode" = "Skift til frasearbejdsområde";
+
+"symbol.workspace.title" = "Symbolarbejdsområde";
+"symbol.workspace.subtitle" = "Byg og administrer tavlesaet";
+
+"boardset.create" = "Nyt tavlesaet";
+"boardset.create_first" = "Opret dit forste tavlesaet";
+"boardset.empty" = "Ingen tavlesaet endnu";
+"boardset.default_name" = "Nyt tavlesaet";
+"boardset.name" = "Tavlesaetnavn";
+"boardset.name_placeholder" = "Daglig kommunikation";
+"boardset.grid" = "Gitter";
+"boardset.rows" = "Rakker: %d";
+"boardset.columns" = "Kolonner: %d";
+"boardset.board_name" = "Tavlenavn";
+"boardset.board_name_placeholder" = "Madtavle";
+"boardset.board_picker" = "Tavle";
+"boardset.add_board" = "Tilfoj tavle";
+"boardset.save" = "Gem tavlesaet";
+"boardset.lock" = "Las tavlesaet";
+"boardset.unlock" = "Las op tavlesaet";
+"boardset.locked_banner" = "Tavlesaettet er last. Las op for at redigere.";
+"boardset.untitled_board" = "Tavle uden titel";
+"boardset.grid_summary" = "%d x %d gitter, %d knapper";
+
+"boardset.status.created" = "Tavlesaet oprettet.";
+"boardset.status.board_added" = "Tavle tilfojet til tavlesaet.";
+"boardset.status.saved" = "Tavlesaet gemt.";
+"boardset.status.locked" = "Tavlesaet last.";
+"boardset.status.unlocked" = "Tavlesaet last op.";
+"boardset.status.cell_saved" = "Celle gemt.";
+"boardset.status.cell_cleared" = "Celle ryddet.";
+
+"boardset.error.create_failed" = "Kunne ikke oprette tavlesaet.";
+"boardset.error.locked" = "Dette tavlesaet er last.";
+"boardset.error.no_board" = "Ingen tavle valgt.";
+"boardset.error.save_failed" = "Kunne ikke gemme tavlesaet.";
+"boardset.error.cell_update_failed" = "Kunne ikke opdatere celle.";
+"boardset.error.cell_clear_failed" = "Kunne ikke rydde celle.";
+
+"boardset.unlock.failed_title" = "Kan ikke lase op";
+"boardset.unlock.not_available" = "Enhedsautentificering er ikke tilgaengelig.";
+"boardset.unlock.reason" = "Las dette tavlesaet op for at redigere symboler og layout.";
+"boardset.unlock.failed" = "Autentificering mislykkedes.";
+
+"boardset.edit" = "Rediger celler";
+"boardset.edit_done" = "Faerdig med redigering";
+"boardset.cell.empty" = "Tom celle";
+"boardset.cell.edit_title" = "Rediger celle";
+"boardset.cell.label" = "Etiket";
+"boardset.cell.vocalization" = "Vokalisering";
+"boardset.cell.linked_board" = "Koblet tavle";
+"boardset.cell.no_link" = "Intet link";
+"boardset.cell.colors" = "Farver";
+"boardset.cell.background_enabled" = "Vaelg baggrundsfarve";
+"boardset.cell.background_picker" = "Baggrundsfarve";
+"boardset.cell.border_enabled" = "Vaelg rammens farve";
+"boardset.cell.border_picker" = "Rammens farve";
+"boardset.cell.background_hex" = "Baggrundsfarve (HEX)";
+"boardset.cell.border_hex" = "Rammens farve (HEX)";
+"boardset.cell.clear" = "Ryd celle";
+"boardset.cell.delete" = "Slet celle";
+
+"sentence.box.title" = "Saetningsboks";
+"sentence.box.delete_phrase" = "Slet frase fra saetning";
+"sentence.box.speak" = "Sig saetning";

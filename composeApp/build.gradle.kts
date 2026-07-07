@@ -54,7 +54,7 @@ kotlin {
             dependencies {
                 @Suppress("DEPRECATION")
                 implementation(compose.desktop.common)
-                implementation("io.ktor:ktor-client-okhttp:2.3.12")
+                implementation("io.ktor:ktor-client-okhttp:3.4.0")
                 implementation("javazoom:jlayer:1.0.1")
                 implementation("org.xerial:sqlite-jdbc:3.41.2.1")
                 runtimeOnly("org.slf4j:slf4j-simple:2.0.9")
