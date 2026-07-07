@@ -175,6 +175,22 @@ class MainActivity : ComponentActivity() {
 
         // Start observing foldable state changes
         observeFoldableState()
+        
+        // Request necessary permissions for BLE & Notifications
+        val requiredPermissions = mutableListOf<String>()
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            requiredPermissions.add(android.Manifest.permission.BLUETOOTH_SCAN)
+            requiredPermissions.add(android.Manifest.permission.BLUETOOTH_CONNECT)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            requiredPermissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+        val missingPermissions = requiredPermissions.filter {
+            androidx.core.content.ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+        if (missingPermissions.isNotEmpty()) {
+            androidx.core.app.ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), 1001)
+        }
 
         setContent {
             AppTheme {

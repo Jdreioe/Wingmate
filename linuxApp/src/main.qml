@@ -34,6 +34,8 @@ Kirigami.ApplicationWindow {
     property bool speechControlsVisible: true
     property string currentSpeechText: ""
     property bool partnerWindowEnabled: false
+    property bool oskEnabled: false  // On-screen keyboard mode
+    property real oskKeyboardScale: 1.0  // Keyboard size multiplier (0.5–2.0)
     
     // --- Logic ---
     
@@ -117,11 +119,24 @@ Kirigami.ApplicationWindow {
                     if (!settings.welcomeFlowCompleted && welcomeWizard) {
                          welcomeWizard.open();
                     }
+
+                    // OSK keyboard scale
+                    if (settings.oskKeyboardScale !== undefined) {
+                        oskKeyboardScale = settings.oskKeyboardScale;
+                    }
                 }
             }
         }
         xhr.open("GET", baseUrl + "/api/settings");
         xhr.send();
+    }
+
+    function updateOskKeyboardScale(scale) {
+        oskKeyboardScale = scale;
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", baseUrl + "/api/settings/osk");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ oskKeyboardScale: scale }));
     }
     
     function setPartnerWindowEnabled(enabled) {
@@ -219,8 +234,20 @@ Kirigami.ApplicationWindow {
     function appendTextToInput(text) {
         root.currentSpeechText += text;
     }
-    
 
+    function learnPhrase(text) {
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", baseUrl + "/api/predict/learn");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ text: text }));
+    }
+
+    // Suppress system virtual keyboard when our OSK is active
+    onOskEnabledChanged: {
+        if (oskEnabled) {
+            Qt.inputMethod.hide();
+        }
+    }
     
     Component.onCompleted: {
         print("QML: App Started. BaseURL: " + baseUrl);
@@ -315,52 +342,97 @@ Kirigami.ApplicationWindow {
                 spacing: 16
                 
                 // Text Input Area
-                Rectangle {
+                RowLayout {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 120
-                    radius: Theme.radius
-                    color: Theme.surface
-                    border.color: speechInput.activeFocus ? Theme.primary : Theme.surfaceHighlight
-                    border.width: speechInput.activeFocus ? 2 : 1
-                    
-                    Behavior on border.color { ColorAnimation { duration: 150 } }
-                    
-                    TextInput {
-                        id: speechInput
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        font.pixelSize: 20
-                        color: Theme.text
-                        selectByMouse: true
-                        wrapMode: TextInput.Wrap
-                        verticalAlignment: TextInput.AlignTop
-                        text: root.currentSpeechText
-                        onTextChanged: {
-                            root.currentSpeechText = text;
-                            root.updatePartnerWindowText(text);
-                        }
+                    spacing: 8
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        radius: Theme.radius
+                        color: Theme.surface
+                        border.color: speechInput.activeFocus ? Theme.primary : Theme.surfaceHighlight
+                        border.width: speechInput.activeFocus ? 2 : 1
                         
-                        Text {
-                            text: "Enter text to speak..."
-                            color: Theme.subText
-                            font: parent.font
-                            visible: !parent.text && !parent.activeFocus
+                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                        
+                        TextInput {
+                            id: speechInput
                             anchors.fill: parent
+                            anchors.margins: 16
+                            font.pixelSize: 20
+                            color: Theme.text
+                            selectByMouse: true
+                            wrapMode: TextInput.Wrap
+                            verticalAlignment: TextInput.AlignTop
+                            // Suppress virtual keyboard when our OSK is active
+                            inputMethodHints: root.oskEnabled ? Qt.ImhNoPredictiveText | Qt.ImhPreferLatin : Qt.ImhNone
+                            text: root.currentSpeechText
+                            onTextChanged: {
+                                root.currentSpeechText = text;
+                                root.updatePartnerWindowText(text);
+                            }
+                            
+                            // Keep focus even when OSK buttons are clicked
+                            onActiveFocusChanged: {
+                                if (!activeFocus && root.oskEnabled) {
+                                    Qt.callLater(function() { speechInput.forceActiveFocus(); });
+                                }
+                            }
+                            
+                            Text {
+                                text: "Enter text to speak..."
+                                color: Theme.subText
+                                font: parent.font
+                                visible: !parent.text && !parent.activeFocus
+                                anchors.fill: parent
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                if (text.length > 0) speak(text);
+                            }
                         }
-                        
-                        Keys.onReturnPressed: {
-                            if (text.length > 0) speak(text);
+                    }
+
+                    // OSK toggle button
+                    Rectangle {
+                        Layout.fillHeight: true
+                        Layout.preferredWidth: 48
+                        radius: Theme.radius
+                        color: root.oskEnabled 
+                            ? Theme.primary 
+                            : (oskToggleArea.containsMouse ? Theme.surfaceHighlight : Theme.surface)
+                        border.color: Theme.surfaceHighlight
+                        border.width: 1
+
+                        Behavior on color { ColorAnimation { duration: 150 } }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "⌨"
+                            font.pixelSize: 22
+                            color: root.oskEnabled ? "#ffffff" : Theme.text
+                        }
+
+                        MouseArea {
+                            id: oskToggleArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.oskEnabled = !root.oskEnabled
                         }
                     }
                 }
                 
-                // Quick syllable chips row (scrollable)
+                // Quick syllable chips row (scrollable) — hidden when OSK active
                 Flickable {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 36
                     contentWidth: syllableRow.width
                     clip: true
                     flickableDirection: Flickable.HorizontalFlick
+                    visible: !root.oskEnabled
                     
                     RowLayout {
                         id: syllableRow
@@ -545,6 +617,45 @@ Kirigami.ApplicationWindow {
                                 }
                             }
                         }
+                    }
+                }
+
+                // On-Screen Keyboard (below saved phrases)
+                OnScreenKeyboard {
+                    id: onScreenKeyboard
+                    Layout.fillWidth: true
+                    visible: root.oskEnabled
+                    active: root.oskEnabled
+                    baseUrl: root.baseUrl
+                    currentText: root.currentSpeechText
+                    keyboardScale: root.oskKeyboardScale
+                    language: root.currentLanguage
+
+                    onKeyPressed: (key) => {
+                        root.currentSpeechText += key;
+                    }
+                    onBackspacePressed: {
+                        if (root.currentSpeechText.length > 0) {
+                            root.currentSpeechText = root.currentSpeechText.substring(
+                                0, root.currentSpeechText.length - 1);
+                        }
+                    }
+                    onSpacePressed: {
+                        root.currentSpeechText += " ";
+                    }
+                    onEnterPressed: {
+                        if (root.currentSpeechText.length > 0) {
+                            speak(root.currentSpeechText);
+                        }
+                    }
+                    onPredictionSelected: (word) => {
+                        // Replace the current partial word with the predicted word
+                        var text = root.currentSpeechText;
+                        var lastSpace = text.lastIndexOf(" ");
+                        var prefix = lastSpace >= 0 ? text.substring(0, lastSpace + 1) : "";
+                        root.currentSpeechText = prefix + word + " ";
+                        // Teach the model this phrase
+                        learnPhrase(root.currentSpeechText.trim());
                     }
                 }
             }

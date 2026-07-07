@@ -28,6 +28,8 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             val createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at"))
             val recPathIdx = cursor.getColumnIndex("recording_path")
             val recordingPath = if (recPathIdx >= 0) cursor.getString(recPathIdx) else null
+            val puckActionIdx = cursor.getColumnIndex("puck_action")
+            val puckAction = if (puckActionIdx >= 0) cursor.getString(puckActionIdx) else null
             list += Phrase(
                 id = id, 
                 text = text, 
@@ -37,7 +39,8 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
                 parentId = parentId, 
                 linkedBoardId = linkedBoardId,
                 createdAt = createdAt, 
-                recordingPath = recordingPath
+                recordingPath = recordingPath,
+                puckAction = puckAction
             )
         }
         cursor.close()
@@ -64,6 +67,7 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             put("linked_board_id", phrase.linkedBoardId)
             put("created_at", createdAt)
             put("recording_path", phrase.recordingPath)
+            put("puck_action", phrase.puckAction)
             put("ordering", ord + 1)
         }
         db.insert("phrases", null, values)
@@ -75,7 +79,8 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             imageUrl = phrase.imageUrl,
             parentId = phrase.parentId, 
             linkedBoardId = phrase.linkedBoardId,
-            createdAt = createdAt
+            createdAt = createdAt,
+            puckAction = phrase.puckAction
         )
     }
 
@@ -89,6 +94,7 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             put("parent_id", phrase.parentId)
             put("linked_board_id", phrase.linkedBoardId)
             put("recording_path", phrase.recordingPath)
+            put("puck_action", phrase.puckAction)
         }
         db.update("phrases", values, "id = ?", arrayOf(phrase.id))
         return@withContext phrase

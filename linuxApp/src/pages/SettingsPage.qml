@@ -18,6 +18,7 @@ Item {
     property int partnerWindowFontSize: 31
     property bool partnerWindowIdleEnabled: true
     property real fontScale: 1.0
+    property real oskKeyboardScale: 1.0
     
     // Azure data
     property string azureEndpoint: ""
@@ -142,6 +143,7 @@ Item {
                 if (settings.partnerWindowFontSize !== undefined) partnerWindowFontSize = settings.partnerWindowFontSize;
                 if (settings.partnerWindowIdleEnabled !== undefined) partnerWindowIdleEnabled = settings.partnerWindowIdleEnabled;
                 if (settings.fontSizeScale) fontScale = settings.fontSizeScale;
+                if (settings.oskKeyboardScale !== undefined) oskKeyboardScale = settings.oskKeyboardScale;
                 
                 settingsLoaded = true;
                 console.log("SettingsPage: Settings loaded. Voice=" + currentVoice);
@@ -234,6 +236,14 @@ Item {
         if (typeof partnerWindow !== 'undefined') {
             partnerWindow.setIdleEnabled(enabled);
         }
+    }
+
+    function updateOskKeyboardScale(scale) {
+        oskKeyboardScale = scale;
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", baseUrl + "/api/settings/osk");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ oskKeyboardScale: scale }));
     }
     
     // --- Layout ---
@@ -507,6 +517,78 @@ Item {
                                 color: Theme.text
                                 leftPadding: parent.indicator.width + parent.spacing
                                 verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+                    }
+                }
+
+                // On-Screen Keyboard settings
+                ModernCard {
+                    Layout.fillWidth: true
+                    title: "On-Screen Keyboard"
+
+                    content: ColumnLayout {
+                        spacing: 12
+
+                        Text {
+                            text: "Customise the built-in on-screen keyboard size."
+                            color: Theme.subText
+                            font.pixelSize: Theme.fontSizeSmall
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+
+                        // Size slider
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 12
+
+                            Text {
+                                text: "Keyboard Size"
+                                color: Theme.text
+                                Layout.preferredWidth: 120
+                            }
+
+                            Controls.Slider {
+                                id: oskScaleSlider
+                                Layout.fillWidth: true
+                                from: 0.5
+                                to: 2.0
+                                stepSize: 0.1
+                                value: oskKeyboardScale
+                                onMoved: updateOskKeyboardScale(value)
+                            }
+
+                            Text {
+                                text: Math.round(oskScaleSlider.value * 100) + "%"
+                                color: Theme.text
+                                font.pixelSize: Theme.fontSizeSmall
+                                Layout.preferredWidth: 40
+                                horizontalAlignment: Text.AlignRight
+                            }
+                        }
+
+                        // Size presets
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Repeater {
+                                model: [
+                                    { label: "Small",  value: 0.7 },
+                                    { label: "Normal", value: 1.0 },
+                                    { label: "Large",  value: 1.4 },
+                                    { label: "Extra Large", value: 1.8 }
+                                ]
+
+                                Chip {
+                                    text: modelData.label
+                                    selected: Math.abs(oskKeyboardScale - modelData.value) < 0.05
+                                    onClicked: {
+                                        oskScaleSlider.value = modelData.value;
+                                        updateOskKeyboardScale(modelData.value);
+                                    }
+                                }
                             }
                         }
                     }
