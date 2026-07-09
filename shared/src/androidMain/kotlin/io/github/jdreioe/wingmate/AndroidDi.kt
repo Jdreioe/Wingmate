@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate
 
 import android.content.Context
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.infrastructure.AndroidSpeechService
 import io.github.jdreioe.wingmate.infrastructure.AndroidConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlConfigRepository
@@ -11,9 +12,11 @@ import io.github.jdreioe.wingmate.infrastructure.AndroidSqlVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSaidTextRepository
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
+import io.github.jdreioe.wingmate.platform.AudioRecorder
+import io.github.jdreioe.wingmate.platform.InferenceEngine
+import io.github.jdreioe.wingmate.platform.PlatformAudioPlayer
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.module
-import io.github.jdreioe.wingmate.domain.TextPredictionService
 
 fun overrideAndroidSpeechService(context: Context) {
     loadKoinModules(
@@ -37,6 +40,11 @@ fun overrideAndroidSpeechService(context: Context) {
             single<io.github.jdreioe.wingmate.platform.FilePicker> { io.github.jdreioe.wingmate.platform.AndroidFilePicker(context) }
             single<io.github.jdreioe.wingmate.infrastructure.ImageCacher> { io.github.jdreioe.wingmate.infrastructure.AndroidImageCacher(context) }
             single<TextPredictionService> { SimpleNGramPredictionService() }
+
+            // Chatterbox platform services
+            single<InferenceEngine> { InferenceEngine() }
+            single<AudioRecorder> { AudioRecorder(context) }
+            single<PlatformAudioPlayer> { PlatformAudioPlayer() }
         }
     )
 }

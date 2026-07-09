@@ -67,6 +67,7 @@ kotlin {
             dependencies {
                 implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
                 implementation(libs.ktor.client.cio)
+                implementation("io.ktor:ktor-client-okhttp:${libs.versions.ktor.get()}")
                 // Required for FileProvider and core Android helpers used in androidMain
                 implementation("androidx.core:core-ktx:1.13.1")
                 // Compose Multiplatform for Android UI

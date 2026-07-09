@@ -10,6 +10,8 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.CategoryUseCase
 import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.domain.*
+import io.github.jdreioe.wingmate.domain.chatterbox.ModelRepository
+import io.github.jdreioe.wingmate.domain.chatterbox.VoiceProfileRepository
 import io.github.jdreioe.wingmate.infrastructure.*
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
@@ -27,6 +29,8 @@ fun initKoin(extra: Module? = null) {
         single<SaidTextRepository> { InMemorySaidTextRepository() }
         single<ConfigRepository> { InMemoryConfigRepository() }
         single<PronunciationDictionaryRepository> { InMemoryPronunciationDictionaryRepository() }
+        single<ModelRepository> { InMemoryModelRepository() }
+        single<VoiceProfileRepository> { InMemoryVoiceProfileRepository() }
         single<SpeechService> { NoopSpeechService() } // Android overrides this
         single { AzureVoiceCatalog(get<ConfigRepository>()) }
         single { DictionaryLoader(getOrNull<io.github.jdreioe.wingmate.domain.FileStorage>()) } // For language dictionary pretraining and caching

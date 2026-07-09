@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.domain
 
+import io.github.jdreioe.wingmate.domain.chatterbox.TtsEngine
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -40,6 +41,8 @@ data class Settings(
     val secondaryLanguage: String = "en-US",
     // TTS preference: true = use system TTS, false = use Azure TTS
     val useSystemTts: Boolean = false,
+    // TTS engine selection (supersedes useSystemTts)
+    val ttsEngine: TtsEngine = TtsEngine.Azure,
     // Desktop (Linux) only: when true, route TTS audio to a virtual sink whose monitor can be used as a microphone in apps like Zoom
     val virtualMicEnabled: Boolean = false,
     // Auto-update settings
