@@ -93,3 +93,4 @@ iosApp/iosApp 20*/
 **/intermediates/
 **/.cxx/
 **/*.properties
+*.hprof

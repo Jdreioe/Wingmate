@@ -9,7 +9,7 @@ import "pages" as Pages
 Kirigami.ApplicationWindow {
     id: root
     
-    title: "Wingmate - Communication Aid"
+    title: "Wingmate"
     
     width: 1280
     height: 800
@@ -177,6 +177,12 @@ Kirigami.ApplicationWindow {
         xhr.open("POST", baseUrl + "/api/speak/stop");
         xhr.send();
     }
+
+    function pauseSpeech() {
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", baseUrl + "/api/speak/pause");
+        xhr.send();
+    }
     
     function addPhrase(text) {
         var xhr = new XMLHttpRequest();
@@ -308,7 +314,7 @@ Kirigami.ApplicationWindow {
                     if (root.currentSpeechText.length > 0) speak(root.currentSpeechText);
                 }
                 onSettingsClicked: speechSettingsDialog.open()
-                onPauseClicked: {} // TODO: implement pause
+                onPauseClicked: pauseSpeech()
                 onStopClicked: stopSpeech()
             }
         }

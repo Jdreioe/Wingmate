@@ -3,12 +3,12 @@ package io.github.jdreioe.wingmate.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +18,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.common_add
+import wingmatekmp.composeapp.generated.resources.common_cancel
+import wingmatekmp.composeapp.generated.resources.common_delete
+import wingmatekmp.composeapp.generated.resources.dictionary_add_entry_cd
+import wingmatekmp.composeapp.generated.resources.dictionary_add_entry_title
+import wingmatekmp.composeapp.generated.resources.dictionary_alphabet_format
+import wingmatekmp.composeapp.generated.resources.dictionary_alphabet_label
+import wingmatekmp.composeapp.generated.resources.dictionary_back_cd
+import wingmatekmp.composeapp.generated.resources.dictionary_common_ipa
+import wingmatekmp.composeapp.generated.resources.dictionary_delete_cd
+import wingmatekmp.composeapp.generated.resources.dictionary_description
+import wingmatekmp.composeapp.generated.resources.dictionary_empty_subtitle
+import wingmatekmp.composeapp.generated.resources.dictionary_empty_title
+import wingmatekmp.composeapp.generated.resources.dictionary_global_entries_note
+import wingmatekmp.composeapp.generated.resources.dictionary_guess
+import wingmatekmp.composeapp.generated.resources.dictionary_guess_failed
+import wingmatekmp.composeapp.generated.resources.dictionary_phoneme_label
+import wingmatekmp.composeapp.generated.resources.dictionary_phoneme_placeholder
+import wingmatekmp.composeapp.generated.resources.dictionary_test_cd
+import wingmatekmp.composeapp.generated.resources.dictionary_test_pronunciation
+import wingmatekmp.composeapp.generated.resources.dictionary_title
+import wingmatekmp.composeapp.generated.resources.dictionary_word_label
+import wingmatekmp.composeapp.generated.resources.dictionary_word_placeholder
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,17 +60,17 @@ fun DictionaryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Pronunciation Dictionary") },
+                title = { Text(stringResource(Res.string.dictionary_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(Res.string.dictionary_back_cd))
                     }
                 }
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, "Add entry")
+                Icon(Icons.Default.Add, stringResource(Res.string.dictionary_add_entry_cd))
             }
         },
         modifier = modifier
@@ -57,7 +82,7 @@ fun DictionaryScreen(
                 .padding(16.dp)
         ) {
             Text(
-                "Global pronunciation rules applied to all speech",
+                stringResource(Res.string.dictionary_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -70,12 +95,12 @@ fun DictionaryScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            "No dictionary entries",
+                            stringResource(Res.string.dictionary_empty_title),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            "Tap + to add pronunciation rules",
+                            stringResource(Res.string.dictionary_empty_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -140,7 +165,7 @@ private fun DictionaryEntryCard(
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = "Alphabet: ${entry.alphabet}",
+                    text = stringResource(Res.string.dictionary_alphabet_format, entry.alphabet),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -150,14 +175,14 @@ private fun DictionaryEntryCard(
                 IconButton(onClick = onTest) {
                     Icon(
                         Icons.Default.PlayArrow,
-                        contentDescription = "Test",
+                        contentDescription = stringResource(Res.string.dictionary_test_cd),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = stringResource(Res.string.dictionary_delete_cd),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -180,12 +205,13 @@ private fun AddDictionaryEntryDialog(
     var isGuessing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val guessFailedMessage = stringResource(Res.string.dictionary_guess_failed)
     
     val commonIpa = listOf("ə", "ˈ", "ˌ", "ː", "θ", "ð", "ʃ", "ʒ", "ŋ", "j", "æ", "ɑ", "ɔ", "ɛ", "ɪ", "ʊ", "ʌ", "u", "i")
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Pronunciation Entry") },
+        title = { Text(stringResource(Res.string.dictionary_add_entry_title)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -202,8 +228,8 @@ private fun AddDictionaryEntryDialog(
                 OutlinedTextField(
                     value = word,
                     onValueChange = { word = it },
-                    label = { Text("Word") },
-                    placeholder = { Text("e.g., tomato") },
+                    label = { Text(stringResource(Res.string.dictionary_word_label)) },
+                    placeholder = { Text(stringResource(Res.string.dictionary_word_placeholder)) },
                     modifier = Modifier.fillMaxWidth().then(showKeyboard),
                     singleLine = true
                 )
@@ -215,8 +241,8 @@ private fun AddDictionaryEntryDialog(
                     OutlinedTextField(
                         value = phoneme,
                         onValueChange = { phoneme = it },
-                        label = { Text("Phoneme") },
-                        placeholder = { Text("e.g., /təˈmɑːtoʊ/") },
+                        label = { Text(stringResource(Res.string.dictionary_phoneme_label)) },
+                        placeholder = { Text(stringResource(Res.string.dictionary_phoneme_placeholder)) },
                         modifier = Modifier.weight(1f).then(showKeyboard),
                         singleLine = true
                     )
@@ -234,7 +260,7 @@ private fun AddDictionaryEntryDialog(
                                         if (guess != null) {
                                             phoneme = guess
                                         } else {
-                                            error = "Could not find pronunciation"
+                                            error = guessFailedMessage
                                         }
                                         isGuessing = false
                                     }
@@ -242,12 +268,12 @@ private fun AddDictionaryEntryDialog(
                             },
                             enabled = word.isNotBlank()
                         ) {
-                            Text("Guess")
+                            Text(stringResource(Res.string.dictionary_guess))
                         }
                     }
                 }
                 
-                Text("Common IPA Symbols", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(Res.string.dictionary_common_ipa), style = MaterialTheme.typography.labelMedium)
                 Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     commonIpa.forEach { symbol ->
                         SuggestionChip(
@@ -258,7 +284,7 @@ private fun AddDictionaryEntryDialog(
                     }
                 }
 
-                Text("Alphabet", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(Res.string.dictionary_alphabet_label), style = MaterialTheme.typography.labelMedium)
                 Box {
                     OutlinedButton(
                         onClick = { expandedAlphabet = true },
@@ -292,11 +318,11 @@ private fun AddDictionaryEntryDialog(
                 ) {
                     Icon(Icons.Default.PlayArrow, null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Test Pronunciation")
+                    Text(stringResource(Res.string.dictionary_test_pronunciation))
                 }
 
                 Text(
-                    "Global entries apply to all speech synthesis",
+                    stringResource(Res.string.dictionary_global_entries_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -307,12 +333,12 @@ private fun AddDictionaryEntryDialog(
                 onClick = { onAdd(word.trim(), phoneme.trim(), alphabet) },
                 enabled = word.isNotBlank() && phoneme.isNotBlank()
             ) {
-                Text("Add")
+                Text(stringResource(Res.string.common_add))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(Res.string.common_cancel))
             }
         }
     )

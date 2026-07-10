@@ -273,6 +273,14 @@ class KotlinBridge(private val port: Int = 8765) {
                 }
                 call.respond(HttpStatusCode.OK)
             }
+
+            post("/api/speak/pause") {
+                scope.launch {
+                    speechService.pause()
+                    azureSpeechService.pause()
+                }
+                call.respond(HttpStatusCode.OK)
+            }
             
             get("/api/speak/status") {
                 call.respond(mapOf(

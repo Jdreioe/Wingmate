@@ -164,6 +164,57 @@ class DesktopSpeechService(
         playSegmentsFromIndex(0)
     }
 
+    override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean {
+        val file = File(audioFilePath)
+        if (!file.exists() || file.length() <= 0L) {
+            log.info("recorded audio file missing or empty: {}", audioFilePath)
+            return false
+        }
+
+        return runCatching {
+            if (isPlaying || currentPlayer != null || currentProcess != null) {
+                stop()
+            }
+            stopRequested.set(false)
+            pausedAtSegment = false
+            currentSegments = emptyList()
+            currentSegmentIndex = 0
+
+            withContext(Dispatchers.IO) { playAudioFile(file) }
+
+            val spokenText = textForHistory?.trim().orEmpty()
+            if (spokenText.isNotEmpty()) {
+                runCatching {
+                    val koin = GlobalContext.getOrNull()
+                    val repo = koin?.get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+                    val now = System.currentTimeMillis()
+                    val effectiveVoice = voice ?: Voice(name = "Recorded Phrase", primaryLanguage = null)
+                    repo?.add(
+                        io.github.jdreioe.wingmate.domain.SaidText(
+                            date = now,
+                            saidText = spokenText,
+                            voiceName = effectiveVoice.name,
+                            pitch = effectiveVoice.pitch,
+                            speed = effectiveVoice.rate,
+                            audioFilePath = file.absolutePath,
+                            createdAt = now,
+                            position = 0,
+                            primaryLanguage = effectiveVoice.selectedLanguage?.takeIf { it.isNotBlank() }
+                                ?: effectiveVoice.primaryLanguage
+                        )
+                    )
+                }.onFailure { t ->
+                    log.warn("failed to append history for recorded audio playback", t)
+                }
+            }
+
+            true
+        }.getOrElse { t ->
+            log.warn("failed to play recorded audio file", t)
+            false
+        }
+    }
+
     private suspend fun maybePlayFromCache(
         text: String,
         voice: Voice?,
@@ -242,7 +293,12 @@ class DesktopSpeechService(
     }
 
     private suspend fun speakWithAzureTts(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
-        val cfg = getConfig() ?: throw IllegalStateException("No Azure TTS configuration found. Please configure Azure endpoint and subscription key.")
+        val cfg = getConfig()
+        if (cfg == null) {
+            log.warn("No Azure TTS configuration found; falling back to system TTS")
+            speakWithSystemTts(text, voice, pitch, rate)
+            return
+        }
         
         // Enhanced voice parameter handling
         val baseVoice = voice ?: Voice(name = "en-US-JennyNeural", primaryLanguage = "en-US")
@@ -881,30 +937,33 @@ class DesktopSpeechService(
     }
 
     private suspend fun getConfig(): SpeechServiceConfig? {
-        // Get Azure config from repository or env vars
-        val koin = GlobalContext.getOrNull()
-        val repo = koin?.let { runCatching { it.get<ConfigRepository>() }.getOrNull() }
-        val config = repo?.let { 
-            runCatching { 
-                withContext(Dispatchers.IO) { it.getSpeechConfig() } 
-            }.getOrNull() 
-        }
-        
-        if (config != null) {
-            log.debug("loaded Azure config from repository (endpoint: ${config.endpoint})")
-            return config
-        }
-
-        // Fallback to environment variables
-        val endpoint = System.getenv("WINGMATE_AZURE_REGION")?.takeIf { it.isNotBlank() }
-        val key = System.getenv("WINGMATE_AZURE_KEY")?.takeIf { it.isNotBlank() }
-        
-        return if (endpoint != null && key != null) {
-            log.debug("loaded Azure config from environment variables (endpoint: $endpoint)")
-            SpeechServiceConfig(endpoint = endpoint, subscriptionKey = key)
-        } else {
-            log.warn("no Azure TTS configuration found - neither in repository nor environment variables")
-            null
+        // Use NonCancellable so that coroutine cancellation (e.g. from hover changes)
+        // doesn't cause a spurious null result and fallback to system TTS.
+        return withContext(kotlinx.coroutines.NonCancellable) {
+            val koin = GlobalContext.getOrNull()
+            val repo = koin?.let { runCatching { it.get<ConfigRepository>() }.getOrNull() }
+            val config = repo?.let { 
+                runCatching { 
+                    withContext(Dispatchers.IO) { it.getSpeechConfig() } 
+                }.getOrNull() 
+            }
+            
+            if (config != null) {
+                log.debug("loaded Azure config from repository (endpoint: ${config.endpoint})")
+                config
+            } else {
+                // Fallback to environment variables
+                val endpoint = System.getenv("WINGMATE_AZURE_REGION")?.takeIf { it.isNotBlank() }
+                val key = System.getenv("WINGMATE_AZURE_KEY")?.takeIf { it.isNotBlank() }
+                
+                if (endpoint != null && key != null) {
+                    log.debug("loaded Azure config from environment variables (endpoint: $endpoint)")
+                    SpeechServiceConfig(endpoint = endpoint, subscriptionKey = key)
+                } else {
+                    log.warn("no Azure TTS configuration found - neither in repository nor environment variables")
+                    null
+                }
+            }
         }
     }
 

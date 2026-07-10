@@ -1,8 +1,17 @@
 import java.util.Properties
+import org.gradle.api.tasks.Sync
+
+fun toBuildConfigStringLiteral(value: String): String {
+    val escaped = value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+    return "\"$escaped\""
+}
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -17,12 +26,22 @@ android {
     val vCode = (versionProps.getProperty("versionCode") ?: "1").toInt()
     val vName = versionProps.getProperty("versionName") ?: "1.0"
 
+    val openSymbolsSecret = providers.environmentVariable("WINGMATE_OPENSYMBOLS_SECRET")
+        .orElse(providers.environmentVariable("OPENSYMBOLS_SECRET"))
+        .orElse(providers.environmentVariable("openSymbols"))
+        .orElse("")
+
     defaultConfig {
         applicationId = "com.hojmoseit.wingmate"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = vCode
         versionName = vName
+        buildConfigField(
+            "String",
+            "OPENSYMBOLS_SECRET",
+            toBuildConfigStringLiteral(openSymbolsSecret.get())
+        )
     }
 
     tasks.register("incrementVersionCode") {
@@ -41,12 +60,25 @@ android {
     }
 
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    sourceSets {
+        getByName("main") {
+            assets.srcDir("$buildDir/generated/composeAppComposeResources")
+        }
+    }
     
     composeOptions {
         // Compiler extension version must match the Compose compiler compatible with the project's Kotlin plugin.
         // If you use a different Compose compiler version in CI/IDE, adjust this value accordingly.
         kotlinCompilerExtensionVersion = libs.versions.kotlin.get()
+    }
+
+    lint {
+        disable += "Instantiatable"
     }
 
     packaging {
@@ -64,6 +96,32 @@ android {
     }
 }
 
+val syncComposeAppComposeResources by tasks.registering(Sync::class) {
+    dependsOn(":composeApp:copyAndroidMainComposeResourcesToAndroidAssets")
+    from(
+        project(":composeApp").layout.buildDirectory.dir(
+            "generated/compose/resourceGenerator/androidAssets/copyAndroidMainComposeResourcesToAndroidAssets"
+        )
+    )
+    into(layout.buildDirectory.dir("generated/composeAppComposeResources"))
+}
+
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn(syncComposeAppComposeResources)
+}
+
+tasks.matching { it.name.endsWith("LintReportModel") || it.name.endsWith("LintVitalReportModel") }.configureEach {
+    dependsOn(syncComposeAppComposeResources)
+}
+
+tasks.matching { it.name.startsWith("lintAnalyze") }.configureEach {
+    dependsOn(syncComposeAppComposeResources)
+}
+
+tasks.matching { it.name == "lintVitalAnalyzeRelease" }.configureEach {
+    dependsOn(syncComposeAppComposeResources)
+}
+
 dependencies {
     implementation(project(":shared"))
     implementation(project(":composeApp"))
@@ -72,9 +130,13 @@ dependencies {
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+
     // Common AndroidX helpers
     implementation("androidx.core:core-ktx:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:${libs.versions.androidx.lifecycle.get()}")
 
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.compose.ui:ui")
@@ -90,8 +152,8 @@ dependencies {
 
 
     // DI
-    implementation("io.insert-koin:koin-core:4.1.0")
-    implementation("io.insert-koin:koin-android:4.1.0")
+    implementation(libs.koin.core)
+    implementation(libs.koin.android)
 
     // Dual-screen / WindowManager (API 34+ rear display & window area APIs)
     implementation("androidx.window:window:1.3.0")

@@ -17,6 +17,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.CategoryItem
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.category_add_title
+import wingmatekmp.composeapp.generated.resources.category_error_exists
+import wingmatekmp.composeapp.generated.resources.category_error_name_empty
+import wingmatekmp.composeapp.generated.resources.category_name_label
+import wingmatekmp.composeapp.generated.resources.common_cancel
+import wingmatekmp.composeapp.generated.resources.common_language
+import wingmatekmp.composeapp.generated.resources.common_save
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,16 +34,19 @@ fun AddCategoryDialog(existingNames: List<String> = emptyList(), availableLangua
     var error by remember { mutableStateOf<String?>(null) }
     var expanded by remember { mutableStateOf(false) }
     var selectedLanguage by remember { mutableStateOf(availableLanguages.firstOrNull() ?: "") }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Add category") }, text = {
+    val nameEmptyMessage = stringResource(Res.string.category_error_name_empty)
+    val categoryExistsMessage = stringResource(Res.string.category_error_exists)
+
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(Res.string.category_add_title)) }, text = {
         Column(modifier = Modifier.fillMaxWidth()) {
             val showKeyboard = rememberShowKeyboardOnFocus()
             OutlinedTextField(value = name, onValueChange = {
                 name = it
                 error = null
-            }, label = { Text("Category name") }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).then(showKeyboard))
+            }, label = { Text(stringResource(Res.string.category_name_label)) }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).then(showKeyboard))
             if (availableLanguages.isNotEmpty()) {
                 ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-                    TextField(value = selectedLanguage, onValueChange = {}, readOnly = true, label = { Text("Language") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) })
+                    TextField(value = selectedLanguage, onValueChange = {}, readOnly = true, label = { Text(stringResource(Res.string.common_language)) }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) })
                     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = {}) {}
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         for (lang in availableLanguages) {
@@ -49,18 +61,18 @@ fun AddCategoryDialog(existingNames: List<String> = emptyList(), availableLangua
         Button(onClick = {
             val trimmed = name.trim()
             if (trimmed.isBlank()) {
-                error = "Name cannot be empty"
+                error = nameEmptyMessage
                 return@Button
             }
             if (existingNames.any { it.equals(trimmed, ignoreCase = true) }) {
-                error = "Category with this name already exists"
+                error = categoryExistsMessage
                 return@Button
             }
             val id = trimmed.replace("\\s+".toRegex(), "_")
             onSave(CategoryItem(id = id, name = trimmed, selectedLanguage = selectedLanguage.ifEmpty { null }))
             onDismiss()
-        }) { Text("Save") }
+        }) { Text(stringResource(Res.string.common_save)) }
     }, dismissButton = {
-        TextButton(onClick = onDismiss) { Text("Cancel") }
+        TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
     })
 }

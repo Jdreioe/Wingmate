@@ -36,7 +36,9 @@ kotlin {
                 @Suppress("DEPRECATION")
                 implementation(compose.materialIconsExtended)
                 
-                implementation("io.insert-koin:koin-core:3.5.6")
+                implementation(libs.koin.core)
+                implementation(libs.koin.compose)
+                implementation(libs.androidx.lifecycle.runtimeCompose)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
             }
@@ -76,4 +78,30 @@ compose.desktop {
     application {
         mainClass = "io.github.jdreioe.wingmate.desktop.MainKt"
     }
+}
+
+tasks.matching { it.name == "copyAndroidMainComposeResourcesToAndroidAssets" }.configureEach {
+    val outputDirectoryGetter = javaClass.methods.firstOrNull {
+        it.name == "getOutputDirectory" && it.parameterCount == 0
+    } ?: return@configureEach
+
+    val outputDirectoryProperty = outputDirectoryGetter.invoke(this) ?: return@configureEach
+    val outputFile = layout.buildDirectory
+        .dir("generated/compose/resourceGenerator/androidAssets/${name}")
+        .get()
+        .asFile
+
+    val fileValueMethod = outputDirectoryProperty.javaClass.methods.firstOrNull {
+        it.name == "fileValue" && it.parameterCount == 1
+    }
+    if (fileValueMethod != null) {
+        fileValueMethod.invoke(outputDirectoryProperty, outputFile)
+        return@configureEach
+    }
+
+    val setMethod = outputDirectoryProperty.javaClass.methods.firstOrNull {
+        it.name == "set" && it.parameterCount == 1
+    } ?: return@configureEach
+
+    setMethod.invoke(outputDirectoryProperty, outputFile)
 }
