@@ -19,6 +19,15 @@ Wingmate uses third-party services to convert text into speech:
 - **Microsoft Azure Speech Services**: When you use voices provided by Azure, the text you enter is sent to Microsoft's servers to be processed into audio. This data is handled according to Microsoft's privacy and data retention policies.
 - **System Voices**: If you use your device's built-in text-to-speech engine, data handling is subject to your operating system's privacy policy (e.g., Google's on Android, Apple's on iOS).
 
+### 1.3 Optional Feature Usage Reporting (Android)
+Wingmate includes optional, **opt-in** feature usage reporting on Android using Firebase Analytics.
+
+- **Default state**: Disabled by default.
+- **Control**: You can enable or disable this at any time in Settings.
+- **What may be reported**: Anonymous feature interaction events, such as opening screens, playback button usage, phrase/category management actions, board import/board editor actions, and voice/language/settings changes.
+- **What is not reported**: Phrase text, vocalization text, Azure keys, board JSON content, and local file paths.
+- **Purpose**: To understand which features are used and improve app quality.
+
 ## 2. Data Storage
 All data mentioned in Section 1.1 is stored in a local SQLite database on your device. We do not have access to this data, nor do we sync it to our own servers.
 

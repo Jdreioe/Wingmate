@@ -16,8 +16,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -34,7 +34,7 @@ import io.github.jdreioe.wingmate.presentation.DisplayWindowBus
  */
 @Composable
 fun FullScreenDisplay(onClose: (() -> Unit)? = null) {
-    val text by DisplayTextBus.text.collectAsState()
+    val text by DisplayTextBus.text.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
 
     val handleClose: () -> Unit = onClose ?: { DisplayWindowBus.close() }

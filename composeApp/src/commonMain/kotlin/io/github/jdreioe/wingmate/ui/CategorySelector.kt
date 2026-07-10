@@ -20,6 +20,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import io.github.jdreioe.wingmate.domain.CategoryItem
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.category_add_cd
+import wingmatekmp.composeapp.generated.resources.category_selector_title
+import wingmatekmp.composeapp.generated.resources.common_close
 
 @Composable
 fun CategorySelectorDialog(
@@ -32,7 +37,7 @@ fun CategorySelectorDialog(
     availableLanguages: List<String> = emptyList()
 ) {
     var showAdd by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Category for $languageLabel") }, text = {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(Res.string.category_selector_title, languageLabel)) }, text = {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Language label centered
             Text(text = languageLabel, fontSize = 14.sp, modifier = Modifier.padding(bottom = 12.dp).align(Alignment.CenterHorizontally))
@@ -54,12 +59,12 @@ fun CategorySelectorDialog(
                 }
                 // trailing + button immediately after last category
                 IconButton(onClick = { showAdd = true }, modifier = Modifier.padding(start = 4.dp)) {
-                    Icon(imageVector = Icons.Filled.Add, contentDescription = "Add category")
+                    Icon(imageVector = Icons.Filled.Add, contentDescription = stringResource(Res.string.category_add_cd))
                 }
             }
         }
     }, confirmButton = {
-        TextButton(onClick = onDismiss) { Text("Close") }
+        TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_close)) }
     }, dismissButton = {})
 
     if (showAdd) {

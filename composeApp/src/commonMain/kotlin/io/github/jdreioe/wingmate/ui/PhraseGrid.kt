@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.Phrase
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.phrase_add_cd
 
 /**
  * PhraseGrid – a Compose port of the Flutter PhraseGrid.
@@ -52,15 +55,23 @@ fun PhraseGrid(
     readOnly: Boolean = false,
     onCopyAudio: ((filePath: String) -> Unit)? = null,
 ) {
+    val settings by rememberReactiveSettings()
+    // Filter out hidden phrases unless in wiggle mode
+    val visiblePhrases = remember(phrases, isWiggleMode) {
+        if (isWiggleMode) phrases else phrases.filter { !it.isHidden }
+    }
     // Build item list; when not in wiggle mode show an Add button as last tile
     val showAdd = !isWiggleMode && showAddTile
-    val itemCount = if (showAdd) phrases.size + 1 else phrases.size
+    val itemCount = if (showAdd) visiblePhrases.size + 1 else visiblePhrases.size
 
     var showAddDialog by remember { mutableStateOf(false) }
 
-    LazyVerticalGrid(columns = GridCells.Fixed(3), contentPadding = PaddingValues(4.dp)) {
-        items(itemCount) { index ->
-            if (showAdd && index == phrases.size) {
+    LazyVerticalGrid(columns = GridCells.Fixed(settings.gridColumns), contentPadding = PaddingValues(4.dp)) {
+        items(
+            count = itemCount,
+            key = { index -> if (showAdd && index == visiblePhrases.size) "add_tile" else visiblePhrases[index].id }
+        ) { index ->
+            if (showAdd && index == visiblePhrases.size) {
                 // Add button as card
                 Card(
                     modifier = Modifier
@@ -76,14 +87,14 @@ fun PhraseGrid(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Add,
-                            contentDescription = "Add phrase",
+                            contentDescription = stringResource(Res.string.phrase_add_cd),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(32.dp)
                         )
                     }
                 }
             } else {
-                val item = phrases[index]
+                val item = visiblePhrases[index]
                 // When edit mode is active, expose move and delete buttons
                 val categoryName = categories.firstOrNull { it.id == item.parentId }?.name
                 PhraseGridItem(
@@ -99,7 +110,7 @@ fun PhraseGrid(
                     phraseHeight = phraseHeight,
                     phraseFontSize = phraseFontSize,
                     index = index,
-                    total = phrases.size,
+                    total = visiblePhrases.size,
                     readOnly = readOnly,
                     onCopyAudio = onCopyAudio,
                 )

@@ -13,7 +13,7 @@ import io.github.jdreioe.wingmate.application.SettingsUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
-import org.koin.core.context.GlobalContext
+import org.koin.compose.koinInject
 import io.github.jdreioe.wingmate.ui.isDesktop
 
 @Composable
@@ -22,12 +22,8 @@ fun AzureSettingsFullScreen(
     onCancel: () -> Unit,
     onAzureSelected: () -> Unit = {}
 ) {
-    val configRepo = remember {
-        GlobalContext.getOrNull()?.let { koin -> runCatching { koin.get<ConfigRepository>() }.getOrNull() }
-    }
-    val settingsUseCase = remember {
-        GlobalContext.getOrNull()?.let { koin -> runCatching { koin.get<SettingsUseCase>() }.getOrNull() }
-    }
+    val configRepo = koinInject<ConfigRepository>()
+    val settingsUseCase = koinInject<SettingsUseCase>()
     
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
@@ -37,19 +33,15 @@ fun AzureSettingsFullScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(configRepo, settingsUseCase) {
-        if (configRepo != null) {
-            val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfig() }
-            println("Loaded config: $cfg")
-            cfg?.let { endpoint = it.endpoint; subscriptionKey = it.subscriptionKey }
-        }
+        val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfig() }
+        println("Loaded config: $cfg")
+        cfg?.let { endpoint = it.endpoint; subscriptionKey = it.subscriptionKey }
         
-        if (settingsUseCase != null) {
-            val settings = withContext(Dispatchers.Default) { 
-                runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-            }
-            useSystemTts = settings.useSystemTts
-            virtualMic = settings.virtualMicEnabled
+        val settings = withContext(Dispatchers.Default) { 
+            runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
         }
+        useSystemTts = settings.useSystemTts
+        virtualMic = settings.virtualMicEnabled
         
         loading = false
     }
@@ -75,13 +67,11 @@ fun AzureSettingsFullScreen(
                 onClick = { 
                     useSystemTts = false
                     scope.launch {
-                        settingsUseCase?.let { useCase ->
-                            val currentSettings: Settings = withContext(Dispatchers.Default) {
-                                runCatching { useCase.get() }.getOrNull() ?: Settings()
-                            }
-                            runCatching {
-                                useCase.update(currentSettings.copy(useSystemTts = false))
-                            }
+                        val currentSettings: Settings = withContext(Dispatchers.Default) {
+                            runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
+                        }
+                        runCatching {
+                            settingsUseCase.update(currentSettings.copy(useSystemTts = false))
                         }
                         // Navigate to Azure config screen
                         onAzureSelected()
@@ -151,13 +141,11 @@ fun AzureSettingsFullScreen(
                 onClick = { 
                     useSystemTts = true
                     scope.launch {
-                        settingsUseCase?.let { useCase ->
-                            val currentSettings: Settings = withContext(Dispatchers.Default) {
-                                runCatching { useCase.get() }.getOrNull() ?: Settings()
-                            }
-                            runCatching {
-                                useCase.update(currentSettings.copy(useSystemTts = true))
-                            }
+                        val currentSettings: Settings = withContext(Dispatchers.Default) {
+                            runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
+                        }
+                        runCatching {
+                            settingsUseCase.update(currentSettings.copy(useSystemTts = true))
                         }
                         // Go directly to voice selection since no config needed
                         onNext()
@@ -264,27 +252,23 @@ fun AzureSettingsFullScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Azure Configuration", style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
-                
-                if (configRepo == null) {
-                    Text("Config repository not available")
-                } else {
-                    val showKeyboard = rememberShowKeyboardOnFocus()
-                    OutlinedTextField(
-                        value = endpoint,
-                        onValueChange = { endpoint = it },
-                        label = { Text("Region / Endpoint") },
-                        placeholder = { Text("e.g., eastus") },
-                        modifier = Modifier.fillMaxWidth().then(showKeyboard)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = subscriptionKey,
-                        onValueChange = { subscriptionKey = it },
-                        label = { Text("Subscription Key") },
-                        placeholder = { Text("Your Azure Speech service key") },
-                        modifier = Modifier.fillMaxWidth().then(showKeyboard)
-                    )
-                }
+
+                val showKeyboard = rememberShowKeyboardOnFocus()
+                OutlinedTextField(
+                    value = endpoint,
+                    onValueChange = { endpoint = it },
+                    label = { Text("Region / Endpoint") },
+                    placeholder = { Text("e.g., eastus") },
+                    modifier = Modifier.fillMaxWidth().then(showKeyboard)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = subscriptionKey,
+                    onValueChange = { subscriptionKey = it },
+                    label = { Text("Subscription Key") },
+                    placeholder = { Text("Your Azure Speech service key") },
+                    modifier = Modifier.fillMaxWidth().then(showKeyboard)
+                )
             }
         }
 
@@ -295,17 +279,15 @@ fun AzureSettingsFullScreen(
             Spacer(modifier = Modifier.width(8.dp))
             Button(onClick = {
                 scope.launch {
-            // Save TTS preference
-                    if (settingsUseCase != null) {
-                        withContext(Dispatchers.Default) {
-                            val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                val updated = current.copy(useSystemTts = useSystemTts, virtualMicEnabled = virtualMic)
-                            settingsUseCase.update(updated)
-                        }
+                    // Save TTS preference
+                    withContext(Dispatchers.Default) {
+                        val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
+                        val updated = current.copy(useSystemTts = useSystemTts, virtualMicEnabled = virtualMic)
+                        settingsUseCase.update(updated)
                     }
                     
                     // Save Azure config only if Azure TTS is selected and fields are filled
-                    if (!useSystemTts && configRepo != null && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
+                    if (!useSystemTts && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
                         withContext(Dispatchers.Default) {
                             configRepo.saveSpeechConfig(SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey))
                         }

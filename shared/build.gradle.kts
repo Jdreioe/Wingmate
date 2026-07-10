@@ -4,7 +4,7 @@ plugins {
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("app.cash.sqldelight") version "2.2.1"
+    id("app.cash.sqldelight") version "2.0.2"
 }
 
 kotlin {
@@ -37,13 +37,19 @@ kotlin {
     sourceSets {
     val commonMain by getting {
             dependencies {
-                implementation(libs.kotlinx.coroutines.core)
-                implementation(libs.kotlinx.serialization.json)
-                implementation(libs.kotlinx.datetime)
+                api(project(":core:domain"))
+                api(project(":core:data"))
+                api(project(":core:presentation"))
+                api(project(":feature:communication:domain"))
+                api(project(":feature:communication:data"))
+                api(project(":feature:communication:presentation"))
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
                 api(libs.koin.core)
-                implementation(libs.ktor.client.core)
-                implementation(libs.ktor.client.contentNegotiation)
-                implementation(libs.ktor.serialization.json)
+                implementation("io.ktor:ktor-client-core:2.3.12")
+                implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
                 // Add logging for Kotlin Multiplatform
                 implementation("io.github.oshai:kotlin-logging:7.0.0")
 
@@ -54,8 +60,8 @@ kotlin {
                 implementation("com.arkivanov.mvikotlin:mvikotlin-extensions-coroutines:$mviKotlinVersion")
                 
                 // SQLDelight
-                implementation(libs.sqldelight.runtime)
-                implementation(libs.sqldelight.coroutines)
+                implementation("app.cash.sqldelight:runtime:2.0.2")
+                implementation("app.cash.sqldelight:coroutines-extensions:2.0.2")
             }
         }
         val commonTest by getting {
@@ -68,6 +74,8 @@ kotlin {
                 implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
                 implementation(libs.ktor.client.cio)
                 implementation("io.ktor:ktor-client-okhttp:${libs.versions.ktor.get()}")
+                implementation(platform("com.google.firebase:firebase-bom:${libs.versions.firebaseBom.get()}"))
+                implementation("com.google.firebase:firebase-analytics-ktx")
                 // Required for FileProvider and core Android helpers used in androidMain
                 implementation("androidx.core:core-ktx:1.13.1")
                 // Compose Multiplatform for Android UI
@@ -75,13 +83,13 @@ kotlin {
                 implementation(compose.foundation)
                 implementation(compose.material3)
                 
-                implementation(libs.sqldelight.android)
+                implementation("app.cash.sqldelight:android-driver:2.0.2")
             }
         }
         applyDefaultHierarchyTemplate()
         val iosMain by getting {
             dependencies {
-                implementation(libs.ktor.client.darwin)
+                implementation("io.ktor:ktor-client-darwin:2.3.12")
                 // Ensure Koin is resolved for iOS binaries too
                 api(libs.koin.core)
                 // Compose Multiplatform for iOS UI
@@ -89,19 +97,19 @@ kotlin {
                 implementation(compose.foundation)
                 implementation(compose.material3)
                 
-                implementation(libs.sqldelight.native)
+                implementation("app.cash.sqldelight:native-driver:2.0.2")
             }
         }
         val jvmMain by getting {
             dependencies {
-                implementation(libs.ktor.client.cio)
-                implementation(libs.kotlinx.coroutinesSwing)
+                implementation("io.ktor:ktor-client-okhttp:2.3.12")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
                 // Compose Multiplatform for desktop JVM UI
                 implementation(compose.runtime)
                 implementation(compose.foundation)
                 implementation(compose.material3)
                 
-                implementation(libs.sqldelight.jvm)
+                implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
             }
         }
     }

@@ -19,8 +19,8 @@ import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.Voice
-import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @Composable
 fun SsmlSidebar(
@@ -29,8 +29,8 @@ fun SsmlSidebar(
     inputSelection: androidx.compose.ui.text.TextRange = androidx.compose.ui.text.TextRange(0),
     onInsertSsml: ((String) -> Unit)? = null
 ) {
-    val voiceUseCase = remember { GlobalContext.get().get<VoiceUseCase>() }
-    val settingsUseCase = remember { GlobalContext.get().get<SettingsUseCase>() }
+    val voiceUseCase = koinInject<VoiceUseCase>()
+    val settingsUseCase = koinInject<SettingsUseCase>()
     val scope = rememberCoroutineScope()
 
     var selectedVoice by remember { mutableStateOf<Voice?>(null) }

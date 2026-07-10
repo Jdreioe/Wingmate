@@ -6,13 +6,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun PlaybackControls(
+    onThatThought: () -> Unit,
     onPlay: () -> Unit, 
     onPause: () -> Unit, 
     onStop: () -> Unit, 
@@ -30,7 +31,8 @@ fun PlaybackControls(
     onResume: (() -> Unit)? = null,
     isPaused: Boolean = false,
     isSecondarySelectionActive: Boolean = false,
-    isSecondaryActionEnabled: Boolean = true
+    isSecondaryActionEnabled: Boolean = true,
+    isOnThatThoughtActive: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -46,21 +48,27 @@ fun PlaybackControls(
         ) {
             // Show Resume button if paused, otherwise show Play button
             if (isPaused && onResume != null) {
-                SmallIconButton(icon = Icons.Filled.SkipNext, tint = MaterialTheme.colorScheme.primary, onClick = onResume)
+                SmallIconButton(icon = Icons.Rounded.SkipNext, tint = MaterialTheme.colorScheme.primary, onClick = onResume)
             } else {
-                SmallIconButton(icon = Icons.Filled.PlayArrow, tint = MaterialTheme.colorScheme.onSurface, onClick = onPlay)
+                SmallIconButton(icon = Icons.Rounded.PlayArrow, tint = MaterialTheme.colorScheme.onSurface, onClick = onPlay)
             }
             
             // Speak using secondary language (if provided)
             SmallIconButton(
-                icon = Icons.Filled.Language,
+                icon = Icons.Rounded.Language,
                 tint = if (isSecondarySelectionActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                 onClick = { onPlaySecondary?.invoke() },
                 selected = isSecondarySelectionActive,
                 enabled = isSecondaryActionEnabled && onPlaySecondary != null
             )
-            SmallIconButton(icon = Icons.Filled.Pause, tint = MaterialTheme.colorScheme.onSurface, onClick = onPause)
-            SmallIconButton(icon = Icons.Filled.Stop, tint = MaterialTheme.colorScheme.onSurface, onClick = onStop)
+            SmallIconButton(icon = Icons.Rounded.Pause, tint = MaterialTheme.colorScheme.onSurface, onClick = onPause)
+            SmallIconButton(icon = Icons.Rounded.Stop, tint = MaterialTheme.colorScheme.onSurface, onClick = onStop)
+            SmallIconButton(
+                icon = Icons.Rounded.MoreVert,
+                tint = if (isOnThatThoughtActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                onClick = onThatThought,
+                selected = isOnThatThoughtActive
+            )
         }
     }
 }

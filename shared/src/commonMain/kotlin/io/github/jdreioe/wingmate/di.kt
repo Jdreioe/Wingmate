@@ -4,10 +4,11 @@ import io.github.jdreioe.wingmate.application.PhraseBloc
 import io.github.jdreioe.wingmate.application.SettingsBloc
 import io.github.jdreioe.wingmate.application.VoiceBloc
 import io.github.jdreioe.wingmate.application.PhraseUseCase
-import io.github.jdreioe.wingmate.application.usecase.AddCategoryUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.CategoryUseCase
+import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.application.NoopFeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.domain.*
 import io.github.jdreioe.wingmate.domain.chatterbox.ModelRepository
@@ -15,32 +16,35 @@ import io.github.jdreioe.wingmate.domain.chatterbox.VoiceProfileRepository
 import io.github.jdreioe.wingmate.infrastructure.*
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
+import org.koin.core.module.dsl.bind
 import org.koin.dsl.module
+import org.koin.core.module.dsl.singleOf
 
 import io.github.jdreioe.wingmate.di.appModule
 
 @Suppress("unused")
 fun initKoin(extra: Module? = null) {
-    val baseModule: Module = module {
-    single<PhraseRepository> { InMemoryPhraseRepository() }
-    single<CategoryRepository> { InMemoryCategoryRepository() }
-        single<SettingsRepository> { InMemorySettingsRepository() }
-        single<VoiceRepository> { InMemoryVoiceRepository() }
-        single<SaidTextRepository> { InMemorySaidTextRepository() }
-        single<ConfigRepository> { InMemoryConfigRepository() }
-        single<PronunciationDictionaryRepository> { InMemoryPronunciationDictionaryRepository() }
-        single<ModelRepository> { InMemoryModelRepository() }
-        single<VoiceProfileRepository> { InMemoryVoiceProfileRepository() }
-        single<SpeechService> { NoopSpeechService() } // Android overrides this
-        single { AzureVoiceCatalog(get<ConfigRepository>()) }
+    val coreDataModule: Module = module {
+        singleOf(::InMemoryPhraseRepository) { bind<PhraseRepository>() }
+        singleOf(::InMemoryCategoryRepository) { bind<CategoryRepository>() }
+        singleOf(::InMemorySettingsRepository) { bind<SettingsRepository>() }
+        singleOf(::InMemoryVoiceRepository) { bind<VoiceRepository>() }
+        singleOf(::InMemorySaidTextRepository) { bind<SaidTextRepository>() }
+        singleOf(::InMemoryConfigRepository) { bind<ConfigRepository>() }
+        singleOf(::InMemoryPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
+        singleOf(::InMemoryModelRepository) { bind<ModelRepository>() }
+        singleOf(::InMemoryVoiceProfileRepository) { bind<VoiceProfileRepository>() }
+        singleOf(::NoopSpeechService) { bind<SpeechService>() } // Android overrides this
+        singleOf(::NoopFeatureUsageReporter) { bind<FeatureUsageReporter>() }
+        singleOf(::AzureVoiceCatalog)
         single { DictionaryLoader(getOrNull<io.github.jdreioe.wingmate.domain.FileStorage>()) } // For language dictionary pretraining and caching
-        single { PhraseUseCase(get<PhraseRepository>()) }
-    single { CategoryUseCase(get<io.github.jdreioe.wingmate.domain.CategoryRepository>()) }
-        single { SettingsUseCase(get<SettingsRepository>()) }
-        single { UserDataManager(get<SaidTextRepository>()) }
-        single { SettingsStateManager(get<SettingsRepository>()) }
-        single { VoiceUseCase(get<VoiceRepository>(), get<AzureVoiceCatalog>(), get<ConfigRepository>()) }
-        factory { PhraseBloc(get<PhraseUseCase>(), AddCategoryUseCase(get<PhraseRepository>())) }
+        singleOf(::PhraseUseCase)
+        singleOf(::CategoryUseCase)
+        singleOf(::SettingsUseCase)
+        singleOf(::UserDataManager)
+        singleOf(::SettingsStateManager)
+        singleOf(::VoiceUseCase)
+        factory { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>(), get<CategoryUseCase>()) }
         factory { SettingsBloc(get<SettingsUseCase>()) }
         factory { VoiceBloc(get<VoiceUseCase>()) }
     }
@@ -48,7 +52,7 @@ fun initKoin(extra: Module? = null) {
     startKoin {
         allowOverride(true)
         // Include base bindings, MVIKotlin store module, and any extra platform-specific modules
-        val modulesList = listOf(baseModule, appModule) + listOfNotNull(extra)
+        val modulesList = listOf(coreDataModule, appModule) + listOfNotNull(extra)
         modules(modulesList)
     }
 }

@@ -5,8 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import io.github.jdreioe.wingmate.ui.AppTheme
 import io.github.jdreioe.wingmate.ui.FullScreenDisplay
@@ -16,7 +14,6 @@ class PrimaryDisplayActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             AppTheme {
-                val show by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsState(initial = true)
                 Box(Modifier.fillMaxSize()) {
                     FullScreenDisplay(onClose = {
                         finish()

@@ -1,0 +1,130 @@
+package io.github.jdreioe.wingmate.infrastructure
+
+import android.content.ContentValues
+import android.content.Context
+import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.PhraseRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.UUID
+
+class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepository {
+    private val helper by lazy { AndroidSqlOpenHelper(context) }
+
+    override suspend fun getAll(): List<Phrase> = withContext(Dispatchers.IO) {
+        val db = helper.readableDatabase
+        val cursor = db.query("phrases", null, null, null, null, null, "ordering ASC")
+        val list = mutableListOf<Phrase>()
+        while (cursor.moveToNext()) {
+            val id = cursor.getString(cursor.getColumnIndexOrThrow("id"))
+            val text = cursor.getString(cursor.getColumnIndexOrThrow("text"))
+            val name = cursor.getString(cursor.getColumnIndexOrThrow("name"))
+            val bg = cursor.getString(cursor.getColumnIndexOrThrow("background_color"))
+            val imageUrlIdx = cursor.getColumnIndex("image_url")
+            val imageUrl = if (imageUrlIdx >= 0) cursor.getString(imageUrlIdx) else null
+            val parentId = cursor.getString(cursor.getColumnIndexOrThrow("parent_id"))
+            val linkedBoardIdx = cursor.getColumnIndex("linked_board_id")
+            val linkedBoardId = if (linkedBoardIdx >= 0) cursor.getString(linkedBoardIdx) else null
+            val createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at"))
+            val recPathIdx = cursor.getColumnIndex("recording_path")
+            val recordingPath = if (recPathIdx >= 0) cursor.getString(recPathIdx) else null
+            val isHiddenIdx = cursor.getColumnIndex("is_hidden")
+            val isHidden = if (isHiddenIdx >= 0) cursor.getInt(isHiddenIdx) == 1 else false
+            list += Phrase(
+                id = id, 
+                text = text, 
+                name = name, 
+                backgroundColor = bg, 
+                imageUrl = imageUrl,
+                parentId = parentId, 
+                linkedBoardId = linkedBoardId,
+                createdAt = createdAt, 
+                recordingPath = recordingPath,
+                isHidden = isHidden
+            )
+        }
+        cursor.close()
+        println("Loaded {} phrases from SQLite: ${list.size}")
+        return@withContext list
+    }
+
+    override suspend fun add(phrase: Phrase): Phrase = withContext(Dispatchers.IO) {
+        val db = helper.writableDatabase
+        val id = phrase.id.ifBlank { UUID.randomUUID().toString() }
+        val createdAt = if (phrase.createdAt == 0L) System.currentTimeMillis() else phrase.createdAt
+        // compute ordering as max+1
+        val maxCur = db.rawQuery("SELECT COALESCE(MAX(ordering), -1) FROM phrases", null)
+        var ord = -1
+        if (maxCur.moveToFirst()) ord = maxCur.getInt(0)
+        maxCur.close()
+        val values = ContentValues().apply {
+            put("id", id)
+            put("text", phrase.text)
+            put("name", phrase.name)
+            put("background_color", phrase.backgroundColor)
+            put("image_url", phrase.imageUrl)
+            put("parent_id", phrase.parentId)
+            put("linked_board_id", phrase.linkedBoardId)
+            put("created_at", createdAt)
+            put("recording_path", phrase.recordingPath)
+            put("is_hidden", phrase.isHidden)
+            put("ordering", ord + 1)
+        }
+        db.insert("phrases", null, values)
+        return@withContext Phrase(
+            id = id, 
+            text = phrase.text, 
+            name = phrase.name, 
+            backgroundColor = phrase.backgroundColor, 
+            imageUrl = phrase.imageUrl,
+            parentId = phrase.parentId, 
+            linkedBoardId = phrase.linkedBoardId,
+            createdAt = createdAt,
+            isHidden = phrase.isHidden
+        )
+    }
+
+    override suspend fun update(phrase: Phrase): Phrase = withContext(Dispatchers.IO) {
+        val db = helper.writableDatabase
+        val values = ContentValues().apply {
+            put("text", phrase.text)
+            put("name", phrase.name)
+            put("background_color", phrase.backgroundColor)
+            put("image_url", phrase.imageUrl)
+            put("parent_id", phrase.parentId)
+            put("linked_board_id", phrase.linkedBoardId)
+            put("recording_path", phrase.recordingPath)
+            put("is_hidden", phrase.isHidden)
+        }
+        db.update("phrases", values, "id = ?", arrayOf(phrase.id))
+        return@withContext phrase
+    }
+
+    override suspend fun delete(id: String) = withContext(Dispatchers.IO) {
+        val db = helper.writableDatabase
+        db.delete("phrases", "id = ?", arrayOf(id))
+        Unit
+    }
+
+    override suspend fun move(fromIndex: Int, toIndex: Int) = withContext(Dispatchers.IO) {
+        // Simple ordering swap implementation: read all ids and reorder
+        val db = helper.writableDatabase
+        val cursor = db.query("phrases", arrayOf("id"), null, null, null, null, "ordering ASC")
+        val ids = mutableListOf<String>()
+        while (cursor.moveToNext()) ids += cursor.getString(cursor.getColumnIndexOrThrow("id"))
+        cursor.close()
+        if (fromIndex < 0 || toIndex < 0 || fromIndex >= ids.size || toIndex >= ids.size) return@withContext
+        val id = ids.removeAt(fromIndex)
+        ids.add(toIndex, id)
+        db.beginTransaction()
+        try {
+            ids.forEachIndexed { idx, pid ->
+                val vals = ContentValues().apply { put("ordering", idx) }
+                db.update("phrases", vals, "id = ?", arrayOf(pid))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+}

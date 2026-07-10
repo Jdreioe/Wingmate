@@ -5,46 +5,49 @@ import com.arkivanov.mvikotlin.main.store.DefaultStoreFactory
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStoreFactory
 import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
-import io.github.jdreioe.wingmate.application.usecase.AddCategoryUseCase
-import io.github.jdreioe.wingmate.application.usecase.DeleteCategoryUseCase
 import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
-import io.github.jdreioe.wingmate.application.usecase.MoveCategoryUseCase
 import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.MovePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetAllItemsUseCase
+import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.domain.BoardSetRepository
+import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.infrastructure.BoardImportService
+import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
+import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
+import io.github.jdreioe.wingmate.infrastructure.ObfParser
+import io.github.jdreioe.wingmate.infrastructure.RealAacLogger
+import io.github.jdreioe.wingmate.domain.AacLogger
+import io.github.jdreioe.wingmate.domain.SettingsRepository
+import org.koin.core.module.dsl.bind
+import org.koin.core.module.dsl.factoryOf
+import org.koin.core.module.dsl.singleOf
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 val appModule = module {
-    single<StoreFactory> { DefaultStoreFactory() }
+    singleOf(::DefaultStoreFactory) { bind<StoreFactory>() }
     
-    single { io.github.jdreioe.wingmate.infrastructure.ObfParser() }
-    single<io.github.jdreioe.wingmate.domain.BoardRepository> { io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository() }
+    singleOf(::ObfParser)
+    singleOf(::InMemoryBoardRepository) { bind<BoardRepository>() }
+    singleOf(::InMemoryBoardSetRepository) { bind<BoardSetRepository>() }
+    singleOf(::BoardSetUseCase)
 
-    factory { AddPhraseUseCase(get()) }
-    factory { AddCategoryUseCase(get()) }
-    factory { DeleteCategoryUseCase(get(), get()) }
-    factory { MoveCategoryUseCase(get()) }
-    factory { GetPhrasesAndCategoriesUseCase(get()) }
-    factory { DeletePhraseUseCase(get()) }
-    factory { UpdatePhraseUseCase(get()) }
-    factory { MovePhraseUseCase(get()) }
-    factory { GetAllItemsUseCase(get()) }
+    singleOf(::AddPhraseUseCase)
+    singleOf(::GetPhrasesAndCategoriesUseCase)
+    singleOf(::DeletePhraseUseCase)
+    singleOf(::UpdatePhraseUseCase)
+    singleOf(::MovePhraseUseCase)
+    singleOf(::GetAllItemsUseCase)
     
-    single { io.github.jdreioe.wingmate.infrastructure.BoardImportService(get(), get(), get(), get()) }
+    singleOf(::BoardImportService)
+    
+    single<AacLogger> { RealAacLogger(get(), getOrNull(named("logDir")), get()) }
+
+    factoryOf(::PhraseListStoreFactory)
 
     factory {
-        PhraseListStoreFactory(
-            storeFactory = get(),
-            getPhrasesAndCategoriesUseCase = get(),
-            addPhraseUseCase = get(),
-            addCategoryUseCase = get(),
-            deleteCategoryUseCase = get(),
-            moveCategoryUseCase = get(),
-            deletePhraseUseCase = get(),
-            updatePhraseUseCase = get(),
-            movePhraseUseCase = get(),
-            getAllItemsUseCase = get()
-        ).create()
+        get<PhraseListStoreFactory>().create()
     }
 }

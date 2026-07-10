@@ -42,14 +42,20 @@ class ExternalDisplayPresentation(
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
 
         val compose = ComposeView(context)
-        // Manually attach LifecycleOwner and SavedStateRegistryOwner for Compose
-        val viewTreeLifecycleOwnerClass = Class.forName("androidx.lifecycle.ViewTreeLifecycleOwner")
-        val setLifecycleMethod = viewTreeLifecycleOwnerClass.methods.firstOrNull { it.name == "set" && it.parameterTypes.size == 2 }
-        setLifecycleMethod?.invoke(null, compose, this)
-        
-        val viewTreeSavedStateRegistryOwnerClass = Class.forName("androidx.savedstate.ViewTreeSavedStateRegistryOwner")
-        val setSavedStateMethod = viewTreeSavedStateRegistryOwnerClass.methods.firstOrNull { it.name == "set" && it.parameterTypes.size == 2 }
-        setSavedStateMethod?.invoke(null, compose, this)
+        // Attach owners via reflection for compatibility with mixed AndroidX dependency sets.
+        runCatching {
+            val lifecycleOwnerClass = Class.forName("androidx.lifecycle.ViewTreeLifecycleOwner")
+            val setLifecycleMethod = lifecycleOwnerClass.methods.firstOrNull {
+                it.name == "set" && it.parameterTypes.size == 2
+            }
+            setLifecycleMethod?.invoke(null, compose, this)
+
+            val savedStateOwnerClass = Class.forName("androidx.savedstate.ViewTreeSavedStateRegistryOwner")
+            val setSavedStateMethod = savedStateOwnerClass.methods.firstOrNull {
+                it.name == "set" && it.parameterTypes.size == 2
+            }
+            setSavedStateMethod?.invoke(null, compose, this)
+        }
 
         compose.setContent {
             AppTheme {
