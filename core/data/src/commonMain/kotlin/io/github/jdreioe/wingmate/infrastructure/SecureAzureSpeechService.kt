@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate.infrastructure
 import io.github.jdreioe.wingmate.domain.*
 import io.ktor.client.*
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlin.time.Clock
 
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -54,7 +55,7 @@ class SecureAzureSpeechService(
             // Log successful speech
             saidTextRepository.add(SaidText(
                 saidText = text,
-                date = kotlinx.datetime.Clock.System.now().toEpochMilliseconds(),
+                date = Clock.System.now().toEpochMilliseconds(),
                 voiceName = effectiveVoice.name
             ))
         } catch (e: Exception) {

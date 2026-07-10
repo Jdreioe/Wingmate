@@ -40,6 +40,7 @@
 "tts.placeholder" = "Type text to speak";
 "toolbar.language" = "Language";
 "toolbar.voice" = "Voice";
+"toolbar.second_language" = "Second Language";
 "toolbar.add_category" = "Add Category";
 "toolbar.ui_size" = "UI Size";
 "toolbar.reorder" = "Reorder";
@@ -47,6 +48,7 @@
 "toolbar.settings_panel" = "Settings Panel";
 
 "categories.all" = "All";
+"categories.history" = "History";
 "category.new.title" = "New Category";
 "category.name.placeholder" = "Category name";
 "category.save" = "Save";
@@ -63,6 +65,8 @@
 
 "debug.content_loaded" = "DEBUG: ContentView loaded";
 "debug.voice" = "Voice";
+"debug.voice_with_lang" = "Voice: %@ [%@]";
+"debug.voice.none" = "Voice: (none)";
 
 "azure.settings.title" = "Azure Settings";
 "azure.endpoint.placeholder" = "Endpoint (https://<region>.tts.speech.microsoft.com)";
@@ -107,3 +111,190 @@
 "phrase.edit" = "Edit";
 "phrase.play_tts" = "Play";
 "phrase.record" = "Record";
+"textfield.mark_secondary_language" = "Mark for second language";
+"phrase.title" = "Title";
+"phrase.title.placeholder" = "Title";
+"phrase.pronunciation" = "Pronunciation";
+"common.search" = "Search";
+"common.clear" = "Clear";
+"common.stop" = "Stop";
+
+"phrase.recording" = "Recording";
+"phrase.mic_permission_denied" = "Microphone permission denied. Enable it in Settings.";
+"phrase.alternative_text.optional" = "Alternative phrase text (optional)";
+"phrase.alternative_text.placeholder" = "What to speak instead";
+
+"phrase.symbol.section" = "Symbol";
+"phrase.symbol.source" = "Symbol source";
+"phrase.symbol.source.opensymbols" = "OpenSymbols";
+"phrase.symbol.source.user_photos" = "My Photos";
+"phrase.symbol.search.placeholder" = "Search symbols";
+"phrase.symbol.selected" = "Selected symbol";
+"phrase.symbol.error.token_url" = "Failed to build OpenSymbols token URL";
+"phrase.symbol.error.auth_failed" = "OpenSymbols authentication failed";
+"phrase.symbol.error.search_url" = "Failed to build OpenSymbols search URL";
+"phrase.symbol.error.search_failed" = "OpenSymbols search failed";
+"phrase.symbol.error.missing_secret" = "OpenSymbols is not configured for this build";
+"phrase.symbol.pick_photo" = "Pick Photo";
+"phrase.symbol.import_file" = "Import Image";
+"phrase.symbol.error.photo_load_failed" = "Failed to load selected photo";
+"phrase.symbol.error.import_failed" = "Failed to import selected image";
+
+"voice.system_tts.enabled_info" = "System TTS is enabled. Voice selection is handled through iOS Settings.";
+"voice.system_tts.using" = "Using System Text-to-Speech";
+"voice.system_tts.settings_info" = "Voice options are managed in iOS Settings > Accessibility > Spoken Content > Voices";
+
+"accessibility.double_tap_select_voice" = "Double tap to select this voice";
+"accessibility.double_tap_select_language" = "Double tap to select this language";
+
+"common.cancel" = "Cancel";
+"common.change" = "Change...";
+"common.unknown" = "Unknown";
+"common.unknown_language" = "Unknown Language";
+
+"settings.title" = "Settings";
+"settings.tts.title" = "Text-to-Speech Engine";
+"settings.tts.use_system" = "Use System TTS";
+"settings.tts.system_when_offline" = "Use System TTS when offline";
+"settings.restart_setup" = "Restart Setup Guide";
+
+"settings.playback.title" = "Playback";
+"settings.playback.mix_recorded" = "Mix recorded phrases in sentences";
+"settings.playback.mix.help" = "When on, the app will splice your recorded phrase audio into spoken sentences where the phrase name appears.";
+
+"settings.scanning.title" = "Scanning";
+"settings.scanning.enable" = "Enable scanning";
+"settings.scanning.playback_area" = "Playback area";
+"settings.scanning.input_field" = "Input field";
+"settings.scanning.phrase_grid" = "Phrase grid";
+"settings.scanning.category_items" = "Category items";
+"settings.scanning.topbar" = "Top app bar/settings";
+"settings.scanning.grid_order" = "Phrase grid order";
+"settings.scanning.grid_order.row_major" = "Row-major";
+"settings.scanning.grid_order.column_major" = "Column-major";
+"settings.scanning.grid_order.linear" = "Linear";
+"settings.scanning.dwell" = "Dwell (s)";
+"settings.scanning.auto_advance" = "Auto-advance (s)";
+
+"settings.ui_size.input_height" = "Input Height";
+"settings.ui_size.input_font" = "Input Font";
+"settings.ui_size.chip_font" = "Chip Font";
+"settings.ui_size.playback_icon" = "Playback Icon";
+
+"reorder.banner.title" = "Reorder Mode";
+"reorder.banner.subtitle" = "Drag phrases to reorder them";
+"reorder.banner.done_hint" = "Tap Done when finished";
+
+"history.empty" = "No history yet";
+"offline.title" = "You are offline";
+"offline.azure_unavailable_hint" = "Azure voices won't work offline. Enable System TTS to use on-device speech while offline.";
+
+"playback.play" = "Play";
+"playback.pause" = "Pause";
+"playback.stop" = "Stop";
+"playback.hold_thought" = "Hold that thought";
+"playback.restore_thought" = "Restore thought";
+
+"accessibility.playback.play_hint" = "Speaks the text in the input field";
+"accessibility.playback.pause_hint" = "Pauses speech playback";
+"accessibility.playback.stop_hint" = "Stops speech playback";
+"accessibility.playback.clear_hint" = "Clears the text in the input field";
+"accessibility.playback.hold_thought_hint" = "Saves the current input and clears the input field.";
+"accessibility.playback.restore_thought_hint" = "Restores the held input and keeps current text on hold.";
+
+"accessibility.phrase.wiggle_hint" = "Double tap to activate. Use accessibility actions to move this phrase.";
+"accessibility.phrase.insert_hint" = "Double tap to insert this phrase into the input field.";
+"accessibility.phrase.speak_action" = "Speak phrase";
+"accessibility.phrase.edit_action" = "Edit phrase";
+"accessibility.phrase.delete_action" = "Delete phrase";
+
+"accessibility.reorder.move_hint" = "Double tap to activate. Swipe up or down to move this phrase.";
+"accessibility.reorder.move_earlier" = "Move earlier";
+"accessibility.reorder.move_later" = "Move later";
+
+"pronunciation.title" = "Pronunciation Dictionary";
+"pronunciation.empty" = "No custom pronunciations.";
+"pronunciation.word" = "Word";
+"pronunciation.word.placeholder" = "Ex: Wingmate";
+"pronunciation.phoneme" = "Phoneme";
+"pronunciation.phoneme.placeholder" = "Ex: w i ng m ey t";
+"pronunciation.alphabet" = "Alphabet";
+"pronunciation.add_title" = "Add Pronunciation";
+"pronunciation.ipa_palette" = "IPA Symbols";
+"pronunciation.delete_last" = "Delete Last";
+
+"welcome_flow.choose_primary_language" = "Choose primary language for this voice";
+"welcome_flow.select_language" = "Select Language";
+"welcome_flow.pros" = "Pros";
+"welcome_flow.cons" = "Cons";
+"welcome_flow.preview_text.placeholder" = "Enter text to preview...";
+
+"toolbar.switch_symbol_mode" = "Switch to Symbol Workspace";
+"toolbar.switch_phrase_mode" = "Switch to Phrase Workspace";
+
+"symbol.workspace.title" = "Symbol Workspace";
+"symbol.workspace.subtitle" = "Build and manage boardsets";
+
+"boardset.create" = "New Boardset";
+"boardset.create_first" = "Create Your First Boardset";
+"boardset.empty" = "No boardsets yet";
+"boardset.default_name" = "New Boardset";
+"boardset.name" = "Boardset Name";
+"boardset.name_placeholder" = "Everyday Communication";
+"boardset.grid" = "Grid";
+"boardset.rows" = "Rows: %d";
+"boardset.columns" = "Columns: %d";
+"boardset.board_name" = "Board Name";
+"boardset.board_name_placeholder" = "Food Board";
+"boardset.board_picker" = "Board";
+"boardset.add_board" = "Add Board";
+"boardset.save" = "Save Boardset";
+"boardset.lock" = "Lock Boardset";
+"boardset.unlock" = "Unlock Boardset";
+"boardset.locked_banner" = "Boardset is locked. Unlock to edit.";
+"boardset.untitled_board" = "Untitled Board";
+"boardset.grid_summary" = "%d x %d grid, %d buttons";
+
+"boardset.status.created" = "Boardset created.";
+"boardset.status.board_added" = "Board added to boardset.";
+"boardset.status.saved" = "Boardset saved.";
+"boardset.status.locked" = "Boardset locked.";
+"boardset.status.unlocked" = "Boardset unlocked.";
+
+"boardset.error.create_failed" = "Could not create boardset.";
+"boardset.error.locked" = "This boardset is locked.";
+"boardset.error.no_board" = "No board selected.";
+"boardset.error.save_failed" = "Could not save boardset.";
+
+"boardset.unlock.failed_title" = "Unable to Unlock";
+"boardset.unlock.not_available" = "Device authentication is not available.";
+"boardset.unlock.reason" = "Unlock this boardset to edit symbols and layout.";
+"boardset.unlock.failed" = "Authentication failed.";
+
+"boardset.edit" = "Edit Cells";
+"boardset.edit_done" = "Done Editing";
+"boardset.cell.empty" = "Empty Cell";
+"boardset.cell.edit_title" = "Edit Cell";
+"boardset.cell.label" = "Label";
+"boardset.cell.vocalization" = "Vocalization";
+"boardset.cell.linked_board" = "Linked Board";
+"boardset.cell.no_link" = "No Link";
+"boardset.cell.colors" = "Colors";
+"boardset.cell.background_enabled" = "Set background color";
+"boardset.cell.background_picker" = "Background color";
+"boardset.cell.border_enabled" = "Set border color";
+"boardset.cell.border_picker" = "Border color";
+"boardset.cell.background_hex" = "Background Color (HEX)";
+"boardset.cell.border_hex" = "Border Color (HEX)";
+"boardset.cell.clear" = "Clear Cell";
+"boardset.cell.delete" = "Delete Cell";
+
+"boardset.status.cell_saved" = "Cell saved.";
+"boardset.status.cell_cleared" = "Cell cleared.";
+
+"boardset.error.cell_update_failed" = "Could not update cell.";
+"boardset.error.cell_clear_failed" = "Could not clear cell.";
+
+"sentence.box.title" = "Sentence Box";
+"sentence.box.delete_phrase" = "Delete phrase from sentence";
+"sentence.box.speak" = "Speak sentence";

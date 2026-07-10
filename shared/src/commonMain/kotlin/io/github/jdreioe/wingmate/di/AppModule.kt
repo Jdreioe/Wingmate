@@ -43,7 +43,7 @@ val appModule = module {
     
     singleOf(::BoardImportService)
     
-    single<AacLogger> { RealAacLogger(get(), get(named("logDir")), get()) }
+    single<AacLogger> { RealAacLogger(get(), getOrNull(named("logDir")), get()) }
 
     factoryOf(::PhraseListStoreFactory)
 

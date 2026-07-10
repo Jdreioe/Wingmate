@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate.infrastructure
 import io.github.jdreioe.wingmate.domain.*
 import kotlinx.coroutines.delay
 import kotlin.random.Random
+import kotlin.time.Clock
 
 class InMemoryPhraseRepository : PhraseRepository {
     private val store = mutableListOf<Phrase>()
@@ -12,7 +13,7 @@ class InMemoryPhraseRepository : PhraseRepository {
     }
     override suspend fun add(phrase: Phrase): Phrase {
         delay(50)
-        val p = phrase.copy(id = phrase.id.ifBlank { Random.nextInt().toString() }, createdAt = if (phrase.createdAt == 0L) kotlinx.datetime.Clock.System.now().toEpochMilliseconds() else phrase.createdAt)
+        val p = phrase.copy(id = phrase.id.ifBlank { Random.nextInt().toString() }, createdAt = if (phrase.createdAt == 0L) Clock.System.now().toEpochMilliseconds() else phrase.createdAt)
         store.add(p)
         return p
     }

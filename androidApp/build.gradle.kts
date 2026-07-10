@@ -77,6 +77,10 @@ android {
         kotlinCompilerExtensionVersion = libs.versions.kotlin.get()
     }
 
+    lint {
+        disable += "Instantiatable"
+    }
+
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }

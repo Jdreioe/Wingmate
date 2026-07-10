@@ -6,9 +6,13 @@ struct WelcomeFlow: View {
     @State private var currentStep = 0
     @State private var showAzureSettings = false
     @State private var showVoicePicker = false
+    @State private var showLanguagePicker = false
     @State private var selectedVoice: Shared.Voice? = nil
     @State private var hasConfiguredTts = false
-        @State private var previewText: String = NSLocalizedString("welcome_flow.test_text", comment: "")
+    @State private var selectedUseSystemTts: Bool? = nil
+    @State private var pendingLanguageSelection = false
+    @State private var languageOptions: [String] = []
+    @State private var previewText: String = NSLocalizedString("welcome_flow.test_text", comment: "")
     
     let onComplete: () -> Void
     let onSkip: () -> Void
@@ -70,27 +74,55 @@ struct WelcomeFlow: View {
         .sheet(isPresented: $showAzureSettings) {
             AzureSettingsSheet(onClose: { 
                 showAzureSettings = false
-                checkTtsConfiguration()
+                Task {
+                    await model.refreshAzureConfiguration()
+                    checkTtsConfiguration()
+                    if currentStep == 1 && selectedUseSystemTts == false && model.azureConfigured {
+                        withAnimation(.easeInOut(duration: 0.4)) {
+                            currentStep = 2
+                        }
+                    }
+                }
             })
         }
         .sheet(isPresented: $showVoicePicker) {
             VoiceSelectionSheet(selected: selectedVoice, onClose: { showVoicePicker = false }) { voice in
-                selectedVoice = voice
-                Task { await model.chooseVoice(voice) }
-                showVoicePicker = false
-                if currentStep == 2 {
-                    // Auto-advance after voice selection
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            currentStep = 3
+                Task {
+                    await model.chooseVoice(voice)
+
+                    let langs = availablePrimaryLanguages(for: voice)
+
+                    await MainActor.run {
+                        selectedVoice = voice
+                        showVoicePicker = false
+
+                        if langs.count > 1 {
+                            languageOptions = langs
+                            pendingLanguageSelection = true
+                            showLanguagePicker = true
+                        } else {
+                            pendingLanguageSelection = false
                         }
                     }
                 }
             }
         }
+        .sheet(isPresented: $showLanguagePicker) {
+            LanguageSelectionSheet(
+                languages: languageOptions,
+                selected: model.primaryLanguage,
+                onClose: { showLanguagePicker = false },
+                onSelect: { lang in
+                    model.updateLanguage(lang)
+                    pendingLanguageSelection = false
+                    showLanguagePicker = false
+                }
+            )
+        }
         .onAppear {
             checkTtsConfiguration()
             selectedVoice = model.selectedVoice
+            selectedUseSystemTts = model.useSystemTts
         }
     }
     
@@ -147,6 +179,7 @@ struct WelcomeFlow: View {
                     isSelected: model.useSystemTts,
                     action: {
                         model.setUseSystemTts(true)
+                        selectedUseSystemTts = true
                         hasConfiguredTts = true
                         withAnimation(.easeInOut(duration: 0.4)) {
                             currentStep = 2
@@ -169,10 +202,18 @@ struct WelcomeFlow: View {
                         NSLocalizedString("welcome_flow.azure_tts.con2", comment: ""),
                         NSLocalizedString("welcome_flow.azure_tts.con3", comment: "")
                     ],
-                    isSelected: !model.useSystemTts && model.azureConfigured,
+                    isSelected: !model.useSystemTts,
                     action: {
                         model.setUseSystemTts(false)
-                        showAzureSettings = true
+                        selectedUseSystemTts = false
+                        if model.azureConfigured {
+                            hasConfiguredTts = true
+                            withAnimation(.easeInOut(duration: 0.4)) {
+                                currentStep = 2
+                            }
+                        } else {
+                            showAzureSettings = true
+                        }
                     }
                 )
             }
@@ -233,6 +274,18 @@ struct WelcomeFlow: View {
                     
                     if let voice = selectedVoice {
                         SelectedVoiceCard(voice: voice, onSpeak: { model.speak(previewText) })
+                    }
+
+                    if pendingLanguageSelection {
+                        VStack(spacing: 8) {
+                            Text("welcome_flow.choose_primary_language")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Button("welcome_flow.select_language") {
+                                showLanguagePicker = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
                     }
                     
                     Button(action: { showVoicePicker = true }) {
@@ -299,7 +352,7 @@ struct WelcomeFlow: View {
             .padding(.horizontal)
         }
     }
-    
+
     @ViewBuilder
     private var navigationButtons: some View {
         HStack(spacing: 16) {
@@ -326,6 +379,20 @@ struct WelcomeFlow: View {
             Button(currentStep >= totalSteps ? NSLocalizedString("welcome_flow.get_started", comment: "") : NSLocalizedString("welcome_flow.next", comment: "")) {
                 if currentStep >= totalSteps {
                     onComplete()
+                } else if currentStep == 1 {
+                    if selectedUseSystemTts == true {
+                        withAnimation(.easeInOut(duration: 0.4)) {
+                            currentStep = 2
+                        }
+                    } else if selectedUseSystemTts == false {
+                        if model.azureConfigured {
+                            withAnimation(.easeInOut(duration: 0.4)) {
+                                currentStep = 2
+                            }
+                        } else {
+                            showAzureSettings = true
+                        }
+                    }
                 } else if canProceed {
                     withAnimation(.easeInOut(duration: 0.4)) {
                         currentStep += 1
@@ -344,14 +411,33 @@ struct WelcomeFlow: View {
     private var canProceed: Bool {
         switch currentStep {
         case 0: return true
-        case 1: return hasConfiguredTts || model.useSystemTts || model.azureConfigured
-        case 2: return model.useSystemTts || selectedVoice != nil
+        case 1: return selectedUseSystemTts != nil
+        case 2: return model.useSystemTts || (selectedVoice != nil && !pendingLanguageSelection)
         default: return true
         }
     }
     
     private func checkTtsConfiguration() {
         hasConfiguredTts = model.useSystemTts || model.azureConfigured
+        selectedUseSystemTts = model.useSystemTts
+    }
+
+    private func availablePrimaryLanguages(for voice: Shared.Voice) -> [String] {
+        var langs: [String] = []
+
+        let primary = (voice.primaryLanguage ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !primary.isEmpty { langs.append(primary) }
+
+        if let supported = voice.supportedLanguages {
+            for lang in supported {
+                let trimmed = lang.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty && !langs.contains(trimmed) {
+                    langs.append(trimmed)
+                }
+            }
+        }
+
+        return langs
     }
 }
 
@@ -392,7 +478,7 @@ struct TtsOptionCard: View {
                 
                 HStack(alignment: .top, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Pros")
+                        Text("welcome_flow.pros")
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(.green)
@@ -408,7 +494,7 @@ struct TtsOptionCard: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Cons")
+                        Text("welcome_flow.cons")
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(.orange)
@@ -448,9 +534,9 @@ struct SelectedVoiceCard: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(voice.displayName ?? voice.name ?? "Unknown")
+                Text(voice.displayName ?? voice.name ?? NSLocalizedString("common.unknown", comment: ""))
                     .font(.headline)
-                Text(voice.primaryLanguage ?? "Unknown Language")
+                Text(voice.primaryLanguage ?? NSLocalizedString("common.unknown_language", comment: ""))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -482,14 +568,14 @@ struct VoicePreviewCard: View {
             Text(title)
                 .font(.headline)
             
-            TextField("Enter text to preview...", text: $previewText)
+            TextField("welcome_flow.preview_text.placeholder", text: $previewText)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
             
             HStack {
                 Button(action: onSpeak) {
                     HStack {
                         Image(systemName: "play.fill")
-                        Text("Play")
+                        Text("playback.play")
                     }
                     .font(.subheadline)
                     .foregroundColor(.white)
@@ -502,7 +588,7 @@ struct VoicePreviewCard: View {
                 Button(action: onStop) {
                     HStack {
                         Image(systemName: "stop.fill")
-                        Text("Stop")
+                        Text("playback.stop")
                     }
                     .font(.subheadline)
                     .foregroundColor(.white)

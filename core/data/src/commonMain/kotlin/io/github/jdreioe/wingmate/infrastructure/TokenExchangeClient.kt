@@ -5,9 +5,9 @@ import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.datetime.Clock
 import kotlinx.serialization.Serializable
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 

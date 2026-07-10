@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Wingmate.ipa</key>
+	<array>
+		<dict>
+			<key>architectures</key>
+			<array>
+				<string>arm64</string>
+			</array>
+			<key>buildNumber</key>
+			<string>15</string>
+			<key>certificate</key>
+			<dict>
+				<key>SHA1</key>
+				<string>30C6412F33D0EE156203A924D1A62533AA02D684</string>
+				<key>dateExpires</key>
+				<string>19/02/2027</string>
+				<key>type</key>
+				<string>Apple Distribution</string>
+			</dict>
+			<key>embeddedBinaries</key>
+			<array>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>buildNumber</key>
+					<string>1</string>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>30C6412F33D0EE156203A924D1A62533AA02D684</string>
+						<key>dateExpires</key>
+						<string>19/02/2027</string>
+						<key>type</key>
+						<string>Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>Shared.framework</string>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>9BB3E6JDX4</string>
+						<key>name</key>
+						<string>Jonas Dreioe</string>
+					</dict>
+					<key>versionNumber</key>
+					<string>1.0</string>
+				</dict>
+			</array>
+			<key>entitlements</key>
+			<dict>
+				<key>application-identifier</key>
+				<string>9BB3E6JDX4.com.hojmoseit.wingmate</string>
+				<key>com.apple.developer.team-identifier</key>
+				<string>9BB3E6JDX4</string>
+				<key>get-task-allow</key>
+				<false/>
+			</dict>
+			<key>name</key>
+			<string>Wingmate.app</string>
+			<key>profile</key>
+			<dict>
+				<key>UUID</key>
+				<string>83e28bd2-b440-41b8-bbad-1361f1fcae03</string>
+				<key>dateExpires</key>
+				<string>19/02/2027</string>
+				<key>name</key>
+				<string>iOS Team Ad Hoc Provisioning Profile: com.hojmoseit.wingmate</string>
+			</dict>
+			<key>team</key>
+			<dict>
+				<key>id</key>
+				<string>9BB3E6JDX4</string>
+				<key>name</key>
+				<string>Jonas Dreioe</string>
+			</dict>
+			<key>versionNumber</key>
+			<string>0.5</string>
+		</dict>
+	</array>
+</dict>
+</plist>

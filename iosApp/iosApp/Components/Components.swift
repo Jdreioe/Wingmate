@@ -1,5 +1,7 @@
 import SwiftUI
 import Shared
+import UIKit
+import Foundation
 
 struct CategoryChip: View {
     let title: String
@@ -38,9 +40,18 @@ struct LanguageChip: View {
 
 struct MultiLineInput: View {
     @Binding var text: String
+    @Binding var selectedRange: NSRange
     var placeholder: String
     var fontSize: CGFloat
     var minHeight: CGFloat
+    var scanEnabled: Bool = false
+    var includeInScanArea: Bool = true
+    var secondaryLanguage: String
+    var secondaryLanguageRanges: [NSRange]
+    var allowsSecondaryLanguageAction: Bool
+    var onTextChanged: ((String) -> Void)? = nil
+    var onTextEdited: ((NSRange, String) -> Void)? = nil
+    var onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)? = nil
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -51,13 +62,330 @@ struct MultiLineInput: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 12)
             }
-            TextEditor(text: $text)
-                .font(.system(size: fontSize))
-                .scrollContentBackground(.hidden)
-                .background(Color.clear)
-                .padding(8)
+            SelectableTextView(
+                text: $text,
+                selectedRange: $selectedRange,
+                fontSize: fontSize,
+                secondaryLanguage: secondaryLanguage,
+                secondaryLanguageRanges: secondaryLanguageRanges,
+                allowsSecondaryLanguageAction: allowsSecondaryLanguageAction,
+                onTextChanged: onTextChanged,
+                onTextEdited: onTextEdited,
+                onMarkSelectionAsSecondaryLanguage: { range in
+                    onMarkSelectionAsSecondaryLanguage?(range)
+                }
+            )
+            .padding(6)
         }
         .frame(height: minHeight)
+        .accessibilityElement(children: .contain)
+        .accessibilityHidden(scanEnabled && !includeInScanArea)
+    }
+}
+
+struct SentenceBoxView: View {
+    let phrases: [SentencePhraseToken]
+    let onDelete: (Int) -> Void
+    var onSpeak: (() -> Void)? = nil
+    var animationNamespace: Namespace.ID? = nil
+    var animatedTokenId: String? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("sentence.box.title")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(phrases.enumerated()), id: \.element.id) { index, token in
+                        sentenceTokenCard(index: index, token: token)
+                    }
+
+                    if let onSpeak, !phrases.isEmpty {
+                        Button(action: onSpeak) {
+                            VStack(alignment: .center, spacing: 8) {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 28, weight: .semibold))
+                                Text("sentence.box.speak")
+                                    .font(.caption)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 10)
+                            .frame(width: 108)
+                            .frame(minHeight: 94)
+                            .background(Color.accentColor.opacity(0.16))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("sentence.box.speak"))
+                    }
+                }
+                .padding(.horizontal, 2)
+                .padding(.vertical, 2)
+                .animation(.spring(response: 0.38, dampingFraction: 0.82), value: phrases.map(\.id))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sentenceTokenCard(index: Int, token: SentencePhraseToken) -> some View {
+        let card = ZStack(alignment: .topTrailing) {
+            VStack(alignment: .center, spacing: 8) {
+                if let imageUrl = token.imageUrl,
+                   let url = URL(string: imageUrl) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 42, height: 42)
+                        case .failure(_):
+                            Image(systemName: "photo")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 42, height: 42)
+                        case .empty:
+                            ProgressView()
+                                .frame(width: 42, height: 42)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                }
+
+                Text(token.title)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .frame(width: 108)
+            .frame(minHeight: 94)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color(.separator), lineWidth: 1)
+            )
+
+            Button {
+                onDelete(index)
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                    .background(Color(.systemBackground), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .padding(4)
+            .accessibilityLabel(Text("sentence.box.delete_phrase"))
+        }
+
+        if let animationNamespace, animatedTokenId == token.id {
+            card
+                .matchedGeometryEffect(id: token.id, in: animationNamespace, isSource: false)
+                .zIndex(2)
+        } else {
+            card
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+        }
+    }
+}
+
+struct SelectableTextView: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var selectedRange: NSRange
+    let fontSize: CGFloat
+    let secondaryLanguage: String
+    let secondaryLanguageRanges: [NSRange]
+    let allowsSecondaryLanguageAction: Bool
+    let onTextChanged: ((String) -> Void)?
+    let onTextEdited: ((NSRange, String) -> Void)?
+    let onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)?
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            text: $text,
+            selectedRange: $selectedRange,
+            onTextChanged: onTextChanged,
+            onTextEdited: onTextEdited,
+            onMarkSelectionAsSecondaryLanguage: onMarkSelectionAsSecondaryLanguage
+        )
+    }
+
+    func makeUIView(context: Context) -> UITextView {
+        let textView = MenuAwareTextView()
+        textView.delegate = context.coordinator
+        textView.backgroundColor = .clear
+        textView.isScrollEnabled = true
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.textContainerInset = UIEdgeInsets(top: 10, left: 8, bottom: 10, right: 8)
+        textView.font = UIFont.systemFont(ofSize: fontSize)
+        textView.autocorrectionType = .no
+        textView.autocapitalizationType = .none
+        textView.spellCheckingType = .no
+        textView.smartQuotesType = .no
+        textView.smartDashesType = .no
+        textView.smartInsertDeleteType = .no
+        textView.secondaryLanguageActionTitle = NSLocalizedString("textfield.mark_secondary_language", comment: "")
+        textView.allowsSecondaryLanguageAction = allowsSecondaryLanguageAction
+        textView.onMarkSelectionAsSecondaryLanguage = { [weak textView] in
+            guard let selectedRange = textView?.selectedRange, selectedRange.location != NSNotFound, selectedRange.length > 0 else { return }
+            onMarkSelectionAsSecondaryLanguage?(selectedRange)
+        }
+        context.coordinator.isProgrammaticUpdate = true
+        applyHighlighting(to: textView, desiredSelectedRange: selectedRange)
+        context.coordinator.isProgrammaticUpdate = false
+        return textView
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        context.coordinator.isProgrammaticUpdate = true
+        applyHighlighting(to: uiView, desiredSelectedRange: selectedRange)
+        uiView.font = UIFont.systemFont(ofSize: fontSize)
+        if let menuAwareView = uiView as? MenuAwareTextView {
+            menuAwareView.secondaryLanguageActionTitle = NSLocalizedString("textfield.mark_secondary_language", comment: "")
+            menuAwareView.allowsSecondaryLanguageAction = allowsSecondaryLanguageAction
+        }
+        context.coordinator.isProgrammaticUpdate = false
+    }
+
+    private func applyHighlighting(to textView: UITextView, desiredSelectedRange: NSRange) {
+        let selected = (desiredSelectedRange.location == NSNotFound) ? textView.selectedRange : desiredSelectedRange
+        let full = text as NSString
+        let length = full.length
+
+        guard length > 0 else {
+            if textView.attributedText.length != 0 {
+                textView.attributedText = NSAttributedString()
+            }
+            return
+        }
+
+        let hasHighlights = secondaryLanguageRanges.contains { $0.location != NSNotFound && $0.length > 0 && $0.location + $0.length <= length }
+        let currentStringMatches = textView.attributedText.string == text
+
+        if hasHighlights {
+            let attributed = NSMutableAttributedString(string: text)
+            attributed.addAttributes([
+                .font: UIFont.systemFont(ofSize: fontSize),
+                .foregroundColor: UIColor.label
+            ], range: NSRange(location: 0, length: length))
+
+            for range in secondaryLanguageRanges {
+                if range.location != NSNotFound,
+                   range.length > 0,
+                   range.location + range.length <= length {
+                    attributed.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.35), range: range)
+                }
+            }
+
+            if currentStringMatches {
+                textView.textStorage.setAttributedString(attributed)
+            } else {
+                textView.attributedText = attributed
+            }
+        } else if !currentStringMatches {
+            textView.attributedText = NSAttributedString(string: text, attributes: [
+                .font: UIFont.systemFont(ofSize: fontSize),
+                .foregroundColor: UIColor.label
+            ])
+        }
+
+        let maxPos = textView.text.utf16.count
+        let safeLocation = min(max(0, selected.location), maxPos)
+        let safeLength = min(max(0, selected.length), max(0, maxPos - safeLocation))
+        let clamped = NSRange(location: safeLocation, length: safeLength)
+        if !NSEqualRanges(textView.selectedRange, clamped) {
+            textView.selectedRange = clamped
+        }
+        textView.typingAttributes = [
+            .font: UIFont.systemFont(ofSize: fontSize),
+            .foregroundColor: UIColor.label
+        ]
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        @Binding var text: String
+        @Binding var selectedRange: NSRange
+        let onTextChanged: ((String) -> Void)?
+        let onTextEdited: ((NSRange, String) -> Void)?
+        let onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)?
+        var isProgrammaticUpdate: Bool = false
+
+        init(
+            text: Binding<String>,
+            selectedRange: Binding<NSRange>,
+            onTextChanged: ((String) -> Void)?,
+            onTextEdited: ((NSRange, String) -> Void)?,
+            onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)?
+        ) {
+            self._text = text
+            self._selectedRange = selectedRange
+            self.onTextChanged = onTextChanged
+            self.onTextEdited = onTextEdited
+            self.onMarkSelectionAsSecondaryLanguage = onMarkSelectionAsSecondaryLanguage
+        }
+
+        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {
+            if isProgrammaticUpdate { return true }
+            onTextEdited?(range, replacement)
+            return true
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            if isProgrammaticUpdate { return }
+            text = textView.text ?? ""
+            onTextChanged?(text)
+        }
+
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            if isProgrammaticUpdate { return }
+            let latestSelection = textView.selectedRange
+            DispatchQueue.main.async {
+                if !NSEqualRanges(self.selectedRange, latestSelection) {
+                    self.selectedRange = latestSelection
+                }
+            }
+        }
+    }
+}
+
+final class MenuAwareTextView: UITextView {
+    var secondaryLanguageActionTitle: String = NSLocalizedString("textfield.mark_secondary_language", comment: "")
+    var allowsSecondaryLanguageAction: Bool = true
+    var onMarkSelectionAsSecondaryLanguage: (() -> Void)?
+
+    override var canBecomeFirstResponder: Bool { true }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(markSelectedTextAsSecondaryLanguage) {
+            return allowsSecondaryLanguageAction && selectedRange.length > 0
+        }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
+    override func buildMenu(with builder: UIMenuBuilder) {
+        super.buildMenu(with: builder)
+        guard allowsSecondaryLanguageAction, selectedRange.length > 0 else { return }
+        let action = UIAction(title: secondaryLanguageActionTitle, image: UIImage(systemName: "globe.badge.chevron.backward")) { [weak self] _ in
+            self?.markSelectedTextAsSecondaryLanguage()
+        }
+        builder.insertSibling(UIMenu(title: "", children: [action]), afterMenu: .standardEdit)
+    }
+
+    @objc func markSelectedTextAsSecondaryLanguage() {
+        onMarkSelectionAsSecondaryLanguage?()
     }
 }
 
@@ -68,10 +396,16 @@ struct CategoriesRowView: View {
     let chipVPadding: CGFloat
     let onSelect: (String?) -> Void
     let onDelete: (String) -> Void
+    let onAddCategory: () -> Void
     // Optional History chip
     var showHistoryChip: Bool = false
     var isHistorySelected: Bool = false
     var onSelectHistory: (() -> Void)? = nil
+
+    private func priorityForIndex(_ index: Int) -> Double {
+        Double(10_000 - index)
+    }
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
@@ -80,26 +414,42 @@ struct CategoriesRowView: View {
                              fontSize: chipFontSize,
                              hPadding: chipHPadding,
                              vPadding: chipVPadding) { onSelect(nil) }
+                .accessibilitySortPriority(priorityForIndex(0))
                 if showHistoryChip {
                     CategoryChip(title: NSLocalizedString("categories.history", comment: "History"),
                                  selected: isHistorySelected,
                                  fontSize: chipFontSize,
                                  hPadding: chipHPadding,
                                  vPadding: chipVPadding) { onSelectHistory?() }
+                    .accessibilitySortPriority(priorityForIndex(1))
                 }
-                ForEach(state.categories, id: \.id) { cat in
+                let categoryStartIndex = showHistoryChip ? 2 : 1
+                ForEach(Array(state.categories.enumerated()), id: \.element.id) { offset, cat in
                     CategoryChip(title: cat.name ?? NSLocalizedString("common.no_name", comment: ""),
                                  selected: state.selectedCategoryId == cat.id,
                                  fontSize: chipFontSize,
                                  hPadding: chipHPadding,
                                  vPadding: chipVPadding) { onSelect(cat.id) }
+                    .accessibilitySortPriority(priorityForIndex(categoryStartIndex + offset))
                     .contextMenu {
                         Button(role: .destructive) { onDelete(cat.id) } label: { Label("category.delete", systemImage: "trash") }
                     }
                 }
+                Button(action: onAddCategory) {
+                    Image(systemName: "plus")
+                        .font(.system(size: max(14, chipFontSize * 0.85), weight: .semibold))
+                        .padding(.horizontal, chipHPadding)
+                        .padding(.vertical, chipVPadding)
+                        .background(Capsule().fill(Color(.secondarySystemBackground)))
+                        .overlay(Capsule().stroke(Color(.separator), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("toolbar.add_category"))
+                .accessibilitySortPriority(priorityForIndex(categoryStartIndex + state.categories.count))
             }
             .padding(.horizontal, 4)
             .padding(.bottom, 4)
+            .accessibilityElement(children: .contain)
         }
     }
 }
@@ -137,9 +487,32 @@ struct PhraseItemView: View {
     let useDefaultBg = bgHex == "#00000000"
     let bgColor = useDefaultBg ? Color(.secondarySystemBackground) : Color(hex: bgHex)
     let tileShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        let title = phrase.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let accessibleName = ((title?.isEmpty == false ? title : phrase.text) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         Button(action: { model.insertPhraseText(phrase) }) {
             VStack(alignment: .leading, spacing: 6) {
+                if let imageUrl = phrase.imageUrl,
+                   let url = URL(string: imageUrl) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: .infinity, maxHeight: 80)
+                        case .failure(_):
+                            EmptyView()
+                        case .empty:
+                            ProgressView()
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                }
+
                 Text(phrase.name ?? phrase.text)
                     .font(.body)
                     .lineLimit(3)
@@ -153,6 +526,19 @@ struct PhraseItemView: View {
             .contentShape(tileShape)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(accessibleName.isEmpty ? NSLocalizedString("common.no_name", comment: "") : accessibleName))
+        .accessibilityHint(Text(wiggle ? "accessibility.phrase.wiggle_hint" : "accessibility.phrase.insert_hint"))
+        .accessibilityAction(named: Text("accessibility.phrase.speak_action")) { model.speak(phrase.text) }
+        .accessibilityAction(named: Text("accessibility.phrase.edit_action")) {
+            if !phrase.id.hasPrefix("history-") {
+                onEdit()
+            }
+        }
+        .accessibilityAction(named: Text("accessibility.phrase.delete_action")) {
+            if !phrase.id.hasPrefix("history-") {
+                onDelete(phrase.id)
+            }
+        }
         .modifier(WiggleEffect(active: wiggle))
         .contextMenu {
             // Hide edit/record/delete for history items

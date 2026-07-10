@@ -137,7 +137,7 @@ class PhraseListStoreFactory(
         private fun updatePhrase(id: String, text: String?, name: String?) {
             scope.launch {
                 try {
-                    val updated = updatePhraseUseCase(id, text, name, null)
+                    val updated = updatePhraseUseCase(id, text, name, null, null)
                     loadPhrasesAndCategories()
                     dispatch(Msg.PhraseUpdated(updated))
                 } catch (e: Exception) {
@@ -149,7 +149,7 @@ class PhraseListStoreFactory(
         private fun updatePhraseRecording(id: String, recordingPath: String?) {
             scope.launch {
                 try {
-                    val updated = updatePhraseUseCase(id, null, null, recordingPath)
+                    val updated = updatePhraseUseCase(id, null, null, null, recordingPath)
                     loadPhrasesAndCategories()
                     dispatch(Msg.PhraseUpdated(updated))
                 } catch (e: Exception) {

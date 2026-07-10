@@ -40,11 +40,12 @@ struct PredictionBar: View {
                         }
                     } else if !result.letters.isEmpty {
                         // If no words, show letter predictions in a horizontal scroll
+                        let letters = result.letters.map { String(describing: $0) }
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
-                                ForEach(result.letters, id: \.self) { char in
-                                    Button(action: { onLetterSelected(String(char)) }) {
-                                        Text(String(char))
+                                ForEach(letters, id: \.self) { letter in
+                                    Button(action: { onLetterSelected(letter) }) {
+                                        Text(letter)
                                             .font(.system(size: 20 * fontSizeScale, weight: .medium))
                                             .frame(minWidth: 32, minHeight: 32)
                                             .background(Color(.secondarySystemFill))

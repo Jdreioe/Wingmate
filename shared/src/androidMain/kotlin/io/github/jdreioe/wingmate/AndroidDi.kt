@@ -32,6 +32,7 @@ import io.github.jdreioe.wingmate.platform.AndroidShareService
 import io.github.jdreioe.wingmate.platform.AudioClipboard
 import io.github.jdreioe.wingmate.platform.FilePicker
 import io.github.jdreioe.wingmate.platform.ShareService
+import okio.FileSystem
 import org.koin.core.context.loadKoinModules
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
@@ -61,6 +62,7 @@ fun overrideAndroidSpeechService(context: Context) {
             singleOf(::AndroidImageCacher) { bind<ImageCacher>() }
             singleOf(::SimpleNGramPredictionService) { bind<TextPredictionService>() }
             singleOf(::AndroidFirebaseFeatureUsageReporter) { bind<FeatureUsageReporter>() }
+            single { FileSystem.SYSTEM }
         }
     )
 }

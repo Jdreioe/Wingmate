@@ -249,7 +249,6 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp)
                                 .clickable {
                                     scope.launch {
                                         try {
@@ -259,7 +258,8 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                                             // Handle error
                                         }
                                     }
-                                },
+                                }
+                                .padding(vertical = 4.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = if (selected?.name == voice.name) 
                                     MaterialTheme.colorScheme.primaryContainer 
@@ -391,7 +391,6 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp)
                                 .clickable {
                                     scope.launch {
                                         try {
@@ -408,7 +407,8 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                                             println("Failed to select voice: ${voice.name}: $t")
                                         }
                                     }
-                                },
+                                }
+                                .padding(vertical = 4.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = if (selected?.name == voice.name) 
                                     MaterialTheme.colorScheme.primaryContainer 
