@@ -16,26 +16,23 @@ cd "$CI_WORKSPACE"
 # Xcode Cloud requires JDK 21 for Kotlin Multiplatform (jvmToolchain 21)
 install_jdk() {
   echo "Installing JDK 21 via Homebrew..."
-  HOMEBREW_NO_AUTO_UPDATE=1 brew install --quiet openjdk@21
-  # Homebrew openjdk paths differ on Intel vs Apple Silicon
-  if [ -f /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java ]; then
-    export JAVA_HOME=/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
-  elif [ -f /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java ]; then
-    export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+  HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 \
+    brew install --quiet openjdk@21
+  brew link --overwrite --force openjdk@21
+  # Use java_home after linking so it works on Intel, ARM, and future paths
+  if /usr/libexec/java_home -v 21 &>/dev/null; then
+    export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
   else
-    echo "error: openjdk@21 installed but java binary not found at expected path"
+    echo "error: openjdk@21 installed but java_home cannot find it"
     exit 1
   fi
 }
 
+# Unset any Xcode Cloud JAVA_HOME that points to old JDK
+unset JAVA_HOME
+
 if /usr/libexec/java_home -v 21 &>/dev/null; then
   export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
-elif [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then
-  echo "Using JAVA_HOME from environment: $JAVA_HOME"
-elif [ -f /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java ]; then
-  export JAVA_HOME=/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
-elif [ -f /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java ]; then
-  export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
 else
   install_jdk
 fi
