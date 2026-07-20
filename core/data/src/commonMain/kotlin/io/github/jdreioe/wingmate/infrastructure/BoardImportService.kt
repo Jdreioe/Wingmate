@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.infrastructure
 
+import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.FileStorage
@@ -232,7 +233,7 @@ class BoardImportService(
 
     private fun decodeDataUri(data: String): ByteArray? {
         val payload = data.substringAfter("base64,", missingDelimiterValue = data)
-        return runCatching { payload.decodeBase64Bytes() }.getOrNull()
+        return Base64Decoder.decodeOrNull(payload)
     }
 
     private fun extensionFor(contentType: String?, path: String?, default: String): String {

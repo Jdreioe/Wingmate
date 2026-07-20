@@ -471,10 +471,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                         }
                     }
 
-                    if (!requestAudioFocus()) {
-                        // Best effort: continue playback even if focus request was denied.
-                    }
-
+                    requestAudioFocus()
                     player.setOnCompletionListener {
                         finalizePlayback(true)
                     }
@@ -534,9 +531,8 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     
     private fun startPlayback(file: File, voice: Voice) {
         val player = MediaPlayer()
-        if (!requestAudioFocus()) {
-            // Best effort only; continue even if focus isn't granted.
-        }
+                requestAudioFocus()
+
         player.setOnCompletionListener { mp ->
             try {
                 synchronized(playerLock) {

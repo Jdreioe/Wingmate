@@ -10,6 +10,7 @@ import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
@@ -22,6 +23,7 @@ import io.github.jdreioe.wingmate.infrastructure.IosPronunciationDictionaryRepos
 import io.github.jdreioe.wingmate.infrastructure.IosSaidTextRepository
 import io.github.jdreioe.wingmate.infrastructure.IosSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.IosShareService
+import io.github.jdreioe.wingmate.infrastructure.IosSoundPlayer
 import io.github.jdreioe.wingmate.infrastructure.IosSpeechService
 import io.github.jdreioe.wingmate.infrastructure.IosVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
@@ -66,6 +68,7 @@ fun overrideIosSpeechService() {
             // Pronunciation dictionary (persisted)
             singleOf(::IosPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
             singleOf(::IosFileStorage) { bind<FileStorage>() }
+            singleOf(::IosSoundPlayer) { bind<SoundPlayer>() }
         }
     )
 }

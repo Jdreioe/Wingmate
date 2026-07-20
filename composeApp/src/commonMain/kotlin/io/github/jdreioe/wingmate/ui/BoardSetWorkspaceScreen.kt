@@ -75,7 +75,10 @@ import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
+import io.github.jdreioe.wingmate.domain.Base64Decoder
+import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
@@ -87,6 +90,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -632,6 +636,8 @@ private fun BoardSetWorkspaceScreen(
     val phraseUseCase = koinInject<PhraseUseCase>()
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
+    val soundPlayer = koinInject<SoundPlayer>()
+    val fileStorage = koinInject<FileStorage>()
     val settings by rememberReactiveSettings()
     val scope = rememberCoroutineScope()
     var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
@@ -915,7 +921,17 @@ private fun BoardSetWorkspaceScreen(
                                 val spokenText = (button.vocalization ?: button.label).orEmpty().trim()
                                 if (spokenText.isNotEmpty()) {
                                     selectedButtons = selectedButtons + (button to null)
-                                    scope.launch(Dispatchers.IO) {
+                                }
+                                val sound = button.soundId?.let { id ->
+                                    activeBoard.sounds.firstOrNull { it.id == id }
+                                }
+                                scope.launch(Dispatchers.IO) {
+                                    val playedSound = playButtonSound(
+                                        sound = sound,
+                                        fileStorage = fileStorage,
+                                        soundPlayer = soundPlayer
+                                    )
+                                    if (!playedSound && spokenText.isNotEmpty()) {
                                         runCatching {
                                             val voice = voiceUseCase.selected()
                                                 .withLanguageOverride(button.locale)
@@ -1439,6 +1455,31 @@ private fun deleteDraftBoard(graph: BoardSetGraph, boardId: String): BoardSetGra
 
 private fun workspaceId(prefix: String): String {
     return "${prefix}_${Clock.System.now().toEpochMilliseconds()}_${Random.nextInt(1000, 9999)}"
+}
+
+/**
+ * Plays an OBF button sound from storage or inline data. Returns true when playback started.
+ */
+internal suspend fun playButtonSound(
+    sound: ObfSound?,
+    fileStorage: FileStorage,
+    soundPlayer: SoundPlayer
+): Boolean {
+    if (sound == null) return false
+    val path = sound.path
+    val data = sound.data
+    val bytes = when {
+        !path.isNullOrBlank() -> fileStorage.loadBytes(path)
+        !data.isNullOrBlank() -> decodeObfDataUri(data)
+        else -> null
+    } ?: return false
+    if (bytes.isEmpty()) return false
+    return soundPlayer.playBytes(bytes, sound.contentType)
+}
+
+private fun decodeObfDataUri(data: String): ByteArray? {
+    val payload = data.substringAfter("base64,", missingDelimiterValue = data)
+    return Base64Decoder.decodeOrNull(payload)
 }
 
 private fun languageName(
