@@ -85,6 +85,10 @@
     <string name="board_dialog_clear_image">Fjern billede</string>
     <string name="board_dialog_language">Sprog</string>
     <string name="board_dialog_language_default">Brug standardsprog</string>
+    <string name="board_dialog_language_english">Engelsk</string>
+    <string name="board_dialog_language_danish">Dansk</string>
+    <string name="board_dialog_language_primary_value">%1$s (primært)</string>
+    <string name="board_dialog_language_secondary_value">%1$s (sekundært)</string>
     <string name="board_dialog_action">Felthandling</string>
     <string name="board_dialog_action_speak">Tilføj og udtal</string>
     <string name="board_dialog_action_open_page">Åbn side</string>

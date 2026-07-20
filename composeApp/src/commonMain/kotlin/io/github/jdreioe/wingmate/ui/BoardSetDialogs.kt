@@ -22,6 +22,8 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import org.jetbrains.compose.resources.stringResource
 import wingmatekmp.composeapp.generated.resources.*
 
+internal data class FieldLanguageOption(val tag: String, val label: String)
+
 @Composable
 internal fun CreateBoardSetDialog(
     onDismiss: () -> Unit,
@@ -131,7 +133,7 @@ internal fun EditBoardCellDialog(
     initialLabel: String,
     initialVocalization: String,
     initialImageUrl: String,
-    availableLanguages: List<String> = emptyList(),
+    availableLanguages: List<FieldLanguageOption> = emptyList(),
     initialLanguage: String? = null,
     availableBoards: List<ObfBoard> = emptyList(),
     initialLinkedBoardId: String? = null,
@@ -205,7 +207,10 @@ internal fun EditBoardCellDialog(
                         onClick = { showLanguageMenu = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(language ?: stringResource(Res.string.board_dialog_language_default))
+                        Text(
+                            availableLanguages.firstOrNull { it.tag == language }?.label
+                                ?: stringResource(Res.string.board_dialog_language_default)
+                        )
                     }
                     DropdownMenu(
                         expanded = showLanguageMenu,
@@ -215,10 +220,10 @@ internal fun EditBoardCellDialog(
                             text = { Text(stringResource(Res.string.board_dialog_language_default)) },
                             onClick = { language = null; showLanguageMenu = false }
                         )
-                        availableLanguages.forEach { languageTag ->
+                        availableLanguages.forEach { option ->
                             DropdownMenuItem(
-                                text = { Text(languageTag) },
-                                onClick = { language = languageTag; showLanguageMenu = false }
+                                text = { Text(option.label) },
+                                onClick = { language = option.tag; showLanguageMenu = false }
                             )
                         }
                     }

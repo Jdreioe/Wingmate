@@ -35,10 +35,19 @@ internal class AndroidSqlOpenHelper(
                 is_category INTEGER DEFAULT 0,
                 created_at INTEGER,
                 recording_path TEXT,
+                is_hidden INTEGER NOT NULL DEFAULT 0,
                 ordering INTEGER,
                 puck_action TEXT
             );
         """.trimIndent())
+
+        // CREATE TABLE IF NOT EXISTS does not add columns to an existing table.
+        // Repair databases whose user_version was advanced without every column.
+        ensureColumn(db, "phrases", "recording_path", "TEXT")
+        ensureColumn(db, "phrases", "image_url", "TEXT")
+        ensureColumn(db, "phrases", "linked_board_id", "TEXT")
+        ensureColumn(db, "phrases", "puck_action", "TEXT")
+        ensureColumn(db, "phrases", "is_hidden", "INTEGER NOT NULL DEFAULT 0")
 
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS categories (
@@ -165,9 +174,32 @@ internal class AndroidSqlOpenHelper(
                 // ignore if column already exists
             }
         }
+        if (oldVersion < 7 && newVersion >= 7) {
+            ensureColumn(db, "phrases", "is_hidden", "INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    private fun ensureColumn(
+        db: SQLiteDatabase,
+        table: String,
+        column: String,
+        declaration: String
+    ) {
+        val exists = db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            var found = false
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex) == column) {
+                    found = true
+                    break
+                }
+            }
+            found
+        }
+        if (!exists) db.execSQL("ALTER TABLE $table ADD COLUMN $column $declaration")
     }
 
     companion object {
-        private const val DB_VERSION = 6
+        private const val DB_VERSION = 7
     }
 }

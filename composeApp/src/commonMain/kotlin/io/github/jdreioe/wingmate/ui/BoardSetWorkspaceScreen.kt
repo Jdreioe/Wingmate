@@ -67,7 +67,6 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechSegment
-import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
@@ -415,7 +414,6 @@ private fun BoardSetWorkspaceScreen(
     val voiceUseCase = koinInject<VoiceUseCase>()
     val settings by rememberReactiveSettings()
     val scope = rememberCoroutineScope()
-    var selectedVoice by remember(voiceUseCase) { mutableStateOf<Voice?>(null) }
     var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
     var editSession by remember(boardSetId) { mutableStateOf<BoardSetEditSession?>(null) }
     var mode by remember(boardSetId) { mutableStateOf(initialMode) }
@@ -438,18 +436,30 @@ private fun BoardSetWorkspaceScreen(
     val saveErrorMessage = stringResource(Res.string.board_workspace_save_error)
     val phraseSavedMessage = stringResource(Res.string.board_workspace_phrase_saved)
     val phraseSaveErrorMessage = stringResource(Res.string.board_workspace_phrase_save_error)
-    val availableFieldLanguages = (
-        listOf(
+    val englishLanguageName = stringResource(Res.string.board_dialog_language_english)
+    val danishLanguageName = stringResource(Res.string.board_dialog_language_danish)
+    val primaryLanguageName = languageName(
+        settings.primaryLanguage,
+        englishLanguageName,
+        danishLanguageName,
+        stringResource(Res.string.language_primary)
+    )
+    val secondaryLanguageName = languageName(
+        settings.secondaryLanguage,
+        englishLanguageName,
+        danishLanguageName,
+        stringResource(Res.string.language_secondary)
+    )
+    val availableFieldLanguages = listOf(
+        FieldLanguageOption(
             settings.primaryLanguage,
+            stringResource(Res.string.board_dialog_language_primary_value, primaryLanguageName)
+        ),
+        FieldLanguageOption(
             settings.secondaryLanguage,
-            selectedVoice?.selectedLanguage,
-            selectedVoice?.primaryLanguage
-        ) + selectedVoice?.supportedLanguages.orEmpty()
-    ).filterNotNull().map(String::trim).filter(String::isNotEmpty).distinct().sorted()
-
-    LaunchedEffect(voiceUseCase) {
-        selectedVoice = runCatching { voiceUseCase.selected() }.getOrNull()
-    }
+            stringResource(Res.string.board_dialog_language_secondary_value, secondaryLanguageName)
+        )
+    ).distinctBy { it.tag }
 
     LaunchedEffect(boardSetId) {
         isLoading = true
@@ -1090,4 +1100,15 @@ private fun deleteDraftBoard(graph: BoardSetGraph, boardId: String): BoardSetGra
 
 private fun workspaceId(prefix: String): String {
     return "${prefix}_${Clock.System.now().toEpochMilliseconds()}_${Random.nextInt(1000, 9999)}"
+}
+
+private fun languageName(
+    languageTag: String,
+    englishName: String,
+    danishName: String,
+    fallbackName: String
+): String = when (languageTag.substringBefore('-').lowercase()) {
+    "en" -> englishName
+    "da" -> danishName
+    else -> fallbackName
 }
