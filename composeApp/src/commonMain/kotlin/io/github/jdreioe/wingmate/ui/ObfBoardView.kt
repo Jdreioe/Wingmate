@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -146,7 +147,9 @@ fun ObfBoardView(
                                 onCellClick?.invoke(item.row, item.column, button)
                                     ?: onButtonClick(button)
                             },
-                            isEditMode = isEditMode
+                            isEditMode = isEditMode,
+                            boardStrings = board.strings,
+                            locale = settings.primaryLanguage
                         )
                     } else if (isEditMode && button == null) {
                         OutlinedCard(
@@ -187,7 +190,9 @@ fun ObfBoardView(
                                 extractedImageBytes = button.imageId?.let { 
                                     image?.path?.let { path -> extractedImages[path] }
                                 },
-                                onClick = { onButtonClick(button) }
+                                onClick = { onButtonClick(button) },
+                                boardStrings = board.strings,
+                                locale = settings.primaryLanguage
                             )
                         }
                     }
@@ -409,12 +414,16 @@ fun ObfButtonItem(
     image: ObfImage? = null,
     extractedImageBytes: ByteArray? = null,
     onClick: () -> Unit,
-    isEditMode: Boolean = false
+    isEditMode: Boolean = false,
+    boardStrings: Map<String, Map<String, String>> = emptyMap(),
+    locale: String? = null
 ) {
     val speechService: SpeechService = koinInject()
     val voiceUseCase: VoiceUseCase = koinInject()
     val aacLogger: AacLogger = koinInject()
     val settings by rememberReactiveSettings()
+    val displayLabel = resolveObfLocalizedString(boardStrings, locale, button.label)
+    val displayVocalization = resolveObfLocalizedString(boardStrings, locale, button.vocalization)
     
     // Pulse animation state
     var isSelected by remember { mutableStateOf(false) }
@@ -438,7 +447,7 @@ fun ObfButtonItem(
             
             // Auditory Fishing: Whisper label on hover start (fire-and-forget)
             if (settings.auditoryFishingEnabled) {
-                val label = button.label ?: button.vocalization ?: ""
+                val label = displayLabel ?: displayVocalization ?: ""
                 if (label.isNotBlank()) {
                     fishingScope.launch {
                         runCatching {
@@ -458,7 +467,7 @@ fun ObfButtonItem(
                 if (elapsed.toLong() >= duration.toLong()) {
                     isSelected = true
                     onClick()
-                    aacLogger.logButtonClick(button.label ?: "", phraseId = button.id)
+                    aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
                     dwellProgress = 0f
                     break
                 }
@@ -529,7 +538,7 @@ fun ObfButtonItem(
                 val primaryAction = { 
                     isSelected = true
                     onClick()
-                    aacLogger.logButtonClick(button.label ?: "", phraseId = button.id)
+                    aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
                 }
                 
                 if (settings.holdToSelectMillis > 0 && !isEditMode) {
@@ -581,11 +590,11 @@ fun ObfButtonItem(
                 modifier = Modifier.fillMaxSize()
             ) {
                 val showImg = settings.showSymbols && (imageBitmap != null || !imageModel.isNullOrBlank())
-                val showLbl = settings.showLabels && !(button.label.isNullOrBlank() && button.vocalization.isNullOrBlank())
+                    val showLbl = settings.showLabels && !(displayLabel.isNullOrBlank() && displayVocalization.isNullOrBlank())
 
                 if (settings.labelAtTop && showImg && showLbl) {
                     // Label at Top
-                    val labelText = button.label ?: button.vocalization ?: ""
+                    val labelText = displayLabel ?: displayVocalization ?: ""
                     Text(
                         text = labelText,
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
@@ -598,21 +607,21 @@ fun ObfButtonItem(
                     BoardSymbolImage(
                         bitmap = imageBitmap,
                         model = imageModel,
-                        contentDescription = button.label,
-                        modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
-                    )
-                } else {
-                    // Normal order (Image at Top)
-                    if (showImg) {
-                        BoardSymbolImage(
-                            bitmap = imageBitmap,
-                            model = imageModel,
-                            contentDescription = button.label,
+                        contentDescription = displayLabel,
+                            modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
+                        )
+                    } else {
+                        // Normal order (Image at Top)
+                        if (showImg) {
+                            BoardSymbolImage(
+                                bitmap = imageBitmap,
+                                model = imageModel,
+                                contentDescription = displayLabel,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
                         )
                     }
                     if (showLbl) {
-                        val labelText = button.label ?: button.vocalization ?: ""
+                        val labelText = displayLabel ?: displayVocalization ?: ""
                         Text(
                             text = labelText,
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
