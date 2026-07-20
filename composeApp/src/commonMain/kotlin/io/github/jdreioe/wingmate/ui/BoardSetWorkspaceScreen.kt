@@ -161,9 +161,13 @@ fun BoardSetManagerScreen(
 
     LaunchedEffect(Unit) { refreshBoardSets() }
     LaunchedEffect(initialBoardSetId) {
-        val boardSetId = initialBoardSetId ?: return@LaunchedEffect
-        if (withContext(Dispatchers.Default) { useCase.getBoardSet(boardSetId) } != null) {
-            route = BoardSetRoute.Workspace(boardSetId, BoardWorkspaceMode.Run)
+        val targetBoardSet = withContext(Dispatchers.Default) {
+            initialBoardSetId
+                ?.let { useCase.getBoardSet(it) }
+                ?: useCase.listBoardSets().singleOrNull()
+        }
+        if (targetBoardSet != null) {
+            route = BoardSetRoute.Workspace(targetBoardSet.id, BoardWorkspaceMode.Run)
         }
     }
     LaunchedEffect(createOnLaunch) {
