@@ -1,6 +1,5 @@
 package io.github.jdreioe.wingmate.ui
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -11,20 +10,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.unit.dp
+import coil3.compose.SubcomposeAsyncImage
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.stringResource
-import java.net.URL
-import wingmatekmp.composeapp.generated.resources.Res
-import wingmatekmp.composeapp.generated.resources.common_cancel
-import wingmatekmp.composeapp.generated.resources.opensymbols_no_results
-import wingmatekmp.composeapp.generated.resources.opensymbols_not_configured
-import wingmatekmp.composeapp.generated.resources.opensymbols_search_label
-import wingmatekmp.composeapp.generated.resources.opensymbols_search_title
+import wingmatekmp.composeapp.generated.resources.*
 
 /**
  * Dialog to search OpenSymbols for pictograms.
@@ -38,25 +31,38 @@ fun OpenSymbolsSearchDialog(
     var searchQuery by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<OpenSymbolsClient.SymbolResult>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
+    var searchError by remember { mutableStateOf<OpenSymbolsClient.SearchError?>(null) }
+    var retryKey by remember { mutableStateOf(0) }
     val isConfigured = OpenSymbolsClient.isConfigured()
     val notConfiguredMessage = stringResource(Res.string.opensymbols_not_configured)
     val normalizedQuery = searchQuery.trim()
+    val locale = Locale.current.language
 
-    LaunchedEffect(isConfigured, normalizedQuery) {
+    LaunchedEffect(isConfigured, normalizedQuery, locale, retryKey) {
         if (!isConfigured) {
             isLoading = false
             results = emptyList()
+            searchError = OpenSymbolsClient.SearchError.NotConfigured
             return@LaunchedEffect
         }
 
         if (normalizedQuery.isBlank()) {
             isLoading = false
             results = emptyList()
+            searchError = null
             return@LaunchedEffect
         }
 
+        delay(350)
         isLoading = true
-        results = OpenSymbolsClient.search(normalizedQuery)
+        searchError = null
+        when (val response = OpenSymbolsClient.search(normalizedQuery, locale)) {
+            is OpenSymbolsClient.SearchResponse.Success -> results = response.symbols
+            is OpenSymbolsClient.SearchResponse.Failure -> {
+                results = emptyList()
+                searchError = response.error
+            }
+        }
         isLoading = false
     }
     
@@ -88,6 +94,28 @@ fun OpenSymbolsSearchDialog(
                 } else if (isLoading) {
                     Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
+                    }
+                } else if (searchError != null) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            when (searchError) {
+                                OpenSymbolsClient.SearchError.Authentication,
+                                OpenSymbolsClient.SearchError.TokenExpired ->
+                                    stringResource(Res.string.opensymbols_auth_failed)
+                                OpenSymbolsClient.SearchError.Throttled ->
+                                    stringResource(Res.string.opensymbols_throttled)
+                                else -> stringResource(Res.string.opensymbols_search_failed)
+                            },
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(onClick = { retryKey++ }) {
+                            Text(stringResource(Res.string.opensymbols_retry))
+                        }
                     }
                 } else if (results.isEmpty() && normalizedQuery.isNotBlank()) {
                     Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
@@ -126,25 +154,12 @@ private fun SymbolGridItem(
     symbol: OpenSymbolsClient.SymbolResult,
     onClick: () -> Unit
 ) {
-    var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    
-    LaunchedEffect(symbol.image_url) {
-        symbol.image_url?.let { url ->
-            imageBitmap = withContext(Dispatchers.IO) {
-                runCatching {
-                    val bytes = URL(url).readBytes()
-                    bytes.toComposeImageBitmap()
-                }.getOrNull()
-            }
-        }
-    }
-    
     Card(
         modifier = Modifier
             .padding(4.dp)
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clickable(onClick = onClick),
+            .clickable(enabled = symbol.image_url != null, onClick = onClick),
         shape = RoundedCornerShape(8.dp)
     ) {
         Column(
@@ -152,18 +167,18 @@ private fun SymbolGridItem(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            if (imageBitmap != null) {
-                Image(
-                    bitmap = imageBitmap!!,
+            SubcomposeAsyncImage(
+                    model = symbol.image_url,
                     contentDescription = symbol.name,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.weight(1f).fillMaxWidth()
-                )
-            } else {
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                }
-            }
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    loading = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    } },
+                    error = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(stringResource(Res.string.opensymbols_image_unavailable))
+                    } }
+            )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = symbol.name,

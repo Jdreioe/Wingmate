@@ -14,19 +14,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
-import java.net.URL
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -52,9 +50,6 @@ import org.koin.compose.koinInject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
-
-// Simple in-memory cache for downloaded images
-private val imageCache = mutableMapOf<String, ByteArray>()
 
 @Composable
 fun ObfBoardView(
@@ -338,9 +333,6 @@ fun ObfButtonItem(
     
     val contentColor = if (settings.highContrastMode) highContrastContent else MaterialTheme.colorScheme.onSurface
     
-    // State for async-loaded image
-    var urlLoadedBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    
     // Try to load image from various sources synchronously first
     val syncBitmap = remember(image, extractedImageBytes) {
         extractedImageBytes?.let { bytes ->
@@ -354,24 +346,8 @@ fun ObfButtonItem(
         }
     }
     
-    val imageUrl = image?.url
-    LaunchedEffect(imageUrl) {
-        if (syncBitmap == null && imageUrl != null && imageUrl.startsWith("http")) {
-            urlLoadedBitmap = withContext(Dispatchers.IO) {
-                runCatching {
-                    val cachedBytes = imageCache[imageUrl]
-                    val bytes = if (cachedBytes != null) cachedBytes else {
-                        val downloaded = URL(imageUrl).readBytes()
-                        imageCache[imageUrl] = downloaded
-                        downloaded
-                    }
-                    bytes.toComposeImageBitmap()
-                }.getOrNull()
-            }
-        }
-    }
-    
-    val imageBitmap = syncBitmap ?: urlLoadedBitmap
+    val imageBitmap = syncBitmap
+    val imageModel = image?.url ?: image?.path
     
     Card(
         modifier = Modifier
@@ -445,7 +421,7 @@ fun ObfButtonItem(
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxSize()
             ) {
-                val showImg = imageBitmap != null && settings.showSymbols
+                val showImg = settings.showSymbols && (imageBitmap != null || !imageModel.isNullOrBlank())
                 val showLbl = settings.showLabels && !(button.label.isNullOrBlank() && button.vocalization.isNullOrBlank())
 
                 if (settings.labelAtTop && showImg && showLbl) {
@@ -460,19 +436,19 @@ fun ObfButtonItem(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Image(
-                        bitmap = imageBitmap!!,
+                    BoardSymbolImage(
+                        bitmap = imageBitmap,
+                        model = imageModel,
                         contentDescription = button.label,
-                        contentScale = ContentScale.Fit,
                         modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
                     )
                 } else {
                     // Normal order (Image at Top)
                     if (showImg) {
-                        Image(
-                            bitmap = imageBitmap!!,
+                        BoardSymbolImage(
+                            bitmap = imageBitmap,
+                            model = imageModel,
                             contentDescription = button.label,
-                            contentScale = ContentScale.Fit,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
                         )
                     }
@@ -483,12 +459,36 @@ fun ObfButtonItem(
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             textAlign = TextAlign.Center,
                             color = contentColor,
-                            maxLines = if (imageBitmap != null) 1 else 2,
+                            maxLines = if (showImg) 1 else 2,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BoardSymbolImage(
+    bitmap: ImageBitmap?,
+    model: String?,
+    contentDescription: String?,
+    modifier: Modifier
+) {
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Fit,
+            modifier = modifier
+        )
+    } else {
+        AsyncImage(
+            model = model,
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Fit,
+            modifier = modifier
+        )
     }
 }

@@ -29,6 +29,18 @@ android {
     val openSymbolsSecret = providers.environmentVariable("WINGMATE_OPENSYMBOLS_SECRET")
         .orElse(providers.environmentVariable("OPENSYMBOLS_SECRET"))
         .orElse(providers.environmentVariable("openSymbols"))
+        .orElse(providers.provider {
+            val localProperties = Properties()
+            val localPropertiesFile = rootProject.file("local.properties")
+            if (localPropertiesFile.exists()) {
+                localPropertiesFile.inputStream().use(localProperties::load)
+            }
+            sequenceOf(
+                localProperties.getProperty("WINGMATE_OPENSYMBOLS_SECRET"),
+                localProperties.getProperty("OPENSYMBOLS_SECRET"),
+                localProperties.getProperty("openSymbols")
+            ).firstOrNull { !it.isNullOrBlank() }.orEmpty()
+        })
         .orElse("")
 
     defaultConfig {

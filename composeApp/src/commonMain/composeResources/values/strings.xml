@@ -151,8 +151,13 @@
     <string name="opensymbols_search_title">Search OpenSymbols</string>
     <string name="opensymbols_search_label">Search for pictogram...</string>
     <string name="opensymbols_search_cd">Search</string>
-    <string name="opensymbols_not_configured">OpenSymbols is not configured on this device.\nSet WINGMATE_OPENSYMBOLS_SECRET in env or local.properties.</string>
+    <string name="opensymbols_not_configured">OpenSymbols is not configured in this build.\nSet WINGMATE_OPENSYMBOLS_SECRET or OPENSYMBOLS_SECRET in local.properties before building.</string>
     <string name="opensymbols_no_results">No results found</string>
+    <string name="opensymbols_auth_failed">OpenSymbols authentication failed. Check the configured secret.</string>
+    <string name="opensymbols_throttled">OpenSymbols received too many searches. Wait a moment and retry.</string>
+    <string name="opensymbols_search_failed">OpenSymbols could not be reached.</string>
+    <string name="opensymbols_retry">Retry</string>
+    <string name="opensymbols_image_unavailable">Image unavailable</string>
 
     <string name="data_management_title">Data Management</string>
     <string name="data_management_description">Export or import your speech history and trained model data as JSON.</string>

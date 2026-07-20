@@ -22,7 +22,6 @@ import org.koin.compose.koinInject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
-import io.github.jdreioe.wingmate.ui.toComposeImageBitmap
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,6 +50,7 @@ import io.github.jdreioe.wingmate.ui.parseHexToColor
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import androidx.compose.material3.SmallFloatingActionButton
 import io.github.jdreioe.wingmate.domain.Phrase
 import org.jetbrains.compose.resources.stringResource
@@ -303,33 +303,7 @@ fun PhraseGridItem(
                 .fillMaxSize()
                 .rotate(rotation)) {
                 
-                // Async load image from URL if available
-                var imageBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
                 val imageUrl = item.imageUrl
-                androidx.compose.runtime.LaunchedEffect(imageUrl) {
-                    if (!imageUrl.isNullOrBlank()) {
-                        when {
-                            imageUrl.startsWith("http") -> {
-                                imageBitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    runCatching {
-                                        val bytes = java.net.URL(imageUrl).readBytes()
-                                        bytes.toComposeImageBitmap()
-                                    }.getOrNull()
-                                }
-                            }
-                            imageUrl.startsWith("file://") || imageUrl.startsWith("/") -> {
-                                imageBitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    runCatching {
-                                        val path = if (imageUrl.startsWith("file://")) java.net.URI(imageUrl).path else imageUrl
-                                        val bytes = java.io.File(path).readBytes()
-                                        bytes.toComposeImageBitmap()
-                                    }.getOrNull()
-                                }
-                            }
-                        }
-                    }
-                }
-                
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -337,7 +311,7 @@ fun PhraseGridItem(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val showImg = imageBitmap != null && settings.showSymbols
+                    val showImg = !imageUrl.isNullOrBlank() && settings.showSymbols
                     val showLbl = settings.showLabels
 
                     if (settings.labelAtTop && showImg && showLbl) {
@@ -346,8 +320,8 @@ fun PhraseGridItem(
                         val effectiveLarge = if (phraseFontSize != TextUnit.Unspecified) baseLarge.copy(fontSize = phraseFontSize) else baseLarge
                         Text(text = item.text, style = effectiveLarge, color = contentColor)
                         
-                        androidx.compose.foundation.Image(
-                            bitmap = imageBitmap!!,
+                        AsyncImage(
+                            model = imageUrl,
                             contentDescription = item.text,
                             contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(4.dp)
@@ -355,8 +329,8 @@ fun PhraseGridItem(
                     } else {
                         // Normal order (Image at Top)
                         if (showImg) {
-                            androidx.compose.foundation.Image(
-                                bitmap = imageBitmap!!,
+                            AsyncImage(
+                                model = imageUrl,
                                 contentDescription = item.text,
                                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                                 modifier = Modifier.weight(1f).fillMaxWidth().padding(4.dp)
