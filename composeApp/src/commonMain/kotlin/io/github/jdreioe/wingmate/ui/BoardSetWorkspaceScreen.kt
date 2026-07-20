@@ -87,10 +87,11 @@ import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
-import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
+import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -663,6 +664,9 @@ private fun BoardSetWorkspaceScreen(
     val saveErrorMessage = stringResource(Res.string.board_workspace_save_error)
     val phraseSavedMessage = stringResource(Res.string.board_workspace_phrase_saved)
     val phraseSaveErrorMessage = stringResource(Res.string.board_workspace_phrase_save_error)
+    // Placeholder substituted in click handler (stringResource formatting is composition-only).
+    val unsupportedActionTemplate = stringResource(Res.string.board_workspace_unsupported_action, "%ACTION%")
+
     val englishLanguageName = stringResource(Res.string.board_dialog_language_english)
     val danishLanguageName = stringResource(Res.string.board_dialog_language_danish)
     val primaryLanguageName = languageName(
@@ -913,29 +917,80 @@ private fun BoardSetWorkspaceScreen(
                         showSentenceText = isFullscreen,
                         selectedButtons = selectedButtons,
                         onButtonClick = { button ->
-                            val linkedBoard = activeGraph.resolveLinkedBoard(button.loadBoard)
-                            if (linkedBoard != null) {
-                                selectedBoardId?.let { boardStack = boardStack + it }
-                                selectedBoardId = linkedBoard.id
-                            } else {
-                                val spokenText = (button.vocalization ?: button.label).orEmpty().trim()
-                                if (spokenText.isNotEmpty()) {
-                                    selectedButtons = selectedButtons + (button to null)
+                            val actions = parseObfButtonActions(button)
+                            if (actions.isNotEmpty()) {
+                                var speakAfterActions = false
+                                var navigateHome = false
+                                var nextSelection = selectedButtons
+                                for (effect in actions) {
+                                    when (effect) {
+                                        is ObfButtonActionEffect.AppendText -> {
+                                            if (effect.text.isNotEmpty()) {
+                                                nextSelection = nextSelection + (
+                                                    ObfButton(
+                                                        id = workspaceId("action"),
+                                                        label = effect.text,
+                                                        vocalization = effect.text,
+                                                        locale = button.locale
+                                                    ) to null
+                                                )
+                                            }
+                                        }
+                                        ObfButtonActionEffect.Backspace -> {
+                                            nextSelection = backspaceSentenceSelection(nextSelection)
+                                        }
+                                        ObfButtonActionEffect.Clear -> {
+                                            nextSelection = emptyList()
+                                        }
+                                        ObfButtonActionEffect.Speak -> {
+                                            speakAfterActions = true
+                                        }
+                                        ObfButtonActionEffect.Home -> {
+                                            navigateHome = true
+                                        }
+                                        is ObfButtonActionEffect.Unsupported -> {
+                                            statusMessage = unsupportedActionTemplate.replace("%ACTION%", effect.action)
+                                        }
+                                    }
                                 }
-                                val sound = button.soundId?.let { id ->
-                                    activeBoard.sounds.firstOrNull { it.id == id }
+                                selectedButtons = nextSelection
+                                if (navigateHome) {
+                                    boardStack = emptyList()
+                                    selectedBoardId = activeGraph?.boardSet?.rootBoardId
                                 }
-                                scope.launch(Dispatchers.IO) {
-                                    val playedSound = playButtonSound(
-                                        sound = sound,
-                                        fileStorage = fileStorage,
-                                        soundPlayer = soundPlayer
+                                if (speakAfterActions) {
+                                    speakSelectedButtons(
+                                        selected = nextSelection,
+                                        voiceUseCase = voiceUseCase,
+                                        speechService = speechService,
+                                        scope = scope
                                     )
-                                    if (!playedSound && spokenText.isNotEmpty()) {
-                                        runCatching {
-                                            val voice = voiceUseCase.selected()
-                                                .withLanguageOverride(button.locale)
-                                            speechService.speak(spokenText, voice, voice?.pitch, voice?.rate)
+                                }
+                            } else {
+                                val linkedBoard = activeGraph.resolveLinkedBoard(button.loadBoard)
+                                if (linkedBoard != null) {
+                                    selectedBoardId?.let { boardStack = boardStack + it }
+                                    selectedBoardId = linkedBoard.id
+                                } else {
+                                    val spokenText = (button.vocalization ?: button.label).orEmpty().trim()
+                                    if (spokenText.isNotEmpty()) {
+                                        selectedButtons = selectedButtons + (button to null)
+                                    }
+                                    val sound = button.soundId?.let { id ->
+                                        activeBoard.sounds.firstOrNull { it.id == id }
+                                    }
+                                    scope.launch(Dispatchers.IO) {
+                                        val playedSound = playButtonSound(
+                                            sound = sound,
+                                            fileStorage = fileStorage,
+                                            soundPlayer = soundPlayer
+                                        )
+                                        if (!playedSound && spokenText.isNotEmpty()) {
+                                            runCatching {
+                                                val voice = voiceUseCase.selected()
+                                                    .withLanguageOverride(button.locale)
+                                                speechService.speak(spokenText, voice, voice?.pitch, voice?.rate)
+                                            }
                                         }
                                     }
                                 }
@@ -951,15 +1006,17 @@ private fun BoardSetWorkspaceScreen(
                                     ?.takeIf(String::isNotEmpty)
                                     ?.let { text -> text to button.locale }
                             }
-                            val sentence = speechParts.joinToString(" ") { it.first }
+                            val allSingleChars = speechParts.all { it.first.length <= 1 }
+                            val separator = if (allSingleChars) "" else " "
+                            val sentence = speechParts.joinToString(separator) { it.first }
                             if (sentence.isNotEmpty()) {
                                 scope.launch(Dispatchers.IO) {
                                     runCatching {
                                         val voice = voiceUseCase.selected()
                                         if (speechParts.any { !it.second.isNullOrBlank() }) {
-                                            val segments = speechParts.mapIndexed { index, (text, language) ->
+                                            val segments = speechParts.map { (text, language) ->
                                                 SpeechSegment(
-                                                    text = text + if (index < speechParts.lastIndex) " " else "",
+                                                    text = text,
                                                     languageTag = language
                                                 )
                                             }
@@ -972,7 +1029,12 @@ private fun BoardSetWorkspaceScreen(
                             }
                         },
                         onSaveSentence = {
-                            val sentence = selectedButtons.joinToString(" ") {
+                            val allSingleChars = selectedButtons.all {
+                                val text = (it.first.vocalization ?: it.first.label).orEmpty()
+                                text.length <= 1
+                            }
+                            val separator = if (allSingleChars) "" else " "
+                            val sentence = selectedButtons.joinToString(separator) {
                                 (it.first.vocalization ?: it.first.label).orEmpty()
                             }.trim()
                             if (sentence.isNotEmpty() && !isSavingSentence) {
@@ -1061,13 +1123,15 @@ private fun BoardSetWorkspaceScreen(
             initialLanguage = target.button?.locale,
             availableBoards = activeGraph?.boards.orEmpty().filterNot { it.id == activeBoard.id },
             initialLinkedBoardId = activeGraph?.resolveLinkedBoard(target.button?.loadBoard)?.id,
+            initialAction = target.button?.action,
+            initialActions = target.button?.actions.orEmpty(),
             availableSpans = availableSpans,
             initialRowSpan = currentSpan.rows,
             initialColumnSpan = currentSpan.columns,
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
             onSave = { label, vocalization, imageUrl, backgroundColor, language, linkedBoardId,
-                       rowSpan, columnSpan ->
+                       rowSpan, columnSpan, action, actions ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
                     updateDraftCell(
@@ -1082,7 +1146,9 @@ private fun BoardSetWorkspaceScreen(
                         language = language,
                         linkedBoardId = linkedBoardId,
                         rowSpan = rowSpan,
-                        columnSpan = columnSpan
+                        columnSpan = columnSpan,
+                        action = action,
+                        actions = actions
                     )
                 )
                 editingCell = null
@@ -1286,7 +1352,9 @@ internal fun updateDraftCell(
     language: String?,
     linkedBoardId: String?,
     rowSpan: Int = 1,
-    columnSpan: Int = 1
+    columnSpan: Int = 1,
+    action: String? = null,
+    actions: List<String> = emptyList()
 ): BoardSetGraph {
     val board = graph.boardsById[boardId] ?: return graph
     val grid = board.grid ?: return graph
@@ -1316,7 +1384,9 @@ internal fun updateDraftCell(
         imageId = imageId,
         loadBoard = linkedBoardId?.let { targetId ->
             ObfLoadBoard(id = targetId, name = graph.boardsById[targetId]?.name)
-        }
+        },
+        action = action?.trim()?.ifBlank { null },
+        actions = actions
     )
     val buttons = if (existingButton == null) board.buttons + button else board.buttons.map {
         if (it.id == button.id) button else it
@@ -1458,6 +1528,53 @@ private fun workspaceId(prefix: String): String {
 }
 
 /**
+ * Removes one character from the composed sentence. When the last token is a multi-character
+ * spelling fragment, trims one character; otherwise drops the last token entirely.
+ */
+internal fun backspaceSentenceSelection(
+    selected: List<Pair<ObfButton, ImageBitmap?>>
+): List<Pair<ObfButton, ImageBitmap?>> {
+    if (selected.isEmpty()) return selected
+    val (last, image) = selected.last()
+    val text = last.vocalization ?: last.label ?: ""
+    if (text.length <= 1) return selected.dropLast(1)
+    val trimmed = text.dropLast(1)
+    return selected.dropLast(1) + (
+        last.copy(label = trimmed, vocalization = trimmed) to image
+    )
+}
+
+private fun speakSelectedButtons(
+    selected: List<Pair<ObfButton, ImageBitmap?>>,
+    voiceUseCase: VoiceUseCase,
+    speechService: SpeechService,
+    scope: kotlinx.coroutines.CoroutineScope
+) {
+    val speechParts = selected.mapNotNull { (button, _) ->
+        (button.vocalization ?: button.label)
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { text -> text to button.locale }
+    }
+    val allSingleChars = speechParts.all { it.first.length <= 1 }
+    val separator = if (allSingleChars) "" else " "
+    val sentence = speechParts.joinToString(separator) { it.first }
+    if (sentence.isEmpty()) return
+    scope.launch(Dispatchers.IO) {
+        runCatching {
+            val voice = voiceUseCase.selected()
+            if (speechParts.any { !it.second.isNullOrBlank() }) {
+                val segments = speechParts.map { (text, language) ->
+                    SpeechSegment(text = text, languageTag = language)
+                }
+                speechService.speakSegments(segments, voice, voice?.pitch, voice?.rate)
+            } else {
+                speechService.speak(sentence, voice, voice?.pitch, voice?.rate)
+            }
+        }
+    }
+}
+
+/**
  * Plays an OBF button sound from storage or inline data. Returns true when playback started.
  */
 internal suspend fun playButtonSound(
@@ -1478,7 +1595,6 @@ internal suspend fun playButtonSound(
 }
 
 private fun decodeObfDataUri(data: String): ByteArray? {
-    val payload = data.substringAfter("base64,", missingDelimiterValue = data)
     return Base64Decoder.decodeOrNull(payload)
 }
 
