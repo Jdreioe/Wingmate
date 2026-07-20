@@ -15,14 +15,18 @@ data class ObfBoard(
     @SerialName("background_color")
     val backgroundColor: String? = null,
     val buttons: List<ObfButton> = emptyList(),
-    val grid: ObfGrid? = null,
     val images: List<ObfImage> = emptyList(),
-    val sounds: List<ObfSound> = emptyList(),
-    // String lists for localization
+    val grid: ObfGrid? = null,
     val strings: Map<String, Map<String, String>> = emptyMap(),
-    // License info
+    val localeMap: Map<String, String> = emptyMap(),
     val license: ObfLicense? = null
-)
+) {
+    /** True when every button has all four absolute-positioning attributes defined. */
+    val isAbsoluteLayout: Boolean
+        get() = buttons.isNotEmpty() && buttons.all {
+            it.top != null && it.left != null && it.width != null && it.height != null
+        }
+}
 
 @Serializable
 data class ObfButton(
