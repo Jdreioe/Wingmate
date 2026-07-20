@@ -1,0 +1,26 @@
+{
+  "format": "open-board-0.1",
+  "id": "goodbye",
+  "locale": "en",
+  "name": "Goodbye",
+  "description_html": "A goodbye board linked from the Hello starter board.",
+  "grid": {
+    "rows": 2,
+    "columns": 2,
+    "order": [
+      ["b1", "b2"],
+      ["b3", "b4"]
+    ]
+  },
+  "buttons": [
+    {
+      "id": "b1",
+      "label": "Goodbye",
+      "background_color": "#ffcccc",
+      "load_board": { "id": "hello", "name": "Hello" }
+    },
+    { "id": "b2", "label": "See you later", "background_color": "#ccffcc" },
+    { "id": "b3", "label": "Take care", "background_color": "#ccccff" },
+    { "id": "b4", "label": "Bye bye", "background_color": "#ffccff" }
+  ]
+}

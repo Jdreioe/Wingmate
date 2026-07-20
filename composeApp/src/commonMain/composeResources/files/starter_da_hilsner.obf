@@ -1,0 +1,87 @@
+{
+  "format": "open-board-0.1",
+  "id": "hilsner",
+  "locale": "da",
+  "name": "Hilsner",
+  "description_html": "En simpel tavle med grundl\u00e6ggende danske hilsner og fraser.",
+  "grid": {
+    "rows": 4,
+    "columns": 2,
+    "order": [
+      [
+        "b1",
+        "b2"
+      ],
+      [
+        "b3",
+        "b4"
+      ],
+      [
+        "b5",
+        "b6"
+      ],
+      [
+        "b7",
+        "b8"
+      ]
+    ]
+  },
+  "buttons": [
+    {
+      "id": "b1",
+      "label": "Hej",
+      "vocalization": "hej",
+      "background_color": "#ffcccc"
+    },
+    {
+      "id": "b2",
+      "label": "Hvordan g\u00e5r det?",
+      "vocalization": "hvordan g\u00e5r det",
+      "background_color": "#ccffcc"
+    },
+    {
+      "id": "b3",
+      "label": "Ja",
+      "vocalization": "ja",
+      "background_color": "#ccccff"
+    },
+    {
+      "id": "b4",
+      "label": "Nej",
+      "vocalization": "nej",
+      "background_color": "#ffffcc"
+    },
+    {
+      "id": "b5",
+      "label": "Tak",
+      "vocalization": "tak",
+      "background_color": "#ffccff"
+    },
+    {
+      "id": "b6",
+      "label": "V\u00e6r s\u00e5 venlig",
+      "vocalization": "v\u00e6r s\u00e5 venlig",
+      "background_color": "#ccffff"
+    },
+    {
+      "id": "b7",
+      "label": "Kernetavle",
+      "vocalization": "kernetavle",
+      "background_color": "#e8f5e9",
+      "load_board": {
+        "id": "kernetavle",
+        "name": "Kernetavle"
+      }
+    },
+    {
+      "id": "b8",
+      "label": "Flere ord",
+      "vocalization": "flere ord",
+      "background_color": "#fff3e0",
+      "load_board": {
+        "id": "mad_og_drikke",
+        "name": "Mad og Drikke"
+      }
+    }
+  ]
+}

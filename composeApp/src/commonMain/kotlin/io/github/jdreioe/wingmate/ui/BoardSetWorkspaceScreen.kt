@@ -79,6 +79,7 @@ import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
+import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
@@ -143,6 +144,7 @@ fun BoardSetManagerScreen(
     initialBoardSetId: String? = null
 ) {
     val useCase = koinInject<BoardSetUseCase>()
+    val obfParser = koinInject<ObfParser>()
     val saidTextRepository = koinInject<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
     val dictionaryRepository = koinInject<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>()
     val speechService = koinInject<SpeechService>()
@@ -193,12 +195,27 @@ fun BoardSetManagerScreen(
         }
     }
 
-    LaunchedEffect(Unit) { refreshBoardSets() }
+    var triedAutoLoadStarter by remember { mutableStateOf(false) }
+
+    suspend fun loadStarterBoards(): Boolean {
+        restoreStarterBoards(systemLanguageTag(), obfParser, useCase) ?: return false
+        triedAutoLoadStarter = true
+        return true
+    }
+
+    LaunchedEffect(Unit) {
+        refreshBoardSets()
+    }
+    LaunchedEffect(boardSets, triedAutoLoadStarter) {
+        if (!triedAutoLoadStarter && boardSets.isEmpty() && !isLoading) {
+            val ok = loadStarterBoards()
+            triedAutoLoadStarter = true
+            if (ok) refreshBoardSets()
+        }
+    }
     LaunchedEffect(initialBoardSetId) {
-        val targetBoardSet = withContext(Dispatchers.Default) {
-            initialBoardSetId
-                ?.let { useCase.getBoardSet(it) }
-                ?: useCase.listBoardSets().singleOrNull()
+        val targetBoardSet = initialBoardSetId?.let { id ->
+            withContext(Dispatchers.Default) { useCase.getBoardSet(id) }
         }
         if (targetBoardSet != null) {
             route = BoardSetRoute.Workspace(targetBoardSet.id, BoardWorkspaceMode.Run)
@@ -315,7 +332,10 @@ fun BoardSetManagerScreen(
     }
 
     if (showSettings) {
-        SettingsScreen(onDismiss = { showSettings = false })
+        SettingsScreen(
+            onDismiss = { showSettings = false },
+            onBaseBoardsRestored = ::refreshBoardSets
+        )
     }
     if (showImportExport) {
         SettingsExportDialog(onDismiss = { showImportExport = false })

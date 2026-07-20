@@ -1,0 +1,24 @@
+{
+  "format": "open-board-0.1",
+  "id": "hello",
+  "locale": "en",
+  "name": "Hello",
+  "description_html": "A simple starter board with basic greetings and phrases.",
+  "grid": {
+    "rows": 3,
+    "columns": 2,
+    "order": [
+      ["b1", "b2"],
+      ["b3", "b4"],
+      ["b5", "b6"]
+    ]
+  },
+  "buttons": [
+    { "id": "b1", "label": "Hello", "background_color": "#ffcccc" },
+    { "id": "b2", "label": "How are you?", "background_color": "#ccffcc" },
+    { "id": "b3", "label": "Yes", "background_color": "#ccccff" },
+    { "id": "b4", "label": "No", "background_color": "#ffffcc" },
+    { "id": "b5", "label": "Thank you", "background_color": "#ffccff" },
+    { "id": "b6", "label": "Please", "background_color": "#ccffff" }
+  ]
+}
