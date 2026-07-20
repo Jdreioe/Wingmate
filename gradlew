@@ -64,6 +64,15 @@
 #
 ##############################################################################
 
+# If Infisical CLI is available, wrap with `infisical run` to
+# inject secrets as environment variables for the Gradle build.
+if [ -z "${INFISICAL_SKIP-}" ]; then
+    if command -v infisical >/dev/null 2>&1; then
+        export INFISICAL_SKIP=1
+        exec infisical run -- "$0" "$@"
+    fi
+fi
+
 # Attempt to set APP_HOME
 
 # Resolve links: $0 may be a link

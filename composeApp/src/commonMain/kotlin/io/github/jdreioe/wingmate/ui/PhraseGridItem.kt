@@ -22,7 +22,6 @@ import org.koin.compose.koinInject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
-import io.github.jdreioe.wingmate.ui.toComposeImageBitmap
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,6 +50,7 @@ import io.github.jdreioe.wingmate.ui.parseHexToColor
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import androidx.compose.material3.SmallFloatingActionButton
 import io.github.jdreioe.wingmate.domain.Phrase
 import org.jetbrains.compose.resources.stringResource
@@ -107,7 +107,11 @@ fun PhraseGridItem(
         item.backgroundColor?.let { try { parseHexToColor(it) } catch (_: Throwable) { MaterialTheme.colorScheme.surface } } ?: MaterialTheme.colorScheme.surface
     }
     
-    val contentColor = if (settings.highContrastMode) highContrastContent else MaterialTheme.colorScheme.onSurface
+    val contentColor = when {
+        settings.highContrastMode -> highContrastContent
+        item.backgroundColor != null -> contrastingContentColor(bgColor)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     
     val speechService: SpeechService = koinInject()
     val aacLogger: AacLogger = koinInject()
@@ -210,6 +214,10 @@ fun PhraseGridItem(
                 }
             },
         shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = bgColor,
+            contentColor = contentColor
+        ),
         border = if (settings.highContrastMode) {
             androidx.compose.foundation.BorderStroke(3.dp, highContrastContent)
         } else null
@@ -276,7 +284,7 @@ fun PhraseGridItem(
                     categoryName?.let { cname ->
                         Text(
                             text = cname,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = contentColor,
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), shape = RoundedCornerShape(4.dp))
@@ -303,41 +311,14 @@ fun PhraseGridItem(
                 .fillMaxSize()
                 .rotate(rotation)) {
                 
-                // Async load image from URL if available
-                var imageBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
                 val imageUrl = item.imageUrl
-                androidx.compose.runtime.LaunchedEffect(imageUrl) {
-                    if (!imageUrl.isNullOrBlank()) {
-                        when {
-                            imageUrl.startsWith("http") -> {
-                                imageBitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    runCatching {
-                                        val bytes = java.net.URL(imageUrl).readBytes()
-                                        bytes.toComposeImageBitmap()
-                                    }.getOrNull()
-                                }
-                            }
-                            imageUrl.startsWith("file://") || imageUrl.startsWith("/") -> {
-                                imageBitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    runCatching {
-                                        val path = if (imageUrl.startsWith("file://")) java.net.URI(imageUrl).path else imageUrl
-                                        val bytes = java.io.File(path).readBytes()
-                                        bytes.toComposeImageBitmap()
-                                    }.getOrNull()
-                                }
-                            }
-                        }
-                    }
-                }
-                
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(bgColor, shape = RoundedCornerShape(6.dp)),
+                        .fillMaxSize(),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val showImg = imageBitmap != null && settings.showSymbols
+                    val showImg = !imageUrl.isNullOrBlank() && settings.showSymbols
                     val showLbl = settings.showLabels
 
                     if (settings.labelAtTop && showImg && showLbl) {
@@ -346,8 +327,8 @@ fun PhraseGridItem(
                         val effectiveLarge = if (phraseFontSize != TextUnit.Unspecified) baseLarge.copy(fontSize = phraseFontSize) else baseLarge
                         Text(text = item.text, style = effectiveLarge, color = contentColor)
                         
-                        androidx.compose.foundation.Image(
-                            bitmap = imageBitmap!!,
+                        AsyncImage(
+                            model = imageUrl,
                             contentDescription = item.text,
                             contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(4.dp)
@@ -355,8 +336,8 @@ fun PhraseGridItem(
                     } else {
                         // Normal order (Image at Top)
                         if (showImg) {
-                            androidx.compose.foundation.Image(
-                                bitmap = imageBitmap!!,
+                            AsyncImage(
+                                model = imageUrl,
                                 contentDescription = item.text,
                                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                                 modifier = Modifier.weight(1f).fillMaxWidth().padding(4.dp)
@@ -375,14 +356,14 @@ fun PhraseGridItem(
                 // Show material-style move up / move down / delete buttons
                 Column(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) {
                     IconButton(onClick = { if (index > 0) onMove?.invoke(index, index - 1) }) {
-                        Icon(imageVector = Icons.Filled.ArrowDropUp, contentDescription = moveUpLabel, tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(imageVector = Icons.Filled.ArrowDropUp, contentDescription = moveUpLabel, tint = contentColor)
                     }
                     IconButton(onClick = { if (index < total - 1) onMove?.invoke(index, index + 1) }) {
-                        Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = moveDownLabel, tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = moveDownLabel, tint = contentColor)
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     IconButton(onClick = { onDelete?.invoke() }) {
-                        Icon(imageVector = Icons.Filled.Close, contentDescription = deleteLabel, tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(imageVector = Icons.Filled.Close, contentDescription = deleteLabel, tint = contentColor)
                     }
                 }
             }

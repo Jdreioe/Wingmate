@@ -4,6 +4,7 @@ import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
@@ -34,10 +35,85 @@ class BoardSetUseCase(
         return boardSet.boardIds.mapNotNull { boardRepository.getBoard(it) }
     }
 
+    suspend fun loadBoardSetGraph(boardSetId: String): BoardSetGraph? {
+        val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
+        val boards = boardSet.boardIds.mapNotNull { boardRepository.getBoard(it) }
+        return BoardSetGraph(boardSet = boardSet, boards = boards)
+    }
+
+    /**
+     * Validate and persist a complete editor draft. The domain serialization is
+     * unchanged; this method is the single commit boundary used by the UI.
+     */
+    suspend fun saveBoardSetGraph(graph: BoardSetGraph): Result<BoardSetGraph> = runCatching {
+        val canonicalGraph = graph.canonicalizeBoardLinks()
+        validateGraph(canonicalGraph)
+        val now = Clock.System.now().toEpochMilliseconds()
+        val updatedSet = canonicalGraph.boardSet.copy(updatedAt = now)
+        val previousSet = boardSetRepository.getBoardSet(canonicalGraph.boardSet.id)
+        val previousBoards = previousSet?.boardIds
+            ?.mapNotNull { boardRepository.getBoard(it) }
+            .orEmpty()
+        val newBoardIds = canonicalGraph.boards.map { it.id }.toSet()
+        val removedBoardIds = previousSet?.boardIds.orEmpty().filterNot { it in newBoardIds }
+
+        try {
+            canonicalGraph.boards.forEach { boardRepository.saveBoard(it) }
+            boardSetRepository.saveBoardSet(updatedSet)
+            removedBoardIds.forEach { boardRepository.deleteBoard(it) }
+        } catch (error: Throwable) {
+            previousBoards.forEach { boardRepository.saveBoard(it) }
+            previousSet?.let { boardSetRepository.saveBoardSet(it) }
+            newBoardIds.filterNot { id -> previousBoards.any { it.id == id } }
+                .forEach { boardRepository.deleteBoard(it) }
+            throw error
+        }
+        canonicalGraph.copy(boardSet = updatedSet)
+    }
+
+    suspend fun deleteBoardSet(boardSetId: String) {
+        val graph = loadBoardSetGraph(boardSetId) ?: return
+        graph.boards.forEach { boardRepository.deleteBoard(it.id) }
+        boardSetRepository.deleteBoardSet(boardSetId)
+    }
+
+    suspend fun duplicateBoardSet(boardSetId: String): ObfBoardSet? {
+        val source = loadBoardSetGraph(boardSetId) ?: return null
+        val now = Clock.System.now().toEpochMilliseconds()
+        val newSetId = generateId("set")
+        val idMap = source.boards.associate { it.id to generateId("board") }
+        val copiedBoards = source.boards.map { board ->
+            val copiedButtons = board.buttons.map { button ->
+                val targetId = button.loadBoard?.id
+                button.copy(
+                    loadBoard = button.loadBoard?.copy(
+                        id = targetId?.let(idMap::get) ?: targetId
+                    )
+                )
+            }
+            board.copy(
+                id = idMap.getValue(board.id),
+                name = board.name,
+                buttons = copiedButtons
+            )
+        }
+        val copiedSet = source.boardSet.copy(
+            id = newSetId,
+            name = "${source.boardSet.name} (copy)",
+            rootBoardId = idMap.getValue(source.boardSet.rootBoardId),
+            boardIds = source.boardSet.boardIds.mapNotNull(idMap::get),
+            isLocked = false,
+            createdAt = now,
+            updatedAt = now
+        )
+        return saveBoardSetGraph(BoardSetGraph(copiedSet, copiedBoards)).getOrThrow().boardSet
+    }
+
     suspend fun createBoardSet(
         name: String,
         rows: Int,
-        columns: Int
+        columns: Int,
+        rootBoardName: String = "Home"
     ): ObfBoardSet {
         val now = Clock.System.now().toEpochMilliseconds()
         val boardId = generateId("board")
@@ -49,7 +125,7 @@ class BoardSetUseCase(
         val board = ObfBoard(
             format = "open-board-0.1",
             id = boardId,
-            name = "Hjem",
+            name = rootBoardName,
             grid = ObfGrid(
                 rows = normalizedRows,
                 columns = normalizedColumns,
@@ -351,5 +427,27 @@ class BoardSetUseCase(
     private fun generateId(prefix: String): String {
         val now = Clock.System.now().toEpochMilliseconds()
         return "${prefix}_${now}_${Random.nextInt(1000, 9999)}"
+    }
+
+    private fun validateGraph(graph: BoardSetGraph) {
+        val boardIds = graph.boards.map { it.id }
+        require(boardIds.size == boardIds.toSet().size) { "Board IDs must be unique." }
+        require(graph.boardSet.rootBoardId in boardIds) { "The root board must belong to the board set." }
+        require(graph.boardSet.boardIds.toSet() == boardIds.toSet()) { "Board set membership is inconsistent." }
+
+        graph.boards.forEach { board ->
+            val grid = board.grid ?: return@forEach
+            require(grid.rows > 0 && grid.columns > 0) { "Board grids must have positive dimensions." }
+            require(grid.order.size == grid.rows) { "Board grid row count is inconsistent." }
+            require(grid.order.all { it.size == grid.columns }) { "Board grid column count is inconsistent." }
+            val buttonIds = board.buttons.map { it.id }.toSet()
+            require(grid.order.flatten().filterNotNull().all { it in buttonIds }) {
+                "Board grid references a missing button."
+            }
+            board.buttons.forEach { button ->
+                val targetId = button.loadBoard?.id
+                require(targetId == null || targetId in boardIds) { "A board link points outside the board set." }
+            }
+        }
     }
 }

@@ -18,11 +18,14 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
+import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.StartupMode
+import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,6 +44,7 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
     val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
     val settingsStateManager = remember(koin) { koin.getOrNull<SettingsStateManager>() }
     val featureUsageReporter = remember(koin) { koin.getOrNull<FeatureUsageReporter>() }
+    val boardSetUseCase = remember(koin) { koin.getOrNull<BoardSetUseCase>() }
 
     // Selected tab
     var selectedTab by remember { mutableStateOf(SettingsTab.Speech) }
@@ -71,9 +75,11 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
     var usageLoggingEnabled by remember { mutableStateOf(false) }
 
     // --- General section state ---
-    var autoUpdateEnabled by remember { mutableStateOf(true) }
     var featureUsageReportingEnabled by remember { mutableStateOf(false) }
     var partnerWindowEnabled by remember { mutableStateOf(false) }
+    var startupMode by remember { mutableStateOf(StartupMode.Keyboard) }
+    var startupBoardSetId by remember { mutableStateOf<String?>(null) }
+    var availableBoardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
 
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
@@ -110,9 +116,13 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
         }
         useSystemTts = s.useSystemTts
         virtualMic = s.virtualMicEnabled
-        autoUpdateEnabled = s.autoUpdateEnabled
         featureUsageReportingEnabled = s.featureUsageReportingEnabled
         partnerWindowEnabled = s.partnerWindowEnabled
+        startupMode = s.startupMode
+        startupBoardSetId = s.startupBoardSetId
+        availableBoardSets = withContext(Dispatchers.Default) {
+            runCatching { boardSetUseCase?.listBoardSets().orEmpty() }.getOrDefault(emptyList())
+        }
         showLabels = s.showLabels
         showSymbols = s.showSymbols
         labelAtTop = s.labelAtTop
@@ -265,8 +275,13 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
                                 onUsageLoggingChange = { checked -> usageLoggingEnabled = checked; updateSettings { it.copy(usageLoggingEnabled = checked) } }
                             )
                             SettingsTab.General -> GeneralSection(
-                                autoUpdateEnabled = autoUpdateEnabled,
-                                onAutoUpdateChange = { checked -> autoUpdateEnabled = checked; updateSettings { it.copy(autoUpdateEnabled = checked) } },
+                                startupMode = startupMode,
+                                startupBoardSetId = startupBoardSetId,
+                                availableBoardSets = availableBoardSets,
+                                onStartupModeChange = { mode ->
+                                    startupMode = mode
+                                },
+                                onStartupBoardSetChange = { startupBoardSetId = it },
                                 featureUsageReportingEnabled = featureUsageReportingEnabled,
                                 onFeatureReportingChange = { checked ->
                                     featureUsageReportingEnabled = checked
@@ -306,7 +321,9 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
                             useCase.update(current.copy(
                                 useSystemTts = useSystemTts,
                                 virtualMicEnabled = virtualMic,
-                                featureUsageReportingEnabled = featureUsageReportingEnabled
+                                featureUsageReportingEnabled = featureUsageReportingEnabled,
+                                startupMode = startupMode,
+                                startupBoardSetId = startupBoardSetId
                             ))
                         }
                     }
@@ -562,24 +579,97 @@ private fun AccessibilitySection(
 
 // ─── General Tab ─────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GeneralSection(
-    autoUpdateEnabled: Boolean,
-    onAutoUpdateChange: (Boolean) -> Unit,
+    startupMode: StartupMode,
+    startupBoardSetId: String?,
+    availableBoardSets: List<ObfBoardSet>,
+    onStartupModeChange: (StartupMode) -> Unit,
+    onStartupBoardSetChange: (String?) -> Unit,
     featureUsageReportingEnabled: Boolean,
     onFeatureReportingChange: (Boolean) -> Unit,
     partnerWindowEnabled: Boolean,
     partnerDeviceConnected: Boolean,
     onPartnerWindowChange: (Boolean) -> Unit
 ) {
-    SectionHeader("Updates & Analytics")
-
-    SettingsCheckbox(
-        checked = autoUpdateEnabled,
-        onCheckedChange = onAutoUpdateChange,
-        title = stringResource(Res.string.ui_settings_auto_updates_title),
-        description = stringResource(Res.string.ui_settings_auto_updates_desc)
+    SectionHeader(stringResource(Res.string.ui_settings_startup_mode_title))
+    Text(
+        stringResource(Res.string.ui_settings_startup_mode_desc),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
     )
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = startupMode == StartupMode.Keyboard,
+            onClick = { onStartupModeChange(StartupMode.Keyboard) },
+            label = { Text(stringResource(Res.string.ui_settings_startup_mode_keyboard)) },
+            leadingIcon = { Icon(Icons.Filled.Keyboard, contentDescription = null, modifier = Modifier.size(18.dp)) },
+            modifier = Modifier.weight(1f)
+        )
+        FilterChip(
+            selected = startupMode == StartupMode.Screens,
+            onClick = { onStartupModeChange(StartupMode.Screens) },
+            label = { Text(stringResource(Res.string.ui_settings_startup_mode_screens)) },
+            leadingIcon = { Icon(Icons.Filled.GridView, contentDescription = null, modifier = Modifier.size(18.dp)) },
+            modifier = Modifier.weight(1f)
+        )
+    }
+
+    if (startupMode == StartupMode.Screens) {
+        var targetExpanded by remember { mutableStateOf(false) }
+        val selectedName = availableBoardSets
+            .firstOrNull { it.id == startupBoardSetId }
+            ?.name
+            ?: stringResource(Res.string.ui_settings_startup_screen_library)
+
+        Spacer(modifier = Modifier.height(12.dp))
+        ExposedDropdownMenuBox(
+            expanded = targetExpanded,
+            onExpandedChange = { targetExpanded = it }
+        ) {
+            OutlinedTextField(
+                value = selectedName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text(stringResource(Res.string.ui_settings_startup_screen_title)) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = targetExpanded) },
+                modifier = Modifier.fillMaxWidth().menuAnchor(
+                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                    enabled = true
+                )
+            )
+            ExposedDropdownMenu(
+                expanded = targetExpanded,
+                onDismissRequest = { targetExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.ui_settings_startup_screen_library)) },
+                    onClick = {
+                        onStartupBoardSetChange(null)
+                        targetExpanded = false
+                    }
+                )
+                availableBoardSets.forEach { boardSet ->
+                    DropdownMenuItem(
+                        text = { Text(boardSet.name) },
+                        onClick = {
+                            onStartupBoardSetChange(boardSet.id)
+                            targetExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+    SectionHeader(stringResource(Res.string.ui_settings_analytics_title))
+
     SettingsCheckbox(
         checked = featureUsageReportingEnabled,
         onCheckedChange = onFeatureReportingChange,

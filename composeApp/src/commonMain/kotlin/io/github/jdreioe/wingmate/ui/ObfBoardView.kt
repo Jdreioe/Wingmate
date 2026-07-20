@@ -14,25 +14,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
+import coil3.compose.AsyncImage
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.sp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
-import java.net.URL
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
@@ -48,13 +50,26 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.draw.scale
 import io.github.jdreioe.wingmate.domain.AacLogger
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.withLanguageOverride
+import io.github.jdreioe.wingmate.application.VoiceUseCase
 import org.koin.compose.koinInject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.board_workspace_clear_sentence
+import wingmatekmp.composeapp.generated.resources.board_workspace_delete_last
+import wingmatekmp.composeapp.generated.resources.board_workspace_save_phrase
+import wingmatekmp.composeapp.generated.resources.board_workspace_speak_sentence
 
-// Simple in-memory cache for downloaded images
-private val imageCache = mutableMapOf<String, ByteArray>()
+private data class BoardGridItem(
+    val row: Int,
+    val column: Int,
+    val rowSpan: Int,
+    val columnSpan: Int,
+    val button: ObfButton?
+)
 
 @Composable
 fun ObfBoardView(
@@ -65,8 +80,13 @@ fun ObfBoardView(
     isEditMode: Boolean = false,
     selectedButtons: List<Pair<ObfButton, ImageBitmap?>> = emptyList(),
     onSpeakSentence: () -> Unit = {},
+    onSaveSentence: () -> Unit = {},
+    isSaveSentenceEnabled: Boolean = selectedButtons.isNotEmpty(),
     onDeleteLast: () -> Unit = {},
-    onClearSentence: () -> Unit = {}
+    onClearSentence: () -> Unit = {},
+    showMessageBar: Boolean = !isEditMode,
+    showSentenceText: Boolean = false,
+    onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null
 ) {
     val settings by rememberReactiveSettings()
     val imagesById = remember(board) { board.images.associateBy { it.id } }
@@ -83,49 +103,66 @@ fun ObfBoardView(
             modifier = modifier.padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Symbol Bar (Message Window)
-            SymbolBar(
-                selectedButtons = selectedButtons,
-                imagesById = imagesById,
-                extractedImages = extractedImages,
-                onSpeak = onSpeakSentence,
-                onDelete = onDeleteLast,
-                onClear = onClearSentence,
-                modifier = Modifier.fillMaxWidth().height(100.dp)
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
+            if (showMessageBar) {
+                SymbolBar(
+                    selectedButtons = selectedButtons,
+                    imagesById = imagesById,
+                    extractedImages = extractedImages,
+                    onSpeak = onSpeakSentence,
+                    onSave = onSaveSentence,
+                    isSaveEnabled = isSaveSentenceEnabled,
+                    onDelete = onDeleteLast,
+                    onClear = onClearSentence,
+                    showSentenceText = showSentenceText,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (showSentenceText) 260.dp else 100.dp)
+                )
 
-            grid.order.forEachIndexed { rowIndex, row ->
-                Row(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    for (colIndex in 0 until columns) {
-                        val buttonId = row.getOrNull(colIndex)
-                        val button = buttonId?.let { buttonsById[it] }
-                        
-                        // Filter hidden buttons unless in edit mode
-                        val isVisible = button != null && (!button.hidden || isEditMode)
-                        
-                        Box(
-                            modifier = Modifier.weight(1f).fillMaxHeight()
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            val gridItems = remember(grid, buttonsById) {
+                buildBoardGridItems(grid, buttonsById)
+            }
+            SpanningBoardGrid(
+                rows = rows,
+                columns = columns,
+                items = gridItems,
+                modifier = Modifier.weight(1f).fillMaxWidth()
+            ) { item ->
+                val button = item.button
+                val isVisible = button != null && (!button.hidden || isEditMode)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (button != null && isVisible) {
+                        val image = button.imageId?.let { imagesById[it] }
+                        ObfButtonItem(
+                            button = button,
+                            image = image,
+                            extractedImageBytes = button.imageId?.let {
+                                image?.path?.let { path -> extractedImages[path] }
+                            },
+                            onClick = {
+                                onCellClick?.invoke(item.row, item.column, button)
+                                    ?: onButtonClick(button)
+                            },
+                            isEditMode = isEditMode
+                        )
+                    } else if (isEditMode && button == null) {
+                        OutlinedCard(
+                            modifier = Modifier.fillMaxSize(),
+                            onClick = { onCellClick?.invoke(item.row, item.column, null) }
                         ) {
-                            if (button != null && isVisible) {
-                                val image = button.imageId?.let { imagesById[it] }
-                                ObfButtonItem(
-                                    button = button,
-                                    image = image,
-                                    extractedImageBytes = button.imageId?.let { 
-                                        image?.path?.let { path -> extractedImages[path] }
-                                    },
-                                    onClick = { onButtonClick(button) },
-                                    isEditMode = isEditMode
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "+",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
-                            } else {
-                                Spacer(modifier = Modifier.fillMaxSize())
                             }
                         }
+                    } else {
+                        Spacer(modifier = Modifier.fillMaxSize())
                     }
                 }
             }
@@ -164,14 +201,113 @@ fun ObfBoardView(
     }
 }
 
+private fun buildBoardGridItems(
+    grid: io.github.jdreioe.wingmate.domain.obf.ObfGrid,
+    buttonsById: Map<String, ObfButton>
+): List<BoardGridItem> {
+    val rows = grid.rows.coerceAtLeast(1)
+    val columns = grid.columns.coerceAtLeast(1)
+    val order = List(rows) { row ->
+        List(columns) { column -> grid.order.getOrNull(row)?.getOrNull(column) }
+    }
+    val visited = mutableSetOf<Pair<Int, Int>>()
+    return buildList {
+        for (row in 0 until rows) {
+            for (column in 0 until columns) {
+                if ((row to column) in visited) continue
+                val buttonId = order[row][column]
+                if (buttonId == null) {
+                    visited += row to column
+                    add(BoardGridItem(row, column, 1, 1, null))
+                    continue
+                }
+                val occurrences = buildList {
+                    for (candidateRow in 0 until rows) {
+                        for (candidateColumn in 0 until columns) {
+                            if (order[candidateRow][candidateColumn] == buttonId) {
+                                add(candidateRow to candidateColumn)
+                            }
+                        }
+                    }
+                }
+                val minRow = occurrences.minOf { it.first }
+                val maxRow = occurrences.maxOf { it.first }
+                val minColumn = occurrences.minOf { it.second }
+                val maxColumn = occurrences.maxOf { it.second }
+                val isRectangle = (minRow..maxRow).all { candidateRow ->
+                    (minColumn..maxColumn).all { candidateColumn ->
+                        order[candidateRow][candidateColumn] == buttonId
+                    }
+                }
+                if (isRectangle) {
+                    visited += occurrences
+                    add(
+                        BoardGridItem(
+                            row = minRow,
+                            column = minColumn,
+                            rowSpan = maxRow - minRow + 1,
+                            columnSpan = maxColumn - minColumn + 1,
+                            button = buttonsById[buttonId]
+                        )
+                    )
+                } else {
+                    visited += row to column
+                    add(BoardGridItem(row, column, 1, 1, buttonsById[buttonId]))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpanningBoardGrid(
+    rows: Int,
+    columns: Int,
+    items: List<BoardGridItem>,
+    modifier: Modifier = Modifier,
+    content: @Composable (BoardGridItem) -> Unit
+) {
+    Layout(
+        modifier = modifier,
+        content = {
+            items.forEach { item -> content(item) }
+        }
+    ) { measurables, constraints ->
+        val horizontalGap = 4.dp.roundToPx()
+        val verticalGap = 8.dp.roundToPx()
+        val availableWidth = (constraints.maxWidth - horizontalGap * (columns - 1)).coerceAtLeast(0)
+        val availableHeight = (constraints.maxHeight - verticalGap * (rows - 1)).coerceAtLeast(0)
+        val cellWidth = availableWidth / columns
+        val cellHeight = availableHeight / rows
+        val placeables = measurables.mapIndexed { index, measurable ->
+            val item = items[index]
+            val width = cellWidth * item.columnSpan + horizontalGap * (item.columnSpan - 1)
+            val height = cellHeight * item.rowSpan + verticalGap * (item.rowSpan - 1)
+            measurable.measure(Constraints.fixed(width.coerceAtLeast(0), height.coerceAtLeast(0)))
+        }
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            placeables.forEachIndexed { index, placeable ->
+                val item = items[index]
+                placeable.placeRelative(
+                    x = item.column * (cellWidth + horizontalGap),
+                    y = item.row * (cellHeight + verticalGap)
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun SymbolBar(
     selectedButtons: List<Pair<ObfButton, ImageBitmap?>>,
     imagesById: Map<String, io.github.jdreioe.wingmate.domain.obf.ObfImage>,
     extractedImages: Map<String, ByteArray>,
     onSpeak: () -> Unit,
+    onSave: () -> Unit,
+    isSaveEnabled: Boolean,
     onDelete: () -> Unit,
     onClear: () -> Unit,
+    showSentenceText: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -179,59 +315,88 @@ fun SymbolBar(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            LazyRow(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                items(selectedButtons) { (button, bitmap) ->
-                    val resolvedBitmap = remember(button, bitmap) {
-                        bitmap ?: button.imageId?.let { id ->
-                            imagesById[id]?.path?.let { path ->
-                                extractedImages[path]?.toComposeImageBitmap()
-                            }
-                        }
-                    }
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(60.dp)
-                    ) {
-                        if (resolvedBitmap != null) {
-                            Image(
-                                bitmap = resolvedBitmap,
-                                contentDescription = null,
-                                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp))
-                            )
-                        }
-                        Text(
-                            text = button.label ?: "",
-                            style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+        Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            if (showSentenceText) {
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Text(
+                        text = selectedButtons.joinToString(" ") { (button, _) ->
+                            (button.label ?: button.vocalization).orEmpty()
+                        },
+                        fontSize = 48.sp,
+                        lineHeight = 56.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, end = 64.dp, top = 4.dp, bottom = 4.dp)
+                    )
                 }
             }
 
-            VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                FilledIconButton(
-                    onClick = onSpeak,
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
+            Row(
+                modifier = if (showSentenceText) {
+                    Modifier.fillMaxWidth().height(80.dp)
+                } else {
+                    Modifier.weight(1f).fillMaxWidth()
+                },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LazyRow(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Speak")
+                    items(selectedButtons) { (button, bitmap) ->
+                        val resolvedBitmap = remember(button, bitmap) {
+                            bitmap ?: button.imageId?.let { id ->
+                                imagesById[id]?.path?.let { path ->
+                                    extractedImages[path]?.toComposeImageBitmap()
+                                }
+                            }
+                        }
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(60.dp)
+                        ) {
+                            if (resolvedBitmap != null) {
+                                Image(
+                                    bitmap = resolvedBitmap,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp))
+                                )
+                            }
+                            Text(
+                                text = button.label ?: "",
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete Last")
-                }
-                IconButton(onClick = onClear) {
-                    Icon(Icons.Default.Clear, contentDescription = "Clear All")
+
+                VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FilledIconButton(
+                        onClick = onSpeak,
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = stringResource(Res.string.board_workspace_speak_sentence))
+                    }
+                    IconButton(onClick = onSave, enabled = isSaveEnabled) {
+                        Icon(Icons.Default.Save, contentDescription = stringResource(Res.string.board_workspace_save_phrase))
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.board_workspace_delete_last))
+                    }
+                    IconButton(onClick = onClear) {
+                        Icon(Icons.Default.Clear, contentDescription = stringResource(Res.string.board_workspace_clear_sentence))
+                    }
                 }
             }
         }
@@ -247,6 +412,7 @@ fun ObfButtonItem(
     isEditMode: Boolean = false
 ) {
     val speechService: SpeechService = koinInject()
+    val voiceUseCase: VoiceUseCase = koinInject()
     val aacLogger: AacLogger = koinInject()
     val settings by rememberReactiveSettings()
     
@@ -274,7 +440,13 @@ fun ObfButtonItem(
             if (settings.auditoryFishingEnabled) {
                 val label = button.label ?: button.vocalization ?: ""
                 if (label.isNotBlank()) {
-                    fishingScope.launch { runCatching { speechService.speak(label, rate = 0.8) } }
+                    fishingScope.launch {
+                        runCatching {
+                            val voice = voiceUseCase.selected()
+                                .withLanguageOverride(button.locale)
+                            speechService.speak(label, voice, voice?.pitch, rate = 0.8)
+                        }
+                    }
                 }
             }
             
@@ -314,10 +486,11 @@ fun ObfButtonItem(
         button.borderColor?.let { runCatching { parseHexToColor(it) }.getOrNull() }
     }
     
-    val contentColor = if (settings.highContrastMode) highContrastContent else MaterialTheme.colorScheme.onSurface
-    
-    // State for async-loaded image
-    var urlLoadedBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    val contentColor = when {
+        settings.highContrastMode -> highContrastContent
+        button.backgroundColor != null -> contrastingContentColor(bgColor)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     
     // Try to load image from various sources synchronously first
     val syncBitmap = remember(image, extractedImageBytes) {
@@ -332,24 +505,8 @@ fun ObfButtonItem(
         }
     }
     
-    val imageUrl = image?.url
-    LaunchedEffect(imageUrl) {
-        if (syncBitmap == null && imageUrl != null && imageUrl.startsWith("http")) {
-            urlLoadedBitmap = withContext(Dispatchers.IO) {
-                runCatching {
-                    val cachedBytes = imageCache[imageUrl]
-                    val bytes = if (cachedBytes != null) cachedBytes else {
-                        val downloaded = URL(imageUrl).readBytes()
-                        imageCache[imageUrl] = downloaded
-                        downloaded
-                    }
-                    bytes.toComposeImageBitmap()
-                }.getOrNull()
-            }
-        }
-    }
-    
-    val imageBitmap = syncBitmap ?: urlLoadedBitmap
+    val imageBitmap = syncBitmap
+    val imageModel = image?.url ?: image?.path
     
     Card(
         modifier = Modifier
@@ -423,7 +580,7 @@ fun ObfButtonItem(
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxSize()
             ) {
-                val showImg = imageBitmap != null && settings.showSymbols
+                val showImg = settings.showSymbols && (imageBitmap != null || !imageModel.isNullOrBlank())
                 val showLbl = settings.showLabels && !(button.label.isNullOrBlank() && button.vocalization.isNullOrBlank())
 
                 if (settings.labelAtTop && showImg && showLbl) {
@@ -438,19 +595,19 @@ fun ObfButtonItem(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Image(
-                        bitmap = imageBitmap!!,
+                    BoardSymbolImage(
+                        bitmap = imageBitmap,
+                        model = imageModel,
                         contentDescription = button.label,
-                        contentScale = ContentScale.Fit,
                         modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
                     )
                 } else {
                     // Normal order (Image at Top)
                     if (showImg) {
-                        Image(
-                            bitmap = imageBitmap!!,
+                        BoardSymbolImage(
+                            bitmap = imageBitmap,
+                            model = imageModel,
                             contentDescription = button.label,
-                            contentScale = ContentScale.Fit,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
                         )
                     }
@@ -461,12 +618,36 @@ fun ObfButtonItem(
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             textAlign = TextAlign.Center,
                             color = contentColor,
-                            maxLines = if (imageBitmap != null) 1 else 2,
+                            maxLines = if (showImg) 1 else 2,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BoardSymbolImage(
+    bitmap: ImageBitmap?,
+    model: String?,
+    contentDescription: String?,
+    modifier: Modifier
+) {
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Fit,
+            modifier = modifier
+        )
+    } else {
+        AsyncImage(
+            model = model,
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Fit,
+            modifier = modifier
+        )
     }
 }

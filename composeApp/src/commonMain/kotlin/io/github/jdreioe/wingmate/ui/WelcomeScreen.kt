@@ -2,6 +2,9 @@ package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -16,20 +19,27 @@ import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
+import io.github.jdreioe.wingmate.domain.StartupMode
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
 import wingmatekmp.composeapp.generated.resources.Res
 import wingmatekmp.composeapp.generated.resources.common_next
+import wingmatekmp.composeapp.generated.resources.common_back
 import wingmatekmp.composeapp.generated.resources.welcome_importing_board
+import wingmatekmp.composeapp.generated.resources.welcome_start_mode_keyboard_desc
+import wingmatekmp.composeapp.generated.resources.welcome_start_mode_keyboard_title
+import wingmatekmp.composeapp.generated.resources.welcome_start_mode_screens_desc
+import wingmatekmp.composeapp.generated.resources.welcome_start_mode_screens_title
+import wingmatekmp.composeapp.generated.resources.welcome_start_mode_subtitle
+import wingmatekmp.composeapp.generated.resources.welcome_start_mode_title
 import wingmatekmp.composeapp.generated.resources.welcome_subtitle
 import wingmatekmp.composeapp.generated.resources.welcome_title
 import wingmatekmp.composeapp.generated.resources.welcome_ui_settings
 
 @Composable
 fun WelcomeScreen(
-    onContinue: () -> Unit,
-    onCreateFromScratch: (() -> Unit)? = null
+    onComplete: (startupMode: StartupMode, createScreen: Boolean) -> Unit
 ) {
     val enableBoardImport = !isReleaseBuild()
     val koin = getKoin()
@@ -41,6 +51,8 @@ fun WelcomeScreen(
     }
 
     var step by remember { mutableStateOf(0) }
+    var startupMode by remember { mutableStateOf(StartupMode.Keyboard) }
+    var createScreenOnComplete by remember { mutableStateOf(false) }
     var showUiSettings by remember { mutableStateOf(false) }
     
     // Import state
@@ -74,11 +86,26 @@ fun WelcomeScreen(
                         Text(stringResource(Res.string.welcome_ui_settings))
                     }
                     Spacer(modifier = Modifier.height(24.dp))
-                    Button(onClick = { step = if (enableBoardImport) 1 else 2 }) { Text(stringResource(Res.string.common_next)) }
+                    Button(onClick = { step = 1 }) { Text(stringResource(Res.string.common_next)) }
                 }
             }
         }
         1 -> {
+            StartupModeSelectionScreen(
+                onKeyboard = {
+                    startupMode = StartupMode.Keyboard
+                    createScreenOnComplete = false
+                    step = if (enableBoardImport) 2 else 3
+                },
+                onScreens = {
+                    startupMode = StartupMode.Screens
+                    createScreenOnComplete = false
+                    step = if (enableBoardImport) 2 else 3
+                },
+                onBack = { step = 0 }
+            )
+        }
+        2 -> {
             // Import Board Options
             if (isImporting) {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -107,7 +134,7 @@ fun WelcomeScreen(
                                         "mode" to "classic"
                                     )
                                     // Move to next step if successful
-                                    step = 2
+                                    step = 3
                                 } else {
                                     featureUsageReporter?.reportEvent(
                                         FeatureUsageEvents.BOARD_IMPORT_FAILED,
@@ -143,7 +170,7 @@ fun WelcomeScreen(
                                         FeatureUsageEvents.BOARD_IMPORT_COMPLETED,
                                         "mode" to "modern"
                                     )
-                                    step = 2
+                                    step = 3
                                 } else {
                                     featureUsageReporter?.reportEvent(
                                         FeatureUsageEvents.BOARD_IMPORT_FAILED,
@@ -168,50 +195,101 @@ fun WelcomeScreen(
                             FeatureUsageEvents.BOARD_SETUP_CHOICE,
                             "mode" to "scratch"
                         )
-                        onCreateFromScratch?.invoke()
+                        createScreenOnComplete = true
+                        step = 3
                     },
                     onSkip = {
                         featureUsageReporter?.reportEvent(
                             FeatureUsageEvents.BOARD_SETUP_CHOICE,
                             "mode" to "skip"
                         )
-                        step = 2
-                    }
+                        step = 3
+                    },
+                    showClassic = startupMode == StartupMode.Screens,
+                    showModern = startupMode == StartupMode.Keyboard,
+                    showCreateFromScratch = startupMode == StartupMode.Screens
                 )
             }
         }
-        2 -> {
+        3 -> {
             // Voice engine selector screen
             VoiceEngineSelectorScreen(
-                onNext = { step = 4 }, // Skip to voice selection if System TTS
-                onCancel = { step = if (enableBoardImport) 1 else 0 }, // Back to Import or Intro
-                onAzureSelected = { step = 3 } // Go to Azure config if Azure selected
-            )
-        }
-        3 -> {
-            // Azure configuration screen
-            AzureConfigScreen(
-                onNext = { step = 4 }, // Go to voice selection after Azure config
-                onBack = { step = 2 } // Back to TTS engine selection
+                onNext = { step = 5 }, // Skip to voice selection if System TTS
+                onCancel = { step = if (enableBoardImport) 2 else 1 },
+                onAzureSelected = { step = 4 }
             )
         }
         4 -> {
-            // Full-screen voice selector
-            VoiceSelectionFullScreen(
-                onNext = { step = 5 }, // Go to test voice screen after voice selection
-                onCancel = { step = 2 } // Back to Engine selector
+            // Azure configuration screen
+            AzureConfigScreen(
+                onNext = { step = 5 },
+                onBack = { step = 3 }
             )
         }
         5 -> {
+            // Full-screen voice selector
+            VoiceSelectionFullScreen(
+                onNext = { step = 6 },
+                onCancel = { step = 3 }
+            )
+        }
+        6 -> {
             // Test voice screen
             TestVoiceScreen(
-                onNext = { onContinue() }, // Complete setup after testing voice
-                onBack = { step = 4 } // Back to voice selection
+                onNext = { onComplete(startupMode, createScreenOnComplete) },
+                onBack = { step = 5 }
             )
         }
     }
 
     if (showUiSettings) {
         SettingsScreen(onDismiss = { showUiSettings = false })
+    }
+}
+
+@Composable
+private fun StartupModeSelectionScreen(
+    onKeyboard: () -> Unit,
+    onScreens: () -> Unit,
+    onBack: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                stringResource(Res.string.welcome_start_mode_title),
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(Res.string.welcome_start_mode_subtitle),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(32.dp))
+            ImportOptionCard(
+                title = stringResource(Res.string.welcome_start_mode_keyboard_title),
+                description = stringResource(Res.string.welcome_start_mode_keyboard_desc),
+                icon = Icons.Default.Keyboard,
+                onClick = onKeyboard
+            )
+            Spacer(Modifier.height(16.dp))
+            ImportOptionCard(
+                title = stringResource(Res.string.welcome_start_mode_screens_title),
+                description = stringResource(Res.string.welcome_start_mode_screens_desc),
+                icon = Icons.Default.GridView,
+                onClick = onScreens
+            )
+            Spacer(Modifier.height(24.dp))
+            TextButton(onClick = onBack) {
+                Text(stringResource(Res.string.common_back))
+            }
+        }
     }
 }

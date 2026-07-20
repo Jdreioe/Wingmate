@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -40,7 +41,10 @@ fun FullScreenDisplay(onClose: (() -> Unit)? = null) {
     val handleClose: () -> Unit = onClose ?: { DisplayWindowBus.close() }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        // safeDrawingPadding keeps the back arrow below the status bar (Android
+        // edge-to-edge) and the text clear of the navigation bar. On external
+        // displays and desktop these insets are zero, so this is a no-op there.
+        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
             // --- Back / close button (own row, never blocked by scroll) ---
             IconButton(
                 onClick = handleClose,

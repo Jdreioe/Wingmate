@@ -22,8 +22,6 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import wingmatekmp.composeapp.generated.resources.Res
 import wingmatekmp.composeapp.generated.resources.common_close
-import wingmatekmp.composeapp.generated.resources.ui_settings_auto_updates_desc
-import wingmatekmp.composeapp.generated.resources.ui_settings_auto_updates_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_feature_reporting_desc
 import wingmatekmp.composeapp.generated.resources.ui_settings_feature_reporting_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_note_scaling_moved
@@ -73,7 +71,6 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
     val featureUsageReporter = koinInject<FeatureUsageReporter>()
 
     var virtualMic by remember { mutableStateOf(false) }
-    var autoUpdateEnabled by remember { mutableStateOf(true) }
     var featureUsageReportingEnabled by remember { mutableStateOf(false) }
     var partnerWindowEnabled by remember { mutableStateOf(false) }
     var showLabels by remember { mutableStateOf(true) }
@@ -103,7 +100,6 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
     LaunchedEffect(Unit) {
         val s = withContext(Dispatchers.Default) { runCatching { settingsUseCase.get() }.getOrNull() ?: Settings() }
         virtualMic = s.virtualMicEnabled
-        autoUpdateEnabled = s.autoUpdateEnabled
         featureUsageReportingEnabled = s.featureUsageReportingEnabled
         partnerWindowEnabled = s.partnerWindowEnabled
         showLabels = s.showLabels
@@ -174,28 +170,6 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
                         Text(stringResource(Res.string.ui_settings_feature_reporting_title), style = MaterialTheme.typography.bodyLarge)
                         Text(
                             stringResource(Res.string.ui_settings_feature_reporting_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // Auto-update setting
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = autoUpdateEnabled,
-                        onCheckedChange = { checked ->
-                            autoUpdateEnabled = checked
-                            updateSettings { it.copy(autoUpdateEnabled = checked) }
-                        }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(Res.string.ui_settings_auto_updates_title), style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            stringResource(Res.string.ui_settings_auto_updates_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -424,4 +398,3 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
         }
     )
 }
-

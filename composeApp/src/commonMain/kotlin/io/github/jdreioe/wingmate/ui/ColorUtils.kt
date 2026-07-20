@@ -1,6 +1,15 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+
+/** Pick whichever of black or white has the stronger WCAG contrast ratio. */
+fun contrastingContentColor(background: Color): Color {
+    val luminance = background.luminance()
+    val contrastWithBlack = (luminance + 0.05f) / 0.05f
+    val contrastWithWhite = 1.05f / (luminance + 0.05f)
+    return if (contrastWithWhite >= contrastWithBlack) Color.White else Color.Black
+}
 
 /**
  * Parse OBF color strings which can be:

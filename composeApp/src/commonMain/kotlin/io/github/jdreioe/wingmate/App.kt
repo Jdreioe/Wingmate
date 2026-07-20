@@ -12,6 +12,8 @@ import io.github.jdreioe.wingmate.ui.PhraseScreen
 import io.github.jdreioe.wingmate.ui.BoardSetManagerScreen
 import io.github.jdreioe.wingmate.ui.AppTheme
 import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.StartupMode
 import org.koin.compose.koinInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -36,20 +38,33 @@ fun App() {
             // Check if welcome flow is completed
             var welcomeCompleted by remember { mutableStateOf<Boolean?>(null) }
             var currentScreen by remember { mutableStateOf<String?>(null) }
-            var initialBoardId by remember { mutableStateOf<String?>(null) }
+            var createBoardSetOnLaunch by remember { mutableStateOf(false) }
+            var startupBoardSetId by remember { mutableStateOf<String?>(null) }
             val scope = rememberCoroutineScope()
 
-            fun completeWelcomeAndNavigate(target: String) {
+            fun routeFor(mode: StartupMode): String = when (mode) {
+                StartupMode.Keyboard -> "phrase"
+                StartupMode.Screens -> "boardsets"
+            }
+
+            fun completeWelcomeAndNavigate(mode: StartupMode, createScreen: Boolean) {
                 scope.launch(Dispatchers.Default) {
-                    val currentSettings = runCatching { settingsRepository.get() }.getOrNull()
-                    currentSettings?.let { settings ->
-                        settingsRepository.update(settings.copy(welcomeFlowCompleted = true))
-                    }
+                    val currentSettings = runCatching { settingsRepository.get() }.getOrNull() ?: Settings()
+                    settingsRepository.update(
+                        currentSettings.copy(
+                            welcomeFlowCompleted = true,
+                            startupMode = mode
+                        )
+                    )
                 }
+                createBoardSetOnLaunch = mode == StartupMode.Screens && createScreen
+                startupBoardSetId = null
+                val target = routeFor(mode)
                 currentScreen = target
                 featureUsageReporter.reportEvent(
                     FeatureUsageEvents.WELCOME_COMPLETED,
-                    "target" to target
+                    "target" to target,
+                    "startup_mode" to mode.name.lowercase()
                 )
             }
             
@@ -58,7 +73,12 @@ fun App() {
                     runCatching { settingsRepository.get() }.getOrNull()
                 }
                 welcomeCompleted = settings?.welcomeFlowCompleted ?: false
-                currentScreen = if (welcomeCompleted == true) "phrase" else "welcome"
+                startupBoardSetId = settings?.startupBoardSetId
+                currentScreen = if (welcomeCompleted == true) {
+                    routeFor(settings?.startupMode ?: StartupMode.Keyboard)
+                } else {
+                    "welcome"
+                }
                 featureUsageReporter.reportEvent(
                     FeatureUsageEvents.APP_STARTED,
                     "welcome_completed" to (welcomeCompleted == true).toString()
@@ -77,24 +97,28 @@ fun App() {
                 when (currentScreen) {
                     "welcome" -> {
                         WelcomeScreen(
-                            onContinue = { completeWelcomeAndNavigate("phrase") },
-                            onCreateFromScratch = { completeWelcomeAndNavigate("boardsets") }
+                            onComplete = ::completeWelcomeAndNavigate
                         )
                     }
                     "phrase" -> {
                         PhraseScreen(
                             onBackToWelcome = { currentScreen = "welcome" },
-                            onOpenBoardSetManager = { currentScreen = "boardsets" },
-                            initialBoardId = initialBoardId
+                            onOpenBoardSetManager = {
+                                createBoardSetOnLaunch = false
+                                startupBoardSetId = null
+                                currentScreen = "boardsets"
+                            }
                         )
                     }
                     "boardsets" -> {
                         BoardSetManagerScreen(
-                            onBack = { currentScreen = "phrase" },
-                            onOpenBoard = { boardId ->
-                                initialBoardId = boardId
+                            onBackToWelcome = { currentScreen = "welcome" },
+                            onBack = {
+                                createBoardSetOnLaunch = false
                                 currentScreen = "phrase"
-                            }
+                            },
+                            createOnLaunch = createBoardSetOnLaunch,
+                            initialBoardSetId = startupBoardSetId
                         )
                     }
                     null -> {

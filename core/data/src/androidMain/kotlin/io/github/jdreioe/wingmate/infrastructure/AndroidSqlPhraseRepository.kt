@@ -70,7 +70,7 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             put("is_hidden", phrase.isHidden)
             put("ordering", ord + 1)
         }
-        db.insert("phrases", null, values)
+        db.insertOrThrow("phrases", null, values)
         return@withContext Phrase(
             id = id, 
             text = phrase.text, 
@@ -80,6 +80,7 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             parentId = phrase.parentId, 
             linkedBoardId = phrase.linkedBoardId,
             createdAt = createdAt,
+            recordingPath = phrase.recordingPath,
             isHidden = phrase.isHidden
         )
     }

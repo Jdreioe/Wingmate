@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.stringResource
@@ -31,7 +32,10 @@ fun ImportOptionsScreen(
     onImportClassic: () -> Unit,
     onImportModern: () -> Unit,
     onCreateFromScratch: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    showClassic: Boolean = true,
+    showModern: Boolean = true,
+    showCreateFromScratch: Boolean = true
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -60,28 +64,33 @@ fun ImportOptionsScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            ImportOptionCard(
-                title = stringResource(Res.string.import_options_classic_title),
-                description = stringResource(Res.string.import_options_classic_desc),
-                onClick = onImportClassic
-            )
+            if (showClassic) {
+                ImportOptionCard(
+                    title = stringResource(Res.string.import_options_classic_title),
+                    description = stringResource(Res.string.import_options_classic_desc),
+                    onClick = onImportClassic,
+                    isRecommended = true
+                )
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            if (showModern) {
+                if (showClassic) Spacer(modifier = Modifier.height(16.dp))
+                ImportOptionCard(
+                    title = stringResource(Res.string.import_options_modern_title),
+                    description = stringResource(Res.string.import_options_modern_desc),
+                    onClick = onImportModern,
+                    isRecommended = true
+                )
+            }
 
-            ImportOptionCard(
-                title = stringResource(Res.string.import_options_modern_title),
-                description = stringResource(Res.string.import_options_modern_desc),
-                onClick = onImportModern,
-                isRecommended = true
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            ImportOptionCard(
-                title = stringResource(Res.string.import_options_scratch_title),
-                description = stringResource(Res.string.import_options_scratch_desc),
-                onClick = onCreateFromScratch
-            )
+            if (showCreateFromScratch) {
+                if (showClassic || showModern) Spacer(modifier = Modifier.height(16.dp))
+                ImportOptionCard(
+                    title = stringResource(Res.string.import_options_scratch_title),
+                    description = stringResource(Res.string.import_options_scratch_desc),
+                    onClick = onCreateFromScratch
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 
@@ -97,7 +106,8 @@ fun ImportOptionCard(
     title: String,
     description: String,
     onClick: () -> Unit,
-    isRecommended: Boolean = false
+    isRecommended: Boolean = false,
+    icon: ImageVector? = null
 ) {
     Card(
         modifier = Modifier
@@ -116,12 +126,26 @@ fun ImportOptionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isRecommended) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    icon?.let {
+                        Icon(
+                            imageVector = it,
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                            tint = if (isRecommended) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isRecommended) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (isRecommended) {
                     Box(
                         modifier = Modifier

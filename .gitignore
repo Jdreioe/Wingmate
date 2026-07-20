@@ -30,6 +30,7 @@ build/
 local.properties
 *.keystore
 *.jks
+service-account.json
 androidApp/build/
 androidApp/**/build/
 androidApp/release/
