@@ -101,6 +101,14 @@
     <string name="board_dialog_destination_page">Destination page</string>
     <string name="board_dialog_choose_page">Choose a page</string>
     <string name="board_dialog_clear_cell">Clear field</string>
+    <string name="board_dialog_special_actions">Special actions</string>
+    <string name="board_dialog_action_spell">Spell a word</string>
+    <string name="board_dialog_action_space">Add a space</string>
+    <string name="board_dialog_action_erase">Erase last character</string>
+    <string name="board_dialog_action_clear">Clear sentence</string>
+    <string name="board_dialog_action_home">Go to home page</string>
+    <string name="board_dialog_action_speak_sentence">Speak sentence</string>
+    <string name="board_dialog_special_actions_help">Tap an action to set what this button does</string>
 
     <string name="language_dialog_title">Language</string>
     <string name="language_filter_languages">Filter languages</string>

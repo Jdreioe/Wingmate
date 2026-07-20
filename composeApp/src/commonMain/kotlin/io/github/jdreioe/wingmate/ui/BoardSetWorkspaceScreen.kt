@@ -1081,13 +1081,14 @@ private fun BoardSetWorkspaceScreen(
             initialLanguage = target.button?.locale,
             availableBoards = activeGraph?.boards.orEmpty().filterNot { it.id == activeBoard.id },
             initialLinkedBoardId = activeGraph?.resolveLinkedBoard(target.button?.loadBoard)?.id,
+            initialAction = target.button?.action,
             availableSpans = availableSpans,
             initialRowSpan = currentSpan.rows,
             initialColumnSpan = currentSpan.columns,
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
             onSave = { label, vocalization, imageUrl, backgroundColor, language, linkedBoardId,
-                       rowSpan, columnSpan ->
+                       rowSpan, columnSpan, action ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
                     updateDraftCell(
@@ -1102,7 +1103,8 @@ private fun BoardSetWorkspaceScreen(
                         language = language,
                         linkedBoardId = linkedBoardId,
                         rowSpan = rowSpan,
-                        columnSpan = columnSpan
+                        columnSpan = columnSpan,
+                        action = action
                     )
                 )
                 editingCell = null
@@ -1306,7 +1308,8 @@ internal fun updateDraftCell(
     language: String?,
     linkedBoardId: String?,
     rowSpan: Int = 1,
-    columnSpan: Int = 1
+    columnSpan: Int = 1,
+    action: String? = null
 ): BoardSetGraph {
     val board = graph.boardsById[boardId] ?: return graph
     val grid = board.grid ?: return graph
@@ -1336,7 +1339,8 @@ internal fun updateDraftCell(
         imageId = imageId,
         loadBoard = linkedBoardId?.let { targetId ->
             ObfLoadBoard(id = targetId, name = graph.boardsById[targetId]?.name)
-        }
+        },
+        action = action?.trim()?.ifBlank { null }
     )
     val buttons = if (existingButton == null) board.buttons + button else board.buttons.map {
         if (it.id == button.id) button else it

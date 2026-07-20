@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -149,6 +150,7 @@ internal fun EditBoardCellDialog(
     availableSpans: List<FieldSpanOption> = listOf(FieldSpanOption(rows = 1, columns = 1)),
     initialRowSpan: Int = 1,
     initialColumnSpan: Int = 1,
+    initialAction: String? = null,
     hasExistingValue: Boolean,
     onDismiss: () -> Unit,
     onSave: (
@@ -159,7 +161,8 @@ internal fun EditBoardCellDialog(
         language: String?,
         linkedBoardId: String?,
         rowSpan: Int,
-        columnSpan: Int
+        columnSpan: Int,
+        action: String?
     ) -> Unit,
     onClearCell: () -> Unit
 ) {
@@ -169,6 +172,7 @@ internal fun EditBoardCellDialog(
     var backgroundColor by remember { mutableStateOf(initialBackgroundColor) }
     var language by remember { mutableStateOf(initialLanguage) }
     var linkedBoardId by remember { mutableStateOf(initialLinkedBoardId) }
+    var action by remember { mutableStateOf(initialAction) }
     var selectedSpan by remember(initialRowSpan, initialColumnSpan) {
         mutableStateOf(FieldSpanOption(initialRowSpan, initialColumnSpan))
     }
@@ -383,6 +387,51 @@ internal fun EditBoardCellDialog(
                         }
                     }
                 }
+
+                Text(
+                    stringResource(Res.string.board_dialog_special_actions),
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Text(
+                    stringResource(Res.string.board_dialog_special_actions_help),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilterChip(
+                        selected = action == ":spell",
+                        onClick = { action = if (action == ":spell") null else ":spell" },
+                        label = { Text(stringResource(Res.string.board_dialog_action_spell)) }
+                    )
+                    FilterChip(
+                        selected = action == ":space",
+                        onClick = { action = if (action == ":space") null else ":space" },
+                        label = { Text(stringResource(Res.string.board_dialog_action_space)) }
+                    )
+                    FilterChip(
+                        selected = action == ":backspace",
+                        onClick = { action = if (action == ":backspace") null else ":backspace" },
+                        label = { Text(stringResource(Res.string.board_dialog_action_erase)) }
+                    )
+                    FilterChip(
+                        selected = action == ":clear",
+                        onClick = { action = if (action == ":clear") null else ":clear" },
+                        label = { Text(stringResource(Res.string.board_dialog_action_clear)) }
+                    )
+                    FilterChip(
+                        selected = action == ":home",
+                        onClick = { action = if (action == ":home") null else ":home" },
+                        label = { Text(stringResource(Res.string.board_dialog_action_home)) }
+                    )
+                    FilterChip(
+                        selected = action == ":speak",
+                        onClick = { action = if (action == ":speak") null else ":speak" },
+                        label = { Text(stringResource(Res.string.board_dialog_action_speak_sentence)) }
+                    )
+                }
             }
         },
         confirmButton = {
@@ -396,7 +445,8 @@ internal fun EditBoardCellDialog(
                         language,
                         linkedBoardId.takeIf { opensPage },
                         selectedSpan.rows,
-                        selectedSpan.columns
+                        selectedSpan.columns,
+                        action?.trim()?.ifBlank { null }
                     )
                 },
                 enabled = label.isNotBlank() && (!opensPage || linkedBoardId != null)

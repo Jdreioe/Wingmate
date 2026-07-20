@@ -101,6 +101,14 @@
     <string name="board_dialog_destination_page">Målside</string>
     <string name="board_dialog_choose_page">Vælg en side</string>
     <string name="board_dialog_clear_cell">Ryd felt</string>
+    <string name="board_dialog_special_actions">Særlige handlinger</string>
+    <string name="board_dialog_action_spell">Stav et ord</string>
+    <string name="board_dialog_action_space">Tilføj mellemrum</string>
+    <string name="board_dialog_action_erase">Slet sidste tegn</string>
+    <string name="board_dialog_action_clear">Ryd sætning</string>
+    <string name="board_dialog_action_home">Gå til startside</string>
+    <string name="board_dialog_action_speak_sentence">Udtal sætning</string>
+    <string name="board_dialog_special_actions_help">Tryk for at vælge, hvad knappen skal gøre</string>
 
     <string name="language_dialog_title">Sprog</string>
     <string name="language_filter_languages">Filtrer sprog</string>
