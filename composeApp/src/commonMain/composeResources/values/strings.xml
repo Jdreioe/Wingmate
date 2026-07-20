@@ -270,7 +270,7 @@
     <string name="mode_switch_to_keyboard">Switch to keyboard and phrases</string>
     <string name="board_workspace_enter_fullscreen">Open page full screen</string>
     <string name="board_workspace_exit_fullscreen">Exit full screen</string>
-    <string name="board_workspace_app_settings">App settings</string>
+    <string name="board_sets_app_settings">App settings</string>
 
     <string name="common_add">Add</string>
     <string name="common_next">Next</string>

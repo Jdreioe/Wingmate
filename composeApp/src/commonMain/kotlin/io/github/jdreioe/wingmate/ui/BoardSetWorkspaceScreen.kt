@@ -182,6 +182,7 @@ fun BoardSetManagerScreen(
             isLoading = isLoading,
             statusMessage = statusMessage,
             onBack = onBack,
+            onOpenSettings = { showSettings = true },
             onCreate = { showCreateDialog = true },
             onOpen = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Run) },
             onEdit = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Edit) },
@@ -209,7 +210,6 @@ fun BoardSetManagerScreen(
             boardSetId = currentRoute.boardSetId,
             initialMode = currentRoute.mode,
             onSwitchToKeyboard = onBack,
-            onOpenSettings = { showSettings = true },
             onExitToLibrary = {
                 route = BoardSetRoute.Library
                 refreshBoardSets()
@@ -274,6 +274,7 @@ private fun BoardSetLibraryScreen(
     isLoading: Boolean,
     statusMessage: String?,
     onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
     onCreate: () -> Unit,
     onOpen: (ObfBoardSet) -> Unit,
     onEdit: (ObfBoardSet) -> Unit,
@@ -281,6 +282,7 @@ private fun BoardSetLibraryScreen(
     onToggleLock: (ObfBoardSet) -> Unit,
     onDelete: (ObfBoardSet) -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -300,6 +302,27 @@ private fun BoardSetLibraryScreen(
                             Icons.Default.Keyboard,
                             contentDescription = stringResource(Res.string.mode_switch_to_keyboard)
                         )
+                    }
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = stringResource(Res.string.board_workspace_actions)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.board_sets_app_settings)) },
+                                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onOpenSettings()
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -433,7 +456,6 @@ private fun BoardSetWorkspaceScreen(
     boardSetId: String,
     initialMode: BoardWorkspaceMode,
     onSwitchToKeyboard: () -> Unit,
-    onOpenSettings: () -> Unit,
     onExitToLibrary: () -> Unit
 ) {
     val useCase = koinInject<BoardSetUseCase>()
@@ -456,7 +478,6 @@ private fun BoardSetWorkspaceScreen(
     var editingCell by remember { mutableStateOf<WorkspaceCellTarget?>(null) }
     var showFinishDialog by remember { mutableStateOf(false) }
     var editActionsExpanded by remember { mutableStateOf(false) }
-    var workspaceMenuExpanded by remember { mutableStateOf(false) }
     var showRenameBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
     var isSavingSentence by remember(boardSetId) { mutableStateOf(false) }
@@ -627,15 +648,6 @@ private fun BoardSetWorkspaceScreen(
                                         showDeleteBoardDialog = true
                                     }
                                 )
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.board_workspace_app_settings)) },
-                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                                    onClick = {
-                                        editActionsExpanded = false
-                                        onOpenSettings()
-                                    }
-                                )
                             }
                         }
                     } else {
@@ -662,27 +674,6 @@ private fun BoardSetWorkspaceScreen(
                         if (activeGraph?.boardSet?.isLocked == false) {
                             IconButton(onClick = ::startEditing) {
                                 Icon(Icons.Default.Edit, contentDescription = stringResource(Res.string.board_workspace_edit))
-                            }
-                        }
-                        Box {
-                            IconButton(onClick = { workspaceMenuExpanded = true }) {
-                                Icon(
-                                    Icons.Default.MoreVert,
-                                    contentDescription = stringResource(Res.string.board_workspace_actions)
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = workspaceMenuExpanded,
-                                onDismissRequest = { workspaceMenuExpanded = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.board_workspace_app_settings)) },
-                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                                    onClick = {
-                                        workspaceMenuExpanded = false
-                                        onOpenSettings()
-                                    }
-                                )
                             }
                         }
                     }

@@ -270,7 +270,7 @@
     <string name="mode_switch_to_keyboard">Skift til tastatur og fraser</string>
     <string name="board_workspace_enter_fullscreen">Åbn siden i fuld skærm</string>
     <string name="board_workspace_exit_fullscreen">Afslut fuld skærm</string>
-    <string name="board_workspace_app_settings">Appindstillinger</string>
+    <string name="board_sets_app_settings">Appindstillinger</string>
 
     <string name="common_add">Tilføj</string>
     <string name="common_next">Næste</string>
