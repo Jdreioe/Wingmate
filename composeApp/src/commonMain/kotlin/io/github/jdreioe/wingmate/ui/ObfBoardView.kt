@@ -38,7 +38,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import io.github.jdreioe.wingmate.ui.toComposeImageBitmap
 import androidx.compose.animation.core.*
@@ -359,8 +358,7 @@ fun ObfButtonItem(
     
     val contentColor = when {
         settings.highContrastMode -> highContrastContent
-        button.backgroundColor != null && bgColor.luminance() < 0.45f -> Color.White
-        button.backgroundColor != null -> Color.Black
+        button.backgroundColor != null -> contrastingContentColor(bgColor)
         else -> MaterialTheme.colorScheme.onSurface
     }
     

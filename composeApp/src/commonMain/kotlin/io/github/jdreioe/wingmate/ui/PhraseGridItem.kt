@@ -107,7 +107,11 @@ fun PhraseGridItem(
         item.backgroundColor?.let { try { parseHexToColor(it) } catch (_: Throwable) { MaterialTheme.colorScheme.surface } } ?: MaterialTheme.colorScheme.surface
     }
     
-    val contentColor = if (settings.highContrastMode) highContrastContent else MaterialTheme.colorScheme.onSurface
+    val contentColor = when {
+        settings.highContrastMode -> highContrastContent
+        item.backgroundColor != null -> contrastingContentColor(bgColor)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     
     val speechService: SpeechService = koinInject()
     val aacLogger: AacLogger = koinInject()

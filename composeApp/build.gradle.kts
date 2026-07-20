@@ -45,6 +45,12 @@ kotlin {
                 implementation("io.coil-kt.coil3:coil-svg:3.5.0")
             }
         }
+
+        val commonTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
         
         val androidMain by getting {
             dependencies {
