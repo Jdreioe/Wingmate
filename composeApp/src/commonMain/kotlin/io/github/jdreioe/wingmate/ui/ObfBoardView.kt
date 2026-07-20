@@ -47,6 +47,8 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.draw.scale
 import io.github.jdreioe.wingmate.domain.AacLogger
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.withLanguageOverride
+import io.github.jdreioe.wingmate.application.VoiceUseCase
 import org.koin.compose.koinInject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -280,6 +282,7 @@ fun ObfButtonItem(
     isEditMode: Boolean = false
 ) {
     val speechService: SpeechService = koinInject()
+    val voiceUseCase: VoiceUseCase = koinInject()
     val aacLogger: AacLogger = koinInject()
     val settings by rememberReactiveSettings()
     
@@ -307,7 +310,13 @@ fun ObfButtonItem(
             if (settings.auditoryFishingEnabled) {
                 val label = button.label ?: button.vocalization ?: ""
                 if (label.isNotBlank()) {
-                    fishingScope.launch { runCatching { speechService.speak(label, rate = 0.8) } }
+                    fishingScope.launch {
+                        runCatching {
+                            val voice = voiceUseCase.selected()
+                                .withLanguageOverride(button.locale)
+                            speechService.speak(label, voice, voice?.pitch, rate = 0.8)
+                        }
+                    }
                 }
             }
             

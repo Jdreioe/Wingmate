@@ -63,8 +63,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.PhraseUseCase
+import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.SpeechSegment
+import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
@@ -408,7 +412,10 @@ private fun BoardSetWorkspaceScreen(
     val useCase = koinInject<BoardSetUseCase>()
     val phraseUseCase = koinInject<PhraseUseCase>()
     val speechService = koinInject<SpeechService>()
+    val voiceUseCase = koinInject<VoiceUseCase>()
+    val settings by rememberReactiveSettings()
     val scope = rememberCoroutineScope()
+    var selectedVoice by remember(voiceUseCase) { mutableStateOf<Voice?>(null) }
     var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
     var editSession by remember(boardSetId) { mutableStateOf<BoardSetEditSession?>(null) }
     var mode by remember(boardSetId) { mutableStateOf(initialMode) }
@@ -431,6 +438,18 @@ private fun BoardSetWorkspaceScreen(
     val saveErrorMessage = stringResource(Res.string.board_workspace_save_error)
     val phraseSavedMessage = stringResource(Res.string.board_workspace_phrase_saved)
     val phraseSaveErrorMessage = stringResource(Res.string.board_workspace_phrase_save_error)
+    val availableFieldLanguages = (
+        listOf(
+            settings.primaryLanguage,
+            settings.secondaryLanguage,
+            selectedVoice?.selectedLanguage,
+            selectedVoice?.primaryLanguage
+        ) + selectedVoice?.supportedLanguages.orEmpty()
+    ).filterNotNull().map(String::trim).filter(String::isNotEmpty).distinct().sorted()
+
+    LaunchedEffect(voiceUseCase) {
+        selectedVoice = runCatching { voiceUseCase.selected() }.getOrNull()
+    }
 
     LaunchedEffect(boardSetId) {
         isLoading = true
@@ -650,7 +669,11 @@ private fun BoardSetWorkspaceScreen(
                                 if (spokenText.isNotEmpty()) {
                                     selectedButtons = selectedButtons + (button to null)
                                     scope.launch(Dispatchers.IO) {
-                                        runCatching { speechService.speak(spokenText) }
+                                        runCatching {
+                                            val voice = voiceUseCase.selected()
+                                                .withLanguageOverride(button.locale)
+                                            speechService.speak(spokenText, voice, voice?.pitch, voice?.rate)
+                                        }
                                     }
                                 }
                             }
@@ -659,11 +682,30 @@ private fun BoardSetWorkspaceScreen(
                             { row, column, button -> editingCell = WorkspaceCellTarget(row, column, button) }
                         } else null,
                         onSpeakSentence = {
-                            val sentence = selectedButtons.joinToString(" ") {
-                                (it.first.vocalization ?: it.first.label).orEmpty()
-                            }.trim()
+                            val speechParts = selectedButtons.mapNotNull { (button, _) ->
+                                (button.vocalization ?: button.label)
+                                    ?.trim()
+                                    ?.takeIf(String::isNotEmpty)
+                                    ?.let { text -> text to button.locale }
+                            }
+                            val sentence = speechParts.joinToString(" ") { it.first }
                             if (sentence.isNotEmpty()) {
-                                scope.launch(Dispatchers.IO) { runCatching { speechService.speak(sentence) } }
+                                scope.launch(Dispatchers.IO) {
+                                    runCatching {
+                                        val voice = voiceUseCase.selected()
+                                        if (speechParts.any { !it.second.isNullOrBlank() }) {
+                                            val segments = speechParts.mapIndexed { index, (text, language) ->
+                                                SpeechSegment(
+                                                    text = text + if (index < speechParts.lastIndex) " " else "",
+                                                    languageTag = language
+                                                )
+                                            }
+                                            speechService.speakSegments(segments, voice, voice?.pitch, voice?.rate)
+                                        } else {
+                                            speechService.speak(sentence, voice, voice?.pitch, voice?.rate)
+                                        }
+                                    }
+                                }
                             }
                         },
                         onSaveSentence = {
@@ -730,11 +772,13 @@ private fun BoardSetWorkspaceScreen(
             initialLabel = target.button?.label.orEmpty(),
             initialVocalization = target.button?.vocalization.orEmpty(),
             initialImageUrl = initialImageUrl,
+            availableLanguages = availableFieldLanguages,
+            initialLanguage = target.button?.locale,
             availableBoards = activeGraph?.boards.orEmpty().filterNot { it.id == activeBoard.id },
             initialLinkedBoardId = activeGraph?.resolveLinkedBoard(target.button?.loadBoard)?.id,
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
-            onSave = { label, vocalization, imageUrl, linkedBoardId ->
+            onSave = { label, vocalization, imageUrl, language, linkedBoardId ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
                     updateDraftCell(
@@ -745,6 +789,7 @@ private fun BoardSetWorkspaceScreen(
                         label = label,
                         vocalization = vocalization,
                         imageUrl = imageUrl,
+                        language = language,
                         linkedBoardId = linkedBoardId
                     )
                 )
@@ -945,6 +990,7 @@ private fun updateDraftCell(
     label: String,
     vocalization: String?,
     imageUrl: String?,
+    language: String?,
     linkedBoardId: String?
 ): BoardSetGraph {
     val board = graph.boardsById[boardId] ?: return graph
@@ -970,6 +1016,7 @@ private fun updateDraftCell(
     val button = (existingButton ?: ObfButton(id = buttonId)).copy(
         label = label.trim(),
         vocalization = vocalization?.trim()?.ifBlank { null },
+        locale = language?.trim()?.ifBlank { null },
         imageId = imageId,
         loadBoard = linkedBoardId?.let { targetId ->
             ObfLoadBoard(id = targetId, name = graph.boardsById[targetId]?.name)

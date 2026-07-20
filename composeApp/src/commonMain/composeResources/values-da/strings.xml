@@ -83,6 +83,13 @@
     <string name="board_dialog_vocalization">Udtale (valgfri)</string>
     <string name="board_dialog_image_url">Billed-URL (valgfri)</string>
     <string name="board_dialog_clear_image">Fjern billede</string>
+    <string name="board_dialog_language">Sprog</string>
+    <string name="board_dialog_language_default">Brug standardsprog</string>
+    <string name="board_dialog_action">Felthandling</string>
+    <string name="board_dialog_action_speak">Tilføj og udtal</string>
+    <string name="board_dialog_action_open_page">Åbn side</string>
+    <string name="board_dialog_destination_page">Målside</string>
+    <string name="board_dialog_choose_page">Vælg en side</string>
     <string name="board_dialog_clear_cell">Ryd felt</string>
 
     <string name="language_dialog_title">Sprog</string>

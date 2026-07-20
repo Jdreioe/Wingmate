@@ -6,6 +6,8 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
 import kotlinx.coroutines.runBlocking
@@ -24,6 +26,26 @@ class BoardSetUseCaseTest {
         boardRepository,
         NoopFeatureUsageReporter()
     )
+
+    @Test
+    fun fieldLanguageOverridesLanguageWithoutChangingTheSelectedVoice() {
+        val selected = Voice(
+            name = "multilingual-voice",
+            primaryLanguage = "en-US",
+            selectedLanguage = "en-US",
+            pitch = 1.1,
+            rate = 0.9
+        )
+
+        val danish = selected.withLanguageOverride("da-DK")
+
+        assertEquals("multilingual-voice", danish?.name)
+        assertEquals("da-DK", danish?.primaryLanguage)
+        assertEquals("da-DK", danish?.selectedLanguage)
+        assertEquals(1.1, danish?.pitch)
+        assertEquals(0.9, danish?.rate)
+        assertEquals(selected, selected.withLanguageOverride(null))
+    }
 
     @Test
     fun saveAndLoadGraphKeepsEveryBoardAndLink() = runBlocking {
@@ -47,6 +69,7 @@ class BoardSetUseCaseTest {
                 ObfButton(
                     id = "to-food",
                     label = "People",
+                    locale = "da-DK",
                     loadBoard = ObfLoadBoard(id = people.id, name = people.name)
                 )
             )
@@ -59,6 +82,7 @@ class BoardSetUseCaseTest {
         assertEquals("People", loaded.resolveLinkedBoard(link)?.name)
         assertEquals("food", link?.id)
         assertEquals("People", link?.name)
+        assertEquals("da-DK", loaded.rootBoard?.buttons?.single()?.locale)
     }
 
     @Test

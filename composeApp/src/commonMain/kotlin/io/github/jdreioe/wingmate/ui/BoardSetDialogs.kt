@@ -1,6 +1,8 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -129,17 +131,28 @@ internal fun EditBoardCellDialog(
     initialLabel: String,
     initialVocalization: String,
     initialImageUrl: String,
+    availableLanguages: List<String> = emptyList(),
+    initialLanguage: String? = null,
     availableBoards: List<ObfBoard> = emptyList(),
     initialLinkedBoardId: String? = null,
     hasExistingValue: Boolean,
     onDismiss: () -> Unit,
-    onSave: (label: String, vocalization: String?, imageUrl: String?, linkedBoardId: String?) -> Unit,
+    onSave: (
+        label: String,
+        vocalization: String?,
+        imageUrl: String?,
+        language: String?,
+        linkedBoardId: String?
+    ) -> Unit,
     onClearCell: () -> Unit
 ) {
     var label by remember { mutableStateOf(initialLabel) }
     var vocalization by remember { mutableStateOf(initialVocalization) }
     var imageUrl by remember { mutableStateOf(initialImageUrl) }
+    var language by remember { mutableStateOf(initialLanguage) }
     var linkedBoardId by remember { mutableStateOf(initialLinkedBoardId) }
+    var opensPage by remember { mutableStateOf(initialLinkedBoardId != null) }
+    var showLanguageMenu by remember { mutableStateOf(false) }
     var showBoardMenu by remember { mutableStateOf(false) }
     var showSymbolSearch by remember { mutableStateOf(false) }
 
@@ -147,7 +160,10 @@ internal fun EditBoardCellDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(Res.string.board_dialog_edit_cell, row + 1, column + 1)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(
                     boardName,
                     style = MaterialTheme.typography.labelMedium,
@@ -179,23 +195,77 @@ internal fun EditBoardCellDialog(
                         }
                     }
                 }
-                if (availableBoards.isNotEmpty()) {
+
+                Text(
+                    stringResource(Res.string.board_dialog_language),
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Box {
+                    OutlinedButton(
+                        onClick = { showLanguageMenu = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(language ?: stringResource(Res.string.board_dialog_language_default))
+                    }
+                    DropdownMenu(
+                        expanded = showLanguageMenu,
+                        onDismissRequest = { showLanguageMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(Res.string.board_dialog_language_default)) },
+                            onClick = { language = null; showLanguageMenu = false }
+                        )
+                        availableLanguages.forEach { languageTag ->
+                            DropdownMenuItem(
+                                text = { Text(languageTag) },
+                                onClick = { language = languageTag; showLanguageMenu = false }
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    stringResource(Res.string.board_dialog_action),
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.FilterChip(
+                        selected = !opensPage,
+                        onClick = {
+                            opensPage = false
+                            linkedBoardId = null
+                        },
+                        label = { Text(stringResource(Res.string.board_dialog_action_speak)) }
+                    )
+                    androidx.compose.material3.FilterChip(
+                        selected = opensPage,
+                        onClick = {
+                            opensPage = true
+                        },
+                        enabled = availableBoards.isNotEmpty(),
+                        label = { Text(stringResource(Res.string.board_dialog_action_open_page)) }
+                    )
+                }
+                if (opensPage && availableBoards.isNotEmpty()) {
+                    Text(
+                        stringResource(Res.string.board_dialog_destination_page),
+                        style = MaterialTheme.typography.labelLarge
+                    )
                     Box {
-                        OutlinedButton(onClick = { showBoardMenu = true }) {
+                        OutlinedButton(
+                            onClick = { showBoardMenu = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             val targetName = availableBoards.firstOrNull { it.id == linkedBoardId }?.name
                             Text(
                                 targetName?.let { stringResource(Res.string.board_cell_opens_board, it) }
-                                    ?: stringResource(Res.string.board_cell_no_link)
+                                    ?: stringResource(Res.string.board_dialog_choose_page)
                             )
                         }
                         DropdownMenu(
                             expanded = showBoardMenu,
                             onDismissRequest = { showBoardMenu = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.board_cell_no_link)) },
-                                onClick = { linkedBoardId = null; showBoardMenu = false }
-                            )
                             availableBoards.forEach { board ->
                                 DropdownMenuItem(
                                     text = {
@@ -216,10 +286,11 @@ internal fun EditBoardCellDialog(
                         label.trim(),
                         vocalization.trim().ifBlank { null },
                         imageUrl.trim().ifBlank { null },
-                        linkedBoardId
+                        language,
+                        linkedBoardId.takeIf { opensPage }
                     )
                 },
-                enabled = label.isNotBlank()
+                enabled = label.isNotBlank() && (!opensPage || linkedBoardId != null)
             ) { Text(stringResource(Res.string.common_save)) }
         },
         dismissButton = {

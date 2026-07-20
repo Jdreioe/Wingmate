@@ -29,6 +29,8 @@ data class ObfButton(
     val id: String,
     val label: String? = null,
     val vocalization: String? = null,
+    /** Optional per-field speech language; null inherits the selected voice language. */
+    val locale: String? = null,
     @SerialName("image_id")
     val imageId: String? = null,
     @SerialName("sound_id")

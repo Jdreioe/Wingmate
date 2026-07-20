@@ -18,6 +18,11 @@ data class Voice(
     val rateForSSML: String? = null,
 )
 
+fun Voice?.withLanguageOverride(languageTag: String?): Voice? {
+    val language = languageTag?.trim()?.takeIf(String::isNotEmpty) ?: return this
+    return (this ?: Voice()).copy(primaryLanguage = language, selectedLanguage = language)
+}
+
 @Serializable
 data class SpeechServiceConfig(
     val endpoint: String = "",

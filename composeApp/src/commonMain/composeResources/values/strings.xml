@@ -83,6 +83,13 @@
     <string name="board_dialog_vocalization">Vocalization (optional)</string>
     <string name="board_dialog_image_url">Image URL (optional)</string>
     <string name="board_dialog_clear_image">Clear image</string>
+    <string name="board_dialog_language">Language</string>
+    <string name="board_dialog_language_default">Use default language</string>
+    <string name="board_dialog_action">Field action</string>
+    <string name="board_dialog_action_speak">Add and speak</string>
+    <string name="board_dialog_action_open_page">Open page</string>
+    <string name="board_dialog_destination_page">Destination page</string>
+    <string name="board_dialog_choose_page">Choose a page</string>
     <string name="board_dialog_clear_cell">Clear field</string>
 
     <string name="language_dialog_title">Language</string>
