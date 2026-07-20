@@ -12,3 +12,20 @@ data class ObfBoardSet(
     val createdAt: Long,
     val updatedAt: Long
 )
+
+/**
+ * A complete board set and all boards it owns.
+ *
+ * Keeping the graph together prevents the editor and communicator from loading
+ * different subsets of the same board set.
+ */
+data class BoardSetGraph(
+    val boardSet: ObfBoardSet,
+    val boards: List<ObfBoard>
+) {
+    val boardsById: Map<String, ObfBoard>
+        get() = boards.associateBy { it.id }
+
+    val rootBoard: ObfBoard?
+        get() = boardsById[boardSet.rootBoardId]
+}

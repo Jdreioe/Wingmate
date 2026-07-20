@@ -66,7 +66,9 @@ fun ObfBoardView(
     selectedButtons: List<Pair<ObfButton, ImageBitmap?>> = emptyList(),
     onSpeakSentence: () -> Unit = {},
     onDeleteLast: () -> Unit = {},
-    onClearSentence: () -> Unit = {}
+    onClearSentence: () -> Unit = {},
+    showMessageBar: Boolean = !isEditMode,
+    onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null
 ) {
     val settings by rememberReactiveSettings()
     val imagesById = remember(board) { board.images.associateBy { it.id } }
@@ -83,20 +85,22 @@ fun ObfBoardView(
             modifier = modifier.padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Symbol Bar (Message Window)
-            SymbolBar(
-                selectedButtons = selectedButtons,
-                imagesById = imagesById,
-                extractedImages = extractedImages,
-                onSpeak = onSpeakSentence,
-                onDelete = onDeleteLast,
-                onClear = onClearSentence,
-                modifier = Modifier.fillMaxWidth().height(100.dp)
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
+            if (showMessageBar) {
+                SymbolBar(
+                    selectedButtons = selectedButtons,
+                    imagesById = imagesById,
+                    extractedImages = extractedImages,
+                    onSpeak = onSpeakSentence,
+                    onDelete = onDeleteLast,
+                    onClear = onClearSentence,
+                    modifier = Modifier.fillMaxWidth().height(100.dp)
+                )
 
-            grid.order.forEachIndexed { rowIndex, row ->
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            repeat(rows) { rowIndex ->
+                val row = grid.order.getOrNull(rowIndex).orEmpty()
                 Row(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -119,9 +123,27 @@ fun ObfBoardView(
                                     extractedImageBytes = button.imageId?.let { 
                                         image?.path?.let { path -> extractedImages[path] }
                                     },
-                                    onClick = { onButtonClick(button) },
+                                    onClick = {
+                                        onCellClick?.invoke(rowIndex, colIndex, button)
+                                            ?: onButtonClick(button)
+                                    },
                                     isEditMode = isEditMode
                                 )
+                            } else if (isEditMode) {
+                                OutlinedCard(
+                                    modifier = Modifier.fillMaxSize(),
+                                    onClick = {
+                                        onCellClick?.invoke(rowIndex, colIndex, null)
+                                    }
+                                ) {
+                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "+",
+                                            style = MaterialTheme.typography.headlineMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
                             } else {
                                 Spacer(modifier = Modifier.fillMaxSize())
                             }

@@ -36,7 +36,7 @@ fun App() {
             // Check if welcome flow is completed
             var welcomeCompleted by remember { mutableStateOf<Boolean?>(null) }
             var currentScreen by remember { mutableStateOf<String?>(null) }
-            var initialBoardId by remember { mutableStateOf<String?>(null) }
+            var createBoardSetOnLaunch by remember { mutableStateOf(false) }
             val scope = rememberCoroutineScope()
 
             fun completeWelcomeAndNavigate(target: String) {
@@ -78,23 +78,28 @@ fun App() {
                     "welcome" -> {
                         WelcomeScreen(
                             onContinue = { completeWelcomeAndNavigate("phrase") },
-                            onCreateFromScratch = { completeWelcomeAndNavigate("boardsets") }
+                            onCreateFromScratch = {
+                                createBoardSetOnLaunch = true
+                                completeWelcomeAndNavigate("boardsets")
+                            }
                         )
                     }
                     "phrase" -> {
                         PhraseScreen(
                             onBackToWelcome = { currentScreen = "welcome" },
-                            onOpenBoardSetManager = { currentScreen = "boardsets" },
-                            initialBoardId = initialBoardId
+                            onOpenBoardSetManager = {
+                                createBoardSetOnLaunch = false
+                                currentScreen = "boardsets"
+                            }
                         )
                     }
                     "boardsets" -> {
                         BoardSetManagerScreen(
-                            onBack = { currentScreen = "phrase" },
-                            onOpenBoard = { boardId ->
-                                initialBoardId = boardId
+                            onBack = {
+                                createBoardSetOnLaunch = false
                                 currentScreen = "phrase"
-                            }
+                            },
+                            createOnLaunch = createBoardSetOnLaunch
                         )
                     }
                     null -> {
