@@ -1,5 +1,7 @@
 package io.github.jdreioe.wingmate.ui
 
+import java.util.Locale
+
 actual fun isDesktop(): Boolean = false
 
 actual fun isReleaseBuild(): Boolean = runCatching {
@@ -8,3 +10,5 @@ actual fun isReleaseBuild(): Boolean = runCatching {
 	val isDebug = buildConfig.getField("DEBUG").getBoolean(null)
 	!isDebug
 }.getOrDefault(true)
+
+actual fun systemLanguageTag(): String = Locale.getDefault().toLanguageTag()

@@ -1,0 +1,35 @@
+{
+  "format": "open-board-0.1",
+  "id": "kernetavle",
+  "locale": "da",
+  "name": "Kernetavle",
+  "description_html": "En kernetavle med højfrekvente danske ord til AK.",
+  "grid": {
+    "rows": 4,
+    "columns": 4,
+    "order": [
+      ["b1", "b2", "b3", "b4"],
+      ["b5", "b6", "b7", "b8"],
+      ["b9", "b10", "b11", "b12"],
+      ["b13", "b14", "b15", "b16"]
+    ]
+  },
+  "buttons": [
+    { "id": "b1", "label": "jeg", "vocalization": "jeg", "background_color": "#e8f5e9" },
+    { "id": "b2", "label": "du", "vocalization": "du", "background_color": "#e8f5e9" },
+    { "id": "b3", "label": "det", "vocalization": "det", "background_color": "#e8f5e9" },
+    { "id": "b4", "label": "vi", "vocalization": "vi", "background_color": "#e8f5e9" },
+    { "id": "b5", "label": "vil", "vocalization": "vil", "background_color": "#fff3e0" },
+    { "id": "b6", "label": "gå", "vocalization": "gå", "background_color": "#fff3e0" },
+    { "id": "b7", "label": "se", "vocalization": "se", "background_color": "#fff3e0" },
+    { "id": "b8", "label": "kan", "vocalization": "kan", "background_color": "#fff3e0" },
+    { "id": "b9", "label": "mere", "vocalization": "mere", "background_color": "#e3f2fd" },
+    { "id": "b10", "label": "hjælp", "vocalization": "hjælp", "background_color": "#e3f2fd" },
+    { "id": "b11", "label": "stop", "vocalization": "stop", "background_color": "#e3f2fd" },
+    { "id": "b12", "label": "ja", "vocalization": "ja", "background_color": "#e3f2fd" },
+    { "id": "b13", "label": "nej", "vocalization": "nej", "background_color": "#fce4ec" },
+    { "id": "b14", "label": "god", "vocalization": "god", "background_color": "#fce4ec" },
+    { "id": "b15", "label": "dårlig", "vocalization": "dårlig", "background_color": "#fce4ec" },
+    { "id": "b16", "label": "færdig", "vocalization": "færdig", "background_color": "#fce4ec" }
+  ]
+}

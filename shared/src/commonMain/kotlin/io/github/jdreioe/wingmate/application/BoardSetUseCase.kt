@@ -152,6 +152,46 @@ class BoardSetUseCase(
         return boardSet
     }
 
+    suspend fun createBoardSetFromBoards(
+        name: String,
+        boards: List<ObfBoard>
+    ): ObfBoardSet {
+        require(boards.isNotEmpty()) { "A board set must contain at least one board" }
+
+        val now = Clock.System.now().toEpochMilliseconds()
+        val boardSetId = generateId("set")
+        val boardIdMap = boards.associate { it.id to generateId("board") }
+        val importedBoards = boards.map { board ->
+            board.copy(
+                id = boardIdMap.getValue(board.id),
+                buttons = board.buttons.map { button ->
+                    val linkedBoardId = button.loadBoard?.id
+                    button.copy(
+                        loadBoard = button.loadBoard?.copy(
+                            id = linkedBoardId?.let(boardIdMap::get) ?: linkedBoardId
+                        )
+                    )
+                }
+            )
+        }
+
+        val boardSet = ObfBoardSet(
+            id = boardSetId,
+            name = name,
+            rootBoardId = importedBoards.first().id,
+            boardIds = importedBoards.map { it.id },
+            createdAt = now,
+            updatedAt = now
+        )
+        val saved = saveBoardSetGraph(BoardSetGraph(boardSet, importedBoards)).getOrThrow().boardSet
+        featureUsageReporter.reportEvent(
+            FeatureUsageEvents.BOARDSET_CREATED,
+            "mode" to "starter",
+            "board_count" to importedBoards.size.toString()
+        )
+        return saved
+    }
+
     suspend fun toggleLocked(boardSetId: String): ObfBoardSet? {
         val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
         val updated = boardSet.copy(

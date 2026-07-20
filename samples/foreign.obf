@@ -1,0 +1,74 @@
+{
+  "id": "foreign",
+  "format": "open-board-0.1",
+  "name": "Foreign Words",
+  "buttons": [
+    {
+      "label": "हेर्नुहोस्",
+      "id": 0,
+      "border_color": "#444",
+      "background_color": "#ffff32",
+      "image_id": 0
+    },
+    {
+      "label": "यो",
+      "id": 1,
+      "border_color": "#444",
+      "background_color": "#c0c0c0",
+      "image_id": 1
+    },
+    {
+      "label": "صرخة",
+      "id": 2,
+      "border_color": "#444",
+      "background_color": "#c0c0c0",
+      "image_id": 2
+    },
+    {
+      "label": "水很酷哟",
+      "id": 3
+    }
+  ],
+  "images": [
+    {
+      "id": 0,
+      "url": "https://s3.amazonaws.com/opensymbols/libraries/mulberry/communication%20aid%202.svg",
+      "content_type": "image/svg",
+      "license": {
+        "type": "CC BY-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-sa/2.0/uk",
+        "author_name": "Paxtoncrafts Charitable Trust"
+      }
+    },
+    {
+      "id": 1,
+      "url": "https://s3.amazonaws.com/opensymbols/libraries/sclera/name.png",
+      "content_type": "image/png",
+      "license": {
+        "type": "CC BY-NC",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc/2.0/",
+        "author_name": "Sclera"
+      }
+    },
+    {
+      "id": 2,
+      "url": "https://s3.amazonaws.com/opensymbols/libraries/mulberry/chicken%20live.svg",
+      "content_type": "image/svg",
+      "license": {
+        "type": "CC BY-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-sa/2.0/uk",
+        "author_name": "Paxtoncrafts Charitable Trust"
+      }
+    }
+  ],
+  "grid": {
+    "rows": 4,
+    "columns": 5,
+    "order": [
+      [0, 1, 2, null, null],
+      [3, null, null, null, null],
+      [null, null, null, null, null],
+      [null, null, null, null, null]
+    ]
+  }
+}
