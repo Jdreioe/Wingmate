@@ -30,6 +30,7 @@ import org.jetbrains.compose.resources.stringResource
 import wingmatekmp.composeapp.generated.resources.*
 
 internal data class FieldLanguageOption(val tag: String, val label: String)
+internal data class FieldSpanOption(val rows: Int, val columns: Int)
 
 @Composable
 internal fun CreateBoardSetDialog(
@@ -145,6 +146,9 @@ internal fun EditBoardCellDialog(
     initialLanguage: String? = null,
     availableBoards: List<ObfBoard> = emptyList(),
     initialLinkedBoardId: String? = null,
+    availableSpans: List<FieldSpanOption> = listOf(FieldSpanOption(rows = 1, columns = 1)),
+    initialRowSpan: Int = 1,
+    initialColumnSpan: Int = 1,
     hasExistingValue: Boolean,
     onDismiss: () -> Unit,
     onSave: (
@@ -153,7 +157,9 @@ internal fun EditBoardCellDialog(
         imageUrl: String?,
         backgroundColor: String?,
         language: String?,
-        linkedBoardId: String?
+        linkedBoardId: String?,
+        rowSpan: Int,
+        columnSpan: Int
     ) -> Unit,
     onClearCell: () -> Unit
 ) {
@@ -163,11 +169,15 @@ internal fun EditBoardCellDialog(
     var backgroundColor by remember { mutableStateOf(initialBackgroundColor) }
     var language by remember { mutableStateOf(initialLanguage) }
     var linkedBoardId by remember { mutableStateOf(initialLinkedBoardId) }
+    var selectedSpan by remember(initialRowSpan, initialColumnSpan) {
+        mutableStateOf(FieldSpanOption(initialRowSpan, initialColumnSpan))
+    }
     var opensPage by remember { mutableStateOf(initialLinkedBoardId != null) }
     var showLanguageMenu by remember { mutableStateOf(false) }
     var showBoardMenu by remember { mutableStateOf(false) }
     var showSymbolSearch by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
+    var showSpanMenu by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -242,6 +252,52 @@ internal fun EditBoardCellDialog(
                         }
                     }
                 }
+
+                Text(
+                    stringResource(Res.string.board_dialog_field_size),
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Box {
+                    OutlinedButton(
+                        onClick = { showSpanMenu = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            stringResource(
+                                Res.string.board_dialog_field_size_value,
+                                selectedSpan.columns,
+                                selectedSpan.rows
+                            )
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showSpanMenu,
+                        onDismissRequest = { showSpanMenu = false }
+                    ) {
+                        availableSpans.forEach { span ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(
+                                            Res.string.board_dialog_field_size_value,
+                                            span.columns,
+                                            span.rows
+                                        )
+                                    )
+                                },
+                                onClick = {
+                                    selectedSpan = span
+                                    showSpanMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+                Text(
+                    stringResource(Res.string.board_dialog_field_size_help),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
                 Text(
                     stringResource(Res.string.board_dialog_language),
@@ -338,7 +394,9 @@ internal fun EditBoardCellDialog(
                         imageUrl.trim().ifBlank { null },
                         backgroundColor,
                         language,
-                        linkedBoardId.takeIf { opensPage }
+                        linkedBoardId.takeIf { opensPage },
+                        selectedSpan.rows,
+                        selectedSpan.columns
                     )
                 },
                 enabled = label.isNotBlank() && (!opensPage || linkedBoardId != null)

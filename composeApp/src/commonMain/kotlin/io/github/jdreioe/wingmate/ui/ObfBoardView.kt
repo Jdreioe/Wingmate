@@ -14,10 +14,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import coil3.compose.AsyncImage
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
@@ -60,6 +62,14 @@ import wingmatekmp.composeapp.generated.resources.board_workspace_clear_sentence
 import wingmatekmp.composeapp.generated.resources.board_workspace_delete_last
 import wingmatekmp.composeapp.generated.resources.board_workspace_save_phrase
 import wingmatekmp.composeapp.generated.resources.board_workspace_speak_sentence
+
+private data class BoardGridItem(
+    val row: Int,
+    val column: Int,
+    val rowSpan: Int,
+    val columnSpan: Int,
+    val button: ObfButton?
+)
 
 @Composable
 fun ObfBoardView(
@@ -112,55 +122,47 @@ fun ObfBoardView(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            repeat(rows) { rowIndex ->
-                val row = grid.order.getOrNull(rowIndex).orEmpty()
-                Row(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    for (colIndex in 0 until columns) {
-                        val buttonId = row.getOrNull(colIndex)
-                        val button = buttonId?.let { buttonsById[it] }
-                        
-                        // Filter hidden buttons unless in edit mode
-                        val isVisible = button != null && (!button.hidden || isEditMode)
-                        
-                        Box(
-                            modifier = Modifier.weight(1f).fillMaxHeight()
+            val gridItems = remember(grid, buttonsById) {
+                buildBoardGridItems(grid, buttonsById)
+            }
+            SpanningBoardGrid(
+                rows = rows,
+                columns = columns,
+                items = gridItems,
+                modifier = Modifier.weight(1f).fillMaxWidth()
+            ) { item ->
+                val button = item.button
+                val isVisible = button != null && (!button.hidden || isEditMode)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (button != null && isVisible) {
+                        val image = button.imageId?.let { imagesById[it] }
+                        ObfButtonItem(
+                            button = button,
+                            image = image,
+                            extractedImageBytes = button.imageId?.let {
+                                image?.path?.let { path -> extractedImages[path] }
+                            },
+                            onClick = {
+                                onCellClick?.invoke(item.row, item.column, button)
+                                    ?: onButtonClick(button)
+                            },
+                            isEditMode = isEditMode
+                        )
+                    } else if (isEditMode && button == null) {
+                        OutlinedCard(
+                            modifier = Modifier.fillMaxSize(),
+                            onClick = { onCellClick?.invoke(item.row, item.column, null) }
                         ) {
-                            if (button != null && isVisible) {
-                                val image = button.imageId?.let { imagesById[it] }
-                                ObfButtonItem(
-                                    button = button,
-                                    image = image,
-                                    extractedImageBytes = button.imageId?.let { 
-                                        image?.path?.let { path -> extractedImages[path] }
-                                    },
-                                    onClick = {
-                                        onCellClick?.invoke(rowIndex, colIndex, button)
-                                            ?: onButtonClick(button)
-                                    },
-                                    isEditMode = isEditMode
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "+",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
-                            } else if (isEditMode) {
-                                OutlinedCard(
-                                    modifier = Modifier.fillMaxSize(),
-                                    onClick = {
-                                        onCellClick?.invoke(rowIndex, colIndex, null)
-                                    }
-                                ) {
-                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = "+",
-                                            style = MaterialTheme.typography.headlineMedium,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                }
-                            } else {
-                                Spacer(modifier = Modifier.fillMaxSize())
                             }
                         }
+                    } else {
+                        Spacer(modifier = Modifier.fillMaxSize())
                     }
                 }
             }
@@ -194,6 +196,102 @@ fun ObfBoardView(
                         Spacer(modifier = Modifier.weight(1f))
                     }
                 }
+            }
+        }
+    }
+}
+
+private fun buildBoardGridItems(
+    grid: io.github.jdreioe.wingmate.domain.obf.ObfGrid,
+    buttonsById: Map<String, ObfButton>
+): List<BoardGridItem> {
+    val rows = grid.rows.coerceAtLeast(1)
+    val columns = grid.columns.coerceAtLeast(1)
+    val order = List(rows) { row ->
+        List(columns) { column -> grid.order.getOrNull(row)?.getOrNull(column) }
+    }
+    val visited = mutableSetOf<Pair<Int, Int>>()
+    return buildList {
+        for (row in 0 until rows) {
+            for (column in 0 until columns) {
+                if ((row to column) in visited) continue
+                val buttonId = order[row][column]
+                if (buttonId == null) {
+                    visited += row to column
+                    add(BoardGridItem(row, column, 1, 1, null))
+                    continue
+                }
+                val occurrences = buildList {
+                    for (candidateRow in 0 until rows) {
+                        for (candidateColumn in 0 until columns) {
+                            if (order[candidateRow][candidateColumn] == buttonId) {
+                                add(candidateRow to candidateColumn)
+                            }
+                        }
+                    }
+                }
+                val minRow = occurrences.minOf { it.first }
+                val maxRow = occurrences.maxOf { it.first }
+                val minColumn = occurrences.minOf { it.second }
+                val maxColumn = occurrences.maxOf { it.second }
+                val isRectangle = (minRow..maxRow).all { candidateRow ->
+                    (minColumn..maxColumn).all { candidateColumn ->
+                        order[candidateRow][candidateColumn] == buttonId
+                    }
+                }
+                if (isRectangle) {
+                    visited += occurrences
+                    add(
+                        BoardGridItem(
+                            row = minRow,
+                            column = minColumn,
+                            rowSpan = maxRow - minRow + 1,
+                            columnSpan = maxColumn - minColumn + 1,
+                            button = buttonsById[buttonId]
+                        )
+                    )
+                } else {
+                    visited += row to column
+                    add(BoardGridItem(row, column, 1, 1, buttonsById[buttonId]))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpanningBoardGrid(
+    rows: Int,
+    columns: Int,
+    items: List<BoardGridItem>,
+    modifier: Modifier = Modifier,
+    content: @Composable (BoardGridItem) -> Unit
+) {
+    Layout(
+        modifier = modifier,
+        content = {
+            items.forEach { item -> content(item) }
+        }
+    ) { measurables, constraints ->
+        val horizontalGap = 4.dp.roundToPx()
+        val verticalGap = 8.dp.roundToPx()
+        val availableWidth = (constraints.maxWidth - horizontalGap * (columns - 1)).coerceAtLeast(0)
+        val availableHeight = (constraints.maxHeight - verticalGap * (rows - 1)).coerceAtLeast(0)
+        val cellWidth = availableWidth / columns
+        val cellHeight = availableHeight / rows
+        val placeables = measurables.mapIndexed { index, measurable ->
+            val item = items[index]
+            val width = cellWidth * item.columnSpan + horizontalGap * (item.columnSpan - 1)
+            val height = cellHeight * item.rowSpan + verticalGap * (item.rowSpan - 1)
+            measurable.measure(Constraints.fixed(width.coerceAtLeast(0), height.coerceAtLeast(0)))
+        }
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            placeables.forEachIndexed { index, placeable ->
+                val item = items[index]
+                placeable.placeRelative(
+                    x = item.column * (cellWidth + horizontalGap),
+                    y = item.row * (cellHeight + verticalGap)
+                )
             }
         }
     }

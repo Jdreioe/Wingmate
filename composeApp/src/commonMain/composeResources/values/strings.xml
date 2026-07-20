@@ -85,6 +85,9 @@
     <string name="board_dialog_clear_image">Clear image</string>
     <string name="board_dialog_color">Field color</string>
     <string name="board_dialog_pick_color">Pick</string>
+    <string name="board_dialog_field_size">Field size</string>
+    <string name="board_dialog_field_size_value">%1$d × %2$d</string>
+    <string name="board_dialog_field_size_help">Width × height in cells</string>
     <string name="board_dialog_language">Language</string>
     <string name="board_dialog_language_default">Use default language</string>
     <string name="board_dialog_language_english">English</string>

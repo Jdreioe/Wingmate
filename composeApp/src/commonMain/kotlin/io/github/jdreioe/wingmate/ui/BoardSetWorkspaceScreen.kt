@@ -130,6 +130,8 @@ private data class WorkspaceCellTarget(
     val button: ObfButton?
 )
 
+internal data class GridFieldSpan(val rows: Int, val columns: Int)
+
 /**
  * Board-set entry point with a familiar library -> Run/Edit workspace flow.
  */
@@ -1002,6 +1004,12 @@ private fun BoardSetWorkspaceScreen(
 
     val target = editingCell
     if (target != null && activeBoard != null) {
+        val currentSpan = activeBoard.grid?.fieldSpanAt(target.row, target.column)
+            ?: GridFieldSpan(rows = 1, columns = 1)
+        val availableSpans = activeBoard.grid
+            ?.availableFieldSpansAt(target.row, target.column)
+            .orEmpty()
+            .map { FieldSpanOption(rows = it.rows, columns = it.columns) }
         val initialImageUrl = target.button?.imageId
             ?.let { id -> activeBoard.images.firstOrNull { it.id == id }?.url }
             .orEmpty()
@@ -1017,9 +1025,13 @@ private fun BoardSetWorkspaceScreen(
             initialLanguage = target.button?.locale,
             availableBoards = activeGraph?.boards.orEmpty().filterNot { it.id == activeBoard.id },
             initialLinkedBoardId = activeGraph?.resolveLinkedBoard(target.button?.loadBoard)?.id,
+            availableSpans = availableSpans,
+            initialRowSpan = currentSpan.rows,
+            initialColumnSpan = currentSpan.columns,
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
-            onSave = { label, vocalization, imageUrl, backgroundColor, language, linkedBoardId ->
+            onSave = { label, vocalization, imageUrl, backgroundColor, language, linkedBoardId,
+                       rowSpan, columnSpan ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
                     updateDraftCell(
@@ -1032,7 +1044,9 @@ private fun BoardSetWorkspaceScreen(
                         imageUrl = imageUrl,
                         backgroundColor = backgroundColor,
                         language = language,
-                        linkedBoardId = linkedBoardId
+                        linkedBoardId = linkedBoardId,
+                        rowSpan = rowSpan,
+                        columnSpan = columnSpan
                     )
                 )
                 editingCell = null
@@ -1224,7 +1238,7 @@ private fun addDraftBoard(
     )
 }
 
-private fun updateDraftCell(
+internal fun updateDraftCell(
     graph: BoardSetGraph,
     boardId: String,
     row: Int,
@@ -1234,7 +1248,9 @@ private fun updateDraftCell(
     imageUrl: String?,
     backgroundColor: String?,
     language: String?,
-    linkedBoardId: String?
+    linkedBoardId: String?,
+    rowSpan: Int = 1,
+    columnSpan: Int = 1
 ): BoardSetGraph {
     val board = graph.boardsById[boardId] ?: return graph
     val grid = board.grid ?: return graph
@@ -1269,16 +1285,13 @@ private fun updateDraftCell(
     val buttons = if (existingButton == null) board.buttons + button else board.buttons.map {
         if (it.id == button.id) button else it
     }
-    val order = grid.order.mapIndexed { rowIndex, values ->
-        if (rowIndex != row) values else values.mapIndexed { columnIndex, value ->
-            if (columnIndex == column) buttonId else value
-        }
-    }
-    val updatedBoard = board.copy(buttons = buttons, images = images, grid = grid.copy(order = order))
+    val updatedGrid = grid.withFieldSpan(row, column, buttonId, rowSpan, columnSpan)
+        ?: return graph
+    val updatedBoard = board.copy(buttons = buttons, images = images, grid = updatedGrid)
     return graph.copy(boards = graph.boards.map { if (it.id == boardId) updatedBoard else it })
 }
 
-private fun clearDraftCell(
+internal fun clearDraftCell(
     graph: BoardSetGraph,
     boardId: String,
     row: Int,
@@ -1287,20 +1300,92 @@ private fun clearDraftCell(
     val board = graph.boardsById[boardId] ?: return graph
     val grid = board.grid ?: return graph
     val removedButtonId = grid.order.getOrNull(row)?.getOrNull(column)
-    val order = grid.order.mapIndexed { rowIndex, values ->
-        if (rowIndex != row) values else values.mapIndexed { columnIndex, value ->
-            if (columnIndex == column) null else value
-        }
+    val order = grid.normalizedOrder().map { values ->
+        values.map { value -> if (value == removedButtonId) null else value }
     }
-    val stillReferenced = removedButtonId != null && order.flatten().any { it == removedButtonId }
     val removedImageId = board.buttons.firstOrNull { it.id == removedButtonId }?.imageId
-    val buttons = if (stillReferenced) board.buttons else board.buttons.filterNot { it.id == removedButtonId }
+    val buttons = board.buttons.filterNot { it.id == removedButtonId }
     val images = if (removedImageId != null && buttons.none { it.imageId == removedImageId }) {
         board.images.filterNot { it.id == removedImageId }
     } else board.images
     val updatedBoard = board.copy(buttons = buttons, images = images, grid = grid.copy(order = order))
     return graph.copy(boards = graph.boards.map { if (it.id == boardId) updatedBoard else it })
 }
+
+internal fun ObfGrid.fieldSpanAt(row: Int, column: Int): GridFieldSpan {
+    val buttonId = order.getOrNull(row)?.getOrNull(column)
+        ?: return GridFieldSpan(rows = 1, columns = 1)
+    val occupiedCells = normalizedOrder().flatMapIndexed { rowIndex, values ->
+        values.mapIndexedNotNull { columnIndex, value ->
+            if (value == buttonId) rowIndex to columnIndex else null
+        }
+    }
+    if (occupiedCells.isEmpty()) return GridFieldSpan(rows = 1, columns = 1)
+    val minRow = occupiedCells.minOf { it.first }
+    val maxRow = occupiedCells.maxOf { it.first }
+    val minColumn = occupiedCells.minOf { it.second }
+    val maxColumn = occupiedCells.maxOf { it.second }
+    return GridFieldSpan(
+        rows = maxRow - minRow + 1,
+        columns = maxColumn - minColumn + 1
+    )
+}
+
+internal fun ObfGrid.availableFieldSpansAt(row: Int, column: Int): List<GridFieldSpan> {
+    if (row !in 0 until rows || column !in 0 until columns) return emptyList()
+    val normalized = normalizedOrder()
+    val existingId = normalized[row][column]
+    return buildList {
+        for (rowSpan in 1..(rows - row)) {
+            for (columnSpan in 1..(columns - column)) {
+                val available = (row until row + rowSpan).all { rowIndex ->
+                    (column until column + columnSpan).all { columnIndex ->
+                        normalized[rowIndex][columnIndex] == null ||
+                            normalized[rowIndex][columnIndex] == existingId
+                    }
+                }
+                if (available) add(GridFieldSpan(rowSpan, columnSpan))
+            }
+        }
+    }.sortedWith(compareBy<GridFieldSpan> { it.rows * it.columns }.thenBy { it.rows }.thenBy { it.columns })
+}
+
+internal fun ObfGrid.withFieldSpan(
+    row: Int,
+    column: Int,
+    buttonId: String,
+    rowSpan: Int,
+    columnSpan: Int
+): ObfGrid? {
+    if (row !in 0 until rows || column !in 0 until columns) return null
+    val safeRowSpan = rowSpan.coerceAtLeast(1)
+    val safeColumnSpan = columnSpan.coerceAtLeast(1)
+    if (row + safeRowSpan > rows || column + safeColumnSpan > columns) return null
+    val normalized = normalizedOrder()
+    val existingId = normalized[row][column]
+    val targetIsAvailable = (row until row + safeRowSpan).all { rowIndex ->
+        (column until column + safeColumnSpan).all { columnIndex ->
+            normalized[rowIndex][columnIndex] == null || normalized[rowIndex][columnIndex] == existingId
+        }
+    }
+    if (!targetIsAvailable) return null
+    val cleared = normalized.map { values ->
+        values.map { value -> if (value == existingId && existingId != null) null else value }.toMutableList()
+    }
+    for (rowIndex in row until row + safeRowSpan) {
+        for (columnIndex in column until column + safeColumnSpan) {
+            cleared[rowIndex][columnIndex] = buttonId
+        }
+    }
+    return copy(order = cleared)
+}
+
+private fun ObfGrid.normalizedOrder(): List<List<String?>> =
+    List(rows.coerceAtLeast(0)) { rowIndex ->
+        List(columns.coerceAtLeast(0)) { columnIndex ->
+            order.getOrNull(rowIndex)?.getOrNull(columnIndex)
+        }
+    }
 
 private fun renameDraftBoard(graph: BoardSetGraph, boardId: String, name: String): BoardSetGraph {
     return graph.copy(
