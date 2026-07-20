@@ -46,18 +46,19 @@ class BoardSetUseCase(
      * unchanged; this method is the single commit boundary used by the UI.
      */
     suspend fun saveBoardSetGraph(graph: BoardSetGraph): Result<BoardSetGraph> = runCatching {
-        validateGraph(graph)
+        val canonicalGraph = graph.canonicalizeBoardLinks()
+        validateGraph(canonicalGraph)
         val now = Clock.System.now().toEpochMilliseconds()
-        val updatedSet = graph.boardSet.copy(updatedAt = now)
-        val previousSet = boardSetRepository.getBoardSet(graph.boardSet.id)
+        val updatedSet = canonicalGraph.boardSet.copy(updatedAt = now)
+        val previousSet = boardSetRepository.getBoardSet(canonicalGraph.boardSet.id)
         val previousBoards = previousSet?.boardIds
             ?.mapNotNull { boardRepository.getBoard(it) }
             .orEmpty()
-        val newBoardIds = graph.boards.map { it.id }.toSet()
+        val newBoardIds = canonicalGraph.boards.map { it.id }.toSet()
         val removedBoardIds = previousSet?.boardIds.orEmpty().filterNot { it in newBoardIds }
 
         try {
-            graph.boards.forEach { boardRepository.saveBoard(it) }
+            canonicalGraph.boards.forEach { boardRepository.saveBoard(it) }
             boardSetRepository.saveBoardSet(updatedSet)
             removedBoardIds.forEach { boardRepository.deleteBoard(it) }
         } catch (error: Throwable) {
@@ -67,7 +68,7 @@ class BoardSetUseCase(
                 .forEach { boardRepository.deleteBoard(it) }
             throw error
         }
-        graph.copy(boardSet = updatedSet)
+        canonicalGraph.copy(boardSet = updatedSet)
     }
 
     suspend fun deleteBoardSet(boardSetId: String) {

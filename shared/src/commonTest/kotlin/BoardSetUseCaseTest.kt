@@ -39,6 +39,43 @@ class BoardSetUseCaseTest {
     }
 
     @Test
+    fun fieldLinkedFromHomeNavigatesToPeopleAfterSaveAndReload() = runBlocking {
+        val source = linkedGraph()
+        val people = source.boardsById.getValue("food").copy(name = "People")
+        val home = source.rootBoard!!.copy(
+            buttons = listOf(
+                ObfButton(
+                    id = "to-food",
+                    label = "People",
+                    loadBoard = ObfLoadBoard(id = people.id, name = people.name)
+                )
+            )
+        )
+
+        useCase.saveBoardSetGraph(source.copy(boards = listOf(home, people))).getOrThrow()
+        val loaded = assertNotNull(useCase.loadBoardSetGraph("set"))
+        val link = loaded.rootBoard?.buttons?.single()?.loadBoard
+
+        assertEquals("People", loaded.resolveLinkedBoard(link)?.name)
+        assertEquals("food", link?.id)
+        assertEquals("People", link?.name)
+    }
+
+    @Test
+    fun importedPathAndUniquePageNameLinksResolveToTheirPage() {
+        val graph = linkedGraph()
+
+        assertEquals(
+            "food",
+            graph.resolveLinkedBoard(ObfLoadBoard(path = "boards/food.obf"))?.id
+        )
+        assertEquals(
+            "food",
+            graph.resolveLinkedBoard(ObfLoadBoard(name = "FOOD"))?.id
+        )
+    }
+
+    @Test
     fun duplicateGraphRemapsInternalBoardLinks() = runBlocking {
         useCase.saveBoardSetGraph(linkedGraph()).getOrThrow()
 

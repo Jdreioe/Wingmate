@@ -28,4 +28,38 @@ data class BoardSetGraph(
 
     val rootBoard: ObfBoard?
         get() = boardsById[boardSet.rootBoardId]
+
+    /** Resolve an OBF page link regardless of whether it uses an ID, path, or name. */
+    fun resolveLinkedBoard(link: ObfLoadBoard?): ObfBoard? {
+        if (link == null) return null
+
+        link.id?.let { id -> boardsById[id]?.let { return it } }
+
+        val pathCandidates = listOfNotNull(link.path, link.url)
+            .flatMap { value ->
+                val normalized = value.substringBefore('?').substringBefore('#').trimEnd('/')
+                listOf(normalized, normalized.substringAfterLast('/').removeSuffix(".obf"))
+            }
+            .filter(String::isNotBlank)
+            .toSet()
+        boards.firstOrNull { board ->
+            board.id in pathCandidates || board.url?.substringBefore('?') in pathCandidates
+        }?.let { return it }
+
+        val requestedName = link.name?.trim()?.takeIf(String::isNotEmpty) ?: return null
+        return boards.singleOrNull { it.name?.trim()?.equals(requestedName, ignoreCase = true) == true }
+    }
+
+    /** Store resolvable links with the canonical local page ID and display name. */
+    fun canonicalizeBoardLinks(): BoardSetGraph = copy(
+        boards = boards.map { board ->
+            board.copy(
+                buttons = board.buttons.map buttonMap@{ button ->
+                    val link = button.loadBoard ?: return@buttonMap button
+                    val target = resolveLinkedBoard(link) ?: return@buttonMap button
+                    button.copy(loadBoard = link.copy(id = target.id, name = target.name ?: link.name))
+                }
+            )
+        }
+    )
 }

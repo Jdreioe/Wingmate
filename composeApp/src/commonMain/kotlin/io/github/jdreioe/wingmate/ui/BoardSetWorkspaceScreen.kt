@@ -641,9 +641,7 @@ private fun BoardSetWorkspaceScreen(
                         showMessageBar = mode == BoardWorkspaceMode.Run,
                         selectedButtons = selectedButtons,
                         onButtonClick = { button ->
-                            val linkedId = button.loadBoard?.id
-                                ?: button.loadBoard?.path?.substringAfterLast('/')?.removeSuffix(".obf")
-                            val linkedBoard = linkedId?.let(activeGraph.boardsById::get)
+                            val linkedBoard = activeGraph.resolveLinkedBoard(button.loadBoard)
                             if (linkedBoard != null) {
                                 selectedBoardId?.let { boardStack = boardStack + it }
                                 selectedBoardId = linkedBoard.id
@@ -733,7 +731,7 @@ private fun BoardSetWorkspaceScreen(
             initialVocalization = target.button?.vocalization.orEmpty(),
             initialImageUrl = initialImageUrl,
             availableBoards = activeGraph?.boards.orEmpty().filterNot { it.id == activeBoard.id },
-            initialLinkedBoardId = target.button?.loadBoard?.id,
+            initialLinkedBoardId = activeGraph?.resolveLinkedBoard(target.button?.loadBoard)?.id,
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
             onSave = { label, vocalization, imageUrl, linkedBoardId ->
@@ -973,7 +971,9 @@ private fun updateDraftCell(
         label = label.trim(),
         vocalization = vocalization?.trim()?.ifBlank { null },
         imageId = imageId,
-        loadBoard = linkedBoardId?.let { ObfLoadBoard(id = it) }
+        loadBoard = linkedBoardId?.let { targetId ->
+            ObfLoadBoard(id = targetId, name = graph.boardsById[targetId]?.name)
+        }
     )
     val buttons = if (existingButton == null) board.buttons + button else board.buttons.map {
         if (it.id == button.id) button else it
