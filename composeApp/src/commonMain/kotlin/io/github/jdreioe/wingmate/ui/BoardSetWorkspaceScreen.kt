@@ -62,6 +62,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.PhraseUseCase
+import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
@@ -404,6 +406,7 @@ private fun BoardSetWorkspaceScreen(
     onExitToLibrary: () -> Unit
 ) {
     val useCase = koinInject<BoardSetUseCase>()
+    val phraseUseCase = koinInject<PhraseUseCase>()
     val speechService = koinInject<SpeechService>()
     val scope = rememberCoroutineScope()
     var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
@@ -422,9 +425,12 @@ private fun BoardSetWorkspaceScreen(
     var editActionsExpanded by remember { mutableStateOf(false) }
     var showRenameBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
+    var isSavingSentence by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(Res.string.board_workspace_unlock_to_edit)
     val savedMessage = stringResource(Res.string.board_workspace_saved)
     val saveErrorMessage = stringResource(Res.string.board_workspace_save_error)
+    val phraseSavedMessage = stringResource(Res.string.board_workspace_phrase_saved)
+    val phraseSaveErrorMessage = stringResource(Res.string.board_workspace_phrase_save_error)
 
     LaunchedEffect(boardSetId) {
         isLoading = true
@@ -662,6 +668,34 @@ private fun BoardSetWorkspaceScreen(
                                 scope.launch(Dispatchers.IO) { runCatching { speechService.speak(sentence) } }
                             }
                         },
+                        onSaveSentence = {
+                            val sentence = selectedButtons.joinToString(" ") {
+                                (it.first.vocalization ?: it.first.label).orEmpty()
+                            }.trim()
+                            if (sentence.isNotEmpty() && !isSavingSentence) {
+                                isSavingSentence = true
+                                scope.launch {
+                                    runCatching {
+                                        phraseUseCase.add(
+                                            Phrase(
+                                                id = workspaceId("phrase"),
+                                                text = sentence,
+                                                name = null,
+                                                backgroundColor = null,
+                                                parentId = null,
+                                                createdAt = Clock.System.now().toEpochMilliseconds()
+                                            )
+                                        )
+                                    }.onSuccess {
+                                        statusMessage = phraseSavedMessage
+                                    }.onFailure {
+                                        statusMessage = phraseSaveErrorMessage
+                                    }
+                                    isSavingSentence = false
+                                }
+                            }
+                        },
+                        isSaveSentenceEnabled = selectedButtons.isNotEmpty() && !isSavingSentence,
                         onDeleteLast = {
                             if (selectedButtons.isNotEmpty()) selectedButtons = selectedButtons.dropLast(1)
                         },

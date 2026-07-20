@@ -55,6 +55,12 @@
     <string name="board_workspace_finish_body">Gem ændringerne, før du vender tilbage til kommunikation?</string>
     <string name="board_workspace_saved">Ændringerne blev gemt</string>
     <string name="board_workspace_save_error">Ændringerne kunne ikke gemmes</string>
+    <string name="board_workspace_save_phrase">Gem under fraser</string>
+    <string name="board_workspace_phrase_saved">Gemt under Alle fraser</string>
+    <string name="board_workspace_phrase_save_error">Sætningen kunne ikke gemmes under fraser</string>
+    <string name="board_workspace_speak_sentence">Læs sætningen op</string>
+    <string name="board_workspace_delete_last">Slet sidste ord</string>
+    <string name="board_workspace_clear_sentence">Ryd sætningen</string>
     <string name="board_workspace_save_changes">Gem ændringer</string>
     <string name="board_workspace_discard">Kassér</string>
     <string name="board_workspace_keep_editing">Fortsæt redigering</string>

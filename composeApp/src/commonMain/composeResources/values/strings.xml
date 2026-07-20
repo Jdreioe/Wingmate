@@ -55,6 +55,12 @@
     <string name="board_workspace_finish_body">Save your changes before returning to communication mode?</string>
     <string name="board_workspace_saved">Changes saved</string>
     <string name="board_workspace_save_error">Unable to save changes</string>
+    <string name="board_workspace_save_phrase">Save to phrases</string>
+    <string name="board_workspace_phrase_saved">Saved to All phrases</string>
+    <string name="board_workspace_phrase_save_error">Unable to save the sentence to phrases</string>
+    <string name="board_workspace_speak_sentence">Speak sentence</string>
+    <string name="board_workspace_delete_last">Delete last word</string>
+    <string name="board_workspace_clear_sentence">Clear sentence</string>
     <string name="board_workspace_save_changes">Save changes</string>
     <string name="board_workspace_discard">Discard</string>
     <string name="board_workspace_keep_editing">Keep editing</string>

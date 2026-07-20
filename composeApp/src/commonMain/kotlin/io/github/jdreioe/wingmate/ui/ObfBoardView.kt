@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
@@ -50,6 +51,12 @@ import org.koin.compose.koinInject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.board_workspace_clear_sentence
+import wingmatekmp.composeapp.generated.resources.board_workspace_delete_last
+import wingmatekmp.composeapp.generated.resources.board_workspace_save_phrase
+import wingmatekmp.composeapp.generated.resources.board_workspace_speak_sentence
 
 @Composable
 fun ObfBoardView(
@@ -60,6 +67,8 @@ fun ObfBoardView(
     isEditMode: Boolean = false,
     selectedButtons: List<Pair<ObfButton, ImageBitmap?>> = emptyList(),
     onSpeakSentence: () -> Unit = {},
+    onSaveSentence: () -> Unit = {},
+    isSaveSentenceEnabled: Boolean = selectedButtons.isNotEmpty(),
     onDeleteLast: () -> Unit = {},
     onClearSentence: () -> Unit = {},
     showMessageBar: Boolean = !isEditMode,
@@ -86,6 +95,8 @@ fun ObfBoardView(
                     imagesById = imagesById,
                     extractedImages = extractedImages,
                     onSpeak = onSpeakSentence,
+                    onSave = onSaveSentence,
+                    isSaveEnabled = isSaveSentenceEnabled,
                     onDelete = onDeleteLast,
                     onClear = onClearSentence,
                     modifier = Modifier.fillMaxWidth().height(100.dp)
@@ -187,6 +198,8 @@ fun SymbolBar(
     imagesById: Map<String, io.github.jdreioe.wingmate.domain.obf.ObfImage>,
     extractedImages: Map<String, ByteArray>,
     onSpeak: () -> Unit,
+    onSave: () -> Unit,
+    isSaveEnabled: Boolean,
     onDelete: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier
@@ -242,13 +255,16 @@ fun SymbolBar(
                     onClick = onSpeak,
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Speak")
+                    Icon(Icons.Default.PlayArrow, contentDescription = stringResource(Res.string.board_workspace_speak_sentence))
+                }
+                IconButton(onClick = onSave, enabled = isSaveEnabled) {
+                    Icon(Icons.Default.Save, contentDescription = stringResource(Res.string.board_workspace_save_phrase))
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete Last")
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.board_workspace_delete_last))
                 }
                 IconButton(onClick = onClear) {
-                    Icon(Icons.Default.Clear, contentDescription = "Clear All")
+                    Icon(Icons.Default.Clear, contentDescription = stringResource(Res.string.board_workspace_clear_sentence))
                 }
             }
         }
