@@ -75,10 +75,14 @@ import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
+import io.github.jdreioe.wingmate.domain.Base64Decoder
+import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
+import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
@@ -86,7 +90,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
-import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -145,6 +149,7 @@ fun BoardSetManagerScreen(
     initialBoardSetId: String? = null
 ) {
     val useCase = koinInject<BoardSetUseCase>()
+    val obfParser = koinInject<ObfParser>()
     val saidTextRepository = koinInject<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
     val dictionaryRepository = koinInject<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>()
     val speechService = koinInject<SpeechService>()
@@ -195,12 +200,27 @@ fun BoardSetManagerScreen(
         }
     }
 
-    LaunchedEffect(Unit) { refreshBoardSets() }
+    var triedAutoLoadStarter by remember { mutableStateOf(false) }
+
+    suspend fun loadStarterBoards(): Boolean {
+        restoreStarterBoards(systemLanguageTag(), obfParser, useCase) ?: return false
+        triedAutoLoadStarter = true
+        return true
+    }
+
+    LaunchedEffect(Unit) {
+        refreshBoardSets()
+    }
+    LaunchedEffect(boardSets, triedAutoLoadStarter) {
+        if (!triedAutoLoadStarter && boardSets.isEmpty() && !isLoading) {
+            val ok = loadStarterBoards()
+            triedAutoLoadStarter = true
+            if (ok) refreshBoardSets()
+        }
+    }
     LaunchedEffect(initialBoardSetId) {
-        val targetBoardSet = withContext(Dispatchers.Default) {
-            initialBoardSetId
-                ?.let { useCase.getBoardSet(it) }
-                ?: useCase.listBoardSets().singleOrNull()
+        val targetBoardSet = initialBoardSetId?.let { id ->
+            withContext(Dispatchers.Default) { useCase.getBoardSet(id) }
         }
         if (targetBoardSet != null) {
             route = BoardSetRoute.Workspace(targetBoardSet.id, BoardWorkspaceMode.Run)
@@ -317,7 +337,10 @@ fun BoardSetManagerScreen(
     }
 
     if (showSettings) {
-        SettingsScreen(onDismiss = { showSettings = false })
+        SettingsScreen(
+            onDismiss = { showSettings = false },
+            onBaseBoardsRestored = ::refreshBoardSets
+        )
     }
     if (showImportExport) {
         SettingsExportDialog(onDismiss = { showImportExport = false })
@@ -614,6 +637,8 @@ private fun BoardSetWorkspaceScreen(
     val phraseUseCase = koinInject<PhraseUseCase>()
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
+    val soundPlayer = koinInject<SoundPlayer>()
+    val fileStorage = koinInject<FileStorage>()
     val settings by rememberReactiveSettings()
     val scope = rememberCoroutineScope()
     var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
@@ -950,7 +975,17 @@ private fun BoardSetWorkspaceScreen(
                                     val spokenText = (button.vocalization ?: button.label).orEmpty().trim()
                                     if (spokenText.isNotEmpty()) {
                                         selectedButtons = selectedButtons + (button to null)
-                                        scope.launch(Dispatchers.IO) {
+                                    }
+                                    val sound = button.soundId?.let { id ->
+                                        activeBoard.sounds.firstOrNull { it.id == id }
+                                    }
+                                    scope.launch(Dispatchers.IO) {
+                                        val playedSound = playButtonSound(
+                                            sound = sound,
+                                            fileStorage = fileStorage,
+                                            soundPlayer = soundPlayer
+                                        )
+                                        if (!playedSound && spokenText.isNotEmpty()) {
                                             runCatching {
                                                 val voice = voiceUseCase.selected()
                                                     .withLanguageOverride(button.locale)
@@ -1537,6 +1572,30 @@ private fun speakSelectedButtons(
             }
         }
     }
+}
+
+/**
+ * Plays an OBF button sound from storage or inline data. Returns true when playback started.
+ */
+internal suspend fun playButtonSound(
+    sound: ObfSound?,
+    fileStorage: FileStorage,
+    soundPlayer: SoundPlayer
+): Boolean {
+    if (sound == null) return false
+    val path = sound.path
+    val data = sound.data
+    val bytes = when {
+        !path.isNullOrBlank() -> fileStorage.loadBytes(path)
+        !data.isNullOrBlank() -> decodeObfDataUri(data)
+        else -> null
+    } ?: return false
+    if (bytes.isEmpty()) return false
+    return soundPlayer.playBytes(bytes, sound.contentType)
+}
+
+private fun decodeObfDataUri(data: String): ByteArray? {
+    return Base64Decoder.decodeOrNull(payload)
 }
 
 private fun languageName(

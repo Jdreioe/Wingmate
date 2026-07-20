@@ -1,0 +1,123 @@
+{
+  "format": "open-board-0.1",
+  "id": "lots_of_stuff",
+  "locale": "en",
+  "name": "Lots of Stuff Board",
+  "ext_speaker_url": "http://www.example.com/mylink",
+  "description_html": "This is an .obf file that covers all documented components of the spec (images, sounds, alpha colors, proprietary symbols, custom vocalizations, spelling and actions, licensing, ext_ attributes, etc.).",
+  "license": {
+    "type": "CC-By",
+    "copyright_notice_url": "http://creativecommons.org/licenses/by",
+    "source_url": "http://www.example.com/mysource",
+    "author_name": "Brian Whitmer",
+    "author_url": "https://www.twitter.com/whitmer",
+    "author_email": "brian@mailinator.com"
+  },
+  "grid": {
+    "rows": 2,
+    "columns": 3,
+    "order": [
+      ["b1", "b3", null],
+      ["b4", "b2", "b5"]
+    ]
+  },
+  "buttons": [
+    {
+      "id": "b1",
+      "label": "happy",
+      "vocalization": "I am happy, yo",
+      "image_id": "i9",
+      "sound_id": "s2",
+      "background_color": "rgb(200, 200, 200)",
+      "border_color": "rgb( 255, 0,  0) "
+    },
+    {
+      "id": "b2",
+      "label": "sad",
+      "image_id": "i11",
+      "sound_id": "s1",
+      "background_color": "rgb( 200, 200, 200) ",
+      "border_color": "rgb(0, 0, 255)",
+      "load_board": {
+        "name": "Cool Remote Board",
+        "url": "http://www.example.com/load_board",
+        "data_url": "http://www.example.com/download/load_board.obf?auth=asdfjkl"
+      }
+    },
+    {
+      "id": "b3",
+      "label": "+less",
+      "image_id": "i11",
+      "action": "+less",
+      "background_color": "rgba(0, 0, 0, 0.1)",
+      "border_color": "rgba(255, 0, 0, 0.2)"
+    },
+    {
+      "id": "b5",
+      "label": "No way",
+      "ext_speaker_should_be_hidden_in_preview": true,
+      "hidden": true
+    },
+    {
+      "id": "b4",
+      "action": ":clear",
+      "label": "Clear Text"
+    }
+  ],
+  "images": [
+    {
+      "id": "i9",
+      "width": 300,
+      "height": 300,
+      "url": "https://openclipart.org/image/800px/svg_to_png/166638/1325061089.png",
+      "content_type": "image/png",
+      "license": {
+        "type": "public domain",
+        "copyright_notice_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+        "source_url": "https://openclipart.org/detail/205568/two-kids-in-school-uniform-by-cyberscooty-205568",
+        "author_name": "cyberscooty",
+        "author_url": "https://openclipart.org/user-detail/cyberscooty"
+      }
+    },
+    {
+      "id": "i11",
+      "width": 300,
+      "height": 300,
+      "content_type": "image/png",
+      "url": "https://openclipart.org/image/300px/svg_to_png/145/PeterM_Sad_tiger_cat.png",
+      "ext_speaker_freshness": "some"
+    },
+    {
+      "id": "i42",
+      "width": 400,
+      "height": 400,
+      "content_type": "image/x-icon",
+      "symbol": {
+        "set": "mypics",
+        "filename": "hat.ico"
+      }
+    }
+  ],
+  "sounds": [
+    {
+      "id": "s1",
+      "url": "http://soundbible.com/grab.php?id=132&type=mp3",
+      "duration": 2,
+      "ext_speaker_coolness": 4,
+      "content_type": "audio/mp3",
+      "license": {
+        "type": "public domain",
+        "copyright_notice_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+        "source_url": "http://soundbible.com/132-Female-Sigh.html",
+        "author_name": "PD Ezwa",
+        "author_url": "http://soundbible.com/132-Female-Sigh.html"
+      }
+    },
+    {
+      "id": "s2",
+      "url": "http://soundbible.com/grab.php?id=132&type=mp3",
+      "duration": 2,
+      "content_type": "audio/mp3"
+    }
+  ]
+}

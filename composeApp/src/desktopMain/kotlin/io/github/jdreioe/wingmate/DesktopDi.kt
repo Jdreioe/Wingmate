@@ -11,6 +11,10 @@ import io.github.jdreioe.wingmate.domain.PhraseRecordingService
 import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
+import io.github.jdreioe.wingmate.domain.FileStorage
+import io.github.jdreioe.wingmate.domain.SoundPlayer
+import io.github.jdreioe.wingmate.infrastructure.JvmFileStorage
+import io.github.jdreioe.wingmate.infrastructure.JvmSoundPlayer
 import io.github.jdreioe.wingmate.infrastructure.DesktopSpeechService
 import io.github.jdreioe.wingmate.infrastructure.DesktopPhraseRecordingService
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
@@ -68,6 +72,8 @@ fun overrideDesktopSpeechService() {
             singleOf(::SimpleNGramPredictionService) { bind<TextPredictionService>() }
             // File picker for importing files
             singleOf(::DesktopFilePicker) { bind<FilePicker>() }
+            singleOf(::JvmFileStorage) { bind<FileStorage>() }
+            singleOf(::JvmSoundPlayer) { bind<SoundPlayer>() }
             singleOf(::JvmImageCacher) { bind<ImageCacher>() }
             
             single { FileSystem.SYSTEM }

@@ -235,6 +235,12 @@
     <string name="ui_settings_startup_mode_screens">Screens</string>
     <string name="ui_settings_startup_screen_title">Screen to open</string>
     <string name="ui_settings_startup_screen_library">Screen library</string>
+    <string name="ui_settings_base_boards_title">Base boards</string>
+    <string name="ui_settings_base_boards_desc">Add a fresh copy of the starter boards to the Screen library. Existing screens are not changed.</string>
+    <string name="ui_settings_base_boards_restore">Restore base boards</string>
+    <string name="ui_settings_base_boards_restoring">Restoring…</string>
+    <string name="ui_settings_base_boards_restored">Base boards restored</string>
+    <string name="ui_settings_base_boards_error">Unable to restore base boards</string>
 
     <string name="test_voice_default_text">Hello! This is how I sound. Welcome to Wingmate!</string>
     <string name="test_voice_title">Test Your Voice</string>
@@ -296,7 +302,7 @@
     <string name="phrase_screen_import_export_data">Import/Export Data</string>
     <string name="phrase_screen_check_updates">Check for updates</string>
     <string name="phrase_screen_welcome_screen">Welcome screen</string>
-    <string name="phrase_screen_load_sample_board">Load Sample Page</string>
+    <string name="phrase_screen_load_sample_board">Load starter boards</string>
     <string name="phrase_screen_close_board">Close Page</string>
     <string name="phrase_screen_import_board">Import OBF/OBZ Page...</string>
     <string name="phrase_screen_select_board_title">Select OBF/OBZ Page</string>

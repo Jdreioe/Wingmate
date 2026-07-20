@@ -235,6 +235,12 @@
     <string name="ui_settings_startup_mode_screens">Skærme</string>
     <string name="ui_settings_startup_screen_title">Skærm der skal åbnes</string>
     <string name="ui_settings_startup_screen_library">Skærmoversigt</string>
+    <string name="ui_settings_base_boards_title">Grundtavler</string>
+    <string name="ui_settings_base_boards_desc">Tilføj en ny kopi af starttavlerne til skærmoversigten. Eksisterende skærme ændres ikke.</string>
+    <string name="ui_settings_base_boards_restore">Gendan grundtavler</string>
+    <string name="ui_settings_base_boards_restoring">Gendanner…</string>
+    <string name="ui_settings_base_boards_restored">Grundtavlerne er gendannet</string>
+    <string name="ui_settings_base_boards_error">Grundtavlerne kunne ikke gendannes</string>
 
     <string name="test_voice_default_text">Hej! Sådan lyder jeg. Velkommen til Wingmate!</string>
     <string name="test_voice_title">Test din stemme</string>
@@ -296,7 +302,7 @@
     <string name="phrase_screen_import_export_data">Importer/eksporter data</string>
     <string name="phrase_screen_check_updates">Søg efter opdateringer</string>
     <string name="phrase_screen_welcome_screen">Velkomstskærm</string>
-    <string name="phrase_screen_load_sample_board">Indlæs eksempelside</string>
+    <string name="phrase_screen_load_sample_board">Indlæs starttavler</string>
     <string name="phrase_screen_close_board">Luk side</string>
     <string name="phrase_screen_import_board">Importer OBF/OBZ-side...</string>
     <string name="phrase_screen_select_board_title">Vælg OBF/OBZ-side</string>

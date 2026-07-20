@@ -5,21 +5,25 @@ import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.IosAudioClipboard
 import io.github.jdreioe.wingmate.infrastructure.IosCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.IosConfigRepository
+import io.github.jdreioe.wingmate.infrastructure.IosFileStorage
 import io.github.jdreioe.wingmate.infrastructure.IosPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.IosPronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.infrastructure.IosSaidTextRepository
 import io.github.jdreioe.wingmate.infrastructure.IosSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.IosShareService
+import io.github.jdreioe.wingmate.infrastructure.IosSoundPlayer
 import io.github.jdreioe.wingmate.infrastructure.IosSpeechService
 import io.github.jdreioe.wingmate.infrastructure.IosVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
@@ -63,6 +67,8 @@ fun overrideIosSpeechService() {
             
             // Pronunciation dictionary (persisted)
             singleOf(::IosPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
+            singleOf(::IosFileStorage) { bind<FileStorage>() }
+            singleOf(::IosSoundPlayer) { bind<SoundPlayer>() }
         }
     )
 }
