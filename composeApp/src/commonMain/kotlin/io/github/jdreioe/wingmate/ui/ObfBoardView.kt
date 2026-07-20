@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.draw.scale
 import io.github.jdreioe.wingmate.domain.AacLogger
+import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -507,7 +508,7 @@ fun ObfButtonItem(
                 runCatching {
                     val data = imageSource.data
                     val base64 = if (data.contains(",")) data.substringAfter(",") else data
-                    val bytes = java.util.Base64.getDecoder().decode(base64)
+                    val bytes = Base64Decoder.decode(base64)
                     bytes.toComposeImageBitmap()
                 }.getOrNull()
             }
