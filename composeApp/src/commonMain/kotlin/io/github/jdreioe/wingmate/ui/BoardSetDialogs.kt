@@ -151,6 +151,7 @@ internal fun EditBoardCellDialog(
     initialRowSpan: Int = 1,
     initialColumnSpan: Int = 1,
     initialAction: String? = null,
+    initialActions: List<String> = emptyList(),
     hasExistingValue: Boolean,
     onDismiss: () -> Unit,
     onSave: (
@@ -162,7 +163,8 @@ internal fun EditBoardCellDialog(
         linkedBoardId: String?,
         rowSpan: Int,
         columnSpan: Int,
-        action: String?
+        action: String?,
+        actions: List<String>
     ) -> Unit,
     onClearCell: () -> Unit
 ) {
@@ -173,6 +175,7 @@ internal fun EditBoardCellDialog(
     var language by remember { mutableStateOf(initialLanguage) }
     var linkedBoardId by remember { mutableStateOf(initialLinkedBoardId) }
     var action by remember { mutableStateOf(initialAction) }
+    val actions by remember { mutableStateOf(initialActions) }
     var selectedSpan by remember(initialRowSpan, initialColumnSpan) {
         mutableStateOf(FieldSpanOption(initialRowSpan, initialColumnSpan))
     }
@@ -446,7 +449,8 @@ internal fun EditBoardCellDialog(
                         linkedBoardId.takeIf { opensPage },
                         selectedSpan.rows,
                         selectedSpan.columns,
-                        action?.trim()?.ifBlank { null }
+                        action?.trim()?.ifBlank { null },
+                        actions
                     )
                 },
                 enabled = label.isNotBlank() && (!opensPage || linkedBoardId != null)

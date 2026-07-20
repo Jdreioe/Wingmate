@@ -971,15 +971,17 @@ private fun BoardSetWorkspaceScreen(
                                     ?.takeIf(String::isNotEmpty)
                                     ?.let { text -> text to button.locale }
                             }
-                            val sentence = speechParts.joinToString(" ") { it.first }
+                            val allSingleChars = speechParts.all { it.first.length <= 1 }
+                            val separator = if (allSingleChars) "" else " "
+                            val sentence = speechParts.joinToString(separator) { it.first }
                             if (sentence.isNotEmpty()) {
                                 scope.launch(Dispatchers.IO) {
                                     runCatching {
                                         val voice = voiceUseCase.selected()
                                         if (speechParts.any { !it.second.isNullOrBlank() }) {
-                                            val segments = speechParts.mapIndexed { index, (text, language) ->
+                                            val segments = speechParts.map { (text, language) ->
                                                 SpeechSegment(
-                                                    text = text + if (index < speechParts.lastIndex) " " else "",
+                                                    text = text,
                                                     languageTag = language
                                                 )
                                             }
@@ -992,7 +994,12 @@ private fun BoardSetWorkspaceScreen(
                             }
                         },
                         onSaveSentence = {
-                            val sentence = selectedButtons.joinToString(" ") {
+                            val allSingleChars = selectedButtons.all {
+                                val text = (it.first.vocalization ?: it.first.label).orEmpty()
+                                text.length <= 1
+                            }
+                            val separator = if (allSingleChars) "" else " "
+                            val sentence = selectedButtons.joinToString(separator) {
                                 (it.first.vocalization ?: it.first.label).orEmpty()
                             }.trim()
                             if (sentence.isNotEmpty() && !isSavingSentence) {
@@ -1082,13 +1089,14 @@ private fun BoardSetWorkspaceScreen(
             availableBoards = activeGraph?.boards.orEmpty().filterNot { it.id == activeBoard.id },
             initialLinkedBoardId = activeGraph?.resolveLinkedBoard(target.button?.loadBoard)?.id,
             initialAction = target.button?.action,
+            initialActions = target.button?.actions.orEmpty(),
             availableSpans = availableSpans,
             initialRowSpan = currentSpan.rows,
             initialColumnSpan = currentSpan.columns,
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
             onSave = { label, vocalization, imageUrl, backgroundColor, language, linkedBoardId,
-                       rowSpan, columnSpan, action ->
+                       rowSpan, columnSpan, action, actions ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
                     updateDraftCell(
@@ -1104,7 +1112,8 @@ private fun BoardSetWorkspaceScreen(
                         linkedBoardId = linkedBoardId,
                         rowSpan = rowSpan,
                         columnSpan = columnSpan,
-                        action = action
+                        action = action,
+                        actions = actions
                     )
                 )
                 editingCell = null
@@ -1309,7 +1318,8 @@ internal fun updateDraftCell(
     linkedBoardId: String?,
     rowSpan: Int = 1,
     columnSpan: Int = 1,
-    action: String? = null
+    action: String? = null,
+    actions: List<String> = emptyList()
 ): BoardSetGraph {
     val board = graph.boardsById[boardId] ?: return graph
     val grid = board.grid ?: return graph
@@ -1340,7 +1350,8 @@ internal fun updateDraftCell(
         loadBoard = linkedBoardId?.let { targetId ->
             ObfLoadBoard(id = targetId, name = graph.boardsById[targetId]?.name)
         },
-        action = action?.trim()?.ifBlank { null }
+        action = action?.trim()?.ifBlank { null },
+        actions = actions
     )
     val buttons = if (existingButton == null) board.buttons + button else board.buttons.map {
         if (it.id == button.id) button else it
@@ -1509,9 +1520,9 @@ private fun speakSelectedButtons(
             ?.takeIf { it.isNotEmpty() }
             ?.let { text -> text to button.locale }
     }
-    val sentence = speechParts.joinToString("") { it.first }.ifBlank {
-        speechParts.joinToString(" ") { it.first }
-    }
+    val allSingleChars = speechParts.all { it.first.length <= 1 }
+    val separator = if (allSingleChars) "" else " "
+    val sentence = speechParts.joinToString(separator) { it.first }
     if (sentence.isEmpty()) return
     scope.launch(Dispatchers.IO) {
         runCatching {
