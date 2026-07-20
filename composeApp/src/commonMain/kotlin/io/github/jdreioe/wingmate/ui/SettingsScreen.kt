@@ -75,7 +75,6 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
     var usageLoggingEnabled by remember { mutableStateOf(false) }
 
     // --- General section state ---
-    var autoUpdateEnabled by remember { mutableStateOf(true) }
     var featureUsageReportingEnabled by remember { mutableStateOf(false) }
     var partnerWindowEnabled by remember { mutableStateOf(false) }
     var startupMode by remember { mutableStateOf(StartupMode.Keyboard) }
@@ -117,7 +116,6 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
         }
         useSystemTts = s.useSystemTts
         virtualMic = s.virtualMicEnabled
-        autoUpdateEnabled = s.autoUpdateEnabled
         featureUsageReportingEnabled = s.featureUsageReportingEnabled
         partnerWindowEnabled = s.partnerWindowEnabled
         startupMode = s.startupMode
@@ -284,8 +282,6 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
                                     startupMode = mode
                                 },
                                 onStartupBoardSetChange = { startupBoardSetId = it },
-                                autoUpdateEnabled = autoUpdateEnabled,
-                                onAutoUpdateChange = { checked -> autoUpdateEnabled = checked; updateSettings { it.copy(autoUpdateEnabled = checked) } },
                                 featureUsageReportingEnabled = featureUsageReportingEnabled,
                                 onFeatureReportingChange = { checked ->
                                     featureUsageReportingEnabled = checked
@@ -591,8 +587,6 @@ private fun GeneralSection(
     availableBoardSets: List<ObfBoardSet>,
     onStartupModeChange: (StartupMode) -> Unit,
     onStartupBoardSetChange: (String?) -> Unit,
-    autoUpdateEnabled: Boolean,
-    onAutoUpdateChange: (Boolean) -> Unit,
     featureUsageReportingEnabled: Boolean,
     onFeatureReportingChange: (Boolean) -> Unit,
     partnerWindowEnabled: Boolean,
@@ -674,14 +668,8 @@ private fun GeneralSection(
     }
 
     Spacer(modifier = Modifier.height(24.dp))
-    SectionHeader("Updates & Analytics")
+    SectionHeader(stringResource(Res.string.ui_settings_analytics_title))
 
-    SettingsCheckbox(
-        checked = autoUpdateEnabled,
-        onCheckedChange = onAutoUpdateChange,
-        title = stringResource(Res.string.ui_settings_auto_updates_title),
-        description = stringResource(Res.string.ui_settings_auto_updates_desc)
-    )
     SettingsCheckbox(
         checked = featureUsageReportingEnabled,
         onCheckedChange = onFeatureReportingChange,

@@ -212,8 +212,7 @@
     <string name="ui_settings_note_scaling_moved">Bemærk: UI-skalering er flyttet til dialogen Taleindstillinger.</string>
     <string name="ui_settings_virtual_mic_title">Brug virtuel mikrofon til opkald</string>
     <string name="ui_settings_virtual_mic_desc">Ruter TTS-lyd til en virtuel enhed, som du kan vælge som mikrofon i Zoom/Meet.</string>
-    <string name="ui_settings_auto_updates_title">Automatiske opdateringer</string>
-    <string name="ui_settings_auto_updates_desc">Søg automatisk efter og installer opdateringer fra GitHub.</string>
+    <string name="ui_settings_analytics_title">Analyse</string>
     <string name="ui_settings_feature_reporting_title">Rapportering af funktionsbrug</string>
     <string name="ui_settings_feature_reporting_desc">Hjælp med at forbedre Wingmate ved at dele anonyme hændelser om funktionsbrug. Ingen frasetekst, nøgler eller filstier rapporteres.</string>
     <string name="ui_settings_partner_window_title">Partnerdisplay</string>
@@ -271,6 +270,7 @@
     <string name="mode_switch_to_keyboard">Skift til tastatur og fraser</string>
     <string name="board_workspace_enter_fullscreen">Åbn siden i fuld skærm</string>
     <string name="board_workspace_exit_fullscreen">Afslut fuld skærm</string>
+    <string name="board_workspace_app_settings">Appindstillinger</string>
 
     <string name="common_add">Tilføj</string>
     <string name="common_next">Næste</string>

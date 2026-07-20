@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -138,6 +139,7 @@ fun BoardSetManagerScreen(
     var boardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ObfBoardSet?>(null) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     val loadError = stringResource(Res.string.board_sets_load_error)
@@ -207,6 +209,7 @@ fun BoardSetManagerScreen(
             boardSetId = currentRoute.boardSetId,
             initialMode = currentRoute.mode,
             onSwitchToKeyboard = onBack,
+            onOpenSettings = { showSettings = true },
             onExitToLibrary = {
                 route = BoardSetRoute.Library
                 refreshBoardSets()
@@ -257,6 +260,10 @@ fun BoardSetManagerScreen(
                 TextButton(onClick = { deleteTarget = null }) { Text(stringResource(Res.string.common_cancel)) }
             }
         )
+    }
+
+    if (showSettings) {
+        SettingsScreen(onDismiss = { showSettings = false })
     }
 }
 
@@ -426,6 +433,7 @@ private fun BoardSetWorkspaceScreen(
     boardSetId: String,
     initialMode: BoardWorkspaceMode,
     onSwitchToKeyboard: () -> Unit,
+    onOpenSettings: () -> Unit,
     onExitToLibrary: () -> Unit
 ) {
     val useCase = koinInject<BoardSetUseCase>()
@@ -448,6 +456,7 @@ private fun BoardSetWorkspaceScreen(
     var editingCell by remember { mutableStateOf<WorkspaceCellTarget?>(null) }
     var showFinishDialog by remember { mutableStateOf(false) }
     var editActionsExpanded by remember { mutableStateOf(false) }
+    var workspaceMenuExpanded by remember { mutableStateOf(false) }
     var showRenameBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
     var isSavingSentence by remember(boardSetId) { mutableStateOf(false) }
@@ -618,6 +627,15 @@ private fun BoardSetWorkspaceScreen(
                                         showDeleteBoardDialog = true
                                     }
                                 )
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(Res.string.board_workspace_app_settings)) },
+                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                    onClick = {
+                                        editActionsExpanded = false
+                                        onOpenSettings()
+                                    }
+                                )
                             }
                         }
                     } else {
@@ -644,6 +662,27 @@ private fun BoardSetWorkspaceScreen(
                         if (activeGraph?.boardSet?.isLocked == false) {
                             IconButton(onClick = ::startEditing) {
                                 Icon(Icons.Default.Edit, contentDescription = stringResource(Res.string.board_workspace_edit))
+                            }
+                        }
+                        Box {
+                            IconButton(onClick = { workspaceMenuExpanded = true }) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = stringResource(Res.string.board_workspace_actions)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = workspaceMenuExpanded,
+                                onDismissRequest = { workspaceMenuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(Res.string.board_workspace_app_settings)) },
+                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                    onClick = {
+                                        workspaceMenuExpanded = false
+                                        onOpenSettings()
+                                    }
+                                )
                             }
                         }
                     }

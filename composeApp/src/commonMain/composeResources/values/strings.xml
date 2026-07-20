@@ -212,8 +212,7 @@
     <string name="ui_settings_note_scaling_moved">Note: UI Scaling settings have been moved to Speech Settings dialog.</string>
     <string name="ui_settings_virtual_mic_title">Use virtual microphone for calls</string>
     <string name="ui_settings_virtual_mic_desc">Routes TTS audio to a virtual device you can pick as mic in Zoom/Meet.</string>
-    <string name="ui_settings_auto_updates_title">Automatic updates</string>
-    <string name="ui_settings_auto_updates_desc">Automatically check for and install updates from GitHub.</string>
+    <string name="ui_settings_analytics_title">Analytics</string>
     <string name="ui_settings_feature_reporting_title">Feature usage reporting</string>
     <string name="ui_settings_feature_reporting_desc">Help improve Wingmate by sharing anonymous feature usage events. No phrase text, keys, or file paths are reported.</string>
     <string name="ui_settings_partner_window_title">Partner window display</string>
@@ -271,6 +270,7 @@
     <string name="mode_switch_to_keyboard">Switch to keyboard and phrases</string>
     <string name="board_workspace_enter_fullscreen">Open page full screen</string>
     <string name="board_workspace_exit_fullscreen">Exit full screen</string>
+    <string name="board_workspace_app_settings">App settings</string>
 
     <string name="common_add">Add</string>
     <string name="common_next">Next</string>
