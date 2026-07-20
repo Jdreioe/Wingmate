@@ -90,11 +90,65 @@ fun ObfBoardView(
 ) {
     val settings by rememberReactiveSettings()
     val imagesById = remember(board) { board.images.associateBy { it.id } }
+    // Absolute positioning: if every button has top/left/width/height, render fractionally
+    val isAbsoluteLayout = remember(board) {
+        board.buttons.isNotEmpty() && board.buttons.all {
+            it.top != null && it.left != null && it.width != null && it.height != null
+        }
+    }
     // If grid is defined, use it. Otherwise, just listing buttons (fallback)
     val grid = board.grid
     val buttonsById = remember(board) { board.buttons.associateBy { it.id } }
 
-    if (grid != null) {
+    if (isAbsoluteLayout) {
+        Column(modifier = modifier.fillMaxSize().padding(8.dp)) {
+            if (showMessageBar) {
+                SymbolBar(
+                    selectedButtons = selectedButtons,
+                    imagesById = imagesById,
+                    extractedImages = extractedImages,
+                    onSpeak = onSpeakSentence,
+                    onSave = onSaveSentence,
+                    isSaveEnabled = isSaveSentenceEnabled,
+                    onDelete = onDeleteLast,
+                    onClear = onClearSentence,
+                    showSentenceText = showSentenceText,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (showSentenceText) 260.dp else 100.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth().then(if (showMessageBar) Modifier.weight(1f) else Modifier)) {
+                val containerWidth = maxWidth
+                val containerHeight = maxHeight
+                board.buttons.forEach { button ->
+                    val left = (button.left ?: 0.0) * containerWidth.value
+                    val top = (button.top ?: 0.0) * containerHeight.value
+                    val w = (button.width ?: 0.1) * containerWidth.value
+                    val h = (button.height ?: 0.1) * containerHeight.value
+                    if (!button.hidden || isEditMode) {
+                        val image = button.imageId?.let { imagesById[it] }
+                        Box(
+                            modifier = Modifier
+                                .offset(x = left.dp, y = top.dp)
+                                .size(width = w.dp, height = h.dp)
+                        ) {
+                            ObfButtonItem(
+                                button = button,
+                                image = image,
+                                extractedImageBytes = button.imageId?.let {
+                                    image?.path?.let { path -> extractedImages[path] }
+                                },
+                                onClick = { onButtonClick(button) },
+                                isEditMode = isEditMode
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    } else if (grid != null) {
         val columns = grid.columns.coerceAtLeast(1)
         val rows = grid.rows.coerceAtLeast(1)
         
