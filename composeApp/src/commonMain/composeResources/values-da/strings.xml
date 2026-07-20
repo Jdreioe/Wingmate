@@ -327,4 +327,6 @@
     <string name="ui_settings_auditory_fishing_desc">Hvisk mærkaten når en knap berøres eller holdes over.</string>
     <string name="ui_settings_usage_logging_title">Standardiseret logning (OBL)</string>
     <string name="ui_settings_usage_logging_desc">Optag brugsdata i Open Logging Format til klinisk gennemgang.</string>
+    <string name="board_symbol_unavailable">Symbolbibliotek utilgængeligt</string>
+    <string name="board_symbol_unavailable_set">Symbolbiblioteket “%1$s” er utilgængeligt</string>
 </resources>
