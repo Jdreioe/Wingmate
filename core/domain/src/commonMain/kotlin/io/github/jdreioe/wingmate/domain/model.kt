@@ -65,6 +65,8 @@ data class Settings(
     val welcomeFlowCompleted: Boolean = false,
     // Screen shown after launch once onboarding has been completed.
     val startupMode: StartupMode = StartupMode.Keyboard,
+    // Optional screen set opened directly when startupMode is Screens.
+    val startupBoardSetId: String? = null,
     // Partner window display (TD-I13 via FTDI FT232H) — desktop only
     val partnerWindowEnabled: Boolean = false,
     // EVE ROM font index (16-34); 31 = largest standard ROM font

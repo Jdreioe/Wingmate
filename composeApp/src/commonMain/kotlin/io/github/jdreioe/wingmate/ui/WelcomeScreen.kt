@@ -2,6 +2,9 @@ package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -273,12 +276,14 @@ private fun StartupModeSelectionScreen(
             ImportOptionCard(
                 title = stringResource(Res.string.welcome_start_mode_keyboard_title),
                 description = stringResource(Res.string.welcome_start_mode_keyboard_desc),
+                icon = Icons.Default.Keyboard,
                 onClick = onKeyboard
             )
             Spacer(Modifier.height(16.dp))
             ImportOptionCard(
                 title = stringResource(Res.string.welcome_start_mode_screens_title),
                 description = stringResource(Res.string.welcome_start_mode_screens_desc),
+                icon = Icons.Default.GridView,
                 onClick = onScreens
             )
             Spacer(Modifier.height(24.dp))

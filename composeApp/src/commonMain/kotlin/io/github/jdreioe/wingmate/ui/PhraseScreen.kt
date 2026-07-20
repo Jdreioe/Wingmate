@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Add
@@ -72,8 +73,8 @@ import org.koin.compose.getKoin
 import org.koin.compose.koinInject
 import wingmatekmp.composeapp.generated.resources.Res
 import wingmatekmp.composeapp.generated.resources.common_language
+import wingmatekmp.composeapp.generated.resources.mode_switch_to_screens
 import wingmatekmp.composeapp.generated.resources.phrase_screen_app_settings
-import wingmatekmp.composeapp.generated.resources.phrase_screen_boardset_manager
 import wingmatekmp.composeapp.generated.resources.phrase_screen_check_updates
 import wingmatekmp.composeapp.generated.resources.phrase_screen_close_board
 import wingmatekmp.composeapp.generated.resources.phrase_screen_copy_last_soundfile
@@ -289,6 +290,22 @@ fun PhraseScreen(
                             fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
                         )) },
                         actions = {
+                            IconButton(
+                                onClick = {
+                                    featureUsageReporter.reportEvent(
+                                        FeatureUsageEvents.SCREEN_VIEW,
+                                        "screen" to "boardsets"
+                                    )
+                                    onOpenBoardSetManager?.invoke()
+                                },
+                                enabled = onOpenBoardSetManager != null
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.GridView,
+                                    contentDescription = stringResource(Res.string.mode_switch_to_screens)
+                                )
+                            }
+
                             // Fullscreen toggle: mirrors the current input text
                             IconButton(onClick = {
                                 // Always mirror current text first
@@ -414,18 +431,6 @@ fun PhraseScreen(
                                         onBackToWelcome?.invoke()
                                     }
                                 )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.phrase_screen_boardset_manager), style = MaterialTheme.typography.bodyMedium) },
-                                    onClick = {
-                                        showOverflow = false
-                                        featureUsageReporter.reportEvent(
-                                            FeatureUsageEvents.SCREEN_VIEW,
-                                            "screen" to "boardsets"
-                                        )
-                                        onOpenBoardSetManager?.invoke()
-                                    }
-                                )
-                                
                                 Divider()
 
                                 if (enableObfObzImport) {

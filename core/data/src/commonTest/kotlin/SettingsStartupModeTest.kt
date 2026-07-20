@@ -4,6 +4,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class SettingsStartupModeTest {
     private val json = Json { ignoreUnknownKeys = true }
@@ -13,6 +14,7 @@ class SettingsStartupModeTest {
         val settings = json.decodeFromString<Settings>("{}")
 
         assertEquals(StartupMode.Keyboard, settings.startupMode)
+        assertNull(settings.startupBoardSetId)
     }
 
     @Test
@@ -21,5 +23,18 @@ class SettingsStartupModeTest {
         val decoded = json.decodeFromString<Settings>(encoded)
 
         assertEquals(StartupMode.Screens, decoded.startupMode)
+    }
+
+    @Test
+    fun selectedStartupScreenSurvivesPersistenceRoundTrip() {
+        val encoded = json.encodeToString(
+            Settings(
+                startupMode = StartupMode.Screens,
+                startupBoardSetId = "screen-people"
+            )
+        )
+        val decoded = json.decodeFromString<Settings>(encoded)
+
+        assertEquals("screen-people", decoded.startupBoardSetId)
     }
 }

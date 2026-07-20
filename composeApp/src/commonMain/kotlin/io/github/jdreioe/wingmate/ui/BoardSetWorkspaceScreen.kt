@@ -21,9 +21,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.AlertDialog
@@ -42,6 +45,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -125,7 +129,8 @@ private data class WorkspaceCellTarget(
 @Composable
 fun BoardSetManagerScreen(
     onBack: () -> Unit,
-    createOnLaunch: Boolean = false
+    createOnLaunch: Boolean = false,
+    initialBoardSetId: String? = null
 ) {
     val useCase = koinInject<BoardSetUseCase>()
     val scope = rememberCoroutineScope()
@@ -155,6 +160,12 @@ fun BoardSetManagerScreen(
     }
 
     LaunchedEffect(Unit) { refreshBoardSets() }
+    LaunchedEffect(initialBoardSetId) {
+        val boardSetId = initialBoardSetId ?: return@LaunchedEffect
+        if (withContext(Dispatchers.Default) { useCase.getBoardSet(boardSetId) } != null) {
+            route = BoardSetRoute.Workspace(boardSetId, BoardWorkspaceMode.Run)
+        }
+    }
     LaunchedEffect(createOnLaunch) {
         if (createOnLaunch) showCreateDialog = true
     }
@@ -191,6 +202,7 @@ fun BoardSetManagerScreen(
         is BoardSetRoute.Workspace -> BoardSetWorkspaceScreen(
             boardSetId = currentRoute.boardSetId,
             initialMode = currentRoute.mode,
+            onSwitchToKeyboard = onBack,
             onExitToLibrary = {
                 route = BoardSetRoute.Library
                 refreshBoardSets()
@@ -271,9 +283,12 @@ private fun BoardSetLibraryScreen(
                         )
                     }
                 },
-                navigationIcon = {
+                actions = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.common_back))
+                        Icon(
+                            Icons.Default.Keyboard,
+                            contentDescription = stringResource(Res.string.mode_switch_to_keyboard)
+                        )
                     }
                 }
             )
@@ -406,6 +421,7 @@ private fun BoardSetLibraryCard(
 private fun BoardSetWorkspaceScreen(
     boardSetId: String,
     initialMode: BoardWorkspaceMode,
+    onSwitchToKeyboard: () -> Unit,
     onExitToLibrary: () -> Unit
 ) {
     val useCase = koinInject<BoardSetUseCase>()
@@ -431,6 +447,7 @@ private fun BoardSetWorkspaceScreen(
     var showRenameBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
     var isSavingSentence by remember(boardSetId) { mutableStateOf(false) }
+    var isFullscreen by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(Res.string.board_workspace_unlock_to_edit)
     val savedMessage = stringResource(Res.string.board_workspace_saved)
     val saveErrorMessage = stringResource(Res.string.board_workspace_save_error)
@@ -511,7 +528,7 @@ private fun BoardSetWorkspaceScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (!isFullscreen) TopAppBar(
                 title = {
                     Column {
                         Text(
@@ -600,6 +617,18 @@ private fun BoardSetWorkspaceScreen(
                             }
                         }
                     } else {
+                        IconButton(onClick = { isFullscreen = true }) {
+                            Icon(
+                                Icons.Default.Fullscreen,
+                                contentDescription = stringResource(Res.string.board_workspace_enter_fullscreen)
+                            )
+                        }
+                        IconButton(onClick = onSwitchToKeyboard) {
+                            Icon(
+                                Icons.Default.Keyboard,
+                                contentDescription = stringResource(Res.string.mode_switch_to_keyboard)
+                            )
+                        }
                         if (selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
                             IconButton(onClick = {
                                 selectedBoardId = activeGraph?.boardSet?.rootBoardId
@@ -649,22 +678,24 @@ private fun BoardSetWorkspaceScreen(
                     }
                 }
                 else -> Column(Modifier.fillMaxSize()) {
-                    statusMessage?.let {
+                    if (!isFullscreen) statusMessage?.let {
                         Text(
                             it,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
-                    BoardStrip(
-                        boards = activeGraph.boards,
-                        selectedBoardId = selectedBoardId,
-                        onSelect = {
-                            selectedBoardId = it
-                            boardStack = emptyList()
-                            selectedButtons = emptyList()
-                        }
-                    )
+                    if (!isFullscreen) {
+                        BoardStrip(
+                            boards = activeGraph.boards,
+                            selectedBoardId = selectedBoardId,
+                            onSelect = {
+                                selectedBoardId = it
+                                boardStack = emptyList()
+                                selectedButtons = emptyList()
+                            }
+                        )
+                    }
                     ObfBoardView(
                         board = activeBoard,
                         isEditMode = mode == BoardWorkspaceMode.Edit,
@@ -753,6 +784,21 @@ private fun BoardSetWorkspaceScreen(
                         onClearSentence = { selectedButtons = emptyList() },
                         modifier = Modifier.weight(1f).fillMaxWidth()
                     )
+                }
+            }
+            if (isFullscreen && mode == BoardWorkspaceMode.Run && activeGraph != null && activeBoard != null) {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                    tonalElevation = 4.dp
+                ) {
+                    IconButton(onClick = { isFullscreen = false }) {
+                        Icon(
+                            Icons.Default.FullscreenExit,
+                            contentDescription = stringResource(Res.string.board_workspace_exit_fullscreen)
+                        )
+                    }
                 }
             }
         }

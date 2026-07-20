@@ -39,6 +39,7 @@ fun App() {
             var welcomeCompleted by remember { mutableStateOf<Boolean?>(null) }
             var currentScreen by remember { mutableStateOf<String?>(null) }
             var createBoardSetOnLaunch by remember { mutableStateOf(false) }
+            var startupBoardSetId by remember { mutableStateOf<String?>(null) }
             val scope = rememberCoroutineScope()
 
             fun routeFor(mode: StartupMode): String = when (mode) {
@@ -57,6 +58,7 @@ fun App() {
                     )
                 }
                 createBoardSetOnLaunch = mode == StartupMode.Screens && createScreen
+                startupBoardSetId = null
                 val target = routeFor(mode)
                 currentScreen = target
                 featureUsageReporter.reportEvent(
@@ -71,6 +73,7 @@ fun App() {
                     runCatching { settingsRepository.get() }.getOrNull()
                 }
                 welcomeCompleted = settings?.welcomeFlowCompleted ?: false
+                startupBoardSetId = settings?.startupBoardSetId
                 currentScreen = if (welcomeCompleted == true) {
                     routeFor(settings?.startupMode ?: StartupMode.Keyboard)
                 } else {
@@ -102,6 +105,7 @@ fun App() {
                             onBackToWelcome = { currentScreen = "welcome" },
                             onOpenBoardSetManager = {
                                 createBoardSetOnLaunch = false
+                                startupBoardSetId = null
                                 currentScreen = "boardsets"
                             }
                         )
@@ -112,7 +116,8 @@ fun App() {
                                 createBoardSetOnLaunch = false
                                 currentScreen = "phrase"
                             },
-                            createOnLaunch = createBoardSetOnLaunch
+                            createOnLaunch = createBoardSetOnLaunch,
+                            initialBoardSetId = startupBoardSetId
                         )
                     }
                     null -> {

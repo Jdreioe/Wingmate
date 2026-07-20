@@ -222,6 +222,8 @@
     <string name="ui_settings_startup_mode_desc">Vælg hvilken kommunikationstilstand Wingmate åbner efter opstart.</string>
     <string name="ui_settings_startup_mode_keyboard">Tastatur</string>
     <string name="ui_settings_startup_mode_screens">Skærme</string>
+    <string name="ui_settings_startup_screen_title">Skærm der skal åbnes</string>
+    <string name="ui_settings_startup_screen_library">Skærmoversigt</string>
 
     <string name="test_voice_default_text">Hej! Sådan lyder jeg. Velkommen til Wingmate!</string>
     <string name="test_voice_title">Test din stemme</string>
@@ -265,6 +267,10 @@
     <string name="welcome_start_mode_screens_title">Skærme</string>
     <string name="welcome_start_mode_screens_desc">Kommuniker med forbundne sider, felter og symboler.</string>
     <string name="welcome_importing_board">Importerer side...</string>
+    <string name="mode_switch_to_screens">Skift til skærme</string>
+    <string name="mode_switch_to_keyboard">Skift til tastatur og fraser</string>
+    <string name="board_workspace_enter_fullscreen">Åbn siden i fuld skærm</string>
+    <string name="board_workspace_exit_fullscreen">Afslut fuld skærm</string>
 
     <string name="common_add">Tilføj</string>
     <string name="common_next">Næste</string>
@@ -279,7 +285,6 @@
     <string name="phrase_screen_import_export_data">Importer/eksporter data</string>
     <string name="phrase_screen_check_updates">Søg efter opdateringer</string>
     <string name="phrase_screen_welcome_screen">Velkomstskærm</string>
-    <string name="phrase_screen_boardset_manager">Skærme</string>
     <string name="phrase_screen_load_sample_board">Indlæs eksempelside</string>
     <string name="phrase_screen_close_board">Luk side</string>
     <string name="phrase_screen_import_board">Importer OBF/OBZ-side...</string>
