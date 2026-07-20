@@ -18,6 +18,7 @@ import coil3.compose.AsyncImage
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
@@ -105,7 +106,7 @@ fun ObfBoardView(
                     showSentenceText = showSentenceText,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (showSentenceText) 140.dp else 100.dp)
+                        .height(if (showSentenceText) 260.dp else 100.dp)
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -218,75 +219,87 @@ fun SymbolBar(
     ) {
         Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
             if (showSentenceText) {
-                Text(
-                    text = selectedButtons.joinToString(" ") { (button, _) ->
-                        (button.label ?: button.vocalization).orEmpty()
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp)
-                )
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Text(
+                        text = selectedButtons.joinToString(" ") { (button, _) ->
+                            (button.label ?: button.vocalization).orEmpty()
+                        },
+                        fontSize = 48.sp,
+                        lineHeight = 56.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, end = 64.dp, top = 4.dp, bottom = 4.dp)
+                    )
+                }
             }
 
             Row(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = if (showSentenceText) {
+                    Modifier.fillMaxWidth().height(80.dp)
+                } else {
+                    Modifier.weight(1f).fillMaxWidth()
+                },
                 verticalAlignment = Alignment.CenterVertically
             ) {
-            LazyRow(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                items(selectedButtons) { (button, bitmap) ->
-                    val resolvedBitmap = remember(button, bitmap) {
-                        bitmap ?: button.imageId?.let { id ->
-                            imagesById[id]?.path?.let { path ->
-                                extractedImages[path]?.toComposeImageBitmap()
+                LazyRow(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(selectedButtons) { (button, bitmap) ->
+                        val resolvedBitmap = remember(button, bitmap) {
+                            bitmap ?: button.imageId?.let { id ->
+                                imagesById[id]?.path?.let { path ->
+                                    extractedImages[path]?.toComposeImageBitmap()
+                                }
                             }
                         }
-                    }
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(60.dp)
-                    ) {
-                        if (resolvedBitmap != null) {
-                            Image(
-                                bitmap = resolvedBitmap,
-                                contentDescription = null,
-                                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp))
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(60.dp)
+                        ) {
+                            if (resolvedBitmap != null) {
+                                Image(
+                                    bitmap = resolvedBitmap,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp))
+                                )
+                            }
+                            Text(
+                                text = button.label ?: "",
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Text(
-                            text = button.label ?: "",
-                            style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
                     }
                 }
-            }
 
-            VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
+                VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                FilledIconButton(
-                    onClick = onSpeak,
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = stringResource(Res.string.board_workspace_speak_sentence))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FilledIconButton(
+                        onClick = onSpeak,
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = stringResource(Res.string.board_workspace_speak_sentence))
+                    }
+                    IconButton(onClick = onSave, enabled = isSaveEnabled) {
+                        Icon(Icons.Default.Save, contentDescription = stringResource(Res.string.board_workspace_save_phrase))
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.board_workspace_delete_last))
+                    }
+                    IconButton(onClick = onClear) {
+                        Icon(Icons.Default.Clear, contentDescription = stringResource(Res.string.board_workspace_clear_sentence))
+                    }
                 }
-                IconButton(onClick = onSave, enabled = isSaveEnabled) {
-                    Icon(Icons.Default.Save, contentDescription = stringResource(Res.string.board_workspace_save_phrase))
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.board_workspace_delete_last))
-                }
-                IconButton(onClick = onClear) {
-                    Icon(Icons.Default.Clear, contentDescription = stringResource(Res.string.board_workspace_clear_sentence))
-                }
-            }
             }
         }
     }
