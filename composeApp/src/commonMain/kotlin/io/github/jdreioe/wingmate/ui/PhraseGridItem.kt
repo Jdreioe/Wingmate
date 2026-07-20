@@ -214,6 +214,10 @@ fun PhraseGridItem(
                 }
             },
         shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = bgColor,
+            contentColor = contentColor
+        ),
         border = if (settings.highContrastMode) {
             androidx.compose.foundation.BorderStroke(3.dp, highContrastContent)
         } else null
@@ -280,7 +284,7 @@ fun PhraseGridItem(
                     categoryName?.let { cname ->
                         Text(
                             text = cname,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = contentColor,
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), shape = RoundedCornerShape(4.dp))
@@ -310,8 +314,7 @@ fun PhraseGridItem(
                 val imageUrl = item.imageUrl
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(bgColor, shape = RoundedCornerShape(6.dp)),
+                        .fillMaxSize(),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -353,14 +356,14 @@ fun PhraseGridItem(
                 // Show material-style move up / move down / delete buttons
                 Column(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) {
                     IconButton(onClick = { if (index > 0) onMove?.invoke(index, index - 1) }) {
-                        Icon(imageVector = Icons.Filled.ArrowDropUp, contentDescription = moveUpLabel, tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(imageVector = Icons.Filled.ArrowDropUp, contentDescription = moveUpLabel, tint = contentColor)
                     }
                     IconButton(onClick = { if (index < total - 1) onMove?.invoke(index, index + 1) }) {
-                        Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = moveDownLabel, tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = moveDownLabel, tint = contentColor)
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     IconButton(onClick = { onDelete?.invoke() }) {
-                        Icon(imageVector = Icons.Filled.Close, contentDescription = deleteLabel, tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(imageVector = Icons.Filled.Close, contentDescription = deleteLabel, tint = contentColor)
                     }
                 }
             }
