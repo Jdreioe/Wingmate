@@ -41,7 +41,15 @@ val appModule = module {
     singleOf(::MovePhraseUseCase)
     singleOf(::GetAllItemsUseCase)
     
-    singleOf(::BoardImportService)
+    single {
+        BoardImportService(
+            obfParser = get(),
+            boardRepository = get(),
+            boardSetRepository = get(),
+            filePicker = get(),
+            fileStorage = getOrNull()
+        )
+    }
     
     single<AacLogger> { RealAacLogger(get(), getOrNull(named("logDir")), get()) }
 
