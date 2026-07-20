@@ -1,7 +1,10 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -16,7 +19,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import org.jetbrains.compose.resources.stringResource
@@ -133,6 +140,7 @@ internal fun EditBoardCellDialog(
     initialLabel: String,
     initialVocalization: String,
     initialImageUrl: String,
+    initialBackgroundColor: String? = null,
     availableLanguages: List<FieldLanguageOption> = emptyList(),
     initialLanguage: String? = null,
     availableBoards: List<ObfBoard> = emptyList(),
@@ -143,6 +151,7 @@ internal fun EditBoardCellDialog(
         label: String,
         vocalization: String?,
         imageUrl: String?,
+        backgroundColor: String?,
         language: String?,
         linkedBoardId: String?
     ) -> Unit,
@@ -151,12 +160,14 @@ internal fun EditBoardCellDialog(
     var label by remember { mutableStateOf(initialLabel) }
     var vocalization by remember { mutableStateOf(initialVocalization) }
     var imageUrl by remember { mutableStateOf(initialImageUrl) }
+    var backgroundColor by remember { mutableStateOf(initialBackgroundColor) }
     var language by remember { mutableStateOf(initialLanguage) }
     var linkedBoardId by remember { mutableStateOf(initialLinkedBoardId) }
     var opensPage by remember { mutableStateOf(initialLinkedBoardId != null) }
     var showLanguageMenu by remember { mutableStateOf(false) }
     var showBoardMenu by remember { mutableStateOf(false) }
     var showSymbolSearch by remember { mutableStateOf(false) }
+    var showColorPicker by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -194,6 +205,40 @@ internal fun EditBoardCellDialog(
                     if (imageUrl.isNotBlank()) {
                         OutlinedButton(onClick = { imageUrl = "" }) {
                             Text(stringResource(Res.string.board_dialog_clear_image))
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        stringResource(Res.string.board_dialog_color),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    val previewColor = backgroundColor
+                        ?.let { runCatching { parseHexToColor(it) }.getOrNull() }
+                        ?: MaterialTheme.colorScheme.surfaceVariant
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(previewColor)
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant,
+                                CircleShape
+                            )
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = { showColorPicker = true }) {
+                        Text(stringResource(Res.string.board_dialog_pick_color))
+                    }
+                    if (backgroundColor != null) {
+                        TextButton(onClick = { backgroundColor = null }) {
+                            Text(stringResource(Res.string.common_clear))
                         }
                     }
                 }
@@ -291,6 +336,7 @@ internal fun EditBoardCellDialog(
                         label.trim(),
                         vocalization.trim().ifBlank { null },
                         imageUrl.trim().ifBlank { null },
+                        backgroundColor,
                         language,
                         linkedBoardId.takeIf { opensPage }
                     )
@@ -316,6 +362,22 @@ internal fun EditBoardCellDialog(
             onSelect = { selectedUrl ->
                 imageUrl = selectedUrl
                 showSymbolSearch = false
+            }
+        )
+    }
+
+    if (showColorPicker) {
+        ColorPickerDialog(
+            initialColor = backgroundColor
+                ?.let { runCatching { parseHexToColor(it) }.getOrNull() }
+                ?: Color(0xFF81D4FA),
+            initialUse = backgroundColor != null,
+            onDismiss = { showColorPicker = false },
+            onPick = { color ->
+                backgroundColor = color?.let {
+                    "#" + (it.toArgb() and 0xFFFFFF).toString(16).padStart(6, '0').uppercase()
+                }
+                showColorPicker = false
             }
         )
     }

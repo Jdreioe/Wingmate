@@ -782,13 +782,14 @@ private fun BoardSetWorkspaceScreen(
             initialLabel = target.button?.label.orEmpty(),
             initialVocalization = target.button?.vocalization.orEmpty(),
             initialImageUrl = initialImageUrl,
+            initialBackgroundColor = target.button?.backgroundColor,
             availableLanguages = availableFieldLanguages,
             initialLanguage = target.button?.locale,
             availableBoards = activeGraph?.boards.orEmpty().filterNot { it.id == activeBoard.id },
             initialLinkedBoardId = activeGraph?.resolveLinkedBoard(target.button?.loadBoard)?.id,
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
-            onSave = { label, vocalization, imageUrl, language, linkedBoardId ->
+            onSave = { label, vocalization, imageUrl, backgroundColor, language, linkedBoardId ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
                     updateDraftCell(
@@ -799,6 +800,7 @@ private fun BoardSetWorkspaceScreen(
                         label = label,
                         vocalization = vocalization,
                         imageUrl = imageUrl,
+                        backgroundColor = backgroundColor,
                         language = language,
                         linkedBoardId = linkedBoardId
                     )
@@ -1000,6 +1002,7 @@ private fun updateDraftCell(
     label: String,
     vocalization: String?,
     imageUrl: String?,
+    backgroundColor: String?,
     language: String?,
     linkedBoardId: String?
 ): BoardSetGraph {
@@ -1026,6 +1029,7 @@ private fun updateDraftCell(
     val button = (existingButton ?: ObfButton(id = buttonId)).copy(
         label = label.trim(),
         vocalization = vocalization?.trim()?.ifBlank { null },
+        backgroundColor = backgroundColor?.trim()?.ifBlank { null },
         locale = language?.trim()?.ifBlank { null },
         imageId = imageId,
         loadBoard = linkedBoardId?.let { targetId ->

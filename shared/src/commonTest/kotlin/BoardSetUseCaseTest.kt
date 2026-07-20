@@ -70,6 +70,7 @@ class BoardSetUseCaseTest {
                     id = "to-food",
                     label = "People",
                     locale = "da-DK",
+                    backgroundColor = "#81D4FA",
                     loadBoard = ObfLoadBoard(id = people.id, name = people.name)
                 )
             )
@@ -83,6 +84,7 @@ class BoardSetUseCaseTest {
         assertEquals("food", link?.id)
         assertEquals("People", link?.name)
         assertEquals("da-DK", loaded.rootBoard?.buttons?.single()?.locale)
+        assertEquals("#81D4FA", loaded.rootBoard?.buttons?.single()?.backgroundColor)
     }
 
     @Test

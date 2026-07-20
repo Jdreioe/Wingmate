@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import io.github.jdreioe.wingmate.ui.toComposeImageBitmap
 import androidx.compose.animation.core.*
@@ -356,7 +357,12 @@ fun ObfButtonItem(
         button.borderColor?.let { runCatching { parseHexToColor(it) }.getOrNull() }
     }
     
-    val contentColor = if (settings.highContrastMode) highContrastContent else MaterialTheme.colorScheme.onSurface
+    val contentColor = when {
+        settings.highContrastMode -> highContrastContent
+        button.backgroundColor != null && bgColor.luminance() < 0.45f -> Color.White
+        button.backgroundColor != null -> Color.Black
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     
     // Try to load image from various sources synchronously first
     val syncBitmap = remember(image, extractedImageBytes) {

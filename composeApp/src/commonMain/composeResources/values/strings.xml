@@ -83,6 +83,8 @@
     <string name="board_dialog_vocalization">Vocalization (optional)</string>
     <string name="board_dialog_image_url">Image URL (optional)</string>
     <string name="board_dialog_clear_image">Clear image</string>
+    <string name="board_dialog_color">Field color</string>
+    <string name="board_dialog_pick_color">Pick</string>
     <string name="board_dialog_language">Language</string>
     <string name="board_dialog_language_default">Use default language</string>
     <string name="board_dialog_language_english">English</string>

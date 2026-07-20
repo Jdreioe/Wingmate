@@ -83,6 +83,8 @@
     <string name="board_dialog_vocalization">Udtale (valgfri)</string>
     <string name="board_dialog_image_url">Billed-URL (valgfri)</string>
     <string name="board_dialog_clear_image">Fjern billede</string>
+    <string name="board_dialog_color">Feltfarve</string>
+    <string name="board_dialog_pick_color">Vælg</string>
     <string name="board_dialog_language">Sprog</string>
     <string name="board_dialog_language_default">Brug standardsprog</string>
     <string name="board_dialog_language_english">Engelsk</string>
