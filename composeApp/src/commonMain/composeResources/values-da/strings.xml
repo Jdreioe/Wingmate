@@ -157,7 +157,7 @@
     <string name="color_picker_brightness"> Lysstyrke</string>
 
     <string name="import_options_title">Importer sider</string>
-    <string name="import_options_subtitle">Har du eksisterende OBF/OBZ-sider? Importer dem nu for hurtigt at komme i gang.</string>
+    <string name="import_options_subtitle">Har du eksisterende kommunikationssider? Importer dem nu for hurtigt at komme i gang.</string>
     <string name="import_options_classic_title">Klassisk tilstand</string>
     <string name="import_options_classic_desc">Præcis kopi af dine eksisterende sider. Bevarer originalt layout og navigation. Bedst hvis alt skal føles velkendt.</string>
     <string name="import_options_modern_title">Moderne tilstand</string>
@@ -263,7 +263,7 @@
     <string name="welcome_start_mode_keyboard_title">Tastatur og fraser</string>
     <string name="welcome_start_mode_keyboard_desc">Skriv beskeder, og kommuniker med gemte fraser og kategorier.</string>
     <string name="welcome_start_mode_screens_title">Skærme</string>
-    <string name="welcome_start_mode_screens_desc">Kommuniker med forbundne OBF/OBZ-sider, felter og symboler.</string>
+    <string name="welcome_start_mode_screens_desc">Kommuniker med forbundne sider, felter og symboler.</string>
     <string name="welcome_importing_board">Importerer side...</string>
 
     <string name="common_add">Tilføj</string>

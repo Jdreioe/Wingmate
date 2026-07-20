@@ -157,7 +157,7 @@
     <string name="color_picker_brightness">Bright</string>
 
     <string name="import_options_title">Import Pages</string>
-    <string name="import_options_subtitle">Do you have existing OBF/OBZ pages? Import them now to kickstart your communication.</string>
+    <string name="import_options_subtitle">Do you have existing communication pages? Import them now to get started.</string>
     <string name="import_options_classic_title">Classic Mode</string>
     <string name="import_options_classic_desc">Exact replica of your existing pages. Preserves the original layout and navigation structure. Best if you want to keep everything familiar.</string>
     <string name="import_options_modern_title">Modern Mode</string>
@@ -263,7 +263,7 @@
     <string name="welcome_start_mode_keyboard_title">Keyboard and phrases</string>
     <string name="welcome_start_mode_keyboard_desc">Type messages and communicate with saved phrases and categories.</string>
     <string name="welcome_start_mode_screens_title">Screens</string>
-    <string name="welcome_start_mode_screens_desc">Communicate with linked OBF/OBZ pages, fields, and symbols.</string>
+    <string name="welcome_start_mode_screens_desc">Communicate with linked pages, fields, and symbols.</string>
     <string name="welcome_importing_board">Importing page...</string>
 
     <string name="common_add">Add</string>
