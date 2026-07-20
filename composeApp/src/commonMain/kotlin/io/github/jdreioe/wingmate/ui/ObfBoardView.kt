@@ -74,6 +74,7 @@ fun ObfBoardView(
     onDeleteLast: () -> Unit = {},
     onClearSentence: () -> Unit = {},
     showMessageBar: Boolean = !isEditMode,
+    showSentenceText: Boolean = false,
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null
 ) {
     val settings by rememberReactiveSettings()
@@ -101,7 +102,10 @@ fun ObfBoardView(
                     isSaveEnabled = isSaveSentenceEnabled,
                     onDelete = onDeleteLast,
                     onClear = onClearSentence,
-                    modifier = Modifier.fillMaxWidth().height(100.dp)
+                    showSentenceText = showSentenceText,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (showSentenceText) 140.dp else 100.dp)
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -204,6 +208,7 @@ fun SymbolBar(
     isSaveEnabled: Boolean,
     onDelete: () -> Unit,
     onClear: () -> Unit,
+    showSentenceText: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -211,10 +216,23 @@ fun SymbolBar(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            if (showSentenceText) {
+                Text(
+                    text = selectedButtons.joinToString(" ") { (button, _) ->
+                        (button.label ?: button.vocalization).orEmpty()
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+            }
+
+            Row(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
             LazyRow(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -268,6 +286,7 @@ fun SymbolBar(
                 IconButton(onClick = onClear) {
                     Icon(Icons.Default.Clear, contentDescription = stringResource(Res.string.board_workspace_clear_sentence))
                 }
+            }
             }
         }
     }

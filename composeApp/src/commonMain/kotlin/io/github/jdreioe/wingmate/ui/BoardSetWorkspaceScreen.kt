@@ -882,6 +882,7 @@ private fun BoardSetWorkspaceScreen(
                         board = activeBoard,
                         isEditMode = mode == BoardWorkspaceMode.Edit,
                         showMessageBar = mode == BoardWorkspaceMode.Run,
+                        showSentenceText = isFullscreen,
                         selectedButtons = selectedButtons,
                         onButtonClick = { button ->
                             val linkedBoard = activeGraph.resolveLinkedBoard(button.loadBoard)
