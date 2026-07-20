@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
+import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
@@ -16,7 +17,9 @@ import kotlin.time.Clock
 class BoardSetUseCase(
     private val boardSetRepository: BoardSetRepository,
     private val boardRepository: BoardRepository,
-    private val featureUsageReporter: FeatureUsageReporter
+    private val featureUsageReporter: FeatureUsageReporter,
+    private val obzExporter: ObzExporter = ObzExporter(),
+    private val fileStorage: FileStorage? = null
 ) {
     private val json = Json {
         prettyPrint = true
@@ -383,6 +386,18 @@ class BoardSetUseCase(
         val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
         val rootBoard = boardRepository.getBoard(boardSet.rootBoardId) ?: return null
         return json.encodeToString(rootBoard)
+    }
+
+    suspend fun exportBoardSetAsObz(boardSetId: String): ByteArray? {
+        val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
+        val allBoards = boardRepository.listBoards()
+        val graph = BoardSetGraph(boardSet, allBoards.filter { it.id in boardSet.boardIds })
+        if (graph.boards.isEmpty()) return null
+        return obzExporter.export(
+            boards = graph.boards,
+            rootBoardId = boardSet.rootBoardId,
+            loadMedia = { path -> fileStorage?.loadBytes(path) }
+        )
     }
 
     suspend fun getRootBoard(boardSetId: String): ObfBoard? {

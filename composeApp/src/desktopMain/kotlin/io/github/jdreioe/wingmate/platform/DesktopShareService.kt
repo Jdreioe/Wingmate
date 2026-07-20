@@ -32,4 +32,24 @@ class DesktopShareService : ShareService {
             true
         }.getOrElse { false }
     }
+
+    override fun shareFile(fileName: String, content: ByteArray): Boolean {
+        return runCatching {
+            val file = File.createTempFile(fileName.substringBeforeLast('.'), ".$fileName.substringAfterLast('.')")
+            file.deleteOnExit()
+            file.writeBytes(content)
+            if (Desktop.isDesktopSupported()) {
+                val desktop = Desktop.getDesktop()
+                if (desktop.isSupported(Desktop.Action.OPEN)) {
+                    desktop.open(file)
+                    return@runCatching true
+                }
+            }
+            val proc = ProcessBuilder("xdg-open", file.absolutePath)
+                .redirectErrorStream(true)
+                .start()
+            val exit = proc.waitFor()
+            exit == 0
+        }.getOrElse { false }
+    }
 }

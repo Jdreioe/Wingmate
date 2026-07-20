@@ -24,4 +24,15 @@ class AndroidFileStorage(private val context: Context) : FileStorage {
     override suspend fun exists(fileName: String): Boolean = withContext(Dispatchers.IO) {
         File(context.filesDir, fileName).exists()
     }
+
+    override suspend fun saveBytes(fileName: String, content: ByteArray) = withContext(Dispatchers.IO) {
+        val file = File(context.filesDir, fileName)
+        file.parentFile?.mkdirs()
+        file.writeBytes(content)
+    }
+
+    override suspend fun loadBytes(fileName: String): ByteArray? = withContext(Dispatchers.IO) {
+        val file = File(context.filesDir, fileName)
+        if (file.exists()) file.readBytes() else null
+    }
 }

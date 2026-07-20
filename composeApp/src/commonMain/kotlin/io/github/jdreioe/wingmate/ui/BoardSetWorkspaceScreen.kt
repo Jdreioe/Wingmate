@@ -613,6 +613,7 @@ private fun BoardSetWorkspaceScreen(
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
     val settings by rememberReactiveSettings()
+    val shareService = koinInject<io.github.jdreioe.wingmate.platform.ShareService>()
     val scope = rememberCoroutineScope()
     var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
     var editSession by remember(boardSetId) { mutableStateOf<BoardSetEditSession?>(null) }
@@ -811,6 +812,30 @@ private fun BoardSetWorkspaceScreen(
                             Icon(
                                 Icons.Default.Keyboard,
                                 contentDescription = stringResource(Res.string.mode_switch_to_keyboard)
+                            )
+                        }
+                        IconButton(onClick = {
+                            scope.launch {
+                                val graph = activeGraph
+                                if (graph != null) {
+                                    val obzBytes = useCase.exportBoardSetAsObz(graph.boardSet.id)
+                                    if (obzBytes != null) {
+                                        val fileName = "${graph.boardSet.name}.obz"
+                                        val shared = shareService?.shareFile(fileName, obzBytes)
+                                        statusMessage = if (shared == true) {
+                                            "Exported ${graph.boardSet.name}.obz"
+                                        } else {
+                                            "Export saved (${obzBytes.size} bytes)"
+                                        }
+                                    } else {
+                                        statusMessage = "Export failed: no boards"
+                                    }
+                                }
+                            }
+                        }) {
+                            Icon(
+                                Icons.Default.ImportExport,
+                                contentDescription = stringResource(Res.string.phrase_screen_import_export_data)
                             )
                         }
                         if (selectedBoardId != activeGraph?.boardSet?.rootBoardId) {

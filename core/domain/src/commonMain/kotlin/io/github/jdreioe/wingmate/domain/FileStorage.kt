@@ -17,6 +17,18 @@ interface FileStorage {
     suspend fun load(fileName: String): String?
     
     /**
+     * Saves binary content to a file with the given name.
+     * Overwrites if exists.
+     */
+    suspend fun saveBytes(fileName: String, content: ByteArray)
+    
+    /**
+     * Reads binary content from a file with the given name.
+     * Returns null if file does not exist.
+     */
+    suspend fun loadBytes(fileName: String): ByteArray?
+    
+    /**
      * Checks if a file exists.
      */
     suspend fun exists(fileName: String): Boolean
