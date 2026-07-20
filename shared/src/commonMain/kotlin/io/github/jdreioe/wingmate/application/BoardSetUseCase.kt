@@ -393,10 +393,35 @@ class BoardSetUseCase(
         val allBoards = boardRepository.listBoards()
         val graph = BoardSetGraph(boardSet, allBoards.filter { it.id in boardSet.boardIds })
         if (graph.boards.isEmpty()) return null
+
+        val soundBytes = mutableMapOf<String, ByteArray>()
+        if (fileStorage != null) {
+            for (board in graph.boards) {
+                for (button in board.buttons) {
+                    val soundId = button.soundId ?: continue
+                    if (soundId in soundBytes) continue
+                    // Try multiple storage path patterns
+                    val candidates = listOf(
+                        "sounds/$soundId",
+                        "$boardSetId/sounds/$soundId",
+                        "boardsets/$boardSetId/sounds/$soundId"
+                    )
+                    for (path in candidates) {
+                        val bytes = fileStorage.loadBytes(path)
+                        if (bytes != null) {
+                            soundBytes[soundId] = bytes
+                            break
+                        }
+                    }
+                }
+            }
+        }
+
         return obzExporter.export(
             boards = graph.boards,
             rootBoardId = boardSet.rootBoardId,
-            loadMedia = { path -> fileStorage?.loadBytes(path) }
+            loadMedia = { path -> fileStorage?.loadBytes(path) },
+            soundBytes = soundBytes
         )
     }
 

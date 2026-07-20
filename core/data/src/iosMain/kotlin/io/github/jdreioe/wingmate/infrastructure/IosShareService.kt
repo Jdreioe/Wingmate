@@ -47,7 +47,11 @@ class IosShareService : ShareService {
     override fun shareFile(fileName: String, content: ByteArray): Boolean {
         val tmpDir = NSTemporaryDirectory() ?: return false
         val filePath = "$tmpDir/$fileName"
-        val data = NSData.create(bytes = content.toPointer()!!, length = content.size.toULong())
+        val data = content.usePinned { pinned ->
+            pinned.addressOf(0).let { ptr ->
+                NSData.create(bytes = ptr, length = content.size.toULong())
+            }
+        }
         data.writeToFile(filePath, atomically = true)
         val url = NSURL.fileURLWithPath(filePath)
         val controller = UIActivityViewController(

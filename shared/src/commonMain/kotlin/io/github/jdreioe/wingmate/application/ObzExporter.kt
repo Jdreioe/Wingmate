@@ -19,13 +19,15 @@ class ObzExporter(
      *
      * @param boards all boards in the set (root + linked)
      * @param rootBoardId the id of the root board
-     * @param loadMedia optional callback to resolve media file path -> bytes
+     * @param loadMedia optional callback to resolve media by image path -> bytes
+     * @param soundBytes optional map of sound id -> bytes (pre-resolved)
      * @return OBZ ZIP bytes
      */
     suspend fun export(
         boards: List<ObfBoard>,
         rootBoardId: String,
-        loadMedia: suspend (path: String) -> ByteArray? = { null }
+        loadMedia: suspend (path: String) -> ByteArray? = { null },
+        soundBytes: Map<String, ByteArray> = emptyMap()
     ): ByteArray {
         val rootBoard = boards.firstOrNull { it.id == rootBoardId }
             ?: error("root board $rootBoardId not found")
@@ -59,16 +61,14 @@ class ObzExporter(
         }
 
         // Collect sound references from buttons
-        // Sounds are identified by sound_id on buttons; the file path is resolved
-        // through storage. For each unique sound_id, we attempt to load the sound
-        // from its stored path pattern.
         for (board in boards) {
             for (button in board.buttons) {
                 val soundId = button.soundId
                 if (soundId != null && soundId !in soundFiles) {
                     val soundPath = "sounds/$soundId"
                     soundFiles[soundId] = soundPath
-                    loadMedia(soundPath)?.let { bytes ->
+                    val bytes = soundBytes[soundId] ?: loadMedia(soundPath)
+                    if (bytes != null) {
                         entries[soundPath] = bytes
                     }
                 }

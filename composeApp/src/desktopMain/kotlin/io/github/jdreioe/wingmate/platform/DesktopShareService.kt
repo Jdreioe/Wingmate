@@ -35,7 +35,7 @@ class DesktopShareService : ShareService {
 
     override fun shareFile(fileName: String, content: ByteArray): Boolean {
         return runCatching {
-            val file = File.createTempFile(fileName.substringBeforeLast('.'), ".$fileName.substringAfterLast('.')")
+            val file = File.createTempFile(fileName.substringBeforeLast('.'), ".${fileName.substringAfterLast('.')}")
             file.deleteOnExit()
             file.writeBytes(content)
             if (Desktop.isDesktopSupported()) {
