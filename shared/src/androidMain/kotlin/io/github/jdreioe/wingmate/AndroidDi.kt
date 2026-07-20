@@ -10,6 +10,7 @@ import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PhraseRecordingService
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
@@ -18,6 +19,7 @@ import io.github.jdreioe.wingmate.infrastructure.AndroidFileStorage
 import io.github.jdreioe.wingmate.infrastructure.AndroidBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidFirebaseFeatureUsageReporter
+import io.github.jdreioe.wingmate.infrastructure.AndroidSoundPlayer
 import io.github.jdreioe.wingmate.infrastructure.AndroidSpeechService
 import io.github.jdreioe.wingmate.infrastructure.AndroidImageCacher
 import io.github.jdreioe.wingmate.infrastructure.AndroidPhraseRecordingService
@@ -64,6 +66,7 @@ fun overrideAndroidSpeechService(context: Context) {
             singleOf(::AndroidBoardSetRepository) { bind<BoardSetRepository>() }
             // Text prediction service using n-grams trained on user's history
             singleOf(::AndroidFileStorage) { bind<FileStorage>() }
+            singleOf(::AndroidSoundPlayer) { bind<SoundPlayer>() }
             singleOf(::AndroidFilePicker) { bind<FilePicker>() }
             singleOf(::AndroidImageCacher) { bind<ImageCacher>() }
             singleOf(::SimpleNGramPredictionService) { bind<TextPredictionService>() }

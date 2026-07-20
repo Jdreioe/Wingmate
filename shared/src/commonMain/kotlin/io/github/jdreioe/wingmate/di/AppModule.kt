@@ -19,7 +19,9 @@ import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import io.github.jdreioe.wingmate.infrastructure.RealAacLogger
 import io.github.jdreioe.wingmate.domain.AacLogger
+import io.github.jdreioe.wingmate.domain.NoopSoundPlayer
 import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.SoundPlayer
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -33,6 +35,8 @@ val appModule = module {
     singleOf(::InMemoryBoardRepository) { bind<BoardRepository>() }
     singleOf(::InMemoryBoardSetRepository) { bind<BoardSetRepository>() }
     singleOf(::BoardSetUseCase)
+    // Platforms override with a real player; default is a no-op.
+    single<SoundPlayer> { NoopSoundPlayer() }
 
     singleOf(::AddPhraseUseCase)
     singleOf(::GetPhrasesAndCategoriesUseCase)
