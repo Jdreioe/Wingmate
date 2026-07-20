@@ -632,6 +632,7 @@ private fun BoardSetWorkspaceScreen(
     var showRenameBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
     var isSavingSentence by remember(boardSetId) { mutableStateOf(false) }
+    var isExporting by remember(boardSetId) { mutableStateOf(false) }
     var isFullscreen by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(Res.string.board_workspace_unlock_to_edit)
     val savedMessage = stringResource(Res.string.board_workspace_saved)
@@ -814,25 +815,42 @@ private fun BoardSetWorkspaceScreen(
                                 contentDescription = stringResource(Res.string.mode_switch_to_keyboard)
                             )
                         }
-                        IconButton(onClick = {
-                            scope.launch {
-                                val graph = activeGraph
-                                if (graph != null) {
-                                    val obzBytes = useCase.exportBoardSetAsObz(graph.boardSet.id)
-                                    if (obzBytes != null) {
-                                        val fileName = "${graph.boardSet.name}.obz"
-                                        val shared = shareService?.shareFile(fileName, obzBytes)
-                                        statusMessage = if (shared == true) {
-                                            "Exported ${graph.boardSet.name}.obz"
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    isExporting = true
+                                    statusMessage = null
+                                    try {
+                                        val graph = activeGraph
+                                        if (graph == null) {
+                                            statusMessage = "Export failed: no board set loaded"
                                         } else {
-                                            "Export saved (${obzBytes.size} bytes)"
+                                            val obzBytes = useCase.exportBoardSetAsObz(graph.boardSet.id)
+                                            if (obzBytes != null) {
+                                                val fileName = "${graph.boardSet.name}.obz"
+                                                if (shareService != null) {
+                                                    val shared = shareService.shareFile(fileName, obzBytes)
+                                                    statusMessage = if (shared) {
+                                                        "Exported ${graph.boardSet.name}.obz"
+                                                    } else {
+                                                        "Export cancelled"
+                                                    }
+                                                } else {
+                                                    statusMessage = "Export saved (${obzBytes.size} bytes)"
+                                                }
+                                            } else {
+                                                statusMessage = "Export failed: no boards"
+                                            }
                                         }
-                                    } else {
-                                        statusMessage = "Export failed: no boards"
+                                    } catch (e: Exception) {
+                                        statusMessage = "Export failed: ${e.message ?: "unknown error"}"
+                                    } finally {
+                                        isExporting = false
                                     }
                                 }
-                            }
-                        }) {
+                            },
+                            enabled = !isExporting
+                        ) {
                             Icon(
                                 Icons.Default.ImportExport,
                                 contentDescription = stringResource(Res.string.phrase_screen_import_export_data)
