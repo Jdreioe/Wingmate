@@ -617,10 +617,11 @@ private fun BoardSetWorkspaceScreen(
                 },
                 colors = if (mode == BoardWorkspaceMode.Edit) {
                     TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                        actionIconContentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        actionIconContentColor = MaterialTheme.colorScheme.primary,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onSurface
                     )
                 } else TopAppBarDefaults.topAppBarColors()
             )
