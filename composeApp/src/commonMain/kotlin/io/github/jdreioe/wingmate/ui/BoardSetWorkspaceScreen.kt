@@ -613,7 +613,8 @@ private fun BoardSetWorkspaceScreen(
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
     val settings by rememberReactiveSettings()
-    val shareService = remember { org.koin.compose.getKoin().getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
+    val koin = org.koin.compose.getKoin()
+    val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
     val scope = rememberCoroutineScope()
     var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
     var editSession by remember(boardSetId) { mutableStateOf<BoardSetEditSession?>(null) }
