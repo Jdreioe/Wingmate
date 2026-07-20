@@ -17,8 +17,8 @@ data class ObfBoard(
     val buttons: List<ObfButton> = emptyList(),
     val images: List<ObfImage> = emptyList(),
     val grid: ObfGrid? = null,
+    val sounds: List<ObfSound> = emptyList(),
     val strings: Map<String, Map<String, String>> = emptyMap(),
-    val localeMap: Map<String, String> = emptyMap(),
     val license: ObfLicense? = null
 ) {
     /** True when every button has all four absolute-positioning attributes defined. */
