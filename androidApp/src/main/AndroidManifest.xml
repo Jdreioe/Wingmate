@@ -31,6 +31,7 @@
         <activity
             android:name="io.github.jdreioe.wingmate.MainActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:windowSoftInputMode="adjustResize|stateHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -40,6 +41,7 @@
         <activity
             android:name="io.github.jdreioe.wingmate.display.PrimaryDisplayActivity"
             android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
     </application>
 </manifest>

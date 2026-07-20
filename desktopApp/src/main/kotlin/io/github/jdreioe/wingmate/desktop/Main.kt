@@ -191,7 +191,7 @@ private fun buildInfisicalConfig(): InfisicalConfig {
         envKeys = listOf("WINGMATE_INFISICAL_URL", "INFISICAL_URL"),
         systemPropertyKeys = listOf("wingmate.infisical.url", "infisical.url"),
         localPropertyKeys = listOf("WINGMATE_INFISICAL_URL", "INFISICAL_URL")
-    ) ?: "https://app.infisical.com"
+    ) ?: "https://app.infisical.eu"
 
     val environment = readConfigValue(
         envKeys = listOf("WINGMATE_INFISICAL_ENV", "INFISICAL_ENV"),

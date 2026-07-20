@@ -42,9 +42,9 @@ Wingmate is developed by Jonas, who has Cerebral Palsy (CP) and extensive experi
 
 OpenSymbols is now configured at runtime and is no longer hardcoded in source.
 
-Desktop resolves the secret in this order:
+The project resolves the secret in this order:
 
-1. Infisical (recommended)
+1. Infisical (via `gradlew` auto-wrap or direct API)
 2. Environment variable: `WINGMATE_OPENSYMBOLS_SECRET`
 3. JVM system property: `wingmate.opensymbols.secret`
 4. `local.properties` key: `OPENSYMBOLS_SECRET` (or `WINGMATE_OPENSYMBOLS_SECRET`)
@@ -60,12 +60,33 @@ If you store a secret named `openSymbols` in environment `system_env`, only thes
 
 Optional overrides:
 
-- `INFISICAL_URL` (default: `https://app.infisical.com`)
+- `INFISICAL_URL` (default: `https://app.infisical.eu`)
 - `INFISICAL_ENV` (default: `system_env`)
 - `INFISICAL_SECRET_NAME` (default: `openSymbols`)
 - `INFISICAL_SECRET_PATH` (default: `/`)
 - `INFISICAL_ORGANIZATION_SLUG`
 - `INFISICAL_ENABLED=false` to disable vault lookup
+
+#### Automatic wrapping via Infisical CLI (recommended)
+
+When you set `INFISICAL_PROJECT_ID` (or `INFISICAL_PROJECT_SLUG`) and the
+[Infisical CLI](https://infisical.com/docs/cli/overview) is installed, `gradlew`
+will automatically wrap itself with `infisical run`, injecting all secrets from
+your Infisical project as environment variables. No extra steps are needed:
+
+```bash
+export INFISICAL_PROJECT_ID="<your-project-id>"
+export INFISICAL_CLIENT_ID="<your-client-id>"
+export INFISICAL_CLIENT_SECRET="<your-client-secret>"
+./gradlew assembleDebug        # ← auto-wraps with infisical run
+```
+
+This works for all Gradle tasks (Android, Desktop, etc.).
+
+#### Direct API resolution (no CLI required)
+
+If the Infisical CLI is not installed, the build scripts and desktop runtime
+will reach Infisical directly via HTTP using the same configuration variables.
 
 Example (Linux/macOS):
 
@@ -78,7 +99,8 @@ export INFISICAL_CLIENT_SECRET="<your-client-secret>"
 
 ### Local fallback
 
-If Infisical is not configured or unavailable, desktop falls back to local runtime config.
+If Infisical is not configured or unavailable, the project falls back to local
+runtime config.
 
 Example (Linux/macOS):
 
