@@ -5,6 +5,7 @@ import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
@@ -15,6 +16,7 @@ import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.IosAudioClipboard
 import io.github.jdreioe.wingmate.infrastructure.IosCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.IosConfigRepository
+import io.github.jdreioe.wingmate.infrastructure.IosFileStorage
 import io.github.jdreioe.wingmate.infrastructure.IosPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.IosPronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.infrastructure.IosSaidTextRepository
@@ -63,6 +65,7 @@ fun overrideIosSpeechService() {
             
             // Pronunciation dictionary (persisted)
             singleOf(::IosPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
+            singleOf(::IosFileStorage) { bind<FileStorage>() }
         }
     )
 }
