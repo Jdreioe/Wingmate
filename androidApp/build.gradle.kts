@@ -193,24 +193,8 @@ android {
     if (versionPropsFile.exists()) {
         versionPropsFile.inputStream().use { versionProps.load(it) }
     }
-
-    val isPublishOrBundleTask = gradle.startParameter.taskNames.any { taskName ->
-        taskName.contains("publishRelease") || taskName.contains("bundleRelease")
-    }
-
-    val vCode: Int
-    val vName: String
-    if (isPublishOrBundleTask) {
-        val currentCode = (versionProps.getProperty("versionCode") ?: "1").toInt()
-        vCode = currentCode + 1
-        versionProps.setProperty("versionCode", vCode.toString())
-        vName = versionProps.getProperty("versionName") ?: "1.0"
-        versionPropsFile.outputStream().use { versionProps.store(it, "Auto-incremented by build") }
-        logger.lifecycle("Version code auto-incremented to $vCode")
-    } else {
-        vCode = (versionProps.getProperty("versionCode") ?: "1").toInt()
-        vName = versionProps.getProperty("versionName") ?: "1.0"
-    }
+    val vCode = (versionProps.getProperty("versionCode") ?: "1").toInt()
+    val vName = versionProps.getProperty("versionName") ?: "1.0"
 
     val openSymbolsSecret = providers.provider { resolveOpenSymbolsSecretFromInfisical() }
         .orElse(providers.environmentVariable("WINGMATE_OPENSYMBOLS_SECRET"))
@@ -242,6 +226,22 @@ android {
             toBuildConfigStringLiteral(openSymbolsSecret.get())
         )
     }
+
+    tasks.register("incrementVersionCode") {
+        doLast {
+            val currentCode = versionProps.getProperty("versionCode")?.toInt() ?: 1
+            versionProps.setProperty("versionCode", (currentCode + 1).toString())
+            versionPropsFile.outputStream().use { versionProps.store(it, "Auto-incremented by build") }
+            println("Version code incremented to ${currentCode + 1}")
+        }
+    }
+
+    tasks.configureEach {
+        if (name == "bundleRelease" || name == "bundleReleaseStandard" || name == "bundleReleaseAab") {
+            dependsOn("incrementVersionCode")
+        }
+    }
+
 
     buildFeatures {
         compose = true
