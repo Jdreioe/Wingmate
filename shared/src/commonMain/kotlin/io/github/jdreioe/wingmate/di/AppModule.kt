@@ -30,10 +30,20 @@ import org.koin.dsl.module
 val appModule = module {
     singleOf(::DefaultStoreFactory) { bind<StoreFactory>() }
     
+    single {
+        kotlinx.serialization.json.Json {
+            prettyPrint = true
+            encodeDefaults = true
+            ignoreUnknownKeys = true
+            isLenient = true
+            coerceInputValues = true
+        }
+    }
+    
     singleOf(::ObfParser)
     singleOf(::InMemoryBoardRepository) { bind<BoardRepository>() }
     singleOf(::InMemoryBoardSetRepository) { bind<BoardSetRepository>() }
-    singleOf(::ObzExporter)
+    single { ObzExporter(getOrNull() ?: kotlinx.serialization.json.Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }) }
     singleOf(::BoardSetUseCase)
 
     singleOf(::AddPhraseUseCase)

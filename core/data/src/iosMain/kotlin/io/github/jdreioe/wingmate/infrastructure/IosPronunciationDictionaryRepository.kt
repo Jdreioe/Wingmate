@@ -63,10 +63,4 @@ class IosPronunciationDictionaryRepository : PronunciationDictionaryRepository {
             logger.warn(t) { "Failed to save PronunciationEntry list" }
         }
     }
-
-    override suspend fun clear() {
-        withContext(Dispatchers.Default) {
-            saveAll(emptyList())
-        }
-    }
 }

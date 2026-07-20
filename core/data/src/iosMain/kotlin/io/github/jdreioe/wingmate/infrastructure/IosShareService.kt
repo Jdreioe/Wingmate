@@ -1,11 +1,14 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.platform.ShareService
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.usePinned
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
 import platform.Foundation.NSURL
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSData
+import platform.Foundation.create
 import platform.Foundation.writeToFile
 
 class IosShareService : ShareService {
