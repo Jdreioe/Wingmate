@@ -720,12 +720,12 @@ private fun BoardSetWorkspaceScreen(
                                     activeGraph?.boardSet?.name.orEmpty()
                                 )
                             } else {
-                                activeGraph?.boardSet?.name ?: stringResource(Res.string.board_workspace_title)
+                                activeBoard?.name ?: stringResource(Res.string.board_workspace_board_fallback)
                             },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        activeBoard?.name?.let {
+                        if (mode == BoardWorkspaceMode.Edit) activeBoard?.name?.let {
                             Text(
                                 it,
                                 style = MaterialTheme.typography.bodySmall,
@@ -867,7 +867,7 @@ private fun BoardSetWorkspaceScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
-                    if (!isFullscreen) {
+                    if (!isFullscreen && mode == BoardWorkspaceMode.Edit) {
                         BoardStrip(
                             boards = activeGraph.boards,
                             selectedBoardId = selectedBoardId,
