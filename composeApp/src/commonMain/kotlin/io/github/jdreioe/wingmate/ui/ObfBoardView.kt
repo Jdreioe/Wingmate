@@ -590,10 +590,9 @@ fun ObfButtonItem(
                 modifier = Modifier.fillMaxSize()
             ) {
                 val showImg = settings.showSymbols && (imageBitmap != null || !imageModel.isNullOrBlank())
-                    val showLbl = settings.showLabels && !(displayLabel.isNullOrBlank() && displayVocalization.isNullOrBlank())
+                val showLbl = settings.showLabels && !(displayLabel.isNullOrBlank() && displayVocalization.isNullOrBlank())
 
                 if (settings.labelAtTop && showImg && showLbl) {
-                    // Label at Top
                     val labelText = displayLabel ?: displayVocalization ?: ""
                     Text(
                         text = labelText,
@@ -608,15 +607,14 @@ fun ObfButtonItem(
                         bitmap = imageBitmap,
                         model = imageModel,
                         contentDescription = displayLabel,
-                            modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
-                        )
-                    } else {
-                        // Normal order (Image at Top)
-                        if (showImg) {
-                            BoardSymbolImage(
-                                bitmap = imageBitmap,
-                                model = imageModel,
-                                contentDescription = displayLabel,
+                        modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
+                    )
+                } else {
+                    if (showImg) {
+                        BoardSymbolImage(
+                            bitmap = imageBitmap,
+                            model = imageModel,
+                            contentDescription = displayLabel,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
                         )
                     }
