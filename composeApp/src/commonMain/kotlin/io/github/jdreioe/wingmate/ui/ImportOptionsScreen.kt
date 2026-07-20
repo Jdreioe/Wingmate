@@ -31,7 +31,10 @@ fun ImportOptionsScreen(
     onImportClassic: () -> Unit,
     onImportModern: () -> Unit,
     onCreateFromScratch: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    showClassic: Boolean = true,
+    showModern: Boolean = true,
+    showCreateFromScratch: Boolean = true
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -60,28 +63,33 @@ fun ImportOptionsScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            ImportOptionCard(
-                title = stringResource(Res.string.import_options_classic_title),
-                description = stringResource(Res.string.import_options_classic_desc),
-                onClick = onImportClassic
-            )
+            if (showClassic) {
+                ImportOptionCard(
+                    title = stringResource(Res.string.import_options_classic_title),
+                    description = stringResource(Res.string.import_options_classic_desc),
+                    onClick = onImportClassic,
+                    isRecommended = true
+                )
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            if (showModern) {
+                if (showClassic) Spacer(modifier = Modifier.height(16.dp))
+                ImportOptionCard(
+                    title = stringResource(Res.string.import_options_modern_title),
+                    description = stringResource(Res.string.import_options_modern_desc),
+                    onClick = onImportModern,
+                    isRecommended = true
+                )
+            }
 
-            ImportOptionCard(
-                title = stringResource(Res.string.import_options_modern_title),
-                description = stringResource(Res.string.import_options_modern_desc),
-                onClick = onImportModern,
-                isRecommended = true
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            ImportOptionCard(
-                title = stringResource(Res.string.import_options_scratch_title),
-                description = stringResource(Res.string.import_options_scratch_desc),
-                onClick = onCreateFromScratch
-            )
+            if (showCreateFromScratch) {
+                if (showClassic || showModern) Spacer(modifier = Modifier.height(16.dp))
+                ImportOptionCard(
+                    title = stringResource(Res.string.import_options_scratch_title),
+                    description = stringResource(Res.string.import_options_scratch_desc),
+                    onClick = onCreateFromScratch
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 

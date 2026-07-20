@@ -205,6 +205,10 @@
     <string name="ui_settings_feature_reporting_desc">Hjælp med at forbedre Wingmate ved at dele anonyme hændelser om funktionsbrug. Ingen frasetekst, nøgler eller filstier rapporteres.</string>
     <string name="ui_settings_partner_window_title">Partnerdisplay</string>
     <string name="ui_settings_partner_window_desc">Spejl skrevet tekst til det tilsluttede TD-I13 partnerdisplay.</string>
+    <string name="ui_settings_startup_mode_title">Åbn ved opstart</string>
+    <string name="ui_settings_startup_mode_desc">Vælg hvilken kommunikationstilstand Wingmate åbner efter opstart.</string>
+    <string name="ui_settings_startup_mode_keyboard">Tastatur</string>
+    <string name="ui_settings_startup_mode_screens">Skærme</string>
 
     <string name="test_voice_default_text">Hej! Sådan lyder jeg. Velkommen til Wingmate!</string>
     <string name="test_voice_title">Test din stemme</string>
@@ -241,6 +245,12 @@
     <string name="welcome_title">Velkommen til Wingmate</string>
     <string name="welcome_subtitle">Tillykke med din nye stemme!</string>
     <string name="welcome_ui_settings">UI-indstillinger</string>
+    <string name="welcome_start_mode_title">Hvordan vil du kommunikere?</string>
+    <string name="welcome_start_mode_subtitle">Vælg hvad Wingmate skal åbne. Du kan ændre det senere i Indstillinger.</string>
+    <string name="welcome_start_mode_keyboard_title">Tastatur og fraser</string>
+    <string name="welcome_start_mode_keyboard_desc">Skriv beskeder, og kommuniker med gemte fraser og kategorier.</string>
+    <string name="welcome_start_mode_screens_title">Skærme</string>
+    <string name="welcome_start_mode_screens_desc">Kommuniker med forbundne OBF/OBZ-sider, felter og symboler.</string>
     <string name="welcome_importing_board">Importerer side...</string>
 
     <string name="common_add">Tilføj</string>

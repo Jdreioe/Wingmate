@@ -23,6 +23,7 @@ import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.StartupMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,6 +75,7 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
     var autoUpdateEnabled by remember { mutableStateOf(true) }
     var featureUsageReportingEnabled by remember { mutableStateOf(false) }
     var partnerWindowEnabled by remember { mutableStateOf(false) }
+    var startupMode by remember { mutableStateOf(StartupMode.Keyboard) }
 
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
@@ -113,6 +115,7 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
         autoUpdateEnabled = s.autoUpdateEnabled
         featureUsageReportingEnabled = s.featureUsageReportingEnabled
         partnerWindowEnabled = s.partnerWindowEnabled
+        startupMode = s.startupMode
         showLabels = s.showLabels
         showSymbols = s.showSymbols
         labelAtTop = s.labelAtTop
@@ -265,6 +268,10 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
                                 onUsageLoggingChange = { checked -> usageLoggingEnabled = checked; updateSettings { it.copy(usageLoggingEnabled = checked) } }
                             )
                             SettingsTab.General -> GeneralSection(
+                                startupMode = startupMode,
+                                onStartupModeChange = { mode ->
+                                    startupMode = mode
+                                },
                                 autoUpdateEnabled = autoUpdateEnabled,
                                 onAutoUpdateChange = { checked -> autoUpdateEnabled = checked; updateSettings { it.copy(autoUpdateEnabled = checked) } },
                                 featureUsageReportingEnabled = featureUsageReportingEnabled,
@@ -306,7 +313,8 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
                             useCase.update(current.copy(
                                 useSystemTts = useSystemTts,
                                 virtualMicEnabled = virtualMic,
-                                featureUsageReportingEnabled = featureUsageReportingEnabled
+                                featureUsageReportingEnabled = featureUsageReportingEnabled,
+                                startupMode = startupMode
                             ))
                         }
                     }
@@ -564,6 +572,8 @@ private fun AccessibilitySection(
 
 @Composable
 private fun GeneralSection(
+    startupMode: StartupMode,
+    onStartupModeChange: (StartupMode) -> Unit,
     autoUpdateEnabled: Boolean,
     onAutoUpdateChange: (Boolean) -> Unit,
     featureUsageReportingEnabled: Boolean,
@@ -572,6 +582,38 @@ private fun GeneralSection(
     partnerDeviceConnected: Boolean,
     onPartnerWindowChange: (Boolean) -> Unit
 ) {
+    SectionHeader(stringResource(Res.string.ui_settings_startup_mode_title))
+    Text(
+        stringResource(Res.string.ui_settings_startup_mode_desc),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = startupMode == StartupMode.Keyboard,
+            onClick = { onStartupModeChange(StartupMode.Keyboard) },
+            label = { Text(stringResource(Res.string.ui_settings_startup_mode_keyboard)) },
+            leadingIcon = if (startupMode == StartupMode.Keyboard) {
+                { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            } else null,
+            modifier = Modifier.weight(1f)
+        )
+        FilterChip(
+            selected = startupMode == StartupMode.Screens,
+            onClick = { onStartupModeChange(StartupMode.Screens) },
+            label = { Text(stringResource(Res.string.ui_settings_startup_mode_screens)) },
+            leadingIcon = if (startupMode == StartupMode.Screens) {
+                { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            } else null,
+            modifier = Modifier.weight(1f)
+        )
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
     SectionHeader("Updates & Analytics")
 
     SettingsCheckbox(

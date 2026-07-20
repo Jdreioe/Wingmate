@@ -30,6 +30,12 @@ data class CategoryItem(
 )
 
 @Serializable
+enum class StartupMode {
+    Keyboard,
+    Screens
+}
+
+@Serializable
 data class Settings(
     val language: String = "en-US",
     val voice: String = "default",
@@ -57,6 +63,8 @@ data class Settings(
     val useCustomColors: Boolean = false, // enable custom color theming
     // Welcome flow completion
     val welcomeFlowCompleted: Boolean = false,
+    // Screen shown after launch once onboarding has been completed.
+    val startupMode: StartupMode = StartupMode.Keyboard,
     // Partner window display (TD-I13 via FTDI FT232H) — desktop only
     val partnerWindowEnabled: Boolean = false,
     // EVE ROM font index (16-34); 31 = largest standard ROM font
