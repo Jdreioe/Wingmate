@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.infrastructure
 
+import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.FileStorage
@@ -232,7 +233,7 @@ class BoardImportService(
 
     private fun decodeDataUri(data: String): ByteArray? {
         val payload = data.substringAfter("base64,", missingDelimiterValue = data)
-        return runCatching { payload.decodeBase64Bytes() }.getOrNull()
+        return Base64Decoder.decodeOrNull(payload)
     }
 
     private fun extensionFor(contentType: String?, path: String?, default: String): String {
@@ -262,42 +263,4 @@ class BoardImportService(
         }
         return "${prefix}_$suffix"
     }
-}
-
-/** Minimal base64 decoder for data-URI payloads. */
-private fun String.decodeBase64Bytes(): ByteArray {
-    val table = IntArray(128) { -1 }
-    val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-    alphabet.forEachIndexed { index, c -> table[c.code] = index }
-
-    val cleaned = filterNot { it.isWhitespace() }
-    if (cleaned.isEmpty()) return ByteArray(0)
-    require(cleaned.length % 4 == 0) { "Invalid base64 length" }
-
-    val padding = when {
-        cleaned.endsWith("==") -> 2
-        cleaned.endsWith("=") -> 1
-        else -> 0
-    }
-    val out = ByteArray(cleaned.length / 4 * 3 - padding)
-    var outIndex = 0
-    var i = 0
-    while (i < cleaned.length) {
-        val c0 = decodeBase64Char(table, cleaned[i])
-        val c1 = decodeBase64Char(table, cleaned[i + 1])
-        val c2 = if (cleaned[i + 2] == '=') 0 else decodeBase64Char(table, cleaned[i + 2])
-        val c3 = if (cleaned[i + 3] == '=') 0 else decodeBase64Char(table, cleaned[i + 3])
-        val triple = (c0 shl 18) or (c1 shl 12) or (c2 shl 6) or c3
-        if (outIndex < out.size) out[outIndex++] = ((triple shr 16) and 0xFF).toByte()
-        if (outIndex < out.size) out[outIndex++] = ((triple shr 8) and 0xFF).toByte()
-        if (outIndex < out.size) out[outIndex++] = (triple and 0xFF).toByte()
-        i += 4
-    }
-    return out
-}
-
-private fun decodeBase64Char(table: IntArray, char: Char): Int {
-    val value = table.getOrElse(char.code) { -1 }
-    require(value >= 0) { "Invalid base64 char: $char" }
-    return value
 }

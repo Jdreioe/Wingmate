@@ -75,6 +75,7 @@ import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
+import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SoundPlayer
@@ -1458,35 +1459,7 @@ internal suspend fun playButtonSound(
 
 private fun decodeObfDataUri(data: String): ByteArray? {
     val payload = data.substringAfter("base64,", missingDelimiterValue = data)
-    val table = IntArray(128) { -1 }
-    val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-    alphabet.forEachIndexed { index, c -> table[c.code] = index }
-    val cleaned = payload.filterNot { it.isWhitespace() }
-    if (cleaned.isEmpty() || cleaned.length % 4 != 0) return null
-    val padding = when {
-        cleaned.endsWith("==") -> 2
-        cleaned.endsWith("=") -> 1
-        else -> 0
-    }
-    val out = ByteArray(cleaned.length / 4 * 3 - padding)
-    var outIndex = 0
-    var i = 0
-    while (i < cleaned.length) {
-        fun dec(c: Char): Int? {
-            val value = table.getOrElse(c.code) { -1 }
-            return if (value >= 0) value else null
-        }
-        val c0 = dec(cleaned[i]) ?: return null
-        val c1 = dec(cleaned[i + 1]) ?: return null
-        val c2 = if (cleaned[i + 2] == '=') 0 else dec(cleaned[i + 2]) ?: return null
-        val c3 = if (cleaned[i + 3] == '=') 0 else dec(cleaned[i + 3]) ?: return null
-        val triple = (c0 shl 18) or (c1 shl 12) or (c2 shl 6) or c3
-        if (outIndex < out.size) out[outIndex++] = ((triple shr 16) and 0xFF).toByte()
-        if (outIndex < out.size) out[outIndex++] = ((triple shr 8) and 0xFF).toByte()
-        if (outIndex < out.size) out[outIndex++] = (triple and 0xFF).toByte()
-        i += 4
-    }
-    return out
+    return Base64Decoder.decodeOrNull(payload)
 }
 
 private fun languageName(
