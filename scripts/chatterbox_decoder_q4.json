@@ -1,0 +1,36 @@
+{
+  "sourceModel": "onnx-community/chatterbox-multilingual-ONNX",
+  "sourceRevision": "452d3f434aa592098f1eedac9099f33642ab2da5",
+  "sourceArtifacts": {
+    "conditional_decoder.onnx": {
+      "sizeBytes": 6350448,
+      "sha256": "1656d0d31332bae1854839959a3139300ebb67c178651dfa3f8c5fbfa5351351"
+    },
+    "conditional_decoder.onnx_data": {
+      "sizeBytes": 533970816,
+      "sha256": "51d58345a272747665ec9d5bb61e01835258a940e321a288582ac4c18cf01b5a"
+    }
+  },
+  "quantization": {
+    "tool": "onnxruntime",
+    "toolVersion": "1.27.0",
+    "algorithm": "RTN",
+    "format": "MatMulNBits",
+    "bits": 4,
+    "blockSize": 128,
+    "symmetric": true,
+    "accuracyLevel": 4,
+    "quantizedMatMulNodes": 3435,
+    "totalMatMulNodes": 4585
+  },
+  "artifacts": {
+    "conditional_decoder_q4.onnx": {
+      "sizeBytes": 6855016,
+      "sha256": "8bec3ad12b5315b13838b19db4d415aad3d717069860d7f2e2096ec6d8828122"
+    },
+    "conditional_decoder_q4.onnx.data": {
+      "sizeBytes": 210111616,
+      "sha256": "7436e4ea855941214e538e80c4b020e2bf0fab0abb02793dfef42b1d49164c1a"
+    }
+  }
+}

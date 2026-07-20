@@ -41,6 +41,7 @@ kotlin {
                 implementation("io.ktor:ktor-client-okhttp:2.3.12")
                 implementation("androidx.core:core-ktx:1.13.1")
                 implementation("app.cash.sqldelight:android-driver:2.0.2")
+                implementation(libs.onnxruntime.android)
             }
         }
 

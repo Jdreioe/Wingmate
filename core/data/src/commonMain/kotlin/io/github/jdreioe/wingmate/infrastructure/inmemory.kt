@@ -3,9 +3,15 @@ package io.github.jdreioe.wingmate.infrastructure
 import io.github.jdreioe.wingmate.domain.*
 import io.github.jdreioe.wingmate.domain.chatterbox.ChatterboxModel
 import io.github.jdreioe.wingmate.domain.chatterbox.ClonedVoiceProfile
+import io.github.jdreioe.wingmate.domain.chatterbox.ModelDownloader
+import io.github.jdreioe.wingmate.domain.chatterbox.ModelInstallationStatus
 import io.github.jdreioe.wingmate.domain.chatterbox.ModelRepository
+import io.github.jdreioe.wingmate.domain.chatterbox.ChatterboxRuntimeStatus
+import io.github.jdreioe.wingmate.domain.chatterbox.ChatterboxStatusProvider
 import io.github.jdreioe.wingmate.domain.chatterbox.VoiceProfileRepository
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlin.random.Random
 import kotlin.time.Clock
 
@@ -45,12 +51,12 @@ class InMemorySettingsRepository : SettingsRepository {
     private var settings = Settings()
     override suspend fun get(): Settings {
         delay(50)
-        return settings
+        return settings.normalizedTtsEngineSettings()
     }
     override suspend fun update(settings: Settings): Settings {
         delay(50)
-        this.settings = settings
-        return settings
+        this.settings = settings.normalizedTtsEngineSettings()
+        return this.settings
     }
 }
 
@@ -192,4 +198,24 @@ class InMemoryVoiceProfileRepository : VoiceProfileRepository {
         delay(10)
         active = profile
     }
+
+    override suspend fun clearActive() {
+        delay(10)
+        active = null
+    }
+}
+
+class NoopModelDownloader : ModelDownloader {
+    override suspend fun downloadModel(modelId: String, onProgress: (Float) -> Unit): Result<Unit> =
+        Result.failure(UnsupportedOperationException("Model download not supported on this platform"))
+
+    override fun installationStatus(modelId: String): ModelInstallationStatus =
+        ModelInstallationStatus.NotInstalled
+
+    override suspend fun deleteModel(modelId: String): Result<Unit> = Result.success(Unit)
+}
+
+class NoopChatterboxStatusProvider : ChatterboxStatusProvider {
+    override val status: StateFlow<ChatterboxRuntimeStatus> =
+        MutableStateFlow(ChatterboxRuntimeStatus.NotInstalled)
 }

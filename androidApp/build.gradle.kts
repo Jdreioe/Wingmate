@@ -37,6 +37,7 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = vCode
         versionName = vName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField(
             "String",
             "OPENSYMBOLS_SECRET",
@@ -67,7 +68,7 @@ android {
 
     sourceSets {
         getByName("main") {
-            assets.srcDir("$buildDir/generated/composeAppComposeResources")
+            assets.directories.add(layout.buildDirectory.dir("generated/composeAppComposeResources").get().asFile.path)
         }
     }
     
@@ -129,6 +130,9 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.testExt.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)

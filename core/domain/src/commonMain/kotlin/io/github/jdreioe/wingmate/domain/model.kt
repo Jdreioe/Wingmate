@@ -42,6 +42,12 @@ data class Settings(
     val useSystemTts: Boolean = false,
     // TTS engine selection (supersedes useSystemTts)
     val ttsEngine: TtsEngine = TtsEngine.Azure,
+    // Chatterbox TTS settings
+    val useChatterboxTts: Boolean = false,
+    val chatterboxReferenceAudioPath: String = "",
+    val chatterboxModelDir: String = "",
+    val chatterboxPresetVoice: String = "default",
+    val chatterboxLanguage: String = "en",
     // Desktop (Linux) only: when true, route TTS audio to a virtual sink whose monitor can be used as a microphone in apps like Zoom
     val virtualMicEnabled: Boolean = false,
     // Auto-update settings
@@ -83,6 +89,21 @@ data class Settings(
     val selectionSoundEnabled: Boolean = false,
     val auditoryFishingEnabled: Boolean = false,
     val usageLoggingEnabled: Boolean = false
+)
+
+fun Settings.normalizedTtsEngineSettings(): Settings {
+    val selected = when {
+        useChatterboxTts -> TtsEngine.Chatterbox
+        useSystemTts -> TtsEngine.System
+        else -> ttsEngine
+    }
+    return withTtsEngine(selected)
+}
+
+fun Settings.withTtsEngine(engine: TtsEngine): Settings = copy(
+    ttsEngine = engine,
+    useSystemTts = engine == TtsEngine.System,
+    useChatterboxTts = engine == TtsEngine.Chatterbox,
 )
 
 @Serializable

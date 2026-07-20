@@ -185,7 +185,8 @@ fun WelcomeScreen(
             VoiceEngineSelectorScreen(
                 onNext = { step = 4 }, // Skip to voice selection if System TTS
                 onCancel = { step = if (enableBoardImport) 1 else 0 }, // Back to Import or Intro
-                onAzureSelected = { step = 3 } // Go to Azure config if Azure selected
+                onAzureSelected = { step = 3 }, // Go to Azure config if Azure selected
+                onChatterboxSelected = { step = 6 },
             )
         }
         3 -> {
@@ -207,6 +208,12 @@ fun WelcomeScreen(
             TestVoiceScreen(
                 onNext = { onContinue() }, // Complete setup after testing voice
                 onBack = { step = 4 } // Back to voice selection
+            )
+        }
+        6 -> {
+            ChatterboxVoiceSettingsScreen(
+                onBack = { step = 2 },
+                onContinue = { step = 5 },
             )
         }
     }

@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate
 import android.app.Application
 import com.hojmoseit.wingmate.BuildConfig
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
+import io.github.jdreioe.wingmate.infrastructure.ChatterboxSpeechService
 import org.koin.core.context.GlobalContext
 import org.koin.dsl.module
 
@@ -26,5 +27,12 @@ class WingmateApplication : Application() {
         ).firstOrNull { !it.isNullOrBlank() }
 
         OpenSymbolsClient.setSharedSecret(openSymbolsSecret)
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_BACKGROUND) {
+            GlobalContext.getOrNull()?.getOrNull<ChatterboxSpeechService>()?.unload()
+        }
     }
 }

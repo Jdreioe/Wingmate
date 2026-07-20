@@ -31,6 +31,23 @@ sealed class ChatterboxError(override val message: String) : Exception(message) 
     class InferenceError(cause: String) :
         ChatterboxError("Speech engine error: $cause")
 
+    class DownloadIntegrity(path: String) :
+        ChatterboxError("Downloaded model file failed verification: $path")
+
+    class IncompatibleGraph(model: String, detail: String) :
+        ChatterboxError("Model '$model' has an incompatible ONNX interface: $detail")
+
+    class UnsupportedLanguage(language: String) :
+        ChatterboxError("Chatterbox currently supports English and Danish; '$language' is unavailable.")
+
+    class TextTooLong(maxTokens: Int) :
+        ChatterboxError("Text is too long for Chatterbox (maximum $maxTokens tokens).")
+
+    class InvalidWaveform(reason: String) :
+        ChatterboxError("Chatterbox produced invalid audio: $reason")
+
+    class Cancelled : ChatterboxError("Chatterbox speech was cancelled.")
+
     companion object {
         private fun formatBytes(bytes: Long): String {
             val kb = bytes / 1024

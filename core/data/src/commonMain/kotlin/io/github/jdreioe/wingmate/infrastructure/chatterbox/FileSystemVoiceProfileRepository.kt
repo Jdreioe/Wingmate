@@ -50,6 +50,10 @@ class FileSystemVoiceProfileRepository(
         fileStorage.save(ACTIVE_FILE, profile.id)
     }
 
+    override suspend fun clearActive() {
+        fileStorage.delete(ACTIVE_FILE)
+    }
+
     companion object {
         private const val VOICES_DIR = "voices"
         private const val INDEX_FILE = "$VOICES_DIR/index.json"

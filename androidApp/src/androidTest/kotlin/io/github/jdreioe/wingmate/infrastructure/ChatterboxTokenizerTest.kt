@@ -1,98 +1,73 @@
 package io.github.jdreioe.wingmate.infrastructure
 
+import io.github.jdreioe.wingmate.domain.chatterbox.ChatterboxError
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
-import org.junit.Assert.*
 import java.io.File
 
 class ChatterboxTokenizerTest {
-
-    private fun createTempVocab(content: String): File {
-        val f = File.createTempFile("chatterbox_vocab_", ".json")
-        f.writeText(content)
-        f.deleteOnExit()
-        return f
+    private fun tokenizer(): ChatterboxTokenizer {
+        val json = """
+            {
+              "model": {
+                "type": "BPE",
+                "vocab": {
+                  "[STOP]":0,"[UNK]":1,"[SPACE]":2,".":9,"e":18,"j":23,"l":25,"o":28,
+                  "H":284,"ll":84,"[en]":708,"[da]":715,"<EXAGGERATION>":6563,
+                  "<START_SPEECH>":6561,"[START]":255
+                },
+                "merges": ["l l"]
+              },
+              "added_tokens": [
+                {"id":0,"content":"[STOP]"},
+                {"id":1,"content":"[UNK]"},
+                {"id":2,"content":"[SPACE]"},
+                {"id":255,"content":"[START]"},
+                {"id":708,"content":"[en]"},
+                {"id":715,"content":"[da]"},
+                {"id":6561,"content":"<START_SPEECH>"},
+                {"id":6563,"content":"<EXAGGERATION>"}
+              ]
+            }
+        """.trimIndent()
+        val file = File.createTempFile("tokenizer", ".json").apply { writeText(json) }
+        return ChatterboxTokenizer(file.absolutePath)
     }
 
     @Test
-    fun textToTokens_encodesKnownTokens() {
-        val vocab = """{"hello": 10, "world": 20, "<unk>": 0}"""
-        val tokenizer = ChatterboxTokenizer(createTempVocab(vocab).absolutePath)
-        val tokens = tokenizer.textToTokens("hello world")
-        assertTrue("hello" in tokens.map { tokenizer.tokenToText(it) })
-        assertTrue("world" in tokens.map { tokenizer.tokenToText(it) })
+    fun englishEncodingPreservesCaseAndTemplateTokens() {
+        val encoding = tokenizer().encode("Hello.", "en")
+        assertArrayEquals(
+            longArrayOf(6563, 255, 708, 284, 18, 84, 28, 9, 0, 6561, 6561),
+            encoding.inputIds,
+        )
+        assertArrayEquals(longArrayOf(0, 0, 1, 2, 3, 4, 5, 6, 7, 0, 0), encoding.positionIds)
     }
 
     @Test
-    fun textToTokens_caseInsensitive() {
-        val vocab = """{"hello": 10, "<unk>": 0}"""
-        val tokenizer = ChatterboxTokenizer(createTempVocab(vocab).absolutePath)
-        val tokens = tokenizer.textToTokens("HELLO")
-        assertEquals(1, tokens.size)
-        assertEquals(10, tokens[0])
+    fun danishEncodingUsesDanishLanguageTokenAndSpaceToken() {
+        val encoding = tokenizer().encode("Hej hej", "da")
+        assertArrayEquals(
+            longArrayOf(6563, 255, 715, 284, 18, 23, 2, 1, 18, 23, 0, 6561, 6561),
+            encoding.inputIds,
+        )
     }
 
     @Test
-    fun textToTokens_unknownTokenBecomesUnk() {
-        val vocab = """{"<unk>": 0}"""
-        val tokenizer = ChatterboxTokenizer(createTempVocab(vocab).absolutePath)
-        val tokens = tokenizer.textToTokens("zzzzz")
-        assertTrue(tokens.all { it == 0 })
+    fun unsupportedLanguageFailsClearly() {
+        assertThrows(ChatterboxError.UnsupportedLanguage::class.java) {
+            tokenizer().encode("Bonjour", "fr")
+        }
     }
 
     @Test
-    fun textToTokens_emptyString() {
-        val vocab = """{"<unk>": 0}"""
-        val tokenizer = ChatterboxTokenizer(createTempVocab(vocab).absolutePath)
-        val tokens = tokenizer.textToTokens("")
-        assertTrue(tokens.isEmpty())
-    }
-
-    @Test
-    fun textToTokens_longestMatchWins() {
-        val vocab = """{"ab": 1, "abc": 2, "d": 3, "<unk>": 0}"""
-        val tokenizer = ChatterboxTokenizer(createTempVocab(vocab).absolutePath)
-        val tokens = tokenizer.textToTokens("abcd")
-        assertEquals(listOf(2, 3), tokens)
-    }
-
-    @Test
-    fun tokenToText_knownId() {
-        val vocab = """{"hello": 10, "<unk>": 0}"""
-        val tokenizer = ChatterboxTokenizer(createTempVocab(vocab).absolutePath)
-        assertEquals("hello", tokenizer.tokenToText(10))
-    }
-
-    @Test
-    fun tokenToText_unknownId() {
-        val vocab = """{"<unk>": 0}"""
-        val tokenizer = ChatterboxTokenizer(createTempVocab(vocab).absolutePath)
-        assertEquals("<unk>", tokenizer.tokenToText(999))
-    }
-
-    @Test
-    fun constantsAreCorrect() {
-        assertEquals(255, ChatterboxTokenizer.SOT_TEXT_ID)
-        assertEquals(0, ChatterboxTokenizer.EOT_TEXT_ID)
-        assertEquals(6561, ChatterboxTokenizer.SOT_SPEECH)
-        assertEquals(6562, ChatterboxTokenizer.EOT_SPEECH)
+    fun constantsMatchPinnedModel() {
+        assertEquals(255L, ChatterboxTokenizer.SOT_TEXT_ID)
+        assertEquals(0L, ChatterboxTokenizer.EOT_TEXT_ID)
+        assertEquals(6561L, ChatterboxTokenizer.SOT_SPEECH)
+        assertEquals(6562L, ChatterboxTokenizer.EOT_SPEECH)
         assertEquals(8194, ChatterboxTokenizer.SPEECH_VOCAB)
-        assertEquals(256, ChatterboxTokenizer.MAX_TEXT_LEN)
-    }
-
-    @Test
-    fun textToTokens_multipleMatchesAcrossString() {
-        val vocab = """{"a": 1, "b": 2, "ab": 3, "bc": 4, "<unk>": 0}"""
-        val tokenizer = ChatterboxTokenizer(createTempVocab(vocab).absolutePath)
-        val tokens = tokenizer.textToTokens("abc")
-        assertEquals(listOf(3, 2), tokens)
-    }
-
-    @Test
-    fun textToTokens_handlesNewlinesAndWhitespace_inVocab() {
-        val vocab = """{" ": 5, "\\n": 6, "a": 1, "<unk>": 0}"""
-        val raw = """{" ": 5, "\n": 6, "a": 1, "<unk>": 0}"""
-        val tokenizer = ChatterboxTokenizer(createTempVocab(raw).absolutePath)
-        val tokens = tokenizer.textToTokens("a a")
-        assertTrue(tokens.size >= 2)
     }
 }

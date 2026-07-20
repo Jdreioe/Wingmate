@@ -12,22 +12,29 @@ import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
+import io.github.jdreioe.wingmate.domain.chatterbox.ModelDownloader
 import io.github.jdreioe.wingmate.domain.chatterbox.ModelRepository
 import io.github.jdreioe.wingmate.domain.chatterbox.VoiceProfileRepository
+import io.github.jdreioe.wingmate.domain.chatterbox.ChatterboxStatusProvider
 import io.github.jdreioe.wingmate.infrastructure.AndroidFileStorage
 import io.github.jdreioe.wingmate.infrastructure.AndroidFirebaseFeatureUsageReporter
 import io.github.jdreioe.wingmate.infrastructure.AndroidImageCacher
 import io.github.jdreioe.wingmate.infrastructure.AndroidPhraseRecordingService
 import io.github.jdreioe.wingmate.infrastructure.AndroidSpeechService
+import io.github.jdreioe.wingmate.infrastructure.ChatterboxModelDownloader
+import io.github.jdreioe.wingmate.infrastructure.ChatterboxSpeechService
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSaidTextRepository
+import io.github.jdreioe.wingmate.infrastructure.AndroidSpeechVerifier
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
+import io.github.jdreioe.wingmate.infrastructure.Mp4AudioExtractor
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
+import io.github.jdreioe.wingmate.infrastructure.WavRecorder
 import io.github.jdreioe.wingmate.infrastructure.chatterbox.FileSystemModelRepository
 import io.github.jdreioe.wingmate.infrastructure.chatterbox.FileSystemVoiceProfileRepository
 import io.github.jdreioe.wingmate.platform.AndroidAudioClipboard
@@ -76,9 +83,16 @@ fun overrideAndroidSpeechService(context: Context) {
             single<VoiceProfileRepository> { FileSystemVoiceProfileRepository(get()) }
 
             // Chatterbox platform services
+            single { ChatterboxSpeechService(get(), get(), get()) }
+            single<io.github.jdreioe.wingmate.domain.chatterbox.VoiceCloningService> { get<ChatterboxSpeechService>() }
+            single<ChatterboxStatusProvider> { get<ChatterboxSpeechService>() }
+            single<ModelDownloader> { ChatterboxModelDownloader(get()) }
             single<InferenceEngine> { InferenceEngine() }
-            single<AudioRecorder> { AudioRecorder(context) }
+            single<AudioRecorder> { AudioRecorder() }
             single<PlatformAudioPlayer> { PlatformAudioPlayer() }
+            single { WavRecorder() }
+            single<io.github.jdreioe.wingmate.domain.chatterbox.AudioExtractor> { Mp4AudioExtractor() }
+            single<io.github.jdreioe.wingmate.domain.chatterbox.SpeechVerifier> { AndroidSpeechVerifier(get()) }
         }
     )
 }

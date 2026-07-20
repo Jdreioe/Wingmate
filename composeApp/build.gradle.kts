@@ -21,19 +21,12 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 implementation(project(":shared"))
-                @Suppress("DEPRECATION")
                 implementation(compose.runtime)
-                @Suppress("DEPRECATION")
                 implementation(compose.foundation)
-                @Suppress("DEPRECATION")
                 implementation(compose.material3)
-                @Suppress("DEPRECATION")
                 implementation(compose.ui)
-                @Suppress("DEPRECATION")
                 implementation(compose.components.resources)
-                @Suppress("DEPRECATION")
                 implementation(compose.components.uiToolingPreview)
-                @Suppress("DEPRECATION")
                 implementation(compose.materialIconsExtended)
                 
                 implementation(libs.koin.core)
@@ -54,7 +47,6 @@ kotlin {
         
         val desktopMain by getting {
             dependencies {
-                @Suppress("DEPRECATION")
                 implementation(compose.desktop.common)
                 implementation("io.ktor:ktor-client-okhttp:3.4.0")
                 implementation("javazoom:jlayer:1.0.1")

@@ -8,6 +8,8 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.chatterbox.TtsEngine
+import io.github.jdreioe.wingmate.domain.withTtsEngine
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
@@ -356,7 +358,6 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                         if (settingsUseCase != null) {
                             val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
                             val updated = current.copy(
-                                useSystemTts = useSystemTts, 
                                 virtualMicEnabled = virtualMic,
                                 featureUsageReportingEnabled = featureUsageReportingEnabled,
                                 fontSizeScale = fontSizeScale,
@@ -364,7 +365,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                                 categoryChipScale = categoryChipScale,
                                 buttonScale = buttonScale,
                                 inputFieldScale = inputFieldScale
-                            )
+                            ).withTtsEngine(if (useSystemTts) TtsEngine.System else TtsEngine.Azure)
                             settingsUseCase.update(updated)
                             featureUsageReporter?.setEnabled(featureUsageReportingEnabled)
                         }

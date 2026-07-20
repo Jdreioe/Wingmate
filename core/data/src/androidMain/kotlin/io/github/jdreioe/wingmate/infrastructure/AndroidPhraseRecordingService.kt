@@ -46,7 +46,6 @@ class AndroidPhraseRecordingService(
             val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 MediaRecorder(context)
             } else {
-                @Suppress("DEPRECATION")
                 MediaRecorder()
             }
 

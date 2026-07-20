@@ -11,9 +11,12 @@ import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.NoopFeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.domain.*
+import io.github.jdreioe.wingmate.domain.chatterbox.ModelDownloader
 import io.github.jdreioe.wingmate.domain.chatterbox.ModelRepository
 import io.github.jdreioe.wingmate.domain.chatterbox.VoiceProfileRepository
+import io.github.jdreioe.wingmate.domain.chatterbox.ChatterboxStatusProvider
 import io.github.jdreioe.wingmate.infrastructure.*
+import io.github.jdreioe.wingmate.infrastructure.chatterbox.ChatterboxModelManager
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.bind
@@ -34,6 +37,9 @@ fun initKoin(extra: Module? = null) {
         singleOf(::InMemoryPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
         singleOf(::InMemoryModelRepository) { bind<ModelRepository>() }
         singleOf(::InMemoryVoiceProfileRepository) { bind<VoiceProfileRepository>() }
+        singleOf(::ChatterboxModelManager)
+        singleOf(::NoopModelDownloader) { bind<ModelDownloader>() } // Android overrides this
+        singleOf(::NoopChatterboxStatusProvider) { bind<ChatterboxStatusProvider>() }
         singleOf(::NoopSpeechService) { bind<SpeechService>() } // Android overrides this
         singleOf(::NoopFeatureUsageReporter) { bind<FeatureUsageReporter>() }
         singleOf(::AzureVoiceCatalog)

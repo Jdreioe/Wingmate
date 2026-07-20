@@ -18,6 +18,8 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.chatterbox.TtsEngine
+import io.github.jdreioe.wingmate.domain.withTtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -103,7 +105,9 @@ fun SsmlSidebar(
                                 useSystemTts = checked
                                 scope.launch {
                                     val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                                    settingsUseCase.updateWithNotification(current.copy(useSystemTts = checked))
+                                    settingsUseCase.updateWithNotification(
+                                        current.withTtsEngine(if (checked) TtsEngine.System else TtsEngine.Azure)
+                                    )
                                 }
                             },
                             thumbContent = {

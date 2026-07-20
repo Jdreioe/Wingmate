@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.normalizedTtsEngineSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -14,13 +15,15 @@ class IosSettingsRepository : SettingsRepository {
 
     override suspend fun get(): Settings = withContext(Dispatchers.Default) {
         val text = prefs.stringForKey(key)
-        if (text == null) Settings() else runCatching { json.decodeFromString(Settings.serializer(), text) }.getOrElse { Settings() }
+        (if (text == null) Settings() else runCatching { json.decodeFromString(Settings.serializer(), text) }.getOrElse { Settings() })
+            .normalizedTtsEngineSettings()
     }
 
     override suspend fun update(settings: Settings): Settings = withContext(Dispatchers.Default) {
-        val text = json.encodeToString(Settings.serializer(), settings)
+        val normalized = settings.normalizedTtsEngineSettings()
+        val text = json.encodeToString(Settings.serializer(), normalized)
         prefs.setObject(text, forKey = key)
         prefs.synchronize()
-        settings
+        normalized
     }
 }

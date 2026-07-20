@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate.infrastructure
 import android.content.Context
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.normalizedTtsEngineSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -35,7 +36,7 @@ class AndroidSqlSettingsRepository(private val context: Context) : SettingsRepos
             return@withContext try {
                 val s = json.decodeFromString(Settings.serializer(), text)
                 println("Loaded UI settings from SQLite: {}: ${s}")
-                s
+                s.normalizedTtsEngineSettings()
             } catch (t: Throwable) {
                 println("Failed to decode UI settings from SQLite: ${t}")
                 Settings()
@@ -48,9 +49,10 @@ class AndroidSqlSettingsRepository(private val context: Context) : SettingsRepos
     override suspend fun update(settings: Settings): Settings = withContext(Dispatchers.IO) {
         val db = helper.writableDatabase
         // Removed SLF4J logger for cross-platform compatibility
-        val text = json.encodeToString(Settings.serializer(), settings)
+        val normalized = settings.normalizedTtsEngineSettings()
+        val text = json.encodeToString(Settings.serializer(), normalized)
         db.execSQL("INSERT OR REPLACE INTO ui_settings (id, data) VALUES (1, ?)", arrayOf(text))
-        println("Saved UI settings to SQLite: {}: ${settings}")
-        return@withContext settings
+        println("Saved UI settings to SQLite: {}: ${normalized}")
+        return@withContext normalized
     }
 }

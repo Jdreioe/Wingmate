@@ -23,6 +23,8 @@ import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.chatterbox.TtsEngine
+import io.github.jdreioe.wingmate.domain.withTtsEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -37,6 +39,13 @@ private enum class SettingsTab { Speech, Display, Accessibility, General }
 @Composable
 fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
     val koin = getKoin()
+    var showChatterbox by remember { mutableStateOf(false) }
+
+    if (showChatterbox) {
+        ChatterboxVoiceSettingsScreen(onBack = { showChatterbox = false })
+        return
+    }
+
     val configRepo = remember(koin) { koin.getOrNull<ConfigRepository>() }
     val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
     val settingsStateManager = remember(koin) { koin.getOrNull<SettingsStateManager>() }
@@ -49,6 +58,7 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
     var useSystemTts by remember { mutableStateOf(false) }
+    var useChatterboxTts by remember { mutableStateOf(false) }
     var virtualMic by remember { mutableStateOf(false) }
 
     // --- Display section state ---
@@ -109,6 +119,7 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
             runCatching { settingsUseCase?.get() }.getOrNull() ?: Settings()
         }
         useSystemTts = s.useSystemTts
+        useChatterboxTts = s.useChatterboxTts
         virtualMic = s.virtualMicEnabled
         autoUpdateEnabled = s.autoUpdateEnabled
         featureUsageReportingEnabled = s.featureUsageReportingEnabled
@@ -216,7 +227,9 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
                         when (currentTab) {
                             SettingsTab.Speech -> SpeechSection(
                                 useSystemTts = useSystemTts,
-                                onUseSystemTtsChange = { useSystemTts = it },
+                                onUseSystemTtsChange = { useSystemTts = it; updateSettings { s -> s.withTtsEngine(if (it) TtsEngine.System else TtsEngine.Azure) } },
+                                useChatterboxTts = useChatterboxTts,
+                                onUseChatterboxTtsChange = { useChatterboxTts = it; updateSettings { s -> s.withTtsEngine(if (it) TtsEngine.Chatterbox else TtsEngine.Azure) } },
                                 endpoint = endpoint,
                                 onEndpointChange = { endpoint = it },
                                 subscriptionKey = subscriptionKey,
@@ -225,7 +238,8 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
                                 onVirtualMicChange = { checked ->
                                     virtualMic = checked
                                     updateSettings { it.copy(virtualMicEnabled = checked) }
-                                }
+                                },
+                                onShowChatterbox = { showChatterbox = true }
                             )
                             SettingsTab.Display -> DisplaySection(
                                 fontSizeScale = fontSizeScale,
@@ -293,7 +307,7 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
                 scope.launch {
                     withContext(Dispatchers.Default) {
                         // Save Azure config if needed
-                        if (!useSystemTts && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
+                        if (!useSystemTts && !useChatterboxTts && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
                             runCatching {
                                 configRepo?.saveSpeechConfig(
                                     SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey)
@@ -305,6 +319,7 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
                             val current = runCatching { useCase.get() }.getOrNull() ?: Settings()
                             useCase.update(current.copy(
                                 useSystemTts = useSystemTts,
+                                useChatterboxTts = useChatterboxTts,
                                 virtualMicEnabled = virtualMic,
                                 featureUsageReportingEnabled = featureUsageReportingEnabled
                             ))
@@ -327,35 +342,44 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
 private fun SpeechSection(
     useSystemTts: Boolean,
     onUseSystemTtsChange: (Boolean) -> Unit,
+    useChatterboxTts: Boolean = false,
+    onUseChatterboxTtsChange: (Boolean) -> Unit = {},
     endpoint: String,
     onEndpointChange: (String) -> Unit,
     subscriptionKey: String,
     onSubscriptionKeyChange: (String) -> Unit,
     virtualMic: Boolean,
-    onVirtualMicChange: (Boolean) -> Unit
+    onVirtualMicChange: (Boolean) -> Unit,
+    onShowChatterbox: () -> Unit = {},
 ) {
     // Sub-dialog states
     var showVoiceSelection by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
-
+    var showVoiceModels by remember { mutableStateOf(false) }
     SectionHeader("Text-to-Speech Engine")
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(
-            selected = !useSystemTts,
-            onClick = { onUseSystemTtsChange(false) },
+            selected = !useSystemTts && !useChatterboxTts,
+            onClick = { onUseSystemTtsChange(false); onUseChatterboxTtsChange(false) },
             label = { Text("Azure TTS") },
             modifier = Modifier.weight(1f)
         )
         FilterChip(
             selected = useSystemTts,
-            onClick = { onUseSystemTtsChange(true) },
+            onClick = { onUseSystemTtsChange(true); onUseChatterboxTtsChange(false) },
             label = { Text("System TTS") },
+            modifier = Modifier.weight(1f)
+        )
+        FilterChip(
+            selected = useChatterboxTts,
+            onClick = { onUseChatterboxTtsChange(true); onUseSystemTtsChange(false) },
+            label = { Text("Chatterbox") },
             modifier = Modifier.weight(1f)
         )
     }
 
-    if (!useSystemTts) {
+    if (!useSystemTts && !useChatterboxTts) {
         Spacer(modifier = Modifier.height(16.dp))
         val showKeyboard = rememberShowKeyboardOnFocus()
         OutlinedTextField(
@@ -399,6 +423,31 @@ private fun SpeechSection(
         }
     }
 
+    Spacer(modifier = Modifier.height(8.dp))
+
+    OutlinedButton(
+        onClick = { showVoiceModels = true },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Icon(Icons.Filled.Memory, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Voice Models")
+    }
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    FilledTonalButton(
+        onClick = {
+            onUseChatterboxTtsChange(true)
+            onShowChatterbox()
+        },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Chatterbox")
+    }
+
     if (isDesktop()) {
         Spacer(modifier = Modifier.height(16.dp))
         SettingsSwitch(
@@ -420,6 +469,13 @@ private fun SpeechSection(
             openPrimaryMenuInitially = true
         )
     }
+    if (showVoiceModels) {
+        VoiceModelsDialog(
+            show = true,
+            onDismiss = { showVoiceModels = false }
+        )
+    }
+
 }
 
 // ─── Display Tab ─────────────────────────────────────────────────────────────

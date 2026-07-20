@@ -9,6 +9,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.chatterbox.TtsEngine
+import io.github.jdreioe.wingmate.domain.withTtsEngine
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,11 +21,13 @@ import org.koin.compose.koinInject
 fun VoiceEngineSelectorScreen(
     onNext: () -> Unit, 
     onCancel: () -> Unit,
-    onAzureSelected: () -> Unit = {}
+    onAzureSelected: () -> Unit = {},
+    onChatterboxSelected: () -> Unit = {},
 ) {
     val settingsUseCase = koinInject<SettingsUseCase>()
 
     var useSystemTts by remember { mutableStateOf(false) }
+    var useChatterbox by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
@@ -32,6 +36,7 @@ fun VoiceEngineSelectorScreen(
             runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
         }
         useSystemTts = settings.useSystemTts
+        useChatterbox = settings.useChatterboxTts
 
         loading = false
     }
@@ -65,15 +70,16 @@ fun VoiceEngineSelectorScreen(
                 Card(
                     onClick = {
                         useSystemTts = false
+                        useChatterbox = false
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (!useSystemTts)
+                        containerColor = if (!useSystemTts && !useChatterbox)
                             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
                         else
                             MaterialTheme.colorScheme.surfaceContainer
                     ),
-                    border = if (!useSystemTts)
+                    border = if (!useSystemTts && !useChatterbox)
                         BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                     else null
                 ) {
@@ -87,7 +93,7 @@ fun VoiceEngineSelectorScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                             )
-                            if (!useSystemTts) {
+                            if (!useSystemTts && !useChatterbox) {
                                 Spacer(Modifier.width(8.dp))
                                 AssistChip(
                                     onClick = { },
@@ -129,6 +135,7 @@ fun VoiceEngineSelectorScreen(
                 Card(
                     onClick = {
                         useSystemTts = true
+                        useChatterbox = false
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -187,6 +194,71 @@ fun VoiceEngineSelectorScreen(
                     }
                 }
 
+                Spacer(Modifier.height(12.dp))
+
+                // Chatterbox TTS Card
+                Card(
+                    onClick = {
+                        useSystemTts = false
+                        useChatterbox = true
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (useChatterbox)
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                        else
+                            MaterialTheme.colorScheme.surfaceContainer
+                    ),
+                    border = if (useChatterbox)
+                        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                    else null
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            Text(
+                                "🧠 Chatterbox (On-Device)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                            )
+                            if (useChatterbox) {
+                                Spacer(Modifier.width(8.dp))
+                                AssistChip(
+                                    onClick = { },
+                                    label = { Text("Selected", style = MaterialTheme.typography.labelSmall) }
+                                )
+                            }
+                        }
+
+                        Text(
+                            "✅ Pros:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text("• Works completely offline", style = MaterialTheme.typography.bodySmall)
+                        Text("• Voice cloning on your device", style = MaterialTheme.typography.bodySmall)
+                        Text("• 23 languages supported", style = MaterialTheme.typography.bodySmall)
+                        Text("• Complete privacy — no cloud", style = MaterialTheme.typography.bodySmall)
+                        Text("• Low latency after load", style = MaterialTheme.typography.bodySmall)
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Text(
+                            "❌ Cons:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text("• ~5GB model download required", style = MaterialTheme.typography.bodySmall)
+                        Text("• Requires modern Android device", style = MaterialTheme.typography.bodySmall)
+                        Text("• Cloning takes a few minutes", style = MaterialTheme.typography.bodySmall)
+                        Text("• Currently Android only", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
                 Spacer(Modifier.height(16.dp))
 
                 // Recommendation Card
@@ -231,14 +303,22 @@ fun VoiceEngineSelectorScreen(
                                     runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
                                 }
                                 runCatching {
-                                    settingsUseCase.update(currentSettings.copy(useSystemTts = useSystemTts))
+                                    settingsUseCase.update(
+                                        currentSettings.withTtsEngine(
+                                            when {
+                                                useChatterbox -> TtsEngine.Chatterbox
+                                                useSystemTts -> TtsEngine.System
+                                                else -> TtsEngine.Azure
+                                            }
+                                        )
+                                    )
                                 }
 
                                 // Navigate to appropriate next screen based on selection
-                                if (useSystemTts) {
-                                    onNext() // Go directly to voice selection
-                                } else {
-                                    onAzureSelected() // Go to Azure configuration
+                                when {
+                                    useChatterbox -> onChatterboxSelected()
+                                    useSystemTts -> onNext()
+                                    else -> onAzureSelected()
                                 }
                             }
                         },

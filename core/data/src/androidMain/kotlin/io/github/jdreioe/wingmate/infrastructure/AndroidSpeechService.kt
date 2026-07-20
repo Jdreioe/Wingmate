@@ -20,6 +20,9 @@ import android.widget.Toast
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.chatterbox.TtsEngine
+import io.github.jdreioe.wingmate.domain.chatterbox.ChatterboxError
+import io.github.jdreioe.wingmate.infrastructure.chatterbox.ChatterboxModelManager
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.infrastructure.AzureTtsClient
@@ -91,7 +94,6 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 audioFocusRequest = req
                 audioManager.requestAudioFocus(req) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
             } else {
-                @Suppress("DEPRECATION")
                 audioManager.requestAudioFocus(
                     focusChangeListener,
                     AudioManager.STREAM_MUSIC,
@@ -105,7 +107,6 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
             } else {
-                @Suppress("DEPRECATION")
                 audioManager.abandonAudioFocus(focusChangeListener)
             }
         } catch (_: Throwable) { }
@@ -334,9 +335,47 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         // Combine all segments text for cache lookup and history
         val combinedText = segments.joinToString("") { it.text }
 
+        val selectedEngine = when {
+            uiSettings?.useChatterboxTts == true -> TtsEngine.Chatterbox
+            uiSettings?.useSystemTts == true -> TtsEngine.System
+            else -> uiSettings?.ttsEngine ?: TtsEngine.Azure
+        }
+
         // If user prefers system TTS, use it directly
-        if (uiSettings?.useSystemTts == true) {
+        if (selectedEngine == TtsEngine.System) {
             recordHistory(combinedText, voice) // Record ONCE for the whole sentence
+            playSegmentsWithPlatformTts(segments, voice, pitch, rate)
+            return
+        }
+
+        // If Chatterbox TTS is selected, delegate to ChatterboxSpeechService
+        if (selectedEngine == TtsEngine.Chatterbox) {
+            val chatterbox = runCatching {
+                GlobalContext.get().get<ChatterboxSpeechService>()
+            }.getOrNull()
+            if (chatterbox != null) {
+                val result = chatterbox.speakSegmentsResult(segments, voice, pitch, rate)
+                if (result.isSuccess) return
+                val error = result.exceptionOrNull()
+                if (error is ChatterboxError.Cancelled) return
+                if (error != null) chatterbox.recordFallback(error)
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(
+                        context,
+                        "Chatterbox is unavailable. Using Android speech.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            } else {
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(
+                        context,
+                        "Chatterbox is unavailable. Using Android speech.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+            recordHistory(combinedText, voice)
             playSegmentsWithPlatformTts(segments, voice, pitch, rate)
             return
         }
@@ -764,6 +803,9 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     }
 
     override suspend fun stop() {
+        runCatching {
+            GlobalContext.getOrNull()?.getOrNull<ChatterboxSpeechService>()?.stop()
+        }
         synchronized(playerLock) {
             try {
                 mediaPlayer?.let { try { it.stop(); it.release() } catch (_: Throwable) {} }
@@ -933,7 +975,6 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                     } else {
                         // Fallback using Thread.sleep is NOT safe on main thread, but pre-Lollipop is ancient.
                         // Just ignore or use playSilence (deprecated but works).
-                        @Suppress("DEPRECATION")
                         run {
                             pendingTtsUtterances.incrementAndGet()
                             val silenceResult = t.playSilence(

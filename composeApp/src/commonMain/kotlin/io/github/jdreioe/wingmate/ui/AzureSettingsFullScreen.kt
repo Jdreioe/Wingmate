@@ -9,6 +9,8 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.chatterbox.TtsEngine
+import io.github.jdreioe.wingmate.domain.withTtsEngine
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -71,7 +73,7 @@ fun AzureSettingsFullScreen(
                             runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
                         }
                         runCatching {
-                            settingsUseCase.update(currentSettings.copy(useSystemTts = false))
+                            settingsUseCase.update(currentSettings.withTtsEngine(TtsEngine.Azure))
                         }
                         // Navigate to Azure config screen
                         onAzureSelected()
@@ -145,7 +147,7 @@ fun AzureSettingsFullScreen(
                             runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
                         }
                         runCatching {
-                            settingsUseCase.update(currentSettings.copy(useSystemTts = true))
+                            settingsUseCase.update(currentSettings.withTtsEngine(TtsEngine.System))
                         }
                         // Go directly to voice selection since no config needed
                         onNext()
@@ -282,7 +284,9 @@ fun AzureSettingsFullScreen(
                     // Save TTS preference
                     withContext(Dispatchers.Default) {
                         val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                        val updated = current.copy(useSystemTts = useSystemTts, virtualMicEnabled = virtualMic)
+                        val updated = current.copy(virtualMicEnabled = virtualMic).withTtsEngine(
+                            if (useSystemTts) TtsEngine.System else TtsEngine.Azure
+                        )
                         settingsUseCase.update(updated)
                     }
                     

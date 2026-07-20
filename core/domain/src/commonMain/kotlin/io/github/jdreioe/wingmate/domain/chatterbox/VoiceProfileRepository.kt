@@ -7,4 +7,5 @@ interface VoiceProfileRepository {
     suspend fun delete(id: String)
     suspend fun getActive(): ClonedVoiceProfile?
     suspend fun setActive(profile: ClonedVoiceProfile)
+    suspend fun clearActive()
 }
