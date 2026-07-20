@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.GridView
@@ -24,7 +25,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.produceState
@@ -332,6 +338,7 @@ fun PhraseScreen(
                                 // === SPEECH TOOLS ===
                                 DropdownMenuItem(
                                     text = { Text(stringResource(Res.string.phrase_screen_pronunciation_dictionary), style = MaterialTheme.typography.bodyMedium) },
+                                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
                                     onClick = {
                                         showOverflow = false
                                         showDictionaryScreen = true
@@ -347,6 +354,7 @@ fun PhraseScreen(
                                 // === AUDIO FILES ===
                                 DropdownMenuItem(
                                     text = { Text(stringResource(Res.string.phrase_screen_copy_last_soundfile), style = MaterialTheme.typography.bodyMedium) },
+                                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                                     onClick = {
                                         showOverflow = false
                                         uiScope.launch(Dispatchers.IO) {
@@ -364,6 +372,7 @@ fun PhraseScreen(
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(Res.string.phrase_screen_share_last_soundfile), style = MaterialTheme.typography.bodyMedium) },
+                                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                                     onClick = {
                                         showOverflow = false
                                         uiScope.launch(Dispatchers.IO) {
@@ -385,6 +394,7 @@ fun PhraseScreen(
                                 // === APP SETTINGS ===
                                 DropdownMenuItem(
                                     text = { Text(stringResource(Res.string.phrase_screen_app_settings), style = MaterialTheme.typography.bodyMedium) },
+                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
                                     onClick = {
                                         showOverflow = false
                                         showSettingsDialog = true
@@ -396,6 +406,7 @@ fun PhraseScreen(
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(Res.string.phrase_screen_import_export_data), style = MaterialTheme.typography.bodyMedium) },
+                                    leadingIcon = { Icon(Icons.Default.ImportExport, contentDescription = null) },
                                     onClick = {
                                         showOverflow = false
                                         showSettingsExportDialog = true
@@ -407,6 +418,7 @@ fun PhraseScreen(
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(Res.string.phrase_screen_check_updates), style = MaterialTheme.typography.bodyMedium) },
+                                    leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null) },
                                     onClick = { 
                                         showOverflow = false
                                         featureUsageReporter.reportEvent(
@@ -422,6 +434,7 @@ fun PhraseScreen(
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(Res.string.phrase_screen_welcome_screen), style = MaterialTheme.typography.bodyMedium) },
+                                    leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
                                     onClick = {
                                         showOverflow = false
                                         featureUsageReporter.reportEvent(
@@ -445,6 +458,7 @@ fun PhraseScreen(
                                                 style = MaterialTheme.typography.bodyMedium
                                             )
                                         },
+                                        leadingIcon = { Icon(Icons.Default.Dashboard, contentDescription = null) },
                                         onClick = { 
                                             showOverflow = false
                                             if (currentBoard == null) {
@@ -484,6 +498,7 @@ fun PhraseScreen(
                                     )
                                     DropdownMenuItem(
                                         text = { Text(stringResource(Res.string.phrase_screen_import_board), style = MaterialTheme.typography.bodyMedium) },
+                                        leadingIcon = { Icon(Icons.Default.FolderOpen, contentDescription = null) },
                                         onClick = { 
                                             showOverflow = false
                                             uiScope.launch(Dispatchers.IO) {

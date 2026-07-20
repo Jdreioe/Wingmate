@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -27,8 +28,11 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -67,6 +71,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.FeatureUsageEvents
+import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.Phrase
@@ -130,16 +136,28 @@ private data class WorkspaceCellTarget(
 @Composable
 fun BoardSetManagerScreen(
     onBack: () -> Unit,
+    onBackToWelcome: () -> Unit,
     createOnLaunch: Boolean = false,
     initialBoardSetId: String? = null
 ) {
     val useCase = koinInject<BoardSetUseCase>()
+    val saidTextRepository = koinInject<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+    val dictionaryRepository = koinInject<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>()
+    val speechService = koinInject<SpeechService>()
+    val voiceUseCase = koinInject<VoiceUseCase>()
+    val koin = org.koin.compose.getKoin()
+    val featureUsageReporter = koinInject<io.github.jdreioe.wingmate.application.FeatureUsageReporter>()
+    val updateService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.UpdateService>() }
+    val audioClipboard = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.AudioClipboard>() }
+    val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
     val scope = rememberCoroutineScope()
     var route by remember { mutableStateOf<BoardSetRoute>(BoardSetRoute.Library) }
     var boardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showDictionary by remember { mutableStateOf(false) }
+    var showImportExport by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ObfBoardSet?>(null) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     val loadError = stringResource(Res.string.board_sets_load_error)
@@ -158,6 +176,18 @@ fun BoardSetManagerScreen(
                 .onSuccess { boardSets = it }
                 .onFailure { statusMessage = it.message ?: loadError }
             isLoading = false
+        }
+    }
+
+    fun useLatestAudio(action: (String) -> Unit) {
+        scope.launch(Dispatchers.IO) {
+            val path = runCatching {
+                saidTextRepository.list()
+                    .filter { !it.audioFilePath.isNullOrBlank() }
+                    .maxByOrNull { it.date ?: it.createdAt ?: 0L }
+                    ?.audioFilePath
+            }.getOrNull()
+            if (!path.isNullOrBlank()) action(path)
         }
     }
 
@@ -182,7 +212,27 @@ fun BoardSetManagerScreen(
             isLoading = isLoading,
             statusMessage = statusMessage,
             onBack = onBack,
+            onOpenDictionary = {
+                showDictionary = true
+                featureUsageReporter.reportEvent(
+                    FeatureUsageEvents.SETTINGS_UPDATED,
+                    "action" to "open_pronunciation_dictionary"
+                )
+            },
+            onCopyLastSound = { useLatestAudio { audioClipboard?.copyAudioFile(it) } },
+            onShareLastSound = { useLatestAudio { shareService?.shareAudio(it) } },
             onOpenSettings = { showSettings = true },
+            onOpenImportExport = { showImportExport = true },
+            onCheckUpdates = {
+                featureUsageReporter.reportEvent(
+                    FeatureUsageEvents.SETTINGS_UPDATED,
+                    "action" to "check_updates"
+                )
+                scope.launch(Dispatchers.IO) {
+                    runCatching { updateService?.checkForUpdates() }
+                }
+            },
+            onOpenWelcome = onBackToWelcome,
             onCreate = { showCreateDialog = true },
             onOpen = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Run) },
             onEdit = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Edit) },
@@ -265,6 +315,48 @@ fun BoardSetManagerScreen(
     if (showSettings) {
         SettingsScreen(onDismiss = { showSettings = false })
     }
+    if (showImportExport) {
+        SettingsExportDialog(onDismiss = { showImportExport = false })
+    }
+    if (showDictionary) {
+        var entries by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.PronunciationEntry>>(emptyList()) }
+
+        LaunchedEffect(showDictionary) {
+            if (showDictionary) entries = dictionaryRepository.getAll()
+        }
+
+        DictionaryScreen(
+            entries = entries,
+            onAddEntry = { word, phoneme, alphabet ->
+                scope.launch {
+                    dictionaryRepository.add(io.github.jdreioe.wingmate.domain.PronunciationEntry(word, phoneme, alphabet))
+                    entries = dictionaryRepository.getAll()
+                }
+            },
+            onDeleteEntry = { entry ->
+                scope.launch {
+                    dictionaryRepository.delete(entry.word)
+                    entries = dictionaryRepository.getAll()
+                }
+            },
+            onTestEntry = { word, phoneme, alphabet ->
+                scope.launch {
+                    val voice = runCatching { voiceUseCase.selected() }.getOrNull()
+                    speechService.speak(
+                        "<phoneme alphabet=\"$alphabet\" ph=\"$phoneme\">$word</phoneme>",
+                        voice,
+                        voice?.pitch,
+                        voice?.rate
+                    )
+                }
+            },
+            onGuessPronunciation = { word ->
+                val voice = runCatching { voiceUseCase.selected() }.getOrNull()
+                speechService.guessPronunciation(word, voice?.primaryLanguage ?: "en")
+            },
+            onBack = { showDictionary = false }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -274,7 +366,13 @@ private fun BoardSetLibraryScreen(
     isLoading: Boolean,
     statusMessage: String?,
     onBack: () -> Unit,
+    onOpenDictionary: () -> Unit,
+    onCopyLastSound: () -> Unit,
+    onShareLastSound: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenImportExport: () -> Unit,
+    onCheckUpdates: () -> Unit,
+    onOpenWelcome: () -> Unit,
     onCreate: () -> Unit,
     onOpen: (ObfBoardSet) -> Unit,
     onEdit: (ObfBoardSet) -> Unit,
@@ -315,11 +413,61 @@ private fun BoardSetLibraryScreen(
                             onDismissRequest = { menuExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.board_sets_app_settings)) },
+                                text = { Text(stringResource(Res.string.phrase_screen_pronunciation_dictionary)) },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onOpenDictionary()
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.phrase_screen_copy_last_soundfile)) },
+                                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onCopyLastSound()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.phrase_screen_share_last_soundfile)) },
+                                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onShareLastSound()
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.phrase_screen_app_settings)) },
                                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
                                 onClick = {
                                     menuExpanded = false
                                     onOpenSettings()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.phrase_screen_import_export_data)) },
+                                leadingIcon = { Icon(Icons.Default.ImportExport, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onOpenImportExport()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.phrase_screen_check_updates)) },
+                                leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onCheckUpdates()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.phrase_screen_welcome_screen)) },
+                                leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onOpenWelcome()
                                 }
                             )
                         }

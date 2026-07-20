@@ -112,6 +112,7 @@ fun App() {
                     }
                     "boardsets" -> {
                         BoardSetManagerScreen(
+                            onBackToWelcome = { currentScreen = "welcome" },
                             onBack = {
                                 createBoardSetOnLaunch = false
                                 currentScreen = "phrase"
