@@ -47,8 +47,16 @@ data class ObfButton(
     // Linking to other boards
     @SerialName("load_board")
     val loadBoard: ObfLoadBoard? = null,
+    /** Single OBF action (e.g. "+a", ":space"). Prefer [actions] when non-empty. */
+    val action: String? = null,
+    /** Ordered OBF actions; when non-empty these take precedence over [action]. */
+    val actions: List<String> = emptyList(),
     val hidden: Boolean = false
-)
+) {
+    /** Effective action list: [actions] if present, otherwise the singular [action]. */
+    fun resolvedActions(): List<String> =
+        if (actions.isNotEmpty()) actions else listOfNotNull(action?.takeIf { it.isNotBlank() })
+}
 
 @Serializable
 data class ObfGrid(

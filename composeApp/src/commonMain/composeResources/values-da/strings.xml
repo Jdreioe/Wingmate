@@ -61,6 +61,7 @@
     <string name="board_workspace_speak_sentence">Læs sætningen op</string>
     <string name="board_workspace_delete_last">Slet sidste ord</string>
     <string name="board_workspace_clear_sentence">Ryd sætningen</string>
+    <string name="board_workspace_unsupported_action">Ikke-understøttet board-handling: %1$s</string>
     <string name="board_workspace_save_changes">Gem ændringer</string>
     <string name="board_workspace_discard">Kassér</string>
     <string name="board_workspace_keep_editing">Fortsæt redigering</string>
