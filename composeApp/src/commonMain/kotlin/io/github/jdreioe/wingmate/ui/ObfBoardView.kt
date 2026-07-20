@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.sp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.ObfImageSource
+import io.github.jdreioe.wingmate.domain.obf.resolveObfImageSource
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -58,6 +60,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import org.jetbrains.compose.resources.stringResource
 import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.board_symbol_unavailable
+import wingmatekmp.composeapp.generated.resources.board_symbol_unavailable_set
 import wingmatekmp.composeapp.generated.resources.board_workspace_clear_sentence
 import wingmatekmp.composeapp.generated.resources.board_workspace_delete_last
 import wingmatekmp.composeapp.generated.resources.board_workspace_save_phrase
@@ -492,21 +496,35 @@ fun ObfButtonItem(
         else -> MaterialTheme.colorScheme.onSurface
     }
     
-    // Try to load image from various sources synchronously first
-    val syncBitmap = remember(image, extractedImageBytes) {
-        extractedImageBytes?.let { bytes ->
-            runCatching { bytes.toComposeImageBitmap() }.getOrNull()
-        } ?: image?.data?.let { data ->
-            runCatching {
-                val base64 = if (data.contains(",")) data.substringAfter(",") else data
-                val bytes = java.util.Base64.getDecoder().decode(base64)
-                bytes.toComposeImageBitmap()
-            }.getOrNull()
+    // Spec priority: data → path → url → symbol (extracted zip bytes count as path).
+    val imageSource = remember(image) { resolveObfImageSource(image) }
+    val syncBitmap = remember(imageSource, extractedImageBytes) {
+        when {
+            extractedImageBytes != null && imageSource is ObfImageSource.Path -> {
+                runCatching { extractedImageBytes.toComposeImageBitmap() }.getOrNull()
+            }
+            imageSource is ObfImageSource.DataUri -> {
+                runCatching {
+                    val data = imageSource.data
+                    val base64 = if (data.contains(",")) data.substringAfter(",") else data
+                    val bytes = java.util.Base64.getDecoder().decode(base64)
+                    bytes.toComposeImageBitmap()
+                }.getOrNull()
+            }
+            extractedImageBytes != null -> {
+                runCatching { extractedImageBytes.toComposeImageBitmap() }.getOrNull()
+            }
+            else -> null
         }
     }
-    
+
     val imageBitmap = syncBitmap
-    val imageModel = image?.url ?: image?.path
+    val imageModel = when (imageSource) {
+        is ObfImageSource.Url -> imageSource.url
+        is ObfImageSource.Path -> imageSource.path
+        else -> null
+    }
+    val symbolUnavailable = imageSource is ObfImageSource.Symbol && imageBitmap == null
     
     Card(
         modifier = Modifier
@@ -580,7 +598,8 @@ fun ObfButtonItem(
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxSize()
             ) {
-                val showImg = settings.showSymbols && (imageBitmap != null || !imageModel.isNullOrBlank())
+                val showImg = settings.showSymbols &&
+                    (imageBitmap != null || !imageModel.isNullOrBlank() || symbolUnavailable)
                 val showLbl = settings.showLabels && !(button.label.isNullOrBlank() && button.vocalization.isNullOrBlank())
 
                 if (settings.labelAtTop && showImg && showLbl) {
@@ -595,21 +614,37 @@ fun ObfButtonItem(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    BoardSymbolImage(
-                        bitmap = imageBitmap,
-                        model = imageModel,
-                        contentDescription = button.label,
-                        modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
-                    )
-                } else {
-                    // Normal order (Image at Top)
-                    if (showImg) {
+                    if (symbolUnavailable) {
+                        SymbolUnavailablePlaceholder(
+                            symbolSet = (imageSource as ObfImageSource.Symbol).symbol.set,
+                            modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp),
+                            contentColor = contentColor
+                        )
+                    } else {
                         BoardSymbolImage(
                             bitmap = imageBitmap,
                             model = imageModel,
                             contentDescription = button.label,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
                         )
+                    }
+                } else {
+                    // Normal order (Image at Top)
+                    if (showImg) {
+                        if (symbolUnavailable) {
+                            SymbolUnavailablePlaceholder(
+                                symbolSet = (imageSource as ObfImageSource.Symbol).symbol.set,
+                                modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp),
+                                contentColor = contentColor
+                            )
+                        } else {
+                            BoardSymbolImage(
+                                bitmap = imageBitmap,
+                                model = imageModel,
+                                contentDescription = button.label,
+                                modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
+                            )
+                        }
                     }
                     if (showLbl) {
                         val labelText = button.label ?: button.vocalization ?: ""
@@ -648,6 +683,29 @@ private fun BoardSymbolImage(
             contentDescription = contentDescription,
             contentScale = ContentScale.Fit,
             modifier = modifier
+        )
+    }
+}
+
+@Composable
+private fun SymbolUnavailablePlaceholder(
+    symbolSet: String?,
+    modifier: Modifier,
+    contentColor: Color
+) {
+    val message = if (symbolSet.isNullOrBlank()) {
+        stringResource(Res.string.board_symbol_unavailable)
+    } else {
+        stringResource(Res.string.board_symbol_unavailable_set, symbolSet)
+    }
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.labelSmall,
+            color = contentColor.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

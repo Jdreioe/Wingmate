@@ -312,4 +312,6 @@
     <string name="ui_settings_auditory_fishing_desc">Whisper the label when a button is hovered or touched.</string>
     <string name="ui_settings_usage_logging_title">Standardized logging (OBL)</string>
     <string name="ui_settings_usage_logging_desc">Record usage data in Open Logging Format for clinical review.</string>
+    <string name="board_symbol_unavailable">Symbol set unavailable</string>
+    <string name="board_symbol_unavailable_set">Symbol set “%1$s” unavailable</string>
 </resources>

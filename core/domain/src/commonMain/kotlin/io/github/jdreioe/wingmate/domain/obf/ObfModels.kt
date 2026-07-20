@@ -67,7 +67,17 @@ data class ObfImage(
     val url: String? = null, // External URL
     val path: String? = null, // Relative path in OBZ or local storage
     val data: String? = null,  // Base64 data URI
+    /** Proprietary symbol-set reference (e.g. SymbolStix). Lowest priority after data/path/url. */
+    val symbol: ObfSymbol? = null,
     val license: ObfLicense? = null
+)
+
+@Serializable
+data class ObfSymbol(
+    val set: String? = null,
+    val filename: String? = null,
+    @SerialName("library_key")
+    val libraryKey: String? = null
 )
 
 @Serializable
