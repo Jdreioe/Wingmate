@@ -117,6 +117,29 @@ class BoardSetUseCaseTest {
     }
 
     @Test
+    fun creatingBoardSetFromExamplesUsesFreshIdsAndRemapsLinks() = runBlocking {
+        val source = linkedGraph()
+
+        val importedSet = useCase.createBoardSetFromBoards("Examples", source.boards)
+        val imported = assertNotNull(useCase.loadBoardSetGraph(importedSet.id))
+        val importedTarget = imported.rootBoard?.buttons?.single()?.loadBoard?.id
+
+        assertEquals("Examples", importedSet.name)
+        assertEquals(2, imported.boards.size)
+        assertNotEquals("home", importedSet.rootBoardId)
+        assertTrue(importedTarget in importedSet.boardIds)
+        assertNotEquals("food", importedTarget)
+    }
+
+    @Test
+    fun creatingBoardSetFromExamplesRejectsAnEmptyList() = runBlocking {
+        assertFailsWith<IllegalArgumentException> {
+            useCase.createBoardSetFromBoards("Examples", emptyList())
+        }
+        Unit
+    }
+
+    @Test
     fun saveRejectsLinksOutsideTheBoardSet() = runBlocking {
         val source = linkedGraph()
         val brokenHome = source.rootBoard!!.copy(

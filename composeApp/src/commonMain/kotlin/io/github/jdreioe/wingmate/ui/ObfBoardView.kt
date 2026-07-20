@@ -416,8 +416,10 @@ fun ObfButtonItem(
     val aacLogger: AacLogger = koinInject()
     val settings by rememberReactiveSettings()
     
-    // Pulse animation state
-    var isSelected by remember { mutableStateOf(false) }
+    // Page links navigate immediately; pulsing the outgoing button makes the
+    // destination page appear to animate as the grid composition is reused.
+    val animateSelection = button.loadBoard == null
+    var isSelected by remember(button.id) { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isSelected) 1.1f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -456,7 +458,7 @@ fun ObfButtonItem(
                 dwellProgress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
                 
                 if (elapsed.toLong() >= duration.toLong()) {
-                    isSelected = true
+                    if (animateSelection) isSelected = true
                     onClick()
                     aacLogger.logButtonClick(button.label ?: "", phraseId = button.id)
                     dwellProgress = 0f
@@ -527,7 +529,7 @@ fun ObfButtonItem(
             }
             .let { baseModifier ->
                 val primaryAction = { 
-                    isSelected = true
+                    if (animateSelection) isSelected = true
                     onClick()
                     aacLogger.logButtonClick(button.label ?: "", phraseId = button.id)
                 }

@@ -1,0 +1,27 @@
+{
+  "format": "open-board-0.1",
+  "id": "foelelser",
+  "locale": "da",
+  "name": "Følelser",
+  "description_html": "En tavle med følelser og behov til AK-brugere.",
+  "grid": {
+    "rows": 3,
+    "columns": 3,
+    "order": [
+      ["b1", "b2", "b3"],
+      ["b4", "b5", "b6"],
+      ["b7", "b8", "b9"]
+    ]
+  },
+  "buttons": [
+    { "id": "b1", "label": "glad", "vocalization": "glad", "background_color": "#e8f5e9" },
+    { "id": "b2", "label": "trist", "vocalization": "trist", "background_color": "#bbdefb" },
+    { "id": "b3", "label": "vred", "vocalization": "vred", "background_color": "#fce4ec" },
+    { "id": "b4", "label": "bange", "vocalization": "bange", "background_color": "#f3e5f5" },
+    { "id": "b5", "label": "træt", "vocalization": "træt", "background_color": "#e0e0e0" },
+    { "id": "b6", "label": "sulten", "vocalization": "sulten", "background_color": "#fff3e0" },
+    { "id": "b7", "label": "tørstig", "vocalization": "tørstig", "background_color": "#fff3e0" },
+    { "id": "b8", "label": "syg", "vocalization": "syg", "background_color": "#fce4ec" },
+    { "id": "b9", "label": "glad igen", "vocalization": "glad igen", "background_color": "#e8f5e9" }
+  ]
+}

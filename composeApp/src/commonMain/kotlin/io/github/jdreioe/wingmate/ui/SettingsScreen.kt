@@ -26,6 +26,7 @@ import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,13 +39,18 @@ private enum class SettingsTab { Speech, Display, Accessibility, General }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
+fun SettingsScreen(
+    onDismiss: () -> Unit,
+    onSaved: (() -> Unit)? = null,
+    onBaseBoardsRestored: (() -> Unit)? = null
+) {
     val koin = getKoin()
     val configRepo = remember(koin) { koin.getOrNull<ConfigRepository>() }
     val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
     val settingsStateManager = remember(koin) { koin.getOrNull<SettingsStateManager>() }
     val featureUsageReporter = remember(koin) { koin.getOrNull<FeatureUsageReporter>() }
     val boardSetUseCase = remember(koin) { koin.getOrNull<BoardSetUseCase>() }
+    val obfParser = remember(koin) { koin.getOrNull<ObfParser>() }
 
     // Selected tab
     var selectedTab by remember { mutableStateOf(SettingsTab.Speech) }
@@ -80,9 +86,13 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
     var startupMode by remember { mutableStateOf(StartupMode.Keyboard) }
     var startupBoardSetId by remember { mutableStateOf<String?>(null) }
     var availableBoardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
+    var restoringBaseBoards by remember { mutableStateOf(false) }
+    var baseBoardsStatus by remember { mutableStateOf<String?>(null) }
 
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
+    val baseBoardsRestoredMessage = stringResource(Res.string.ui_settings_base_boards_restored)
+    val baseBoardsErrorMessage = stringResource(Res.string.ui_settings_base_boards_error)
 
     // Partner window device detection (desktop-only)
     val partnerDeviceConnected by PartnerWindowAvailability.deviceConnected.collectAsStateWithLifecycle()
@@ -295,7 +305,34 @@ fun SettingsScreen(onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
                                 },
                                 partnerWindowEnabled = partnerWindowEnabled,
                                 partnerDeviceConnected = partnerDeviceConnected,
-                                onPartnerWindowChange = { checked -> partnerWindowEnabled = checked; updateSettings { it.copy(partnerWindowEnabled = checked) } }
+                                onPartnerWindowChange = { checked -> partnerWindowEnabled = checked; updateSettings { it.copy(partnerWindowEnabled = checked) } },
+                                restoringBaseBoards = restoringBaseBoards,
+                                baseBoardsStatus = baseBoardsStatus,
+                                onRestoreBaseBoards = {
+                                    if (!restoringBaseBoards) {
+                                        scope.launch {
+                                            restoringBaseBoards = true
+                                            baseBoardsStatus = null
+                                            val restored = runCatching {
+                                                val parser = obfParser ?: error(baseBoardsErrorMessage)
+                                                val useCase = boardSetUseCase ?: error(baseBoardsErrorMessage)
+                                                restoreStarterBoards(systemLanguageTag(), parser, useCase)
+                                                    ?: error(baseBoardsErrorMessage)
+                                            }
+                                            baseBoardsStatus = restored.fold(
+                                                onSuccess = {
+                                                    onBaseBoardsRestored?.invoke()
+                                                    baseBoardsRestoredMessage
+                                                },
+                                                onFailure = { it.message ?: baseBoardsErrorMessage }
+                                            )
+                                            availableBoardSets = runCatching {
+                                                boardSetUseCase?.listBoardSets().orEmpty()
+                                            }.getOrDefault(availableBoardSets)
+                                            restoringBaseBoards = false
+                                        }
+                                    }
+                                }
                             )
                         }
                         }
@@ -591,7 +628,10 @@ private fun GeneralSection(
     onFeatureReportingChange: (Boolean) -> Unit,
     partnerWindowEnabled: Boolean,
     partnerDeviceConnected: Boolean,
-    onPartnerWindowChange: (Boolean) -> Unit
+    onPartnerWindowChange: (Boolean) -> Unit,
+    restoringBaseBoards: Boolean,
+    baseBoardsStatus: String?,
+    onRestoreBaseBoards: () -> Unit
 ) {
     SectionHeader(stringResource(Res.string.ui_settings_startup_mode_title))
     Text(
@@ -665,6 +705,46 @@ private fun GeneralSection(
                 }
             }
         }
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+    SectionHeader(stringResource(Res.string.ui_settings_base_boards_title))
+    Text(
+        stringResource(Res.string.ui_settings_base_boards_desc),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+    OutlinedButton(
+        onClick = onRestoreBaseBoards,
+        enabled = !restoringBaseBoards
+    ) {
+        if (restoringBaseBoards) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp
+            )
+        } else {
+            Icon(Icons.Filled.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            stringResource(
+                if (restoringBaseBoards) {
+                    Res.string.ui_settings_base_boards_restoring
+                } else {
+                    Res.string.ui_settings_base_boards_restore
+                }
+            )
+        )
+    }
+    baseBoardsStatus?.let { status ->
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            status,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 
     Spacer(modifier = Modifier.height(24.dp))

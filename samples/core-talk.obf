@@ -1,0 +1,35 @@
+{
+  "format": "open-board-0.1",
+  "id": "core_talk",
+  "locale": "en",
+  "name": "Core Talk",
+  "description_html": "A core vocabulary board with high-frequency words for AAC.",
+  "grid": {
+    "rows": 4,
+    "columns": 4,
+    "order": [
+      ["b1", "b2", "b3", "b4"],
+      ["b5", "b6", "b7", "b8"],
+      ["b9", "b10", "b11", "b12"],
+      ["b13", "b14", "b15", "b16"]
+    ]
+  },
+  "buttons": [
+    { "id": "b1", "label": "I", "background_color": "#e8f5e9" },
+    { "id": "b2", "label": "you", "background_color": "#e8f5e9" },
+    { "id": "b3", "label": "it", "background_color": "#e8f5e9" },
+    { "id": "b4", "label": "we", "background_color": "#e8f5e9" },
+    { "id": "b5", "label": "want", "background_color": "#fff3e0" },
+    { "id": "b6", "label": "go", "background_color": "#fff3e0" },
+    { "id": "b7", "label": "see", "background_color": "#fff3e0" },
+    { "id": "b8", "label": "like", "background_color": "#fff3e0" },
+    { "id": "b9", "label": "more", "background_color": "#e3f2fd" },
+    { "id": "b10", "label": "help", "background_color": "#e3f2fd" },
+    { "id": "b11", "label": "stop", "background_color": "#e3f2fd" },
+    { "id": "b12", "label": "yes", "background_color": "#e3f2fd" },
+    { "id": "b13", "label": "no", "background_color": "#fce4ec" },
+    { "id": "b14", "label": "good", "background_color": "#fce4ec" },
+    { "id": "b15", "label": "bad", "background_color": "#fce4ec" },
+    { "id": "b16", "label": "all done", "background_color": "#fce4ec" }
+  ]
+}

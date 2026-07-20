@@ -64,8 +64,11 @@ import io.github.jdreioe.wingmate.domain.PredictionResult
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TextPredictionService
+import io.github.jdreioe.wingmate.ui.systemLanguageTag
+import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
+import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +77,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import org.jetbrains.compose.resources.InternalResourceApi
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
@@ -103,6 +107,38 @@ private data class ThoughtDraft(
     val input: TextFieldValue,
     val secondaryLanguageRanges: List<TextRange>,
 )
+
+private fun starterBoardFiles(languageTag: String): List<String>? {
+    return when {
+        languageTag.startsWith("en") -> listOf("starter_en_hello", "starter_en_goodbye")
+        languageTag.startsWith("da") -> listOf(
+            "starter_da_hilsner", "starter_da_kernetavle",
+            "starter_da_mad_og_drikke", "starter_da_foelelser"
+        )
+        else -> null
+    }
+}
+
+@OptIn(InternalResourceApi::class)
+private suspend fun loadStarterBoards(
+    languageTag: String,
+    obfParser: ObfParser,
+    boardRepo: BoardRepository
+): ObfBoard? {
+    val files = starterBoardFiles(languageTag) ?: return null
+    var rootBoard: ObfBoard? = null
+    for (name in files) {
+        val bytes = Res.readBytes("files/$name.obf")
+        val json = bytes.decodeToString()
+        val boardRes = obfParser.parseBoard(json)
+        if (boardRes.isSuccess) {
+            val board = boardRes.getOrThrow()
+            boardRepo.saveBoard(board)
+            if (rootBoard == null) rootBoard = board
+        }
+    }
+    return rootBoard
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -446,7 +482,11 @@ fun PhraseScreen(
                                 )
                                 Divider()
 
-                                if (enableObfObzImport) {
+                                val systemLang = remember { systemLanguageTag() }
+                                val hasStarterBoards = remember(systemLang) { starterBoardFiles(systemLang) != null }
+                                val showStarterOption = enableObfObzImport && (currentBoard != null || hasStarterBoards)
+
+                                if (showStarterOption) {
                                     DropdownMenuItem(
                                         text = {
                                             Text(
@@ -462,32 +502,13 @@ fun PhraseScreen(
                                         onClick = { 
                                             showOverflow = false
                                             if (currentBoard == null) {
-                                                uiScope.launch {
-                                                    // Load a sample board for demonstration
-                                                    val sampleJson = """
-                                                        {
-                                                          "format": "open-board-0.1",
-                                                          "id": "sample_1",
-                                                          "name": "Sample Board",
-                                                          "grid": { "rows": 3, "columns": 2, "order": [["b1", "b2"], ["b3", "b4"], ["b5", "b6"]] },
-                                                          "buttons": [
-                                                            {"id": "b1", "label": "Hello", "background_color": "#ffcccc"},
-                                                            {"id": "b2", "label": "How are you?", "background_color": "#ccffcc"},
-                                                            {"id": "b3", "label": "Yes", "background_color": "#ccccff"},
-                                                            {"id": "b4", "label": "No", "background_color": "#ffffcc"},
-                                                            {"id": "b5", "label": "Thank you", "background_color": "#ffccff"},
-                                                            {"id": "b6", "label": "Please", "background_color": "#ccffff"}
-                                                          ]
-                                                        }
-                                                    """.trimIndent()
-                                                    val boardRes = obfParser.parseBoard(sampleJson)
-                                                    if (boardRes.isSuccess) {
-                                                        val board = boardRes.getOrThrow()
-                                                        boardRepo.saveBoard(board)
+                                                uiScope.launch(Dispatchers.IO) {
+                                                    val board = loadStarterBoards(systemLang, obfParser, boardRepo)
+                                                    if (board != null) {
                                                         currentBoard = board
                                                         featureUsageReporter.reportEvent(
                                                             FeatureUsageEvents.BOARD_IMPORT_COMPLETED,
-                                                            "mode" to "sample_board"
+                                                            "mode" to "starter_boards"
                                                         )
                                                     }
                                                 }
