@@ -1,0 +1,83 @@
+{
+  "format": "open-board-0.1",
+  "id": "absolute_demo",
+  "locale": "en",
+  "name": "Free Layout Demo",
+  "description_html": "A board using absolute positioning to demonstrate free-form button layout. Each button has top/left/width/height (0.0–1.0 fractions).",
+  "buttons": [
+    {
+      "id": "b1",
+      "label": "Hello",
+      "background_color": "#ffcccc",
+      "top": 0.05,
+      "left": 0.05,
+      "width": 0.4,
+      "height": 0.25
+    },
+    {
+      "id": "b2",
+      "label": "How are you?",
+      "background_color": "#ccffcc",
+      "top": 0.05,
+      "left": 0.55,
+      "width": 0.4,
+      "height": 0.25
+    },
+    {
+      "id": "b3",
+      "label": "I feel\u2026",
+      "background_color": "#ffffcc",
+      "top": 0.38,
+      "left": 0.05,
+      "width": 0.25,
+      "height": 0.25
+    },
+    {
+      "id": "b4",
+      "label": "happy",
+      "vocalization": "I am happy",
+      "background_color": "#ffccff",
+      "top": 0.38,
+      "left": 0.38,
+      "width": 0.25,
+      "height": 0.25
+    },
+    {
+      "id": "b5",
+      "label": "sad",
+      "vocalization": "I am sad",
+      "background_color": "#ccccff",
+      "top": 0.38,
+      "left": 0.7,
+      "width": 0.25,
+      "height": 0.25
+    },
+    {
+      "id": "b6",
+      "label": "Yes",
+      "background_color": "#a5d6a7",
+      "top": 0.7,
+      "left": 0.05,
+      "width": 0.25,
+      "height": 0.25
+    },
+    {
+      "id": "b7",
+      "label": "No",
+      "background_color": "#ef9a9a",
+      "top": 0.7,
+      "left": 0.38,
+      "width": 0.25,
+      "height": 0.25
+    },
+    {
+      "id": "b8",
+      "label": "Help",
+      "background_color": "#fff176",
+      "top": 0.7,
+      "left": 0.7,
+      "width": 0.25,
+      "height": 0.25
+    }
+  ]
+}
