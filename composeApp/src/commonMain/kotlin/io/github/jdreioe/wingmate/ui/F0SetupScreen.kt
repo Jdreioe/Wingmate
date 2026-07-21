@@ -12,13 +12,8 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.jdreioe.wingmate.domain.AzureF0Provisioner
-import io.github.jdreioe.wingmate.domain.ConfigRepository
-import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.AutoF0FlowResult
 import io.github.jdreioe.wingmate.infrastructure.AutoF0FlowUseCase
-import io.github.jdreioe.wingmate.infrastructure.AzureArmClient
-import io.ktor.client.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,10 +33,7 @@ fun F0SetupScreen(
     onManualByok: () -> Unit,
     onBack: () -> Unit
 ) {
-    val provisioner = koinInject<AzureF0Provisioner>()
-    val armClient = remember { AzureArmClient(HttpClient()) }
-    val configRepository = koinInject<ConfigRepository>()
-    val settingsRepository = koinInject<SettingsRepository>()
+    val flowUseCase = koinInject<AutoF0FlowUseCase>()
 
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
@@ -64,7 +56,6 @@ fun F0SetupScreen(
         scope.launch {
             statusMessage = "Signing in..."
             currentStep = F0Step.SIGNING_IN
-            val flowUseCase = AutoF0FlowUseCase(provisioner, armClient, configRepository, settingsRepository)
 
             when (val result = withContext(Dispatchers.IO) { flowUseCase.execute() }) {
                 is AutoF0FlowResult.Success -> {
