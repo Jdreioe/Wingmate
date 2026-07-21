@@ -8,3 +8,14 @@ expect fun systemLanguageTag(): String
 
 @Composable
 expect fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit)
+
+class MicrophonePermissionState(
+    val isGranted: Boolean,
+    val shouldShowRationale: Boolean,
+    val deniedPermanently: Boolean,
+    val request: () -> Unit,
+    val openSettings: () -> Unit
+)
+
+@Composable
+expect fun rememberMicrophonePermissionState(): MicrophonePermissionState

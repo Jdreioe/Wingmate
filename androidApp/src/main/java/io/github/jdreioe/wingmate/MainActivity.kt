@@ -1,12 +1,9 @@
 package io.github.jdreioe.wingmate
 
-import android.Manifest
 import android.os.Bundle
 import android.os.Build
 import android.hardware.display.DisplayManager
-import android.view.Display
 import android.content.Intent
-import android.content.pm.PackageManager
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
@@ -15,8 +12,6 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
-import androidx.core.content.ContextCompat
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.FoldingFeature
@@ -43,9 +38,6 @@ import io.github.jdreioe.wingmate.ui.FullScreenDisplay
 class MainActivity : ComponentActivity() {
     private var presentation: ExternalDisplayPresentation? = null
     private var isFoldableUnfolded = false
-    private val microphonePermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { _ -> }
     
     // Window Area API variables for rear display and dual-screen mode
 
@@ -75,10 +67,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
-        
         // Ensure IME insets can be detected correctly
         WindowCompat.setDecorFitsSystemWindows(window, false)
 

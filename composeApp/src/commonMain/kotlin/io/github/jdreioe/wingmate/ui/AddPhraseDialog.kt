@@ -34,6 +34,8 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
 import io.github.jdreioe.wingmate.domain.PhraseRecordingService
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.ui.MicrophonePermissionState
+import io.github.jdreioe.wingmate.ui.rememberMicrophonePermissionState
 import wingmatekmp.composeapp.generated.resources.Res
 import wingmatekmp.composeapp.generated.resources.color_picker_brightness
 import wingmatekmp.composeapp.generated.resources.color_picker_title
@@ -42,6 +44,7 @@ import wingmatekmp.composeapp.generated.resources.common_clear
 import wingmatekmp.composeapp.generated.resources.common_delete
 import wingmatekmp.composeapp.generated.resources.common_no_name
 import wingmatekmp.composeapp.generated.resources.common_ok
+import wingmatekmp.composeapp.generated.resources.common_retry
 import wingmatekmp.composeapp.generated.resources.common_save
 import wingmatekmp.composeapp.generated.resources.phrase_add_title
 import wingmatekmp.composeapp.generated.resources.phrase_belongs_to_category
@@ -56,6 +59,8 @@ import wingmatekmp.composeapp.generated.resources.phrase_open_symbols
 import wingmatekmp.composeapp.generated.resources.phrase_pick_color
 import wingmatekmp.composeapp.generated.resources.phrase_pick_file
 import wingmatekmp.composeapp.generated.resources.phrase_play_button
+import wingmatekmp.composeapp.generated.resources.phrase_mic_permission_denied
+import wingmatekmp.composeapp.generated.resources.phrase_mic_permission_settings
 import wingmatekmp.composeapp.generated.resources.phrase_record_button
 import wingmatekmp.composeapp.generated.resources.phrase_record_hint
 import wingmatekmp.composeapp.generated.resources.phrase_edit_hidden_title
@@ -119,6 +124,30 @@ fun AddPhraseDialog(
     val recordingFinalizeFailed = stringResource(Res.string.phrase_recording_finalize_failed)
     val recordingPlayFailed = stringResource(Res.string.phrase_recording_play_failed)
     val selectImageTitle = stringResource(Res.string.phrase_select_image_title)
+    val micPermissionDeniedText = stringResource(Res.string.phrase_mic_permission_denied)
+    val micPermissionSettingsText = stringResource(Res.string.phrase_mic_permission_settings)
+
+    val micState = rememberMicrophonePermissionState()
+    var waitingForMicPermission by remember { mutableStateOf(false) }
+
+    LaunchedEffect(micState.isGranted, waitingForMicPermission) {
+        if (micState.isGranted && waitingForMicPermission) {
+            waitingForMicPermission = false
+            recordingError = null
+            val hint = initialPhrase?.id ?: text.ifBlank { altText }.ifBlank { recordingHintFallback }
+            val result = recordingService?.startRecording(hint)
+            if (result == null) {
+                recordingError = recordingUnavailable
+                return@LaunchedEffect
+            }
+            result
+                .onSuccess { recordingInProgress = true }
+                .onFailure {
+                    recordingInProgress = false
+                    recordingError = it.message ?: recordingStartFailed
+                }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -239,20 +268,25 @@ fun AddPhraseDialog(
                             if (canRecord && !recordingInProgress) {
                                 OutlinedButton(
                                     onClick = {
-                                        scope.launch {
-                                            recordingError = null
-                                            val hint = initialPhrase?.id ?: text.ifBlank { altText }.ifBlank { recordingHintFallback }
-                                            val result = recordingService?.startRecording(hint)
-                                            if (result == null) {
-                                                recordingError = recordingUnavailable
-                                                return@launch
-                                            }
-                                            result
-                                                .onSuccess { recordingInProgress = true }
-                                                .onFailure {
-                                                    recordingInProgress = false
-                                                    recordingError = it.message ?: recordingStartFailed
+                                        if (micState.isGranted) {
+                                            scope.launch {
+                                                recordingError = null
+                                                val hint = initialPhrase?.id ?: text.ifBlank { altText }.ifBlank { recordingHintFallback }
+                                                val result = recordingService?.startRecording(hint)
+                                                if (result == null) {
+                                                    recordingError = recordingUnavailable
+                                                    return@launch
                                                 }
+                                                result
+                                                    .onSuccess { recordingInProgress = true }
+                                                    .onFailure {
+                                                        recordingInProgress = false
+                                                        recordingError = it.message ?: recordingStartFailed
+                                                    }
+                                            }
+                                        } else {
+                                            waitingForMicPermission = true
+                                            micState.request()
                                         }
                                     }
                                 ) {
@@ -332,6 +366,30 @@ fun AddPhraseDialog(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
+                        }
+
+                        if (!micState.isGranted && canRecord) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = micPermissionDeniedText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (micState.deniedPermanently) {
+                                    OutlinedButton(onClick = { micState.openSettings() }) {
+                                        Text(micPermissionSettingsText)
+                                    }
+                                } else {
+                                    OutlinedButton(onClick = {
+                                        waitingForMicPermission = true
+                                        micState.request()
+                                    }) {
+                                        Text(stringResource(Res.string.common_retry))
+                                    }
+                                }
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))

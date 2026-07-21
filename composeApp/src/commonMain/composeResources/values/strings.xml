@@ -10,6 +10,7 @@
     <string name="common_no_name">No Name</string>
     <string name="common_back">Back</string>
     <string name="common_continue">Continue</string>
+    <string name="common_retry">Retry</string>
 
     <string name="board_sets_title">Screens</string>
     <string name="board_sets_subtitle">Choose a screen to communicate</string>
@@ -168,6 +169,8 @@
     <string name="phrase_play_button">Play</string>
     <string name="phrase_clear_button">Clear</string>
     <string name="phrase_recording_in_progress">Recording in progress...</string>
+    <string name="phrase_mic_permission_denied">Microphone access is required to record custom phrases.</string>
+    <string name="phrase_mic_permission_settings">Open Settings</string>
     <string name="phrase_color_label">Color</string>
     <string name="phrase_pick_color">Pick color</string>
     <string name="phrase_none">None</string>

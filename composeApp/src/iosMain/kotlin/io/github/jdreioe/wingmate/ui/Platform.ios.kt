@@ -15,3 +15,14 @@ actual fun systemLanguageTag(): String = NSLocale.currentLocale.localeIdentifier
 @Composable
 actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
 }
+
+@Composable
+actual fun rememberMicrophonePermissionState(): MicrophonePermissionState {
+    return MicrophonePermissionState(
+        isGranted = true,
+        shouldShowRationale = false,
+        deniedPermanently = false,
+        request = {},
+        openSettings = {}
+    )
+}

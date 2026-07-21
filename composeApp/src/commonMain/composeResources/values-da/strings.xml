@@ -10,6 +10,7 @@
     <string name="common_no_name">Intet navn</string>
     <string name="common_back">Tilbage</string>
     <string name="common_continue">Fortsæt</string>
+    <string name="common_retry">Prøv igen</string>
 
     <string name="board_sets_title">Skærme</string>
     <string name="board_sets_subtitle">Vælg en skærm til kommunikation</string>
@@ -168,6 +169,8 @@
     <string name="phrase_play_button">Afspil</string>
     <string name="phrase_clear_button">Ryd</string>
     <string name="phrase_recording_in_progress">Optagelse i gang...</string>
+    <string name="phrase_mic_permission_denied">Mikrofonen er påkrævet for at optage brugerdefinerede fraser.</string>
+    <string name="phrase_mic_permission_settings">Åbn Indstillinger</string>
     <string name="phrase_color_label">Farve</string>
     <string name="phrase_pick_color">Vælg farve</string>
     <string name="phrase_none">Ingen</string>
