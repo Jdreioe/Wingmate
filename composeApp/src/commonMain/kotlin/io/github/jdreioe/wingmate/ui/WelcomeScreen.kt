@@ -17,11 +17,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.application.SettingsUseCase
+import io.github.jdreioe.wingmate.application.VoiceUseCase
+import io.github.jdreioe.wingmate.domain.StartupMode
+import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.ui.PlatformBackHandler
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
-import io.github.jdreioe.wingmate.domain.StartupMode
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
 import wingmatekmp.composeapp.generated.resources.Res
@@ -220,30 +226,37 @@ fun WelcomeScreen(
         3 -> {
             // Voice engine selector screen
             VoiceEngineSelectorScreen(
-                onNext = { step = 5 }, // Skip to voice selection if System TTS
+                onNext = { step = 6 }, // Skip to voice selection if System TTS
                 onCancel = { step = if (enableBoardImport) 2 else 1 },
                 onAzureSelected = { step = 4 }
             )
         }
         4 -> {
-            // Azure configuration screen
-            AzureConfigScreen(
-                onNext = { step = 5 },
+            // Azure F0 automatic setup flow
+            F0SetupScreen(
+                onDone = { step = 5 },
+                onManualByok = { step = 5 }, // Skip to voice selection, manual entry via settings
                 onBack = { step = 3 }
             )
         }
         5 -> {
-            // Full-screen voice selector
-            VoiceSelectionFullScreen(
-                onNext = { step = 6 },
-                onCancel = { step = 3 }
+            // Language selection (after Azure setup, before voice pick)
+            LanguageSelectionPage(
+                onBack = { step = 4 }
             )
         }
         6 -> {
+            // Full-screen voice selector with search and filters
+            VoiceSelectionFullScreen(
+                onNext = { step = 7 },
+                onCancel = { step = 3 }
+            )
+        }
+        7 -> {
             // Test voice screen
             TestVoiceScreen(
                 onNext = { onComplete(startupMode, createScreenOnComplete) },
-                onBack = { step = 5 }
+                onBack = { step = 6 }
             )
         }
     }

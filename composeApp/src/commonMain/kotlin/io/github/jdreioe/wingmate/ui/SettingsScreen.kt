@@ -1732,7 +1732,7 @@ private fun VoiceRow(
 // ─── Language Selection Page ─────────────────────────────────────────────────
 
 @Composable
-private fun LanguageSelectionPage(onBack: () -> Unit) {
+internal fun LanguageSelectionPage(onBack: () -> Unit) {
     val voiceUseCase = koinInject<VoiceUseCase>()
     val settingsUseCase = koinInject<SettingsUseCase>()
     val featureUsageReporter = koinInject<FeatureUsageReporter>()
