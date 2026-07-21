@@ -8,6 +8,7 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PhraseRecordingService
+import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
@@ -21,6 +22,7 @@ import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlSettingsRepository
+import io.github.jdreioe.wingmate.infrastructure.DesktopSqlPronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlBoardRepository
@@ -60,6 +62,8 @@ fun overrideDesktopSpeechService() {
             singleOf(::DesktopSqlBoardSetRepository) { bind<BoardSetRepository>() }
             // Persist UI settings on desktop
             singleOf(::DesktopSqlSettingsRepository) { bind<SettingsRepository>() }
+            // Persist pronunciation dictionary on desktop
+            singleOf(::DesktopSqlPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
             // Persist selected voice on desktop
             singleOf(::DesktopSqlVoiceRepository) { bind<VoiceRepository>() }
             // Persist said texts on desktop

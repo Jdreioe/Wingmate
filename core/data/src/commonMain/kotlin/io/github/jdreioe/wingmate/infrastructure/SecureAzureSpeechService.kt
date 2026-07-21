@@ -210,11 +210,11 @@ class SecureAzureSpeechService(
     override suspend fun guessPronunciation(text: String, language: String): String? {
         val langCode = language.take(2).lowercase()
         return try {
-            // Use Wiktionary API as a robust source for IPA
-            val url = "https://en.wiktionary.org/w/api.php?action=query&titles=${text.trim()}&prop=revisions&rvprop=content&format=json"
-            val response = httpClient.get(url)
-            
-            if (response.status.value == 200) {
+            suspend fun lookup(edition: String, requireLanguageTag: Boolean): String? {
+                val response = httpClient.get("https://$edition.wiktionary.org/w/api.php") {
+                    url { parameters.append("action", "query"); parameters.append("titles", text.trim()); parameters.append("prop", "revisions"); parameters.append("rvprop", "content"); parameters.append("format", "json") }
+                }
+                if (response.status.value == 200) {
                 val body = response.bodyAsText()
                 val json = Json { ignoreUnknownKeys = true }
                 val root = json.parseToJsonElement(body).jsonObject
@@ -230,7 +230,7 @@ class SecureAzureSpeechService(
                 val content = revisions?.get(0)?.jsonObject?.get("*")?.jsonPrimitive?.content
                 
                 if (content != null) {
-                    val regex = Regex("\\{\\{IPA\\|$langCode\\|/([^/]+)/")
+                    val regex = if (requireLanguageTag) Regex("\\{\\{IPA\\|$langCode\\|/([^/]+)/") else Regex("\\{\\{IPA\\|(?:$langCode\\|)?/([^/]+)/")
                     val match = regex.find(content)
                     if (match != null) return match.groupValues[1]
                     
@@ -238,8 +238,10 @@ class SecureAzureSpeechService(
                     val matchBrackets = regexBrackets.find(content)
                     if (matchBrackets != null) return matchBrackets.groupValues[1]
                 }
+                }
+                return null
             }
-            null
+            lookup(langCode, requireLanguageTag = false) ?: if (langCode != "en") lookup("en", requireLanguageTag = true) else null
         } catch (e: Exception) {
             logger.warn(e) { "Failed to guess pronunciation for '$text'" }
             null

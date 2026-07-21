@@ -23,6 +23,7 @@ actual fun rememberMicrophonePermissionState(): MicrophonePermissionState {
         isGranted = true,
         shouldShowRationale = false,
         deniedPermanently = false,
+        hasRequested = false,
         request = {},
         openSettings = {}
     )

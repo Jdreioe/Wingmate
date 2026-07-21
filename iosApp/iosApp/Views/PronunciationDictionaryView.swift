@@ -57,9 +57,9 @@ struct AddPronunciationSheet: View {
     
     @State private var word = ""
     @State private var phoneme = ""
-    @State private var alphabet = "ipa"
+    @State private var alphabet = "text"
     
-    let alphabets = ["ipa", "x-sampa", "sapi", "ups"]
+    let alphabets = ["text", "ipa", "x-sampa", "sapi", "ups"]
     private let ipaSymbols = [
         "i", "y", "ɨ", "ʉ", "ɯ", "u",
         "ɪ", "ʏ", "ʊ", "e", "ø", "ɘ", "ɵ", "ɤ", "o",
@@ -79,7 +79,7 @@ struct AddPronunciationSheet: View {
                         .autocorrectionDisabled()
                 }
                 
-                Section(header: Text("pronunciation.phoneme")) {
+                Section(header: Text("pronunciation.phoneme"), footer: Text("pronunciation.easy_help")) {
                     TextField("pronunciation.phoneme.placeholder", text: $phoneme)
                         .autocorrectionDisabled()
                 }
@@ -87,7 +87,7 @@ struct AddPronunciationSheet: View {
                 Section(header: Text("pronunciation.alphabet")) {
                     Picker("pronunciation.alphabet", selection: $alphabet) {
                         ForEach(alphabets, id: \.self) { a in
-                            Text(a.uppercased()).tag(a)
+                            Text(a == "text" ? String(localized: "pronunciation.alphabet.easy") : a.uppercased()).tag(a)
                         }
                     }
                 }

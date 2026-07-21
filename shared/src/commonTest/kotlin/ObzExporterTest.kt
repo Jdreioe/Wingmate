@@ -2,10 +2,19 @@ import io.github.jdreioe.wingmate.application.ObzExporter
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.ObfLicense
+import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfSound
+import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -98,6 +107,77 @@ class ObzExporterTest {
         assertNotNull(extracted)
         val boardJson = extracted.decodeToString()
         assertTrue(boardJson.contains("\"id\":\"root\""))
+    }
+
+    @Test
+    fun roundTripPreservesExtensionsAndDataUrl() = runBlocking {
+        val board = ObfBoard(
+            format = "open-board-0.1",
+            id = "ext-board",
+            name = "Ext",
+            extensions = mapOf("ext_speaker_url" to JsonPrimitive("http://example.com/link")),
+            license = ObfLicense(
+                type = "CC-By",
+                extensions = mapOf("ext_license_note" to JsonPrimitive("keep"))
+            ),
+            buttons = listOf(
+                ObfButton(
+                    id = "b1",
+                    label = "Go",
+                    extensions = mapOf("ext_btn" to JsonPrimitive(true)),
+                    loadBoard = ObfLoadBoard(
+                        id = "other",
+                        dataUrl = "http://example.com/other.obf?auth=1",
+                        extensions = mapOf("ext_link" to JsonPrimitive("remote"))
+                    )
+                )
+            ),
+            images = listOf(
+                ObfImage(
+                    id = "i1",
+                    dataUrl = "http://example.com/img.png?auth=1",
+                    extensions = mapOf("ext_img" to JsonPrimitive("fresh"))
+                )
+            ),
+            sounds = listOf(
+                ObfSound(
+                    id = "s1",
+                    dataUrl = "http://example.com/snd.mp3?auth=1",
+                    extensions = mapOf("ext_snd" to JsonPrimitive(4))
+                )
+            )
+        )
+
+        val exported = exporter.serializeBoard(board)
+        assertTrue(exported.contains("ext_speaker_url"))
+        assertTrue(exported.contains("data_url"))
+        assertTrue(exported.contains("ext_btn"))
+        assertTrue(exported.contains("ext_link"))
+
+        // Non-ext keys in the extensions map must never replace standard fields.
+        val hostile = board.copy(
+            extensions = board.extensions + (
+                "id" to JsonPrimitive("hijacked")
+            ) + (
+                "ext_id" to JsonPrimitive("ok-ext")
+            )
+        )
+        val hostileJson = exporter.serializeBoard(hostile)
+        val reparsedHostile = ObfParser().parseBoard(hostileJson).getOrThrow()
+        assertEquals("ext-board", reparsedHostile.id)
+        assertFalse(reparsedHostile.extensions.containsKey("id"))
+        assertEquals("ok-ext", reparsedHostile.extensions["ext_id"]?.jsonPrimitive?.contentOrNull)
+
+        val reparsed = ObfParser().parseBoard(exported).getOrThrow()
+        assertEquals("http://example.com/link", reparsed.extensions["ext_speaker_url"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("keep", reparsed.license?.extensions?.get("ext_license_note")?.jsonPrimitive?.contentOrNull)
+        assertEquals(true, reparsed.buttons.single().extensions["ext_btn"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals("http://example.com/other.obf?auth=1", reparsed.buttons.single().loadBoard?.dataUrl)
+        assertEquals("remote", reparsed.buttons.single().loadBoard?.extensions?.get("ext_link")?.jsonPrimitive?.contentOrNull)
+        assertEquals("http://example.com/img.png?auth=1", reparsed.images.single().dataUrl)
+        assertEquals("fresh", reparsed.images.single().extensions["ext_img"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("http://example.com/snd.mp3?auth=1", reparsed.sounds.single().dataUrl)
+        assertEquals("4", reparsed.sounds.single().extensions["ext_snd"]?.jsonPrimitive?.content)
     }
 
     private fun extractEntry(zip: ByteArray, entryName: String): ByteArray? {

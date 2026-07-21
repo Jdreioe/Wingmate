@@ -368,7 +368,7 @@ fun AddPhraseDialog(
                             )
                         }
 
-                        if (!micState.isGranted && canRecord) {
+                        if (!micState.isGranted && canRecord && micState.hasRequested) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = micPermissionDeniedText,

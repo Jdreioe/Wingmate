@@ -36,7 +36,6 @@ import wingmatekmp.composeapp.generated.resources.welcome_start_mode_subtitle
 import wingmatekmp.composeapp.generated.resources.welcome_start_mode_title
 import wingmatekmp.composeapp.generated.resources.welcome_subtitle
 import wingmatekmp.composeapp.generated.resources.welcome_title
-import wingmatekmp.composeapp.generated.resources.welcome_ui_settings
 
 @Composable
 fun WelcomeScreen(
@@ -54,7 +53,6 @@ fun WelcomeScreen(
     var step by remember { mutableStateOf(0) }
     var startupMode by remember { mutableStateOf(StartupMode.Keyboard) }
     var createScreenOnComplete by remember { mutableStateOf(false) }
-    var showUiSettings by remember { mutableStateOf(false) }
     
     // Import state
     var isImporting by remember { mutableStateOf(false) }
@@ -93,10 +91,6 @@ fun WelcomeScreen(
                         stringResource(Res.string.welcome_subtitle),
                         color = MaterialTheme.colorScheme.onBackground
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    TextButton(onClick = { showUiSettings = true }) { 
-                        Text(stringResource(Res.string.welcome_ui_settings))
-                    }
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(onClick = { step = 1 }) { Text(stringResource(Res.string.common_next)) }
                 }
@@ -252,10 +246,6 @@ fun WelcomeScreen(
                 onBack = { step = 5 }
             )
         }
-    }
-
-    if (showUiSettings) {
-        SettingsScreen(onDismiss = { showUiSettings = false })
     }
 }
 

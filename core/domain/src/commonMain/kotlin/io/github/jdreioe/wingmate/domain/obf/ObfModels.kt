@@ -1,9 +1,12 @@
 package io.github.jdreioe.wingmate.domain.obf
 
 import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+
+@OptIn(ExperimentalSerializationApi::class)
 
 @Serializable
 data class ObfBoard(
@@ -116,7 +119,9 @@ data class ObfLoadBoard(
     val url: String? = null,
     val path: String? = null,
     @SerialName("data_url")
-    val dataUrl: String? = null
+    val dataUrl: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val extensions: Map<String, JsonElement> = emptyMap()
 )
 
 @Serializable

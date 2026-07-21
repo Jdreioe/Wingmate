@@ -31,7 +31,7 @@ import kotlinx.serialization.json.*
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 
 class DesktopSpeechService(
-    private val dictionaryRepo: PronunciationDictionaryRepository? = null
+    private val dictionaryRepo: PronunciationDictionaryRepository
 ) : SpeechService {
     private val client = HttpClient(OkHttp) {}
     private val log = LoggerFactory.getLogger("DesktopSpeechService")
@@ -63,12 +63,9 @@ class DesktopSpeechService(
         
         var processedText = text
         
-        // Apply dictionary replacements if available
-        if (dictionaryRepo != null) {
-            val entries = dictionaryRepo.getAll()
-            if (entries.isNotEmpty()) {
-                processedText = applyDictionary(processedText, entries)
-            }
+        val entries = runCatching { dictionaryRepo.getAll() }.getOrDefault(emptyList())
+        if (entries.isNotEmpty()) {
+            processedText = applyDictionary(processedText, entries)
         }
 
         // Check if text contains SSML markup (user inserted via sidebar buttons OR dictionary injection)
@@ -122,7 +119,11 @@ class DesktopSpeechService(
              val pattern = "\\b${Regex.escape(entry.word)}\\b".toRegex(RegexOption.IGNORE_CASE)
              if (pattern.containsMatchIn(processed)) {
                  processed = processed.replace(pattern) { matchResult ->
-                     "<phoneme alphabet=\"${entry.alphabet}\" ph=\"${entry.phoneme}\">${matchResult.value}</phoneme>"
+                     if (entry.alphabet == "text") {
+                         "<sub alias=\"${entry.phoneme}\">${matchResult.value}</sub>"
+                     } else {
+                         "<phoneme alphabet=\"${entry.alphabet}\" ph=\"${entry.phoneme}\">${matchResult.value}</phoneme>"
+                     }
                  }
              }
         }
@@ -555,12 +556,12 @@ class DesktopSpeechService(
         val langCode = language.take(2).lowercase()
         log.info("Guessing pronunciation for: '$text' in language '$langCode' using Wiktionary")
         return try {
-            // Use Wiktionary API as a robust source for IPA
-            val url = "https://en.wiktionary.org/w/api.php?action=query&titles=${text.trim()}&prop=revisions&rvprop=content&format=json"
-            log.info("Fetching URL: $url")
-            val response = client.get(url)
-            
-            if (response.status.value == 200) {
+            suspend fun lookup(edition: String, requireLanguageTag: Boolean): String? {
+                log.info("Looking up pronunciation in {} Wiktionary", edition)
+                val response = client.get("https://$edition.wiktionary.org/w/api.php") {
+                    url { parameters.append("action", "query"); parameters.append("titles", text.trim()); parameters.append("prop", "revisions"); parameters.append("rvprop", "content"); parameters.append("format", "json") }
+                }
+                if (response.status.value == 200) {
                 val body = response.bodyAsText()
                 val json = Json { ignoreUnknownKeys = true }
                 val root = json.parseToJsonElement(body).jsonObject
@@ -582,7 +583,7 @@ class DesktopSpeechService(
                 if (content != null) {
                     // Look for {{IPA|lang|/pronunciation/}}
                     // Regex to capture the content between slashes
-                    val regex = Regex("\\{\\{IPA\\|$langCode\\|/([^/]+)/")
+                    val regex = if (requireLanguageTag) Regex("\\{\\{IPA\\|$langCode\\|/([^/]+)/") else Regex("\\{\\{IPA\\|(?:$langCode\\|)?/([^/]+)/")
                     val match = regex.find(content)
                     if (match != null) {
                         val ipa = match.groupValues[1]
@@ -599,8 +600,10 @@ class DesktopSpeechService(
                         return ipa
                     }
                 }
+                }
+                return null
             }
-            null
+            lookup(langCode, requireLanguageTag = false) ?: if (langCode != "en") lookup("en", requireLanguageTag = true) else null
         } catch (e: Exception) {
             log.warn("Failed to guess pronunciation for '$text'", e)
             null

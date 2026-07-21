@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -16,6 +17,9 @@ import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.Locale
 
 actual fun isDesktop(): Boolean = false
@@ -37,41 +41,77 @@ actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
 @Composable
 actual fun rememberMicrophonePermissionState(): MicrophonePermissionState {
     val context = LocalContext.current
-    var deniedPermanently by remember { mutableStateOf(false) }
-    var shouldShowRationale by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
     val permission = Manifest.permission.RECORD_AUDIO
 
-    val isGranted = ContextCompat.checkSelfPermission(context, permission) ==
-        PackageManager.PERMISSION_GRANTED
+    fun checkGranted(): Boolean =
+        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+
+    var isGranted by remember { mutableStateOf(checkGranted()) }
+    var deniedPermanently by remember { mutableStateOf(false) }
+    var shouldShowRationale by remember { mutableStateOf(false) }
+    var hasRequested by remember { mutableStateOf(false) }
+
+    fun refreshDenialState() {
+        if (isGranted) {
+            shouldShowRationale = false
+            deniedPermanently = false
+            return
+        }
+        if (!hasRequested) {
+            shouldShowRationale = false
+            deniedPermanently = false
+            return
+        }
+        val activity = context as? Activity
+        val canShowRationale = activity != null &&
+            ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
+        shouldShowRationale = canShowRationale
+        deniedPermanently = !canShowRationale
+    }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (!granted) {
-            val activity = context as? Activity
-            val canShowRationale = activity != null &&
-                ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
-            shouldShowRationale = canShowRationale
-            deniedPermanently = !canShowRationale
-        } else {
+        hasRequested = true
+        isGranted = granted || checkGranted()
+        if (isGranted) {
             shouldShowRationale = false
             deniedPermanently = false
+        } else {
+            refreshDenialState()
         }
     }
 
-    return remember(launcher, isGranted, deniedPermanently, shouldShowRationale) {
-        MicrophonePermissionState(
-            isGranted = isGranted,
-            shouldShowRationale = shouldShowRationale,
-            deniedPermanently = deniedPermanently,
-            request = { launcher.launch(permission) },
-            openSettings = {
-                context.startActivity(
-                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = android.net.Uri.fromParts("package", context.packageName, null)
-                    }
-                )
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val granted = checkGranted()
+                isGranted = granted
+                if (granted) {
+                    shouldShowRationale = false
+                    deniedPermanently = false
+                } else if (hasRequested) {
+                    refreshDenialState()
+                }
             }
-        )
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+
+    return MicrophonePermissionState(
+        isGranted = isGranted,
+        shouldShowRationale = shouldShowRationale,
+        deniedPermanently = deniedPermanently,
+        hasRequested = hasRequested,
+        request = { launcher.launch(permission) },
+        openSettings = {
+            context.startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = android.net.Uri.fromParts("package", context.packageName, null)
+                }
+            )
+        }
+    )
 }

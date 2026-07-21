@@ -6,5 +6,6 @@ import kotlinx.serialization.Serializable
 data class PronunciationEntry(
     val word: String,
     val phoneme: String,
-    val alphabet: String = "ipa" // ipa, x-sampa, sapi, ups
+    /** One of: text (easy alias), ipa, x-sampa, sapi, ups */
+    val alphabet: String = "text"
 )

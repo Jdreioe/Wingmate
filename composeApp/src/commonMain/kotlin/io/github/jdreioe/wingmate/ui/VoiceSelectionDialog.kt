@@ -475,7 +475,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
     }
 }
 
-private fun matchesVoiceFilters(
+internal fun matchesVoiceFilters(
     voice: Voice,
     queryTerms: List<String>,
     genderFilter: String?
@@ -492,7 +492,7 @@ private fun matchesVoiceFilters(
     return queryTerms.all { term -> searchable.contains(term) }
 }
 
-private fun buildVoiceSearchText(voice: Voice): String {
+internal fun buildVoiceSearchText(voice: Voice): String {
     val supported = voice.supportedLanguages ?: emptyList()
     return buildString {
         append(voice.displayName.orEmpty())

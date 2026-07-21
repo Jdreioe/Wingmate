@@ -94,8 +94,10 @@ class IosSpeechService(
     override suspend fun guessPronunciation(text: String, language: String): String? {
         val langCode = language.take(2).lowercase()
         return try {
-            val url = "https://en.wiktionary.org/w/api.php?action=query&titles=${text.trim()}&prop=revisions&rvprop=content&format=json"
-            val response = httpClient.get(url)
+            suspend fun lookup(edition: String, requireLanguageTag: Boolean): String? {
+            val response = httpClient.get("https://$edition.wiktionary.org/w/api.php") {
+                url { parameters.append("action", "query"); parameters.append("titles", text.trim()); parameters.append("prop", "revisions"); parameters.append("rvprop", "content"); parameters.append("format", "json") }
+            }
             if (response.status.value != 200) return null
 
             val body = response.bodyAsText()
@@ -109,12 +111,14 @@ class IosSpeechService(
             val revisions = page?.get("revisions")?.jsonArray
             val content = revisions?.getOrNull(0)?.jsonObject?.get("*")?.jsonPrimitive?.content
             if (content != null) {
-                val regex = Regex("\\{\\{IPA\\|$langCode\\|/([^/]+)/")
+                val regex = if (requireLanguageTag) Regex("\\{\\{IPA\\|$langCode\\|/([^/]+)/") else Regex("\\{\\{IPA\\|(?:$langCode\\|)?/([^/]+)/")
                 regex.find(content)?.groupValues?.getOrNull(1)?.let { return it }
                 val regexBrackets = Regex("\\{\\{IPA\\|$langCode\\|\\[([^\\]]+)\\]")
                 regexBrackets.find(content)?.groupValues?.getOrNull(1)?.let { return it }
             }
             null
+            }
+            lookup(langCode, requireLanguageTag = false) ?: if (langCode != "en") lookup("en", requireLanguageTag = true) else null
         } catch (e: Exception) {
             logger.warn(e) { "Failed to guess pronunciation for '$text'" }
             null

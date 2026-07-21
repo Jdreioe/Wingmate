@@ -8,6 +8,7 @@ import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PhraseRecordingService
+import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SoundPlayer
@@ -26,6 +27,7 @@ import io.github.jdreioe.wingmate.infrastructure.AndroidPhraseRecordingService
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlCategoryRepository
+import io.github.jdreioe.wingmate.infrastructure.AndroidSqlPronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSaidTextRepository
@@ -61,6 +63,7 @@ fun overrideAndroidSpeechService(context: Context) {
             singleOf(::AndroidSqlCategoryRepository) { bind<CategoryRepository>() }
             singleOf(::AndroidSqlVoiceRepository) { bind<VoiceRepository>() }
             singleOf(::AndroidSqlSettingsRepository) { bind<SettingsRepository>() }
+            singleOf(::AndroidSqlPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
             singleOf(::AndroidSqlSaidTextRepository) { bind<SaidTextRepository>() }
             singleOf(::AndroidBoardRepository) { bind<BoardRepository>() }
             singleOf(::AndroidBoardSetRepository) { bind<BoardSetRepository>() }

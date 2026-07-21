@@ -13,6 +13,7 @@ class MicrophonePermissionState(
     val isGranted: Boolean,
     val shouldShowRationale: Boolean,
     val deniedPermanently: Boolean,
+    val hasRequested: Boolean = false,
     val request: () -> Unit,
     val openSettings: () -> Unit
 )

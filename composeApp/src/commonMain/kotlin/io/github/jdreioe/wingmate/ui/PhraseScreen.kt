@@ -15,20 +15,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.TopAppBarDefaults
@@ -85,23 +82,19 @@ import wingmatekmp.composeapp.generated.resources.Res
 import wingmatekmp.composeapp.generated.resources.common_language
 import wingmatekmp.composeapp.generated.resources.mode_switch_to_screens
 import wingmatekmp.composeapp.generated.resources.phrase_screen_app_settings
-import wingmatekmp.composeapp.generated.resources.phrase_screen_check_updates
 import wingmatekmp.composeapp.generated.resources.phrase_screen_close_board
 import wingmatekmp.composeapp.generated.resources.phrase_screen_copy_last_soundfile
 import wingmatekmp.composeapp.generated.resources.phrase_screen_enter_text_placeholder
 import wingmatekmp.composeapp.generated.resources.phrase_screen_error
 import wingmatekmp.composeapp.generated.resources.phrase_screen_import_board
-import wingmatekmp.composeapp.generated.resources.phrase_screen_import_export_data
 import wingmatekmp.composeapp.generated.resources.phrase_screen_loading
 import wingmatekmp.composeapp.generated.resources.phrase_screen_load_sample_board
 import wingmatekmp.composeapp.generated.resources.phrase_screen_menu_cd
-import wingmatekmp.composeapp.generated.resources.phrase_screen_pronunciation_dictionary
 import wingmatekmp.composeapp.generated.resources.phrase_screen_select_board_title
 import wingmatekmp.composeapp.generated.resources.phrase_screen_share_last_soundfile
 import wingmatekmp.composeapp.generated.resources.phrase_screen_ssml_controls
 import wingmatekmp.composeapp.generated.resources.phrase_screen_toggle_fullscreen_cd
 import wingmatekmp.composeapp.generated.resources.phrase_screen_voice_settings
-import wingmatekmp.composeapp.generated.resources.phrase_screen_welcome_screen
 
 private data class ThoughtDraft(
     val input: TextFieldValue,
@@ -155,7 +148,7 @@ fun PhraseScreen(
     val aacLogger = koinInject<io.github.jdreioe.wingmate.domain.AacLogger>()
     val boardRepo = koinInject<io.github.jdreioe.wingmate.domain.BoardRepository>()
     val obfParser = koinInject<io.github.jdreioe.wingmate.infrastructure.ObfParser>()
-    val dictionaryRepo = koinInject<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>()
+
     val predictionService = remember(koin) { koin.getOrNull<TextPredictionService>() }
     val dictionaryLoader = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.DictionaryLoader>() }
     val updateService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.UpdateService>() }
@@ -168,7 +161,6 @@ fun PhraseScreen(
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showVoiceSelection by remember { mutableStateOf(false) }
     var showUiLanguageDialog by remember { mutableStateOf(false) }
-    var showDictionaryScreen by remember { mutableStateOf(false) }
     var showSettingsExportDialog by remember { mutableStateOf(false) }
     var showSsmlDialog by remember { mutableStateOf(false) }
     val showFullscreen by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsStateWithLifecycle()
@@ -234,9 +226,8 @@ fun PhraseScreen(
             // Selected buttons for Symbol Bar
             var selectedObfButtons by remember { mutableStateOf<List<Pair<ObfButton, ImageBitmap?>>>(emptyList()) }
 
-            PlatformBackHandler(enabled = currentBoard != null || showDictionaryScreen) {
+            PlatformBackHandler(enabled = currentBoard != null) {
                 when {
-                    showDictionaryScreen -> showDictionaryScreen = false
                     boardStack.isNotEmpty() -> {
                         currentBoard = boardStack.last()
                         boardStack = boardStack.dropLast(1)
@@ -374,22 +365,6 @@ fun PhraseScreen(
                                 Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.phrase_screen_menu_cd))
                             }
                             DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
-                                // === SPEECH TOOLS ===
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.phrase_screen_pronunciation_dictionary), style = MaterialTheme.typography.bodyMedium) },
-                                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
-                                    onClick = {
-                                        showOverflow = false
-                                        showDictionaryScreen = true
-                                        featureUsageReporter.reportEvent(
-                                            FeatureUsageEvents.SETTINGS_UPDATED,
-                                            "action" to "open_pronunciation_dictionary"
-                                        )
-                                    }
-                                )
-                                
-                                Divider()
-                                
                                 // === AUDIO FILES ===
                                 DropdownMenuItem(
                                     text = { Text(stringResource(Res.string.phrase_screen_copy_last_soundfile), style = MaterialTheme.typography.bodyMedium) },
@@ -441,46 +416,6 @@ fun PhraseScreen(
                                             FeatureUsageEvents.SETTINGS_UPDATED,
                                             "action" to "open_app_settings"
                                         )
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.phrase_screen_import_export_data), style = MaterialTheme.typography.bodyMedium) },
-                                    leadingIcon = { Icon(Icons.Default.ImportExport, contentDescription = null) },
-                                    onClick = {
-                                        showOverflow = false
-                                        showSettingsExportDialog = true
-                                        featureUsageReporter.reportEvent(
-                                            FeatureUsageEvents.SETTINGS_UPDATED,
-                                            "action" to "open_import_export"
-                                        )
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.phrase_screen_check_updates), style = MaterialTheme.typography.bodyMedium) },
-                                    leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null) },
-                                    onClick = { 
-                                        showOverflow = false
-                                        featureUsageReporter.reportEvent(
-                                            FeatureUsageEvents.SETTINGS_UPDATED,
-                                            "action" to "check_updates"
-                                        )
-                                        if (updateService != null) {
-                                            uiScope.launch(Dispatchers.IO) {
-                                                runCatching { updateService.checkForUpdates() }
-                                            }
-                                        }
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.phrase_screen_welcome_screen), style = MaterialTheme.typography.bodyMedium) },
-                                    leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
-                                    onClick = {
-                                        showOverflow = false
-                                        featureUsageReporter.reportEvent(
-                                            FeatureUsageEvents.SCREEN_VIEW,
-                                            "screen" to "welcome"
-                                        )
-                                        onBackToWelcome?.invoke()
                                     }
                                 )
                                 Divider()
@@ -1569,7 +1504,7 @@ fun PhraseScreen(
             }
 
             if (showSettingsDialog) {
-                SettingsScreen(onDismiss = { showSettingsDialog = false }, onSaved = { showSettingsDialog = false })
+                SettingsScreen(onDismiss = { showSettingsDialog = false }, onSaved = { showSettingsDialog = false }, onBackToWelcome = onBackToWelcome)
             }
             if (showVoiceSelection) {
                 VoiceSelectionDialog(show = true, onDismiss = { showVoiceSelection = false })
@@ -1581,54 +1516,6 @@ fun PhraseScreen(
                     openPrimaryMenuInitially = true
                 )
             }
-            if (showDictionaryScreen) {
-                val scope = rememberCoroutineScope()
-                var entries by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.PronunciationEntry>>(emptyList()) }
-                
-                LaunchedEffect(showDictionaryScreen) {
-                    if (showDictionaryScreen) {
-                        entries = dictionaryRepo.getAll()
-                    }
-                }
-                
-                DictionaryScreen(
-                    entries = entries,
-                    onAddEntry = { word, phoneme, alphabet ->
-                        scope.launch {
-                            dictionaryRepo.add(io.github.jdreioe.wingmate.domain.PronunciationEntry(word, phoneme, alphabet))
-                            entries = dictionaryRepo.getAll()
-                            featureUsageReporter.reportEvent(
-                                FeatureUsageEvents.DICTIONARY_ENTRY_ADDED,
-                                "alphabet" to alphabet
-                            )
-                        }
-                    },
-                    onDeleteEntry = { entry ->
-                        scope.launch {
-                            dictionaryRepo.delete(entry.word)
-                            entries = dictionaryRepo.getAll()
-                            featureUsageReporter.reportEvent(
-                                FeatureUsageEvents.DICTIONARY_ENTRY_DELETED,
-                                "alphabet" to entry.alphabet
-                            )
-                        }
-                    },
-                    onTestEntry = { word, phoneme, alphabet ->
-                        scope.launch {
-                            val testSsml = "<phoneme alphabet=\"$alphabet\" ph=\"$phoneme\">$word</phoneme>"
-                            val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                            speechService.speak(testSsml, selected, selected?.pitch, selected?.rate)
-                        }
-                    },
-                    onGuessPronunciation = { word ->
-                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                        val lang = selected?.primaryLanguage ?: "en"
-                        speechService.guessPronunciation(word, lang)
-                    },
-                    onBack = { showDictionaryScreen = false }
-                )
-            }
-            
             if (showSsmlDialog) {
                 androidx.compose.ui.window.Dialog(
                     onDismissRequest = { showSsmlDialog = false }

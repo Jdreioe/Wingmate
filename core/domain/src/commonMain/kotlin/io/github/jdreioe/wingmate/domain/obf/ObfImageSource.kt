@@ -17,7 +17,10 @@ sealed class ObfImageSource {
  */
 fun resolveObfImageSource(image: ObfImage?): ObfImageSource {
     if (image == null) return ObfImageSource.None
+    // Spec priority: data → path → url → symbol. data_url is a standard remote data endpoint
+    // and is treated as a data-class reference ahead of path/url when inline data is absent.
     val data = image.data?.takeIf { it.isNotBlank() }
+        ?: image.dataUrl?.takeIf { it.isNotBlank() }
     if (data != null) return ObfImageSource.DataUri(data)
     val path = image.path?.takeIf { it.isNotBlank() }
     if (path != null) return ObfImageSource.Path(path)

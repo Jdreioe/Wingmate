@@ -11,11 +11,26 @@ class ObfImageSourceTest {
         val image = ObfImage(
             id = "1",
             data = "data:image/png;base64,abc",
+            dataUrl = "https://example.com/data.png",
             path = "images/a.png",
             url = "https://example.com/a.png",
             symbol = ObfSymbol(set = "symbolstix", filename = "happy.png")
         )
         assertEquals(ObfImageSource.DataUri("data:image/png;base64,abc"), resolveObfImageSource(image))
+    }
+
+    @Test
+    fun prefersDataUrlOverPathWhenDataAbsent() {
+        val image = ObfImage(
+            id = "1",
+            dataUrl = "https://example.com/download/image.png?auth=token",
+            path = "images/a.png",
+            url = "https://example.com/a.png"
+        )
+        assertEquals(
+            ObfImageSource.DataUri("https://example.com/download/image.png?auth=token"),
+            resolveObfImageSource(image)
+        )
     }
 
     @Test

@@ -177,7 +177,8 @@ class BoardImportService(
                 name = link.name,
                 url = link.url,
                 path = link.path,
-                dataUrl = link.dataUrl
+                dataUrl = link.dataUrl,
+                extensions = link.extensions
             )
         }
         return button.copy(

@@ -122,6 +122,14 @@ internal class AndroidSqlOpenHelper(
             );
         """.trimIndent())
 
+        // Pronunciation dictionary (single-row JSON list)
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS pronunciation_dictionary (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                data TEXT
+            );
+        """.trimIndent())
+
         // Said texts
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS said_texts (

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.FoldingFeature

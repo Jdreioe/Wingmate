@@ -177,7 +177,11 @@ object AzureTtsClient {
             // Regex to match whole word, case insensitive
             val regex = Regex("\\b${Regex.escape(entry.word)}\\b", RegexOption.IGNORE_CASE)
             result = result.replace(regex) { match ->
-                "<phoneme alphabet=\"${entry.alphabet}\" ph=\"${entry.phoneme}\">${match.value}</phoneme>"
+                if (entry.alphabet == "text") {
+                    "<sub alias=\"${entry.phoneme}\">${match.value}</sub>"
+                } else {
+                    "<phoneme alphabet=\"${entry.alphabet}\" ph=\"${entry.phoneme}\">${match.value}</phoneme>"
+                }
             }
         }
         return result

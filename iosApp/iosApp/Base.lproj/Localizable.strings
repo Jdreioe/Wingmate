@@ -216,9 +216,11 @@
 "pronunciation.empty" = "No custom pronunciations.";
 "pronunciation.word" = "Word";
 "pronunciation.word.placeholder" = "Ex: Wingmate";
-"pronunciation.phoneme" = "Phoneme";
-"pronunciation.phoneme.placeholder" = "Ex: w i ng m ey t";
-"pronunciation.alphabet" = "Alphabet";
+"pronunciation.phoneme" = "How it should sound";
+"pronunciation.phoneme.placeholder" = "Ex: win-mate";
+"pronunciation.easy_help" = "Write it using familiar letters. You do not need to know IPA.";
+"pronunciation.alphabet" = "Method";
+"pronunciation.alphabet.easy" = "Everyday spelling (easy)";
 "pronunciation.add_title" = "Add Pronunciation";
 "pronunciation.ipa_palette" = "IPA Symbols";
 "pronunciation.delete_last" = "Delete Last";
