@@ -15,27 +15,56 @@ cd "$CI_WORKSPACE"
 # === JDK Setup ===
 # Xcode Cloud requires JDK 21 for Kotlin Multiplatform (jvmToolchain 21)
 install_jdk() {
-  echo "Installing JDK 21 via Homebrew..."
-  HOMEBREW_NO_AUTO_UPDATE=1 brew install --quiet openjdk@21
-  # Homebrew openjdk paths differ on Intel vs Apple Silicon
-  if [ -f /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java ]; then
-    export JAVA_HOME=/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
-  elif [ -f /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java ]; then
-    export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
-  else
-    echo "error: openjdk@21 installed but java binary not found at expected path"
-    exit 1
+  echo "Installing JDK 21..."
+
+  # Try Homebrew
+  if command -v brew &>/dev/null; then
+    echo "Using Homebrew..."
+    HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 \
+      brew install --quiet openjdk@21
+    brew link --overwrite --force openjdk@21
+    # Register with java_home via user-level symlink (no sudo)
+    mkdir -p ~/Library/Java/JavaVirtualMachines
+    for f in /usr/local/opt/openjdk@21/libexec/openjdk.jdk \
+             /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk; do
+      if [ -d "$f" ]; then
+        ln -sfn "$f" ~/Library/Java/JavaVirtualMachines/openjdk-21.jdk
+        break
+      fi
+    done
+    if /usr/libexec/java_home -v 21 &>/dev/null; then
+      export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+      return 0
+    fi
   fi
+
+  # Fallback: download Adoptium JDK directly (no brew, no sudo)
+  echo "Downloading JDK 21 from Adoptium..."
+  ARCH=$(uname -m)
+  [ "$ARCH" = "arm64" ] && ARCH="aarch64" || ARCH="x64"
+  curl -sL "https://api.adoptium.net/v3/binary/latest/21/ga/mac/osx/${ARCH}/jdk/hotspot/normal/eclipse" \
+    -o /tmp/jdk21.tar.gz
+  rm -rf /tmp/jdk21
+  mkdir -p /tmp/jdk21
+  tar xzf /tmp/jdk21.tar.gz -C /tmp/jdk21 --strip-components=1
+  JAVA_HOME=$(find /tmp/jdk21 -maxdepth 3 -name java -path "*/bin/*" | head -1 | sed 's|/bin/java||')
+  if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+    export JAVA_HOME
+    # Also register for java_home
+    mkdir -p ~/Library/Java/JavaVirtualMachines
+    ln -sfn "$JAVA_HOME" ~/Library/Java/JavaVirtualMachines/openjdk-21.jdk 2>/dev/null || true
+    return 0
+  fi
+
+  echo "error: failed to install JDK 21"
+  exit 1
 }
+
+# Unset any Xcode Cloud JAVA_HOME that points to old JDK
+unset JAVA_HOME
 
 if /usr/libexec/java_home -v 21 &>/dev/null; then
   export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
-elif [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then
-  echo "Using JAVA_HOME from environment: $JAVA_HOME"
-elif [ -f /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java ]; then
-  export JAVA_HOME=/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
-elif [ -f /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java ]; then
-  export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
 else
   install_jdk
 fi
