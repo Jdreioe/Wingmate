@@ -90,8 +90,10 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
+import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -972,7 +974,12 @@ private fun BoardSetWorkspaceScreen(
                                     selectedBoardId?.let { boardStack = boardStack + it }
                                     selectedBoardId = linkedBoard.id
                                 } else {
-                                    val spokenText = (button.vocalization ?: button.label).orEmpty().trim()
+                                    val resolved = resolveObfLocalizedString(
+                                        activeBoard?.strings ?: emptyMap(),
+                                        settings.primaryLanguage,
+                                        button.vocalization ?: button.label
+                                    )
+                                    val spokenText = resolved?.trim().orEmpty()
                                     if (spokenText.isNotEmpty()) {
                                         selectedButtons = selectedButtons + (button to null)
                                     }
@@ -1001,7 +1008,12 @@ private fun BoardSetWorkspaceScreen(
                         } else null,
                         onSpeakSentence = {
                             val speechParts = selectedButtons.mapNotNull { (button, _) ->
-                                (button.vocalization ?: button.label)
+                                val resolved = resolveObfLocalizedString(
+                                    activeBoard?.strings ?: emptyMap(),
+                                    settings.primaryLanguage,
+                                    button.vocalization ?: button.label
+                                )
+                                resolved
                                     ?.trim()
                                     ?.takeIf(String::isNotEmpty)
                                     ?.let { text -> text to button.locale }
