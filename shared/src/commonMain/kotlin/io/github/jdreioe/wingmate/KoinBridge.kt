@@ -67,8 +67,8 @@ class KoinBridge : KoinComponent {
         val settingsUseCase: SettingsUseCase = get()
         val current = settingsUseCase.get()
         val candidate = when {
-            !voice.selectedLanguage.isNullOrEmpty() -> voice.selectedLanguage!!
-            !voice.primaryLanguage.isNullOrEmpty() -> voice.primaryLanguage!!
+            !voice.selectedLanguage.isNullOrEmpty() -> voice.selectedLanguage
+            !voice.primaryLanguage.isNullOrEmpty() -> voice.primaryLanguage
             else -> current.primaryLanguage
         }
         if (candidate != current.primaryLanguage) {
