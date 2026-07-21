@@ -667,7 +667,7 @@ class DesktopSpeechService(
         val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
         val uiSettings = settingsRepo?.let { runCatching { runBlocking { it.get() } }.getOrNull() }
         
-        if (uiSettings?.useSystemTts == true) {
+        if (uiSettings?.ttsEngine == io.github.jdreioe.wingmate.domain.TtsEngine.SYSTEM) {
             // Use system TTS
             speakWithSystemTts(text, voice, pitch, rate)
             return
@@ -716,7 +716,7 @@ class DesktopSpeechService(
         val koin = GlobalContext.getOrNull()
         val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
         val uiSettings = settingsRepo?.let { runCatching { runBlocking { it.get() } }.getOrNull() }
-        if (uiSettings?.useSystemTts == true) {
+        if (uiSettings?.ttsEngine == io.github.jdreioe.wingmate.domain.TtsEngine.SYSTEM) {
             log.info("System TTS preferred; skipping Azure SSML merge path")
             return false
         }

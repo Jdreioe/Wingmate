@@ -28,14 +28,15 @@ import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.domain.ConfigRepository
-import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
+import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.StartupMode
-import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import io.github.jdreioe.wingmate.infrastructure.ArasaacDownloadProgress
@@ -89,7 +90,7 @@ fun SettingsScreen(
     // --- Speech section state ---
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
-    var useSystemTts by remember { mutableStateOf(false) }
+    var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var virtualMic by remember { mutableStateOf(false) }
 
     // --- Display section state ---
@@ -165,7 +166,7 @@ fun SettingsScreen(
         val s = withContext(Dispatchers.Default) {
             runCatching { settingsUseCase?.get() }.getOrNull() ?: Settings()
         }
-        useSystemTts = s.useSystemTts
+        ttsEngine = s.ttsEngine
         virtualMic = s.virtualMicEnabled
         featureUsageReportingEnabled = s.featureUsageReportingEnabled
         partnerWindowEnabled = s.partnerWindowEnabled
@@ -353,10 +354,10 @@ fun SettingsScreen(
                                     }
                                 } else { when (currentTab) {
                             SettingsTab.Speech -> SpeechSection(
-                                useSystemTts = useSystemTts,
-                                onUseSystemTtsChange = { checked ->
-                                    useSystemTts = checked
-                                    updateSettings { it.copy(useSystemTts = checked) }
+                                ttsEngine = ttsEngine,
+                                onTtsEngineChange = { engine ->
+                                    ttsEngine = engine
+                                    updateSettings { it.copy(ttsEngine = engine) }
                                 },
                                 endpoint = endpoint,
                                 onEndpointChange = { endpoint = it },
@@ -1006,8 +1007,8 @@ private fun SettingsCategoryRow(
 
 @Composable
 private fun SpeechSection(
-    useSystemTts: Boolean,
-    onUseSystemTtsChange: (Boolean) -> Unit,
+    ttsEngine: TtsEngine,
+    onTtsEngineChange: (TtsEngine) -> Unit,
     endpoint: String,
     onEndpointChange: (String) -> Unit,
     subscriptionKey: String,
@@ -1022,22 +1023,22 @@ private fun SpeechSection(
     SettingsGroup(title = "Text-to-Speech Engine") {
         SettingsPreferenceRow(
             title = "Speech engine",
-            subtitle = if (useSystemTts) "System TTS" else "Azure TTS"
+            subtitle = if (ttsEngine == TtsEngine.SYSTEM) "System TTS" else "Azure TTS"
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
-                    selected = !useSystemTts,
-                    onClick = { onUseSystemTtsChange(false) },
+                    selected = ttsEngine != TtsEngine.SYSTEM,
+                    onClick = { onTtsEngineChange(TtsEngine.AZURE_USER_RESOURCE) },
                     label = { Text("Azure") }
                 )
                 FilterChip(
-                    selected = useSystemTts,
-                    onClick = { onUseSystemTtsChange(true) },
+                    selected = ttsEngine == TtsEngine.SYSTEM,
+                    onClick = { onTtsEngineChange(TtsEngine.SYSTEM) },
                     label = { Text("System") }
                 )
             }
         }
-        if (!useSystemTts) {
+        if (ttsEngine != TtsEngine.SYSTEM) {
             SettingsGroupDivider()
             Column(modifier = Modifier.padding(vertical = 12.dp)) {
                 OutlinedTextField(
@@ -1427,7 +1428,7 @@ private fun VoiceSelectionPage(onBack: () -> Unit) {
     var selected by remember { mutableStateOf<Voice?>(null) }
     var showVoiceSettings by remember { mutableStateOf(false) }
     var editingVoice by remember { mutableStateOf<Voice?>(null) }
-    var useSystemTts by remember { mutableStateOf(false) }
+    var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var systemVoices by remember { mutableStateOf<List<Voice>>(emptyList()) }
     var selectedLanguage by remember { mutableStateOf<String?>(null) }
     var availableLanguages by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -1444,11 +1445,11 @@ private fun VoiceSelectionPage(onBack: () -> Unit) {
             val settings = withContext(Dispatchers.Default) {
                 runCatching { settingsUseCase.get() }.getOrNull()
             }
-            useSystemTts = settings?.useSystemTts ?: false
+            ttsEngine = settings?.ttsEngine ?: TtsEngine.SYSTEM
         }
         loading = true
         try {
-            if (useSystemTts) {
+            if (ttsEngine == TtsEngine.SYSTEM) {
                 val allSystemVoices = systemVoiceProvider?.getSystemVoices() ?: listOf(
                     Voice(name = "system-default", displayName = "System Default", primaryLanguage = "en-US", gender = "Unknown")
                 )
@@ -1491,7 +1492,7 @@ private fun VoiceSelectionPage(onBack: () -> Unit) {
         voices
     }
 
-    val activeLanguageFilteredVoices = if (useSystemTts) languageFilteredSystemVoices else languageFilteredAzureVoices
+    val activeLanguageFilteredVoices = if (ttsEngine == TtsEngine.SYSTEM) languageFilteredSystemVoices else languageFilteredAzureVoices
     val allLabel = stringResource(Res.string.language_all)
     val availableGenders = remember(activeLanguageFilteredVoices) {
         activeLanguageFilteredVoices.mapNotNull { it.gender?.trim()?.takeIf { gender -> gender.isNotEmpty() } }.distinct().sorted()
@@ -1511,8 +1512,8 @@ private fun VoiceSelectionPage(onBack: () -> Unit) {
         languageFilteredAzureVoices.filter { voice -> matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter) }
     }
 
-    val visibleVoiceCount = if (useSystemTts) filteredSystemVoices.size else filteredAzureVoices.size
-    val totalVoiceCount = if (useSystemTts) systemVoices.size else voices.size
+    val visibleVoiceCount = if (ttsEngine == TtsEngine.SYSTEM) filteredSystemVoices.size else filteredAzureVoices.size
+    val totalVoiceCount = if (ttsEngine == TtsEngine.SYSTEM) systemVoices.size else voices.size
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         OutlinedTextField(
@@ -1600,13 +1601,13 @@ private fun VoiceSelectionPage(onBack: () -> Unit) {
         } else if (error != null) {
             Text(stringResource(Res.string.voice_error, error ?: ""))
         } else {
-            val filteredVoices = if (useSystemTts) filteredSystemVoices else filteredAzureVoices
-            val titleRes = if (useSystemTts) {
+            val filteredVoices = if (ttsEngine == TtsEngine.SYSTEM) filteredSystemVoices else filteredAzureVoices
+            val titleRes = if (ttsEngine == TtsEngine.SYSTEM) {
                 if (selectedLanguage != null) Res.string.voice_system_title_with_lang else Res.string.voice_system_title
             } else {
                 if (selectedLanguage != null) Res.string.voice_azure_title_with_lang else Res.string.voice_azure_title
             }
-            val emptyRes = if (useSystemTts) Res.string.voice_no_system_match else Res.string.voice_no_azure_match
+            val emptyRes = if (ttsEngine == TtsEngine.SYSTEM) Res.string.voice_no_system_match else Res.string.voice_no_azure_match
 
             SettingsGroup(title = stringResource(titleRes, selectedLanguage ?: "")) {
                 if (filteredVoices.isEmpty()) {
@@ -1621,12 +1622,12 @@ private fun VoiceSelectionPage(onBack: () -> Unit) {
                         VoiceRow(
                             voice = v,
                             isSelected = selected?.name == v.name,
-                            showSettings = !useSystemTts,
+                            showSettings = ttsEngine != TtsEngine.SYSTEM,
                             onSelect = {
                                 scope.launch {
                                     try {
                                         useCase.select(v)
-                                        val primary = if (useSystemTts) (v.primaryLanguage ?: "") else (v.selectedLanguage?.ifBlank { v.primaryLanguage ?: "" } ?: "")
+                                        val primary = if (ttsEngine == TtsEngine.SYSTEM) (v.primaryLanguage ?: "") else (v.selectedLanguage?.ifBlank { v.primaryLanguage ?: "" } ?: "")
                                         if (primary.isNotBlank() && settingsUseCase != null) {
                                             val current = settingsUseCase.get()
                                             settingsUseCase.update(current.copy(primaryLanguage = primary))

@@ -13,7 +13,7 @@ Item {
     property string currentLanguage: "en-US"
     property string currentVoice: "default"
     property real speechRate: 1.0
-    property bool useSystemTts: false
+    property string ttsEngine: "SYSTEM"
     property bool partnerWindowEnabled: false
     property int partnerWindowFontSize: 31
     property bool partnerWindowIdleEnabled: true
@@ -138,7 +138,7 @@ Item {
                 }
                 if (settings.voice) currentVoice = settings.voice;
                 if (settings.speechRate) speechRate = settings.speechRate;
-                if (settings.useSystemTts !== undefined) useSystemTts = settings.useSystemTts;
+                if (settings.ttsEngine !== undefined) ttsEngine = settings.ttsEngine;
                 if (settings.partnerWindowEnabled !== undefined) partnerWindowEnabled = settings.partnerWindowEnabled;
                 if (settings.partnerWindowFontSize !== undefined) partnerWindowFontSize = settings.partnerWindowFontSize;
                 if (settings.partnerWindowIdleEnabled !== undefined) partnerWindowIdleEnabled = settings.partnerWindowIdleEnabled;
@@ -198,8 +198,8 @@ Item {
         var xhr = new XMLHttpRequest();
         xhr.open("PUT", baseUrl + "/api/settings/systemtts");
         xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.send(JSON.stringify({ useSystemTts: enabled }));
-        useSystemTts = enabled;
+        xhr.send(JSON.stringify({ ttsEngine: enabled ? "SYSTEM" : "AZURE_USER_RESOURCE" }));
+        ttsEngine = enabled ? "SYSTEM" : "AZURE_USER_RESOURCE";
     }
     
     function updatePartnerWindow(enabled) {
@@ -349,9 +349,9 @@ Item {
                         // TTS Mode
                         Controls.CheckBox {
                             text: "Use Local TTS (Piper/eSpeak)"
-                            checked: useSystemTts
+                            checked: ttsEngine === "SYSTEM"
                             onClicked: updateSystemTts(checked)
-                            
+
                             contentItem: Text {
                                 text: parent.text
                                 color: Theme.text
@@ -367,7 +367,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     title: "Azure Speech"
-                    visible: !useSystemTts
+                    visible: ttsEngine !== "SYSTEM"
                     
                     content: ColumnLayout {
                         spacing: 12

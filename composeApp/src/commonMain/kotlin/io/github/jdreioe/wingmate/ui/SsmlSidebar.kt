@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -41,7 +42,7 @@ fun SsmlSidebar(
     var pitch by remember { mutableStateOf(1.0) }
     var rate by remember { mutableStateOf(1.0) }
     var volume by remember { mutableStateOf(1.0) }
-    var useSystemTts by remember { mutableStateOf(false) }
+    var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var emphasis by remember { mutableStateOf("strong") }
     var breakDuration by remember { mutableStateOf(500) }
     var phonemeEntry by remember { mutableStateOf("") }
@@ -62,7 +63,7 @@ fun SsmlSidebar(
         val s = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
         primaryLang = s.primaryLanguage
         secondaryLang = s.secondaryLanguage
-        useSystemTts = s.useSystemTts
+        ttsEngine = s.ttsEngine
     }
 
     // Helper to insert SSML with selected text or placeholder
@@ -95,20 +96,20 @@ fun SsmlSidebar(
                     ) {
                         Column {
                             Text("Engine", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
-                            Text(if (useSystemTts) "System (Offline)" else "Azure (Premium)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(if (ttsEngine == TtsEngine.SYSTEM) "System (Offline)" else "Azure (Premium)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         }
                         Switch(
-                            checked = useSystemTts, 
+                            checked = ttsEngine == TtsEngine.SYSTEM, 
                             onCheckedChange = { checked ->
-                                useSystemTts = checked
+                                ttsEngine = if (checked) TtsEngine.SYSTEM else TtsEngine.AZURE_USER_RESOURCE
                                 scope.launch {
                                     val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                                    settingsUseCase.updateWithNotification(current.copy(useSystemTts = checked))
+                                    settingsUseCase.updateWithNotification(current.copy(ttsEngine = ttsEngine))
                                 }
                             },
                             thumbContent = {
                                 Icon(
-                                    imageVector = if (useSystemTts) Icons.Filled.Settings else Icons.Filled.Cloud,
+                                    imageVector = if (ttsEngine == TtsEngine.SYSTEM) Icons.Filled.Settings else Icons.Filled.Cloud,
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp)
                                 )

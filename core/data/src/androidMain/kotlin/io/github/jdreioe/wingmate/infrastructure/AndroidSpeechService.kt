@@ -335,7 +335,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         val combinedText = segments.joinToString("") { it.text }
 
         // If user prefers system TTS, use it directly
-        if (uiSettings?.useSystemTts == true) {
+        if (uiSettings?.ttsEngine == io.github.jdreioe.wingmate.domain.TtsEngine.SYSTEM) {
             recordHistory(combinedText, voice) // Record ONCE for the whole sentence
             playSegmentsWithPlatformTts(segments, voice, pitch, rate)
             return
@@ -842,7 +842,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
         
         // If user prefers system TTS, use platform TTS approach
-        if (uiSettings?.useSystemTts == true) {
+        if (uiSettings?.ttsEngine == io.github.jdreioe.wingmate.domain.TtsEngine.SYSTEM) {
             playSegmentsWithPlatformTts(currentSegments.drop(startIndex), currentVoice, currentPitch, currentRate)
         } else {
             // For Azure TTS: concatenate remaining segments and use main speak logic

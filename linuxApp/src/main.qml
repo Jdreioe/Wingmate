@@ -28,7 +28,7 @@ Kirigami.ApplicationWindow {
     property var availableLanguages: []
     property string currentVoice: "default"
     property string currentLanguage: "en-US"
-    property bool useSystemTts: false
+    property string ttsEngine: "SYSTEM"
     property real speechRate: 1.0
     property string selectedCategoryId: ""
     property bool speechControlsVisible: true
@@ -97,7 +97,7 @@ Kirigami.ApplicationWindow {
                     if (settings.language) currentLanguage = settings.language;
                     if (settings.voice) currentVoice = settings.voice;
                     if (settings.speechRate) speechRate = settings.speechRate;
-                    if (settings.useSystemTts !== undefined) useSystemTts = settings.useSystemTts;
+                    if (settings.ttsEngine !== undefined) ttsEngine = settings.ttsEngine;
                     if (settings.partnerWindowEnabled !== undefined) {
                         partnerWindowEnabled = settings.partnerWindowEnabled;
                         // Sync persisted setting to Rust partner window bridge
@@ -325,7 +325,7 @@ Kirigami.ApplicationWindow {
             visible: root.speechControlsVisible
             baseUrl: root.baseUrl
             voiceName: root.currentVoice
-            engineName: root.useSystemTts ? "System (Local)" : "Azure (Premium)"
+            engineName: root.ttsEngine === "SYSTEM" ? "System (Local)" : "Azure (Premium)"
             speedValue: root.speechRate
             
             onChangeEngineRequested: speechSettingsDialog.open()
@@ -754,7 +754,7 @@ Kirigami.ApplicationWindow {
     Dialogs.SpeechSettingsDialog {
         id: speechSettingsDialog
         baseUrl: root.baseUrl
-        useAzure: !root.useSystemTts
+        useAzure: root.ttsEngine !== "SYSTEM"
         
         Component.onCompleted: {
             // Load azure config
@@ -775,8 +775,8 @@ Kirigami.ApplicationWindow {
             var xhr = new XMLHttpRequest();
             xhr.open("PUT", root.baseUrl + "/api/settings/systemtts");
             xhr.setRequestHeader("Content-Type", "application/json");
-            xhr.send(JSON.stringify({ useSystemTts: !useAzure }));
-            root.useSystemTts = !useAzure;
+            xhr.send(JSON.stringify({ ttsEngine: useAzure ? "AZURE_USER_RESOURCE" : "SYSTEM" }));
+            root.ttsEngine = useAzure ? "AZURE_USER_RESOURCE" : "SYSTEM";
             
             // Save Azure config
             if (useAzure) {

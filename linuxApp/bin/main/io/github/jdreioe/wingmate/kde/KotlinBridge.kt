@@ -19,6 +19,7 @@ import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.DictionaryLoader
@@ -181,10 +182,10 @@ class KotlinBridge(private val port: Int = 8765) {
             }
             
             put("/api/settings/systemtts") {
-                val params = call.receive<Map<String, Boolean>>()
-                val useSystem = params["useSystemTts"] ?: true
+                val params = call.receive<Map<String, String>>()
+                val engineStr = params["ttsEngine"] ?: "SYSTEM"
                 val current = settingsManager.settings.value ?: io.github.jdreioe.wingmate.domain.Settings()
-                settingsManager.updateSettings(current.copy(useSystemTts = useSystem))
+                settingsManager.updateSettings(current.copy(ttsEngine = if (engineStr == "SYSTEM") TtsEngine.SYSTEM else TtsEngine.AZURE_USER_RESOURCE))
                 call.respond(HttpStatusCode.OK)
             }
             
@@ -217,9 +218,9 @@ class KotlinBridge(private val port: Int = 8765) {
                                 
                             println("[SPEECH] Selected voice: ${voice.name}, Language: ${voice.selectedLanguage}")
 
-                            // Logic: useSystemTts=true -> Piper/Local. useSystemTts=false -> Azure.
-                            // Default is false, which means Azure.
-                            if (settings?.useSystemTts == true) { // Use explicit true check
+                            // Logic: ttsEngine=SYSTEM -> Piper/Local. ttsEngine=AZURE_USER_RESOURCE -> Azure.
+                            // Default is SYSTEM.
+                            if (settings?.ttsEngine == io.github.jdreioe.wingmate.domain.TtsEngine.SYSTEM) {
                                 println("[SPEECH] Using System TTS (LinuxSpeechService)")
                                 speechService.speak(text, voice)
                             } else {

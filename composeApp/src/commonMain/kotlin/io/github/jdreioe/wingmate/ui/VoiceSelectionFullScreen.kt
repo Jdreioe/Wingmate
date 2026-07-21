@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -56,7 +57,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
     var selectedLanguageFilter by remember { mutableStateOf<String?>(null) }
     var supportedLanguages by remember { mutableStateOf<List<String>>(emptyList()) }
     var showLanguageFilter by remember { mutableStateOf(false) }
-    var useSystemTts by remember { mutableStateOf(false) }
+    var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(useCase, settingsUseCase) {
@@ -65,11 +66,11 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
             val settings = withContext(Dispatchers.IO) {
                 runCatching { settingsUseCase.get() }.getOrNull()
             }
-            useSystemTts = settings?.useSystemTts ?: false
+            ttsEngine = settings?.ttsEngine ?: TtsEngine.SYSTEM
         }
 
         // If using system TTS, skip voice loading and go straight to next
-        if (useSystemTts) {
+        if (ttsEngine == TtsEngine.SYSTEM) {
             loading = false
             return@LaunchedEffect
         }
@@ -118,7 +119,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
         Text(stringResource(Res.string.voice_select_title), style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (useSystemTts) {
+        if (ttsEngine == TtsEngine.SYSTEM) {
             // System TTS selected - show available system voices for selection
             Text(
                 text = if (selectedLanguageFilter != null) {
