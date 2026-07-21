@@ -48,6 +48,11 @@
     <string name="board_workspace_finish">Finish editing</string>
     <string name="board_workspace_actions">Page actions</string>
     <string name="board_workspace_rename">Rename page</string>
+    <string name="board_workspace_rename_set">Rename screen</string>
+    <string name="board_workspace_resize">Resize page</string>
+    <string name="board_workspace_resize_body">Choose the number of rows and columns. Fields outside the new page must be moved before shrinking.</string>
+    <string name="board_workspace_resize_blocked">The page cannot be reduced while fields occupy the rows or columns being removed.</string>
+    <string name="board_workspace_resize_action">Resize</string>
     <string name="board_workspace_set_home">Set as start page</string>
     <string name="board_workspace_delete">Delete page</string>
     <string name="board_workspace_home">Start page</string>
@@ -245,6 +250,15 @@
     <string name="ui_settings_base_boards_restoring">Restoring…</string>
     <string name="ui_settings_base_boards_restored">Base boards restored</string>
     <string name="ui_settings_base_boards_error">Unable to restore base boards</string>
+    <string name="ui_settings_symbols_title">Offline symbols</string>
+    <string name="ui_settings_symbols_download_title">Download all ARASAAC symbols</string>
+    <string name="ui_settings_symbols_download_desc">Keep the complete 500 px ARASAAC library on this device for offline use. Requires roughly 300 MB; Wi-Fi is recommended.</string>
+    <string name="ui_settings_symbols_download">Download symbols</string>
+    <string name="ui_settings_symbols_downloading">Downloading %1$d of %2$d…</string>
+    <string name="ui_settings_symbols_cached">%1$d symbols available offline</string>
+    <string name="ui_settings_symbols_complete">All %1$d symbols are available offline</string>
+    <string name="ui_settings_symbols_failed">Download finished; %1$d symbols could not be downloaded. Tap to retry.</string>
+    <string name="ui_settings_symbols_unavailable">Offline symbol storage is unavailable on this device.</string>
 
     <string name="test_voice_default_text">Hello! This is how I sound. Welcome to Wingmate!</string>
     <string name="test_voice_title">Test Your Voice</string>

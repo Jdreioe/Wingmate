@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,6 +29,8 @@ import io.github.jdreioe.wingmate.domain.obf.ObfImageSource
 import io.github.jdreioe.wingmate.domain.obf.resolveObfImageSource
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import kotlinx.coroutines.withTimeoutOrNull
@@ -35,6 +38,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Save
@@ -44,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import io.github.jdreioe.wingmate.ui.toComposeImageBitmap
 import androidx.compose.animation.core.*
@@ -68,6 +74,8 @@ import wingmatekmp.composeapp.generated.resources.board_workspace_clear_sentence
 import wingmatekmp.composeapp.generated.resources.board_workspace_delete_last
 import wingmatekmp.composeapp.generated.resources.board_workspace_save_phrase
 import wingmatekmp.composeapp.generated.resources.board_workspace_speak_sentence
+import wingmatekmp.composeapp.generated.resources.board_workspace_home
+import wingmatekmp.composeapp.generated.resources.board_cell_opens_board
 
 private data class BoardGridItem(
     val row: Int,
@@ -92,7 +100,9 @@ fun ObfBoardView(
     onClearSentence: () -> Unit = {},
     showMessageBar: Boolean = !isEditMode,
     showSentenceText: Boolean = false,
-    onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null
+    onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
+    onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
+    homeBoardId: String? = null
 ) {
     val settings by rememberReactiveSettings()
     val imagesById = remember(board) { board.images.associateBy { it.id } }
@@ -121,12 +131,12 @@ fun ObfBoardView(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    renderAbsoluteButtons(board, imagesById, extractedImages, isEditMode, onButtonClick)
+                    renderAbsoluteButtons(board, imagesById, extractedImages, isEditMode, onButtonClick, homeBoardId)
                 }
             }
         } else {
             BoxWithConstraints(modifier = modifier.fillMaxSize().padding(8.dp)) {
-                renderAbsoluteButtons(board, imagesById, extractedImages, isEditMode, onButtonClick)
+                renderAbsoluteButtons(board, imagesById, extractedImages, isEditMode, onButtonClick, homeBoardId)
             }
         }
     } else if (grid != null) {
@@ -160,46 +170,56 @@ fun ObfBoardView(
             val gridItems = remember(grid, buttonsById) {
                 buildBoardGridItems(grid, buttonsById)
             }
-            SpanningBoardGrid(
-                rows = rows,
-                columns = columns,
-                items = gridItems,
-                modifier = Modifier.weight(1f).fillMaxWidth()
-            ) { item ->
-                val button = item.button
-                val isVisible = button != null && (!button.hidden || isEditMode)
-                Box(modifier = Modifier.fillMaxSize()) {
-                    if (button != null && isVisible) {
-                        val image = button.imageId?.let { imagesById[it] }
-                        ObfButtonItem(
-                            button = button,
-                            image = image,
-                            extractedImageBytes = button.imageId?.let {
-                                image?.path?.let { path -> extractedImages[path] }
-                            },
-                            onClick = {
-                                onCellClick?.invoke(item.row, item.column, button)
-                                    ?: onButtonClick(button)
-                            },
-                            isEditMode = isEditMode,
-                            boardStrings = board.strings,
-                            locale = settings.primaryLanguage
-                        )
-                    } else if (isEditMode && button == null) {
-                        OutlinedCard(
-                            modifier = Modifier.fillMaxSize(),
-                            onClick = { onCellClick?.invoke(item.row, item.column, null) }
-                        ) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "+",
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    color = MaterialTheme.colorScheme.primary
+            val pageScrollState = rememberScrollState()
+            BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                val minimumCellHeight = 96.dp * settings.inputFieldScale.coerceIn(0.5f, 2f)
+                val minimumContentHeight = minimumCellHeight * rows + 8.dp * (rows - 1)
+                val contentHeight = maxOf(maxHeight, minimumContentHeight)
+                Box(modifier = Modifier.fillMaxSize().verticalScroll(pageScrollState)) {
+                    SpanningBoardGrid(
+                        rows = rows,
+                        columns = columns,
+                        items = gridItems,
+                        modifier = Modifier.fillMaxWidth().height(contentHeight),
+                        onMove = onCellMove
+                    ) { item ->
+                        val button = item.button
+                        val isVisible = button != null && (!button.hidden || isEditMode)
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            if (button != null && isVisible) {
+                                val image = button.imageId?.let { imagesById[it] }
+                                ObfButtonItem(
+                                    button = button,
+                                    image = image,
+                                    extractedImageBytes = button.imageId?.let {
+                                        image?.path?.let { path -> extractedImages[path] }
+                                    },
+                                    onClick = {
+                                        onCellClick?.invoke(item.row, item.column, button)
+                                            ?: onButtonClick(button)
+                                    },
+                                    isEditMode = isEditMode,
+                                    isHomeLink = button.isHomeNavigation(homeBoardId),
+                                    boardStrings = board.strings,
+                                    locale = settings.primaryLanguage
                                 )
+                            } else if (isEditMode && button == null) {
+                                OutlinedCard(
+                                    modifier = Modifier.fillMaxSize(),
+                                    onClick = { onCellClick?.invoke(item.row, item.column, null) }
+                                ) {
+                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "+",
+                                            style = MaterialTheme.typography.headlineMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.fillMaxSize())
                             }
                         }
-                    } else {
-                        Spacer(modifier = Modifier.fillMaxSize())
                     }
                 }
             }
@@ -225,6 +245,7 @@ fun ObfBoardView(
                                     image?.path?.let { path -> extractedImages[path] }
                                 },
                                 onClick = { onButtonClick(button) },
+                                isHomeLink = button.isHomeNavigation(homeBoardId),
                                 boardStrings = board.strings,
                                 locale = settings.primaryLanguage
                             )
@@ -304,12 +325,85 @@ private fun SpanningBoardGrid(
     columns: Int,
     items: List<BoardGridItem>,
     modifier: Modifier = Modifier,
+    onMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
     content: @Composable (BoardGridItem) -> Unit
 ) {
+    var dragSource by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
+    var dragTarget by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
+    val dragModifier = if (onMove != null) {
+        Modifier.pointerInput(rows, columns, items, onMove) {
+            val horizontalGap = 4.dp.toPx()
+            val verticalGap = 8.dp.toPx()
+
+            fun cellAt(position: Offset): Pair<Int, Int>? {
+                if (position.x < 0f || position.y < 0f || position.x >= size.width || position.y >= size.height) {
+                    return null
+                }
+                val cellWidth = (size.width - horizontalGap * (columns - 1)).coerceAtLeast(0f) / columns
+                val cellHeight = (size.height - verticalGap * (rows - 1)).coerceAtLeast(0f) / rows
+                val column = (position.x / (cellWidth + horizontalGap)).toInt().coerceIn(0, columns - 1)
+                val row = (position.y / (cellHeight + verticalGap)).toInt().coerceIn(0, rows - 1)
+                return row to column
+            }
+
+            fun fieldAt(cell: Pair<Int, Int>): BoardGridItem? = items.firstOrNull { item ->
+                cell.first in item.row until item.row + item.rowSpan &&
+                    cell.second in item.column until item.column + item.columnSpan
+            }
+
+            detectDragGesturesAfterLongPress(
+                onDragStart = { position ->
+                    val cell = cellAt(position)
+                    val field = cell?.let(::fieldAt)?.takeIf { it.button != null }
+                    dragSource = field?.let { it.row to it.column }
+                    dragTarget = dragSource
+                },
+                onDrag = { change, _ ->
+                    if (dragSource != null) {
+                        change.consume()
+                        dragTarget = cellAt(change.position)
+                    }
+                },
+                onDragEnd = {
+                    val source = dragSource
+                    val target = dragTarget
+                    dragSource = null
+                    dragTarget = null
+                    if (source != null && target != null && source != target) {
+                        onMove(source.first, source.second, target.first, target.second)
+                    }
+                },
+                onDragCancel = {
+                    dragSource = null
+                    dragTarget = null
+                }
+            )
+        }
+    } else {
+        Modifier
+    }
     Layout(
-        modifier = modifier,
+        modifier = modifier.then(dragModifier),
         content = {
-            items.forEach { item -> content(item) }
+            items.forEach { item ->
+                val isDropTarget = dragTarget?.let { target ->
+                    target.first in item.row until item.row + item.rowSpan &&
+                        target.second in item.column until item.column + item.columnSpan
+                } == true
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (isDropTarget) {
+                                Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+                            } else {
+                                Modifier
+                            }
+                        )
+                ) {
+                    content(item)
+                }
+            }
         }
     ) { measurables, constraints ->
         val horizontalGap = 4.dp.roundToPx()
@@ -449,6 +543,7 @@ fun ObfButtonItem(
     extractedImageBytes: ByteArray? = null,
     onClick: () -> Unit,
     isEditMode: Boolean = false,
+    isHomeLink: Boolean = false,
     boardStrings: Map<String, Map<String, String>> = emptyMap(),
     locale: String? = null
 ) {
@@ -699,6 +794,35 @@ fun ObfButtonItem(
                     }
                 }
             }
+            if (button.loadBoard != null || isHomeLink) {
+                val destinationDescription = if (isHomeLink) {
+                    stringResource(Res.string.board_workspace_home)
+                } else {
+                    stringResource(
+                        Res.string.board_cell_opens_board,
+                        button.loadBoard?.name.orEmpty()
+                    )
+                }
+                Surface(
+                    modifier = Modifier.align(Alignment.TopEnd).size(28.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    tonalElevation = 3.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (isHomeLink) {
+                                Icons.Default.Home
+                            } else {
+                                Icons.AutoMirrored.Filled.ArrowForward
+                            },
+                            contentDescription = destinationDescription,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -709,7 +833,8 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
     imagesById: Map<String, ObfImage>,
     extractedImages: Map<String, ByteArray>,
     isEditMode: Boolean,
-    onButtonClick: (ObfButton) -> Unit
+    onButtonClick: (ObfButton) -> Unit,
+    homeBoardId: String?
 ) {
     val containerWidth = maxWidth
     val containerHeight = maxHeight
@@ -732,12 +857,17 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
                         image?.path?.let { path -> extractedImages[path] }
                     },
                     onClick = { onButtonClick(button) },
-                    isEditMode = isEditMode
+                    isEditMode = isEditMode,
+                    isHomeLink = button.isHomeNavigation(homeBoardId)
                 )
             }
         }
     }
 }
+
+private fun ObfButton.isHomeNavigation(homeBoardId: String?): Boolean =
+    resolvedActions().any { it.trim().equals(":home", ignoreCase = true) } ||
+        (homeBoardId != null && loadBoard?.id == homeBoardId)
 
 @Composable
 private fun BoardSymbolImage(

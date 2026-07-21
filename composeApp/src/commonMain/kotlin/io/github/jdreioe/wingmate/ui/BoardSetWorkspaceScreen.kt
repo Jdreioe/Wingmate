@@ -122,8 +122,9 @@ private data class BoardSetEditSession(
     val isDirty: Boolean get() = draft != original
 
     fun apply(updated: BoardSetGraph): BoardSetEditSession {
-        if (updated == draft) return this
-        return copy(draft = updated, undoStack = undoStack + draft)
+        val normalized = updated.withHomeFieldsBottomLeft()
+        if (normalized == draft) return this
+        return copy(draft = normalized, undoStack = undoStack + draft)
     }
 
     fun undo(): BoardSetEditSession {
@@ -737,6 +738,8 @@ private fun BoardSetWorkspaceScreen(
     var showFinishDialog by remember { mutableStateOf(false) }
     var editActionsExpanded by remember { mutableStateOf(false) }
     var showRenameBoardDialog by remember { mutableStateOf(false) }
+    var showRenameBoardSetDialog by remember { mutableStateOf(false) }
+    var showResizeBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
     var isSavingSentence by remember(boardSetId) { mutableStateOf(false) }
     var isExporting by remember(boardSetId) { mutableStateOf(false) }
@@ -777,11 +780,12 @@ private fun BoardSetWorkspaceScreen(
     LaunchedEffect(boardSetId) {
         isLoading = true
         val loaded = withContext(Dispatchers.Default) { useCase.loadBoardSetGraph(boardSetId) }
-        savedGraph = loaded
-        selectedBoardId = loaded?.boardSet?.rootBoardId
-        if (loaded != null && initialMode == BoardWorkspaceMode.Edit && !loaded.boardSet.isLocked) {
-            editSession = BoardSetEditSession(loaded, loaded)
-        } else if (loaded?.boardSet?.isLocked == true) {
+        val normalized = loaded?.withHomeFieldsBottomLeft()
+        savedGraph = normalized
+        selectedBoardId = normalized?.boardSet?.rootBoardId
+        if (normalized != null && initialMode == BoardWorkspaceMode.Edit && !normalized.boardSet.isLocked) {
+            editSession = BoardSetEditSession(normalized, normalized)
+        } else if (normalized?.boardSet?.isLocked == true) {
             mode = BoardWorkspaceMode.Run
         }
         isLoading = false
@@ -878,6 +882,21 @@ private fun BoardSetWorkspaceScreen(
                                     onClick = {
                                         editActionsExpanded = false
                                         showRenameBoardDialog = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(Res.string.board_workspace_rename_set)) },
+                                    onClick = {
+                                        editActionsExpanded = false
+                                        showRenameBoardSetDialog = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(Res.string.board_workspace_resize)) },
+                                    enabled = activeBoard?.grid != null,
+                                    onClick = {
+                                        editActionsExpanded = false
+                                        showResizeBoardDialog = true
                                     }
                                 )
                                 DropdownMenuItem(
@@ -1127,6 +1146,25 @@ private fun BoardSetWorkspaceScreen(
                         onCellClick = if (mode == BoardWorkspaceMode.Edit) {
                             { row, column, button -> editingCell = WorkspaceCellTarget(row, column, button) }
                         } else null,
+                        onCellMove = if (mode == BoardWorkspaceMode.Edit) {
+                            { fromRow, fromColumn, toRow, toColumn ->
+                                val session = editSession
+                                val boardId = activeBoard?.id
+                                if (session != null && boardId != null) {
+                                    editSession = session.apply(
+                                        moveDraftField(
+                                            session.draft,
+                                            boardId,
+                                            fromRow,
+                                            fromColumn,
+                                            toRow,
+                                            toColumn
+                                        )
+                                    )
+                                }
+                            }
+                        } else null,
+                        homeBoardId = activeGraph.boardSet.rootBoardId,
                         onSpeakSentence = {
                             val speechParts = selectedButtons.mapNotNull { (button, _) ->
                                 val resolved = resolveObfLocalizedString(
@@ -1349,6 +1387,41 @@ private fun BoardSetWorkspaceScreen(
         )
     }
 
+    if (showRenameBoardSetDialog && activeGraph != null) {
+        RenameBoardSetDialog(
+            currentName = activeGraph.boardSet.name,
+            onDismiss = { showRenameBoardSetDialog = false },
+            onRename = { name ->
+                val session = editSession
+                if (session != null) {
+                    editSession = session.apply(renameDraftBoardSet(session.draft, name))
+                }
+                showRenameBoardSetDialog = false
+            }
+        )
+    }
+
+    val resizeTargetBoard = activeBoard
+    val resizeTargetGrid = resizeTargetBoard?.grid
+    if (showResizeBoardDialog && resizeTargetBoard != null && resizeTargetGrid != null) {
+        ResizeBoardDialog(
+            currentRows = resizeTargetGrid.rows,
+            currentColumns = resizeTargetGrid.columns,
+            onDismiss = { showResizeBoardDialog = false },
+            onResize = { rows, columns ->
+                val session = editSession ?: return@ResizeBoardDialog false
+                val resized = resizeDraftBoard(session.draft, resizeTargetBoard.id, rows, columns)
+                if (resized == session.draft) {
+                    false
+                } else {
+                    editSession = session.apply(resized)
+                    showResizeBoardDialog = false
+                    true
+                }
+            }
+        )
+    }
+
     if (showDeleteBoardDialog && activeBoard != null) {
         AlertDialog(
             onDismissRequest = { showDeleteBoardDialog = false },
@@ -1404,6 +1477,95 @@ private fun RenameBoardDialog(
                 onClick = { onRename(name.trim()) },
                 enabled = name.isNotBlank()
             ) { Text(stringResource(Res.string.board_workspace_rename_action)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
+        }
+    )
+}
+
+@Composable
+private fun RenameBoardSetDialog(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onRename: (String) -> Unit
+) {
+    var name by remember(currentName) { mutableStateOf(currentName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.board_workspace_rename_set)) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text(stringResource(Res.string.board_dialog_set_name)) },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onRename(name.trim()) },
+                enabled = name.isNotBlank() && name.trim() != currentName
+            ) { Text(stringResource(Res.string.board_workspace_rename_action)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
+        }
+    )
+}
+
+@Composable
+private fun ResizeBoardDialog(
+    currentRows: Int,
+    currentColumns: Int,
+    onDismiss: () -> Unit,
+    onResize: (rows: Int, columns: Int) -> Boolean
+) {
+    var rowsText by remember(currentRows) { mutableStateOf(currentRows.toString()) }
+    var columnsText by remember(currentColumns) { mutableStateOf(currentColumns.toString()) }
+    var blocked by remember { mutableStateOf(false) }
+    val rows = rowsText.toIntOrNull()
+    val columns = columnsText.toIntOrNull()
+    val dimensionsValid = rows in 1..20 && columns in 1..20
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.board_workspace_resize)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(Res.string.board_workspace_resize_body))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = rowsText,
+                        onValueChange = { rowsText = it.filter(Char::isDigit); blocked = false },
+                        label = { Text(stringResource(Res.string.board_dialog_rows)) },
+                        isError = rowsText.isNotEmpty() && rows !in 1..20,
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = columnsText,
+                        onValueChange = { columnsText = it.filter(Char::isDigit); blocked = false },
+                        label = { Text(stringResource(Res.string.board_dialog_columns)) },
+                        isError = columnsText.isNotEmpty() && columns !in 1..20,
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+                if (blocked) {
+                    Text(
+                        stringResource(Res.string.board_workspace_resize_blocked),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    blocked = !onResize(requireNotNull(rows), requireNotNull(columns))
+                },
+                enabled = dimensionsValid && (rows != currentRows || columns != currentColumns)
+            ) { Text(stringResource(Res.string.board_workspace_resize_action)) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
@@ -1619,6 +1781,110 @@ internal fun ObfGrid.withFieldSpan(
     return copy(order = cleared)
 }
 
+internal fun ObfGrid.resized(newRows: Int, newColumns: Int): ObfGrid? {
+    if (newRows !in 1..20 || newColumns !in 1..20) return null
+    val normalized = normalizedOrder()
+    val removesOccupiedCell = normalized.indices.any { rowIndex ->
+        normalized[rowIndex].indices.any { columnIndex ->
+            normalized[rowIndex][columnIndex] != null &&
+                (rowIndex >= newRows || columnIndex >= newColumns)
+        }
+    }
+    if (removesOccupiedCell) return null
+    return copy(
+        rows = newRows,
+        columns = newColumns,
+        order = List(newRows) { rowIndex ->
+            List(newColumns) { columnIndex ->
+                normalized.getOrNull(rowIndex)?.getOrNull(columnIndex)
+            }
+        }
+    )
+}
+
+internal fun ObfGrid.moveOrSwapField(
+    fromRow: Int,
+    fromColumn: Int,
+    toRow: Int,
+    toColumn: Int
+): ObfGrid? {
+    if (fromRow !in 0 until rows || fromColumn !in 0 until columns) return null
+    if (toRow !in 0 until rows || toColumn !in 0 until columns) return null
+    val normalized = normalizedOrder()
+    val sourceId = normalized[fromRow][fromColumn] ?: return null
+    val targetId = normalized[toRow][toColumn]
+    if (sourceId == targetId) return this
+
+    fun anchorAndSpan(buttonId: String): Pair<Pair<Int, Int>, GridFieldSpan>? {
+        val cells = normalized.flatMapIndexed { rowIndex, values ->
+            values.mapIndexedNotNull { columnIndex, value ->
+                if (value == buttonId) rowIndex to columnIndex else null
+            }
+        }
+        if (cells.isEmpty()) return null
+        val minRow = cells.minOf { it.first }
+        val maxRow = cells.maxOf { it.first }
+        val minColumn = cells.minOf { it.second }
+        val maxColumn = cells.maxOf { it.second }
+        val rectangular = (minRow..maxRow).all { rowIndex ->
+            (minColumn..maxColumn).all { columnIndex ->
+                normalized[rowIndex][columnIndex] == buttonId
+            }
+        }
+        if (!rectangular) return null
+        return (minRow to minColumn) to GridFieldSpan(
+            rows = maxRow - minRow + 1,
+            columns = maxColumn - minColumn + 1
+        )
+    }
+
+    val (sourceAnchor, sourceSpan) = anchorAndSpan(sourceId) ?: return null
+    val targetPlacement = targetId?.let(::anchorAndSpan)
+    val targetAnchor = targetPlacement?.first ?: (toRow to toColumn)
+    val targetSpan = targetPlacement?.second
+    val clearedIds = setOfNotNull(sourceId, targetId)
+    val updated = normalized.map { row ->
+        row.map { value -> if (value in clearedIds) null else value }.toMutableList()
+    }
+
+    fun canPlace(anchor: Pair<Int, Int>, span: GridFieldSpan): Boolean {
+        val (row, column) = anchor
+        if (row < 0 || column < 0 || row + span.rows > rows || column + span.columns > columns) {
+            return false
+        }
+        return (row until row + span.rows).all { rowIndex ->
+            (column until column + span.columns).all { columnIndex ->
+                updated[rowIndex][columnIndex] == null
+            }
+        }
+    }
+
+    if (!canPlace(targetAnchor, sourceSpan)) return null
+    if (targetSpan != null && !canPlace(sourceAnchor, targetSpan)) return null
+    if (targetSpan != null) {
+        val sourceDestinationRows = targetAnchor.first until targetAnchor.first + sourceSpan.rows
+        val sourceDestinationColumns = targetAnchor.second until targetAnchor.second + sourceSpan.columns
+        val targetDestinationRows = sourceAnchor.first until sourceAnchor.first + targetSpan.rows
+        val targetDestinationColumns = sourceAnchor.second until sourceAnchor.second + targetSpan.columns
+        val destinationsOverlap = sourceDestinationRows.any { it in targetDestinationRows } &&
+            sourceDestinationColumns.any { it in targetDestinationColumns }
+        if (destinationsOverlap) return null
+    }
+
+    fun place(buttonId: String, anchor: Pair<Int, Int>, span: GridFieldSpan) {
+        val (row, column) = anchor
+        for (rowIndex in row until row + span.rows) {
+            for (columnIndex in column until column + span.columns) {
+                updated[rowIndex][columnIndex] = buttonId
+            }
+        }
+    }
+
+    place(sourceId, targetAnchor, sourceSpan)
+    if (targetId != null && targetSpan != null) place(targetId, sourceAnchor, targetSpan)
+    return copy(order = updated)
+}
+
 private fun ObfGrid.normalizedOrder(): List<List<String?>> =
     List(rows.coerceAtLeast(0)) { rowIndex ->
         List(columns.coerceAtLeast(0)) { columnIndex ->
@@ -1626,12 +1892,125 @@ private fun ObfGrid.normalizedOrder(): List<List<String?>> =
         }
     }
 
-private fun renameDraftBoard(graph: BoardSetGraph, boardId: String, name: String): BoardSetGraph {
+internal fun renameDraftBoard(graph: BoardSetGraph, boardId: String, name: String): BoardSetGraph {
     return graph.copy(
         boards = graph.boards.map { board ->
             if (board.id == boardId) board.copy(name = name.trim()) else board
         }
     )
+}
+
+internal fun renameDraftBoardSet(graph: BoardSetGraph, name: String): BoardSetGraph {
+    val normalizedName = name.trim()
+    if (normalizedName.isEmpty() || normalizedName == graph.boardSet.name) return graph
+    return graph.copy(boardSet = graph.boardSet.copy(name = normalizedName))
+}
+
+internal fun resizeDraftBoard(
+    graph: BoardSetGraph,
+    boardId: String,
+    rows: Int,
+    columns: Int
+): BoardSetGraph {
+    val board = graph.boardsById[boardId] ?: return graph
+    val grid = board.grid ?: return graph
+    val homeButton = board.buttons.firstOrNull { button ->
+        button.resolvedActions().any { it.trim().equals(":home", ignoreCase = true) } ||
+            button.loadBoard?.id == graph.boardSet.rootBoardId
+    }
+    val resizedGrid = if (homeButton == null) {
+        grid.resized(rows, columns)
+    } else {
+        val homeCell = grid.normalizedOrder().flatMapIndexed { rowIndex, values ->
+            values.mapIndexedNotNull { columnIndex, value ->
+                if (value == homeButton.id) rowIndex to columnIndex else null
+            }
+        }.firstOrNull()
+        val homeSpan = homeCell?.let { grid.fieldSpanAt(it.first, it.second) }
+            ?: GridFieldSpan(rows = 1, columns = 1)
+        val withoutHome = grid.copy(
+            order = grid.normalizedOrder().map { values ->
+                values.map { value -> if (value == homeButton.id) null else value }
+            }
+        )
+        var resized = withoutHome.resized(rows, columns) ?: return graph
+        val targetRow = rows - homeSpan.rows
+        if (targetRow < 0 || homeSpan.columns > columns) return graph
+        val targetId = resized.order[targetRow][0]
+        if (targetId != null) {
+            val emptyCells = resized.order.flatMapIndexed { rowIndex, values ->
+                values.mapIndexedNotNull { columnIndex, value ->
+                    if (value == null && (rowIndex != targetRow || columnIndex != 0)) {
+                        rowIndex to columnIndex
+                    } else {
+                        null
+                    }
+                }
+            }
+            resized = emptyCells.firstNotNullOfOrNull { (emptyRow, emptyColumn) ->
+                resized.moveOrSwapField(targetRow, 0, emptyRow, emptyColumn)
+            } ?: return graph
+        }
+        resized.withFieldSpan(
+            row = targetRow,
+            column = 0,
+            buttonId = homeButton.id,
+            rowSpan = homeSpan.rows,
+            columnSpan = homeSpan.columns
+        )
+    } ?: return graph
+    if (resizedGrid == board.grid) return graph
+    return graph.copy(
+        boards = graph.boards.map { current ->
+            if (current.id == boardId) current.copy(grid = resizedGrid) else current
+        }
+    )
+}
+
+internal fun moveDraftField(
+    graph: BoardSetGraph,
+    boardId: String,
+    fromRow: Int,
+    fromColumn: Int,
+    toRow: Int,
+    toColumn: Int
+): BoardSetGraph {
+    val board = graph.boardsById[boardId] ?: return graph
+    val movedGrid = board.grid?.moveOrSwapField(fromRow, fromColumn, toRow, toColumn) ?: return graph
+    if (movedGrid == board.grid) return graph
+    return graph.copy(
+        boards = graph.boards.map { current ->
+            if (current.id == boardId) current.copy(grid = movedGrid) else current
+        }
+    )
+}
+
+internal fun BoardSetGraph.withHomeFieldsBottomLeft(): BoardSetGraph {
+    val rootBoardId = boardSet.rootBoardId
+    val normalizedBoards = boards.map { board ->
+        val grid = board.grid ?: return@map board
+        val homeButton = board.buttons.firstOrNull { button ->
+            button.resolvedActions().any { it.trim().equals(":home", ignoreCase = true) } ||
+                button.loadBoard?.id == rootBoardId
+        } ?: return@map board
+        val homeCells = grid.normalizedOrder().flatMapIndexed { rowIndex, values ->
+            values.mapIndexedNotNull { columnIndex, value ->
+                if (value == homeButton.id) rowIndex to columnIndex else null
+            }
+        }
+        if (homeCells.isEmpty()) return@map board
+        val anchor = homeCells.minOf { it.first } to homeCells.minOf { it.second }
+        val span = grid.fieldSpanAt(anchor.first, anchor.second)
+        val bottomLeft = (grid.rows - span.rows).coerceAtLeast(0) to 0
+        val pinnedGrid = grid.moveOrSwapField(
+            fromRow = anchor.first,
+            fromColumn = anchor.second,
+            toRow = bottomLeft.first,
+            toColumn = bottomLeft.second
+        ) ?: grid
+        if (pinnedGrid == grid) board else board.copy(grid = pinnedGrid)
+    }
+    return if (normalizedBoards == boards) this else copy(boards = normalizedBoards)
 }
 
 private fun setDraftRoot(graph: BoardSetGraph, boardId: String): BoardSetGraph {

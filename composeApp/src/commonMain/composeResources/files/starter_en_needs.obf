@@ -23,9 +23,9 @@
         "need_10"
       ],
       [
-        "need_11",
-        "need_12",
         "needs_home",
+        "need_12",
+        "need_11",
         "needs_core",
         "needs_universal"
       ]

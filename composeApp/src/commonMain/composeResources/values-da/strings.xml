@@ -48,6 +48,11 @@
     <string name="board_workspace_finish">Afslut redigering</string>
     <string name="board_workspace_actions">Sidehandlinger</string>
     <string name="board_workspace_rename">Omdøb side</string>
+    <string name="board_workspace_rename_set">Omdøb skærm</string>
+    <string name="board_workspace_resize">Tilpas sidens størrelse</string>
+    <string name="board_workspace_resize_body">Vælg antal rækker og kolonner. Felter uden for den nye side skal flyttes, før siden kan gøres mindre.</string>
+    <string name="board_workspace_resize_blocked">Siden kan ikke gøres mindre, mens der er felter i de rækker eller kolonner, som fjernes.</string>
+    <string name="board_workspace_resize_action">Tilpas</string>
     <string name="board_workspace_set_home">Brug som startside</string>
     <string name="board_workspace_delete">Slet side</string>
     <string name="board_workspace_home">Startside</string>
@@ -245,6 +250,15 @@
     <string name="ui_settings_base_boards_restoring">Gendanner…</string>
     <string name="ui_settings_base_boards_restored">Grundtavlerne er gendannet</string>
     <string name="ui_settings_base_boards_error">Grundtavlerne kunne ikke gendannes</string>
+    <string name="ui_settings_symbols_title">Offline-symboler</string>
+    <string name="ui_settings_symbols_download_title">Download alle ARASAAC-symboler</string>
+    <string name="ui_settings_symbols_download_desc">Gem hele ARASAAC-biblioteket i 500 px på denne enhed til offlinebrug. Kræver cirka 300 MB; Wi-Fi anbefales.</string>
+    <string name="ui_settings_symbols_download">Download symboler</string>
+    <string name="ui_settings_symbols_downloading">Downloader %1$d af %2$d…</string>
+    <string name="ui_settings_symbols_cached">%1$d symboler er tilgængelige offline</string>
+    <string name="ui_settings_symbols_complete">Alle %1$d symboler er tilgængelige offline</string>
+    <string name="ui_settings_symbols_failed">Download afsluttet; %1$d symboler kunne ikke downloades. Tryk for at prøve igen.</string>
+    <string name="ui_settings_symbols_unavailable">Offline-lagring af symboler er ikke tilgængelig på denne enhed.</string>
 
     <string name="test_voice_default_text">Hej! Sådan lyder jeg. Velkommen til Wingmate!</string>
     <string name="test_voice_title">Test din stemme</string>

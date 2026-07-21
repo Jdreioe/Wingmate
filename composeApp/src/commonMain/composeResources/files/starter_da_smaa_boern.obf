@@ -2,7 +2,7 @@
   "format": "open-board-0.1",
   "id": "da_young_children",
   "locale": "da",
-  "name": "Små børn",
+  "name": "Børn",
   "description_html": "Legende og velkendte ord til små børn og deres kommunikationspartnere.",
   "grid": {
     "rows": 4,

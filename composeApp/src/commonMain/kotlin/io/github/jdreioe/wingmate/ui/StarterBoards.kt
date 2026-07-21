@@ -57,7 +57,7 @@ internal fun starterBoardBundles(languageTag: String): List<StarterBoardBundle> 
     }
     val ageGroups = if (danish) {
         listOf(
-            "Små børn" to "starter_da_smaa_boern",
+            "Børn" to "starter_da_smaa_boern",
             "Skole" to "starter_da_skole",
             "Teenagere" to "starter_da_teenagere",
             "Unge voksne" to "starter_da_unge_voksne",
@@ -65,7 +65,7 @@ internal fun starterBoardBundles(languageTag: String): List<StarterBoardBundle> 
         )
     } else {
         listOf(
-            "Young Children" to "starter_en_young_children",
+            "Children" to "starter_en_young_children",
             "School" to "starter_en_school",
             "Teenagers" to "starter_en_teenagers",
             "Young Adults" to "starter_en_young_adults",

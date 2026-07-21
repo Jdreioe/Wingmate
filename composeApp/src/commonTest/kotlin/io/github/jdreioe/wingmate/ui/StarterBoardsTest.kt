@@ -42,11 +42,11 @@ class StarterBoardsTest {
     @Test
     fun eachLanguageProvidesFiveIndependentAgeGroupBoardSets() {
         assertEquals(
-            listOf("Young Children", "School", "Teenagers", "Young Adults", "Adults"),
+            listOf("Children", "School", "Teenagers", "Young Adults", "Adults"),
             starterBoardBundles("en-US").map { it.name }
         )
         assertEquals(
-            listOf("Små børn", "Skole", "Teenagere", "Unge voksne", "Voksne"),
+            listOf("Børn", "Skole", "Teenagere", "Unge voksne", "Voksne"),
             starterBoardBundles("da-DK").map { it.name }
         )
         assertTrue(starterBoardBundles("en").all { it.fileNames.size == 6 })
@@ -88,6 +88,16 @@ class StarterBoardsTest {
             }
             board.buttons.mapNotNull { it.loadBoard?.id }.forEach { targetId ->
                 assertTrue(targetId in boardIds, "${board.name} links to missing board $targetId")
+            }
+            val homeNavigation = board.buttons.lastOrNull { button ->
+                button.label in setOf("Home", "Hjem") && button.loadBoard != null
+            }
+            if (homeNavigation != null) {
+                assertEquals(
+                    homeNavigation.id,
+                    grid.order.last().first(),
+                    "${board.name} Home field must be bottom-left"
+                )
             }
         }
     }
@@ -164,7 +174,7 @@ class StarterBoardsTest {
         val boardSets = useCase.listBoardSets()
         assertEquals(5, boardSets.size)
         assertEquals(
-            setOf("Young Children", "School", "Teenagers", "Young Adults", "Adults"),
+            setOf("Children", "School", "Teenagers", "Young Adults", "Adults"),
             boardSets.map { it.name }.toSet()
         )
         boardSets.forEach { boardSet ->

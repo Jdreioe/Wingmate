@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,6 +28,9 @@ import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
+import io.github.jdreioe.wingmate.infrastructure.ArasaacDownloadProgress
+import io.github.jdreioe.wingmate.infrastructure.ArasaacSymbolDownloadService
+import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,6 +55,10 @@ fun SettingsScreen(
     val featureUsageReporter = remember(koin) { koin.getOrNull<FeatureUsageReporter>() }
     val boardSetUseCase = remember(koin) { koin.getOrNull<BoardSetUseCase>() }
     val obfParser = remember(koin) { koin.getOrNull<ObfParser>() }
+    val imageCacher = remember(koin) { koin.getOrNull<ImageCacher>() }
+    val arasaacDownloader = remember(imageCacher) {
+        imageCacher?.let(::ArasaacSymbolDownloadService)
+    }
 
     // Selected tab
     var selectedTab by remember { mutableStateOf(SettingsTab.Speech) }
@@ -88,6 +96,10 @@ fun SettingsScreen(
     var availableBoardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
     var restoringBaseBoards by remember { mutableStateOf(false) }
     var baseBoardsStatus by remember { mutableStateOf<String?>(null) }
+    var cachedArasaacSymbols by remember { mutableStateOf(0) }
+    var arasaacProgress by remember { mutableStateOf<ArasaacDownloadProgress?>(null) }
+    var arasaacDownloadError by remember { mutableStateOf(false) }
+    var arasaacFailedCount by remember { mutableStateOf(0) }
 
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
@@ -149,27 +161,76 @@ fun SettingsScreen(
         buttonScale = s.buttonScale
         inputFieldScale = s.inputFieldScale
         featureUsageReporter?.setEnabled(s.featureUsageReportingEnabled)
+        cachedArasaacSymbols = runCatching { arasaacDownloader?.cachedCount() ?: 0 }.getOrDefault(0)
         loading = false
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier
-            .fillMaxWidth(0.95f)
-            .fillMaxHeight(0.9f),
-        title = {
-            Text(
-                stringResource(Res.string.ui_settings_title),
-                style = MaterialTheme.typography.headlineSmall
+    fun saveAndClose() {
+        scope.launch {
+            withContext(Dispatchers.Default) {
+                if (!useSystemTts && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
+                    runCatching {
+                        configRepo?.saveSpeechConfig(
+                            SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey)
+                        )
+                    }
+                }
+                settingsUseCase?.let { useCase ->
+                    val current = runCatching { useCase.get() }.getOrNull() ?: Settings()
+                    useCase.update(
+                        current.copy(
+                            useSystemTts = useSystemTts,
+                            virtualMicEnabled = virtualMic,
+                            featureUsageReportingEnabled = featureUsageReportingEnabled,
+                            startupMode = startupMode,
+                            startupBoardSetId = startupBoardSetId
+                        )
+                    )
+                }
+            }
+            onSaved?.invoke()
+            onDismiss()
+        }
+    }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text(stringResource(Res.string.ui_settings_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.common_close))
+                    }
+                },
+                actions = {
+                    TextButton(onClick = ::saveAndClose, enabled = !loading) {
+                        Text(stringResource(Res.string.common_save))
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                )
             )
-        },
-        text = {
+        }
+    ) { contentPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding)
+        ) {
             if (loading) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             } else {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .widthIn(max = 920.dp)
+                        .align(Alignment.TopCenter)
+                ) {
                     // Tab row
                     PrimaryTabRow(
                         selectedTabIndex = selectedTab.ordinal,
@@ -202,7 +263,7 @@ fun SettingsScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Content for each tab with spring animation
                     AnimatedContent(
@@ -228,10 +289,19 @@ fun SettingsScreen(
                         },
                         label = "settings_tab_content"
                     ) { currentTab ->
-                        Column(
+                        Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                .fillMaxHeight(),
+                            shape = MaterialTheme.shapes.extraLarge,
+                            color = MaterialTheme.colorScheme.surfaceContainerLow
+                        ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
                                 .verticalScroll(rememberScrollState())
+                                .padding(20.dp)
                         ) {
                         when (currentTab) {
                             SettingsTab.Speech -> SpeechSection(
@@ -332,47 +402,45 @@ fun SettingsScreen(
                                             restoringBaseBoards = false
                                         }
                                     }
+                                },
+                                arasaacAvailable = arasaacDownloader != null,
+                                cachedArasaacSymbols = cachedArasaacSymbols,
+                                arasaacProgress = arasaacProgress,
+                                arasaacDownloadError = arasaacDownloadError,
+                                arasaacFailedCount = arasaacFailedCount,
+                                onDownloadArasaac = {
+                                    if (arasaacProgress == null) {
+                                        scope.launch {
+                                            arasaacDownloadError = false
+                                            runCatching {
+                                                arasaacDownloader?.downloadAll(systemLanguageTag()) { progress ->
+                                                    arasaacProgress = progress
+                                                } ?: error("ARASAAC storage unavailable")
+                                            }.onSuccess { result ->
+                                                cachedArasaacSymbols = result.total - result.failed
+                                                arasaacDownloadError = result.failed > 0
+                                                arasaacFailedCount = result.failed
+                                            }.onFailure {
+                                                arasaacDownloadError = true
+                                                arasaacFailedCount = arasaacProgress?.failed ?: 0
+                                                cachedArasaacSymbols = runCatching {
+                                                    arasaacDownloader?.cachedCount() ?: cachedArasaacSymbols
+                                                }.getOrDefault(cachedArasaacSymbols)
+                                            }
+                                            arasaacProgress = null
+                                        }
+                                    }
                                 }
                             )
+                        }
+                        Spacer(Modifier.height(24.dp))
                         }
                         }
                     }
                 }
             }
-        },
-        confirmButton = {
-            Button(onClick = {
-                scope.launch {
-                    withContext(Dispatchers.Default) {
-                        // Save Azure config if needed
-                        if (!useSystemTts && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
-                            runCatching {
-                                configRepo?.saveSpeechConfig(
-                                    SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey)
-                                )
-                            }
-                        }
-                        // Save TTS engine preference
-                        settingsUseCase?.let { useCase ->
-                            val current = runCatching { useCase.get() }.getOrNull() ?: Settings()
-                            useCase.update(current.copy(
-                                useSystemTts = useSystemTts,
-                                virtualMicEnabled = virtualMic,
-                                featureUsageReportingEnabled = featureUsageReportingEnabled,
-                                startupMode = startupMode,
-                                startupBoardSetId = startupBoardSetId
-                            ))
-                        }
-                    }
-                    onSaved?.invoke()
-                    onDismiss()
-                }
-            }) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_close)) }
         }
-    )
+    }
 }
 
 // ─── Speech Tab ──────────────────────────────────────────────────────────────
@@ -631,7 +699,13 @@ private fun GeneralSection(
     onPartnerWindowChange: (Boolean) -> Unit,
     restoringBaseBoards: Boolean,
     baseBoardsStatus: String?,
-    onRestoreBaseBoards: () -> Unit
+    onRestoreBaseBoards: () -> Unit,
+    arasaacAvailable: Boolean,
+    cachedArasaacSymbols: Int,
+    arasaacProgress: ArasaacDownloadProgress?,
+    arasaacDownloadError: Boolean,
+    arasaacFailedCount: Int,
+    onDownloadArasaac: () -> Unit
 ) {
     SectionHeader(stringResource(Res.string.ui_settings_startup_mode_title))
     Text(
@@ -746,6 +820,62 @@ private fun GeneralSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+
+    Spacer(modifier = Modifier.height(24.dp))
+    SectionHeader(stringResource(Res.string.ui_settings_symbols_title))
+    Text(
+        stringResource(Res.string.ui_settings_symbols_download_desc),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+    val activeProgress = arasaacProgress
+    OutlinedButton(
+        onClick = onDownloadArasaac,
+        enabled = arasaacAvailable && activeProgress == null
+    ) {
+        if (activeProgress != null) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+        } else {
+            Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (activeProgress != null) {
+                stringResource(
+                    Res.string.ui_settings_symbols_downloading,
+                    activeProgress.completed,
+                    activeProgress.total
+                )
+            } else {
+                stringResource(Res.string.ui_settings_symbols_download)
+            }
+        )
+    }
+    if (activeProgress != null && activeProgress.total > 0) {
+        Spacer(modifier = Modifier.height(8.dp))
+        LinearProgressIndicator(
+            progress = { activeProgress.completed.toFloat() / activeProgress.total },
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        when {
+            !arasaacAvailable -> stringResource(Res.string.ui_settings_symbols_unavailable)
+            arasaacDownloadError -> stringResource(
+                Res.string.ui_settings_symbols_failed,
+                arasaacFailedCount
+            )
+            cachedArasaacSymbols > 0 -> stringResource(
+                Res.string.ui_settings_symbols_cached,
+                cachedArasaacSymbols
+            )
+            else -> stringResource(Res.string.ui_settings_symbols_download_title)
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = if (arasaacDownloadError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    )
 
     Spacer(modifier = Modifier.height(24.dp))
     SectionHeader(stringResource(Res.string.ui_settings_analytics_title))
