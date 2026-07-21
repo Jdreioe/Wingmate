@@ -150,7 +150,7 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
                 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Optional feature usage reporting (Android Firebase implementation)
+                // Optional feature usage reporting (Android Aptabase implementation)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(
                         checked = featureUsageReportingEnabled,

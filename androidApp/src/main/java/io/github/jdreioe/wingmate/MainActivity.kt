@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.FoldingFeature
 import androidx.window.area.WindowAreaController
@@ -27,6 +26,7 @@ import java.util.concurrent.Executor
 import io.github.jdreioe.wingmate.display.ExternalDisplayPresentation
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
@@ -68,8 +68,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Ensure IME insets can be detected correctly
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Match Android 15+ edge-to-edge enforcement on older Android versions too.
+        enableEdgeToEdge()
 
         // Initialize FilePicker bridge
         runCatching {
@@ -289,4 +289,3 @@ class MainActivity : ComponentActivity() {
         windowAreaSession = null
     }
 }
-

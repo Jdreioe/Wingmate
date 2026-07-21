@@ -26,6 +26,10 @@ object FeatureUsageEvents {
     const val APP_STARTED = "app_started"
     const val SCREEN_VIEW = "screen_view"
     const val WELCOME_COMPLETED = "welcome_completed"
+    const val WELCOME_STARTED = "welcome_started"
+    const val WELCOME_STEP_VIEWED = "welcome_step_viewed"
+    const val WELCOME_REOPENED = "welcome_reopened"
+    const val STARTUP_MODE_SELECTED = "startup_mode_selected"
 
     const val PLAYBACK_PLAY = "playback_play"
     const val PLAYBACK_PAUSE = "playback_pause"
@@ -49,14 +53,26 @@ object FeatureUsageEvents {
 
     const val VOICE_SELECTED = "voice_selected"
     const val VOICE_REFRESHED = "voice_refreshed"
+    const val VOICE_FILTER_APPLIED = "voice_filter_applied"
+    const val VOICE_ENGINE_SELECTED = "voice_engine_selected"
     const val LANGUAGE_UPDATED = "language_updated"
+    const val SECONDARY_LANGUAGE_TOGGLED = "secondary_language_toggled"
     const val SETTINGS_UPDATED = "settings_updated"
+    const val SETTINGS_OPENED = "settings_opened"
+    const val SETTINGS_SECTION_OPENED = "settings_section_opened"
     const val ANALYTICS_CONSENT_CHANGED = "analytics_consent_changed"
 
     const val BOARD_IMPORT_STARTED = "board_import_started"
     const val BOARD_IMPORT_COMPLETED = "board_import_completed"
     const val BOARD_IMPORT_FAILED = "board_import_failed"
     const val BOARD_SETUP_CHOICE = "board_setup_choice"
+
+    const val AZURE_F0_SETUP_STARTED = "azure_f0_setup_started"
+    const val AZURE_F0_PORTAL_OPENED = "azure_f0_portal_opened"
+    const val AZURE_F0_RESOURCES_OPENED = "azure_f0_resources_opened"
+    const val AZURE_F0_CREDENTIALS_SUBMITTED = "azure_f0_credentials_submitted"
+    const val AZURE_F0_SETUP_COMPLETED = "azure_f0_setup_completed"
+    const val AZURE_F0_SETUP_FAILED = "azure_f0_setup_failed"
 
     const val BOARDSET_CREATED = "boardset_created"
     const val BOARDSET_LOCK_TOGGLED = "boardset_lock_toggled"

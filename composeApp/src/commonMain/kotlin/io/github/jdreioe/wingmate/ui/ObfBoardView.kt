@@ -595,7 +595,7 @@ fun ObfButtonItem(
                 val elapsed = now - startTime
                 dwellProgress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
                 
-                if (elapsed.toLong() >= duration.toLong()) {
+                if (elapsed >= duration) {
                     if (animateSelection) isSelected = true
                     onClick()
                     aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
@@ -751,7 +751,7 @@ fun ObfButtonItem(
                     Spacer(modifier = Modifier.height(4.dp))
                     if (symbolUnavailable) {
                         SymbolUnavailablePlaceholder(
-                            symbolSet = (imageSource as ObfImageSource.Symbol).symbol.set,
+                            symbolSet = imageSource.symbol.set,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp),
                             contentColor = contentColor
                         )
@@ -768,7 +768,7 @@ fun ObfButtonItem(
                     if (showImg) {
                         if (symbolUnavailable) {
                             SymbolUnavailablePlaceholder(
-                                symbolSet = (imageSource as ObfImageSource.Symbol).symbol.set,
+                                symbolSet = imageSource.symbol.set,
                                 modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp),
                                 contentColor = contentColor
                             )

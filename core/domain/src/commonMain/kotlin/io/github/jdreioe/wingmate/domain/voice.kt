@@ -48,6 +48,6 @@ data class UiSettings(
     val id: Int? = null,
     val name: String = "default",
     val primaryLanguage: String = "en-US",
-    val secondaryLanguage: String = "en-US",
+    val secondaryLanguage: String = "",
     val isWiggleMode: Boolean = false,
 )

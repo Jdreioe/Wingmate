@@ -47,9 +47,9 @@ data class Settings(
     val language: String = "en-US",
     val voice: String = "default",
     val speechRate: Float = 1.0f,
-    // UI-level settings: primary and secondary locales used by the UI language selector
+    // The primary locale is used by default. An empty secondary locale means it is disabled.
     val primaryLanguage: String = "en-US",
-    val secondaryLanguage: String = "en-US",
+    val secondaryLanguage: String = "",
     // TTS engine selection
     val ttsEngine: TtsEngine = TtsEngine.SYSTEM,
     // Desktop (Linux) only: when true, route TTS audio to a virtual sink whose monitor can be used as a microphone in apps like Zoom
@@ -84,7 +84,7 @@ data class Settings(
     val partnerWindowIdleEnabled: Boolean = true,
     // On-screen keyboard scale (0.5 = half, 1.0 = normal, 2.0 = double)
     val oskKeyboardScale: Float = 1.0f,
-    // Optional product analytics (Firebase on Android). Default is opt-out.
+    // Optional product analytics (Aptabase on Android). Default is opt-out.
     val featureUsageReportingEnabled: Boolean = false,
     // Accessibility settings (OpenAAC)
     val showLabels: Boolean = true,

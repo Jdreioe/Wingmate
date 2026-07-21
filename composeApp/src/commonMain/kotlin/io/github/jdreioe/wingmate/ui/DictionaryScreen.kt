@@ -326,7 +326,10 @@ private fun AddDictionaryEntryDialog(
                             onValueChange = {},
                             readOnly = true,
                             modifier = Modifier
-                                .menuAnchor()
+                                .menuAnchor(
+                                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                    enabled = true
+                                )
                                 .fillMaxWidth(),
                             trailingIcon = {
                                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedAlphabet)

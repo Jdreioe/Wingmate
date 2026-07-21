@@ -236,7 +236,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                                 )
                                 availableLanguages.forEach { language ->
                                     DropdownMenuItem(
-                                        text = { Text(language) },
+                                        text = { Text(localizedLocaleDisplayName(language)) },
                                         onClick = {
                                             selectedLanguage = language
                                             showLanguageFilter = false
@@ -501,11 +501,14 @@ internal fun buildVoiceSearchText(voice: Voice): String {
         append(voice.name.orEmpty())
         append(' ')
         append(voice.primaryLanguage.orEmpty())
+        voice.primaryLanguage?.let { append(' '); append(localizedLocaleDisplayName(it)) }
         append(' ')
         append(voice.gender.orEmpty())
         if (supported.isNotEmpty()) {
             append(' ')
             append(supported.joinToString(" "))
+            append(' ')
+            append(supported.joinToString(" ") { localizedLocaleDisplayName(it) })
         }
     }.lowercase()
 }

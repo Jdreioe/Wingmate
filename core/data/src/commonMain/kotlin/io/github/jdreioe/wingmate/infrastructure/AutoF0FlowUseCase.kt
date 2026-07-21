@@ -22,8 +22,14 @@ class AutoF0FlowUseCase(
 ) {
     suspend fun execute(): AutoF0FlowResult {
         val signInResult = provisioner.signIn()
-        if (signInResult != AzureSignInResult.SUCCESS) {
-            return AutoF0FlowResult.SignInFailed(signInResult)
+        if (signInResult !is AzureSignInResult.SUCCESS) {
+            val msg = if (signInResult is AzureSignInResult.ERROR) {
+                signInResult.message ?: "Unknown error"
+            } else {
+                "Sign-in was cancelled"
+            }
+            println("AutoF0Flow: Sign-in failed: $msg")
+            return AutoF0FlowResult.SignInFailed(msg)
         }
 
         val subscriptions = try {
@@ -155,21 +161,11 @@ class AutoF0FlowUseCase(
         return AutoF0FlowResult.Success(resource.name, resource.region)
     }
 
-    /**
-     * Acquire an ARM access token by triggering a getSubscriptions call.
-     * The provisioner caches the token via MSAL internally.
-     * For the ARM client we need the raw token — we store it via a side channel.
-     *
-     * This is a simplified approach; in production the token should be retrieved
-     * from MSAL's IAuthenticationResult directly.
-     */
     private suspend fun getAccessTokenFromScope(): String? {
         return try {
-            provisioner.getSubscriptions()
-            // Token acquisition happened as a side effect
-            // In I-06 we'll plumb the actual token through
-            "arm-token-placeholder"
-        } catch (_: Exception) {
+            provisioner.getAccessToken()
+        } catch (e: Exception) {
+            println("AutoF0Flow: Failed to get access token: ${e.message}")
             null
         }
     }
@@ -184,7 +180,7 @@ class AutoF0FlowUseCase(
 
 sealed class AutoF0FlowResult {
     data class Success(val resourceName: String, val region: String) : AutoF0FlowResult()
-    data class SignInFailed(val reason: AzureSignInResult) : AutoF0FlowResult()
+    data class SignInFailed(val message: String) : AutoF0FlowResult()
     object NoSubscriptions : AutoF0FlowResult()
     object ExistingF0Conflict : AutoF0FlowResult()
     object ProviderRegistrationFailed : AutoF0FlowResult()

@@ -62,7 +62,7 @@ fun PredictionBar(
         // Separator if both words and letters are present
         if (predictions.words.isNotEmpty() && predictions.letters.isNotEmpty()) {
             Spacer(modifier = Modifier.width(8.dp))
-            Divider(
+            VerticalDivider(
                 modifier = Modifier
                     .height(24.dp)
                     .width(1.dp),
