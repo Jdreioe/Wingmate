@@ -642,6 +642,8 @@ private fun BoardSetWorkspaceScreen(
     val soundPlayer = koinInject<SoundPlayer>()
     val fileStorage = koinInject<FileStorage>()
     val settings by rememberReactiveSettings()
+    val koin = org.koin.compose.getKoin()
+    val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
     val scope = rememberCoroutineScope()
     var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
     var editSession by remember(boardSetId) { mutableStateOf<BoardSetEditSession?>(null) }
@@ -660,6 +662,7 @@ private fun BoardSetWorkspaceScreen(
     var showRenameBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
     var isSavingSentence by remember(boardSetId) { mutableStateOf(false) }
+    var isExporting by remember(boardSetId) { mutableStateOf(false) }
     var isFullscreen by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(Res.string.board_workspace_unlock_to_edit)
     val savedMessage = stringResource(Res.string.board_workspace_saved)
@@ -843,6 +846,47 @@ private fun BoardSetWorkspaceScreen(
                             Icon(
                                 Icons.Default.Keyboard,
                                 contentDescription = stringResource(Res.string.mode_switch_to_keyboard)
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    isExporting = true
+                                    statusMessage = null
+                                    try {
+                                        val graph = activeGraph
+                                        if (graph == null) {
+                                            statusMessage = "Export failed: no board set loaded"
+                                        } else {
+                                            val obzBytes = useCase.exportBoardSetAsObz(graph.boardSet.id)
+                                            if (obzBytes != null) {
+                                                val fileName = "${graph.boardSet.name}.obz"
+                                                if (shareService != null) {
+                                                    val shared = shareService.shareFile(fileName, obzBytes)
+                                                    statusMessage = if (shared) {
+                                                        "Exported ${graph.boardSet.name}.obz"
+                                                    } else {
+                                                        "Export cancelled"
+                                                    }
+                                                } else {
+                                                    statusMessage = "Export saved (${obzBytes.size} bytes)"
+                                                }
+                                            } else {
+                                                statusMessage = "Export failed: no boards"
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        statusMessage = "Export failed: ${e.message ?: "unknown error"}"
+                                    } finally {
+                                        isExporting = false
+                                    }
+                                }
+                            },
+                            enabled = !isExporting
+                        ) {
+                            Icon(
+                                Icons.Default.ImportExport,
+                                contentDescription = stringResource(Res.string.phrase_screen_import_export_data)
                             )
                         }
                         if (selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
