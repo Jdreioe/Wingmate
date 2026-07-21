@@ -24,10 +24,16 @@ sealed class ObfButtonActionEffect {
  * - `:home` navigate to the board set root
  */
 fun parseObfButtonAction(raw: String): ObfButtonActionEffect {
+    if (raw.isEmpty()) return ObfButtonActionEffect.Unsupported(raw)
+
+    if (raw.startsWith("+")) {
+        val payload = raw.removePrefix("+")
+        if (payload.isEmpty()) return ObfButtonActionEffect.Unsupported(raw)
+        return ObfButtonActionEffect.AppendText(payload)
+    }
+
     val action = raw.trim()
-    if (action.isEmpty()) return ObfButtonActionEffect.Unsupported(raw)
     return when {
-        action.startsWith("+") -> ObfButtonActionEffect.AppendText(action.removePrefix("+"))
         action.equals(":space", ignoreCase = true) -> ObfButtonActionEffect.AppendText(" ")
         action.equals(":backspace", ignoreCase = true) -> ObfButtonActionEffect.Backspace
         action.equals(":clear", ignoreCase = true) -> ObfButtonActionEffect.Clear
