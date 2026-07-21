@@ -1,0 +1,545 @@
+{
+  "format": "open-board-0.1",
+  "id": "en_young_adults",
+  "locale": "en",
+  "name": "Young Adults",
+  "description_html": "Study, work, independence, relationships, decisions, and everyday life.",
+  "grid": {
+    "rows": 4,
+    "columns": 5,
+    "order": [
+      [
+        "age_1",
+        "age_2",
+        "age_3",
+        "age_4",
+        "age_5"
+      ],
+      [
+        "age_6",
+        "age_7",
+        "age_8",
+        "age_9",
+        "age_10"
+      ],
+      [
+        "age_11",
+        "age_12",
+        "age_13",
+        "age_14",
+        "age_15"
+      ],
+      [
+        "age_home",
+        "age_core",
+        "age_universal",
+        "age_needs",
+        "age_feelings"
+      ]
+    ]
+  },
+  "buttons": [
+    {
+      "id": "age_1",
+      "label": "I choose",
+      "vocalization": "i choose",
+      "background_color": "#FFF3B0",
+      "image_id": "os_age_1"
+    },
+    {
+      "id": "age_2",
+      "label": "My plan",
+      "vocalization": "my plan",
+      "background_color": "#FFF3B0",
+      "image_id": "os_age_2"
+    },
+    {
+      "id": "age_3",
+      "label": "Study",
+      "vocalization": "study",
+      "background_color": "#C8E6C9",
+      "image_id": "os_age_3"
+    },
+    {
+      "id": "age_4",
+      "label": "Work",
+      "vocalization": "work",
+      "background_color": "#FFE0B2",
+      "image_id": "os_age_4"
+    },
+    {
+      "id": "age_5",
+      "label": "Transport",
+      "vocalization": "transport",
+      "background_color": "#FFE0B2",
+      "image_id": "os_age_5"
+    },
+    {
+      "id": "age_6",
+      "label": "Money",
+      "vocalization": "money",
+      "background_color": "#FFE0B2",
+      "image_id": "os_age_6"
+    },
+    {
+      "id": "age_7",
+      "label": "Appointment",
+      "vocalization": "appointment",
+      "background_color": "#FFE0B2",
+      "image_id": "os_age_7"
+    },
+    {
+      "id": "age_8",
+      "label": "Cook",
+      "vocalization": "cook",
+      "background_color": "#C8E6C9",
+      "image_id": "os_age_8"
+    },
+    {
+      "id": "age_9",
+      "label": "Shopping",
+      "vocalization": "shopping",
+      "background_color": "#FFE0B2",
+      "image_id": "os_age_9"
+    },
+    {
+      "id": "age_10",
+      "label": "Friends",
+      "vocalization": "friends",
+      "background_color": "#FFE0B2",
+      "image_id": "os_age_10"
+    },
+    {
+      "id": "age_11",
+      "label": "Relationship",
+      "vocalization": "relationship",
+      "background_color": "#FFE0B2",
+      "image_id": "os_age_11"
+    },
+    {
+      "id": "age_12",
+      "label": "Privacy",
+      "vocalization": "privacy",
+      "background_color": "#FFE0B2",
+      "image_id": "os_age_12"
+    },
+    {
+      "id": "age_13",
+      "label": "Help me decide",
+      "vocalization": "help me decide",
+      "background_color": "#C8E6C9",
+      "image_id": "os_age_13"
+    },
+    {
+      "id": "age_14",
+      "label": "Not now",
+      "vocalization": "not now",
+      "background_color": "#F8BBD0",
+      "image_id": "os_age_14"
+    },
+    {
+      "id": "age_15",
+      "label": "Let's go",
+      "vocalization": "let's go",
+      "background_color": "#C8E6C9",
+      "image_id": "os_age_15"
+    },
+    {
+      "id": "age_home",
+      "label": "Home",
+      "vocalization": "home",
+      "background_color": "#E1BEE7",
+      "load_board": {
+        "id": "en_home",
+        "name": "Starter Home"
+      },
+      "image_id": "os_age_home"
+    },
+    {
+      "id": "age_core",
+      "label": "Core 24",
+      "vocalization": "core 24",
+      "background_color": "#E1BEE7",
+      "load_board": {
+        "id": "en_core24",
+        "name": "Core 24"
+      },
+      "image_id": "os_age_core"
+    },
+    {
+      "id": "age_universal",
+      "label": "Universal",
+      "vocalization": "universal",
+      "background_color": "#E1BEE7",
+      "load_board": {
+        "id": "en_universal_core",
+        "name": "Universal Core 36"
+      },
+      "image_id": "os_age_universal"
+    },
+    {
+      "id": "age_needs",
+      "label": "Needs",
+      "vocalization": "needs",
+      "background_color": "#E1BEE7",
+      "load_board": {
+        "id": "en_needs",
+        "name": "Needs"
+      },
+      "image_id": "os_age_needs"
+    },
+    {
+      "id": "age_feelings",
+      "label": "Feelings",
+      "vocalization": "feelings",
+      "background_color": "#E1BEE7",
+      "load_board": {
+        "id": "en_feelings",
+        "name": "Feelings"
+      },
+      "image_id": "os_age_feelings"
+    }
+  ],
+  "images": [
+    {
+      "id": "os_age_1",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/noun-project/choose_683_86700.svg",
+      "symbol": {
+        "set": "noun-project",
+        "filename": "choose-4659a1ea",
+        "library_key": "choose-4659a1ea"
+      },
+      "license": {
+        "type": "CC By",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by/3.0/us/",
+        "source_url": "https://www.opensymbols.org/symbols/noun-project/choose-4659a1ea?id=44878",
+        "author_name": "Kirill Ulitin",
+        "author_url": "http://thenounproject.com/likeleto"
+      },
+      "content_type": "image/svg+xml"
+    },
+    {
+      "id": "os_age_2",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/to plan.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "to-plan-b8a45b1b",
+        "library_key": "to-plan-b8a45b1b"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/to-plan-b8a45b1b?id=10907",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_3",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/study.png.varianted-skin.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "study-465d2dcf",
+        "library_key": "study-465d2dcf"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/study-465d2dcf?id=9307",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_4",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/tawasol/work.jpg",
+      "symbol": {
+        "set": "tawasol",
+        "filename": "work-5c66b067",
+        "library_key": "work-5c66b067"
+      },
+      "license": {
+        "type": "CC BY-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-sa/4.0/",
+        "source_url": "https://www.opensymbols.org/symbols/tawasol/work-5c66b067?id=45644",
+        "author_name": "Mada, HMC and University of Southampton",
+        "author_url": "http://www.tawasolsymbols.org/"
+      },
+      "content_type": "image/jpeg"
+    },
+    {
+      "id": "os_age_5",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/transport.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "transport-1ea48496",
+        "library_key": "transport-1ea48496"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/transport-1ea48496?id=11715",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_6",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/noun-project/Money-53f8f53817.svg",
+      "symbol": {
+        "set": "noun-project",
+        "filename": "money-8bd008a6",
+        "library_key": "money-8bd008a6"
+      },
+      "license": {
+        "type": "CC BY-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/noun-project/money-8bd008a6?id=35655",
+        "author_name": "Joe Harrison",
+        "author_url": "http://thenounproject.com/joe_harrison"
+      },
+      "content_type": "image/svg+xml"
+    },
+    {
+      "id": "os_age_7",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/appointment.png.varianted-skin.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "appointment-2f861bf5",
+        "library_key": "appointment-2f861bf5"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/appointment-2f861bf5?id=986",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_8",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/cook.png.varianted-skin.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "cook-16dc3304",
+        "library_key": "cook-16dc3304"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/cook-16dc3304?id=2812",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_9",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/icon_archive/shopping.png",
+      "symbol": {
+        "set": "icon_archive",
+        "filename": "shopping-51c70a39",
+        "library_key": "shopping-51c70a39"
+      },
+      "license": {
+        "type": "CC By",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by/4.0/",
+        "source_url": "https://www.opensymbols.org/symbols/icon_archive/shopping-51c70a39?id=43343",
+        "author_name": "DesignContest",
+        "author_url": "http://www.iconarchive.com/artist/designcontest.html"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_10",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/noun-project/Friends-01b697c5bf.svg",
+      "symbol": {
+        "set": "noun-project",
+        "filename": "friends-bdf628ac",
+        "library_key": "friends-bdf628ac"
+      },
+      "license": {
+        "type": "CC BY-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/noun-project/friends-bdf628ac?id=33128",
+        "author_name": "Luis Prado",
+        "author_url": "http://thenounproject.com/Luis"
+      },
+      "content_type": "image/svg+xml"
+    },
+    {
+      "id": "os_age_11",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/relationship.png.varianted-skin.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "relationship-7a4f4114",
+        "library_key": "relationship-7a4f4114"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/relationship-7a4f4114?id=7990",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_12",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/privacy.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "privacy-dd479b3e",
+        "library_key": "privacy-dd479b3e"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/privacy-dd479b3e?id=7658",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_13",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/sclera/decide.png",
+      "symbol": {
+        "set": "sclera",
+        "filename": "decide-b41a4c85",
+        "library_key": "decide-b41a4c85"
+      },
+      "license": {
+        "type": "CC BY-NC",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc/2.0/",
+        "source_url": "https://www.opensymbols.org/symbols/sclera/decide-b41a4c85?id=19008",
+        "author_name": "Sclera",
+        "author_url": "http://www.sclera.be/en/picto/copyright"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_14",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/sclera/now.png",
+      "symbol": {
+        "set": "sclera",
+        "filename": "now-4e0f0aae",
+        "library_key": "now-4e0f0aae"
+      },
+      "license": {
+        "type": "CC BY-NC",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc/2.0/",
+        "source_url": "https://www.opensymbols.org/symbols/sclera/now-4e0f0aae?id=22798",
+        "author_name": "Sclera",
+        "author_url": "http://www.sclera.be/en/picto/copyright"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_15",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/to go.png.varianted-skin.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "to-go-594b8558",
+        "library_key": "to-go-594b8558"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/to-go-594b8558?id=10541",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_home",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/home.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "home-31d8e0c4",
+        "library_key": "home-31d8e0c4"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/home-31d8e0c4?id=5076",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_core",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/sclera/24.png",
+      "symbol": {
+        "set": "sclera",
+        "filename": "24-2484a7df",
+        "library_key": "24-2484a7df"
+      },
+      "license": {
+        "type": "CC BY-NC",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc/2.0/",
+        "source_url": "https://www.opensymbols.org/symbols/sclera/24-2484a7df?id=15736",
+        "author_name": "Sclera",
+        "author_url": "http://www.sclera.be/en/picto/copyright"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_universal",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/universal design.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "universal-design-58b080de",
+        "library_key": "universal-design-58b080de"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/universal-design-58b080de?id=11934",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_needs",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/I need help.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "i-need-help-9a0f6fde",
+        "library_key": "i-need-help-9a0f6fde"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/i-need-help-9a0f6fde?id=310",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_age_feelings",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/feelings.png.varianted-skin.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "feelings-427b43b0",
+        "library_key": "feelings-427b43b0"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/feelings-427b43b0?id=3907",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    }
+  ]
+}

@@ -17,6 +17,10 @@
     <string name="board_sets_empty_title">Ingen skærme endnu</string>
     <string name="board_sets_empty_body">Opret en skærm for at komme i gang.</string>
     <string name="board_sets_create">Opret skærm</string>
+    <string name="board_sets_add_starter">Tilføj startskærm</string>
+    <string name="board_sets_starter_age_title">Hvem skal bruge skærmen?</string>
+    <string name="board_sets_starter_age_body">Vælg en aldersgruppe. Wingmate tilføjer ét komplet sæt startskærme, som du altid kan redigere.</string>
+    <string name="board_sets_starter_added">Startskærmen blev tilføjet</string>
     <plurals name="board_sets_board_count">
         <item quantity="one">%1$d side</item>
         <item quantity="other">%1$d sider</item>

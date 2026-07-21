@@ -166,6 +166,7 @@ fun BoardSetManagerScreen(
     var boardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showStarterDialog by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showDictionary by remember { mutableStateOf(false) }
     var showImportExport by remember { mutableStateOf(false) }
@@ -179,6 +180,7 @@ fun BoardSetManagerScreen(
     val deletedMessage = stringResource(Res.string.board_sets_deleted)
     val deleteError = stringResource(Res.string.board_sets_delete_error)
     val defaultBoardName = stringResource(Res.string.board_dialog_default_board_name)
+    val starterAddedMessage = stringResource(Res.string.board_sets_starter_added)
 
     fun refreshBoardSets() {
         scope.launch {
@@ -202,22 +204,15 @@ fun BoardSetManagerScreen(
         }
     }
 
-    var triedAutoLoadStarter by remember { mutableStateOf(false) }
-
-    suspend fun loadStarterBoards(): Boolean {
-        restoreStarterBoards(systemLanguageTag(), obfParser, useCase) ?: return false
-        triedAutoLoadStarter = true
-        return true
-    }
+    var offeredStarterBoards by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         refreshBoardSets()
     }
-    LaunchedEffect(boardSets, triedAutoLoadStarter) {
-        if (!triedAutoLoadStarter && boardSets.isEmpty() && !isLoading) {
-            val ok = loadStarterBoards()
-            triedAutoLoadStarter = true
-            if (ok) refreshBoardSets()
+    LaunchedEffect(boardSets, offeredStarterBoards) {
+        if (!offeredStarterBoards && boardSets.isEmpty() && !isLoading) {
+            showStarterDialog = true
+            offeredStarterBoards = true
         }
     }
     LaunchedEffect(initialBoardSetId) {
@@ -260,6 +255,7 @@ fun BoardSetManagerScreen(
             },
             onOpenWelcome = onBackToWelcome,
             onCreate = { showCreateDialog = true },
+            onAddStarter = { showStarterDialog = true },
             onOpen = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Run) },
             onEdit = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Edit) },
             onDuplicate = { boardSet ->
@@ -305,6 +301,38 @@ fun BoardSetManagerScreen(
                             showCreateDialog = false
                             refreshBoardSets()
                             route = BoardSetRoute.Workspace(created.id, BoardWorkspaceMode.Edit)
+                        }
+                        .onFailure { statusMessage = it.message ?: createError }
+                }
+            }
+        )
+    }
+
+    if (showStarterDialog) {
+        val languageTag = systemLanguageTag()
+        StarterBoardAgeDialog(
+            bundles = starterBoardBundles(languageTag),
+            onDismiss = { showStarterDialog = false },
+            onSelect = { bundle ->
+                showStarterDialog = false
+                scope.launch {
+                    runCatching {
+                        restoreStarterBoards(
+                            languageTag = languageTag,
+                            obfParser = obfParser,
+                            boardSetUseCase = useCase,
+                            bundles = listOf(bundle)
+                        ) ?: error(createError)
+                    }
+                        .onSuccess {
+                            runCatching { useCase.listBoardSets() }
+                                .onSuccess { restoredSets ->
+                                    boardSets = restoredSets
+                                    statusMessage = starterAddedMessage
+                                }
+                                .onFailure { error ->
+                                    statusMessage = error.message ?: loadError
+                                }
                         }
                         .onFailure { statusMessage = it.message ?: createError }
                 }
@@ -403,6 +431,7 @@ private fun BoardSetLibraryScreen(
     onCheckUpdates: () -> Unit,
     onOpenWelcome: () -> Unit,
     onCreate: () -> Unit,
+    onAddStarter: () -> Unit,
     onOpen: (ObfBoardSet) -> Unit,
     onEdit: (ObfBoardSet) -> Unit,
     onDuplicate: (ObfBoardSet) -> Unit,
@@ -468,6 +497,15 @@ private fun BoardSetLibraryScreen(
                             )
                             HorizontalDivider()
                             DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.board_sets_add_starter)) },
+                                leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onAddStarter()
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
                                 text = { Text(stringResource(Res.string.phrase_screen_app_settings)) },
                                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
                                 onClick = {
@@ -525,7 +563,13 @@ private fun BoardSetLibraryScreen(
                         stringResource(Res.string.board_sets_empty_body),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    statusMessage?.let {
+                        Spacer(Modifier.height(12.dp))
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                    }
                     Spacer(Modifier.height(16.dp))
+                    Button(onClick = onAddStarter) { Text(stringResource(Res.string.board_sets_add_starter)) }
+                    Spacer(Modifier.height(8.dp))
                     Button(onClick = onCreate) { Text(stringResource(Res.string.board_sets_create)) }
                 }
                 else -> LazyColumn(
@@ -550,6 +594,39 @@ private fun BoardSetLibraryScreen(
             }
         }
     }
+}
+
+@Composable
+private fun StarterBoardAgeDialog(
+    bundles: List<StarterBoardBundle>,
+    onDismiss: () -> Unit,
+    onSelect: (StarterBoardBundle) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.board_sets_starter_age_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    stringResource(Res.string.board_sets_starter_age_body),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                bundles.forEach { bundle ->
+                    TextButton(
+                        onClick = { onSelect(bundle) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(bundle.name, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
+        }
+    )
 }
 
 @Composable

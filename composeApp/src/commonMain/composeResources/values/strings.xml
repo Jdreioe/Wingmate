@@ -17,6 +17,10 @@
     <string name="board_sets_empty_title">No screens yet</string>
     <string name="board_sets_empty_body">Create a screen to start communicating.</string>
     <string name="board_sets_create">Create screen</string>
+    <string name="board_sets_add_starter">Add starter screen</string>
+    <string name="board_sets_starter_age_title">Who will use this screen?</string>
+    <string name="board_sets_starter_age_body">Choose an age group. Wingmate adds one complete starter screen set that you can edit at any time.</string>
+    <string name="board_sets_starter_added">Starter screen added</string>
     <plurals name="board_sets_board_count">
         <item quantity="one">%1$d page</item>
         <item quantity="other">%1$d pages</item>

@@ -1,0 +1,410 @@
+{
+  "format": "open-board-0.1",
+  "id": "en_food_drink",
+  "locale": "en",
+  "name": "Food & Drink",
+  "description_html": "Common food, drink, and mealtime choices.",
+  "grid": {
+    "rows": 3,
+    "columns": 5,
+    "order": [
+      [
+        "food_1",
+        "food_2",
+        "food_3",
+        "food_4",
+        "food_5"
+      ],
+      [
+        "food_6",
+        "food_7",
+        "food_8",
+        "food_9",
+        "food_10"
+      ],
+      [
+        "food_11",
+        "food_12",
+        "food_home",
+        "food_core",
+        "food_needs"
+      ]
+    ]
+  },
+  "buttons": [
+    {
+      "id": "food_1",
+      "label": "Water",
+      "vocalization": "water",
+      "background_color": "#FFE0B2",
+      "image_id": "os_food_1"
+    },
+    {
+      "id": "food_2",
+      "label": "Milk",
+      "vocalization": "milk",
+      "background_color": "#FFE0B2",
+      "image_id": "os_food_2"
+    },
+    {
+      "id": "food_3",
+      "label": "Juice",
+      "vocalization": "juice",
+      "background_color": "#FFE0B2",
+      "image_id": "os_food_3"
+    },
+    {
+      "id": "food_4",
+      "label": "Coffee",
+      "vocalization": "coffee",
+      "background_color": "#FFE0B2",
+      "image_id": "os_food_4"
+    },
+    {
+      "id": "food_5",
+      "label": "Tea",
+      "vocalization": "tea",
+      "background_color": "#FFE0B2",
+      "image_id": "os_food_5"
+    },
+    {
+      "id": "food_6",
+      "label": "Bread",
+      "vocalization": "bread",
+      "background_color": "#FFE0B2",
+      "image_id": "os_food_6"
+    },
+    {
+      "id": "food_7",
+      "label": "Fruit",
+      "vocalization": "fruit",
+      "background_color": "#FFE0B2",
+      "image_id": "os_food_7"
+    },
+    {
+      "id": "food_8",
+      "label": "Snack",
+      "vocalization": "snack",
+      "background_color": "#FFE0B2",
+      "image_id": "os_food_8"
+    },
+    {
+      "id": "food_9",
+      "label": "Breakfast",
+      "vocalization": "breakfast",
+      "background_color": "#FFE0B2",
+      "image_id": "os_food_9"
+    },
+    {
+      "id": "food_10",
+      "label": "Lunch",
+      "vocalization": "lunch",
+      "background_color": "#FFE0B2",
+      "image_id": "os_food_10"
+    },
+    {
+      "id": "food_11",
+      "label": "Dinner",
+      "vocalization": "dinner",
+      "background_color": "#FFE0B2",
+      "image_id": "os_food_11"
+    },
+    {
+      "id": "food_12",
+      "label": "Something else",
+      "vocalization": "something else",
+      "background_color": "#FFE0B2",
+      "image_id": "os_food_12"
+    },
+    {
+      "id": "food_home",
+      "label": "Home",
+      "vocalization": "home",
+      "background_color": "#E1BEE7",
+      "load_board": {
+        "id": "en_home",
+        "name": "Starter Home"
+      },
+      "image_id": "os_food_home"
+    },
+    {
+      "id": "food_core",
+      "label": "Core 24",
+      "vocalization": "core 24",
+      "background_color": "#E1BEE7",
+      "load_board": {
+        "id": "en_core24",
+        "name": "Core 24"
+      },
+      "image_id": "os_food_core"
+    },
+    {
+      "id": "food_needs",
+      "label": "Needs",
+      "vocalization": "needs",
+      "background_color": "#E1BEE7",
+      "load_board": {
+        "id": "en_needs",
+        "name": "Needs"
+      },
+      "image_id": "os_food_needs"
+    }
+  ],
+  "images": [
+    {
+      "id": "os_food_1",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/noun-project/Water-042a5f030b.svg",
+      "symbol": {
+        "set": "noun-project",
+        "filename": "water-a75adaa6",
+        "library_key": "water-a75adaa6"
+      },
+      "license": {
+        "type": "CC BY-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/noun-project/water-a75adaa6?id=41318",
+        "author_name": "Renee Ramsey-Passmore",
+        "author_url": "http://thenounproject.com/Renee Ramsey-Passmore"
+      },
+      "content_type": "image/svg+xml"
+    },
+    {
+      "id": "os_food_2",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/milk.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "milk-541943f1",
+        "library_key": "milk-541943f1"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/milk-541943f1?id=6205",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_food_3",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/juice.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "juice-fe0ca2a9",
+        "library_key": "juice-fe0ca2a9"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/juice-fe0ca2a9?id=5489",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_food_4",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/noun-project/Coffee_930_11819.svg",
+      "symbol": {
+        "set": "noun-project",
+        "filename": "coffee-f7de2b0e",
+        "library_key": "coffee-f7de2b0e"
+      },
+      "license": {
+        "type": "CC By",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by/3.0/us/",
+        "source_url": "https://www.opensymbols.org/symbols/noun-project/coffee-f7de2b0e?id=44591",
+        "author_name": "Sebastian Langer",
+        "author_url": "http://thenounproject.com/sebastian.langer.330"
+      },
+      "content_type": "image/svg+xml"
+    },
+    {
+      "id": "os_food_5",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/mulberry/tea.svg",
+      "symbol": {
+        "set": "mulberry",
+        "filename": "tea-2743ccbc",
+        "library_key": "tea-2743ccbc"
+      },
+      "license": {
+        "type": "CC BY-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-sa/2.0/uk",
+        "source_url": "https://www.opensymbols.org/symbols/mulberry/tea-2743ccbc?id=15377",
+        "author_name": "Paxtoncrafts Charitable Trust ",
+        "author_url": "http://straight-street.org/lic.php"
+      },
+      "content_type": "image/svg+xml"
+    },
+    {
+      "id": "os_food_6",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/mulberry/bread.svg",
+      "symbol": {
+        "set": "mulberry",
+        "filename": "bread-68f04d0b",
+        "library_key": "bread-68f04d0b"
+      },
+      "license": {
+        "type": "CC BY-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-sa/2.0/uk",
+        "source_url": "https://www.opensymbols.org/symbols/mulberry/bread-68f04d0b?id=12910",
+        "author_name": "Paxtoncrafts Charitable Trust ",
+        "author_url": "http://straight-street.org/lic.php"
+      },
+      "content_type": "image/svg+xml"
+    },
+    {
+      "id": "os_food_7",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/fruit.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "fruit-42947e8e",
+        "library_key": "fruit-42947e8e"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/fruit-42947e8e?id=4339",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_food_8",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/sclera/snack.png",
+      "symbol": {
+        "set": "sclera",
+        "filename": "snack-3c9f1bae",
+        "library_key": "snack-3c9f1bae"
+      },
+      "license": {
+        "type": "CC BY-NC",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc/2.0/",
+        "source_url": "https://www.opensymbols.org/symbols/sclera/snack-3c9f1bae?id=24977",
+        "author_name": "Sclera",
+        "author_url": "http://www.sclera.be/en/picto/copyright"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_food_9",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/breakfast.png.varianted-skin.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "breakfast-5642af18",
+        "library_key": "breakfast-5642af18"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/breakfast-5642af18?id=1781",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_food_10",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/sclera/lunch.png",
+      "symbol": {
+        "set": "sclera",
+        "filename": "lunch-33332228",
+        "library_key": "lunch-33332228"
+      },
+      "license": {
+        "type": "CC BY-NC",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc/2.0/",
+        "source_url": "https://www.opensymbols.org/symbols/sclera/lunch-33332228?id=22131",
+        "author_name": "Sclera",
+        "author_url": "http://www.sclera.be/en/picto/copyright"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_food_11",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/dinner.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "dinner-04a0e0e1",
+        "library_key": "dinner-04a0e0e1"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/dinner-04a0e0e1?id=3234",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_food_12",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/sclera/think.png",
+      "symbol": {
+        "set": "sclera",
+        "filename": "think-28ba5e1f",
+        "library_key": "think-28ba5e1f"
+      },
+      "license": {
+        "type": "CC BY-NC",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc/2.0/",
+        "source_url": "https://www.opensymbols.org/symbols/sclera/think-28ba5e1f?id=25889",
+        "author_name": "Sclera",
+        "author_url": "http://www.sclera.be/en/picto/copyright"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_food_home",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/home.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "home-31d8e0c4",
+        "library_key": "home-31d8e0c4"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/home-31d8e0c4?id=5076",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_food_core",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/sclera/24.png",
+      "symbol": {
+        "set": "sclera",
+        "filename": "24-2484a7df",
+        "library_key": "24-2484a7df"
+      },
+      "license": {
+        "type": "CC BY-NC",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc/2.0/",
+        "source_url": "https://www.opensymbols.org/symbols/sclera/24-2484a7df?id=15736",
+        "author_name": "Sclera",
+        "author_url": "http://www.sclera.be/en/picto/copyright"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_food_needs",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/I need help.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "i-need-help-9a0f6fde",
+        "library_key": "i-need-help-9a0f6fde"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/i-need-help-9a0f6fde?id=310",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    }
+  ]
+}

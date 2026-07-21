@@ -8,17 +8,160 @@
     "rows": 3,
     "columns": 2,
     "order": [
-      ["b1", "b2"],
-      ["b3", "b4"],
-      ["b5", "b6"]
+      [
+        "b1",
+        "b2"
+      ],
+      [
+        "b3",
+        "b4"
+      ],
+      [
+        "b5",
+        "b6"
+      ]
     ]
   },
   "buttons": [
-    { "id": "b1", "label": "Hello", "background_color": "#ffcccc" },
-    { "id": "b2", "label": "How are you?", "background_color": "#ccffcc" },
-    { "id": "b3", "label": "Yes", "background_color": "#ccccff" },
-    { "id": "b4", "label": "No", "background_color": "#ffffcc" },
-    { "id": "b5", "label": "Thank you", "background_color": "#ffccff" },
-    { "id": "b6", "label": "Please", "background_color": "#ccffff" }
+    {
+      "id": "b1",
+      "label": "Hello",
+      "background_color": "#ffcccc",
+      "image_id": "os_b1"
+    },
+    {
+      "id": "b2",
+      "label": "How are you?",
+      "background_color": "#ccffcc",
+      "image_id": "os_b2"
+    },
+    {
+      "id": "b3",
+      "label": "Yes",
+      "background_color": "#ccccff",
+      "image_id": "os_b3"
+    },
+    {
+      "id": "b4",
+      "label": "No",
+      "background_color": "#ffffcc",
+      "image_id": "os_b4"
+    },
+    {
+      "id": "b5",
+      "label": "Thank you",
+      "background_color": "#ffccff",
+      "image_id": "os_b5"
+    },
+    {
+      "id": "b6",
+      "label": "Please",
+      "background_color": "#ccffff",
+      "image_id": "os_b6"
+    }
+  ],
+  "images": [
+    {
+      "id": "os_b1",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/hello.png.varianted-skin.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "hello-69b15109",
+        "library_key": "hello-69b15109"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/hello-69b15109?id=4980",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_b2",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/how are you.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "how-are-you-751d5c7c",
+        "library_key": "how-are-you-751d5c7c"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/how-are-you-751d5c7c?id=5166",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_b3",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/sclera/good  ok.png",
+      "symbol": {
+        "set": "sclera",
+        "filename": "good-ok-62bcc7ae",
+        "library_key": "good-ok-62bcc7ae"
+      },
+      "license": {
+        "type": "CC BY-NC",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc/2.0/",
+        "source_url": "https://www.opensymbols.org/symbols/sclera/good-ok-62bcc7ae?id=20629",
+        "author_name": "Sclera",
+        "author_url": "http://www.sclera.be/en/picto/copyright"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_b4",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/noun-project/No-09d75d7313.svg",
+      "symbol": {
+        "set": "noun-project",
+        "filename": "no-58d7645c",
+        "library_key": "no-58d7645c"
+      },
+      "license": {
+        "type": "CC BY-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/noun-project/no-58d7645c?id=36300",
+        "author_name": "P.J. Onori",
+        "author_url": "http://thenounproject.com/somerandomdude"
+      },
+      "content_type": "image/svg+xml"
+    },
+    {
+      "id": "os_b5",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/shake hands.png.varianted-skin.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "shake-hands-5ff54f9a",
+        "library_key": "shake-hands-5ff54f9a"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/shake-hands-5ff54f9a?id=8555",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    },
+    {
+      "id": "os_b6",
+      "url": "https://d18vdu4p71yql0.cloudfront.net/libraries/arasaac/please.png.varianted-skin.png",
+      "symbol": {
+        "set": "arasaac",
+        "filename": "please-d20d05bf",
+        "library_key": "please-d20d05bf"
+      },
+      "license": {
+        "type": "CC BY-NC-SA",
+        "copyright_notice_url": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+        "source_url": "https://www.opensymbols.org/symbols/arasaac/please-d20d05bf?id=7416",
+        "author_name": "Sergio Palao",
+        "author_url": "http://www.catedu.es/arasaac/condiciones_uso.php"
+      },
+      "content_type": "image/png"
+    }
   ]
 }

@@ -108,17 +108,6 @@ private data class ThoughtDraft(
     val secondaryLanguageRanges: List<TextRange>,
 )
 
-private fun starterBoardFiles(languageTag: String): List<String>? {
-    return when {
-        languageTag.startsWith("en") -> listOf("starter_en_hello", "starter_en_goodbye")
-        languageTag.startsWith("da") -> listOf(
-            "starter_da_hilsner", "starter_da_kernetavle",
-            "starter_da_mad_og_drikke", "starter_da_foelelser"
-        )
-        else -> null
-    }
-}
-
 @OptIn(InternalResourceApi::class)
 private suspend fun loadStarterBoards(
     languageTag: String,
