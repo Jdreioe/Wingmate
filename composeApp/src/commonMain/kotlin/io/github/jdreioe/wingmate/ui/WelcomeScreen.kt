@@ -11,12 +11,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.ui.PlatformBackHandler
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.domain.StartupMode
@@ -59,8 +60,19 @@ fun WelcomeScreen(
     var isImporting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    PlatformBackHandler(enabled = step > 0) {
+        when (step) {
+            1 -> step = 0
+            2 -> step = 1
+            3 -> step = if (enableBoardImport) 2 else 1
+            4 -> step = 3
+            5 -> step = 3
+            6 -> step = 5
+        }
+    }
+
     when (step) {
-    0 -> {
+        0 -> {
             // Intro
             Surface(
                 modifier = Modifier.fillMaxSize(),

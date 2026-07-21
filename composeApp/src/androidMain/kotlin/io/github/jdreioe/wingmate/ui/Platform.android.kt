@@ -1,5 +1,7 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.Composable
 import java.util.Locale
 
 actual fun isDesktop(): Boolean = false
@@ -12,3 +14,8 @@ actual fun isReleaseBuild(): Boolean = runCatching {
 }.getOrDefault(true)
 
 actual fun systemLanguageTag(): String = Locale.getDefault().toLanguageTag()
+
+@Composable
+actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
+    BackHandler(enabled = enabled, onBack = onBack)
+}

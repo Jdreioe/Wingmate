@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.compose.runtime.Composable
 import java.util.Locale
 
 actual fun isDesktop(): Boolean = true
@@ -11,3 +12,7 @@ actual fun isReleaseBuild(): Boolean {
 }
 
 actual fun systemLanguageTag(): String = Locale.getDefault().toLanguageTag()
+
+@Composable
+actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
+}

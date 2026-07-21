@@ -234,6 +234,20 @@ fun PhraseScreen(
             // Selected buttons for Symbol Bar
             var selectedObfButtons by remember { mutableStateOf<List<Pair<ObfButton, ImageBitmap?>>>(emptyList()) }
 
+            PlatformBackHandler(enabled = currentBoard != null || showDictionaryScreen) {
+                when {
+                    showDictionaryScreen -> showDictionaryScreen = false
+                    boardStack.isNotEmpty() -> {
+                        currentBoard = boardStack.last()
+                        boardStack = boardStack.dropLast(1)
+                    }
+                    currentBoard != null -> {
+                        currentBoard = null
+                        boardStack = emptyList()
+                    }
+                }
+            }
+
             LaunchedEffect(initialBoardId, boardRepo) {
                 if (initialBoardId.isNullOrBlank()) return@LaunchedEffect
                 val board = withContext(Dispatchers.IO) { boardRepo.getBoard(initialBoardId) }
