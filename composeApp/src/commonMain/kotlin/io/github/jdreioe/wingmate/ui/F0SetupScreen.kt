@@ -66,8 +66,8 @@ fun F0SetupScreen(
                     currentStep = F0Step.SUCCESS
                 }
                 is AutoF0FlowResult.SignInFailed -> {
-                    println("F0SetupFlow: Sign-in failed, reason=${result.reason}")
-                    errorMessage = "Sign-in was cancelled or failed. Please try again."
+                    println("F0SetupFlow: Sign-in failed: ${result.message}")
+                    errorMessage = result.message
                     currentStep = F0Step.ERROR
                 }
                 is AutoF0FlowResult.NoSubscriptions -> {

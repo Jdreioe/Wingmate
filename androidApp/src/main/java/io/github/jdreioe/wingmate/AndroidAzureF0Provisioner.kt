@@ -32,7 +32,7 @@ class AndroidAzureF0Provisioner(
     }
 
     override suspend fun signIn(): AzureSignInResult = withContext(Dispatchers.Main) {
-        val activity = getActivity() ?: return@withContext AzureSignInResult.ERROR
+        val activity = getActivity() ?: return@withContext AzureSignInResult.ERROR("No activity context")
         suspendCancellableCoroutine { cont ->
             msalApp.signIn(activity, null, scopes, object : AuthenticationCallback {
                 override fun onSuccess(authenticationResult: IAuthenticationResult) {
@@ -42,7 +42,8 @@ class AndroidAzureF0Provisioner(
                     val result = if (exception is MsalUserCancelException) {
                         AzureSignInResult.CANCELLED
                     } else {
-                        AzureSignInResult.ERROR
+                        println("MSAL sign-in error: ${exception.message}")
+                        AzureSignInResult.ERROR(exception.message)
                     }
                     cont.resume(result)
                 }

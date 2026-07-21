@@ -18,10 +18,10 @@ data class AzureF0Resource(
     val resourceGroup: String
 )
 
-enum class AzureSignInResult {
-    SUCCESS,
-    CANCELLED,
-    ERROR
+sealed class AzureSignInResult {
+    object SUCCESS : AzureSignInResult()
+    object CANCELLED : AzureSignInResult()
+    data class ERROR(val message: String? = null) : AzureSignInResult()
 }
 
 data class AzureSignedInUser(

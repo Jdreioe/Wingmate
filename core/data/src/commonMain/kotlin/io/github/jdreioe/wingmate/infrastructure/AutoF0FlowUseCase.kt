@@ -22,8 +22,14 @@ class AutoF0FlowUseCase(
 ) {
     suspend fun execute(): AutoF0FlowResult {
         val signInResult = provisioner.signIn()
-        if (signInResult != AzureSignInResult.SUCCESS) {
-            return AutoF0FlowResult.SignInFailed(signInResult)
+        if (signInResult !is AzureSignInResult.SUCCESS) {
+            val msg = if (signInResult is AzureSignInResult.ERROR) {
+                signInResult.message ?: "Unknown error"
+            } else {
+                "Sign-in was cancelled"
+            }
+            println("AutoF0Flow: Sign-in failed: $msg")
+            return AutoF0FlowResult.SignInFailed(msg)
         }
 
         val subscriptions = try {
@@ -174,7 +180,7 @@ class AutoF0FlowUseCase(
 
 sealed class AutoF0FlowResult {
     data class Success(val resourceName: String, val region: String) : AutoF0FlowResult()
-    data class SignInFailed(val reason: AzureSignInResult) : AutoF0FlowResult()
+    data class SignInFailed(val message: String) : AutoF0FlowResult()
     object NoSubscriptions : AutoF0FlowResult()
     object ExistingF0Conflict : AutoF0FlowResult()
     object ProviderRegistrationFailed : AutoF0FlowResult()
