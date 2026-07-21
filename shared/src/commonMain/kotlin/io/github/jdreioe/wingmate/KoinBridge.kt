@@ -66,11 +66,10 @@ class KoinBridge : KoinComponent {
         // Optionally align Settings.primaryLanguage with selected voice
         val settingsUseCase: SettingsUseCase = get()
         val current = settingsUseCase.get()
-        val candidate = when {
-            !voice.selectedLanguage.isNullOrEmpty() -> voice.selectedLanguage
-            !voice.primaryLanguage.isNullOrEmpty() -> voice.primaryLanguage
-            else -> current.primaryLanguage
-        }
+        val candidate = voice.selectedLanguage
+            ?.takeIf { it.isNotEmpty() }
+            ?: voice.primaryLanguage?.takeIf { it.isNotEmpty() }
+            ?: current.primaryLanguage
         if (candidate != current.primaryLanguage) {
             settingsUseCase.update(current.copy(primaryLanguage = candidate))
         }
