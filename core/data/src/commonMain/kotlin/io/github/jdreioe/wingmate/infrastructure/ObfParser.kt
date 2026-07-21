@@ -22,22 +22,101 @@ class ObfParser {
 
     fun parseBoard(jsonContent: String): Result<ObfBoard> {
         return runCatching {
-            val element = json.parseToJsonElement(jsonContent)
-            json.decodeFromJsonElement(ObfBoard.serializer(), stringifyObfIds(element))
+            val rawElement = json.parseToJsonElement(jsonContent)
+            val cleaned = stringifyObfIds(rawElement)
+            val board = json.decodeFromJsonElement(ObfBoard.serializer(), cleaned)
+            attachExtensions(board, rawElement)
         }
     }
 
     fun parseManifest(jsonContent: String): Result<ObfManifest> {
         return runCatching {
-            val element = json.parseToJsonElement(jsonContent)
-            json.decodeFromJsonElement(ObfManifest.serializer(), stringifyObfIds(element))
+            val rawElement = json.parseToJsonElement(jsonContent)
+            val cleaned = stringifyObfIds(rawElement)
+            val manifest = json.decodeFromJsonElement(ObfManifest.serializer(), cleaned)
+            attachManifestExtensions(manifest, rawElement)
         }
     }
 
-    /**
-     * OBF/OBZ parsing guidelines require numeric IDs to be cast to strings.
-     * Real-world boards often emit JSON numbers for id / image_id / sound_id / grid order cells.
-     */
+    private fun attachExtensions(board: ObfBoard, raw: JsonElement): ObfBoard {
+        if (raw !is JsonObject) return board
+
+        val boardExt = raw.filterKeys { it.startsWith("ext_") }
+        var result = board.copy(
+            extensions = if (boardExt.isEmpty()) emptyMap()
+            else boardExt.mapValues { it.value }
+        )
+
+        val rawButtons = raw["buttons"]?.jsonArray?.map { it.jsonObject }
+        if (rawButtons != null && result.buttons.isNotEmpty()) {
+            result = result.copy(
+                buttons = result.buttons.map { button ->
+                    val rawButton = rawButtons.find {
+                        it["id"]?.jsonPrimitive?.contentOrNull == button.id
+                    }
+                    if (rawButton != null) {
+                        val ext = rawButton.filterKeys { it.startsWith("ext_") }
+                        if (ext.isNotEmpty()) button.copy(extensions = ext.mapValues { it.value })
+                        else button
+                    } else button
+                }
+            )
+        }
+
+        val rawImages = raw["images"]?.jsonArray?.map { it.jsonObject }
+        if (rawImages != null && result.images.isNotEmpty()) {
+            result = result.copy(
+                images = result.images.map { image ->
+                    val rawImage = rawImages.find {
+                        it["id"]?.jsonPrimitive?.contentOrNull == image.id
+                    }
+                    if (rawImage != null) {
+                        val ext = rawImage.filterKeys { it.startsWith("ext_") }
+                        if (ext.isNotEmpty()) image.copy(extensions = ext.mapValues { it.value })
+                        else image
+                    } else image
+                }
+            )
+        }
+
+        val rawSounds = raw["sounds"]?.jsonArray?.map { it.jsonObject }
+        if (rawSounds != null && result.sounds.isNotEmpty()) {
+            result = result.copy(
+                sounds = result.sounds.map { sound ->
+                    val rawSound = rawSounds.find {
+                        it["id"]?.jsonPrimitive?.contentOrNull == sound.id
+                    }
+                    if (rawSound != null) {
+                        val ext = rawSound.filterKeys { it.startsWith("ext_") }
+                        if (ext.isNotEmpty()) sound.copy(extensions = ext.mapValues { it.value })
+                        else sound
+                    } else sound
+                }
+            )
+        }
+
+        if (result.license != null) {
+            val rawLicense = raw["license"]?.jsonObject
+            if (rawLicense != null) {
+                val ext = rawLicense.filterKeys { it.startsWith("ext_") }
+                if (ext.isNotEmpty()) {
+                    result = result.copy(
+                        license = result.license.copy(extensions = ext.mapValues { it.value })
+                    )
+                }
+            }
+        }
+
+        return result
+    }
+
+    private fun attachManifestExtensions(manifest: ObfManifest, raw: JsonElement): ObfManifest {
+        if (raw !is JsonObject) return manifest
+        val ext = raw.filterKeys { it.startsWith("ext_") }
+        if (ext.isEmpty()) return manifest
+        return manifest.copy(extensions = ext.mapValues { it.value })
+    }
+
     internal fun stringifyObfIds(element: JsonElement): JsonElement {
         return when (element) {
             is JsonObject -> JsonObject(
@@ -45,6 +124,7 @@ class ObfParser {
                     when {
                         key in ID_KEYS -> stringifyIdValue(value)
                         key == "order" -> stringifyGridOrder(value)
+                        key.startsWith("ext_") -> value
                         else -> stringifyObfIds(value)
                     }
                 }
