@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate.ui
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -14,6 +15,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
@@ -32,7 +36,10 @@ import io.github.jdreioe.wingmate.infrastructure.ArasaacDownloadProgress
 import io.github.jdreioe.wingmate.infrastructure.ArasaacSymbolDownloadService
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
@@ -60,8 +67,8 @@ fun SettingsScreen(
         imageCacher?.let(::ArasaacSymbolDownloadService)
     }
 
-    // Selected tab
-    var selectedTab by remember { mutableStateOf(SettingsTab.Speech) }
+    // Null represents the Pixel-style settings index; categories open as child pages.
+    var selectedTab by remember { mutableStateOf<SettingsTab?>(null) }
 
     // --- Speech section state ---
     var endpoint by remember { mutableStateOf("") }
@@ -103,6 +110,7 @@ fun SettingsScreen(
 
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
+    val settingsUpdateMutex = remember { Mutex() }
     val baseBoardsRestoredMessage = stringResource(Res.string.ui_settings_base_boards_restored)
     val baseBoardsErrorMessage = stringResource(Res.string.ui_settings_base_boards_error)
 
@@ -112,13 +120,15 @@ fun SettingsScreen(
     // Helper to update settings reactively
     fun updateSettings(update: (Settings) -> Settings) {
         scope.launch {
-            if (settingsStateManager != null) {
-                settingsStateManager.updateSettings(update)
-            } else {
-                settingsUseCase?.let { useCase ->
-                    withContext(Dispatchers.Default) {
-                        val current = runCatching { useCase.get() }.getOrNull() ?: Settings()
-                        useCase.update(update(current))
+            settingsUpdateMutex.withLock {
+                if (settingsStateManager != null) {
+                    settingsStateManager.updateSettings(update)
+                } else {
+                    settingsUseCase?.let { useCase ->
+                        withContext(Dispatchers.Default) {
+                            val current = runCatching { useCase.get() }.getOrNull() ?: Settings()
+                            useCase.update(update(current))
+                        }
                     }
                 }
             }
@@ -165,32 +175,21 @@ fun SettingsScreen(
         loading = false
     }
 
-    fun saveAndClose() {
-        scope.launch {
-            withContext(Dispatchers.Default) {
-                if (!useSystemTts && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
-                    runCatching {
-                        configRepo?.saveSpeechConfig(
-                            SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey)
-                        )
-                    }
-                }
-                settingsUseCase?.let { useCase ->
-                    val current = runCatching { useCase.get() }.getOrNull() ?: Settings()
-                    useCase.update(
-                        current.copy(
-                            useSystemTts = useSystemTts,
-                            virtualMicEnabled = virtualMic,
-                            featureUsageReportingEnabled = featureUsageReportingEnabled,
-                            startupMode = startupMode,
-                            startupBoardSetId = startupBoardSetId
-                        )
-                    )
-                }
+    // Persist text input after the user pauses typing instead of waiting for a Save button.
+    LaunchedEffect(endpoint, subscriptionKey, loading) {
+        if (!loading) {
+            delay(400)
+            runCatching {
+                configRepo?.saveSpeechConfig(
+                    SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey)
+                )
             }
-            onSaved?.invoke()
-            onDismiss()
         }
+    }
+
+    fun closeSettings() {
+        onSaved?.invoke()
+        onDismiss()
     }
 
     Scaffold(
@@ -198,15 +197,17 @@ fun SettingsScreen(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(stringResource(Res.string.ui_settings_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.common_close))
-                    }
+                title = {
+                    Text(
+                        selectedTab?.let { settingsCategoryTitle(it) }
+                            ?: stringResource(Res.string.ui_settings_title)
+                    )
                 },
-                actions = {
-                    TextButton(onClick = ::saveAndClose, enabled = !loading) {
-                        Text(stringResource(Res.string.common_save))
+                navigationIcon = {
+                    IconButton(onClick = {
+                        if (selectedTab == null) closeSettings() else selectedTab = null
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.common_close))
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -231,64 +232,13 @@ fun SettingsScreen(
                         .widthIn(max = 920.dp)
                         .align(Alignment.TopCenter)
                 ) {
-                    // Tab row
-                    PrimaryTabRow(
-                        selectedTabIndex = selectedTab.ordinal,
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        contentColor = MaterialTheme.colorScheme.primary
-                    ) {
-                        Tab(
-                            selected = selectedTab == SettingsTab.Speech,
-                            onClick = { selectedTab = SettingsTab.Speech },
-                            text = { Text("Speech") },
-                            icon = { Icon(Icons.Filled.RecordVoiceOver, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    if (selectedTab == null) {
+                        SettingsHomePage(
+                            onSelectCategory = { selectedTab = it },
+                            modifier = Modifier.fillMaxSize()
                         )
-                        Tab(
-                            selected = selectedTab == SettingsTab.Display,
-                            onClick = { selectedTab = SettingsTab.Display },
-                            text = { Text("Display") },
-                            icon = { Icon(Icons.Filled.Tune, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                        )
-                        Tab(
-                            selected = selectedTab == SettingsTab.Accessibility,
-                            onClick = { selectedTab = SettingsTab.Accessibility },
-                            text = { Text("Access") },
-                            icon = { Icon(Icons.Filled.Accessibility, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                        )
-                        Tab(
-                            selected = selectedTab == SettingsTab.General,
-                            onClick = { selectedTab = SettingsTab.General },
-                            text = { Text("General") },
-                            icon = { Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Content for each tab with spring animation
-                    AnimatedContent(
-                        targetState = selectedTab,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        transitionSpec = {
-                            val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                            (slideInHorizontally(
-                                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow),
-                                initialOffsetX = { fullWidth -> direction * fullWidth / 3 }
-                            ) + fadeIn(
-                                animationSpec = spring(stiffness = Spring.StiffnessLow)
-                            )).togetherWith(
-                                slideOutHorizontally(
-                                    animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow),
-                                    targetOffsetX = { fullWidth -> -direction * fullWidth / 3 }
-                                ) + fadeOut(
-                                    animationSpec = spring(stiffness = Spring.StiffnessLow)
-                                )
-                            )
-                        },
-                        label = "settings_tab_content"
-                    ) { currentTab ->
+                    } else {
+                        val currentTab = checkNotNull(selectedTab)
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -306,7 +256,10 @@ fun SettingsScreen(
                         when (currentTab) {
                             SettingsTab.Speech -> SpeechSection(
                                 useSystemTts = useSystemTts,
-                                onUseSystemTtsChange = { useSystemTts = it },
+                                onUseSystemTtsChange = { checked ->
+                                    useSystemTts = checked
+                                    updateSettings { it.copy(useSystemTts = checked) }
+                                },
                                 endpoint = endpoint,
                                 onEndpointChange = { endpoint = it },
                                 subscriptionKey = subscriptionKey,
@@ -360,8 +313,12 @@ fun SettingsScreen(
                                 availableBoardSets = availableBoardSets,
                                 onStartupModeChange = { mode ->
                                     startupMode = mode
+                                    updateSettings { it.copy(startupMode = mode) }
                                 },
-                                onStartupBoardSetChange = { startupBoardSetId = it },
+                                onStartupBoardSetChange = { boardSetId ->
+                                    startupBoardSetId = boardSetId
+                                    updateSettings { it.copy(startupBoardSetId = boardSetId) }
+                                },
                                 featureUsageReportingEnabled = featureUsageReportingEnabled,
                                 onFeatureReportingChange = { checked ->
                                     featureUsageReportingEnabled = checked
@@ -443,7 +400,171 @@ fun SettingsScreen(
     }
 }
 
-// ─── Speech Tab ──────────────────────────────────────────────────────────────
+@Composable
+private fun settingsCategoryTitle(tab: SettingsTab): String = when (tab) {
+    SettingsTab.Speech -> stringResource(Res.string.ui_settings_speech_title)
+    SettingsTab.Display -> stringResource(Res.string.ui_settings_display_title)
+    SettingsTab.Accessibility -> stringResource(Res.string.ui_settings_accessibility_title)
+    SettingsTab.General -> stringResource(Res.string.ui_settings_general_title)
+}
+
+private data class SettingsCategoryItem(
+    val tab: SettingsTab,
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val iconContainerColor: Color,
+    val iconColor: Color
+)
+
+@Composable
+private fun SettingsHomePage(
+    onSelectCategory: (SettingsTab) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var query by remember { mutableStateOf("") }
+    val categories = listOf(
+        SettingsCategoryItem(
+            tab = SettingsTab.Speech,
+            title = stringResource(Res.string.ui_settings_speech_title),
+            subtitle = stringResource(Res.string.ui_settings_speech_desc),
+            icon = Icons.Filled.RecordVoiceOver,
+            iconContainerColor = Color(0xFF78D6F7),
+            iconColor = Color(0xFF004E65)
+        ),
+        SettingsCategoryItem(
+            tab = SettingsTab.Display,
+            title = stringResource(Res.string.ui_settings_display_title),
+            subtitle = stringResource(Res.string.ui_settings_display_desc),
+            icon = Icons.Filled.Tune,
+            iconContainerColor = Color(0xFFFFB77F),
+            iconColor = Color(0xFF6B3000)
+        ),
+        SettingsCategoryItem(
+            tab = SettingsTab.Accessibility,
+            title = stringResource(Res.string.ui_settings_accessibility_title),
+            subtitle = stringResource(Res.string.ui_settings_accessibility_desc),
+            icon = Icons.Filled.Accessibility,
+            iconContainerColor = Color(0xFFFFA8D8),
+            iconColor = Color(0xFF700044)
+        ),
+        SettingsCategoryItem(
+            tab = SettingsTab.General,
+            title = stringResource(Res.string.ui_settings_general_title),
+            subtitle = stringResource(Res.string.ui_settings_general_desc),
+            icon = Icons.Filled.Storage,
+            iconContainerColor = Color(0xFFA9D49A),
+            iconColor = Color(0xFF1D4E18)
+        )
+    )
+    val normalizedQuery = query.trim().lowercase()
+    val filteredCategories = categories.filter {
+        normalizedQuery.isEmpty() ||
+            it.title.lowercase().contains(normalizedQuery) ||
+            it.subtitle.lowercase().contains(normalizedQuery)
+    }
+
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text(stringResource(Res.string.ui_settings_search)) },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            singleLine = true,
+            shape = CircleShape,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent
+            )
+        )
+
+        if (filteredCategories.isEmpty()) {
+            Text(
+                text = stringResource(Res.string.ui_settings_search_empty),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(24.dp)
+            )
+        } else {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
+            ) {
+                filteredCategories.forEachIndexed { index, item ->
+                    SettingsCategoryRow(
+                        item = item,
+                        onClick = { onSelectCategory(item.tab) }
+                    )
+                    if (index < filteredCategories.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 88.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun SettingsCategoryRow(
+    item: SettingsCategoryItem,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            modifier = Modifier.size(52.dp),
+            shape = CircleShape,
+            color = item.iconContainerColor
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = item.icon,
+                    contentDescription = null,
+                    tint = item.iconColor,
+                    modifier = Modifier.size(27.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(item.title, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                item.subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.Filled.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+// ─── Speech Settings ─────────────────────────────────────────────────────────
 
 @Composable
 private fun SpeechSection(

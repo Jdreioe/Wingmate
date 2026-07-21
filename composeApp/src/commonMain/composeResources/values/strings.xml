@@ -230,6 +230,15 @@
     <string name="phrase_add_cd">Add phrase</string>
 
     <string name="ui_settings_title">Settings</string>
+    <string name="ui_settings_search">Search settings</string>
+    <string name="ui_settings_search_empty">No matching settings</string>
+    <string name="ui_settings_speech_title">Speech and language</string>
+    <string name="ui_settings_speech_desc">Voice, language and speech engine</string>
+    <string name="ui_settings_display_title">Display and layout</string>
+    <string name="ui_settings_display_desc">Symbols, grid and interface scaling</string>
+    <string name="ui_settings_accessibility_desc">Touch timing, feedback and logging</string>
+    <string name="ui_settings_general_title">System and data</string>
+    <string name="ui_settings_general_desc">Startup, offline symbols and privacy</string>
     <string name="ui_settings_note_scaling_moved">Note: UI Scaling settings have been moved to Speech Settings dialog.</string>
     <string name="ui_settings_virtual_mic_title">Use virtual microphone for calls</string>
     <string name="ui_settings_virtual_mic_desc">Routes TTS audio to a virtual device you can pick as mic in Zoom/Meet.</string>

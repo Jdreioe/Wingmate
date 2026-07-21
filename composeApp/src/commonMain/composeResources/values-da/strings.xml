@@ -230,6 +230,15 @@
     <string name="phrase_add_cd">Tilføj frase</string>
 
     <string name="ui_settings_title">Indstillinger</string>
+    <string name="ui_settings_search">Søg i Indstillinger</string>
+    <string name="ui_settings_search_empty">Ingen matchende indstillinger</string>
+    <string name="ui_settings_speech_title">Tale og sprog</string>
+    <string name="ui_settings_speech_desc">Stemme, sprog og talemotor</string>
+    <string name="ui_settings_display_title">Skærm og layout</string>
+    <string name="ui_settings_display_desc">Symboler, gitter og skalering</string>
+    <string name="ui_settings_accessibility_desc">Berøringstid, feedback og logning</string>
+    <string name="ui_settings_general_title">System og data</string>
+    <string name="ui_settings_general_desc">Opstart, offline-symboler og privatliv</string>
     <string name="ui_settings_note_scaling_moved">Bemærk: UI-skalering er flyttet til dialogen Taleindstillinger.</string>
     <string name="ui_settings_virtual_mic_title">Brug virtuel mikrofon til opkald</string>
     <string name="ui_settings_virtual_mic_desc">Ruter TTS-lyd til en virtuel enhed, som du kan vælge som mikrofon i Zoom/Meet.</string>

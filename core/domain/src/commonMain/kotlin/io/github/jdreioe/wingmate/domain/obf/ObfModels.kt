@@ -1,11 +1,13 @@
 package io.github.jdreioe.wingmate.domain.obf
 
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class ObfBoard(
-    val format: String, // e.g., "open-board-0.1"
+    val format: String,
     val id: String,
     val locale: String? = null,
     val url: String? = null,
@@ -19,9 +21,10 @@ data class ObfBoard(
     val grid: ObfGrid? = null,
     val sounds: List<ObfSound> = emptyList(),
     val strings: Map<String, Map<String, String>> = emptyMap(),
-    val license: ObfLicense? = null
+    val license: ObfLicense? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val extensions: Map<String, JsonElement> = emptyMap()
 ) {
-    /** True when every button has all four absolute-positioning attributes defined. */
     val isAbsoluteLayout: Boolean
         get() = buttons.isNotEmpty() && buttons.all {
             it.top != null && it.left != null && it.width != null && it.height != null
@@ -33,7 +36,6 @@ data class ObfButton(
     val id: String,
     val label: String? = null,
     val vocalization: String? = null,
-    /** Optional per-field speech language; null inherits the selected voice language. */
     val locale: String? = null,
     @SerialName("image_id")
     val imageId: String? = null,
@@ -43,21 +45,18 @@ data class ObfButton(
     val backgroundColor: String? = null,
     @SerialName("border_color")
     val borderColor: String? = null,
-    // Absolute positioning (fractions 0.0-1.0)
     val top: Double? = null,
     val left: Double? = null,
     val width: Double? = null,
     val height: Double? = null,
-    // Linking to other boards
     @SerialName("load_board")
     val loadBoard: ObfLoadBoard? = null,
-    /** Single OBF action (e.g. "+a", ":space"). Prefer [actions] when non-empty. */
     val action: String? = null,
-    /** Ordered OBF actions; when non-empty these take precedence over [action]. */
     val actions: List<String> = emptyList(),
-    val hidden: Boolean = false
+    val hidden: Boolean = false,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val extensions: Map<String, JsonElement> = emptyMap()
 ) {
-    /** Effective action list: [actions] if present, otherwise the singular [action]. */
     fun resolvedActions(): List<String> =
         if (actions.isNotEmpty()) actions else listOfNotNull(action?.takeIf { it.isNotBlank() })
 }
@@ -66,7 +65,7 @@ data class ObfButton(
 data class ObfGrid(
     val rows: Int,
     val columns: Int,
-    val order: List<List<String?>> // List of rows, each row is list of button IDs (or null)
+    val order: List<List<String?>>
 )
 
 @Serializable
@@ -76,12 +75,15 @@ data class ObfImage(
     val height: Int? = null,
     @SerialName("content_type")
     val contentType: String? = null,
-    val url: String? = null, // External URL
-    val path: String? = null, // Relative path in OBZ or local storage
-    val data: String? = null,  // Base64 data URI
-    /** Proprietary symbol-set reference (e.g. SymbolStix). Lowest priority after data/path/url. */
+    val url: String? = null,
+    val path: String? = null,
+    val data: String? = null,
+    @SerialName("data_url")
+    val dataUrl: String? = null,
     val symbol: ObfSymbol? = null,
-    val license: ObfLicense? = null
+    val license: ObfLicense? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val extensions: Map<String, JsonElement> = emptyMap()
 )
 
 @Serializable
@@ -100,17 +102,21 @@ data class ObfSound(
     val url: String? = null,
     val path: String? = null,
     val data: String? = null,
-    val license: ObfLicense? = null
+    @SerialName("data_url")
+    val dataUrl: String? = null,
+    val license: ObfLicense? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val extensions: Map<String, JsonElement> = emptyMap()
 )
 
 @Serializable
 data class ObfLoadBoard(
-    val id: String? = null, // ID in the OBZ manifest
+    val id: String? = null,
     val name: String? = null,
-    val url: String? = null, // Web URL
-    val path: String? = null, // Relative path to .obf file
+    val url: String? = null,
+    val path: String? = null,
     @SerialName("data_url")
-    val dataUrl: String? = null // API endpoint
+    val dataUrl: String? = null
 )
 
 @Serializable
@@ -125,19 +131,25 @@ data class ObfLicense(
     @SerialName("author_url")
     val authorUrl: String? = null,
     @SerialName("author_email")
-    val authorEmail: String? = null
+    val authorEmail: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val extensions: Map<String, JsonElement> = emptyMap()
 )
 
 @Serializable
 data class ObfManifest(
     val format: String,
-    val root: String, // Path to root .obf file
-    val paths: ObfManifestPaths
+    val root: String,
+    val paths: ObfManifestPaths,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val extensions: Map<String, JsonElement> = emptyMap()
 )
 
 @Serializable
 data class ObfManifestPaths(
     val boards: Map<String, String> = emptyMap(),
     val images: Map<String, String> = emptyMap(),
-    val sounds: Map<String, String> = emptyMap()
+    val sounds: Map<String, String> = emptyMap(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val extensions: Map<String, JsonElement> = emptyMap()
 )
