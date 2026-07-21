@@ -358,6 +358,14 @@ dependencies {
     implementation(libs.koin.core)
     implementation(libs.koin.android)
 
+    // MSAL for Microsoft sign-in
+    implementation(libs.msal) {
+        exclude(group = "com.microsoft.device.display")
+    }
+
+    // Ktor engine for ARM API calls
+    implementation("io.ktor:ktor-client-okhttp:2.3.12")
+
     // Dual-screen / WindowManager (API 34+ rear display & window area APIs)
     implementation("androidx.window:window:1.3.0")
 }

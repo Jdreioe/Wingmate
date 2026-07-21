@@ -1,0 +1,17 @@
+{
+  "client_id": "YOUR_ENTRA_CLIENT_ID",
+  "authorization_user_agent": "BROWSER",
+  "redirect_uri": "msauth://com.hojmoseit.wingmate/YOUR_BASE64_SIGNATURE_HASH",
+  "account_mode": "MULTIPLE",
+  "broker_redirect_uri_registered": false,
+  "authorities": [
+    {
+      "type": "AAD",
+      "audience": {
+        "type": "AzureADMyOrg",
+        "tenant_id": "common"
+      },
+      "default": true
+    }
+  ]
+}
