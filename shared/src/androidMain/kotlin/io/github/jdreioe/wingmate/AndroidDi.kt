@@ -19,7 +19,7 @@ import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.infrastructure.AndroidFileStorage
 import io.github.jdreioe.wingmate.infrastructure.AndroidBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidBoardSetRepository
-import io.github.jdreioe.wingmate.infrastructure.AndroidFirebaseFeatureUsageReporter
+import io.github.jdreioe.wingmate.infrastructure.AndroidAptabaseFeatureUsageReporter
 import io.github.jdreioe.wingmate.infrastructure.AndroidSoundPlayer
 import io.github.jdreioe.wingmate.infrastructure.AndroidSpeechService
 import io.github.jdreioe.wingmate.infrastructure.AndroidImageCacher
@@ -46,7 +46,7 @@ import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
 
-fun overrideAndroidSpeechService(context: Context) {
+fun overrideAndroidSpeechService(context: Context, aptabaseAppKey: String) {
     loadKoinModules(
         module {
             single<Context> { context }
@@ -73,7 +73,13 @@ fun overrideAndroidSpeechService(context: Context) {
             singleOf(::AndroidFilePicker) { bind<FilePicker>() }
             singleOf(::AndroidImageCacher) { bind<ImageCacher>() }
             singleOf(::SimpleNGramPredictionService) { bind<TextPredictionService>() }
-            singleOf(::AndroidFirebaseFeatureUsageReporter) { bind<FeatureUsageReporter>() }
+            single<FeatureUsageReporter> {
+                AndroidAptabaseFeatureUsageReporter(
+                    context = context,
+                    settingsStateManager = get(),
+                    appKey = aptabaseAppKey
+                )
+            }
             single { FileSystem.SYSTEM }
         }
     )

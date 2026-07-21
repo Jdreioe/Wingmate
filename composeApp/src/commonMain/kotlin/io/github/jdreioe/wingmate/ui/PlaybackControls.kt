@@ -12,7 +12,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,18 +53,19 @@ fun PlaybackControls(
                 SmallIconButton(icon = Icons.Rounded.PlayArrow, tint = MaterialTheme.colorScheme.onSurface, onClick = onPlay)
             }
             
-            // Speak using secondary language (if provided)
-            SmallIconButton(
-                icon = Icons.Rounded.Language,
-                tint = if (isSecondarySelectionActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                onClick = { onPlaySecondary?.invoke() },
-                selected = isSecondarySelectionActive,
-                enabled = isSecondaryActionEnabled && onPlaySecondary != null
-            )
+            if (onPlaySecondary != null) {
+                SmallIconButton(
+                    icon = Icons.Rounded.Language,
+                    tint = if (isSecondarySelectionActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    onClick = { onPlaySecondary.invoke() },
+                    selected = isSecondarySelectionActive,
+                    enabled = isSecondaryActionEnabled
+                )
+            }
             SmallIconButton(icon = Icons.Rounded.Pause, tint = MaterialTheme.colorScheme.onSurface, onClick = onPause)
             SmallIconButton(icon = Icons.Rounded.Stop, tint = MaterialTheme.colorScheme.onSurface, onClick = onStop)
             SmallIconButton(
-                icon = Icons.Rounded.MoreVert,
+                icon = Icons.Rounded.Bookmark,
                 tint = if (isOnThatThoughtActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                 onClick = onThatThought,
                 selected = isOnThatThoughtActive

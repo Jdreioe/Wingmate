@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.ImportExport
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Undo
@@ -37,7 +36,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -80,7 +78,6 @@ import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
-import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
@@ -150,21 +147,16 @@ fun BoardSetManagerScreen(
     initialBoardSetId: String? = null
 ) {
     val useCase = koinInject<BoardSetUseCase>()
-    val obfParser = koinInject<ObfParser>()
-    val saidTextRepository = koinInject<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
     val koin = org.koin.compose.getKoin()
     val featureUsageReporter = koinInject<io.github.jdreioe.wingmate.application.FeatureUsageReporter>()
     val updateService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.UpdateService>() }
-    val audioClipboard = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.AudioClipboard>() }
-    val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
     val scope = rememberCoroutineScope()
     var route by remember { mutableStateOf<BoardSetRoute>(BoardSetRoute.Library) }
     var boardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var showCreateDialog by remember { mutableStateOf(false) }
-    var showStarterDialog by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showImportExport by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ObfBoardSet?>(null) }
@@ -177,7 +169,6 @@ fun BoardSetManagerScreen(
     val deletedMessage = stringResource(Res.string.board_sets_deleted)
     val deleteError = stringResource(Res.string.board_sets_delete_error)
     val defaultBoardName = stringResource(Res.string.board_dialog_default_board_name)
-    val starterAddedMessage = stringResource(Res.string.board_sets_starter_added)
 
     fun refreshBoardSets() {
         scope.launch {
@@ -189,28 +180,8 @@ fun BoardSetManagerScreen(
         }
     }
 
-    fun useLatestAudio(action: (String) -> Unit) {
-        scope.launch(Dispatchers.IO) {
-            val path = runCatching {
-                saidTextRepository.list()
-                    .filter { !it.audioFilePath.isNullOrBlank() }
-                    .maxByOrNull { it.date ?: it.createdAt ?: 0L }
-                    ?.audioFilePath
-            }.getOrNull()
-            if (!path.isNullOrBlank()) action(path)
-        }
-    }
-
-    var offeredStarterBoards by remember { mutableStateOf(false) }
-
     LaunchedEffect(Unit) {
         refreshBoardSets()
-    }
-    LaunchedEffect(boardSets, offeredStarterBoards) {
-        if (!offeredStarterBoards && boardSets.isEmpty() && !isLoading) {
-            showStarterDialog = true
-            offeredStarterBoards = true
-        }
     }
     LaunchedEffect(initialBoardSetId) {
         val targetBoardSet = initialBoardSetId?.let { id ->
@@ -230,11 +201,8 @@ fun BoardSetManagerScreen(
             isLoading = isLoading,
             statusMessage = statusMessage,
             onBack = onBack,
-            onCopyLastSound = { useLatestAudio { audioClipboard?.copyAudioFile(it) } },
-            onShareLastSound = { useLatestAudio { shareService?.shareAudio(it) } },
             onOpenSettings = { showSettings = true },
             onCreate = { showCreateDialog = true },
-            onAddStarter = { showStarterDialog = true },
             onOpen = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Run) },
             onEdit = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Edit) },
             onDuplicate = { boardSet ->
@@ -287,38 +255,6 @@ fun BoardSetManagerScreen(
         )
     }
 
-    if (showStarterDialog) {
-        val languageTag = systemLanguageTag()
-        StarterBoardAgeDialog(
-            bundles = starterBoardBundles(languageTag),
-            onDismiss = { showStarterDialog = false },
-            onSelect = { bundle ->
-                showStarterDialog = false
-                scope.launch {
-                    runCatching {
-                        restoreStarterBoards(
-                            languageTag = languageTag,
-                            obfParser = obfParser,
-                            boardSetUseCase = useCase,
-                            bundles = listOf(bundle)
-                        ) ?: error(createError)
-                    }
-                        .onSuccess {
-                            runCatching { useCase.listBoardSets() }
-                                .onSuccess { restoredSets ->
-                                    boardSets = restoredSets
-                                    statusMessage = starterAddedMessage
-                                }
-                                .onFailure { error ->
-                                    statusMessage = error.message ?: loadError
-                                }
-                        }
-                        .onFailure { statusMessage = it.message ?: createError }
-                }
-            }
-        )
-    }
-
     deleteTarget?.let { boardSet ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
@@ -348,7 +284,6 @@ fun BoardSetManagerScreen(
     if (showSettings) {
         SettingsScreen(
             onDismiss = { showSettings = false },
-            onBaseBoardsRestored = ::refreshBoardSets,
             onBackToWelcome = onBackToWelcome
         )
     }
@@ -364,18 +299,14 @@ private fun BoardSetLibraryScreen(
     isLoading: Boolean,
     statusMessage: String?,
     onBack: () -> Unit,
-    onCopyLastSound: () -> Unit,
-    onShareLastSound: () -> Unit,
     onOpenSettings: () -> Unit,
     onCreate: () -> Unit,
-    onAddStarter: () -> Unit,
     onOpen: (ObfBoardSet) -> Unit,
     onEdit: (ObfBoardSet) -> Unit,
     onDuplicate: (ObfBoardSet) -> Unit,
     onToggleLock: (ObfBoardSet) -> Unit,
     onDelete: (ObfBoardSet) -> Unit
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -396,52 +327,11 @@ private fun BoardSetLibraryScreen(
                             contentDescription = stringResource(Res.string.mode_switch_to_keyboard)
                         )
                     }
-                    Box {
-                        IconButton(onClick = { menuExpanded = true }) {
-                            Icon(
-                                Icons.Default.MoreVert,
-                                contentDescription = stringResource(Res.string.board_workspace_actions)
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.phrase_screen_copy_last_soundfile)) },
-                                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onCopyLastSound()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.phrase_screen_share_last_soundfile)) },
-                                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onShareLastSound()
-                                }
-                            )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.board_sets_add_starter)) },
-                                leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onAddStarter()
-                                }
-                            )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.phrase_screen_app_settings)) },
-                                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onOpenSettings()
-                                }
-                            )
-                        }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = stringResource(Res.string.phrase_screen_app_settings)
+                        )
                     }
                 }
             )
@@ -472,8 +362,6 @@ private fun BoardSetLibraryScreen(
                         Text(it, color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = onAddStarter) { Text(stringResource(Res.string.board_sets_add_starter)) }
-                    Spacer(Modifier.height(8.dp))
                     Button(onClick = onCreate) { Text(stringResource(Res.string.board_sets_create)) }
                 }
                 else -> LazyColumn(
@@ -501,39 +389,7 @@ private fun BoardSetLibraryScreen(
 }
 
 @Composable
-private fun StarterBoardAgeDialog(
-    bundles: List<StarterBoardBundle>,
-    onDismiss: () -> Unit,
-    onSelect: (StarterBoardBundle) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.board_sets_starter_age_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    stringResource(Res.string.board_sets_starter_age_body),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(8.dp))
-                bundles.forEach { bundle ->
-                    TextButton(
-                        onClick = { onSelect(bundle) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(bundle.name, modifier = Modifier.fillMaxWidth())
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
-        }
-    )
-}
-
-@Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun BoardSetLibraryCard(
     boardSet: ObfBoardSet,
     onOpen: () -> Unit,
@@ -542,7 +398,6 @@ private fun BoardSetLibraryCard(
     onToggleLock: () -> Unit,
     onDelete: () -> Unit
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
     Card(
         onClick = onOpen,
         modifier = Modifier.fillMaxWidth(),
@@ -560,47 +415,21 @@ private fun BoardSetLibraryCard(
                 )
             },
             trailingContent = {
-                Box {
-                    IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(Res.string.board_sets_actions))
+                Row {
+                    IconButton(onClick = onEdit, enabled = !boardSet.isLocked) {
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(Res.string.board_sets_edit))
                     }
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.board_sets_open)) },
-                            onClick = { menuExpanded = false; onOpen() }
+                    IconButton(onClick = onDuplicate) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = stringResource(Res.string.board_sets_duplicate))
+                    }
+                    IconButton(onClick = onToggleLock) {
+                        Icon(
+                            if (boardSet.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                            contentDescription = stringResource(if (boardSet.isLocked) Res.string.board_sets_unlock else Res.string.board_sets_lock)
                         )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.board_sets_edit)) },
-                            enabled = !boardSet.isLocked,
-                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                            onClick = { menuExpanded = false; onEdit() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.board_sets_duplicate)) },
-                            leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                            onClick = { menuExpanded = false; onDuplicate() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(if (boardSet.isLocked) Res.string.board_sets_unlock else Res.string.board_sets_lock)) },
-                            leadingIcon = {
-                                Icon(
-                                    if (boardSet.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = { menuExpanded = false; onToggleLock() }
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.common_delete), color = MaterialTheme.colorScheme.error) },
-                            leadingIcon = {
-                                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                            },
-                            onClick = { menuExpanded = false; onDelete() }
-                        )
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.common_delete), tint = MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -639,7 +468,6 @@ private fun BoardSetWorkspaceScreen(
     var showAddBoardDialog by remember { mutableStateOf(false) }
     var editingCell by remember { mutableStateOf<WorkspaceCellTarget?>(null) }
     var showFinishDialog by remember { mutableStateOf(false) }
-    var editActionsExpanded by remember { mutableStateOf(false) }
     var showRenameBoardDialog by remember { mutableStateOf(false) }
     var showRenameBoardSetDialog by remember { mutableStateOf(false) }
     var showResizeBoardDialog by remember { mutableStateOf(false) }
@@ -663,21 +491,28 @@ private fun BoardSetWorkspaceScreen(
         danishLanguageName,
         stringResource(Res.string.language_primary)
     )
-    val secondaryLanguageName = languageName(
-        settings.secondaryLanguage,
-        englishLanguageName,
-        danishLanguageName,
-        stringResource(Res.string.language_secondary)
-    )
     val availableFieldLanguages = listOf(
         FieldLanguageOption(
             settings.primaryLanguage,
             stringResource(Res.string.board_dialog_language_primary_value, primaryLanguageName)
-        ),
-        FieldLanguageOption(
-            settings.secondaryLanguage,
-            stringResource(Res.string.board_dialog_language_secondary_value, secondaryLanguageName)
         )
+    ).plus(
+        settings.secondaryLanguage
+            .takeIf { it.isNotBlank() && it != settings.primaryLanguage }
+            ?.let { secondaryLanguage ->
+                val secondaryLanguageName = languageName(
+                    secondaryLanguage,
+                    englishLanguageName,
+                    danishLanguageName,
+                    stringResource(Res.string.language_secondary)
+                )
+                FieldLanguageOption(
+                    secondaryLanguage,
+                    stringResource(Res.string.board_dialog_language_secondary_value, secondaryLanguageName)
+                )
+            }
+            ?.let(::listOf)
+            .orEmpty()
     ).distinctBy { it.tag }
 
     LaunchedEffect(boardSetId) {
@@ -774,67 +609,39 @@ private fun BoardSetWorkspaceScreen(
                         TextButton(onClick = ::requestFinishEditing) {
                             Text(stringResource(Res.string.board_workspace_finish))
                         }
-                        Box {
-                            IconButton(onClick = { editActionsExpanded = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = stringResource(Res.string.board_workspace_actions))
-                            }
-                            DropdownMenu(
-                                expanded = editActionsExpanded,
-                                onDismissRequest = { editActionsExpanded = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.board_workspace_rename)) },
-                                    onClick = {
-                                        editActionsExpanded = false
-                                        showRenameBoardDialog = true
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.board_workspace_rename_set)) },
-                                    onClick = {
-                                        editActionsExpanded = false
-                                        showRenameBoardSetDialog = true
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.board_workspace_resize)) },
-                                    enabled = activeBoard?.grid != null,
-                                    onClick = {
-                                        editActionsExpanded = false
-                                        showResizeBoardDialog = true
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.board_workspace_set_home)) },
-                                    enabled = activeBoard != null &&
-                                        activeBoard.id != activeGraph?.boardSet?.rootBoardId,
-                                    leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
-                                    onClick = {
-                                        val session = editSession
-                                        val board = activeBoard
-                                        if (session != null && board != null) {
-                                            editSession = session.apply(setDraftRoot(session.draft, board.id))
-                                        }
-                                        editActionsExpanded = false
-                                    }
-                                )
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.board_workspace_delete), color = MaterialTheme.colorScheme.error) },
-                                    enabled = activeGraph?.boards?.size?.let { it > 1 } == true,
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    },
-                                    onClick = {
-                                        editActionsExpanded = false
-                                        showDeleteBoardDialog = true
-                                    }
-                                )
-                            }
+                        IconButton(onClick = { showRenameBoardDialog = true }) {
+                            Icon(Icons.Default.Edit, contentDescription = stringResource(Res.string.board_workspace_rename))
+                        }
+                        IconButton(onClick = { showRenameBoardSetDialog = true }) {
+                            Icon(Icons.Default.Settings, contentDescription = stringResource(Res.string.board_workspace_rename_set))
+                        }
+                        IconButton(
+                            onClick = { showResizeBoardDialog = true },
+                            enabled = activeBoard?.grid != null
+                        ) {
+                            Icon(Icons.Default.ImportExport, contentDescription = stringResource(Res.string.board_workspace_resize))
+                        }
+                        IconButton(
+                            onClick = {
+                                val session = editSession
+                                val board = activeBoard
+                                if (session != null && board != null) {
+                                    editSession = session.apply(setDraftRoot(session.draft, board.id))
+                                }
+                            },
+                            enabled = activeBoard != null && activeBoard.id != activeGraph?.boardSet?.rootBoardId
+                        ) {
+                            Icon(Icons.Default.Home, contentDescription = stringResource(Res.string.board_workspace_set_home))
+                        }
+                        IconButton(
+                            onClick = { showDeleteBoardDialog = true },
+                            enabled = activeGraph?.boards?.size?.let { it > 1 } == true
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = stringResource(Res.string.board_workspace_delete),
+                                tint = MaterialTheme.colorScheme.error
+                            )
                         }
                     } else {
                         IconButton(onClick = { isFullscreen = true }) {

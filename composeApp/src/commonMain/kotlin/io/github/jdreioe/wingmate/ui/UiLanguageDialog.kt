@@ -27,8 +27,12 @@ import wingmatekmp.composeapp.generated.resources.language_filter_region
 import wingmatekmp.composeapp.generated.resources.language_no_available
 import wingmatekmp.composeapp.generated.resources.language_no_match
 import wingmatekmp.composeapp.generated.resources.language_primary
+import wingmatekmp.composeapp.generated.resources.language_primary_description
 import wingmatekmp.composeapp.generated.resources.language_search_label
 import wingmatekmp.composeapp.generated.resources.language_secondary
+import wingmatekmp.composeapp.generated.resources.language_secondary_description
+import wingmatekmp.composeapp.generated.resources.language_secondary_enable
+import wingmatekmp.composeapp.generated.resources.language_secondary_unavailable
 
 @Composable
 fun UiLanguageDialog(
@@ -50,7 +54,9 @@ fun UiLanguageDialog(
     var languageCodeFilter by remember { mutableStateOf<String?>(null) }
     var regionFilter by remember { mutableStateOf<String?>(null) }
     var primary by remember { mutableStateOf("en-US") }
-    var secondary by remember { mutableStateOf("en-US") }
+    var secondary by remember { mutableStateOf("") }
+    var selectedVoiceIsMultilingual by remember { mutableStateOf(false) }
+    var useSecondaryLanguage by remember { mutableStateOf(false) }
     var openPrimaryMenuRequest by remember(openPrimaryMenuInitially) {
         mutableStateOf(openPrimaryMenuInitially)
     }
@@ -61,8 +67,18 @@ fun UiLanguageDialog(
         primary = settings.primaryLanguage
         secondary = settings.secondaryLanguage
         val sel = runCatching { voiceUseCase.selected() }.getOrNull()
+        selectedVoiceIsMultilingual = sel?.supportedLanguages
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?.size
+            ?.let { it > 1 }
+            ?: false
+        useSecondaryLanguage = selectedVoiceIsMultilingual &&
+            settings.secondaryLanguage.isNotBlank() &&
+            settings.secondaryLanguage != settings.primaryLanguage
         available = (sel?.supportedLanguages ?: emptyList())
-            .ifEmpty { listOf(settings.primaryLanguage, settings.secondaryLanguage, "en-US") }
+            .ifEmpty { listOf(settings.primaryLanguage, settings.secondaryLanguage, "en-US").filter { it.isNotBlank() } }
             .distinct()
     }
 
@@ -105,6 +121,7 @@ fun UiLanguageDialog(
             val matchesRegionFilter = regionFilter == null || (regionPart?.equals(regionFilter, ignoreCase = true) == true)
             val matchesSearch = queryTerms.all { term ->
                 lang.contains(term, ignoreCase = true) ||
+                    localizedLocaleDisplayName(lang).contains(term, ignoreCase = true) ||
                     codePart.contains(term, ignoreCase = true) ||
                     (regionPart?.contains(term, ignoreCase = true) == true)
             }
@@ -156,6 +173,12 @@ fun UiLanguageDialog(
 
                 Text(stringResource(Res.string.language_primary))
                 Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(Res.string.language_primary_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
                 LanguageMenu(
                     available = filteredLanguages,
                     selected = primary,
@@ -198,32 +221,51 @@ fun UiLanguageDialog(
                 )
                 Spacer(Modifier.height(12.dp))
 
-                Text(stringResource(Res.string.language_secondary))
-                Spacer(Modifier.height(8.dp))
-                LanguageMenu(
-                    available = filteredLanguages,
-                    selected = secondary,
-                    emptyLabel = if (normalizedAvailable.isEmpty()) noLanguagesAvailableLabel else noLanguagesMatchLabel,
-                    onSelect = { sel ->
-                        secondary = sel
-                        // persist immediately
-                        scope.launch {
-                            try {
-                                val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                                val updated = current.copy(secondaryLanguage = sel)
-                                settingsUseCase.update(updated)
-                                println("Saved secondaryLanguage='$sel'")
-                                featureUsageReporter.reportEvent(
-                                    FeatureUsageEvents.LANGUAGE_UPDATED,
-                                    "target" to "secondary",
-                                    "value" to sel
-                                )
-                            } catch (t: Throwable) {
-                                println("Failed saving secondary language: $t")
-                            }
+                if (selectedVoiceIsMultilingual) {
+                    Text(stringResource(Res.string.language_secondary))
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(Res.string.language_secondary_enable))
+                            Text(
+                                stringResource(Res.string.language_secondary_description),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
+                        Switch(
+                            checked = useSecondaryLanguage,
+                            onCheckedChange = { enabled ->
+                                useSecondaryLanguage = enabled
+                                featureUsageReporter.reportEvent(
+                                    FeatureUsageEvents.SECONDARY_LANGUAGE_TOGGLED,
+                                    "enabled" to enabled.toString(),
+                                    "source" to "language_dialog"
+                                )
+                                secondary = if (enabled) {
+                                    normalizedAvailable.firstOrNull { it != primary }
+                                        ?: normalizedAvailable.firstOrNull()
+                                        ?: primary
+                                } else ""
+                            }
+                        )
                     }
-                )
+                    if (useSecondaryLanguage) {
+                        Spacer(Modifier.height(8.dp))
+                        LanguageMenu(
+                            available = filteredLanguages,
+                            selected = secondary,
+                            emptyLabel = if (normalizedAvailable.isEmpty()) noLanguagesAvailableLabel else noLanguagesMatchLabel,
+                            onSelect = { secondary = it }
+                        )
+                    }
+                } else {
+                    Text(
+                        stringResource(Res.string.language_secondary_unavailable),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         },
         confirmButton = {
@@ -232,7 +274,10 @@ fun UiLanguageDialog(
                     try {
                         // fetch existing settings and copy to preserve unrelated fields
                         val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                        val updated = current.copy(primaryLanguage = primary, secondaryLanguage = secondary)
+                        val updated = current.copy(
+                            primaryLanguage = primary,
+                            secondaryLanguage = secondary.takeIf { useSecondaryLanguage && selectedVoiceIsMultilingual }.orEmpty()
+                        )
                         settingsUseCase.update(updated)
 
                         // Also update the selected voice's selectedLanguage to match the chosen primary language
@@ -326,7 +371,7 @@ fun LanguageMenu(
 
     Box {
         OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(selected)
+            Text(localizedLocaleDisplayName(selected))
         }
         DropdownMenu(
             expanded = expanded,
@@ -343,7 +388,10 @@ fun LanguageMenu(
                 )
             } else {
                 available.forEach { lang ->
-                    DropdownMenuItem(text = { Text(lang) }, onClick = { onSelect(lang); expanded = false })
+                    DropdownMenuItem(
+                        text = { Text(localizedLocaleDisplayName(lang)) },
+                        onClick = { onSelect(lang); expanded = false }
+                    )
                 }
             }
         }

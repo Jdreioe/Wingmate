@@ -46,6 +46,6 @@ SETTING UP AZURE IN WINGMATE
 
 PRIVACY
 
-Wingmate is built with privacy at its core. Text prediction is 100% on-device — no cloud, no tracking. Your phrases, board content, and Azure key are stored locally. Optional Firebase Analytics (disabled by default) only collects anonymous feature-interaction events — never your speech, keys, or personal data.
+Wingmate is built with privacy at its core. Text prediction is 100% on-device — no cloud, no tracking. Your phrases, board content, and Azure key are stored locally. Optional Aptabase analytics (disabled by default) only collects anonymous feature-interaction events — never your speech, keys, or personal data.
 
 Wingmate is created by Jonas, who has cerebral palsy and years of experience with AAC devices. It's built for real people by someone who understands the need for an affordable, powerful, and open communication tool.

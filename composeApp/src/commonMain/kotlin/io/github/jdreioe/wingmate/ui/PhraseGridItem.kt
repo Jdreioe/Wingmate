@@ -104,7 +104,7 @@ fun PhraseGridItem(
     val bgColor = if (settings.highContrastMode) {
         highContrastContainer
     } else {
-        item.backgroundColor?.let { try { parseHexToColor(it) } catch (_: Throwable) { MaterialTheme.colorScheme.surface } } ?: MaterialTheme.colorScheme.surface
+        item.backgroundColor?.let { try { parseHexToColor(it) } catch (_: Throwable) { MaterialTheme.colorScheme.surfaceVariant } } ?: MaterialTheme.colorScheme.surfaceVariant
     }
     
     val contentColor = when {

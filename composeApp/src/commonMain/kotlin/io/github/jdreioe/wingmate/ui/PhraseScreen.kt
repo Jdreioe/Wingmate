@@ -18,14 +18,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.TopAppBarDefaults
@@ -61,11 +58,8 @@ import io.github.jdreioe.wingmate.domain.PredictionResult
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TextPredictionService
-import io.github.jdreioe.wingmate.ui.systemLanguageTag
-import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
-import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -74,7 +68,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import org.jetbrains.compose.resources.InternalResourceApi
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
@@ -86,10 +79,7 @@ import wingmatekmp.composeapp.generated.resources.phrase_screen_close_board
 import wingmatekmp.composeapp.generated.resources.phrase_screen_copy_last_soundfile
 import wingmatekmp.composeapp.generated.resources.phrase_screen_enter_text_placeholder
 import wingmatekmp.composeapp.generated.resources.phrase_screen_error
-import wingmatekmp.composeapp.generated.resources.phrase_screen_import_board
 import wingmatekmp.composeapp.generated.resources.phrase_screen_loading
-import wingmatekmp.composeapp.generated.resources.phrase_screen_load_sample_board
-import wingmatekmp.composeapp.generated.resources.phrase_screen_menu_cd
 import wingmatekmp.composeapp.generated.resources.phrase_screen_select_board_title
 import wingmatekmp.composeapp.generated.resources.phrase_screen_share_last_soundfile
 import wingmatekmp.composeapp.generated.resources.phrase_screen_ssml_controls
@@ -100,27 +90,6 @@ private data class ThoughtDraft(
     val input: TextFieldValue,
     val secondaryLanguageRanges: List<TextRange>,
 )
-
-@OptIn(InternalResourceApi::class)
-private suspend fun loadStarterBoards(
-    languageTag: String,
-    obfParser: ObfParser,
-    boardRepo: BoardRepository
-): ObfBoard? {
-    val files = starterBoardFiles(languageTag) ?: return null
-    var rootBoard: ObfBoard? = null
-    for (name in files) {
-        val bytes = Res.readBytes("files/$name.obf")
-        val json = bytes.decodeToString()
-        val boardRes = obfParser.parseBoard(json)
-        if (boardRes.isSuccess) {
-            val board = boardRes.getOrThrow()
-            boardRepo.saveBoard(board)
-            if (rootBoard == null) rootBoard = board
-        }
-    }
-    return rootBoard
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -171,6 +140,22 @@ fun PhraseScreen(
         // Use the reactive settings as key to ensure this updates when settings change
         val primaryLanguageState = produceState(initialValue = settings.primaryLanguage, key1 = settings.primaryLanguage) {
             value = settings.primaryLanguage
+        }
+        val hasUsableSecondaryLanguage = produceState(
+            initialValue = false,
+            key1 = settings.secondaryLanguage,
+            key2 = settings.primaryLanguage
+        ) {
+            val voice = runCatching { voiceUseCase.selected() }.getOrNull()
+            val supported = voice?.supportedLanguages
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.distinct()
+                .orEmpty()
+            value = settings.secondaryLanguage.isNotBlank() &&
+                settings.secondaryLanguage != settings.primaryLanguage &&
+                supported.size > 1 &&
+                settings.secondaryLanguage in supported
         }
 
             // Input state (hoisted so topBar History button can access it)
@@ -320,7 +305,6 @@ fun PhraseScreen(
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 topBar = {
-                    var showOverflow by remember { mutableStateOf(false) }
                     TopAppBar(
                         title = { Text("Wingmate", style = MaterialTheme.typography.titleLarge.copy(
                             fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
@@ -360,194 +344,19 @@ fun PhraseScreen(
                                 )
                             }
 
-                            // Overflow menu for the rest of actions
-                            IconButton(onClick = { showOverflow = true }) {
-                                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.phrase_screen_menu_cd))
+                            IconButton(onClick = {
+                                showSettingsDialog = true
+                                featureUsageReporter.reportEvent(
+                                    FeatureUsageEvents.SETTINGS_UPDATED,
+                                    "action" to "open_app_settings"
+                                )
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Settings,
+                                    contentDescription = stringResource(Res.string.phrase_screen_app_settings)
+                                )
                             }
-                            DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
-                                // === AUDIO FILES ===
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.phrase_screen_copy_last_soundfile), style = MaterialTheme.typography.bodyMedium) },
-                                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                                    onClick = {
-                                        showOverflow = false
-                                        uiScope.launch(Dispatchers.IO) {
-                                            runCatching {
-                                                val last = saidRepo.list()
-                                                    .filter { it.saidText == input.text && !it.audioFilePath.isNullOrBlank() }
-                                                    .maxByOrNull { it.date ?: it.createdAt ?: 0L }
-                                                val path = last?.audioFilePath
-                                                if (!path.isNullOrBlank()) {
-                                                    audioClipboard?.copyAudioFile(path)
-                                                }
-                                            }
-                                        }
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.phrase_screen_share_last_soundfile), style = MaterialTheme.typography.bodyMedium) },
-                                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                                    onClick = {
-                                        showOverflow = false
-                                        uiScope.launch(Dispatchers.IO) {
-                                            runCatching {
-                                                val last = saidRepo.list()
-                                                    .filter { it.saidText == input.text && !it.audioFilePath.isNullOrBlank() }
-                                                    .maxByOrNull { it.date ?: it.createdAt ?: 0L }
-                                                val path = last?.audioFilePath
-                                                if (!path.isNullOrBlank()) {
-                                                    shareService?.shareAudio(path)
-                                                }
-                                            }
-                                        }
-                                    }
-                                )
-                                
-                                Divider()
-                                
-                                // === APP SETTINGS ===
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.phrase_screen_app_settings), style = MaterialTheme.typography.bodyMedium) },
-                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                                    onClick = {
-                                        showOverflow = false
-                                        showSettingsDialog = true
-                                        featureUsageReporter.reportEvent(
-                                            FeatureUsageEvents.SETTINGS_UPDATED,
-                                            "action" to "open_app_settings"
-                                        )
-                                    }
-                                )
-                                Divider()
 
-                                val systemLang = remember { systemLanguageTag() }
-                                val hasStarterBoards = remember(systemLang) { starterBoardFiles(systemLang) != null }
-                                val showStarterOption = enableObfObzImport && (currentBoard != null || hasStarterBoards)
-
-                                if (showStarterOption) {
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                if (currentBoard == null) {
-                                                    stringResource(Res.string.phrase_screen_load_sample_board)
-                                                } else {
-                                                    stringResource(Res.string.phrase_screen_close_board)
-                                                },
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
-                                        },
-                                        leadingIcon = { Icon(Icons.Default.Dashboard, contentDescription = null) },
-                                        onClick = { 
-                                            showOverflow = false
-                                            if (currentBoard == null) {
-                                                uiScope.launch(Dispatchers.IO) {
-                                                    val board = loadStarterBoards(systemLang, obfParser, boardRepo)
-                                                    if (board != null) {
-                                                        currentBoard = board
-                                                        featureUsageReporter.reportEvent(
-                                                            FeatureUsageEvents.BOARD_IMPORT_COMPLETED,
-                                                            "mode" to "starter_boards"
-                                                        )
-                                                    }
-                                                }
-                                            } else {
-                                                currentBoard = null
-                                            }
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(Res.string.phrase_screen_import_board), style = MaterialTheme.typography.bodyMedium) },
-                                        leadingIcon = { Icon(Icons.Default.FolderOpen, contentDescription = null) },
-                                        onClick = { 
-                                            showOverflow = false
-                                            uiScope.launch(Dispatchers.IO) {
-                                                if (filePicker != null) {
-                                                    val path = filePicker.pickFile(selectBoardDialogTitle, listOf("obf", "obz", "json"))
-                                                    if (path != null) {
-                                                        val isObz = path.lowercase().endsWith(".obz")
-                                                        featureUsageReporter.reportEvent(
-                                                            FeatureUsageEvents.BOARD_IMPORT_STARTED,
-                                                            "mode" to if (isObz) "obz" else "obf"
-                                                        )
-                                                        if (isObz) {
-                                                            // Handle OBZ (zip archive)
-                                                            runCatching {
-                                                                val zipFile = java.util.zip.ZipFile(path)
-                                                                // Read manifest.json to find root board
-                                                                val manifestEntry = zipFile.getEntry("manifest.json")
-                                                                if (manifestEntry != null) {
-                                                                    val manifestContent = zipFile.getInputStream(manifestEntry).bufferedReader().readText()
-                                                                    val manifest = obfParser.parseManifest(manifestContent).getOrNull()
-                                                                    if (manifest != null) {
-                                                                        // Load ALL boards from manifest into map
-                                                                        val loadedBoards = mutableMapOf<String, ObfBoard>()
-                                                                        manifest.paths.boards.forEach { (boardId, boardPath) ->
-                                                                            val entry = zipFile.getEntry(boardPath)
-                                                                            if (entry != null) {
-                                                                                val content = zipFile.getInputStream(entry).bufferedReader().readText()
-                                                                                obfParser.parseBoard(content).getOrNull()?.let { board ->
-                                                                                    loadedBoards[boardId] = board
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                        // Extract ALL images from manifest
-                                                                        val loadedImages = mutableMapOf<String, ByteArray>()
-                                                                        manifest.paths.images.forEach { (imageId, imagePath) ->
-                                                                            val entry = zipFile.getEntry(imagePath)
-                                                                            if (entry != null) {
-                                                                                val bytes = zipFile.getInputStream(entry).readBytes()
-                                                                                loadedImages[imagePath] = bytes
-                                                                            }
-                                                                        }
-                                                                        // Also load root board if not in paths
-                                                                        val rootEntry = zipFile.getEntry(manifest.root)
-                                                                        if (rootEntry != null) {
-                                                                            val boardContent = zipFile.getInputStream(rootEntry).bufferedReader().readText()
-                                                                            val boardRes = obfParser.parseBoard(boardContent)
-                                                                            if (boardRes.isSuccess) {
-                                                                                val board = boardRes.getOrThrow()
-                                                                                loadedBoards[board.id] = board
-                                                                                boardRepo.saveBoard(board)
-                                                                                uiScope.launch { 
-                                                                                    boardsMap = loadedBoards
-                                                                                    boardStack = emptyList()
-                                                                                    extractedImages = loadedImages
-                                                                                    currentBoard = board 
-                                                                                }
-                                                                                featureUsageReporter.reportEvent(
-                                                                                    FeatureUsageEvents.BOARD_IMPORT_COMPLETED,
-                                                                                    "mode" to "obz"
-                                                                                )
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                                zipFile.close()
-                                                            }
-                                                        } else {
-                                                            // Handle plain OBF file
-                                                            val content = filePicker.readFileAsText(path)
-                                                            if (content != null) {
-                                                                val boardRes = obfParser.parseBoard(content)
-                                                                if (boardRes.isSuccess) {
-                                                                    val board = boardRes.getOrThrow()
-                                                                    boardRepo.saveBoard(board)
-                                                                    uiScope.launch { currentBoard = board }
-                                                                    featureUsageReporter.reportEvent(
-                                                                        FeatureUsageEvents.BOARD_IMPORT_COMPLETED,
-                                                                        "mode" to "obf"
-                                                                    )
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    )
-                                }
-
-                            }
                         }
                     )
                 },
@@ -579,7 +388,7 @@ fun PhraseScreen(
                                 uiScope.launch(Dispatchers.IO) {
                                     try {
                                         val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                        val secondaryLang = settings.secondaryLanguage
+                                        val secondaryLang = settings.secondaryLanguage.takeIf { hasUsableSecondaryLanguage.value }
                                         val inputText = input.text
                                         
                                         val hasSSML = inputText.contains("<") && inputText.contains(">")
@@ -602,7 +411,7 @@ fun PhraseScreen(
                                             if (hasSSML) {
                                                 speechService.speak(inputText, selected, selected?.pitch, selected?.rate)
                                             } else {
-                                                val segments = if (secondaryLanguageRanges.isNotEmpty()) {
+                                                val segments = if (secondaryLanguageRanges.isNotEmpty() && secondaryLang != null) {
                                                     buildLanguageAwareSegments(inputText, secondaryLanguageRanges, secondaryLang)
                                                 } else emptyList()
                                                 if (segments.isNotEmpty()) {
@@ -665,7 +474,8 @@ fun PhraseScreen(
                                 refocusInput()
                             },
                             isPaused = isSpeechPaused,
-                            onPlaySecondary = {
+                            onPlaySecondary = if (hasUsableSecondaryLanguage.value) {
+                                {
                                 if (!selectionHasLength) {
                                     refocusInput()
                                     return@PlaybackControls
@@ -680,7 +490,8 @@ fun PhraseScreen(
                                     "enabled" to (!selectionAlreadySecondary).toString()
                                 )
                                 refocusInput()
-                            },
+                                }
+                            } else null,
                             onThatThought = {
                                 val activeDraft = ThoughtDraft(
                                     input = input,
@@ -961,7 +772,9 @@ fun PhraseScreen(
                                             onLongClick = { showCategoryMenu = true }
                                         )
                                 )
-                                DropdownMenu(expanded = showCategoryMenu, onDismissRequest = { showCategoryMenu = false }) {
+                                if (showCategoryMenu) {
+                                    ModalBottomSheet(onDismissRequest = { showCategoryMenu = false }) {
+                                        Column(modifier = Modifier.padding(bottom = 24.dp)) {
                                     DropdownMenuItem(text = { Text("Move left", style = MaterialTheme.typography.bodyLarge.copy(
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) }, enabled = index > 0, onClick = {
@@ -995,6 +808,8 @@ fun PhraseScreen(
                                         // Confirm dialog
                                         confirmDeleteCategory = category
                                     })
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1180,7 +995,8 @@ fun PhraseScreen(
                                     Phrase(
                                         id = "history_$stableHistoryId",
                                         text = s.saidText ?: "",
-                                        name = s.voiceName,
+                                        // History cards must represent what was said, not the voice that said it.
+                                        name = null,
                                         backgroundColor = null,
                                         parentId = HistoryCategoryId,
                                         createdAt = s.date ?: s.createdAt ?: 0L,
@@ -1250,11 +1066,11 @@ fun PhraseScreen(
                                 }
                             }
                         },
-                        onPlaySecondary = { phrase ->
+                        onPlaySecondary = if (hasUsableSecondaryLanguage.value) { { phrase ->
                             uiScope.launch(Dispatchers.IO) {
                                 try {
                                     val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                    val secondaryLang = settings.secondaryLanguage
+                                    val secondaryLang = settings.secondaryLanguage.takeIf { hasUsableSecondaryLanguage.value }
                                     val fallbackLang2 = selected?.selectedLanguage ?: ""
                                     val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: fallbackLang2)
                                     val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
@@ -1282,7 +1098,7 @@ fun PhraseScreen(
                                     } catch (_: Throwable) {}
                                 } catch (_: Throwable) {}
                             }
-                        },
+                        } } else null,
                         onLongPress = { phrase ->
                             if (!isHistory) {
                                 // open edit dialog for this phrase

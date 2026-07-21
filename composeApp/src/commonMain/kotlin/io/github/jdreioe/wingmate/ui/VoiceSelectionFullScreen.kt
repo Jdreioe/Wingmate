@@ -158,7 +158,8 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                selectedLanguageFilter ?: stringResource(Res.string.voice_all_languages),
+                                selectedLanguageFilter?.let(::localizedLocaleDisplayName)
+                                    ?: stringResource(Res.string.voice_all_languages),
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 1
                             )
@@ -177,7 +178,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                             )
                             supportedLanguages.forEach { language ->
                                 DropdownMenuItem(
-                                    text = { Text(language) },
+                                    text = { Text(localizedLocaleDisplayName(language)) },
                                     onClick = {
                                         selectedLanguageFilter = language
                                         showLanguageFilter = false
@@ -336,7 +337,8 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                selectedLanguageFilter ?: stringResource(Res.string.voice_all_languages),
+                                selectedLanguageFilter?.let(::localizedLocaleDisplayName)
+                                    ?: stringResource(Res.string.voice_all_languages),
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 1
                             )
@@ -355,7 +357,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                             )
                             supportedLanguages.forEach { language ->
                                 DropdownMenuItem(
-                                    text = { Text(language) },
+                                    text = { Text(localizedLocaleDisplayName(language)) },
                                     onClick = {
                                         selectedLanguageFilter = language
                                         showLanguageFilter = false

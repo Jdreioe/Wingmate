@@ -164,7 +164,6 @@ private fun urlEncoded(value: String): String =
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("com.google.gms.google-services")
     id("com.github.triplet.play")
 }
 
@@ -228,7 +227,13 @@ android {
     }
 
     val entraClientId = resolveConfigValue("ENTRA_CLIENT_ID")
-    val entraRedirectHash = resolveConfigValue("ENTRA_REDIRECT_HASH")
+    val aptabaseAppKey = resolveConfigValue("APTABASE_APP_KEY")
+    // Debug hash (from ~/.android/debug.keystore); ENTRA_REDIRECT_HASH is an alias
+    val entraRedirectHashDebug = resolveConfigValue("ENTRA_REDIRECT_HASH_DEBUG")
+        .ifBlank { resolveConfigValue("ENTRA_REDIRECT_HASH") }
+    // Release hash (from androidApp/release.keystore)
+    val entraRedirectHashRelease = resolveConfigValue("ENTRA_REDIRECT_HASH_RELEASE")
+        .ifBlank { entraRedirectHashDebug }
 
     defaultConfig {
         applicationId = "com.hojmoseit.wingmate"
@@ -248,28 +253,32 @@ android {
         )
         buildConfigField(
             "String",
-            "ENTRA_REDIRECT_HASH",
-            toBuildConfigStringLiteral(entraRedirectHash)
+            "APTABASE_APP_KEY",
+            toBuildConfigStringLiteral(aptabaseAppKey)
         )
-        manifestPlaceholders["entraRedirectHash"] = entraRedirectHash.ifBlank { "YOUR_BASE64_SIGNATURE_HASH" }
+        manifestPlaceholders["entraRedirectHash"] = entraRedirectHashDebug
     }
 
-    // Generate msal_config.json with real Entra values at build start
+    // Generate msal_config.json with real Entra values at build start.
+    // MSAL only needs the redirect URI registered in Entra to match ONE of them;
+    // the app's actual redirect is computed by MSAL from the installed signature.
+    // We ship the debug hash in the JSON as a fallback — the real check happens
+    // server-side against the registered redirect URIs.
     val msalConfigFile = file("src/main/res/raw/msal_config.json")
     val msalClientId = entraClientId.ifBlank { "YOUR_ENTRA_CLIENT_ID" }
-    val msalRedirectHash = entraRedirectHash.ifBlank { "YOUR_REDIRECT_HASH" }
+    val msalConfigHash = entraRedirectHashDebug.ifBlank { "YOUR_REDIRECT_HASH" }
     msalConfigFile.writeText("""
         {
           "client_id": "$msalClientId",
           "authorization_user_agent": "BROWSER",
-          "redirect_uri": "msauth://com.hojmoseit.wingmate/$msalRedirectHash",
-          "account_mode": "MULTIPLE",
+          "redirect_uri": "msauth://com.hojmoseit.wingmate/$msalConfigHash",
+          "account_mode": "SINGLE",
           "broker_redirect_uri_registered": false,
           "authorities": [
             {
               "type": "AAD",
               "audience": {
-                "type": "AzureADMyOrg",
+                "type": "AzureADandPersonalMicrosoftAccount",
                 "tenant_id": "common"
               },
               "default": true
@@ -277,7 +286,7 @@ android {
           ]
         }
     """.trimIndent())
-    println("msal_config.json: client_id=$msalClientId redirect_hash=$msalRedirectHash")
+    println("msal_config.json: client_id=$msalClientId debug_hash=$entraRedirectHashDebug release_hash=$entraRedirectHashRelease")
 
     tasks.register("incrementVersionCode") {
         doLast {
@@ -338,6 +347,7 @@ android {
     buildTypes {
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
+            manifestPlaceholders["entraRedirectHash"] = entraRedirectHashRelease
         }
     }
 }
@@ -385,9 +395,6 @@ dependencies {
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.analytics)
-
     // Common AndroidX helpers
     implementation("androidx.core:core-ktx:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
@@ -420,6 +427,11 @@ dependencies {
 
     // Dual-screen / WindowManager (API 34+ rear display & window area APIs)
     implementation("androidx.window:window:1.3.0")
+
+    // Unit testing
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlinx.serialization.json)
 }
 
 kotlin {

@@ -15,6 +15,7 @@ import io.github.jdreioe.wingmate.ui.PlatformBackHandler
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
+import io.github.jdreioe.wingmate.application.VoiceUseCase
 import org.koin.compose.koinInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -27,6 +28,7 @@ enum class Screen { Welcome, Phrases, BoardSets }
 fun App() {
     val settingsRepository = koinInject<SettingsRepository>()
     val featureUsageReporter = koinInject<FeatureUsageReporter>()
+    val voiceUseCase = koinInject<VoiceUseCase>()
 
     AppTheme {
         Surface(
@@ -44,18 +46,27 @@ fun App() {
                 StartupMode.Screens -> Screen.BoardSets
             }
 
-            fun completeWelcomeAndNavigate(mode: StartupMode, createScreen: Boolean) {
+            fun completeWelcomeAndNavigate(mode: StartupMode, createScreen: Boolean, analyticsEnabled: Boolean) {
                 scope.launch(Dispatchers.Default) {
                     val currentSettings = runCatching { settingsRepository.get() }.getOrNull() ?: Settings()
                     settingsRepository.update(
                         currentSettings.copy(
                             welcomeFlowCompleted = true,
-                            startupMode = mode
+                            startupMode = mode,
+                            featureUsageReportingEnabled = analyticsEnabled
                         )
                     )
                 }
                 createBoardSetOnLaunch = mode == StartupMode.Screens && createScreen
                 startupBoardSetId = null
+                featureUsageReporter.setEnabled(analyticsEnabled)
+                if (analyticsEnabled) {
+                    featureUsageReporter.reportEvent(
+                        FeatureUsageEvents.ANALYTICS_CONSENT_CHANGED,
+                        "enabled" to "true",
+                        "source" to "welcome_flow"
+                    )
+                }
                 val target = routeFor(mode)
                 currentScreen = target
                 featureUsageReporter.reportEvent(
@@ -65,20 +76,27 @@ fun App() {
                 )
             }
 
+            fun showWelcomeFlow() {
+                createBoardSetOnLaunch = false
+                startupBoardSetId = null
+                currentScreen = Screen.Welcome
+                featureUsageReporter.reportEvent(FeatureUsageEvents.WELCOME_REOPENED)
+            }
+
             LaunchedEffect(Unit) {
                 val settings = withContext(Dispatchers.Default) {
                     runCatching { settingsRepository.get() }.getOrNull()
                 }
+                val hasSelectedVoice = withContext(Dispatchers.Default) {
+                    runCatching { voiceUseCase.selected() }.getOrNull() != null
+                }
                 welcomeCompleted = settings?.welcomeFlowCompleted ?: false
                 startupBoardSetId = settings?.startupBoardSetId
-                currentScreen = if (welcomeCompleted == true) {
-                    routeFor(settings?.startupMode ?: StartupMode.Keyboard)
-                } else {
-                    Screen.Welcome
-                }
+                currentScreen = if (hasSelectedVoice) routeFor(settings?.startupMode ?: StartupMode.Keyboard) else Screen.Welcome
                 featureUsageReporter.reportEvent(
                     FeatureUsageEvents.APP_STARTED,
-                    "welcome_completed" to (welcomeCompleted == true).toString()
+                    "welcome_completed" to (welcomeCompleted == true).toString(),
+                    "voice_selected" to hasSelectedVoice.toString()
                 )
             }
 
@@ -105,7 +123,7 @@ fun App() {
                     }
                     Screen.Phrases -> {
                         PhraseScreen(
-                            onBackToWelcome = { currentScreen = Screen.Welcome },
+                            onBackToWelcome = ::showWelcomeFlow,
                             onOpenBoardSetManager = {
                                 createBoardSetOnLaunch = false
                                 startupBoardSetId = null
@@ -115,7 +133,7 @@ fun App() {
                     }
                     Screen.BoardSets -> {
                         BoardSetManagerScreen(
-                            onBackToWelcome = { currentScreen = Screen.Welcome },
+                            onBackToWelcome = ::showWelcomeFlow,
                             onBack = {
                                 createBoardSetOnLaunch = false
                                 currentScreen = Screen.Phrases

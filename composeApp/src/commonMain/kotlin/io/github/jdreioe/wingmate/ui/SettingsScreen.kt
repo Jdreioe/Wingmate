@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -38,7 +39,6 @@ import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
-import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import io.github.jdreioe.wingmate.infrastructure.ArasaacDownloadProgress
 import io.github.jdreioe.wingmate.infrastructure.ArasaacSymbolDownloadService
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
@@ -66,7 +66,6 @@ private sealed class SettingsSpeechSubPage {
 fun SettingsScreen(
     onDismiss: () -> Unit,
     onSaved: (() -> Unit)? = null,
-    onBaseBoardsRestored: (() -> Unit)? = null,
     onBackToWelcome: (() -> Unit)? = null
 ) {
     val koin = getKoin()
@@ -78,7 +77,6 @@ fun SettingsScreen(
     val pronunciationRepo = remember(koin) { koin.getOrNull<PronunciationDictionaryRepository>() }
     val speechService = remember(koin) { koin.getOrNull<SpeechService>() }
     val voiceUseCase = remember(koin) { koin.getOrNull<VoiceUseCase>() }
-    val obfParser = remember(koin) { koin.getOrNull<ObfParser>() }
     val imageCacher = remember(koin) { koin.getOrNull<ImageCacher>() }
     val arasaacDownloader = remember(imageCacher) {
         imageCacher?.let(::ArasaacSymbolDownloadService)
@@ -113,14 +111,16 @@ fun SettingsScreen(
     var auditoryFishingEnabled by remember { mutableStateOf(false) }
     var usageLoggingEnabled by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) {
+        featureUsageReporter?.reportEvent(FeatureUsageEvents.SETTINGS_OPENED)
+    }
+
     // --- General section state ---
     var featureUsageReportingEnabled by remember { mutableStateOf(false) }
     var partnerWindowEnabled by remember { mutableStateOf(false) }
     var startupMode by remember { mutableStateOf(StartupMode.Keyboard) }
     var startupBoardSetId by remember { mutableStateOf<String?>(null) }
     var availableBoardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
-    var restoringBaseBoards by remember { mutableStateOf(false) }
-    var baseBoardsStatus by remember { mutableStateOf<String?>(null) }
     var cachedArasaacSymbols by remember { mutableStateOf(0) }
     var arasaacProgress by remember { mutableStateOf<ArasaacDownloadProgress?>(null) }
     var arasaacDownloadError by remember { mutableStateOf(false) }
@@ -132,8 +132,6 @@ fun SettingsScreen(
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val settingsUpdateMutex = remember { Mutex() }
-    val baseBoardsRestoredMessage = stringResource(Res.string.ui_settings_base_boards_restored)
-    val baseBoardsErrorMessage = stringResource(Res.string.ui_settings_base_boards_error)
 
     // Partner window device detection (desktop-only)
     val partnerDeviceConnected by PartnerWindowAvailability.deviceConnected.collectAsStateWithLifecycle()
@@ -330,7 +328,13 @@ fun SettingsScreen(
                         ) {
                             if (selectedTab == null) {
                                 SettingsHomePage(
-                                    onSelectCategory = { selectedTab = it },
+                                    onSelectCategory = {
+                                        selectedTab = it
+                                        featureUsageReporter?.reportEvent(
+                                            FeatureUsageEvents.SETTINGS_SECTION_OPENED,
+                                            "section" to it.name.lowercase()
+                                        )
+                                    },
                                     onOpenPronunciation = { showPronunciationDictionary = true },
                                     modifier = Modifier.fillMaxSize()
                                 )
@@ -348,8 +352,11 @@ fun SettingsScreen(
                                             onBack = { speechSubPage = null }
                                         )
                                         SettingsSpeechSubPage.F0Setup -> F0SetupScreen(
-                                            onDone = { speechSubPage = null },
-                                            onManualByok = { speechSubPage = null },
+                                            onDone = {
+                                                ttsEngine = TtsEngine.AZURE_USER_RESOURCE
+                                                updateSettings { it.copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE) }
+                                                speechSubPage = null
+                                            },
                                             onBack = { speechSubPage = null }
                                         )
                                     }
@@ -377,9 +384,18 @@ fun SettingsScreen(
                                     virtualMic = checked
                                     updateSettings { it.copy(virtualMicEnabled = checked) }
                                 },
-                                onOpenVoiceSelection = { speechSubPage = SettingsSpeechSubPage.VoiceSelection },
-                                onOpenLanguageSelection = { speechSubPage = SettingsSpeechSubPage.LanguageSelection },
-                                onOpenF0Setup = { speechSubPage = SettingsSpeechSubPage.F0Setup }
+                                onOpenVoiceSelection = {
+                                    speechSubPage = SettingsSpeechSubPage.VoiceSelection
+                                    featureUsageReporter?.reportEvent(FeatureUsageEvents.SETTINGS_SECTION_OPENED, "section" to "voice_selection")
+                                },
+                                onOpenLanguageSelection = {
+                                    speechSubPage = SettingsSpeechSubPage.LanguageSelection
+                                    featureUsageReporter?.reportEvent(FeatureUsageEvents.SETTINGS_SECTION_OPENED, "section" to "language_selection")
+                                },
+                                onOpenF0Setup = {
+                                    speechSubPage = SettingsSpeechSubPage.F0Setup
+                                    featureUsageReporter?.reportEvent(FeatureUsageEvents.SETTINGS_SECTION_OPENED, "section" to "azure_f0_setup")
+                                }
                             )
                                     SettingsTab.Display -> DisplaySection(
                                         fontSizeScale = fontSizeScale,
@@ -445,33 +461,6 @@ fun SettingsScreen(
                                         partnerWindowEnabled = partnerWindowEnabled,
                                         partnerDeviceConnected = partnerDeviceConnected,
                                         onPartnerWindowChange = { checked -> partnerWindowEnabled = checked; updateSettings { it.copy(partnerWindowEnabled = checked) } },
-                                        restoringBaseBoards = restoringBaseBoards,
-                                        baseBoardsStatus = baseBoardsStatus,
-                                        onRestoreBaseBoards = {
-                                            if (!restoringBaseBoards) {
-                                                scope.launch {
-                                                    restoringBaseBoards = true
-                                                    baseBoardsStatus = null
-                                                    val restored = runCatching {
-                                                        val parser = obfParser ?: error(baseBoardsErrorMessage)
-                                                        val useCase = boardSetUseCase ?: error(baseBoardsErrorMessage)
-                                                        restoreStarterBoards(systemLanguageTag(), parser, useCase)
-                                                            ?: error(baseBoardsErrorMessage)
-                                                    }
-                                                    baseBoardsStatus = restored.fold(
-                                                        onSuccess = {
-                                                            onBaseBoardsRestored?.invoke()
-                                                            baseBoardsRestoredMessage
-                                                        },
-                                                        onFailure = { it.message ?: baseBoardsErrorMessage }
-                                                    )
-                                                    availableBoardSets = runCatching {
-                                                        boardSetUseCase?.listBoardSets().orEmpty()
-                                                    }.getOrDefault(availableBoardSets)
-                                                    restoringBaseBoards = false
-                                                }
-                                            }
-                                        },
                                         arasaacAvailable = arasaacDownloader != null,
                                         cachedArasaacSymbols = cachedArasaacSymbols,
                                         arasaacProgress = arasaacProgress,
@@ -620,9 +609,6 @@ private fun SettingsHomePage(
                 stringResource(Res.string.ui_settings_startup_mode_screens),
                 stringResource(Res.string.ui_settings_startup_screen_title),
                 stringResource(Res.string.ui_settings_startup_screen_library),
-                stringResource(Res.string.ui_settings_base_boards_title),
-                stringResource(Res.string.ui_settings_base_boards_desc),
-                stringResource(Res.string.ui_settings_base_boards_restore),
                 stringResource(Res.string.ui_settings_symbols_title),
                 stringResource(Res.string.ui_settings_symbols_download_title),
                 stringResource(Res.string.ui_settings_symbols_download_desc),
@@ -836,18 +822,6 @@ private fun SettingsHomePage(
                 stringResource(Res.string.ui_settings_startup_mode_screens),
                 stringResource(Res.string.ui_settings_startup_screen_title),
                 "startup", "open"
-            )
-        ),
-        SettingsCategoryItem(
-            tab = SettingsTab.General,
-            title = stringResource(Res.string.ui_settings_base_boards_title),
-            subtitle = stringResource(Res.string.ui_settings_base_boards_desc),
-            icon = Icons.Filled.Storage,
-            iconContainerColor = Color(0xFFA9D49A),
-            iconColor = Color(0xFF1D4E18),
-            keywords = listOf(
-                stringResource(Res.string.ui_settings_base_boards_restore),
-                "starter", "restore", "boards"
             )
         ),
         SettingsCategoryItem(
@@ -1076,7 +1050,7 @@ private fun SpeechSection(
             onClick = onOpenF0Setup,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Set up automatically (Microsoft sign-in)")
+            Text("Set up free tier in Azure Portal")
         }
     }
 
@@ -1263,9 +1237,6 @@ private fun GeneralSection(
     partnerWindowEnabled: Boolean,
     partnerDeviceConnected: Boolean,
     onPartnerWindowChange: (Boolean) -> Unit,
-    restoringBaseBoards: Boolean,
-    baseBoardsStatus: String?,
-    onRestoreBaseBoards: () -> Unit,
     arasaacAvailable: Boolean,
     cachedArasaacSymbols: Int,
     arasaacProgress: ArasaacDownloadProgress?,
@@ -1335,31 +1306,6 @@ private fun GeneralSection(
                     }
                 }
             }
-        }
-    }
-
-    SettingsGroup(title = stringResource(Res.string.ui_settings_base_boards_title)) {
-        Text(
-            stringResource(Res.string.ui_settings_base_boards_desc),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedButton(
-            onClick = onRestoreBaseBoards,
-            enabled = !restoringBaseBoards
-        ) {
-            if (restoringBaseBoards) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(Icons.Filled.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
-            }
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(if (restoringBaseBoards) Res.string.ui_settings_base_boards_restoring else Res.string.ui_settings_base_boards_restore))
-        }
-        baseBoardsStatus?.let { status ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 
@@ -1437,9 +1383,14 @@ private fun GeneralSection(
 // ─── Voice Selection Page ────────────────────────────────────────────────────
 
 @Composable
-private fun VoiceSelectionPage(onBack: () -> Unit) {
+internal fun VoiceSelectionPage(
+    onBack: () -> Unit,
+    onVoiceSelected: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
     val koin = getKoin()
     val useCase = koinInject<VoiceUseCase>()
+    val featureUsageReporter = koinInject<FeatureUsageReporter>()
     val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
     var loading by remember { mutableStateOf(true) }
     var voices by remember { mutableStateOf<List<Voice>>(emptyList()) }
@@ -1451,8 +1402,6 @@ private fun VoiceSelectionPage(onBack: () -> Unit) {
     var systemVoices by remember { mutableStateOf<List<Voice>>(emptyList()) }
     var selectedLanguage by remember { mutableStateOf<String?>(null) }
     var availableLanguages by remember { mutableStateOf<List<String>>(emptyList()) }
-    var showLanguageFilter by remember { mutableStateOf(false) }
-    var showGenderFilter by remember { mutableStateOf(false) }
     var voiceSearch by remember { mutableStateOf("") }
     var genderFilter by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -1534,7 +1483,12 @@ private fun VoiceSelectionPage(onBack: () -> Unit) {
     val visibleVoiceCount = if (ttsEngine == TtsEngine.SYSTEM) filteredSystemVoices.size else filteredAzureVoices.size
     val totalVoiceCount = if (ttsEngine == TtsEngine.SYSTEM) systemVoices.size else voices.size
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(top = 24.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         OutlinedTextField(
             value = voiceSearch,
             onValueChange = { voiceSearch = it },
@@ -1551,63 +1505,28 @@ private fun VoiceSelectionPage(onBack: () -> Unit) {
             )
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(modifier = Modifier.weight(1f)) {
-                OutlinedButton(
-                    onClick = { showLanguageFilter = !showLanguageFilter },
-                    modifier = Modifier.height(36.dp).fillMaxWidth(),
-                    enabled = availableLanguages.isNotEmpty()
-                ) {
-                    Icon(Icons.Default.FilterList, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(selectedLanguage ?: stringResource(Res.string.voice_all_languages), style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                }
-                DropdownMenu(
-                    expanded = showLanguageFilter,
-                    onDismissRequest = { showLanguageFilter = false },
-                    modifier = Modifier.widthIn(min = 220.dp, max = 420.dp).heightIn(max = 320.dp)
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(Res.string.voice_all_languages)) },
-                        onClick = { selectedLanguage = null; showLanguageFilter = false }
-                    )
-                    availableLanguages.forEach { language ->
-                        DropdownMenuItem(
-                            text = { Text(language) },
-                            onClick = { selectedLanguage = language; showLanguageFilter = false }
-                        )
-                    }
-                }
+        VoiceFilterChips(
+            languages = availableLanguages,
+            selectedLanguage = selectedLanguage,
+            genders = availableGenders,
+            selectedGender = genderFilter,
+            onLanguageSelected = { language ->
+                selectedLanguage = language
+                featureUsageReporter.reportEvent(
+                    FeatureUsageEvents.VOICE_FILTER_APPLIED,
+                    "filter" to "language",
+                    "value" to if (language == null) "all" else "selected"
+                )
+            },
+            onGenderSelected = { gender ->
+                genderFilter = gender
+                featureUsageReporter.reportEvent(
+                    FeatureUsageEvents.VOICE_FILTER_APPLIED,
+                    "filter" to "gender",
+                    "value" to if (gender == null) "all" else "selected"
+                )
             }
-
-            Box(modifier = Modifier.weight(1f)) {
-                OutlinedButton(
-                    onClick = { showGenderFilter = !showGenderFilter },
-                    modifier = Modifier.height(36.dp).fillMaxWidth()
-                ) {
-                    Text(stringResource(Res.string.voice_gender_label, genderFilter ?: allLabel), style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                }
-                DropdownMenu(
-                    expanded = showGenderFilter,
-                    onDismissRequest = { showGenderFilter = false },
-                    modifier = Modifier.widthIn(min = 180.dp, max = 320.dp).heightIn(max = 300.dp)
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(allLabel) },
-                        onClick = { genderFilter = null; showGenderFilter = false }
-                    )
-                    availableGenders.forEach { gender ->
-                        DropdownMenuItem(
-                            text = { Text(gender) },
-                            onClick = { genderFilter = gender; showGenderFilter = false }
-                        )
-                    }
-                }
-            }
-        }
+        )
 
         Text(
             stringResource(Res.string.voice_showing_count, visibleVoiceCount, totalVoiceCount),
@@ -1654,7 +1573,7 @@ private fun VoiceSelectionPage(onBack: () -> Unit) {
                                     } catch (t: Throwable) {
                                         println("Failed to select voice ${v.name}: $t")
                                     }
-                                    onBack()
+                                    onVoiceSelected?.invoke() ?: onBack()
                                 }
                             },
                             onSettings = {
@@ -1716,7 +1635,11 @@ private fun VoiceRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(text = voice.displayName ?: voice.name ?: "Unknown", style = MaterialTheme.typography.bodyLarge)
-            Text(text = voice.primaryLanguage ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                text = voice.primaryLanguage?.let(::localizedLocaleDisplayName).orEmpty(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             if (isSelected) {
                 Text(
                     stringResource(Res.string.voice_selected),
@@ -1732,10 +1655,62 @@ private fun VoiceRow(
     }
 }
 
+@Composable
+private fun VoiceFilterChips(
+    languages: List<String>,
+    selectedLanguage: String?,
+    genders: List<String>,
+    selectedGender: String?,
+    onLanguageSelected: (String?) -> Unit,
+    onGenderSelected: (String?) -> Unit
+) {
+    val scrollState = rememberScrollState()
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(scrollState),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = selectedLanguage == null,
+            onClick = { onLanguageSelected(null) },
+            label = { Text(stringResource(Res.string.voice_all_languages)) }
+        )
+        languages.forEach { language ->
+            FilterChip(
+                selected = selectedLanguage == language,
+                onClick = { onLanguageSelected(language) },
+                label = { Text(localizedLocaleDisplayName(language)) }
+            )
+        }
+    }
+    if (genders.isNotEmpty()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = selectedGender == null,
+                onClick = { onGenderSelected(null) },
+                label = { Text(stringResource(Res.string.language_all)) }
+            )
+            genders.forEach { gender ->
+                FilterChip(
+                    selected = selectedGender == gender,
+                    onClick = { onGenderSelected(gender) },
+                    label = { Text(gender) }
+                )
+            }
+        }
+    }
+}
+
 // ─── Language Selection Page ─────────────────────────────────────────────────
 
 @Composable
-internal fun LanguageSelectionPage(onBack: () -> Unit) {
+internal fun LanguageSelectionPage(
+    onBack: () -> Unit,
+    onContinue: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
     val voiceUseCase = koinInject<VoiceUseCase>()
     val settingsUseCase = koinInject<SettingsUseCase>()
     val featureUsageReporter = koinInject<FeatureUsageReporter>()
@@ -1746,18 +1721,28 @@ internal fun LanguageSelectionPage(onBack: () -> Unit) {
 
     var available by remember { mutableStateOf<List<String>>(emptyList()) }
     var filter by remember { mutableStateOf("") }
-    var languageCodeFilter by remember { mutableStateOf<String?>(null) }
-    var regionFilter by remember { mutableStateOf<String?>(null) }
     var primary by remember { mutableStateOf("en-US") }
-    var secondary by remember { mutableStateOf("en-US") }
+    var secondary by remember { mutableStateOf("") }
+    var selectedVoiceIsMultilingual by remember { mutableStateOf(false) }
+    var useSecondaryLanguage by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val settings = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
         primary = settings.primaryLanguage
         secondary = settings.secondaryLanguage
         val sel = runCatching { voiceUseCase.selected() }.getOrNull()
+        selectedVoiceIsMultilingual = sel?.supportedLanguages
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?.size
+            ?.let { it > 1 }
+            ?: false
+        useSecondaryLanguage = selectedVoiceIsMultilingual &&
+            settings.secondaryLanguage.isNotBlank() &&
+            settings.secondaryLanguage != settings.primaryLanguage
         available = (sel?.supportedLanguages ?: emptyList())
-            .ifEmpty { listOf(settings.primaryLanguage, settings.secondaryLanguage, "en-US") }
+            .ifEmpty { listOf(settings.primaryLanguage, settings.secondaryLanguage, "en-US").filter { it.isNotBlank() } }
             .distinct()
     }
 
@@ -1765,30 +1750,21 @@ internal fun LanguageSelectionPage(onBack: () -> Unit) {
         available.map { it.trim() }.filter { it.isNotEmpty() }.distinct().sorted()
     }
 
-    val languageCodeOptions = remember(normalizedAvailable) {
-        normalizedAvailable.map { languageCodePart(it).uppercase() }.distinct().sorted()
-    }
-
-    val regionOptions = remember(normalizedAvailable) {
-        normalizedAvailable.mapNotNull { regionCodePart(it)?.uppercase() }.distinct().sorted()
-    }
-
     val queryTerms = remember(filter) {
         filter.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
     }
 
-    val filteredLanguages = remember(normalizedAvailable, queryTerms, languageCodeFilter, regionFilter) {
+    val filteredLanguages = remember(normalizedAvailable, queryTerms) {
         normalizedAvailable.filter { lang ->
             val codePart = languageCodePart(lang)
             val regionPart = regionCodePart(lang)
-            val matchesCodeFilter = languageCodeFilter == null || codePart.equals(languageCodeFilter, ignoreCase = true)
-            val matchesRegionFilter = regionFilter == null || (regionPart?.equals(regionFilter, ignoreCase = true) == true)
             val matchesSearch = queryTerms.all { term ->
                 lang.contains(term, ignoreCase = true) ||
+                    localizedLocaleDisplayName(lang).contains(term, ignoreCase = true) ||
                     codePart.contains(term, ignoreCase = true) ||
                     (regionPart?.contains(term, ignoreCase = true) == true)
             }
-            matchesCodeFilter && matchesRegionFilter && matchesSearch
+            matchesSearch
         }
     }
 
@@ -1815,7 +1791,12 @@ internal fun LanguageSelectionPage(onBack: () -> Unit) {
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(top = 24.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         OutlinedTextField(
             value = filter,
             onValueChange = { filter = it },
@@ -1832,29 +1813,13 @@ internal fun LanguageSelectionPage(onBack: () -> Unit) {
             )
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            LanguageFilterChip(
-                label = stringResource(Res.string.language_filter_code),
-                selected = languageCodeFilter,
-                allLabel = allLabel,
-                options = languageCodeOptions,
-                onSelect = { languageCodeFilter = it },
-                modifier = Modifier.weight(1f)
-            )
-            LanguageFilterChip(
-                label = stringResource(Res.string.language_filter_region),
-                selected = regionFilter,
-                allLabel = allLabel,
-                options = regionOptions,
-                onSelect = { regionFilter = it },
-                modifier = Modifier.weight(1f)
-            )
-        }
-
         SettingsGroup(title = stringResource(Res.string.language_primary)) {
+            Text(
+                stringResource(Res.string.language_primary_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
             LanguageList(
                 available = filteredLanguages,
                 selected = primary,
@@ -1863,50 +1828,63 @@ internal fun LanguageSelectionPage(onBack: () -> Unit) {
             )
         }
 
-        SettingsGroup(title = stringResource(Res.string.language_secondary)) {
-            LanguageList(
-                available = filteredLanguages,
-                selected = secondary,
-                emptyLabel = if (normalizedAvailable.isEmpty()) noLanguagesAvailableLabel else noLanguagesMatchLabel,
-                onSelect = { sel -> secondary = sel; updateLanguage("secondary", sel) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun LanguageFilterChip(
-    label: String,
-    selected: String?,
-    allLabel: String,
-    options: List<String>,
-    onSelect: (String?) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Column(modifier = modifier) {
-        Text(label, style = MaterialTheme.typography.labelSmall)
-        Spacer(Modifier.height(4.dp))
-        Box {
-            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth().height(36.dp)) {
-                Text(selected ?: allLabel, style = MaterialTheme.typography.bodySmall)
-            }
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.widthIn(min = 160.dp, max = 280.dp).heightIn(max = 280.dp)
-            ) {
-                DropdownMenuItem(
-                    text = { Text(allLabel) },
-                    onClick = { onSelect(null); expanded = false }
-                )
-                options.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option) },
-                        onClick = { onSelect(option); expanded = false }
+        if (selectedVoiceIsMultilingual) {
+            SettingsGroup(title = stringResource(Res.string.language_secondary)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(Res.string.language_secondary_enable), style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            stringResource(Res.string.language_secondary_description),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = useSecondaryLanguage,
+                        onCheckedChange = { enabled ->
+                            useSecondaryLanguage = enabled
+                            featureUsageReporter.reportEvent(
+                                FeatureUsageEvents.SECONDARY_LANGUAGE_TOGGLED,
+                                "enabled" to enabled.toString(),
+                                "source" to "language_selection"
+                            )
+                            if (enabled) {
+                                val initial = normalizedAvailable.firstOrNull { it != primary }
+                                    ?: normalizedAvailable.firstOrNull()
+                                    ?: primary
+                                secondary = initial
+                                updateLanguage("secondary", initial)
+                            } else {
+                                secondary = ""
+                                updateLanguage("secondary", "")
+                            }
+                        }
                     )
                 }
+                if (useSecondaryLanguage) {
+                    Spacer(Modifier.height(8.dp))
+                    LanguageList(
+                        available = filteredLanguages,
+                        selected = secondary,
+                        emptyLabel = if (normalizedAvailable.isEmpty()) noLanguagesAvailableLabel else noLanguagesMatchLabel,
+                        onSelect = { sel -> secondary = sel; updateLanguage("secondary", sel) }
+                    )
+                }
+            }
+        } else {
+            Text(
+                stringResource(Res.string.language_secondary_unavailable),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        if (onContinue != null) {
+            Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(Res.string.common_continue))
             }
         }
     }
@@ -1935,7 +1913,7 @@ private fun LanguageList(
                     .padding(vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(lang, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text(localizedLocaleDisplayName(lang), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 if (lang == selected) {
                     Icon(
                         Icons.Filled.Check,
