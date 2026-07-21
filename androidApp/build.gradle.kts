@@ -214,6 +214,22 @@ android {
         })
         .orElse("")
 
+    fun resolveConfigValue(key: String): String {
+        val localProperties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.inputStream().use(localProperties::load)
+        }
+        return sequenceOf(
+            System.getenv("WINGMATE_$key"),
+            localProperties.getProperty("WINGMATE_$key"),
+            localProperties.getProperty(key)
+        ).firstOrNull { !it.isNullOrBlank() } ?: ""
+    }
+
+    val entraClientId = resolveConfigValue("ENTRA_CLIENT_ID")
+    val entraRedirectHash = resolveConfigValue("ENTRA_REDIRECT_HASH")
+
     defaultConfig {
         applicationId = "com.hojmoseit.wingmate"
         minSdk = libs.versions.android.minSdk.get().toInt()
@@ -225,7 +241,43 @@ android {
             "OPENSYMBOLS_SECRET",
             toBuildConfigStringLiteral(openSymbolsSecret.get())
         )
+        buildConfigField(
+            "String",
+            "ENTRA_CLIENT_ID",
+            toBuildConfigStringLiteral(entraClientId)
+        )
+        buildConfigField(
+            "String",
+            "ENTRA_REDIRECT_HASH",
+            toBuildConfigStringLiteral(entraRedirectHash)
+        )
+        manifestPlaceholders["entraRedirectHash"] = entraRedirectHash.ifBlank { "YOUR_BASE64_SIGNATURE_HASH" }
     }
+
+    // Generate msal_config.json with real Entra values at build start
+    val msalConfigFile = file("src/main/res/raw/msal_config.json")
+    val msalClientId = entraClientId.ifBlank { "YOUR_ENTRA_CLIENT_ID" }
+    val msalRedirectHash = entraRedirectHash.ifBlank { "YOUR_REDIRECT_HASH" }
+    msalConfigFile.writeText("""
+        {
+          "client_id": "$msalClientId",
+          "authorization_user_agent": "BROWSER",
+          "redirect_uri": "msauth://com.hojmoseit.wingmate/$msalRedirectHash",
+          "account_mode": "MULTIPLE",
+          "broker_redirect_uri_registered": false,
+          "authorities": [
+            {
+              "type": "AAD",
+              "audience": {
+                "type": "AzureADMyOrg",
+                "tenant_id": "common"
+              },
+              "default": true
+            }
+          ]
+        }
+    """.trimIndent())
+    println("msal_config.json: client_id=$msalClientId redirect_hash=$msalRedirectHash")
 
     tasks.register("incrementVersionCode") {
         doLast {

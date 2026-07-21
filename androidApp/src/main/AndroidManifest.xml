@@ -55,7 +55,7 @@
                 <data
                     android:scheme="msauth"
                     android:host="com.hojmoseit.wingmate"
-                    android:path="/YOUR_BASE64_SIGNATURE_HASH" />
+                    android:path="/${entraRedirectHash}" />
             </intent-filter>
         </activity>
     </application>

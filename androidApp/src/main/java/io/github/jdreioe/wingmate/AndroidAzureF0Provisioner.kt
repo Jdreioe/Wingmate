@@ -27,31 +27,33 @@ class AndroidAzureF0Provisioner(
     private val scopes = arrayOf("https://management.azure.com/user_impersonation")
 
     private val msalApp: ISingleAccountPublicClientApplication by lazy {
-        val config = com.hojmoseit.wingmate.R.raw.msal_config
-        PublicClientApplication.createSingleAccountPublicClientApplication(context, config)
+        PublicClientApplication.createSingleAccountPublicClientApplication(
+            context, com.hojmoseit.wingmate.R.raw.msal_config
+        )
     }
 
     override suspend fun signIn(): AzureSignInResult = withContext(Dispatchers.Main) {
         val activity = getActivity() ?: return@withContext AzureSignInResult.ERROR("No activity context")
-        suspendCancellableCoroutine { cont ->
+        val result: AzureSignInResult = suspendCancellableCoroutine { cont ->
             msalApp.signIn(activity, null, scopes, object : AuthenticationCallback {
                 override fun onSuccess(authenticationResult: IAuthenticationResult) {
                     cont.resume(AzureSignInResult.SUCCESS)
                 }
                 override fun onError(exception: MsalException) {
-                    val result = if (exception is MsalUserCancelException) {
+                    val res: AzureSignInResult = if (exception is MsalUserCancelException) {
                         AzureSignInResult.CANCELLED
                     } else {
                         println("MSAL sign-in error: ${exception.message}")
                         AzureSignInResult.ERROR(exception.message)
                     }
-                    cont.resume(result)
+                    cont.resume(res)
                 }
                 override fun onCancel() {
                     cont.resume(AzureSignInResult.CANCELLED)
                 }
             })
         }
+        result
     }
 
     override suspend fun signOut() = withContext(Dispatchers.Main) {
