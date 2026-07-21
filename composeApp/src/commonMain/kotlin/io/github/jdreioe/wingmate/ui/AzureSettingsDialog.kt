@@ -8,33 +8,31 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.application.FeatureUsageEvents
+import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.SettingsStateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.getKoin
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.ui_settings_feature_reporting_desc
+import wingmatekmp.composeapp.generated.resources.ui_settings_feature_reporting_title
+
 @Composable
 fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
     if (!show) return
 
-    // get the ConfigRepository from Koin in a safe way
-    val configRepo = remember {
-        org.koin.core.context.GlobalContext.getOrNull()?.let { koin ->
-            runCatching { koin.get<ConfigRepository>() }.getOrNull()
-        }
-    }
-    val settingsUseCase = remember {
-        org.koin.core.context.GlobalContext.getOrNull()?.let { koin ->
-            runCatching { koin.get<SettingsUseCase>() }.getOrNull()
-        }
-    }
-    val settingsStateManager = remember {
-        org.koin.core.context.GlobalContext.getOrNull()?.let { koin ->
-            runCatching { koin.get<SettingsStateManager>() }.getOrNull()
-        }
-    }
+    val koin = getKoin()
+    // get dependencies in a safe way
+    val configRepo = remember(koin) { koin.getOrNull<ConfigRepository>() }
+    val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
+    val settingsStateManager = remember(koin) { koin.getOrNull<SettingsStateManager>() }
+    val featureUsageReporter = remember(koin) { koin.getOrNull<FeatureUsageReporter>() }
 
     // Log which ConfigRepository implementation we got (helps diagnose persistence)
     LaunchedEffect(configRepo) {
@@ -55,8 +53,9 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
 
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
-    var useSystemTts by remember { mutableStateOf(false) }
+    var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var virtualMic by remember { mutableStateOf(false) }
+    var featureUsageReportingEnabled by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     
     // UI Scaling state variables
@@ -70,7 +69,6 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
     var forceDarkTheme by remember { mutableStateOf<Boolean?>(null) }
     var useCustomColors by remember { mutableStateOf(false) }
     var primaryColor by remember { mutableStateOf("") }
-    var puckSpeedThreshold by remember { mutableStateOf(15000f) }
     
     val scope = rememberCoroutineScope()
 
@@ -88,8 +86,9 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
             val settings = withContext(Dispatchers.Default) { 
                 runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
             }
-            useSystemTts = settings.useSystemTts
+            ttsEngine = settings.ttsEngine
             virtualMic = settings.virtualMicEnabled
+            featureUsageReportingEnabled = settings.featureUsageReportingEnabled
             fontSizeScale = settings.fontSizeScale
             playbackIconScale = settings.playbackIconScale
             categoryChipScale = settings.categoryChipScale
@@ -98,7 +97,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
             forceDarkTheme = settings.forceDarkTheme
             useCustomColors = settings.useCustomColors
             primaryColor = settings.primaryColor ?: "#7C4DFF"
-            puckSpeedThreshold = settings.puckSpeedThreshold.toFloat()
+            featureUsageReporter?.setEnabled(settings.featureUsageReportingEnabled)
         }
         loading = false
     }
@@ -135,21 +134,21 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
-                            selected = !useSystemTts,
-                            onClick = { useSystemTts = false },
+                            selected = ttsEngine != TtsEngine.SYSTEM,
+                            onClick = { ttsEngine = TtsEngine.AZURE_USER_RESOURCE },
                             label = { Text("Azure TTS") },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
-                            selected = useSystemTts,
-                            onClick = { useSystemTts = true },
+                            selected = ttsEngine == TtsEngine.SYSTEM,
+                            onClick = { ttsEngine = TtsEngine.SYSTEM },
                             label = { Text("System TTS") },
                             modifier = Modifier.weight(1f)
                         )
                     }
                     
                     // Azure Configuration (only show when Azure TTS is selected)
-                    if (!useSystemTts) {
+                    if (ttsEngine != TtsEngine.SYSTEM) {
                         Spacer(modifier = Modifier.height(16.dp))
                         val showKeyboard = rememberShowKeyboardOnFocus()
                         OutlinedTextField(
@@ -185,118 +184,34 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                         }
                     }
 
-                    // Android Puck.js Toggle
-                    if (!isDesktop()) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        var puckRunning by remember {
-                            mutableStateOf(
-                                runCatching {
-                                    Class.forName("io.github.jdreioe.wingmate.puck.PuckJsService")
-                                        .getField("Companion").get(null)?.let { companion ->
-                                            companion.javaClass.getMethod("isRunning").invoke(companion) as? Boolean
-                                        } ?: false
-                                }.getOrDefault(false)
-                            )
-                        }
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            val context = remember {
-                                runCatching { 
-                                    Class.forName("org.koin.core.context.GlobalContext")
-                                        .getMethod("get", Class.forName("org.koin.core.KoinApplication").kotlin.java)
-                                        .declaringClass // fallback, easier to just use Koin directly if we can, but let's just get context via App wrapper or typical Android means
-                                        null // We'll just use the activity context via LocalContext if this wasn't common code.
-                                }.getOrNull()
-                                // Actually, instead of Koin, let's just find the AndroidApp instance or MainActivity if needed, 
-                                // but we are in common module. The safest way is to use a platform expect/actual or just use Koin properly:
-                                runCatching {
-                                    val koin = org.koin.core.context.GlobalContext.get()
-                                    // Koin has a get() but we can't easily resolve the inline reified version via reflection easily without kotlin-reflect.
-                                    // Let's use a known KotlinBridge or App context if available.
-                                    // Alternatively, since we know it's Android if isDesktop() is false:
-                                    val activityThread = Class.forName("android.app.ActivityThread")
-                                    val currentActivityThread = activityThread.getMethod("currentActivityThread").invoke(null)
-                                    val app = activityThread.getMethod("getApplication").invoke(currentActivityThread)
-                                    app
-                                }.getOrNull()
-                            }
-                            Switch(
-                                checked = puckRunning,
-                                onCheckedChange = { start ->
-                                    puckRunning = start
-                                    context?.let { ctx ->
-                                        try {
-                                            val serviceClass = Class.forName("io.github.jdreioe.wingmate.puck.PuckJsService")
-                                            val intentClass = Class.forName("android.content.Intent")
-                                            val contextClass = Class.forName("android.content.Context")
-                                            val intent = intentClass.getConstructor(contextClass, Class::class.java).newInstance(ctx, serviceClass)
-                                            
-                                            val buildClass = Class.forName("android.os.Build\$VERSION")
-                                            val sdkInt = buildClass.getField("SDK_INT").getInt(null)
-                                            val codesClass = Class.forName("android.os.Build\$VERSION_CODES")
-                                            val oCode = codesClass.getField("O").getInt(null)
-                                            
-                                            if (start) {
-                                                if (sdkInt >= oCode) {
-                                                    contextClass.getMethod("startForegroundService", intentClass).invoke(ctx, intent)
-                                                } else {
-                                                    contextClass.getMethod("startService", intentClass).invoke(ctx, intent)
-                                                }
-                                            } else {
-                                                contextClass.getMethod("stopService", intentClass).invoke(ctx, intent)
-                                            }
-                                        } catch (e: Exception) {
-                                            println("Failed to toggle Puck.js service: ${e.message}")
-                                        }
-                                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = featureUsageReportingEnabled,
+                            onCheckedChange = { checked ->
+                                featureUsageReportingEnabled = checked
+                                scope.launch {
+                                    updateSettings { it.copy(featureUsageReportingEnabled = checked) }
+                                    featureUsageReporter?.setEnabled(checked)
+                                    featureUsageReporter?.reportEvent(
+                                        FeatureUsageEvents.ANALYTICS_CONSENT_CHANGED,
+                                        "enabled" to checked.toString(),
+                                        "source" to "speech_settings_dialog"
+                                    )
                                 }
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Column {
-                                Text("Enable Puck.js Integration")
-                                Text(
-                                    if (puckRunning) "BLE Service is running" else "Connect Puck.js via BLE",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
                             }
-                        }
-                        
-                        // Puck.js Speed Threshold Slider
-                        Spacer(modifier = Modifier.height(16.dp))
+                        )
+                        Spacer(Modifier.width(8.dp))
                         Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                            ) {
-                                Text("Puck.js Speed Threshold", style = MaterialTheme.typography.bodyMedium)
-                                // Map threshold variance to approx km/h for display
-                                // 1000 threshold -> ~15 km/h (very sensitive)
-                                // 100000 threshold -> ~0.5 km/h (very low sensitivity)
-                                // We'll use a simpler inverse linear display: 
-                                // approx km/h = 100000 / threshold (clamped)
-                                val approxKmh = (100000.0 / puckSpeedThreshold.toDouble()).coerceIn(0.5, 15.0)
-                                Text("${"%.1f".format(approxKmh)} km/h", style = MaterialTheme.typography.bodySmall)
-                            }
-                            Slider(
-                                value = puckSpeedThreshold,
-                                onValueChange = { newValue ->
-                                    puckSpeedThreshold = newValue
-                                    scope.launch {
-                                        updateSettings { it.copy(puckSpeedThreshold = newValue.toDouble()) }
-                                    }
-                                },
-                                valueRange = 1000f..100000f,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            Text(stringResource(Res.string.ui_settings_feature_reporting_title))
                             Text(
-                                "Adjust if the app triggers 'Moving' actions too easily or not enough.",
+                                stringResource(Res.string.ui_settings_feature_reporting_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    
+
                     // UI Scaling Settings
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
@@ -442,20 +357,21 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                         if (settingsUseCase != null) {
                             val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
                             val updated = current.copy(
-                                useSystemTts = useSystemTts, 
+                                ttsEngine = ttsEngine, 
                                 virtualMicEnabled = virtualMic,
+                                featureUsageReportingEnabled = featureUsageReportingEnabled,
                                 fontSizeScale = fontSizeScale,
                                 playbackIconScale = playbackIconScale,
                                 categoryChipScale = categoryChipScale,
                                 buttonScale = buttonScale,
-                                inputFieldScale = inputFieldScale,
-                                puckSpeedThreshold = puckSpeedThreshold.toDouble()
+                                inputFieldScale = inputFieldScale
                             )
                             settingsUseCase.update(updated)
+                            featureUsageReporter?.setEnabled(featureUsageReportingEnabled)
                         }
-                        
+
                         // Save Azure config only if Azure TTS is selected
-                        if (!useSystemTts && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
+                        if (ttsEngine != TtsEngine.SYSTEM && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
                             println("Saving speech config: endpoint='$endpoint'")
                             try {
                                 configRepo.saveSpeechConfig(SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey))

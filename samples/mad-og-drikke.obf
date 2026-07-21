@@ -1,0 +1,27 @@
+{
+  "format": "open-board-0.1",
+  "id": "mad_og_drikke",
+  "locale": "da",
+  "name": "Mad og Drikke",
+  "description_html": "En tavle med mad og drikke til AK-brugere.",
+  "grid": {
+    "rows": 3,
+    "columns": 3,
+    "order": [
+      ["b1", "b2", "b3"],
+      ["b4", "b5", "b6"],
+      ["b7", "b8", "b9"]
+    ]
+  },
+  "buttons": [
+    { "id": "b1", "label": "vand", "vocalization": "vand", "background_color": "#e3f2fd" },
+    { "id": "b2", "label": "mælk", "vocalization": "mælk", "background_color": "#e3f2fd" },
+    { "id": "b3", "label": "saft", "vocalization": "saft", "background_color": "#e3f2fd" },
+    { "id": "b4", "label": "brød", "vocalization": "brød", "background_color": "#fff3e0" },
+    { "id": "b5", "label": "smør", "vocalization": "smør", "background_color": "#fff3e0" },
+    { "id": "b6", "label": "ost", "vocalization": "ost", "background_color": "#fff3e0" },
+    { "id": "b7", "label": "frugt", "vocalization": "frugt", "background_color": "#fce4ec" },
+    { "id": "b8", "label": "kage", "vocalization": "kage", "background_color": "#fce4ec" },
+    { "id": "b9", "label": "is", "vocalization": "is", "background_color": "#fce4ec" }
+  ]
+}

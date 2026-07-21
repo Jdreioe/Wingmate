@@ -1,0 +1,33 @@
+name: Deploy to Google Play
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install Infisical CLI
+        run: |
+          curl -1sLf 'https://dl.infisical.com/release/package/install.sh' | bash
+
+      - name: Publish to Google Play
+        run: infisical run -- ./gradlew publishRelease
+        env:
+          INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-release
+          path: androidApp/build/outputs/bundle/release/app-release.aab

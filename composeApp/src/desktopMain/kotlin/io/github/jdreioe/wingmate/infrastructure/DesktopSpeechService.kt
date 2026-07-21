@@ -31,7 +31,7 @@ import kotlinx.serialization.json.*
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 
 class DesktopSpeechService(
-    private val dictionaryRepo: PronunciationDictionaryRepository? = null
+    private val dictionaryRepo: PronunciationDictionaryRepository
 ) : SpeechService {
     private val client = HttpClient(OkHttp) {}
     private val log = LoggerFactory.getLogger("DesktopSpeechService")
@@ -63,12 +63,9 @@ class DesktopSpeechService(
         
         var processedText = text
         
-        // Apply dictionary replacements if available
-        if (dictionaryRepo != null) {
-            val entries = dictionaryRepo.getAll()
-            if (entries.isNotEmpty()) {
-                processedText = applyDictionary(processedText, entries)
-            }
+        val entries = runCatching { dictionaryRepo.getAll() }.getOrDefault(emptyList())
+        if (entries.isNotEmpty()) {
+            processedText = applyDictionary(processedText, entries)
         }
 
         // Check if text contains SSML markup (user inserted via sidebar buttons OR dictionary injection)
@@ -122,7 +119,11 @@ class DesktopSpeechService(
              val pattern = "\\b${Regex.escape(entry.word)}\\b".toRegex(RegexOption.IGNORE_CASE)
              if (pattern.containsMatchIn(processed)) {
                  processed = processed.replace(pattern) { matchResult ->
-                     "<phoneme alphabet=\"${entry.alphabet}\" ph=\"${entry.phoneme}\">${matchResult.value}</phoneme>"
+                     if (entry.alphabet == "text") {
+                         "<sub alias=\"${entry.phoneme}\">${matchResult.value}</sub>"
+                     } else {
+                         "<phoneme alphabet=\"${entry.alphabet}\" ph=\"${entry.phoneme}\">${matchResult.value}</phoneme>"
+                     }
                  }
              }
         }
@@ -162,6 +163,57 @@ class DesktopSpeechService(
         
         // Start playing segments
         playSegmentsFromIndex(0)
+    }
+
+    override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean {
+        val file = File(audioFilePath)
+        if (!file.exists() || file.length() <= 0L) {
+            log.info("recorded audio file missing or empty: {}", audioFilePath)
+            return false
+        }
+
+        return runCatching {
+            if (isPlaying || currentPlayer != null || currentProcess != null) {
+                stop()
+            }
+            stopRequested.set(false)
+            pausedAtSegment = false
+            currentSegments = emptyList()
+            currentSegmentIndex = 0
+
+            withContext(Dispatchers.IO) { playAudioFile(file) }
+
+            val spokenText = textForHistory?.trim().orEmpty()
+            if (spokenText.isNotEmpty()) {
+                runCatching {
+                    val koin = GlobalContext.getOrNull()
+                    val repo = koin?.get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
+                    val now = System.currentTimeMillis()
+                    val effectiveVoice = voice ?: Voice(name = "Recorded Phrase", primaryLanguage = null)
+                    repo?.add(
+                        io.github.jdreioe.wingmate.domain.SaidText(
+                            date = now,
+                            saidText = spokenText,
+                            voiceName = effectiveVoice.name,
+                            pitch = effectiveVoice.pitch,
+                            speed = effectiveVoice.rate,
+                            audioFilePath = file.absolutePath,
+                            createdAt = now,
+                            position = 0,
+                            primaryLanguage = effectiveVoice.selectedLanguage?.takeIf { it.isNotBlank() }
+                                ?: effectiveVoice.primaryLanguage
+                        )
+                    )
+                }.onFailure { t ->
+                    log.warn("failed to append history for recorded audio playback", t)
+                }
+            }
+
+            true
+        }.getOrElse { t ->
+            log.warn("failed to play recorded audio file", t)
+            false
+        }
     }
 
     private suspend fun maybePlayFromCache(
@@ -242,7 +294,12 @@ class DesktopSpeechService(
     }
 
     private suspend fun speakWithAzureTts(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
-        val cfg = getConfig() ?: throw IllegalStateException("No Azure TTS configuration found. Please configure Azure endpoint and subscription key.")
+        val cfg = getConfig()
+        if (cfg == null) {
+            log.warn("No Azure TTS configuration found; falling back to system TTS")
+            speakWithSystemTts(text, voice, pitch, rate)
+            return
+        }
         
         // Enhanced voice parameter handling
         val baseVoice = voice ?: Voice(name = "en-US-JennyNeural", primaryLanguage = "en-US")
@@ -499,12 +556,12 @@ class DesktopSpeechService(
         val langCode = language.take(2).lowercase()
         log.info("Guessing pronunciation for: '$text' in language '$langCode' using Wiktionary")
         return try {
-            // Use Wiktionary API as a robust source for IPA
-            val url = "https://en.wiktionary.org/w/api.php?action=query&titles=${text.trim()}&prop=revisions&rvprop=content&format=json"
-            log.info("Fetching URL: $url")
-            val response = client.get(url)
-            
-            if (response.status.value == 200) {
+            suspend fun lookup(edition: String, requireLanguageTag: Boolean): String? {
+                log.info("Looking up pronunciation in {} Wiktionary", edition)
+                val response = client.get("https://$edition.wiktionary.org/w/api.php") {
+                    url { parameters.append("action", "query"); parameters.append("titles", text.trim()); parameters.append("prop", "revisions"); parameters.append("rvprop", "content"); parameters.append("format", "json") }
+                }
+                if (response.status.value == 200) {
                 val body = response.bodyAsText()
                 val json = Json { ignoreUnknownKeys = true }
                 val root = json.parseToJsonElement(body).jsonObject
@@ -526,7 +583,7 @@ class DesktopSpeechService(
                 if (content != null) {
                     // Look for {{IPA|lang|/pronunciation/}}
                     // Regex to capture the content between slashes
-                    val regex = Regex("\\{\\{IPA\\|$langCode\\|/([^/]+)/")
+                    val regex = if (requireLanguageTag) Regex("\\{\\{IPA\\|$langCode\\|/([^/]+)/") else Regex("\\{\\{IPA\\|(?:$langCode\\|)?/([^/]+)/")
                     val match = regex.find(content)
                     if (match != null) {
                         val ipa = match.groupValues[1]
@@ -543,8 +600,10 @@ class DesktopSpeechService(
                         return ipa
                     }
                 }
+                }
+                return null
             }
-            null
+            lookup(langCode, requireLanguageTag = false) ?: if (langCode != "en") lookup("en", requireLanguageTag = true) else null
         } catch (e: Exception) {
             log.warn("Failed to guess pronunciation for '$text'", e)
             null
@@ -608,7 +667,7 @@ class DesktopSpeechService(
         val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
         val uiSettings = settingsRepo?.let { runCatching { runBlocking { it.get() } }.getOrNull() }
         
-        if (uiSettings?.useSystemTts == true) {
+        if (uiSettings?.ttsEngine == io.github.jdreioe.wingmate.domain.TtsEngine.SYSTEM) {
             // Use system TTS
             speakWithSystemTts(text, voice, pitch, rate)
             return
@@ -657,7 +716,7 @@ class DesktopSpeechService(
         val koin = GlobalContext.getOrNull()
         val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
         val uiSettings = settingsRepo?.let { runCatching { runBlocking { it.get() } }.getOrNull() }
-        if (uiSettings?.useSystemTts == true) {
+        if (uiSettings?.ttsEngine == io.github.jdreioe.wingmate.domain.TtsEngine.SYSTEM) {
             log.info("System TTS preferred; skipping Azure SSML merge path")
             return false
         }
@@ -881,30 +940,33 @@ class DesktopSpeechService(
     }
 
     private suspend fun getConfig(): SpeechServiceConfig? {
-        // Get Azure config from repository or env vars
-        val koin = GlobalContext.getOrNull()
-        val repo = koin?.let { runCatching { it.get<ConfigRepository>() }.getOrNull() }
-        val config = repo?.let { 
-            runCatching { 
-                withContext(Dispatchers.IO) { it.getSpeechConfig() } 
-            }.getOrNull() 
-        }
-        
-        if (config != null) {
-            log.debug("loaded Azure config from repository (endpoint: ${config.endpoint})")
-            return config
-        }
-
-        // Fallback to environment variables
-        val endpoint = System.getenv("WINGMATE_AZURE_REGION")?.takeIf { it.isNotBlank() }
-        val key = System.getenv("WINGMATE_AZURE_KEY")?.takeIf { it.isNotBlank() }
-        
-        return if (endpoint != null && key != null) {
-            log.debug("loaded Azure config from environment variables (endpoint: $endpoint)")
-            SpeechServiceConfig(endpoint = endpoint, subscriptionKey = key)
-        } else {
-            log.warn("no Azure TTS configuration found - neither in repository nor environment variables")
-            null
+        // Use NonCancellable so that coroutine cancellation (e.g. from hover changes)
+        // doesn't cause a spurious null result and fallback to system TTS.
+        return withContext(kotlinx.coroutines.NonCancellable) {
+            val koin = GlobalContext.getOrNull()
+            val repo = koin?.let { runCatching { it.get<ConfigRepository>() }.getOrNull() }
+            val config = repo?.let { 
+                runCatching { 
+                    withContext(Dispatchers.IO) { it.getSpeechConfig() } 
+                }.getOrNull() 
+            }
+            
+            if (config != null) {
+                log.debug("loaded Azure config from repository (endpoint: ${config.endpoint})")
+                config
+            } else {
+                // Fallback to environment variables
+                val endpoint = System.getenv("WINGMATE_AZURE_REGION")?.takeIf { it.isNotBlank() }
+                val key = System.getenv("WINGMATE_AZURE_KEY")?.takeIf { it.isNotBlank() }
+                
+                if (endpoint != null && key != null) {
+                    log.debug("loaded Azure config from environment variables (endpoint: $endpoint)")
+                    SpeechServiceConfig(endpoint = endpoint, subscriptionKey = key)
+                } else {
+                    log.warn("no Azure TTS configuration found - neither in repository nor environment variables")
+                    null
+                }
+            }
         }
     }
 

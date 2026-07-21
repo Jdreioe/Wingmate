@@ -8,7 +8,7 @@ androidx-appcompat = "1.7.2"
 androidx-constraintlayout = "2.2.1"
 androidx-core = "1.17.0"
 androidx-espresso = "3.7.0"
-androidx-lifecycle = "2.9.6"
+androidx-lifecycle = "2.9.4"
 androidx-testExt = "1.3.0"
 composeHotReload = "1.0.0"
 composeMultiplatform = "1.10.1"
@@ -23,7 +23,7 @@ okio = "3.9.0"
 koin = "4.1.1"
 sqldelight = "2.2.1"
 ktor = "3.4.0"
-kotlinx-datetime = "0.7.1"
+kotlinx-datetime = "0.6.0"
 kotlinx-serialization = "1.10.0"
 
 [libraries]
@@ -42,6 +42,10 @@ kotlinx-coroutinesSwing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-s
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "androidx-datastore-preferences" }
 androidx-compose-material-iconsExtended = { module = "androidx.compose.material:material-icons-extended", version.ref = "androidx-compose-material-icons-extended" }
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
+aptabase = { module = "com.github.aptabase:aptabase-kotlin", version = "0.0.8" }
+
+# Microsoft Authentication Library (MSAL) for Android
+msal = { module = "com.microsoft.identity.client:msal", version = "5.2.0" }
 
 # Koin DI
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
@@ -77,3 +81,4 @@ composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "k
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
 kotlinxSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+playPublisher = { id = "com.github.triplet.play", version = "4.0.0" }

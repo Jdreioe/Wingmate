@@ -9,11 +9,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
-import org.koin.core.context.GlobalContext
+import org.koin.compose.koinInject
 
 @Composable
 fun VoiceEngineSelectorScreen(
@@ -21,21 +22,17 @@ fun VoiceEngineSelectorScreen(
     onCancel: () -> Unit,
     onAzureSelected: () -> Unit = {}
 ) {
-    val settingsUseCase = remember {
-        GlobalContext.getOrNull()?.let { koin -> runCatching { koin.get<SettingsUseCase>() }.getOrNull() }
-    }
+    val settingsUseCase = koinInject<SettingsUseCase>()
 
-    var useSystemTts by remember { mutableStateOf(false) }
+    var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(settingsUseCase) {
-        if (settingsUseCase != null) {
-            val settings = withContext(Dispatchers.Default) {
-                runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-            }
-            useSystemTts = settings.useSystemTts
+        val settings = withContext(Dispatchers.Default) {
+            runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
         }
+        ttsEngine = settings.ttsEngine
 
         loading = false
     }
@@ -68,16 +65,16 @@ fun VoiceEngineSelectorScreen(
                 // Azure TTS Card
                 Card(
                     onClick = {
-                        useSystemTts = false
+                        ttsEngine = TtsEngine.AZURE_USER_RESOURCE
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (!useSystemTts)
+                        containerColor = if (ttsEngine != TtsEngine.SYSTEM)
                             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
                         else
                             MaterialTheme.colorScheme.surfaceContainer
                     ),
-                    border = if (!useSystemTts)
+                    border = if (ttsEngine != TtsEngine.SYSTEM)
                         BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                     else null
                 ) {
@@ -91,7 +88,7 @@ fun VoiceEngineSelectorScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                             )
-                            if (!useSystemTts) {
+                            if (ttsEngine != TtsEngine.SYSTEM) {
                                 Spacer(Modifier.width(8.dp))
                                 AssistChip(
                                     onClick = { },
@@ -132,16 +129,16 @@ fun VoiceEngineSelectorScreen(
                 // System TTS Card
                 Card(
                     onClick = {
-                        useSystemTts = true
+                        ttsEngine = TtsEngine.SYSTEM
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (useSystemTts)
+                        containerColor = if (ttsEngine == TtsEngine.SYSTEM)
                             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
                         else
                             MaterialTheme.colorScheme.surfaceContainer
                     ),
-                    border = if (useSystemTts)
+                    border = if (ttsEngine == TtsEngine.SYSTEM)
                         BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                     else null
                 ) {
@@ -155,7 +152,7 @@ fun VoiceEngineSelectorScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                             )
-                            if (useSystemTts) {
+                            if (ttsEngine == TtsEngine.SYSTEM) {
                                 Spacer(Modifier.width(8.dp))
                                 AssistChip(
                                     onClick = { },
@@ -231,17 +228,15 @@ fun VoiceEngineSelectorScreen(
                         onClick = {
                             scope.launch {
                                 // Save the selected TTS engine setting
-                                settingsUseCase?.let { useCase ->
-                                    val currentSettings: Settings = withContext(Dispatchers.Default) {
-                                        runCatching { useCase.get() }.getOrNull() ?: Settings()
-                                    }
-                                    runCatching {
-                                        useCase.update(currentSettings.copy(useSystemTts = useSystemTts))
-                                    }
+                                val currentSettings: Settings = withContext(Dispatchers.Default) {
+                                    runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
+                                }
+                                runCatching {
+                                    settingsUseCase.update(currentSettings.copy(ttsEngine = ttsEngine))
                                 }
 
                                 // Navigate to appropriate next screen based on selection
-                                if (useSystemTts) {
+                                if (ttsEngine == TtsEngine.SYSTEM) {
                                     onNext() // Go directly to voice selection
                                 } else {
                                     onAzureSelected() // Go to Azure configuration

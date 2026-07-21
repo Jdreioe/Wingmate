@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -16,8 +17,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -34,13 +35,16 @@ import io.github.jdreioe.wingmate.presentation.DisplayWindowBus
  */
 @Composable
 fun FullScreenDisplay(onClose: (() -> Unit)? = null) {
-    val text by DisplayTextBus.text.collectAsState()
+    val text by DisplayTextBus.text.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
 
     val handleClose: () -> Unit = onClose ?: { DisplayWindowBus.close() }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        // safeDrawingPadding keeps the back arrow below the status bar (Android
+        // edge-to-edge) and the text clear of the navigation bar. On external
+        // displays and desktop these insets are zero, so this is a no-op there.
+        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
             // --- Back / close button (own row, never blocked by scroll) ---
             IconButton(
                 onClick = handleClose,

@@ -216,9 +216,11 @@
 "pronunciation.empty" = "Ingen brugerdefinerede udtaler.";
 "pronunciation.word" = "Ord";
 "pronunciation.word.placeholder" = "Fx: Wingmate";
-"pronunciation.phoneme" = "Fonem";
-"pronunciation.phoneme.placeholder" = "Fx: w i ng m ey t";
-"pronunciation.alphabet" = "Alfabet";
+"pronunciation.phoneme" = "Sådan skal det lyde";
+"pronunciation.phoneme.placeholder" = "Fx: ving-mate";
+"pronunciation.easy_help" = "Skriv lyden med almindelige bogstaver. Du behøver ikke at kende IPA.";
+"pronunciation.alphabet" = "Metode";
+"pronunciation.alphabet.easy" = "Almindelig stavning (nem)";
 "pronunciation.add_title" = "Tilføj udtale";
 "pronunciation.ipa_palette" = "IPA-symboler";
 "pronunciation.delete_last" = "Slet sidste";

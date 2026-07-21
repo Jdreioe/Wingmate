@@ -13,9 +13,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.application.SettingsUseCase
-import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @Composable
 fun VoiceSettingsDialog(
@@ -31,17 +32,15 @@ fun VoiceSettingsDialog(
     var pitch by remember { mutableStateOf(voice.pitch ?: 1.0) }
     var rate by remember { mutableStateOf(voice.rate ?: 1.0) }
     var showEngineComparison by remember { mutableStateOf(false) }
-    val speechService = remember { GlobalContext.get().get<SpeechService>() }
-    val settingsUseCase = remember { GlobalContext.getOrNull()?.let { runCatching { it.get<SettingsUseCase>() }.getOrNull() } }
+    val speechService = koinInject<SpeechService>()
+    val settingsUseCase = koinInject<SettingsUseCase>()
     val scope = rememberCoroutineScope()
     
     // Get current TTS engine setting
-    var useSystemTts by remember { mutableStateOf(false) }
+    var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     LaunchedEffect(settingsUseCase) {
-        if (settingsUseCase != null) {
-            val settings = runCatching { settingsUseCase.get() }.getOrNull()
-            useSystemTts = settings?.useSystemTts ?: false
-        }
+        val settings = runCatching { settingsUseCase.get() }.getOrNull()
+        ttsEngine = settings?.ttsEngine ?: TtsEngine.SYSTEM
     }
 
     AlertDialog(
@@ -62,12 +61,12 @@ fun VoiceSettingsDialog(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            "Current Engine: ${if (useSystemTts) "System TTS" else "Azure TTS"}",
+                            "Current Engine: ${if (ttsEngine == TtsEngine.SYSTEM) "System TTS" else "Azure TTS"}",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            if (useSystemTts) "Using device's built-in text-to-speech" else "Using Microsoft Azure Cognitive Services",
+                            if (ttsEngine == TtsEngine.SYSTEM) "Using device's built-in text-to-speech" else "Using Microsoft Azure Cognitive Services",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
@@ -153,7 +152,7 @@ fun VoiceSettingsDialog(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (!useSystemTts) 
+                            containerColor = if (ttsEngine != TtsEngine.SYSTEM) 
                                 MaterialTheme.colorScheme.primaryContainer 
                             else 
                                 MaterialTheme.colorScheme.surfaceContainer
@@ -169,7 +168,7 @@ fun VoiceSettingsDialog(
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
-                                if (!useSystemTts) {
+                                if (ttsEngine != TtsEngine.SYSTEM) {
                                     Spacer(Modifier.width(8.dp))
                                     AssistChip(
                                         onClick = { },
@@ -210,7 +209,7 @@ fun VoiceSettingsDialog(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (useSystemTts) 
+                            containerColor = if (ttsEngine == TtsEngine.SYSTEM) 
                                 MaterialTheme.colorScheme.primaryContainer 
                             else 
                                 MaterialTheme.colorScheme.surfaceContainer
@@ -226,7 +225,7 @@ fun VoiceSettingsDialog(
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
-                                if (useSystemTts) {
+                                if (ttsEngine == TtsEngine.SYSTEM) {
                                     Spacer(Modifier.width(8.dp))
                                     AssistChip(
                                         onClick = { },

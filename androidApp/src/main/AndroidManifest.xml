@@ -1,17 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <!-- BLE permissions for Puck.js -->
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <application
-        android:label="Wingmate KMP"
+        android:name="io.github.jdreioe.wingmate.WingmateApplication"
+        android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
         <provider
@@ -26,6 +28,7 @@
         <activity
             android:name="io.github.jdreioe.wingmate.MainActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:windowSoftInputMode="adjustResize|stateHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -35,14 +38,22 @@
         <activity
             android:name="io.github.jdreioe.wingmate.display.PrimaryDisplayActivity"
             android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+
+        <!-- MSAL redirect URI for browser-based auth -->
         <activity
-            android:name="io.github.jdreioe.wingmate.display.RearDisplayActivity"
-            android:exported="false"
-            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
-        <service
-            android:name="io.github.jdreioe.wingmate.puck.PuckJsService"
-            android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:name="com.microsoft.identity.client.BrowserTabActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="msauth"
+                    android:host="com.hojmoseit.wingmate"
+                    android:path="/${entraRedirectHash}" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>

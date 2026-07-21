@@ -9,6 +9,19 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.draw.scale
+import io.github.jdreioe.wingmate.domain.AacLogger
+import io.github.jdreioe.wingmate.domain.SpeechService
+import org.koin.compose.koinInject
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,14 +44,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import io.github.jdreioe.wingmate.ui.parseHexToColor
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import androidx.compose.material3.SmallFloatingActionButton
 import io.github.jdreioe.wingmate.domain.Phrase
-import org.koin.core.context.GlobalContext
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.getKoin
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.common_delete
+import wingmatekmp.composeapp.generated.resources.phrase_item_copy_soundfile
+import wingmatekmp.composeapp.generated.resources.phrase_item_edit
+import wingmatekmp.composeapp.generated.resources.phrase_item_move_down
+import wingmatekmp.composeapp.generated.resources.phrase_item_move_up
+import wingmatekmp.composeapp.generated.resources.phrase_item_share_soundfile
+import wingmatekmp.composeapp.generated.resources.phrase_item_speak_secondary
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -59,14 +83,84 @@ fun PhraseGridItem(
     readOnly: Boolean = false,
     onCopyAudio: ((filePath: String) -> Unit)? = null,
 ) {
-    val infiniteTransition = rememberInfiniteTransition()
-    val angle = infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(animation = tween(durationMillis = 300, easing = LinearEasing), repeatMode = RepeatMode.Reverse)
+    val koin = getKoin()
+    val shareService = remember(koin) {
+        koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>()
+    }
+    val editLabel = stringResource(Res.string.phrase_item_edit)
+    val speakSecondaryLabel = stringResource(Res.string.phrase_item_speak_secondary)
+    val deleteLabel = stringResource(Res.string.common_delete)
+    val copySoundfileLabel = stringResource(Res.string.phrase_item_copy_soundfile)
+    val shareSoundfileLabel = stringResource(Res.string.phrase_item_share_soundfile)
+    val moveUpLabel = stringResource(Res.string.phrase_item_move_up)
+    val moveDownLabel = stringResource(Res.string.phrase_item_move_down)
+
+    val settings by rememberReactiveSettings()
+    
+    // High Contrast Overrides
+    val highContrastContainer = if (MaterialTheme.colorScheme.surface == Color.Black || settings.forceDarkTheme == true) Color.Black else Color.White
+    val highContrastContent = if (highContrastContainer == Color.Black) Color.White else Color.Black
+    
+    val bgColor = if (settings.highContrastMode) {
+        highContrastContainer
+    } else {
+        item.backgroundColor?.let { try { parseHexToColor(it) } catch (_: Throwable) { MaterialTheme.colorScheme.surfaceVariant } } ?: MaterialTheme.colorScheme.surfaceVariant
+    }
+    
+    val contentColor = when {
+        settings.highContrastMode -> highContrastContent
+        item.backgroundColor != null -> contrastingContentColor(bgColor)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    
+    val speechService: SpeechService = koinInject()
+    val aacLogger: AacLogger = koinInject()
+    
+    // Pulse animation state
+    var isSelected by remember { mutableStateOf(false) }
+    val pulseScale by animateFloatAsState(
+        targetValue = if (isSelected) 1.1f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        finishedListener = { isSelected = false }
     )
 
-    val bgColor = item.backgroundColor?.let { try { parseHexToColor(it) } catch (_: Throwable) { MaterialTheme.colorScheme.surface } } ?: MaterialTheme.colorScheme.surface
+    // Dwell logic state
+    var isHovered by remember { mutableStateOf(false) }
+    var dwellProgress by remember { mutableStateOf(0f) }
+    
+    // Stable scope for fire-and-forget speech (survives hover changes)
+    val fishingScope = rememberCoroutineScope()
+
+    androidx.compose.runtime.LaunchedEffect(isHovered, settings.dwellToSelectMillis) {
+        if (isHovered && settings.dwellToSelectMillis > 0 && !isEditMode) {
+            val startTime = System.currentTimeMillis()
+            val duration = settings.dwellToSelectMillis
+            
+            // Auditory Fishing: Whisper label on hover start (fire-and-forget)
+            if (settings.auditoryFishingEnabled) {
+                if (item.text.isNotBlank()) {
+                    fishingScope.launch { runCatching { speechService.speak(item.text, rate = 0.8) } }
+                }
+            }
+            
+            while (isHovered) {
+                val now = System.currentTimeMillis()
+                val elapsed = now - startTime
+                dwellProgress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
+                
+                if (elapsed >= duration) {
+                    isSelected = true
+                    onPlay()
+                    aacLogger.logButtonClick(item.text, phraseId = item.id)
+                    dwellProgress = 0f
+                    break
+                }
+                delay(16)
+            }
+        } else {
+            dwellProgress = 0f
+        }
+    }
 
     var showMenu by remember { mutableStateOf(false) }
 
@@ -75,14 +169,73 @@ fun PhraseGridItem(
             .padding(4.dp)
             .fillMaxWidth()
             .height(phraseHeight)
-            // long-press opens contextual menu; tap inserts if onTap provided
-            .combinedClickable(
-                onClick = { showMenu = false; try { onTap?.invoke() ?: onPlay() } catch (_: Throwable) {} },
-                onLongClick = { showMenu = true }
-            ),
-        shape = RoundedCornerShape(8.dp)
+            .scale(pulseScale)
+            .alpha(if (item.isHidden) 0.5f else 1.0f)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        when (event.type) {
+                            PointerEventType.Enter -> isHovered = true
+                            PointerEventType.Exit -> isHovered = false
+                        }
+                    }
+                }
+            }
+            .let { baseModifier ->
+                val primaryAction = {
+                    showMenu = false
+                    isSelected = true
+                    aacLogger.logButtonClick(item.text, phraseId = item.id)
+                    try { onTap?.invoke() ?: onPlay() } catch (_: Throwable) {}
+                }
+                
+                if (settings.holdToSelectMillis > 0 && !isEditMode) {
+                    baseModifier.pointerInput(settings.holdToSelectMillis) {
+                        detectTapGestures(
+                            onPress = {
+                                val completed = withTimeoutOrNull(settings.holdToSelectMillis) {
+                                    tryAwaitRelease()
+                                    false
+                                } ?: true
+                                if (completed) {
+                                    primaryAction()
+                                    tryAwaitRelease()
+                                }
+                            },
+                            onLongPress = { showMenu = true }
+                        )
+                    }
+                } else {
+                    baseModifier.combinedClickable(
+                        onClick = { primaryAction() },
+                        onLongClick = { showMenu = true }
+                    )
+                }
+            },
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = bgColor,
+            contentColor = contentColor
+        ),
+        border = if (settings.highContrastMode) {
+            androidx.compose.foundation.BorderStroke(3.dp, highContrastContent)
+        } else null
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            // Dwell Progress Overlay
+            if (dwellProgress > 0f) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val strokeWidth = 4.dp.toPx()
+                    drawArc(
+                        color = contentColor.copy(alpha = 0.3f),
+                        startAngle = -90f,
+                        sweepAngle = 360f * dwellProgress,
+                        useCenter = false,
+                        style = Stroke(width = strokeWidth)
+                    )
+                }
+            }
                     // contextual menu (appears on long-press or right-click)
                     if (showMenu && !isEditMode) {
                         DropdownMenu(
@@ -91,20 +244,20 @@ fun PhraseGridItem(
                             modifier = Modifier.align(Alignment.TopEnd)
                         ) {
                             if (!readOnly) {
-                                DropdownMenuItem(text = { Text("Edit") }, onClick = {
+                                DropdownMenuItem(text = { Text(editLabel) }, onClick = {
                                     showMenu = false
                                     try { onLongPress() } catch (_: Throwable) {}
                                 })
                             }
                             // secondary language speak option
                             if (onSpeakSecondary != null && !readOnly) {
-                                DropdownMenuItem(text = { Text("Speak (secondary)") }, onClick = {
+                                DropdownMenuItem(text = { Text(speakSecondaryLabel) }, onClick = {
                                     showMenu = false
                                     try { onSpeakSecondary.invoke() } catch (_: Throwable) {}
                                 })
                             }
                             if (onDelete != null && !readOnly) {
-                                DropdownMenuItem(text = { Text("Delete") }, onClick = {
+                                DropdownMenuItem(text = { Text(deleteLabel) }, onClick = {
                                     showMenu = false
                                     try { onDelete.invoke() } catch (_: Throwable) {}
                                 })
@@ -112,17 +265,16 @@ fun PhraseGridItem(
                             // Copy/share audio file if available
                             val audioPath = item.recordingPath
                             if (!audioPath.isNullOrBlank() && onCopyAudio != null) {
-                                DropdownMenuItem(text = { Text("Copy soundfile") }, onClick = {
+                                DropdownMenuItem(text = { Text(copySoundfileLabel) }, onClick = {
                                     showMenu = false
                                     try { onCopyAudio.invoke(audioPath) } catch (_: Throwable) {}
                                 })
                             }
                             if (!audioPath.isNullOrBlank()) {
-                                DropdownMenuItem(text = { Text("Share soundfile") }, onClick = {
+                                DropdownMenuItem(text = { Text(shareSoundfileLabel) }, onClick = {
                                     showMenu = false
                                     runCatching {
-                                        GlobalContext.get().get<io.github.jdreioe.wingmate.platform.ShareService>()
-                                            .shareAudio(audioPath)
+                                        shareService?.shareAudio(audioPath)
                                     }
                                 })
                             }
@@ -132,66 +284,71 @@ fun PhraseGridItem(
                     categoryName?.let { cname ->
                         Text(
                             text = cname,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = contentColor,
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), shape = RoundedCornerShape(4.dp))
                                 .padding(4.dp)
                         )
                     }
-                    // wiggle rotation applied to content
-                    val rotation = if (isEditMode) (angle.value - 0.5f) * 6f else 0f
+                    // Only allocate and drive the infinite animation while edit mode is active.
+                    val rotation = if (isEditMode) {
+                        val infiniteTransition = rememberInfiniteTransition()
+                        val angle by infiniteTransition.animateFloat(
+                            initialValue = -3f,
+                            targetValue = 3f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(durationMillis = 300, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            )
+                        )
+                        angle
+                    } else {
+                        0f
+                    }
             Box(modifier = Modifier
                 .align(Alignment.Center)
                 .fillMaxSize()
                 .rotate(rotation)) {
                 
-                // Async load image from URL if available
-                var imageBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
                 val imageUrl = item.imageUrl
-                androidx.compose.runtime.LaunchedEffect(imageUrl) {
-                    if (!imageUrl.isNullOrBlank()) {
-                        when {
-                            imageUrl.startsWith("http") -> {
-                                imageBitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    runCatching {
-                                        val bytes = java.net.URL(imageUrl).readBytes()
-                                        bytes.toComposeImageBitmap()
-                                    }.getOrNull()
-                                }
-                            }
-                            imageUrl.startsWith("file://") || imageUrl.startsWith("/") -> {
-                                imageBitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    runCatching {
-                                        val path = if (imageUrl.startsWith("file://")) java.net.URI(imageUrl).path else imageUrl
-                                        val bytes = java.io.File(path).readBytes()
-                                        bytes.toComposeImageBitmap()
-                                    }.getOrNull()
-                                }
-                            }
-                        }
-                    }
-                }
-                
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(bgColor, shape = RoundedCornerShape(6.dp)),
+                        .fillMaxSize(),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Show image if loaded
-                    if (imageBitmap != null) {
-                        androidx.compose.foundation.Image(
-                            bitmap = imageBitmap!!,
+                    val showImg = !imageUrl.isNullOrBlank() && settings.showSymbols
+                    val showLbl = settings.showLabels
+
+                    if (settings.labelAtTop && showImg && showLbl) {
+                        // Label at Top
+                        val baseLarge = MaterialTheme.typography.bodyLarge
+                        val effectiveLarge = if (phraseFontSize != TextUnit.Unspecified) baseLarge.copy(fontSize = phraseFontSize) else baseLarge
+                        Text(text = item.text, style = effectiveLarge, color = contentColor)
+                        
+                        AsyncImage(
+                            model = imageUrl,
                             contentDescription = item.text,
                             contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(4.dp)
                         )
+                    } else {
+                        // Normal order (Image at Top)
+                        if (showImg) {
+                            AsyncImage(
+                                model = imageUrl,
+                                contentDescription = item.text,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                modifier = Modifier.weight(1f).fillMaxWidth().padding(4.dp)
+                            )
+                        }
+                        if (showLbl) {
+                            val baseLarge = MaterialTheme.typography.bodyLarge
+                            val effectiveLarge = if (phraseFontSize != TextUnit.Unspecified) baseLarge.copy(fontSize = phraseFontSize) else baseLarge
+                            Text(text = item.text, style = effectiveLarge, color = contentColor)
+                        }
                     }
-                    val baseLarge = MaterialTheme.typography.bodyLarge
-                    val effectiveLarge = if (phraseFontSize != TextUnit.Unspecified) baseLarge.copy(fontSize = phraseFontSize) else baseLarge
-                    Text(text = item.text, style = effectiveLarge, color = MaterialTheme.colorScheme.onSurface)
                 }
             }
 
@@ -199,14 +356,14 @@ fun PhraseGridItem(
                 // Show material-style move up / move down / delete buttons
                 Column(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) {
                     IconButton(onClick = { if (index > 0) onMove?.invoke(index, index - 1) }) {
-                        Icon(imageVector = Icons.Filled.ArrowDropUp, contentDescription = "Move up", tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(imageVector = Icons.Filled.ArrowDropUp, contentDescription = moveUpLabel, tint = contentColor)
                     }
                     IconButton(onClick = { if (index < total - 1) onMove?.invoke(index, index + 1) }) {
-                        Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = "Move down", tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = moveDownLabel, tint = contentColor)
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     IconButton(onClick = { onDelete?.invoke() }) {
-                        Icon(imageVector = Icons.Filled.Close, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(imageVector = Icons.Filled.Close, contentDescription = deleteLabel, tint = contentColor)
                     }
                 }
             }

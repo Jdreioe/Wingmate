@@ -11,14 +11,31 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.import_options_classic_desc
+import wingmatekmp.composeapp.generated.resources.import_options_classic_title
+import wingmatekmp.composeapp.generated.resources.import_options_modern_desc
+import wingmatekmp.composeapp.generated.resources.import_options_modern_title
+import wingmatekmp.composeapp.generated.resources.import_options_recommended
+import wingmatekmp.composeapp.generated.resources.import_options_scratch_desc
+import wingmatekmp.composeapp.generated.resources.import_options_scratch_title
+import wingmatekmp.composeapp.generated.resources.import_options_skip
+import wingmatekmp.composeapp.generated.resources.import_options_subtitle
+import wingmatekmp.composeapp.generated.resources.import_options_title
 
 @Composable
 fun ImportOptionsScreen(
     onImportClassic: () -> Unit,
     onImportModern: () -> Unit,
-    onSkip: () -> Unit
+    onCreateFromScratch: () -> Unit,
+    onSkip: () -> Unit,
+    showClassic: Boolean = true,
+    showModern: Boolean = true,
+    showCreateFromScratch: Boolean = true
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -33,13 +50,13 @@ fun ImportOptionsScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                "Import Boards",
+                stringResource(Res.string.import_options_title),
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "Do you have existing OBF/OBZ boards? Import them now to kickstart your communication.",
+                stringResource(Res.string.import_options_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -47,25 +64,38 @@ fun ImportOptionsScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            ImportOptionCard(
-                title = "Classic Mode",
-                description = "Exact replica of your existing boards. Preserves the original layout and navigation structure. Best if you want to keep everything familiar.",
-                onClick = onImportClassic
-            )
+            if (showClassic) {
+                ImportOptionCard(
+                    title = stringResource(Res.string.import_options_classic_title),
+                    description = stringResource(Res.string.import_options_classic_desc),
+                    onClick = onImportClassic,
+                    isRecommended = true
+                )
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            if (showModern) {
+                if (showClassic) Spacer(modifier = Modifier.height(16.dp))
+                ImportOptionCard(
+                    title = stringResource(Res.string.import_options_modern_title),
+                    description = stringResource(Res.string.import_options_modern_desc),
+                    onClick = onImportModern,
+                    isRecommended = true
+                )
+            }
 
-            ImportOptionCard(
-                title = "Modern Mode",
-                description = "Optimized for Wingmate. Converts your boards into Category Chips for faster navigation and a cleaner look.",
-                onClick = onImportModern,
-                isRecommended = true
-            )
+            if (showCreateFromScratch) {
+                if (showClassic || showModern) Spacer(modifier = Modifier.height(16.dp))
+                ImportOptionCard(
+                    title = stringResource(Res.string.import_options_scratch_title),
+                    description = stringResource(Res.string.import_options_scratch_desc),
+                    onClick = onCreateFromScratch
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 
             TextButton(onClick = onSkip) {
-                Text("Skip for now")
+                Text(stringResource(Res.string.import_options_skip))
             }
         }
     }
@@ -76,7 +106,8 @@ fun ImportOptionCard(
     title: String,
     description: String,
     onClick: () -> Unit,
-    isRecommended: Boolean = false
+    isRecommended: Boolean = false,
+    icon: ImageVector? = null
 ) {
     Card(
         modifier = Modifier
@@ -95,12 +126,26 @@ fun ImportOptionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isRecommended) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    icon?.let {
+                        Icon(
+                            imageVector = it,
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                            tint = if (isRecommended) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isRecommended) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (isRecommended) {
                     Box(
                         modifier = Modifier
@@ -109,7 +154,7 @@ fun ImportOptionCard(
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            "Recommended",
+                            stringResource(Res.string.import_options_recommended),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimary
                         )

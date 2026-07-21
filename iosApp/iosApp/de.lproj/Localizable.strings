@@ -213,9 +213,11 @@
 "pronunciation.empty" = "Keine benutzerdefinierten Aussprachen.";
 "pronunciation.word" = "Wort";
 "pronunciation.word.placeholder" = "Z. B.: Wingmate";
-"pronunciation.phoneme" = "Phonem";
-"pronunciation.phoneme.placeholder" = "Z. B.: w i ng m ey t";
-"pronunciation.alphabet" = "Alphabet";
+"pronunciation.phoneme" = "So soll es klingen";
+"pronunciation.phoneme.placeholder" = "Z. B.: wing-mate";
+"pronunciation.easy_help" = "Schreiben Sie den Klang mit vertrauten Buchstaben. IPA-Kenntnisse sind nicht nötig.";
+"pronunciation.alphabet" = "Methode";
+"pronunciation.alphabet.easy" = "Alltägliche Schreibweise (einfach)";
 "pronunciation.add_title" = "Aussprache hinzufügen";
 "pronunciation.ipa_palette" = "IPA-Symbole";
 "pronunciation.delete_last" = "Letztes löschen";

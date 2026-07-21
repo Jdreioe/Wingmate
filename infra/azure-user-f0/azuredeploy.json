@@ -1,0 +1,85 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.33.13.18514",
+      "templateHash": "14631876761527801541"
+    },
+    "description": "Deploys an Azure Cognitive Services Speech resource with F0 (free) SKU. Used by Wingmate for automatic F0 setup."
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "northeurope",
+      "allowedValues": [
+        "northeurope",
+        "westeurope",
+        "francecentral",
+        "germanywestcentral",
+        "switzerlandnorth",
+        "swedencentral",
+        "norwayeast",
+        "polandcentral",
+        "italynorth",
+        "spaincentral"
+      ],
+      "metadata": {
+        "description": "Azure region for the Speech resource. Must be a supported EU region."
+      }
+    },
+    "speechResourceName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional: name of the Speech resource. Auto-generated if empty."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional: tags to apply to the resource."
+      }
+    }
+  },
+  "variables": {
+    "uniqueName": "[if(not(empty(parameters('speechResourceName'))), parameters('speechResourceName'), format('wingmate-f0-{0}', uniqueString(resourceGroup().id)))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.CognitiveServices/accounts",
+      "apiVersion": "2024-10-01",
+      "name": "[variables('uniqueName')]",
+      "location": "[parameters('location')]",
+      "kind": "SpeechServices",
+      "sku": {
+        "name": "F0"
+      },
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "publicNetworkAccess": "Enabled",
+        "disableLocalAuth": false
+      }
+    }
+  ],
+  "outputs": {
+    "resourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.CognitiveServices/accounts', variables('uniqueName'))]"
+    },
+    "name": {
+      "type": "string",
+      "value": "[variables('uniqueName')]"
+    },
+    "region": {
+      "type": "string",
+      "value": "[parameters('location')]"
+    },
+    "portalUrl": {
+      "type": "string",
+      "value": "[format('https://portal.azure.com/#@/resource{0}', resourceId('Microsoft.CognitiveServices/accounts', variables('uniqueName')))]"
+    }
+  }
+}

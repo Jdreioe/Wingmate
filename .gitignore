@@ -30,6 +30,7 @@ build/
 local.properties
 *.keystore
 *.jks
+service-account.json
 androidApp/build/
 androidApp/**/build/
 androidApp/release/
@@ -93,3 +94,4 @@ iosApp/iosApp 20*/
 **/intermediates/
 **/.cxx/
 **/*.properties
+*.hprof

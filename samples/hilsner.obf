@@ -1,0 +1,24 @@
+{
+  "format": "open-board-0.1",
+  "id": "hilsner",
+  "locale": "da",
+  "name": "Hilsner",
+  "description_html": "En simpel tavle med grundlæggende danske hilsner og fraser.",
+  "grid": {
+    "rows": 3,
+    "columns": 2,
+    "order": [
+      ["b1", "b2"],
+      ["b3", "b4"],
+      ["b5", "b6"]
+    ]
+  },
+  "buttons": [
+    { "id": "b1", "label": "Hej", "vocalization": "hej", "background_color": "#ffcccc" },
+    { "id": "b2", "label": "Hvordan går det?", "vocalization": "hvordan går det", "background_color": "#ccffcc" },
+    { "id": "b3", "label": "Ja", "vocalization": "ja", "background_color": "#ccccff" },
+    { "id": "b4", "label": "Nej", "vocalization": "nej", "background_color": "#ffffcc" },
+    { "id": "b5", "label": "Tak", "vocalization": "tak", "background_color": "#ffccff" },
+    { "id": "b6", "label": "Vær så venlig", "vocalization": "vær så venlig", "background_color": "#ccffff" }
+  ]
+}

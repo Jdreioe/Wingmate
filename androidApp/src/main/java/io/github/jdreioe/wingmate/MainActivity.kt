@@ -3,7 +3,7 @@ package io.github.jdreioe.wingmate
 import android.os.Bundle
 import android.os.Build
 import android.hardware.display.DisplayManager
-import android.view.Display
+import android.content.Intent
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.FoldingFeature
 import androidx.window.area.WindowAreaController
@@ -27,25 +26,12 @@ import java.util.concurrent.Executor
 import io.github.jdreioe.wingmate.display.ExternalDisplayPresentation
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.Alignment
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.ui.Modifier
 import androidx.window.core.ExperimentalWindowApi
 import org.koin.core.context.GlobalContext
-import org.koin.dsl.module
 import io.github.jdreioe.wingmate.App
 import io.github.jdreioe.wingmate.ui.AppTheme
 import io.github.jdreioe.wingmate.ui.FullScreenDisplay
@@ -81,17 +67,9 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalWindowApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Ensure IME insets can be detected correctly
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        
-        // Initialize Koin if not already done
-        if (GlobalContext.getOrNull() == null) {
-            initKoin(module { })
-        }
-        
-        // Register Android-specific implementations (TTS, SharedPreferences config)
-        overrideAndroidSpeechService(this)
+
+        // Match Android 15+ edge-to-edge enforcement on older Android versions too.
+        enableEdgeToEdge()
 
         // Initialize FilePicker bridge
         runCatching {
@@ -160,7 +138,11 @@ class MainActivity : ComponentActivity() {
                         val dm = getSystemService(DISPLAY_SERVICE) as? DisplayManager
                         val hasExternal = dm?.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)?.isNotEmpty() == true
                         if (!hasExternal) {
-                            startActivity(android.content.Intent(this, io.github.jdreioe.wingmate.display.PrimaryDisplayActivity::class.java))
+                            startActivity(
+                                Intent(this, io.github.jdreioe.wingmate.display.PrimaryDisplayActivity::class.java).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                }
+                            )
                         }
                     }
                 } else {
@@ -176,25 +158,8 @@ class MainActivity : ComponentActivity() {
         // Start observing foldable state changes
         observeFoldableState()
         
-        // Request necessary permissions for BLE & Notifications
-        val requiredPermissions = mutableListOf<String>()
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            requiredPermissions.add(android.Manifest.permission.BLUETOOTH_SCAN)
-            requiredPermissions.add(android.Manifest.permission.BLUETOOTH_CONNECT)
-        }
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            requiredPermissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
-        }
-        val missingPermissions = requiredPermissions.filter {
-            androidx.core.content.ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-        if (missingPermissions.isNotEmpty()) {
-            androidx.core.app.ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), 1001)
-        }
-
         setContent {
             AppTheme {
-                val show by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsState(initial = false)
                 Box(Modifier.fillMaxSize()) {
                     // Main app content - this will be mirrored to rear display when session is active
                     App()
@@ -273,20 +238,16 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             WindowInfoTracker.getOrCreate(this@MainActivity)
                 .windowLayoutInfo(this@MainActivity)
-                .collect { windowLayoutInfo ->
-                    val wasUnfolded = isFoldableUnfolded
-                    
-                    // Check for foldable features
+                .map { windowLayoutInfo ->
                     val foldingFeatures = windowLayoutInfo.displayFeatures.filterIsInstance<FoldingFeature>()
-                    isFoldableUnfolded = foldingFeatures.any { feature ->
+                    foldingFeatures.any { feature ->
                         feature.state == FoldingFeature.State.FLAT || 
                         feature.state == FoldingFeature.State.HALF_OPENED
                     }
-                    
-                    Log.d("MainActivity", "Foldable state: wasUnfolded=$wasUnfolded, isUnfolded=$isFoldableUnfolded, features=${foldingFeatures.size}")
-                    
-                    // Don't auto-open fullscreen for foldables - let user manually activate
-                    // The rear display capability will be available when needed
+                }
+                .distinctUntilChanged()
+                .collect { unfolded ->
+                    isFoldableUnfolded = unfolded
                 }
         }
     }
@@ -328,4 +289,3 @@ class MainActivity : ComponentActivity() {
         windowAreaSession = null
     }
 }
-

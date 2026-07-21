@@ -485,7 +485,7 @@ struct PhraseItemView: View {
     var body: some View {
     let bgHex = phrase.backgroundColor ?? "#00000000"
     let useDefaultBg = bgHex == "#00000000"
-    let bgColor = useDefaultBg ? Color(.secondarySystemBackground) : Color(hex: bgHex)
+    let bgColor = useDefaultBg ? Color(.tertiarySystemBackground) : Color(hex: bgHex)
     let tileShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         let title = phrase.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         let accessibleName = ((title?.isEmpty == false ? title : phrase.text) ?? "")

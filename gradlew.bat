@@ -35,6 +35,24 @@ set APP_HOME=%DIRNAME%
 @rem Resolve any "." and ".." in APP_HOME to make it shorter.
 for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
 
+@rem If Infisical CLI is available and configured, wrap with `infisical run` to
+@rem inject secrets as environment variables for the Gradle build.
+if "%INFISICAL_SKIP%"=="" (
+    where infisical >nul 2>nul
+    if not errorlevel 1 (
+        if not "%INFISICAL_PROJECT_ID%"=="" (
+            set INFISICAL_SKIP=1
+            infisical run -- "%~f0" %*
+            exit /b %ERRORLEVEL%
+        )
+        if not "%INFISICAL_PROJECT_SLUG%"=="" (
+            set INFISICAL_SKIP=1
+            infisical run -- "%~f0" %*
+            exit /b %ERRORLEVEL%
+        )
+    )
+)
+
 @rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
 set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
 
