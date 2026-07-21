@@ -148,7 +148,7 @@ fun PhraseGridItem(
                 val elapsed = now - startTime
                 dwellProgress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
                 
-                if (elapsed.toLong() >= duration.toLong()) {
+                if (elapsed >= duration) {
                     isSelected = true
                     onPlay()
                     aacLogger.logButtonClick(item.text, phraseId = item.id)

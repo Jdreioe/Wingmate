@@ -15,7 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Settings
@@ -68,6 +68,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.FlowPreview
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
@@ -91,7 +92,12 @@ private data class ThoughtDraft(
     val secondaryLanguageRanges: List<TextRange>,
 )
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalFoundationApi::class,
+    ExperimentalComposeUiApi::class,
+    FlowPreview::class
+)
 @Composable
 fun PhraseScreen(
     onBackToWelcome: (() -> Unit)? = null,
@@ -1150,7 +1156,7 @@ fun PhraseScreen(
                                             currentBoard = boardStack.last()
                                             boardStack = boardStack.dropLast(1)
                                         }) {
-                                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                                         }
                                     }
                                     Text("${currentBoard?.name ?: "Board"}", style = MaterialTheme.typography.titleMedium)
@@ -1358,11 +1364,11 @@ fun PhraseScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 IconButton(onClick = { showSsmlDialog = false }) {
-                                    Icon(Icons.Default.ArrowBack, "Close")
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close")
                                 }
                             }
                             
-                            Divider()
+                            HorizontalDivider()
                             
                             // SSML Sidebar content
                             SsmlSidebar(
@@ -1651,7 +1657,7 @@ private fun chunkWithLanguage(
 
     chunk.forEachIndexed { index, c ->
         val absoluteIndex = offset + index
-        while (activeRange != null && absoluteIndex >= activeRange!!.end) {
+        while (activeRange != null && absoluteIndex >= activeRange.end) {
             rangeIndex++
             activeRange = ranges.getOrNull(rangeIndex)
         }

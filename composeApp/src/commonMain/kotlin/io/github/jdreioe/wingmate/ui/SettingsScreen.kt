@@ -252,7 +252,7 @@ fun SettingsScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.common_close))
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
                 )
             )
@@ -1565,7 +1565,7 @@ internal fun VoiceSelectionPage(
                                 scope.launch {
                                     try {
                                         useCase.select(v)
-                                        val primary = if (ttsEngine == TtsEngine.SYSTEM) (v.primaryLanguage ?: "") else (v.selectedLanguage?.ifBlank { v.primaryLanguage ?: "" } ?: "")
+                                        val primary = if (ttsEngine == TtsEngine.SYSTEM) (v.primaryLanguage ?: "") else v.selectedLanguage.ifBlank { v.primaryLanguage ?: "" }
                                         if (primary.isNotBlank() && settingsUseCase != null) {
                                             val current = settingsUseCase.get()
                                             settingsUseCase.update(current.copy(primaryLanguage = primary))
@@ -1599,7 +1599,7 @@ internal fun VoiceSelectionPage(
                 scope.launch {
                     try {
                         useCase.select(updated)
-                        val primary = updated.selectedLanguage?.ifBlank { updated.primaryLanguage ?: "" } ?: ""
+                        val primary = updated.selectedLanguage.ifBlank { updated.primaryLanguage ?: "" }
                         if (primary.isNotBlank() && settingsUseCase != null) {
                             val current = settingsUseCase.get()
                             settingsUseCase.update(current.copy(primaryLanguage = primary))

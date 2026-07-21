@@ -12,8 +12,7 @@ import io.github.jdreioe.wingmate.domain.UserDataManager
 import io.github.jdreioe.wingmate.platform.ShareService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboard
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import wingmatekmp.composeapp.generated.resources.Res
@@ -38,7 +37,7 @@ fun SettingsExportDialog(
     onDismiss: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
 
     val userDataManager = koinInject<UserDataManager>()
     val shareService = koinInject<ShareService>()
@@ -100,7 +99,7 @@ fun SettingsExportDialog(
                                     statusMessage = exportReadyLabel
                                 } catch (e: Exception) {
                                     // Fallback to clipboard
-                                    clipboardManager.setText(AnnotatedString(json))
+                                    clipboard.setClipEntry(plainTextClipEntry(json))
                                     statusMessage = copiedToClipboardLabel
                                 }
                             } catch (e: Exception) {
@@ -119,7 +118,7 @@ fun SettingsExportDialog(
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 // === IMPORT SECTION ===
-                Divider()
+                HorizontalDivider()
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Text(stringResource(Res.string.data_management_import), style = MaterialTheme.typography.titleMedium)

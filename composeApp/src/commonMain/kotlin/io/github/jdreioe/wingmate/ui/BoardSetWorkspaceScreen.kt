@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -30,7 +31,6 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -604,7 +604,7 @@ private fun BoardSetWorkspaceScreen(
                             onClick = { editSession = editSession?.undo() },
                             enabled = editSession?.undoStack?.isNotEmpty() == true
                         ) {
-                            Icon(Icons.Default.Undo, contentDescription = stringResource(Res.string.board_workspace_undo))
+                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(Res.string.board_workspace_undo))
                         }
                         TextButton(onClick = ::requestFinishEditing) {
                             Text(stringResource(Res.string.board_workspace_finish))
@@ -629,7 +629,7 @@ private fun BoardSetWorkspaceScreen(
                                     editSession = session.apply(setDraftRoot(session.draft, board.id))
                                 }
                             },
-                            enabled = activeBoard != null && activeBoard.id != activeGraph?.boardSet?.rootBoardId
+                            enabled = activeBoard != null && activeBoard.id != activeGraph.boardSet.rootBoardId
                         ) {
                             Icon(Icons.Default.Home, contentDescription = stringResource(Res.string.board_workspace_set_home))
                         }
@@ -810,7 +810,7 @@ private fun BoardSetWorkspaceScreen(
                                 selectedButtons = nextSelection
                                 if (navigateHome) {
                                     boardStack = emptyList()
-                                    selectedBoardId = activeGraph?.boardSet?.rootBoardId
+                                    selectedBoardId = activeGraph.boardSet.rootBoardId
                                 }
                                 if (speakAfterActions) {
                                     speakSelectedButtons(
@@ -827,7 +827,7 @@ private fun BoardSetWorkspaceScreen(
                                     selectedBoardId = linkedBoard.id
                                 } else {
                                     val resolved = resolveObfLocalizedString(
-                                        activeBoard?.strings ?: emptyMap(),
+                                        activeBoard.strings,
                                         settings.primaryLanguage,
                                         button.vocalization ?: button.label
                                     )
@@ -861,8 +861,8 @@ private fun BoardSetWorkspaceScreen(
                         onCellMove = if (mode == BoardWorkspaceMode.Edit) {
                             { fromRow, fromColumn, toRow, toColumn ->
                                 val session = editSession
-                                val boardId = activeBoard?.id
-                                if (session != null && boardId != null) {
+                                val boardId = activeBoard.id
+                                if (session != null) {
                                     editSession = session.apply(
                                         moveDraftField(
                                             session.draft,
@@ -880,7 +880,7 @@ private fun BoardSetWorkspaceScreen(
                         onSpeakSentence = {
                             val speechParts = selectedButtons.mapNotNull { (button, _) ->
                                 val resolved = resolveObfLocalizedString(
-                                    activeBoard?.strings ?: emptyMap(),
+                                    activeBoard.strings,
                                     settings.primaryLanguage,
                                     button.vocalization ?: button.label
                                 )
@@ -1004,8 +1004,8 @@ private fun BoardSetWorkspaceScreen(
             initialBackgroundColor = target.button?.backgroundColor,
             availableLanguages = availableFieldLanguages,
             initialLanguage = target.button?.locale,
-            availableBoards = activeGraph?.boards.orEmpty().filterNot { it.id == activeBoard.id },
-            initialLinkedBoardId = activeGraph?.resolveLinkedBoard(target.button?.loadBoard)?.id,
+            availableBoards = activeGraph.boards.filterNot { it.id == activeBoard.id },
+            initialLinkedBoardId = activeGraph.resolveLinkedBoard(target.button?.loadBoard)?.id,
             initialAction = target.button?.action,
             initialActions = target.button?.actions.orEmpty(),
             availableSpans = availableSpans,
@@ -1379,8 +1379,9 @@ internal fun updateDraftCell(
             if (it.id == imageId) it.copy(url = normalizedUrl, path = null, data = null) else it
         }
         else -> {
-            imageId = workspaceId("img")
-            board.images + ObfImage(id = imageId!!, url = normalizedUrl)
+            val createdImageId = workspaceId("img")
+            imageId = createdImageId
+            board.images + ObfImage(id = createdImageId, url = normalizedUrl)
         }
     }
     val button = (existingButton ?: ObfButton(id = buttonId)).copy(

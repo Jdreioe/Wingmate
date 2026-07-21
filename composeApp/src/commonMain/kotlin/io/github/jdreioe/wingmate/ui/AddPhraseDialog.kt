@@ -272,11 +272,7 @@ fun AddPhraseDialog(
                                             scope.launch {
                                                 recordingError = null
                                                 val hint = initialPhrase?.id ?: text.ifBlank { altText }.ifBlank { recordingHintFallback }
-                                                val result = recordingService?.startRecording(hint)
-                                                if (result == null) {
-                                                    recordingError = recordingUnavailable
-                                                    return@launch
-                                                }
+                                                val result = recordingService.startRecording(hint)
                                                 result
                                                     .onSuccess { recordingInProgress = true }
                                                     .onFailure {
@@ -305,12 +301,8 @@ fun AddPhraseDialog(
                                     onClick = {
                                         scope.launch {
                                             recordingError = null
-                                            val result = recordingService?.stopRecording()
+                                            val result = recordingService.stopRecording()
                                             recordingInProgress = false
-                                            if (result == null) {
-                                                recordingError = recordingUnavailable
-                                                return@launch
-                                            }
                                             result
                                                 .onSuccess { path -> recordingPath = path }
                                                 .onFailure {
@@ -502,7 +494,10 @@ fun AddPhraseDialog(
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                             modifier = Modifier
-                                .menuAnchor()
+                                .menuAnchor(
+                                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                    enabled = true
+                                )
                                 .fillMaxWidth()
                         )
                         ExposedDropdownMenu(
