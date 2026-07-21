@@ -37,4 +37,23 @@ class AndroidShareService(private val context: Context) : ShareService {
             true
         }.getOrElse { false }
     }
+
+    override fun shareFile(fileName: String, content: ByteArray): Boolean {
+        return runCatching {
+            val file = File(context.cacheDir, fileName)
+            file.parentFile?.mkdirs()
+            file.writeBytes(content)
+            val authority = context.packageName + ".fileprovider"
+            val uri: Uri = FileProvider.getUriForFile(context, authority, file)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/zip"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(intent, "Share OBZ")
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+            true
+        }.getOrElse { false }
+    }
 }

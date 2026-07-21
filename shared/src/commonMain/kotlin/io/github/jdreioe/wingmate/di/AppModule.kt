@@ -13,6 +13,7 @@ import io.github.jdreioe.wingmate.application.usecase.GetAllItemsUseCase
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.ObzExporter
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
@@ -31,9 +32,20 @@ import org.koin.dsl.module
 val appModule = module {
     singleOf(::DefaultStoreFactory) { bind<StoreFactory>() }
     
+    single {
+        kotlinx.serialization.json.Json {
+            prettyPrint = true
+            encodeDefaults = true
+            ignoreUnknownKeys = true
+            isLenient = true
+            coerceInputValues = true
+        }
+    }
+    
     singleOf(::ObfParser)
     singleOf(::InMemoryBoardRepository) { bind<BoardRepository>() }
     singleOf(::InMemoryBoardSetRepository) { bind<BoardSetRepository>() }
+    single { ObzExporter(getOrNull() ?: kotlinx.serialization.json.Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }) }
     singleOf(::BoardSetUseCase)
     // Platforms override with a real player; default is a no-op.
     single<SoundPlayer> { NoopSoundPlayer() }

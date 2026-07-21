@@ -90,8 +90,10 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
+import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -640,6 +642,8 @@ private fun BoardSetWorkspaceScreen(
     val soundPlayer = koinInject<SoundPlayer>()
     val fileStorage = koinInject<FileStorage>()
     val settings by rememberReactiveSettings()
+    val koin = org.koin.compose.getKoin()
+    val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
     val scope = rememberCoroutineScope()
     var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
     var editSession by remember(boardSetId) { mutableStateOf<BoardSetEditSession?>(null) }
@@ -658,6 +662,7 @@ private fun BoardSetWorkspaceScreen(
     var showRenameBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
     var isSavingSentence by remember(boardSetId) { mutableStateOf(false) }
+    var isExporting by remember(boardSetId) { mutableStateOf(false) }
     var isFullscreen by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(Res.string.board_workspace_unlock_to_edit)
     val savedMessage = stringResource(Res.string.board_workspace_saved)
@@ -843,6 +848,47 @@ private fun BoardSetWorkspaceScreen(
                                 contentDescription = stringResource(Res.string.mode_switch_to_keyboard)
                             )
                         }
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    isExporting = true
+                                    statusMessage = null
+                                    try {
+                                        val graph = activeGraph
+                                        if (graph == null) {
+                                            statusMessage = "Export failed: no board set loaded"
+                                        } else {
+                                            val obzBytes = useCase.exportBoardSetAsObz(graph.boardSet.id)
+                                            if (obzBytes != null) {
+                                                val fileName = "${graph.boardSet.name}.obz"
+                                                if (shareService != null) {
+                                                    val shared = shareService.shareFile(fileName, obzBytes)
+                                                    statusMessage = if (shared) {
+                                                        "Exported ${graph.boardSet.name}.obz"
+                                                    } else {
+                                                        "Export cancelled"
+                                                    }
+                                                } else {
+                                                    statusMessage = "Export saved (${obzBytes.size} bytes)"
+                                                }
+                                            } else {
+                                                statusMessage = "Export failed: no boards"
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        statusMessage = "Export failed: ${e.message ?: "unknown error"}"
+                                    } finally {
+                                        isExporting = false
+                                    }
+                                }
+                            },
+                            enabled = !isExporting
+                        ) {
+                            Icon(
+                                Icons.Default.ImportExport,
+                                contentDescription = stringResource(Res.string.phrase_screen_import_export_data)
+                            )
+                        }
                         if (selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
                             IconButton(onClick = {
                                 selectedBoardId = activeGraph?.boardSet?.rootBoardId
@@ -972,7 +1018,12 @@ private fun BoardSetWorkspaceScreen(
                                     selectedBoardId?.let { boardStack = boardStack + it }
                                     selectedBoardId = linkedBoard.id
                                 } else {
-                                    val spokenText = (button.vocalization ?: button.label).orEmpty().trim()
+                                    val resolved = resolveObfLocalizedString(
+                                        activeBoard?.strings ?: emptyMap(),
+                                        settings.primaryLanguage,
+                                        button.vocalization ?: button.label
+                                    )
+                                    val spokenText = resolved?.trim().orEmpty()
                                     if (spokenText.isNotEmpty()) {
                                         selectedButtons = selectedButtons + (button to null)
                                     }
@@ -1001,7 +1052,12 @@ private fun BoardSetWorkspaceScreen(
                         } else null,
                         onSpeakSentence = {
                             val speechParts = selectedButtons.mapNotNull { (button, _) ->
-                                (button.vocalization ?: button.label)
+                                val resolved = resolveObfLocalizedString(
+                                    activeBoard?.strings ?: emptyMap(),
+                                    settings.primaryLanguage,
+                                    button.vocalization ?: button.label
+                                )
+                                resolved
                                     ?.trim()
                                     ?.takeIf(String::isNotEmpty)
                                     ?.let { text -> text to button.locale }

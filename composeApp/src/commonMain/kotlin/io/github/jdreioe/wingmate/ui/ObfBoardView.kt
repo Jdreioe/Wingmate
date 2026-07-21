@@ -26,6 +26,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfImageSource
 import io.github.jdreioe.wingmate.domain.obf.resolveObfImageSource
+import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -95,11 +96,40 @@ fun ObfBoardView(
 ) {
     val settings by rememberReactiveSettings()
     val imagesById = remember(board) { board.images.associateBy { it.id } }
+    // Absolute positioning: if every button has top/left/width/height, render fractionally
+    val isAbsoluteLayout = remember(board) { board.isAbsoluteLayout }
     // If grid is defined, use it. Otherwise, just listing buttons (fallback)
     val grid = board.grid
     val buttonsById = remember(board) { board.buttons.associateBy { it.id } }
 
-    if (grid != null) {
+    if (isAbsoluteLayout) {
+        if (showMessageBar) {
+            Column(modifier = modifier.fillMaxSize().padding(8.dp)) {
+                SymbolBar(
+                    selectedButtons = selectedButtons,
+                    imagesById = imagesById,
+                    extractedImages = extractedImages,
+                    onSpeak = onSpeakSentence,
+                    onSave = onSaveSentence,
+                    isSaveEnabled = isSaveSentenceEnabled,
+                    onDelete = onDeleteLast,
+                    onClear = onClearSentence,
+                    showSentenceText = showSentenceText,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (showSentenceText) 260.dp else 100.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    renderAbsoluteButtons(board, imagesById, extractedImages, isEditMode, onButtonClick)
+                }
+            }
+        } else {
+            BoxWithConstraints(modifier = modifier.fillMaxSize().padding(8.dp)) {
+                renderAbsoluteButtons(board, imagesById, extractedImages, isEditMode, onButtonClick)
+            }
+        }
+    } else if (grid != null) {
         val columns = grid.columns.coerceAtLeast(1)
         val rows = grid.rows.coerceAtLeast(1)
         
@@ -151,7 +181,9 @@ fun ObfBoardView(
                                 onCellClick?.invoke(item.row, item.column, button)
                                     ?: onButtonClick(button)
                             },
-                            isEditMode = isEditMode
+                            isEditMode = isEditMode,
+                            boardStrings = board.strings,
+                            locale = settings.primaryLanguage
                         )
                     } else if (isEditMode && button == null) {
                         OutlinedCard(
@@ -192,7 +224,9 @@ fun ObfBoardView(
                                 extractedImageBytes = button.imageId?.let { 
                                     image?.path?.let { path -> extractedImages[path] }
                                 },
-                                onClick = { onButtonClick(button) }
+                                onClick = { onButtonClick(button) },
+                                boardStrings = board.strings,
+                                locale = settings.primaryLanguage
                             )
                         }
                     }
@@ -414,12 +448,16 @@ fun ObfButtonItem(
     image: ObfImage? = null,
     extractedImageBytes: ByteArray? = null,
     onClick: () -> Unit,
-    isEditMode: Boolean = false
+    isEditMode: Boolean = false,
+    boardStrings: Map<String, Map<String, String>> = emptyMap(),
+    locale: String? = null
 ) {
     val speechService: SpeechService = koinInject()
     val voiceUseCase: VoiceUseCase = koinInject()
     val aacLogger: AacLogger = koinInject()
     val settings by rememberReactiveSettings()
+    val displayLabel = resolveObfLocalizedString(boardStrings, locale, button.label)
+    val displayVocalization = resolveObfLocalizedString(boardStrings, locale, button.vocalization)
     
     // Page links navigate immediately; pulsing the outgoing button makes the
     // destination page appear to animate as the grid composition is reused.
@@ -445,7 +483,7 @@ fun ObfButtonItem(
             
             // Auditory Fishing: Whisper label on hover start (fire-and-forget)
             if (settings.auditoryFishingEnabled) {
-                val label = button.label ?: button.vocalization ?: ""
+                val label = displayLabel ?: displayVocalization ?: ""
                 if (label.isNotBlank()) {
                     fishingScope.launch {
                         runCatching {
@@ -465,7 +503,7 @@ fun ObfButtonItem(
                 if (elapsed.toLong() >= duration.toLong()) {
                     if (animateSelection) isSelected = true
                     onClick()
-                    aacLogger.logButtonClick(button.label ?: "", phraseId = button.id)
+                    aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
                     dwellProgress = 0f
                     break
                 }
@@ -550,7 +588,7 @@ fun ObfButtonItem(
                 val primaryAction = { 
                     if (animateSelection) isSelected = true
                     onClick()
-                    aacLogger.logButtonClick(button.label ?: "", phraseId = button.id)
+                    aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
                 }
                 
                 if (settings.holdToSelectMillis > 0 && !isEditMode) {
@@ -603,11 +641,10 @@ fun ObfButtonItem(
             ) {
                 val showImg = settings.showSymbols &&
                     (imageBitmap != null || !imageModel.isNullOrBlank() || symbolUnavailable)
-                val showLbl = settings.showLabels && !(button.label.isNullOrBlank() && button.vocalization.isNullOrBlank())
+                val showLbl = settings.showLabels && !(displayLabel.isNullOrBlank() && displayVocalization.isNullOrBlank())
 
                 if (settings.labelAtTop && showImg && showLbl) {
-                    // Label at Top
-                    val labelText = button.label ?: button.vocalization ?: ""
+                    val labelText = displayLabel ?: displayVocalization ?: ""
                     Text(
                         text = labelText,
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
@@ -627,7 +664,7 @@ fun ObfButtonItem(
                         BoardSymbolImage(
                             bitmap = imageBitmap,
                             model = imageModel,
-                            contentDescription = button.label,
+                            contentDescription = displayLabel,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
                         )
                     }
@@ -650,7 +687,7 @@ fun ObfButtonItem(
                         }
                     }
                     if (showLbl) {
-                        val labelText = button.label ?: button.vocalization ?: ""
+                        val labelText = displayLabel ?: displayVocalization ?: ""
                         Text(
                             text = labelText,
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
@@ -661,6 +698,42 @@ fun ObfButtonItem(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxWithConstraintsScope.renderAbsoluteButtons(
+    board: ObfBoard,
+    imagesById: Map<String, ObfImage>,
+    extractedImages: Map<String, ByteArray>,
+    isEditMode: Boolean,
+    onButtonClick: (ObfButton) -> Unit
+) {
+    val containerWidth = maxWidth
+    val containerHeight = maxHeight
+    board.buttons.forEach { button ->
+        val left = (button.left ?: 0.0) * containerWidth.value
+        val top = (button.top ?: 0.0) * containerHeight.value
+        val w = (button.width ?: 0.1) * containerWidth.value
+        val h = (button.height ?: 0.1) * containerHeight.value
+        if (!button.hidden || isEditMode) {
+            val image = button.imageId?.let { imagesById[it] }
+            Box(
+                modifier = Modifier
+                    .offset(x = left.dp, y = top.dp)
+                    .size(width = w.dp, height = h.dp)
+            ) {
+                ObfButtonItem(
+                    button = button,
+                    image = image,
+                    extractedImageBytes = button.imageId?.let {
+                        image?.path?.let { path -> extractedImages[path] }
+                    },
+                    onClick = { onButtonClick(button) },
+                    isEditMode = isEditMode
+                )
             }
         }
     }

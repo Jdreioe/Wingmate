@@ -7,4 +7,10 @@ package io.github.jdreioe.wingmate.platform
 interface ShareService {
     fun shareAudio(filePath: String): Boolean
     fun shareText(text: String): Boolean
+
+    /**
+     * Share a file with the given name and content bytes.
+     * The implementation should write the bytes to a temporary file and open the system share sheet.
+     */
+    fun shareFile(fileName: String, content: ByteArray): Boolean
 }
