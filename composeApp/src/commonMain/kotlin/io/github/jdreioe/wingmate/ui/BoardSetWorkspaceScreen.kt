@@ -1651,7 +1651,7 @@ internal suspend fun playButtonSound(
 }
 
 private fun decodeObfDataUri(data: String): ByteArray? {
-    return Base64Decoder.decodeOrNull(payload)
+    return Base64Decoder.decodeOrNull(data)
 }
 
 private fun languageName(
