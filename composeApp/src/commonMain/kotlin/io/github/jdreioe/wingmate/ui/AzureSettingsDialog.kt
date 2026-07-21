@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
@@ -52,7 +53,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
 
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
-    var useSystemTts by remember { mutableStateOf(false) }
+    var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var virtualMic by remember { mutableStateOf(false) }
     var featureUsageReportingEnabled by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
@@ -85,7 +86,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
             val settings = withContext(Dispatchers.Default) { 
                 runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
             }
-            useSystemTts = settings.useSystemTts
+            ttsEngine = settings.ttsEngine
             virtualMic = settings.virtualMicEnabled
             featureUsageReportingEnabled = settings.featureUsageReportingEnabled
             fontSizeScale = settings.fontSizeScale
@@ -133,21 +134,21 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
-                            selected = !useSystemTts,
-                            onClick = { useSystemTts = false },
+                            selected = ttsEngine != TtsEngine.SYSTEM,
+                            onClick = { ttsEngine = TtsEngine.AZURE_USER_RESOURCE },
                             label = { Text("Azure TTS") },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
-                            selected = useSystemTts,
-                            onClick = { useSystemTts = true },
+                            selected = ttsEngine == TtsEngine.SYSTEM,
+                            onClick = { ttsEngine = TtsEngine.SYSTEM },
                             label = { Text("System TTS") },
                             modifier = Modifier.weight(1f)
                         )
                     }
                     
                     // Azure Configuration (only show when Azure TTS is selected)
-                    if (!useSystemTts) {
+                    if (ttsEngine != TtsEngine.SYSTEM) {
                         Spacer(modifier = Modifier.height(16.dp))
                         val showKeyboard = rememberShowKeyboardOnFocus()
                         OutlinedTextField(
@@ -356,7 +357,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                         if (settingsUseCase != null) {
                             val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
                             val updated = current.copy(
-                                useSystemTts = useSystemTts, 
+                                ttsEngine = ttsEngine, 
                                 virtualMicEnabled = virtualMic,
                                 featureUsageReportingEnabled = featureUsageReportingEnabled,
                                 fontSizeScale = fontSizeScale,
@@ -368,9 +369,9 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                             settingsUseCase.update(updated)
                             featureUsageReporter?.setEnabled(featureUsageReportingEnabled)
                         }
-                        
+
                         // Save Azure config only if Azure TTS is selected
-                        if (!useSystemTts && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
+                        if (ttsEngine != TtsEngine.SYSTEM && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
                             println("Saving speech config: endpoint='$endpoint'")
                             try {
                                 configRepo.saveSpeechConfig(SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey))

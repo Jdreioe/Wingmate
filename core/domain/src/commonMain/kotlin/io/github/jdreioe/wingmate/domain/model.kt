@@ -36,6 +36,13 @@ enum class StartupMode {
 }
 
 @Serializable
+enum class TtsEngine {
+    SYSTEM,
+    AZURE_USER_RESOURCE,
+    AZURE_MANAGED
+}
+
+@Serializable
 data class Settings(
     val language: String = "en-US",
     val voice: String = "default",
@@ -43,8 +50,8 @@ data class Settings(
     // UI-level settings: primary and secondary locales used by the UI language selector
     val primaryLanguage: String = "en-US",
     val secondaryLanguage: String = "en-US",
-    // TTS preference: true = use system TTS, false = use Azure TTS
-    val useSystemTts: Boolean = false,
+    // TTS engine selection
+    val ttsEngine: TtsEngine = TtsEngine.SYSTEM,
     // Desktop (Linux) only: when true, route TTS audio to a virtual sink whose monitor can be used as a microphone in apps like Zoom
     val virtualMicEnabled: Boolean = false,
     // Auto-update settings

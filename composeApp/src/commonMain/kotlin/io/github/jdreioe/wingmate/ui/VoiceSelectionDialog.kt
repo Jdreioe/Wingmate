@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -53,7 +54,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
     var selected by remember { mutableStateOf<Voice?>(null) }
     var showVoiceSettings by remember { mutableStateOf(false) }
     var editingVoice by remember { mutableStateOf<Voice?>(null) }
-    var useSystemTts by remember { mutableStateOf(false) }
+    var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var systemVoices by remember { mutableStateOf<List<Voice>>(emptyList()) }
     var selectedLanguage by remember { mutableStateOf<String?>(null) }
     var availableLanguages by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -71,12 +72,12 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
             val settings = withContext(Dispatchers.Default) { 
                 runCatching { settingsUseCase.get() }.getOrNull() 
             }
-            useSystemTts = settings?.useSystemTts ?: false
+            ttsEngine = settings?.ttsEngine ?: TtsEngine.SYSTEM
         }
         
         loading = true
         try {
-            if (useSystemTts) {
+            if (ttsEngine == TtsEngine.SYSTEM) {
                 // Load system voices
                 val allSystemVoices = systemVoiceProvider?.getSystemVoices() ?: listOf(
                     Voice(
@@ -143,7 +144,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
         voices
     }
 
-    val activeLanguageFilteredVoices = if (useSystemTts) languageFilteredSystemVoices else languageFilteredAzureVoices
+    val activeLanguageFilteredVoices = if (ttsEngine == TtsEngine.SYSTEM) languageFilteredSystemVoices else languageFilteredAzureVoices
     val allLabel = stringResource(Res.string.language_all)
     val availableGenders = remember(activeLanguageFilteredVoices) {
         activeLanguageFilteredVoices
@@ -170,8 +171,8 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
         }
     }
 
-    val visibleVoiceCount = if (useSystemTts) filteredSystemVoices.size else filteredAzureVoices.size
-    val totalVoiceCount = if (useSystemTts) systemVoices.size else voices.size
+    val visibleVoiceCount = if (ttsEngine == TtsEngine.SYSTEM) filteredSystemVoices.size else filteredAzureVoices.size
+    val totalVoiceCount = if (ttsEngine == TtsEngine.SYSTEM) systemVoices.size else voices.size
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -299,7 +300,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() }
                 } else if (error != null) {
                     Text(stringResource(Res.string.voice_error, error ?: ""))
-                } else if (useSystemTts) {
+                } else if (ttsEngine == TtsEngine.SYSTEM) {
                     // Show system voices
                     Text(
                         text = if (selectedLanguage != null) {

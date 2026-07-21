@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -27,7 +28,7 @@ fun AzureSettingsFullScreen(
     
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
-    var useSystemTts by remember { mutableStateOf(false) }
+    var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var loading by remember { mutableStateOf(true) }
     var virtualMic by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -36,13 +37,13 @@ fun AzureSettingsFullScreen(
         val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfig() }
         println("Loaded config: $cfg")
         cfg?.let { endpoint = it.endpoint; subscriptionKey = it.subscriptionKey }
-        
+
         val settings = withContext(Dispatchers.Default) { 
             runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
         }
-        useSystemTts = settings.useSystemTts
+        ttsEngine = settings.ttsEngine
         virtualMic = settings.virtualMicEnabled
-        
+
         loading = false
     }
 
@@ -65,13 +66,13 @@ fun AzureSettingsFullScreen(
             // Azure TTS Card
             Card(
                 onClick = { 
-                    useSystemTts = false
+                    ttsEngine = TtsEngine.AZURE_USER_RESOURCE
                     scope.launch {
                         val currentSettings: Settings = withContext(Dispatchers.Default) {
                             runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
                         }
                         runCatching {
-                            settingsUseCase.update(currentSettings.copy(useSystemTts = false))
+                            settingsUseCase.update(currentSettings.copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE))
                         }
                         // Navigate to Azure config screen
                         onAzureSelected()
@@ -79,12 +80,12 @@ fun AzureSettingsFullScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (!useSystemTts) 
+                    containerColor = if (ttsEngine != TtsEngine.SYSTEM) 
                         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
                     else 
                         MaterialTheme.colorScheme.surfaceContainer
                 ),
-                border = if (!useSystemTts) 
+                border = if (ttsEngine != TtsEngine.SYSTEM) 
                     BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                 else null
             ) {
@@ -98,7 +99,7 @@ fun AzureSettingsFullScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                         )
-                        if (!useSystemTts) {
+                        if (ttsEngine != TtsEngine.SYSTEM) {
                             Spacer(Modifier.width(8.dp))
                             AssistChip(
                                 onClick = { },
@@ -139,13 +140,13 @@ fun AzureSettingsFullScreen(
             // System TTS Card  
             Card(
                 onClick = { 
-                    useSystemTts = true
+                    ttsEngine = TtsEngine.SYSTEM
                     scope.launch {
                         val currentSettings: Settings = withContext(Dispatchers.Default) {
                             runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
                         }
                         runCatching {
-                            settingsUseCase.update(currentSettings.copy(useSystemTts = true))
+                            settingsUseCase.update(currentSettings.copy(ttsEngine = TtsEngine.SYSTEM))
                         }
                         // Go directly to voice selection since no config needed
                         onNext()
@@ -153,12 +154,12 @@ fun AzureSettingsFullScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (useSystemTts) 
+                    containerColor = if (ttsEngine == TtsEngine.SYSTEM) 
                         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
                     else 
                         MaterialTheme.colorScheme.surfaceContainer
                 ),
-                border = if (useSystemTts) 
+                border = if (ttsEngine == TtsEngine.SYSTEM) 
                     BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                 else null
             ) {
@@ -172,7 +173,7 @@ fun AzureSettingsFullScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                         )
-                        if (useSystemTts) {
+                        if (ttsEngine == TtsEngine.SYSTEM) {
                             Spacer(Modifier.width(8.dp))
                             AssistChip(
                                 onClick = { },
@@ -248,7 +249,7 @@ fun AzureSettingsFullScreen(
             }
 
             // Azure Configuration (only show when Azure TTS is selected)
-            if (!useSystemTts) {
+            if (ttsEngine != TtsEngine.SYSTEM) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Azure Configuration", style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -282,12 +283,12 @@ fun AzureSettingsFullScreen(
                     // Save TTS preference
                     withContext(Dispatchers.Default) {
                         val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                        val updated = current.copy(useSystemTts = useSystemTts, virtualMicEnabled = virtualMic)
+                        val updated = current.copy(ttsEngine = ttsEngine, virtualMicEnabled = virtualMic)
                         settingsUseCase.update(updated)
                     }
-                    
+
                     // Save Azure config only if Azure TTS is selected and fields are filled
-                    if (!useSystemTts && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
+                    if (ttsEngine != TtsEngine.SYSTEM && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
                         withContext(Dispatchers.Default) {
                             configRepo.saveSpeechConfig(SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey))
                         }
