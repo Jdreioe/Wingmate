@@ -57,29 +57,36 @@ fun F0SetupScreen(
             statusMessage = "Signing in..."
             currentStep = F0Step.SIGNING_IN
 
-            when (val result = withContext(Dispatchers.IO) { flowUseCase.execute() }) {
+            val result = withContext(Dispatchers.IO) { flowUseCase.execute() }
+            println("F0SetupFlow: result=$result")
+            when (result) {
                 is AutoF0FlowResult.Success -> {
                     resultResourceName = result.resourceName
                     resultRegion = result.region
                     currentStep = F0Step.SUCCESS
                 }
                 is AutoF0FlowResult.SignInFailed -> {
+                    println("F0SetupFlow: Sign-in failed, reason=${result.reason}")
                     errorMessage = "Sign-in was cancelled or failed. Please try again."
                     currentStep = F0Step.ERROR
                 }
                 is AutoF0FlowResult.NoSubscriptions -> {
+                    println("F0SetupFlow: No subscriptions found")
                     errorMessage = "No Azure subscriptions found. Create a free Azure account at azure.com/free."
                     currentStep = F0Step.ERROR
                 }
                 is AutoF0FlowResult.ExistingF0Conflict -> {
+                    println("F0SetupFlow: Existing F0 conflict")
                     errorMessage = "An F0 Speech resource already exists in your subscription. Use the manual key entry option to connect it."
                     currentStep = F0Step.ERROR
                 }
                 is AutoF0FlowResult.ProviderRegistrationFailed -> {
+                    println("F0SetupFlow: Provider registration failed")
                     errorMessage = "Could not register the Speech provider. You may need admin permissions on your Azure subscription."
                     currentStep = F0Step.ERROR
                 }
                 is AutoF0FlowResult.Error -> {
+                    println("F0SetupFlow: Error - ${result.message}")
                     errorMessage = result.message
                     currentStep = F0Step.ERROR
                 }

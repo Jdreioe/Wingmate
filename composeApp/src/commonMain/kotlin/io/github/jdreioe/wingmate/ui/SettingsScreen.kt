@@ -336,6 +336,24 @@ fun SettingsScreen(
                                 )
                             } else {
                                 val currentTab = checkNotNull(selectedTab)
+                                val subPage = speechSubPage
+                                if (subPage != null && currentTab == SettingsTab.Speech) {
+                                    // Sub-pages manage their own scrolling, so they must
+                                    // NOT be placed inside another verticalScroll container.
+                                    when (subPage) {
+                                        SettingsSpeechSubPage.VoiceSelection -> VoiceSelectionPage(
+                                            onBack = { speechSubPage = null }
+                                        )
+                                        SettingsSpeechSubPage.LanguageSelection -> LanguageSelectionPage(
+                                            onBack = { speechSubPage = null }
+                                        )
+                                        SettingsSpeechSubPage.F0Setup -> F0SetupScreen(
+                                            onDone = { speechSubPage = null },
+                                            onManualByok = { speechSubPage = null },
+                                            onBack = { speechSubPage = null }
+                                        )
+                                    }
+                                } else {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -343,22 +361,7 @@ fun SettingsScreen(
                                         .padding(horizontal = 16.dp, vertical = 12.dp),
                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
-                                val subPage = speechSubPage
-                                if (subPage != null && currentTab == SettingsTab.Speech) {
-                                    when (subPage) {
-                                SettingsSpeechSubPage.VoiceSelection -> VoiceSelectionPage(
-                                    onBack = { speechSubPage = null }
-                                )
-                                SettingsSpeechSubPage.LanguageSelection -> LanguageSelectionPage(
-                                    onBack = { speechSubPage = null }
-                                )
-                                SettingsSpeechSubPage.F0Setup -> F0SetupScreen(
-                                    onDone = { speechSubPage = null },
-                                    onManualByok = { speechSubPage = null },
-                                    onBack = { speechSubPage = null }
-                                )
-                                    }
-                                } else { when (currentTab) {
+                                when (currentTab) {
                             SettingsTab.Speech -> SpeechSection(
                                 ttsEngine = ttsEngine,
                                 onTtsEngineChange = { engine ->
@@ -499,8 +502,8 @@ fun SettingsScreen(
                                         }
                                     )
                                 }
-                                }
                                 Spacer(Modifier.height(16.dp))
+                                }
                                 }
                             }
                         }

@@ -155,21 +155,11 @@ class AutoF0FlowUseCase(
         return AutoF0FlowResult.Success(resource.name, resource.region)
     }
 
-    /**
-     * Acquire an ARM access token by triggering a getSubscriptions call.
-     * The provisioner caches the token via MSAL internally.
-     * For the ARM client we need the raw token — we store it via a side channel.
-     *
-     * This is a simplified approach; in production the token should be retrieved
-     * from MSAL's IAuthenticationResult directly.
-     */
     private suspend fun getAccessTokenFromScope(): String? {
         return try {
-            provisioner.getSubscriptions()
-            // Token acquisition happened as a side effect
-            // In I-06 we'll plumb the actual token through
-            "arm-token-placeholder"
-        } catch (_: Exception) {
+            provisioner.getAccessToken()
+        } catch (e: Exception) {
+            println("AutoF0Flow: Failed to get access token: ${e.message}")
             null
         }
     }

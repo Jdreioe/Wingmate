@@ -78,13 +78,17 @@ class AndroidAzureF0Provisioner(
     }
 
     override suspend fun getSubscriptions(): List<AzureSubscription> = withContext(Dispatchers.IO) {
-        val token = getAccessToken() ?: return@withContext emptyList()
+        val token = acquireTokenSilent() ?: return@withContext emptyList()
         armClient.listSubscriptions(token)
     }
 
     override suspend fun getF0Resources(subscriptionId: String): List<AzureF0Resource> = withContext(Dispatchers.IO) {
-        val token = getAccessToken() ?: return@withContext emptyList()
+        val token = acquireTokenSilent() ?: return@withContext emptyList()
         armClient.listF0SpeechResources(token, subscriptionId)
+    }
+
+    override suspend fun getAccessToken(): String? = withContext(Dispatchers.IO) {
+        acquireTokenSilent()
     }
 
     private suspend fun getAccount(): IAccount? = suspendCancellableCoroutine { cont ->
@@ -97,7 +101,7 @@ class AndroidAzureF0Provisioner(
         })
     }
 
-    private suspend fun getAccessToken(): String? = suspendCancellableCoroutine { cont ->
+    private suspend fun acquireTokenSilent(): String? = suspendCancellableCoroutine { cont ->
         val account = getAccountSync()
         if (account == null) { cont.resume(null); return@suspendCancellableCoroutine }
         msalApp.acquireTokenSilentAsync(scopes, account.authority, object : AuthenticationCallback {

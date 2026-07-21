@@ -37,4 +37,5 @@ interface AzureF0Provisioner {
     suspend fun getSignedInUser(): AzureSignedInUser?
     suspend fun getSubscriptions(): List<AzureSubscription>
     suspend fun getF0Resources(subscriptionId: String): List<AzureF0Resource>
+    suspend fun getAccessToken(): String?
 }

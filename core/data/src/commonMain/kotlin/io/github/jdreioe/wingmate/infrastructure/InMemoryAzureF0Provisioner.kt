@@ -34,4 +34,6 @@ class InMemoryAzureF0Provisioner : AzureF0Provisioner {
 
     override suspend fun getF0Resources(subscriptionId: String): List<AzureF0Resource> =
         if (signedIn) f0Resources[subscriptionId] ?: emptyList() else emptyList()
+
+    override suspend fun getAccessToken(): String? = if (signedIn) "test-access-token" else null
 }
