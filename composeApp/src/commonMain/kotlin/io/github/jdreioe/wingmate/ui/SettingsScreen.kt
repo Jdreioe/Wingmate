@@ -58,6 +58,7 @@ private enum class SettingsTab { Speech, Display, Accessibility, General }
 private sealed class SettingsSpeechSubPage {
     object VoiceSelection : SettingsSpeechSubPage()
     object LanguageSelection : SettingsSpeechSubPage()
+    object F0Setup : SettingsSpeechSubPage()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -351,6 +352,11 @@ fun SettingsScreen(
                                 SettingsSpeechSubPage.LanguageSelection -> LanguageSelectionPage(
                                     onBack = { speechSubPage = null }
                                 )
+                                SettingsSpeechSubPage.F0Setup -> F0SetupScreen(
+                                    onDone = { speechSubPage = null },
+                                    onManualByok = { speechSubPage = null },
+                                    onBack = { speechSubPage = null }
+                                )
                                     }
                                 } else { when (currentTab) {
                             SettingsTab.Speech -> SpeechSection(
@@ -369,7 +375,8 @@ fun SettingsScreen(
                                     updateSettings { it.copy(virtualMicEnabled = checked) }
                                 },
                                 onOpenVoiceSelection = { speechSubPage = SettingsSpeechSubPage.VoiceSelection },
-                                onOpenLanguageSelection = { speechSubPage = SettingsSpeechSubPage.LanguageSelection }
+                                onOpenLanguageSelection = { speechSubPage = SettingsSpeechSubPage.LanguageSelection },
+                                onOpenF0Setup = { speechSubPage = SettingsSpeechSubPage.F0Setup }
                             )
                                     SettingsTab.Display -> DisplaySection(
                                         fontSizeScale = fontSizeScale,
@@ -1016,7 +1023,8 @@ private fun SpeechSection(
     virtualMic: Boolean,
     onVirtualMicChange: (Boolean) -> Unit,
     onOpenVoiceSelection: () -> Unit = {},
-    onOpenLanguageSelection: () -> Unit = {}
+    onOpenLanguageSelection: () -> Unit = {},
+    onOpenF0Setup: () -> Unit = {}
 ) {
     val showKeyboard = rememberShowKeyboardOnFocus()
 
@@ -1058,6 +1066,14 @@ private fun SpeechSection(
                     shape = MaterialTheme.shapes.large
                 )
             }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = onOpenF0Setup,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Set up automatically (Microsoft sign-in)")
         }
     }
 
