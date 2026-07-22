@@ -25,10 +25,12 @@ jobs:
           infisical --version
 
       - name: Publish to Google Play
-        run: infisical run -- ./gradlew publishRelease
+        run: infisical run --projectId="$INFISICAL_PROJECT_ID" --env=system_env -- ./gradlew publishRelease
         env:
           INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
+          INFISICAL_PROJECT_ID: ${{ vars.INFISICAL_PROJECT_ID }}
           INFISICAL_API_URL: https://eu.infisical.com
+          INFISICAL_SKIP: "1"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
