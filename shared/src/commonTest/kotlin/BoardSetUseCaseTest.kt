@@ -190,6 +190,16 @@ class BoardSetUseCaseTest {
     }
 
     @Test
+    fun sentenceCachingIsConfiguredPerBoardSet() = runBlocking {
+        useCase.saveBoardSetGraph(linkedGraph()).getOrThrow()
+
+        val updated = assertNotNull(useCase.setSentenceCaching("set", false))
+
+        assertEquals(false, updated.cacheWholeSentences)
+        assertEquals(false, useCase.loadBoardSetGraph("set")?.boardSet?.cacheWholeSentences)
+    }
+
+    @Test
     fun deletingNonRootBoardRemovesLinksAndTheBoard() = runBlocking {
         useCase.saveBoardSetGraph(linkedGraph()).getOrThrow()
 

@@ -186,9 +186,11 @@
 "settings.category.display" = "Display & Layout";
 "settings.category.display.subtitle" = "Symbols, grid, contrast, and interface size";
 "settings.category.accessibility" = "Accessibility";
-"settings.category.accessibility.subtitle" = "Touch timing, scanning, feedback, and logging";
+"settings.category.accessibility.subtitle" = "Touch timing, scanning, and feedback";
+"settings.category.privacy" = "Privacy";
+"settings.category.privacy.subtitle" = "History visibility, local data, and reporting";
 "settings.category.general" = "General";
-"settings.category.general.subtitle" = "Startup, privacy, and setup";
+"settings.category.general.subtitle" = "Startup, device options, and setup";
 "settings.category.pronunciation.subtitle" = "Teach Wingmate how to say names and words";
 "settings.speech.engine" = "Speech Engine";
 "settings.speech.engine.azure" = "Azure";
@@ -221,7 +223,13 @@
 "settings.general.startup.footer" = "Choose which communication mode Wingmate opens after startup.";
 "settings.general.privacy" = "Privacy";
 "settings.general.analytics" = "Feature Usage Reporting";
-"settings.general.analytics.footer" = "Share anonymous feature-use events. Phrase text, keys, file paths, and board content are never reported.";
+"settings.general.analytics.footer" = "Share anonymous feature-use events. Phrase text, keys, file paths, and screen content are never reported.";
+"settings.privacy.local_data" = "Local data";
+"settings.privacy.show_history" = "Show speech history";
+"settings.privacy.show_history.footer" = "Only speech played while this is enabled appears in History. Speech played while off remains cached locally for audio reuse but stays hidden.";
+"settings.privacy.data_collection" = "Data collection";
+"settings.privacy.board_cache" = "Screen sentence caching";
+"settings.privacy.board_cache.footer" = "Choose per screen whether complete spoken sentences are cached. Turning this off improves privacy, but replaying a sentence may synthesize it again and use more speech-service tokens.";
 
 "reorder.banner.title" = "Reorder Mode";
 "reorder.banner.subtitle" = "Drag phrases to reorder them";
@@ -277,51 +285,51 @@
 "toolbar.switch_phrase_mode" = "Switch to Phrase Workspace";
 
 "symbol.workspace.title" = "Symbol Workspace";
-"symbol.workspace.subtitle" = "Build and manage boardsets";
+"symbol.workspace.subtitle" = "Build and manage screens";
 
-"boardset.create" = "New Boardset";
-"boardset.create_first" = "Create Your First Boardset";
-"boardset.empty" = "No boardsets yet";
-"boardset.default_name" = "New Boardset";
-"boardset.name" = "Boardset Name";
+"boardset.create" = "New Screen";
+"boardset.create_first" = "Create Your First Screen";
+"boardset.empty" = "No screens yet";
+"boardset.default_name" = "New Screen";
+"boardset.name" = "Screen Name";
 "boardset.name_placeholder" = "Everyday Communication";
 "boardset.grid" = "Grid";
 "boardset.rows" = "Rows: %d";
 "boardset.columns" = "Columns: %d";
-"boardset.board_name" = "Board Name";
-"boardset.board_name_placeholder" = "Food Board";
-"boardset.board_picker" = "Board";
-"boardset.add_board" = "Add Board";
-"boardset.save" = "Save Boardset";
-"boardset.lock" = "Lock Boardset";
-"boardset.unlock" = "Unlock Boardset";
-"boardset.locked_banner" = "Boardset is locked. Unlock to edit.";
-"boardset.untitled_board" = "Untitled Board";
+"boardset.board_name" = "Page Name";
+"boardset.board_name_placeholder" = "Food Page";
+"boardset.board_picker" = "Page";
+"boardset.add_board" = "Add Page";
+"boardset.save" = "Save Screen";
+"boardset.lock" = "Lock Screen";
+"boardset.unlock" = "Unlock Screen";
+"boardset.locked_banner" = "Screen is locked. Unlock to edit.";
+"boardset.untitled_board" = "Untitled Page";
 "boardset.grid_summary" = "%d x %d grid, %d buttons";
 
-"boardset.status.created" = "Boardset created.";
-"boardset.status.board_added" = "Board added to boardset.";
-"boardset.status.saved" = "Boardset saved.";
-"boardset.status.locked" = "Boardset locked.";
-"boardset.status.unlocked" = "Boardset unlocked.";
+"boardset.status.created" = "Screen created.";
+"boardset.status.board_added" = "Page added to screen.";
+"boardset.status.saved" = "Screen saved.";
+"boardset.status.locked" = "Screen locked.";
+"boardset.status.unlocked" = "Screen unlocked.";
 
-"boardset.error.create_failed" = "Could not create boardset.";
-"boardset.error.locked" = "This boardset is locked.";
-"boardset.error.no_board" = "No board selected.";
-"boardset.error.save_failed" = "Could not save boardset.";
+"boardset.error.create_failed" = "Could not create screen.";
+"boardset.error.locked" = "This screen is locked.";
+"boardset.error.no_board" = "No page selected.";
+"boardset.error.save_failed" = "Could not save screen.";
 
 "boardset.unlock.failed_title" = "Unable to Unlock";
 "boardset.unlock.not_available" = "Device authentication is not available.";
-"boardset.unlock.reason" = "Unlock this boardset to edit symbols and layout.";
+"boardset.unlock.reason" = "Unlock this screen to edit symbols and layout.";
 "boardset.unlock.failed" = "Authentication failed.";
 
-"boardset.edit" = "Edit Cells";
+"boardset.edit" = "Edit Fields";
 "boardset.edit_done" = "Done Editing";
-"boardset.cell.empty" = "Empty Cell";
-"boardset.cell.edit_title" = "Edit Cell";
+"boardset.cell.empty" = "Empty Field";
+"boardset.cell.edit_title" = "Edit Field";
 "boardset.cell.label" = "Label";
 "boardset.cell.vocalization" = "Vocalization";
-"boardset.cell.linked_board" = "Linked Board";
+"boardset.cell.linked_board" = "Linked Page";
 "boardset.cell.no_link" = "No Link";
 "boardset.cell.colors" = "Colors";
 "boardset.cell.background_enabled" = "Set background color";
@@ -330,14 +338,14 @@
 "boardset.cell.border_picker" = "Border color";
 "boardset.cell.background_hex" = "Background Color (HEX)";
 "boardset.cell.border_hex" = "Border Color (HEX)";
-"boardset.cell.clear" = "Clear Cell";
-"boardset.cell.delete" = "Delete Cell";
+"boardset.cell.clear" = "Clear Field";
+"boardset.cell.delete" = "Delete Field";
 
-"boardset.status.cell_saved" = "Cell saved.";
-"boardset.status.cell_cleared" = "Cell cleared.";
+"boardset.status.cell_saved" = "Field saved.";
+"boardset.status.cell_cleared" = "Field cleared.";
 
-"boardset.error.cell_update_failed" = "Could not update cell.";
-"boardset.error.cell_clear_failed" = "Could not clear cell.";
+"boardset.error.cell_update_failed" = "Could not update field.";
+"boardset.error.cell_clear_failed" = "Could not clear field.";
 
 "sentence.box.title" = "Sentence Box";
 "sentence.box.delete_phrase" = "Delete phrase from sentence";
@@ -382,43 +390,42 @@
 "welcome_mode.tour.keyboard.step1" = "Type the message you want to speak in the text box.";
 "welcome_mode.tour.keyboard.step2" = "Tap saved phrases and categories for words you use often.";
 "welcome_mode.tour.keyboard.step3" = "Have the complete message spoken aloud, then start the next one.";
-"welcome_mode.tour.boardsets.title" = "Boardsets and Screens";
+"welcome_mode.tour.boardsets.title" = "Screens";
 "welcome_mode.tour.boardsets.subtitle" = "Communicate with visual grids of symbols and linked pages.";
-"welcome_mode.tour.boardsets.step1" = "Select a boardset from your library.";
+"welcome_mode.tour.boardsets.step1" = "Select a screen from your library.";
 "welcome_mode.tour.boardsets.step2" = "Tap symbols in a grid to speak them or navigate to another page.";
-"welcome_mode.tour.boardsets.step3" = "Edit boardsets later to customize symbols and layout.";
+"welcome_mode.tour.boardsets.step3" = "Edit the screen later to customize symbols and layout.";
 "welcome_mode.tour.phrase_preview_title" = "Phrase Screen";
 "welcome_mode.tour.phrase_preview_message" = "I would like some water, please.";
 "welcome_mode.tour.back" = "Back to choices";
 
 /* Analytics Consent */
 "welcome_analytics.title" = "Help Improve Wingmate";
-"welcome_analytics.desc" = "Optionally share anonymous feature-use events. We never send your phrases, speech text, Azure keys, or board content. You can change this later in Settings.";
+"welcome_analytics.desc" = "Optionally share anonymous feature-use events. We never send your phrases, speech text, Azure keys, or screen content. You can change this later in Settings.";
 "welcome_analytics.opt_in" = "Share anonymous analytics";
 
 /* BoardSets Library & Workspace */
-"board_sets.library.title" = "Boardsets Library";
+"board_sets.library.title" = "Screens";
 "board_sets.library.subtitle" = "Visual grids of symbols and linked pages";
-"board_sets.library.empty_title" = "No Boardsets Yet";
-"board_sets.library.empty_body" = "Create a boardset to start communicating with visual symbols and pages.";
+"board_sets.library.empty_title" = "No Screens Yet";
+"board_sets.library.empty_body" = "Create a screen to start communicating with visual symbols and pages.";
 "board_sets.library.open" = "Open";
 "board_sets.library.duplicate" = "Duplicate";
-"board_sets.library.delete_title" = "Delete Boardset";
+"board_sets.library.delete_title" = "Delete Screen";
 "board_sets.library.delete_message" = "Are you sure you want to delete '%@'?";
-"board_sets.status.deleted" = "Boardset deleted.";
-"board_sets.status.duplicated" = "Boardset duplicated.";
-"board_sets.error.delete_failed" = "Failed to delete boardset.";
-"board_sets.error.duplicate_failed" = "Failed to duplicate boardset.";
+"board_sets.status.deleted" = "Screen deleted.";
+"board_sets.status.duplicated" = "Screen duplicated.";
+"board_sets.error.delete_failed" = "Failed to delete screen.";
+"board_sets.error.duplicate_failed" = "Failed to duplicate screen.";
 "board_workspace.editing" = "Editing %@";
 "board_workspace.finish" = "Finish";
 "board_workspace.undo" = "Undo";
 "board_workspace.home" = "Home";
-"board_workspace.exit_library" = "Library";
-"boardset.rename_set" = "Rename Boardset";
-"boardset.rename_board" = "Rename Board";
-"boardset.resize_board" = "Resize Board";
-"boardset.resize_warning" = "Buttons outside the new grid size will be removed.";
-"boardset.make_home" = "Make Home Board";
-"boardset.delete_board" = "Delete Board";
-"boardset.delete_board.message" = "Delete this board? Links to it will also be removed.";
-
+"board_workspace.exit_library" = "Screens";
+"boardset.rename_set" = "Rename Screen";
+"boardset.rename_board" = "Rename Page";
+"boardset.resize_board" = "Resize Page";
+"boardset.resize_warning" = "Fields outside the new grid size will be removed.";
+"boardset.make_home" = "Set as Start Page";
+"boardset.delete_board" = "Delete Page";
+"boardset.delete_board.message" = "Delete this page? Links to it will also be removed.";

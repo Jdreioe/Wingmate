@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.di.appModule
 import io.github.jdreioe.wingmate.initKoin
@@ -14,6 +15,9 @@ import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
+import io.github.jdreioe.wingmate.domain.TextEditResult
+import io.github.jdreioe.wingmate.domain.TextEditingPolicy
+import io.github.jdreioe.wingmate.domain.TextSpan
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
@@ -29,6 +33,26 @@ class KoinBridge : KoinComponent {
     fun phraseListStore(): PhraseListStore = get()
     // Safe variant to avoid throwing across Swift bridge
     fun phraseListStoreOrNull(): PhraseListStore? = try { get<PhraseListStore>() } catch (_: Throwable) { null }
+
+    // --- Shared native text-editing policy ---
+    fun mergeTextSpans(spans: List<TextSpan>, textLength: Int): List<TextSpan> =
+        TextEditingPolicy.merge(spans, textLength)
+
+    fun addTextSpan(spans: List<TextSpan>, span: TextSpan, textLength: Int): List<TextSpan> =
+        TextEditingPolicy.merge(spans + span, textLength)
+
+    fun adjustTextSpansForReplacement(
+        textLength: Int,
+        edit: TextSpan,
+        replacementLength: Int,
+        spans: List<TextSpan>,
+    ): List<TextSpan> = TextEditingPolicy.adjustForReplacement(textLength, edit, replacementLength, spans)
+
+    fun completePredictedWord(text: String, cursor: Int, suggestion: String): TextEditResult =
+        TextEditingPolicy.completeWord(text, cursor, suggestion)
+
+    fun insertPredictedText(text: String, cursor: Int, value: String): TextEditResult =
+        TextEditingPolicy.insert(text, cursor, value)
 
     // --- Sharing helpers ---
     fun shareAudio(path: String) {
@@ -49,6 +73,14 @@ class KoinBridge : KoinComponent {
             get<SpeechService>().speak(text)
         } catch (t: Throwable) {
             logger.warn(t) { "speak() failed; swallowing to avoid Swift bridge crash" }
+        }
+    }
+
+    suspend fun speakBoardSentence(text: String, cacheAudio: Boolean) {
+        try {
+            get<SpeechService>().speakWithCachePolicy(text = text, cacheAudio = cacheAudio)
+        } catch (t: Throwable) {
+            logger.warn(t) { "speakBoardSentence() failed; swallowing to avoid Swift bridge crash" }
         }
     }
 
@@ -127,6 +159,7 @@ class KoinBridge : KoinComponent {
         updateSettings { it.copy(usageLoggingEnabled = enabled) }
         runCatching { get<io.github.jdreioe.wingmate.domain.AacLogger>().setEnabled(enabled) }
     }
+    suspend fun updateHistoryVisible(visible: Boolean) = updateSettings { it.copy(historyVisible = visible) }
     suspend fun updateFeatureUsageReportingEnabled(enabled: Boolean) {
         updateSettings { it.copy(featureUsageReportingEnabled = enabled) }
         runCatching { get<io.github.jdreioe.wingmate.application.FeatureUsageReporter>().setEnabled(enabled) }
@@ -198,6 +231,12 @@ class KoinBridge : KoinComponent {
     suspend fun deleteBoardSet(id: String) { get<BoardSetUseCase>().deleteBoardSet(id) }
     suspend fun duplicateBoardSet(id: String): ObfBoardSet? = get<BoardSetUseCase>().duplicateBoardSet(id)
     suspend fun toggleBoardSetLocked(id: String): ObfBoardSet? = get<BoardSetUseCase>().toggleLocked(id)
+    suspend fun updateBoardSetSentenceCaching(id: String, enabled: Boolean): ObfBoardSet? {
+        return get<BoardSetUseCase>().setSentenceCaching(id, enabled)
+    }
+    suspend fun cacheAllBoardSetFields() = get<BoardSetSpeechCacheUseCase>().cacheAll()
+    suspend fun retryBoardSetSpeechCaching() = get<BoardSetSpeechCacheUseCase>().retryPending()
+    fun updateBoardSetSpeechCacheOnline(online: Boolean) = get<BoardSetSpeechCacheUseCase>().setOnline(online)
     suspend fun touchBoardSet(id: String): ObfBoardSet? = get<BoardSetUseCase>().touchBoardSet(id)
     suspend fun createBoardSet(name: String, rows: Int, columns: Int): ObfBoardSet = get<BoardSetUseCase>().createBoardSet(name, rows, columns)
     suspend fun createBoard(boardSetId: String, name: String, rows: Int, columns: Int): ObfBoard? =
@@ -280,7 +319,10 @@ class KoinBridge : KoinComponent {
         val order = grid.order.mapIndexed { r, columns ->
             columns.mapIndexed { c, id -> if (r == row && c == col) buttonId else id }
         }
-        return board.copy(buttons = buttons, images = images, grid = grid.copy(order = order)).also { repo.saveBoard(it) }
+        return board.copy(buttons = buttons, images = images, grid = grid.copy(order = order)).also {
+            repo.saveBoard(it)
+            get<BoardSetSpeechCacheUseCase>().cacheField(it, button)
+        }
     }
 
     suspend fun clearBoardCellButton(boardId: String, row: Int, col: Int): ObfBoard? {
@@ -317,7 +359,7 @@ class KoinBridge : KoinComponent {
     // Returns the list of said items mapped as Phrase objects for easy Swift UI rendering
     suspend fun listHistoryAsPhrases(): List<Phrase> {
         return try {
-            val said = get<SaidTextRepository>().list()
+            val said = get<SaidTextRepository>().list().filter { it.visibleInHistory }
             val now = 0L
             said.map { s ->
                 Phrase(

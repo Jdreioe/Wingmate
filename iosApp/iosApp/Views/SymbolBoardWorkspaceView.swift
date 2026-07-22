@@ -467,7 +467,7 @@ struct SymbolBoardWorkspaceView: View {
                         onSpeak: {
                             let sentence = boardSentenceText
                             guard !sentence.isEmpty else { return }
-                            model.speak(sentence)
+                            model.speakBoardSentence(sentence, boardSetId: boardSetId)
                         },
                         animationNamespace: sentenceAnimationNamespace,
                         animatedTokenId: activeSentenceAnimation?.tokenId

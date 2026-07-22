@@ -11,8 +11,10 @@ import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.MovePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetAllItemsUseCase
 import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.domain.BoardSpeechCache
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.ObzExporter
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
@@ -46,6 +48,7 @@ val appModule = module {
     singleOf(::InMemoryBoardRepository) { bind<BoardRepository>() }
     singleOf(::InMemoryBoardSetRepository) { bind<BoardSetRepository>() }
     single { ObzExporter(getOrNull() ?: kotlinx.serialization.json.Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }) }
+    singleOf(::BoardSetSpeechCacheUseCase) { bind<BoardSpeechCache>() }
     singleOf(::BoardSetUseCase)
     // Platforms override with a real player; default is a no-op.
     single<SoundPlayer> { NoopSoundPlayer() }

@@ -9,6 +9,8 @@ data class ObfBoardSet(
     val rootBoardId: String,
     val boardIds: List<String> = emptyList(),
     val isLocked: Boolean = false,
+    /** Cache synthesized audio for complete sentences assembled in this board set. */
+    val cacheWholeSentences: Boolean = true,
     val createdAt: Long,
     val updatedAt: Long
 )

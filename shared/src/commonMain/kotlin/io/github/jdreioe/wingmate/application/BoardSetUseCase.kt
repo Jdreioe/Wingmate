@@ -19,7 +19,8 @@ class BoardSetUseCase(
     private val boardRepository: BoardRepository,
     private val featureUsageReporter: FeatureUsageReporter,
     private val obzExporter: ObzExporter = ObzExporter(),
-    private val fileStorage: FileStorage? = null
+    private val fileStorage: FileStorage? = null,
+    private val speechCache: BoardSetSpeechCacheUseCase? = null,
 ) {
     private val json = Json {
         prettyPrint = true
@@ -71,7 +72,7 @@ class BoardSetUseCase(
                 .forEach { boardRepository.deleteBoard(it) }
             throw error
         }
-        canonicalGraph.copy(boardSet = updatedSet)
+        canonicalGraph.copy(boardSet = updatedSet).also { speechCache?.cacheGraph(it) }
     }
 
     suspend fun deleteBoardSet(boardSetId: String) {
@@ -206,6 +207,17 @@ class BoardSetUseCase(
             FeatureUsageEvents.BOARDSET_LOCK_TOGGLED,
             "locked" to updated.isLocked.toString()
         )
+        return updated
+    }
+
+    suspend fun setSentenceCaching(boardSetId: String, enabled: Boolean): ObfBoardSet? {
+        val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
+        if (boardSet.cacheWholeSentences == enabled) return boardSet
+        val updated = boardSet.copy(
+            cacheWholeSentences = enabled,
+            updatedAt = Clock.System.now().toEpochMilliseconds()
+        )
+        boardSetRepository.saveBoardSet(updated)
         return updated
     }
 
@@ -407,6 +419,7 @@ class BoardSetUseCase(
             "column" to column.toString(),
             "has_image" to (normalizedImageUrl != null).toString()
         )
+        speechCache?.cacheField(updatedBoard, updatedButton)
         return updatedBoard
     }
 

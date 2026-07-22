@@ -67,7 +67,8 @@ class VoiceUseCase(
     private val repo: VoiceRepository,
     private val azure: AzureVoiceCatalog,
     private val configRepo: ConfigRepository,
-    private val featureUsageReporter: FeatureUsageReporter
+    private val featureUsageReporter: FeatureUsageReporter,
+    private val boardSetSpeechCache: BoardSpeechCache? = null,
 ) {
     suspend fun list(): List<Voice> = repo.getVoices()
     suspend fun selected(): Voice? = repo.getSelected()
@@ -79,6 +80,7 @@ class VoiceUseCase(
             "primary_language" to voice.primaryLanguage,
             "selected_language" to voice.selectedLanguage
         )
+        boardSetSpeechCache?.cacheAll()
     }
     suspend fun refreshFromAzure(): List<Voice> {
         val list = azure.list()

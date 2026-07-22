@@ -31,7 +31,7 @@ struct MainContentView: View {
     private var showingHistory: Bool {
         // We'll detect by comparing a local selection binding; use model.state plus a local flag passed from chip
         // MainContentView will maintain its own isHistorySelected state
-        return isHistorySelected
+        return isHistorySelected && model.historyVisible
     }
     @State private var isHistorySelected: Bool = false
     
@@ -80,6 +80,7 @@ struct MainContentView: View {
         model.scanningEnabled && !model.scanPlaybackAreaEnabled
     }
 
+    #if DEBUG
     @ViewBuilder
     private var predictionBar: some View {
         if !model.predictions.words.isEmpty || !model.predictions.letters.isEmpty {
@@ -91,6 +92,7 @@ struct MainContentView: View {
             )
         }
     }
+    #endif
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -151,7 +153,9 @@ struct MainContentView: View {
             }
             if model.state.isLoading { ProgressView().frame(maxWidth: .infinity, alignment: .center) }
 
+            #if DEBUG
             predictionBar
+            #endif
 
             if !model.sentencePhrases.isEmpty {
                 SentenceBoxView(
@@ -201,7 +205,7 @@ struct MainContentView: View {
                 onDelete: { id in model.deleteCategory(id: id) },
                 onAddCategory: { showAddCategory = true }
             ,
-                showHistoryChip: !model.historyPhrases.isEmpty,
+                showHistoryChip: model.historyVisible && !model.historyPhrases.isEmpty,
                 isHistorySelected: isHistorySelected,
                 onSelectHistory: {
                     isHistorySelected = true

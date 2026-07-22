@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
@@ -148,6 +149,7 @@ fun BoardSetManagerScreen(
     initialBoardSetId: String? = null
 ) {
     val useCase = koinInject<BoardSetUseCase>()
+    val boardSetSpeechCache = koinInject<BoardSetSpeechCacheUseCase>()
     val boardImportService = koinInject<BoardImportService>()
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
@@ -186,6 +188,7 @@ fun BoardSetManagerScreen(
 
     LaunchedEffect(Unit) {
         refreshBoardSets()
+        boardSetSpeechCache.cacheAll()
     }
     LaunchedEffect(initialBoardSetId) {
         val targetBoardSet = initialBoardSetId?.let { id ->
@@ -212,6 +215,7 @@ fun BoardSetManagerScreen(
                     runCatching { boardImportService.importBoardSet() }
                         .onSuccess { imported ->
                             if (imported != null) {
+                                boardSetSpeechCache.cacheBoardSet(imported.id)
                                 statusMessage = importedMessage
                                 refreshBoardSets()
                             }
@@ -840,6 +844,7 @@ private fun BoardSetWorkspaceScreen(
                                         selected = nextSelection,
                                         voiceUseCase = voiceUseCase,
                                         speechService = speechService,
+                                        cacheWholeSentence = activeGraph.boardSet.cacheWholeSentences,
                                         scope = scope
                                     )
                                 }
@@ -926,9 +931,21 @@ private fun BoardSetWorkspaceScreen(
                                                     languageTag = language
                                                 )
                                             }
-                                            speechService.speakSegments(segments, voice, voice?.pitch, voice?.rate)
+                                            speechService.speakSegmentsWithCachePolicy(
+                                                segments,
+                                                voice,
+                                                voice?.pitch,
+                                                voice?.rate,
+                                                cacheAudio = activeGraph.boardSet.cacheWholeSentences
+                                            )
                                         } else {
-                                            speechService.speak(sentence, voice, voice?.pitch, voice?.rate)
+                                            speechService.speakWithCachePolicy(
+                                                sentence,
+                                                voice,
+                                                voice?.pitch,
+                                                voice?.rate,
+                                                cacheAudio = activeGraph.boardSet.cacheWholeSentences
+                                            )
                                         }
                                     }
                                 }
@@ -1796,6 +1813,7 @@ private fun speakSelectedButtons(
     selected: List<Pair<ObfButton, ImageBitmap?>>,
     voiceUseCase: VoiceUseCase,
     speechService: SpeechService,
+    cacheWholeSentence: Boolean,
     scope: kotlinx.coroutines.CoroutineScope
 ) {
     val speechParts = selected.mapNotNull { (button, _) ->
@@ -1814,9 +1832,21 @@ private fun speakSelectedButtons(
                 val segments = speechParts.map { (text, language) ->
                     SpeechSegment(text = text, languageTag = language)
                 }
-                speechService.speakSegments(segments, voice, voice?.pitch, voice?.rate)
+                speechService.speakSegmentsWithCachePolicy(
+                    segments,
+                    voice,
+                    voice?.pitch,
+                    voice?.rate,
+                    cacheAudio = cacheWholeSentence
+                )
             } else {
-                speechService.speak(sentence, voice, voice?.pitch, voice?.rate)
+                speechService.speakWithCachePolicy(
+                    sentence,
+                    voice,
+                    voice?.pitch,
+                    voice?.rate,
+                    cacheAudio = cacheWholeSentence
+                )
             }
         }
     }

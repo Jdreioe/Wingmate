@@ -9,6 +9,7 @@ struct BoardSetInfo: Codable, Identifiable, Equatable {
     var rootBoardId: String
     var boardIds: [String]
     var isLocked: Bool
+    var cacheWholeSentences: Bool
     var updatedAt: TimeInterval
 }
 
@@ -90,8 +91,10 @@ final class IosViewModel: ObservableObject {
     @Published var selectedVoice: Shared.Voice? = nil
     @Published var availableLanguages: [String] = []
     // Predictions
+    #if DEBUG
     @Published var predictions: Shared.PredictionResult = Shared.PredictionResult(words: [], letters: [])
     private var predictionJob: Task<Void, Never>? = nil
+    #endif
     // History items exposed as phrases for UI rendering
     @Published var historyPhrases: [Shared.Phrase] = []
     // Special selection for History view
@@ -126,6 +129,7 @@ final class IosViewModel: ObservableObject {
     @Published var auditoryFishingEnabled: Bool = false
     @Published var usageLoggingEnabled: Bool = false
     @Published var featureUsageReportingEnabled: Bool = false
+    @Published var historyVisible: Bool = true
     @Published var startupUsesScreens: Bool = false
     @Published var startupBoardSetId: String? = nil
     private var hasShownOfflineBanner: Bool = UserDefaults.standard.bool(forKey: "offline_banner_shown")
@@ -248,6 +252,13 @@ final class IosViewModel: ObservableObject {
         ConnectivityMonitor.shared.onChange { [weak self] online in
             guard let self = self else { return }
             self.isOnline = online
+            self.bridge.updateBoardSetSpeechCacheOnline(online: online)
+            if online {
+                Task {
+                    try? await self.bridge.cacheAllBoardSetFields()
+                    try? await self.bridge.retryBoardSetSpeechCaching()
+                }
+            }
             if !online && !self.hasShownOfflineBanner {
                 self.showOfflineInfoOnce = true
                 self.hasShownOfflineBanner = true
@@ -256,12 +267,15 @@ final class IosViewModel: ObservableObject {
         }
     // Preload history once Koin is up
     await loadHistory()
-    // Train prediction model on history
+    #if DEBUG
+    // Predictions are a development-only feature and are excluded from production behavior.
     _ = try? await bridge.trainPredictionModel()
+    #endif
     // Load pronunciations
     await loadPronunciations()
     // Load boardsets and selected board for symbol mode
     await loadBoardSets()
+    _ = try? await bridge.cacheAllBoardSetFields()
     }
 
     func refreshAzureConfiguration() async {
@@ -336,6 +350,7 @@ final class IosViewModel: ObservableObject {
                 self.auditoryFishingEnabled = settings.auditoryFishingEnabled
                 self.usageLoggingEnabled = settings.usageLoggingEnabled
                 self.featureUsageReportingEnabled = settings.featureUsageReportingEnabled
+                self.historyVisible = settings.historyVisible
                 self.startupUsesScreens = opensScreens
                 self.startupBoardSetId = settings.startupBoardSetId
                 self.boardModeEnabled = opensScreens
@@ -416,8 +431,10 @@ final class IosViewModel: ObservableObject {
         isApplyingSentencePhraseInput = true
         onInputChanged(input)
         isApplyingSentencePhraseInput = false
-        // Incremental learning
+        #if DEBUG
+        // Incremental learning for development builds with predictions enabled.
         Task { _ = try? await bridge.learnPhrase(text: t) }
+        #endif
     }
 
     func removeSentencePhrase(at index: Int) {
@@ -522,6 +539,17 @@ final class IosViewModel: ObservableObject {
         Task { _ = try? await bridge.speak(text: t) }
     }
 
+    func speakBoardSentence(_ text: String, boardSetId: String) {
+        let cacheAudio = boardSets.first(where: { $0.id == boardSetId })?.cacheWholeSentences ?? true
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        AudioSessionHelper.activatePlayback()
+        if useSystemTts || !azureConfigured || (!isOnline && useSystemTtsWhenOffline) {
+            SystemTtsManager.shared.speak(text, language: primaryLanguage)
+            return
+        }
+        Task { _ = try? await bridge.speakBoardSentence(text: text, cacheAudio: cacheAudio) }
+    }
+
     private func textWithSecondaryLanguageMarkup(from plainText: String) -> String {
         let locale = secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !locale.isEmpty,
@@ -555,6 +583,10 @@ final class IosViewModel: ObservableObject {
 
     // MARK: - History
     func loadHistory() async {
+        guard historyVisible else {
+            historyPhrases = []
+            return
+        }
         do {
             let items = try await bridge.listHistoryAsPhrases()
             await MainActor.run { self.historyPhrases = items.reversed() }
@@ -766,6 +798,16 @@ final class IosViewModel: ObservableObject {
         Task { _ = try? await bridge.updateUsageLoggingEnabled(enabled: enabled) }
     }
 
+    func setHistoryVisible(_ visible: Bool) {
+        historyVisible = visible
+        if visible {
+            Task { await loadHistory() }
+        } else {
+            historyPhrases = []
+        }
+        Task { _ = try? await bridge.updateHistoryVisible(visible: visible) }
+    }
+
     func setFeatureUsageReportingEnabled(_ enabled: Bool) {
         featureUsageReportingEnabled = enabled
         Task { _ = try? await bridge.updateFeatureUsageReportingEnabled(enabled: enabled) }
@@ -866,92 +908,47 @@ final class IosViewModel: ObservableObject {
               range.length > 0,
               range.location + range.length <= currentText.length else { return }
 
-        secondaryLanguageRanges = mergeRanges(secondaryLanguageRanges + [range], maxLength: currentText.length)
+        secondaryLanguageRanges = ranges(from: bridge.addTextSpan(
+            spans: textSpans(from: secondaryLanguageRanges),
+            span: Shared.TextSpan(start: Int32(range.location), endExclusive: Int32(range.location + range.length)),
+            textLength: Int32(currentText.length)
+        ))
     }
 
     func adjustSecondaryLanguageRangesAfterEdit(range: NSRange, replacementText: String) {
         guard !secondaryLanguageRanges.isEmpty else { return }
         let currentLength = (input as NSString).length
         let replacementLength = (replacementText as NSString).length
-        let delta = replacementLength - range.length
-
-        let editStart = range.location
-        let editEnd = range.location + range.length
-
-        var updated: [NSRange] = []
-        for r in secondaryLanguageRanges {
-            let rStart = r.location
-            let rEnd = r.location + r.length
-
-            // Edit completely before range: shift
-            if editEnd <= rStart {
-                updated.append(NSRange(location: max(0, rStart + delta), length: r.length))
-                continue
-            }
-
-            // Edit completely after range: unchanged
-            if editStart >= rEnd {
-                updated.append(r)
-                continue
-            }
-
-            // Overlap cases
-            if editStart <= rStart && editEnd >= rEnd {
-                // Range removed entirely
-                continue
-            }
-
-            if editStart <= rStart {
-                // Overlap starts before (or at) marked range start
-                let newStart = max(0, editStart + replacementLength)
-                let newLen = max(0, rEnd - editEnd)
-                if newLen > 0 {
-                    updated.append(NSRange(location: newStart, length: newLen))
-                }
-                continue
-            }
-
-            if editEnd >= rEnd {
-                // Overlap ends after (or at) marked range end
-                let newLen = max(0, editStart - rStart)
-                if newLen > 0 {
-                    updated.append(NSRange(location: rStart, length: newLen))
-                }
-                continue
-            }
-
-            // Edit fully inside marked range: keep one merged range with adjusted length
-            let newLen = r.length + delta
-            if newLen > 0 {
-                updated.append(NSRange(location: rStart, length: newLen))
-            }
-        }
-
-        let newMaxLength = max(0, currentLength + delta)
-        secondaryLanguageRanges = mergeRanges(updated, maxLength: newMaxLength)
+        secondaryLanguageRanges = ranges(from: bridge.adjustTextSpansForReplacement(
+            textLength: Int32(currentLength),
+            edit: Shared.TextSpan(start: Int32(range.location), endExclusive: Int32(range.location + range.length)),
+            replacementLength: Int32(replacementLength),
+            spans: textSpans(from: secondaryLanguageRanges)
+        ))
     }
 
     private func mergeRanges(_ ranges: [NSRange], maxLength: Int) -> [NSRange] {
-        let sorted = ranges
-            .filter { $0.location != NSNotFound && $0.length > 0 && $0.location + $0.length <= maxLength }
-            .sorted { $0.location < $1.location }
+        ranges(from: bridge.mergeTextSpans(
+            spans: textSpans(from: ranges),
+            textLength: Int32(maxLength)
+        ))
+    }
 
-        guard !sorted.isEmpty else { return [] }
-        var merged: [NSRange] = []
-        for r in sorted {
-            if let last = merged.last {
-                let lastEnd = last.location + last.length
-                let rEnd = r.location + r.length
-                if r.location <= lastEnd {
-                    merged[merged.count - 1] = NSRange(location: last.location, length: max(lastEnd, rEnd) - last.location)
-                } else {
-                    merged.append(r)
-                }
-            } else {
-                merged.append(r)
-            }
+    private func textSpans(from ranges: [NSRange]) -> [Shared.TextSpan] {
+        ranges.compactMap { range in
+            guard range.location != NSNotFound else { return nil }
+            return Shared.TextSpan(
+                start: Int32(range.location),
+                endExclusive: Int32(range.location + range.length)
+            )
         }
-        return merged
+    }
+
+    private func ranges(from spans: [Shared.TextSpan]) -> [NSRange] {
+        spans.map { span in
+            let start = Int(span.start)
+            return NSRange(location: start, length: max(0, Int(span.endExclusive) - start))
+        }
     }
 
     private func makeCurrentInputSnapshot() -> InputSnapshot {
@@ -1018,8 +1015,10 @@ final class IosViewModel: ObservableObject {
         let normalizedRecordingPath = recordingPath?.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalRecordingPath = (normalizedRecordingPath?.isEmpty == false) ? normalizedRecordingPath : nil
         store?.accept(intent: Shared.PhraseListStoreIntent.AddPhrase(text: trimmed, name: finalAlternative, imageUrl: finalImageUrl, recordingPath: finalRecordingPath))
-        // Incremental learning
+        #if DEBUG
+        // Incremental learning for development builds with predictions enabled.
         Task { _ = try? await bridge.learnPhrase(text: trimmed) }
+        #endif
     }
     
     // MARK: - Prediction
@@ -1037,6 +1036,7 @@ final class IosViewModel: ObservableObject {
             }
         }
 
+        #if DEBUG
         predictionJob?.cancel()
         predictionJob = Task {
             // Keep native text entry responsive. The prediction bridge can be
@@ -1046,37 +1046,32 @@ final class IosViewModel: ObservableObject {
             let res = (try? await bridge.predict(context: newValue, maxWords: 5, maxLetters: 5)) ?? Shared.PredictionResult(words: [], letters: [])
             await MainActor.run { self.predictions = res }
         }
+        #endif
     }
-    
+
+    #if DEBUG
     func applyWordPrediction(_ word: String) {
-        let text = input
-        // Simple heuristic: replace last word part or append
-        // Finding the last word boundary
-        let ns = text as NSString
-        let range = NSRange(location: 0, length: ns.length)
-        // Regex to find the last token
-        // Strategy: find last space.
-        if let lastSpaceInfo = text.lastIndex(of: " ") {
-            let prefix = text[..<lastSpaceInfo]
-            // If the typed word matches start of prediction, replace it. 
-            // Actually, simplest is: if text ends with space, append. If not, replace last token.
-            if text.hasSuffix(" ") {
-                input = text + word + " "
-            } else {
-                input = String(prefix) + " " + word + " "
-            }
-        } else {
-            // First word
-             input = word + " "
-        }
-        // Re-predict
+        let result = bridge.completePredictedWord(
+            text: input,
+            cursor: Int32(inputSelectionRange.location),
+            suggestion: word
+        )
+        input = result.text
+        inputSelectionRange = NSRange(location: Int(result.cursor), length: 0)
         onInputChanged(input)
     }
     
     func applyLetterPrediction(_ char: String) {
-        input.append(char)
+        let result = bridge.insertPredictedText(
+            text: input,
+            cursor: Int32(inputSelectionRange.location),
+            value: char
+        )
+        input = result.text
+        inputSelectionRange = NSRange(location: Int(result.cursor), length: 0)
         onInputChanged(input)
     }
+    #endif
 
     private func hasAudioPath(_ path: String?) -> Bool {
         guard let path = path else { return false }
@@ -1160,6 +1155,7 @@ final class IosViewModel: ObservableObject {
             rootBoardId: set.rootBoardId,
             boardIds: set.boardIds,
             isLocked: set.isLocked,
+            cacheWholeSentences: set.cacheWholeSentences,
             updatedAt: TimeInterval(set.updatedAt) / 1_000
         )
     }
@@ -1167,6 +1163,17 @@ final class IosViewModel: ObservableObject {
     private func updateBoardSet(_ updated: BoardSetInfo) {
         guard let idx = boardSets.firstIndex(where: { $0.id == updated.id }) else { return }
         boardSets[idx] = updated
+    }
+
+    func setBoardSetSentenceCaching(id: String, enabled: Bool) {
+        guard var set = boardSets.first(where: { $0.id == id }) else { return }
+        set.cacheWholeSentences = enabled
+        updateBoardSet(set)
+        Task {
+            if let updated = try? await bridge.updateBoardSetSentenceCaching(id: id, enabled: enabled) {
+                updateBoardSet(boardSetInfo(from: updated))
+            }
+        }
     }
 
     private func normalizedBoardsetName(_ input: String) -> String {

@@ -272,9 +272,9 @@
     <string name="ui_settings_speech_desc">Stemme, sprog og talemotor</string>
     <string name="ui_settings_display_title">Skærm og layout</string>
     <string name="ui_settings_display_desc">Symboler, gitter og skalering</string>
-    <string name="ui_settings_accessibility_desc">Berøringstid, feedback og logning</string>
+    <string name="ui_settings_accessibility_desc">Berøringstid og feedback</string>
     <string name="ui_settings_general_title">System og data</string>
-    <string name="ui_settings_general_desc">Opstart, offline-symboler og privatliv</string>
+    <string name="ui_settings_general_desc">Opstart, offline-symboler og enhedsvalg</string>
     <string name="ui_settings_note_scaling_moved">Bemærk: UI-skalering er flyttet til dialogen Taleindstillinger.</string>
     <string name="ui_settings_virtual_mic_title">Brug virtuel mikrofon til opkald</string>
     <string name="ui_settings_virtual_mic_desc">Ruter TTS-lyd til en virtuel enhed, som du kan vælge som mikrofon i Zoom/Meet.</string>
@@ -400,4 +400,13 @@
     <string name="ui_settings_usage_logging_desc">Optag brugsdata i Open Logging Format til klinisk gennemgang.</string>
     <string name="board_symbol_unavailable">Symbolbibliotek utilgængeligt</string>
     <string name="board_symbol_unavailable_set">Symbolbiblioteket “%1$s” er utilgængeligt</string>
+    <string name="ui_settings_privacy_title">Privatliv</string>
+    <string name="ui_settings_privacy_desc">Visning af historik, lokale data og rapportering</string>
+    <string name="ui_settings_privacy_local_data_title">Lokale data</string>
+    <string name="ui_settings_history_visible_title">Vis talehistorik</string>
+    <string name="ui_settings_history_visible_desc">Kun tale afspillet, mens dette er slået til, vises i historikken. Skjult tale forbliver gemt lokalt, så lyd kan genbruges.</string>
+    <string name="ui_settings_board_cache_title">Sætningscache for tavlesæt</string>
+    <string name="ui_settings_board_cache_desc">Vælg for hvert tavlesæt, om hele talte sætninger skal gemmes. Deaktivering forbedrer privatlivet, men gentagelse kan kræve ny talesyntese og bruge flere tokens.</string>
+    <string name="ui_settings_board_cache_empty">Opret et tavlesæt for at konfigurere sætningscache.</string>
+    <string name="ui_settings_privacy_collection_title">Dataindsamling</string>
 </resources>

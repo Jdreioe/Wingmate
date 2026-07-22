@@ -60,7 +60,30 @@ interface ConfigRepository {
 
 interface SpeechService {
     suspend fun speak(text: String, voice: Voice? = null, pitch: Double? = null, rate: Double? = null)
+    suspend fun speakWithCachePolicy(
+        text: String,
+        voice: Voice? = null,
+        pitch: Double? = null,
+        rate: Double? = null,
+        cacheAudio: Boolean = true
+    ) = speak(text, voice, pitch, rate)
     suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice? = null, pitch: Double? = null, rate: Double? = null)
+    suspend fun speakSegmentsWithCachePolicy(
+        segments: List<SpeechSegment>,
+        voice: Voice? = null,
+        pitch: Double? = null,
+        rate: Double? = null,
+        cacheAudio: Boolean = true
+    ) = speakSegments(segments, voice, pitch, rate)
+    /** Synthesize speech into the reusable cache without playing it or adding History. */
+    suspend fun cacheSpeech(
+        text: String,
+        voice: Voice? = null,
+        pitch: Double? = null,
+        rate: Double? = null
+    ): Boolean = false
+    /** Retry cache work that was deferred while the device was offline. */
+    suspend fun retryPendingSpeechCache() = Unit
     suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String? = null, voice: Voice? = null): Boolean = false
     suspend fun pause()
     suspend fun stop()
@@ -68,6 +91,11 @@ interface SpeechService {
     fun isPlaying(): Boolean
     fun isPaused(): Boolean
     suspend fun guessPronunciation(text: String, language: String = "en"): String? = null
+}
+
+/** Application hook used when a voice change requires board audio to be regenerated. */
+interface BoardSpeechCache {
+    suspend fun cacheAll()
 }
 
 interface UpdateService {

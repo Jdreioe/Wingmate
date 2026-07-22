@@ -5,6 +5,7 @@ private enum SettingsDestination: String, CaseIterable, Identifiable {
     case speech
     case display
     case accessibility
+    case privacy
     case general
     case pronunciation
 
@@ -15,6 +16,7 @@ private enum SettingsDestination: String, CaseIterable, Identifiable {
         case .speech: "settings.category.speech"
         case .display: "settings.category.display"
         case .accessibility: "settings.category.accessibility"
+        case .privacy: "settings.category.privacy"
         case .general: "settings.category.general"
         case .pronunciation: "pronunciation.title"
         }
@@ -29,6 +31,7 @@ private enum SettingsDestination: String, CaseIterable, Identifiable {
         case .speech: "settings.category.speech.subtitle"
         case .display: "settings.category.display.subtitle"
         case .accessibility: "settings.category.accessibility.subtitle"
+        case .privacy: "settings.category.privacy.subtitle"
         case .general: "settings.category.general.subtitle"
         case .pronunciation: "settings.category.pronunciation.subtitle"
         }
@@ -39,6 +42,7 @@ private enum SettingsDestination: String, CaseIterable, Identifiable {
         case .speech: "waveform.and.mic"
         case .display: "textformat.size"
         case .accessibility: "accessibility"
+        case .privacy: "hand.raised.fill"
         case .general: "gearshape"
         case .pronunciation: "character.book.closed"
         }
@@ -49,6 +53,7 @@ private enum SettingsDestination: String, CaseIterable, Identifiable {
         case .speech: .cyan
         case .display: .orange
         case .accessibility: .pink
+        case .privacy: .indigo
         case .general: .green
         case .pronunciation: .purple
         }
@@ -62,7 +67,8 @@ private enum SettingsDestination: String, CaseIterable, Identifiable {
         case .speech: keywords = "speech voice language tts azure system pronunciation audio playback"
         case .display: keywords = "display layout symbols labels grid columns size scaling contrast"
         case .accessibility: keywords = "accessibility scanning dwell hold feedback sound logging"
-        case .general: keywords = "general startup screens keyboard analytics privacy setup"
+        case .privacy: keywords = "privacy history cache analytics reporting logging data"
+        case .general: keywords = "general startup screens keyboard setup"
         case .pronunciation: keywords = "pronunciation dictionary phoneme ipa words"
         }
         return title.contains(query) || keywords.contains(query)
@@ -132,6 +138,8 @@ struct SettingsView: View {
             )
         case .accessibility:
             AccessibilitySettingsView(model: model)
+        case .privacy:
+            PrivacySettingsView(model: model)
         case .general:
             GeneralSettingsView(model: model, onRestartSetup: onRestartSetup)
         case .pronunciation:
@@ -333,9 +341,6 @@ private struct AccessibilitySettingsView: View {
                 Toggle("settings.accessibility.auditory_fishing", isOn: Binding(
                     get: { model.auditoryFishingEnabled }, set: { model.setAuditoryFishingEnabled($0) }
                 ))
-                Toggle("settings.accessibility.usage_logging", isOn: Binding(
-                    get: { model.usageLoggingEnabled }, set: { model.setUsageLoggingEnabled($0) }
-                ))
             }
 
             Section("settings.scanning.title") {
@@ -397,23 +402,61 @@ private struct GeneralSettingsView: View {
             }
 
             Section {
-                Toggle("settings.general.analytics", isOn: Binding(
-                    get: { model.featureUsageReportingEnabled },
-                    set: { model.setFeatureUsageReportingEnabled($0) }
-                ))
-            } header: {
-                Text("settings.general.privacy")
-            } footer: {
-                Text("settings.general.analytics.footer")
-            }
-
-            Section {
                 Button(action: onRestartSetup) {
                     Label("settings.restart_setup", systemImage: "arrow.counterclockwise")
                 }
             }
         }
         .navigationTitle(Text("settings.category.general"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct PrivacySettingsView: View {
+    @ObservedObject var model: IosViewModel
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("settings.privacy.show_history", isOn: Binding(
+                    get: { model.historyVisible },
+                    set: { model.setHistoryVisible($0) }
+                ))
+            } header: {
+                Text("settings.privacy.local_data")
+            } footer: {
+                Text("settings.privacy.show_history.footer")
+            }
+
+            Section {
+                ForEach(model.boardSets) { set in
+                    Toggle(set.name, isOn: Binding(
+                        get: { set.cacheWholeSentences },
+                        set: { model.setBoardSetSentenceCaching(id: set.id, enabled: $0) }
+                    ))
+                }
+            } header: {
+                Text("settings.privacy.board_cache")
+            } footer: {
+                Text("settings.privacy.board_cache.footer")
+            }
+
+            Section {
+                Toggle("settings.general.analytics", isOn: Binding(
+                    get: { model.featureUsageReportingEnabled },
+                    set: { model.setFeatureUsageReportingEnabled($0) }
+                ))
+                Toggle("settings.accessibility.usage_logging", isOn: Binding(
+                    get: { model.usageLoggingEnabled },
+                    set: { model.setUsageLoggingEnabled($0) }
+                ))
+            } header: {
+                Text("settings.privacy.data_collection")
+            } footer: {
+                Text("settings.general.analytics.footer")
+            }
+        }
+        .navigationTitle(Text("settings.category.privacy"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -53,7 +53,7 @@ import org.koin.compose.getKoin
 import org.koin.compose.koinInject
 import wingmatekmp.composeapp.generated.resources.*
 
-private enum class SettingsTab { Speech, Display, Accessibility, General }
+private enum class SettingsTab { Speech, Display, Accessibility, Privacy, General }
 
 private sealed class SettingsSpeechSubPage {
     object VoiceSelection : SettingsSpeechSubPage()
@@ -117,6 +117,7 @@ fun SettingsScreen(
 
     // --- General section state ---
     var featureUsageReportingEnabled by remember { mutableStateOf(false) }
+    var historyVisible by remember { mutableStateOf(true) }
     var partnerWindowEnabled by remember { mutableStateOf(false) }
     var startupMode by remember { mutableStateOf(StartupMode.Keyboard) }
     var startupBoardSetId by remember { mutableStateOf<String?>(null) }
@@ -168,6 +169,7 @@ fun SettingsScreen(
         ttsEngine = s.ttsEngine
         virtualMic = s.virtualMicEnabled
         featureUsageReportingEnabled = s.featureUsageReportingEnabled
+        historyVisible = s.historyVisible
         partnerWindowEnabled = s.partnerWindowEnabled
         startupMode = s.startupMode
         startupBoardSetId = s.startupBoardSetId
@@ -430,9 +432,41 @@ fun SettingsScreen(
                                         selectionSoundEnabled = selectionSoundEnabled,
                                         onSelectionSoundChange = { checked -> selectionSoundEnabled = checked; updateSettings { it.copy(selectionSoundEnabled = checked) } },
                                         auditoryFishingEnabled = auditoryFishingEnabled,
-                                        onAuditoryFishingChange = { checked -> auditoryFishingEnabled = checked; updateSettings { it.copy(auditoryFishingEnabled = checked) } },
+                                        onAuditoryFishingChange = { checked -> auditoryFishingEnabled = checked; updateSettings { it.copy(auditoryFishingEnabled = checked) } }
+                                    )
+                                    SettingsTab.Privacy -> PrivacySection(
+                                        historyVisible = historyVisible,
+                                        onHistoryVisibleChange = { checked ->
+                                            historyVisible = checked
+                                            updateSettings { it.copy(historyVisible = checked) }
+                                        },
+                                        boardSets = availableBoardSets,
+                                        onBoardSetSentenceCachingChange = { boardSet, enabled ->
+                                            scope.launch {
+                                                val updated = boardSetUseCase?.setSentenceCaching(boardSet.id, enabled)
+                                                if (updated != null) {
+                                                    availableBoardSets = availableBoardSets.map {
+                                                        if (it.id == updated.id) updated else it
+                                                    }
+                                                }
+                                            }
+                                        },
                                         usageLoggingEnabled = usageLoggingEnabled,
-                                        onUsageLoggingChange = { checked -> usageLoggingEnabled = checked; updateSettings { it.copy(usageLoggingEnabled = checked) } }
+                                        onUsageLoggingChange = { checked ->
+                                            usageLoggingEnabled = checked
+                                            updateSettings { it.copy(usageLoggingEnabled = checked) }
+                                        },
+                                        featureUsageReportingEnabled = featureUsageReportingEnabled,
+                                        onFeatureReportingChange = { checked ->
+                                            featureUsageReportingEnabled = checked
+                                            updateSettings { it.copy(featureUsageReportingEnabled = checked) }
+                                            featureUsageReporter?.setEnabled(checked)
+                                            featureUsageReporter?.reportEvent(
+                                                FeatureUsageEvents.ANALYTICS_CONSENT_CHANGED,
+                                                "enabled" to checked.toString(),
+                                                "source" to "privacy_settings"
+                                            )
+                                        }
                                     )
                                     SettingsTab.General -> GeneralSection(
                                         onBackToWelcome = onBackToWelcome,
@@ -446,17 +480,6 @@ fun SettingsScreen(
                                         onStartupBoardSetChange = { boardSetId ->
                                             startupBoardSetId = boardSetId
                                             updateSettings { it.copy(startupBoardSetId = boardSetId) }
-                                        },
-                                        featureUsageReportingEnabled = featureUsageReportingEnabled,
-                                        onFeatureReportingChange = { checked ->
-                                            featureUsageReportingEnabled = checked
-                                            updateSettings { it.copy(featureUsageReportingEnabled = checked) }
-                                            featureUsageReporter?.setEnabled(checked)
-                                            featureUsageReporter?.reportEvent(
-                                                FeatureUsageEvents.ANALYTICS_CONSENT_CHANGED,
-                                                "enabled" to checked.toString(),
-                                                "source" to "settings_screen"
-                                            )
                                         },
                                         partnerWindowEnabled = partnerWindowEnabled,
                                         partnerDeviceConnected = partnerDeviceConnected,
@@ -506,6 +529,7 @@ private fun settingsCategoryTitle(tab: SettingsTab): String = when (tab) {
     SettingsTab.Speech -> stringResource(Res.string.ui_settings_speech_title)
     SettingsTab.Display -> stringResource(Res.string.ui_settings_display_title)
     SettingsTab.Accessibility -> stringResource(Res.string.ui_settings_accessibility_title)
+    SettingsTab.Privacy -> stringResource(Res.string.ui_settings_privacy_title)
     SettingsTab.General -> stringResource(Res.string.ui_settings_general_title)
 }
 
@@ -537,6 +561,7 @@ private fun SettingsHomePage(
     val speechTitle = stringResource(Res.string.ui_settings_speech_title)
     val displayTitle = stringResource(Res.string.ui_settings_display_title)
     val accessibilityTitle = stringResource(Res.string.ui_settings_accessibility_title)
+    val privacyTitle = stringResource(Res.string.ui_settings_privacy_title)
     val generalTitle = stringResource(Res.string.ui_settings_general_title)
 
     val categories = listOf(
@@ -582,7 +607,7 @@ private fun SettingsHomePage(
             iconContainerColor = Color(0xFFFFA8D8),
             iconColor = Color(0xFF700044),
             keywords = listOf(
-                "touch", "timing", "feedback", "logging", "obl",
+                "touch", "timing", "feedback",
                 stringResource(Res.string.ui_settings_hold_to_select_title),
                 stringResource(Res.string.ui_settings_hold_to_select_desc),
                 stringResource(Res.string.ui_settings_dwell_to_select_title),
@@ -590,9 +615,24 @@ private fun SettingsHomePage(
                 stringResource(Res.string.ui_settings_selection_sound_title),
                 stringResource(Res.string.ui_settings_auditory_fishing_title),
                 stringResource(Res.string.ui_settings_auditory_fishing_desc),
+                "hold", "dwell", "hover", "sound", "whisper"
+            )
+        ),
+        SettingsCategoryItem(
+            tab = SettingsTab.Privacy,
+            title = privacyTitle,
+            subtitle = stringResource(Res.string.ui_settings_privacy_desc),
+            icon = Icons.Filled.Security,
+            iconContainerColor = Color(0xFFB8C4FF),
+            iconColor = Color(0xFF263B80),
+            keywords = listOf(
+                stringResource(Res.string.ui_settings_history_visible_title),
+                stringResource(Res.string.ui_settings_history_visible_desc),
+                stringResource(Res.string.ui_settings_feature_reporting_title),
+                stringResource(Res.string.ui_settings_feature_reporting_desc),
                 stringResource(Res.string.ui_settings_usage_logging_title),
                 stringResource(Res.string.ui_settings_usage_logging_desc),
-                "hold", "dwell", "hover", "sound", "whisper"
+                "history", "cache", "privacy", "analytics", "logging", "data"
             )
         ),
         SettingsCategoryItem(
@@ -613,13 +653,10 @@ private fun SettingsHomePage(
                 stringResource(Res.string.ui_settings_symbols_download_title),
                 stringResource(Res.string.ui_settings_symbols_download_desc),
                 stringResource(Res.string.ui_settings_symbols_download),
-                stringResource(Res.string.ui_settings_analytics_title),
-                stringResource(Res.string.ui_settings_feature_reporting_title),
-                stringResource(Res.string.ui_settings_feature_reporting_desc),
                 stringResource(Res.string.ui_settings_partner_window_title),
                 stringResource(Res.string.ui_settings_partner_window_desc),
                 stringResource(Res.string.phrase_screen_welcome_screen),
-                "startup", "privacy", "analytics", "arasaac", "offline",
+                "startup", "arasaac", "offline",
                 "partner", "welcome", "restore", "boards", "screens"
             )
         )
@@ -801,13 +838,22 @@ private fun SettingsHomePage(
             keywords = listOf("whisper", "audio", "feedback")
         ),
         SettingsCategoryItem(
-            tab = SettingsTab.Accessibility,
+            tab = SettingsTab.Privacy,
             title = stringResource(Res.string.ui_settings_usage_logging_title),
             subtitle = stringResource(Res.string.ui_settings_usage_logging_desc),
-            icon = Icons.Filled.Accessibility,
-            iconContainerColor = Color(0xFFFFA8D8),
-            iconColor = Color(0xFF700044),
+            icon = Icons.Filled.Security,
+            iconContainerColor = Color(0xFFB8C4FF),
+            iconColor = Color(0xFF263B80),
             keywords = listOf("obl", "logging", "clinical")
+        ),
+        SettingsCategoryItem(
+            tab = SettingsTab.Privacy,
+            title = stringResource(Res.string.ui_settings_history_visible_title),
+            subtitle = stringResource(Res.string.ui_settings_history_visible_desc),
+            icon = Icons.Filled.Security,
+            iconContainerColor = Color(0xFFB8C4FF),
+            iconColor = Color(0xFF263B80),
+            keywords = listOf("history", "cache", "local data")
         ),
         // General
         SettingsCategoryItem(
@@ -837,12 +883,12 @@ private fun SettingsHomePage(
             )
         ),
         SettingsCategoryItem(
-            tab = SettingsTab.General,
+            tab = SettingsTab.Privacy,
             title = stringResource(Res.string.ui_settings_feature_reporting_title),
             subtitle = stringResource(Res.string.ui_settings_feature_reporting_desc),
-            icon = Icons.Filled.Storage,
-            iconContainerColor = Color(0xFFA9D49A),
-            iconColor = Color(0xFF1D4E18),
+            icon = Icons.Filled.Security,
+            iconContainerColor = Color(0xFFB8C4FF),
+            iconColor = Color(0xFF263B80),
             keywords = listOf(
                 stringResource(Res.string.ui_settings_analytics_title),
                 "analytics", "privacy", "telemetry"
@@ -1170,9 +1216,7 @@ private fun AccessibilitySection(
     selectionSoundEnabled: Boolean,
     onSelectionSoundChange: (Boolean) -> Unit,
     auditoryFishingEnabled: Boolean,
-    onAuditoryFishingChange: (Boolean) -> Unit,
-    usageLoggingEnabled: Boolean,
-    onUsageLoggingChange: (Boolean) -> Unit
+    onAuditoryFishingChange: (Boolean) -> Unit
 ) {
     SettingsGroup(title = "Touch & Timing") {
         SettingsSlider(
@@ -1198,7 +1242,7 @@ private fun AccessibilitySection(
         )
     }
 
-    SettingsGroup(title = "Feedback & Logging") {
+    SettingsGroup(title = "Feedback") {
         SettingsSwitch(
             checked = selectionSoundEnabled,
             onCheckedChange = onSelectionSoundChange,
@@ -1210,6 +1254,64 @@ private fun AccessibilitySection(
             onCheckedChange = onAuditoryFishingChange,
             title = stringResource(Res.string.ui_settings_auditory_fishing_title),
             description = stringResource(Res.string.ui_settings_auditory_fishing_desc)
+        )
+    }
+}
+
+// ─── Privacy Tab ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun PrivacySection(
+    historyVisible: Boolean,
+    onHistoryVisibleChange: (Boolean) -> Unit,
+    boardSets: List<ObfBoardSet>,
+    onBoardSetSentenceCachingChange: (ObfBoardSet, Boolean) -> Unit,
+    usageLoggingEnabled: Boolean,
+    onUsageLoggingChange: (Boolean) -> Unit,
+    featureUsageReportingEnabled: Boolean,
+    onFeatureReportingChange: (Boolean) -> Unit
+) {
+    SettingsGroup(title = stringResource(Res.string.ui_settings_privacy_local_data_title)) {
+        SettingsSwitch(
+            checked = historyVisible,
+            onCheckedChange = onHistoryVisibleChange,
+            title = stringResource(Res.string.ui_settings_history_visible_title),
+            description = stringResource(Res.string.ui_settings_history_visible_desc)
+        )
+    }
+
+
+    SettingsGroup(title = stringResource(Res.string.ui_settings_board_cache_title)) {
+        Text(
+            stringResource(Res.string.ui_settings_board_cache_desc),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (boardSets.isEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(Res.string.ui_settings_board_cache_empty),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            boardSets.forEach { boardSet ->
+                SettingsGroupDivider()
+                SettingsSwitch(
+                    checked = boardSet.cacheWholeSentences,
+                    onCheckedChange = { onBoardSetSentenceCachingChange(boardSet, it) },
+                    title = boardSet.name
+                )
+            }
+        }
+    }
+
+    SettingsGroup(title = stringResource(Res.string.ui_settings_privacy_collection_title)) {
+        SettingsSwitch(
+            checked = featureUsageReportingEnabled,
+            onCheckedChange = onFeatureReportingChange,
+            title = stringResource(Res.string.ui_settings_feature_reporting_title),
+            description = stringResource(Res.string.ui_settings_feature_reporting_desc)
         )
         SettingsGroupDivider()
         SettingsSwitch(
@@ -1232,8 +1334,6 @@ private fun GeneralSection(
     availableBoardSets: List<ObfBoardSet>,
     onStartupModeChange: (StartupMode) -> Unit,
     onStartupBoardSetChange: (String?) -> Unit,
-    featureUsageReportingEnabled: Boolean,
-    onFeatureReportingChange: (Boolean) -> Unit,
     partnerWindowEnabled: Boolean,
     partnerDeviceConnected: Boolean,
     onPartnerWindowChange: (Boolean) -> Unit,
@@ -1343,15 +1443,6 @@ private fun GeneralSection(
             },
             style = MaterialTheme.typography.bodySmall,
             color = if (arasaacDownloadError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-
-    SettingsGroup(title = stringResource(Res.string.ui_settings_analytics_title)) {
-        SettingsSwitch(
-            checked = featureUsageReportingEnabled,
-            onCheckedChange = onFeatureReportingChange,
-            title = stringResource(Res.string.ui_settings_feature_reporting_title),
-            description = stringResource(Res.string.ui_settings_feature_reporting_desc)
         )
     }
 

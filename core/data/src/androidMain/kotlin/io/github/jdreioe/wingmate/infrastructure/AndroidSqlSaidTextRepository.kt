@@ -26,9 +26,11 @@ class AndroidSqlSaidTextRepository(private val context: Context) : SaidTextRepos
                 audio_file_path TEXT,
                 created_at INTEGER,
                 position INTEGER,
-                primary_language TEXT
+                primary_language TEXT,
+                visible_in_history INTEGER NOT NULL DEFAULT 1
             )
         """.trimIndent())
+        runCatching { db.execSQL("ALTER TABLE said_texts ADD COLUMN visible_in_history INTEGER NOT NULL DEFAULT 1") }
     }
 
     override suspend fun add(item: SaidText): SaidText = withContext(Dispatchers.IO) {
@@ -43,6 +45,7 @@ class AndroidSqlSaidTextRepository(private val context: Context) : SaidTextRepos
             put("created_at", item.createdAt)
             put("position", item.position)
             put("primary_language", item.primaryLanguage)
+            put("visible_in_history", if (item.visibleInHistory) 1 else 0)
         }
         val id = db.insert("said_texts", null, values)
         return@withContext item.copy(id = id.toInt())
@@ -63,7 +66,8 @@ class AndroidSqlSaidTextRepository(private val context: Context) : SaidTextRepos
             val createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at"))
             val position = cursor.getInt(cursor.getColumnIndexOrThrow("position"))
             val primaryLanguage = cursor.getString(cursor.getColumnIndexOrThrow("primary_language"))
-            list += SaidText(id = id, date = date, saidText = saidText, voiceName = voiceName, pitch = pitch, speed = speed, audioFilePath = audio, createdAt = createdAt, position = position, primaryLanguage = primaryLanguage)
+            val visibleInHistory = cursor.getInt(cursor.getColumnIndexOrThrow("visible_in_history")) != 0
+            list += SaidText(id = id, date = date, saidText = saidText, voiceName = voiceName, pitch = pitch, speed = speed, audioFilePath = audio, createdAt = createdAt, position = position, primaryLanguage = primaryLanguage, visibleInHistory = visibleInHistory)
         }
         cursor.close()
         return@withContext list
@@ -90,6 +94,7 @@ class AndroidSqlSaidTextRepository(private val context: Context) : SaidTextRepos
                     put("created_at", item.createdAt)
                     put("position", item.position)
                     put("primary_language", item.primaryLanguage)
+                    put("visible_in_history", if (item.visibleInHistory) 1 else 0)
                 }
                 db.insert("said_texts", null, values)
             }

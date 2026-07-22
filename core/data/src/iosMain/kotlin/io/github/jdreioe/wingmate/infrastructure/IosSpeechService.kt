@@ -7,6 +7,8 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.SpeechSegment
+import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
@@ -15,6 +17,8 @@ import io.ktor.client.statement.bodyAsText
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -30,7 +34,14 @@ class IosSpeechService(
     private val configRepository: ConfigRepository,
     private val pronunciationDictionaryRepository: PronunciationDictionaryRepository? = null,
     private val saidRepo: SaidTextRepository? = null,
+    private val settingsRepository: SettingsRepository? = null,
 ) : SpeechService {
+
+    private val sentenceAudioCache = mutableMapOf<String, ByteArray>()
+    private val sentenceAudioCacheMutex = Mutex()
+    private data class PendingCache(val text: String, val voice: Voice?, val pitch: Double?, val rate: Double?)
+    private val pendingSpeechCache = mutableSetOf<PendingCache>()
+    private val pendingSpeechCacheMutex = Mutex()
 
     init {
         configureAudioSession()
@@ -41,22 +52,60 @@ class IosSpeechService(
     }
 
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
+        speakWithCachePolicy(text, voice, pitch, rate, cacheAudio = true)
+    }
+
+    override suspend fun speakWithCachePolicy(text: String, voice: Voice?, pitch: Double?, rate: Double?, cacheAudio: Boolean) {
         val normalizedText = SpeechTextProcessor.normalizeShorthandSsml(text)
         if (normalizedText.isBlank()) return
 
         val effectiveVoice = voice ?: defaultVoice()
-        val audioBytes = synthesize(normalizedText, effectiveVoice) ?: return
+        val cacheKey = "text|$normalizedText|${effectiveVoice.name}|$pitch|$rate"
+        val cached = if (cacheAudio) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] } else null
+        val audioBytes = cached ?: synthesize(normalizedText, effectiveVoice) ?: return
+        if (cacheAudio && cached == null) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] = audioBytes }
         playAudio(audioBytes)
         trySaveHistory(normalizedText, effectiveVoice, pitch, rate, null)
     }
 
     override suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
+        speakSegmentsWithCachePolicy(segments, voice, pitch, rate, cacheAudio = true)
+    }
+
+    override suspend fun speakSegmentsWithCachePolicy(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?, cacheAudio: Boolean) {
         if (segments.isEmpty()) return
         val combinedText = segments.joinToString(separator = "") { it.text }
         val effectiveVoice = voice ?: defaultVoice()
-        val audioBytes = synthesizeSegments(segments, effectiveVoice) ?: return
+        val cacheKey = "segments|${segments.joinToString()}|${effectiveVoice.name}|$pitch|$rate"
+        val cached = if (cacheAudio) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] } else null
+        val audioBytes = cached ?: synthesizeSegments(segments, effectiveVoice) ?: return
+        if (cacheAudio && cached == null) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] = audioBytes }
         playAudio(audioBytes)
         trySaveHistory(combinedText, effectiveVoice, pitch, rate, null)
+    }
+
+    override suspend fun cacheSpeech(text: String, voice: Voice?, pitch: Double?, rate: Double?): Boolean {
+        val normalizedText = SpeechTextProcessor.normalizeShorthandSsml(text).trim()
+        if (normalizedText.isEmpty()) return true
+        if (settingsRepository?.get()?.ttsEngine == TtsEngine.SYSTEM) return false
+        val effectiveVoice = voice ?: defaultVoice()
+        val cacheKey = "text|$normalizedText|${effectiveVoice.name}|$pitch|$rate"
+        if (sentenceAudioCacheMutex.withLock { cacheKey in sentenceAudioCache }) return true
+
+        val request = PendingCache(normalizedText, voice, pitch, rate)
+        val bytes = runCatching { synthesize(normalizedText, effectiveVoice) }.getOrNull()
+        if (bytes == null) {
+            pendingSpeechCacheMutex.withLock { pendingSpeechCache += request }
+            return false
+        }
+        sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] = bytes }
+        pendingSpeechCacheMutex.withLock { pendingSpeechCache -= request }
+        return true
+    }
+
+    override suspend fun retryPendingSpeechCache() {
+        val requests = pendingSpeechCacheMutex.withLock { pendingSpeechCache.toList() }
+        requests.forEach { cacheSpeech(it.text, it.voice, it.pitch, it.rate) }
     }
 
     override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean {
@@ -159,6 +208,7 @@ class IosSpeechService(
         val repo = saidRepo ?: return
         runCatching {
             val now = Clock.System.now().toEpochMilliseconds()
+            val visibleInHistory = settingsRepository?.get()?.historyVisible ?: true
             repo.add(
                 SaidText(
                     date = now,
@@ -168,7 +218,8 @@ class IosSpeechService(
                     speed = rate ?: voice?.rate,
                     audioFilePath = filePath,
                     createdAt = now,
-                    primaryLanguage = voice?.selectedLanguage ?: voice?.primaryLanguage
+                    primaryLanguage = voice?.selectedLanguage ?: voice?.primaryLanguage,
+                    visibleInHistory = visibleInHistory
                 )
             )
         }

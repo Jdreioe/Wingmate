@@ -41,6 +41,8 @@ data class SaidText(
     val createdAt: Long? = null,
     val position: Int? = null,
     val primaryLanguage: String? = null,
+    /** Whether this playback was eligible for the user-facing History feed. */
+    val visibleInHistory: Boolean = true,
 )
 
 @Serializable

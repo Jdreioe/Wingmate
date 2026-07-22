@@ -57,7 +57,9 @@ import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PredictionResult
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
+import io.github.jdreioe.wingmate.domain.TextEditingPolicy
 import io.github.jdreioe.wingmate.domain.TextPredictionService
+import io.github.jdreioe.wingmate.domain.TextSpan
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import androidx.compose.ui.graphics.ImageBitmap
@@ -124,14 +126,20 @@ fun PhraseScreen(
     val boardRepo = koinInject<io.github.jdreioe.wingmate.domain.BoardRepository>()
     val obfParser = koinInject<io.github.jdreioe.wingmate.infrastructure.ObfParser>()
 
-    val predictionService = remember(koin) { koin.getOrNull<TextPredictionService>() }
-    val dictionaryLoader = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.DictionaryLoader>() }
+    val releaseBuild = isReleaseBuild()
+    val predictionsEnabled = !releaseBuild
+    val predictionService = remember(koin, predictionsEnabled) {
+        if (predictionsEnabled) koin.getOrNull<TextPredictionService>() else null
+    }
+    val dictionaryLoader = remember(koin, predictionsEnabled) {
+        if (predictionsEnabled) koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.DictionaryLoader>() else null
+    }
     val updateService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.UpdateService>() }
     val filePicker = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.FilePicker>() }
     val phraseRepo = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.PhraseRepository>() }
     val audioClipboard = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.AudioClipboard>() }
     val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
-    val enableObfObzImport = !isReleaseBuild()
+    val enableObfObzImport = !releaseBuild
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showVoiceSelection by remember { mutableStateOf(false) }
@@ -249,7 +257,9 @@ fun PhraseScreen(
             LaunchedEffect(saidRepo, primaryLanguageState.value) {
                 try {
                     val list = saidRepo.list()
-                    historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L }
+                    historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L }
+
+                    if (!predictionsEnabled) return@LaunchedEffect
                     
                     // Train prediction model: first load base language dictionary, then user history
                     val ngramService = predictionService as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
@@ -281,6 +291,10 @@ fun PhraseScreen(
             // Update predictions as user types or model retrains.
             // Debounce + minimum token length avoids running n-gram inference on every keypress.
             LaunchedEffect(predictionService, predictionModelVersion) {
+                if (!predictionsEnabled) {
+                    predictions = PredictionResult()
+                    return@LaunchedEffect
+                }
                 if (predictionService == null || !predictionService.isTrained()) {
                     predictions = PredictionResult()
                     return@LaunchedEffect
@@ -432,10 +446,12 @@ fun PhraseScreen(
                                         // Also train prediction model incrementally with new phrase
                                         try {
                                             val list = saidRepo.list()
-                                            uiScope.launch { historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
+                                            uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
                                             // Incremental learning for immediate feedback
-                                            (predictionService as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService)?.learnPhrase(input.text)
-                                            predictionModelVersion++ // Trigger update after new entry
+                                            if (predictionsEnabled) {
+                                                (predictionService as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService)?.learnPhrase(input.text)
+                                                predictionModelVersion++ // Trigger update after new entry
+                                            }
                                         } catch (_: Throwable) {}
                                     } catch (t: Throwable) {
                                         // swallow for UI; diagnostics logged by service
@@ -622,37 +638,22 @@ fun PhraseScreen(
                     // On narrow screens, if keyboard is active, show prediction bar instead of SSML button
                     val isKeyboardVisible = WindowInsets.ime.asPaddingValues().calculateBottomPadding() > 0.dp
                     
-                    if (!isWide && isKeyboardVisible && (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty())) {
+                    if (predictionsEnabled && !isWide && isKeyboardVisible && (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty())) {
                          PredictionBar(
                             predictions = predictions,
                             onWordSelected = { word ->
                                 val fv = input
-                                val text = fv.text
-                                val cursorPos = fv.selection.start.coerceIn(0, text.length)
-                                val wordStart = text.lastIndexOf(' ', cursorPos - 1) + 1
-                                val partialWord = text.substring(wordStart, cursorPos)
-                                val newText = if (partialWord.isNotEmpty() && word.lowercase().startsWith(partialWord.lowercase())) {
-                                    text.substring(0, wordStart) + word + " " + text.substring(cursorPos)
-                                } else {
-                                    text.substring(0, cursorPos) + (if (cursorPos > 0 && text[cursorPos - 1] != ' ') " " else "") + word + " " + text.substring(cursorPos)
-                                }
-                                val newCursor = if (partialWord.isNotEmpty() && word.lowercase().startsWith(partialWord.lowercase())) {
-                                    wordStart + word.length + 1
-                                } else {
-                                    cursorPos + (if (cursorPos > 0 && text[cursorPos - 1] != ' ') 1 else 0) + word.length + 1
-                                }
-                                secondaryLanguageRanges = adjustRangesAfterEdit(text, newText, secondaryLanguageRanges)
-                                input = TextFieldValue(newText, selection = TextRange(newCursor.coerceAtMost(newText.length)))
-                                syncDisplayText(newText)
+                                val updated = completePredictedWord(fv, word)
+                                secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, updated.text, secondaryLanguageRanges)
+                                input = updated
+                                syncDisplayText(updated.text)
                             },
                             onLetterSelected = { letter ->
                                 val fv = input
-                                val pos = fv.selection.start.coerceIn(0, fv.text.length)
-                                val newText = fv.text.substring(0, pos) + letter + fv.text.substring(pos)
-                                val newCursor = pos + 1
-                                secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
-                                input = TextFieldValue(newText, selection = TextRange(newCursor))
-                                syncDisplayText(newText)
+                                val updated = insertPredictedText(fv, letter.toString())
+                                secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, updated.text, secondaryLanguageRanges)
+                                input = updated
+                                syncDisplayText(updated.text)
                             },
                             fontSizeScale = settings.fontSizeScale,
                             modifier = Modifier.padding(vertical = 4.dp)
@@ -669,42 +670,22 @@ fun PhraseScreen(
                     }
                     
                     // Word and letter prediction bar in original position (only if keyboard is NOT active on narrow screens, or always on wide screens)
-                    if ((isWide || !isKeyboardVisible) && (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty())) {
+                    if (predictionsEnabled && (isWide || !isKeyboardVisible) && (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty())) {
                         PredictionBar(
                             predictions = predictions,
                             onWordSelected = { word ->
                                 val fv = input
-                                val text = fv.text
-                                val cursorPos = fv.selection.start.coerceIn(0, text.length)
-                                
-                                // Find start of current word being typed
-                                val wordStart = text.lastIndexOf(' ', cursorPos - 1) + 1
-                                val partialWord = text.substring(wordStart, cursorPos)
-                                
-                                // If we have a partial word and the suggestion starts with it, complete it
-                                val newText = if (partialWord.isNotEmpty() && word.lowercase().startsWith(partialWord.lowercase())) {
-                                    text.substring(0, wordStart) + word + " " + text.substring(cursorPos)
-                                } else {
-                                    // Otherwise, insert word at cursor with space
-                                    text.substring(0, cursorPos) + (if (cursorPos > 0 && text[cursorPos - 1] != ' ') " " else "") + word + " " + text.substring(cursorPos)
-                                }
-                                val newCursor = if (partialWord.isNotEmpty() && word.lowercase().startsWith(partialWord.lowercase())) {
-                                    wordStart + word.length + 1
-                                } else {
-                                    cursorPos + (if (cursorPos > 0 && text[cursorPos - 1] != ' ') 1 else 0) + word.length + 1
-                                }
-                                secondaryLanguageRanges = adjustRangesAfterEdit(text, newText, secondaryLanguageRanges)
-                                input = TextFieldValue(newText, selection = TextRange(newCursor.coerceAtMost(newText.length)))
-                                syncDisplayText(newText)
+                                val updated = completePredictedWord(fv, word)
+                                secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, updated.text, secondaryLanguageRanges)
+                                input = updated
+                                syncDisplayText(updated.text)
                             },
                             onLetterSelected = { letter ->
                                 val fv = input
-                                val pos = fv.selection.start.coerceIn(0, fv.text.length)
-                                val newText = fv.text.substring(0, pos) + letter + fv.text.substring(pos)
-                                val newCursor = pos + 1
-                                secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
-                                input = TextFieldValue(newText, selection = TextRange(newCursor))
-                                syncDisplayText(newText)
+                                val updated = insertPredictedText(fv, letter.toString())
+                                secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, updated.text, secondaryLanguageRanges)
+                                input = updated
+                                syncDisplayText(updated.text)
                             },
                             fontSizeScale = settings.fontSizeScale
                         )
@@ -820,7 +801,7 @@ fun PhraseScreen(
                             }
                         }
                         // History chip: appears only when there are items; placed immediately after user categories
-                        if (historyItems.isNotEmpty()) {
+                        if (settings.historyVisible && historyItems.isNotEmpty()) {
                             item {
                                 FilterChip(
                                     selected = selectedCategory?.id == HistoryCategoryId,
@@ -858,10 +839,10 @@ fun PhraseScreen(
 
                     // Refresh history from repo when switching to History
                     LaunchedEffect(selectedCategory?.id) {
-                        if (selectedCategory?.id == HistoryCategoryId) {
+                        if (settings.historyVisible && selectedCategory?.id == HistoryCategoryId) {
                             try {
                                 val list = saidRepo.list()
-                                historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L }
+                                historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L }
                             } catch (_: Throwable) {}
                         }
                     }
@@ -990,7 +971,7 @@ fun PhraseScreen(
                     var showEditDialog by remember { mutableStateOf(false) }
                     var editingPhrase by remember { mutableStateOf<Phrase?>(null) }
                     // Show only actual phrase items (not category markers), filtered by selected category
-                    val isHistory = selectedCategory?.id == HistoryCategoryId
+                    val isHistory = settings.historyVisible && selectedCategory?.id == HistoryCategoryId
                     val selectedCategoryId = selectedCategory?.id
                     val visiblePhrases by remember(isHistory, historyItems, state.items, selectedCategoryId) {
                         derivedStateOf {
@@ -1066,7 +1047,7 @@ fun PhraseScreen(
                                         // Refresh history from repo
                                         try {
                                             val list = saidRepo.list()
-                                            uiScope.launch { historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
+                                            uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
                                         } catch (_: Throwable) {}
                                     } catch (_: Throwable) {}
                                 }
@@ -1100,7 +1081,7 @@ fun PhraseScreen(
                                     // Refresh history from repo
                                     try {
                                         val list = saidRepo.list()
-                                        uiScope.launch { historyItems = list.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
+                                        uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
                                     } catch (_: Throwable) {}
                                 } catch (_: Throwable) {}
                             }
@@ -1473,28 +1454,14 @@ private fun SecondaryLanguageTextField(
 }
 
 private fun normalizeRange(range: TextRange, maxLength: Int): TextRange {
-    val start = range.start.coerceIn(0, maxLength)
-    val end = range.end.coerceIn(0, maxLength)
-    return if (start <= end) TextRange(start, end) else TextRange(end, start)
+    return TextEditingPolicy.normalize(range.toTextSpan(), maxLength).toTextRange()
 }
 
 private fun TextRange.spanLength(): Int = (end - start).coerceAtLeast(0)
 
 private fun isRangeFullySecondary(selection: TextRange, ranges: List<TextRange>): Boolean {
-    if (selection.spanLength() == 0) return false
-    var cursor = selection.start
-    val sorted = ranges.sortedBy { it.start }
-    var index = 0
-    while (cursor < selection.end) {
-        while (index < sorted.size && sorted[index].end <= cursor) {
-            index++
-        }
-        if (index >= sorted.size) return false
-        val range = sorted[index]
-        if (cursor < range.start) return false
-        cursor = minOf(selection.end, range.end)
-    }
-    return true
+    val textLength = maxOf(selection.end, ranges.maxOfOrNull { it.end } ?: 0)
+    return TextEditingPolicy.isFullyCovered(selection.toTextSpan(), ranges.map { it.toTextSpan() }, textLength)
 }
 
 private fun toggleSecondaryRange(
@@ -1502,104 +1469,36 @@ private fun toggleSecondaryRange(
     selection: TextRange,
     textLength: Int
 ): List<TextRange> {
-    val normalized = normalizeRange(selection, textLength)
-    if (normalized.spanLength() == 0) return ranges
-    val cleaned = clampRanges(ranges, textLength)
-    return if (isRangeFullySecondary(normalized, cleaned)) {
-        subtractRange(cleaned, normalized)
-    } else {
-        mergeRanges(cleaned + normalized)
-    }
+    return TextEditingPolicy.toggle(ranges.map { it.toTextSpan() }, selection.toTextSpan(), textLength)
+        .map { it.toTextRange() }
 }
 
 private fun adjustRangesAfterEdit(oldText: String, newText: String, ranges: List<TextRange>): List<TextRange> {
-    if (ranges.isEmpty()) return emptyList()
-    if (oldText == newText) return clampRanges(ranges, newText.length)
-    val prefix = commonPrefixLength(oldText, newText)
-    val suffix = commonSuffixLength(oldText, newText, prefix)
-    val oldChangedEnd = oldText.length - suffix
-    val newChangedEnd = newText.length - suffix
-    val delta = newChangedEnd - oldChangedEnd
-
-    val updated = mutableListOf<TextRange>()
-    ranges.sortedBy { it.start }.forEach { range ->
-        when {
-            range.end <= prefix -> updated.add(range)
-            range.start >= oldChangedEnd -> updated.add(TextRange(range.start + delta, range.end + delta))
-            else -> {
-                if (range.start < prefix) {
-                    updated.add(TextRange(range.start, prefix))
-                }
-                if (range.end > oldChangedEnd) {
-                    updated.add(TextRange(oldChangedEnd + delta, range.end + delta))
-                }
-            }
-        }
-    }
-    return clampRanges(updated, newText.length)
+    return TextEditingPolicy.adjustAfterEdit(oldText, newText, ranges.map { it.toTextSpan() })
+        .map { it.toTextRange() }
 }
 
 private fun clampRanges(ranges: List<TextRange>, maxLength: Int): List<TextRange> {
-    if (ranges.isEmpty()) return emptyList()
-    return ranges.mapNotNull { range ->
-        val start = range.start.coerceIn(0, maxLength)
-        val end = range.end.coerceIn(0, maxLength)
-        if (start < end) TextRange(start, end) else null
-    }.sortedBy { it.start }
-}
-
-private fun subtractRange(ranges: List<TextRange>, removal: TextRange): List<TextRange> {
-    if (ranges.isEmpty()) return emptyList()
-    val result = mutableListOf<TextRange>()
-    ranges.forEach { range ->
-        if (removal.end <= range.start || removal.start >= range.end) {
-            result.add(range)
-        } else {
-            if (removal.start > range.start) {
-                result.add(TextRange(range.start, removal.start))
-            }
-            if (removal.end < range.end) {
-                result.add(TextRange(removal.end, range.end))
-            }
-        }
-    }
-    return result.filter { it.spanLength() > 0 }
+    return TextEditingPolicy.merge(ranges.map { it.toTextSpan() }, maxLength).map { it.toTextRange() }
 }
 
 private fun mergeRanges(ranges: List<TextRange>): List<TextRange> {
-    if (ranges.isEmpty()) return emptyList()
-    val sorted = ranges.sortedBy { it.start }
-    val merged = mutableListOf<TextRange>()
-    var current = sorted.first()
-    for (index in 1 until sorted.size) {
-        val candidate = sorted[index]
-        if (candidate.start <= current.end) {
-            current = TextRange(current.start, maxOf(current.end, candidate.end))
-        } else {
-            if (current.spanLength() > 0) merged.add(current)
-            current = candidate
-        }
-    }
-    if (current.spanLength() > 0) merged.add(current)
-    return merged
+    val maxLength = ranges.maxOfOrNull { maxOf(it.start, it.end) } ?: 0
+    return clampRanges(ranges, maxLength)
 }
 
-private fun commonPrefixLength(a: String, b: String): Int {
-    val minLen = minOf(a.length, b.length)
-    var idx = 0
-    while (idx < minLen && a[idx] == b[idx]) idx++
-    return idx
+private fun TextRange.toTextSpan(): TextSpan = TextSpan(start, end)
+
+private fun TextSpan.toTextRange(): TextRange = TextRange(start, endExclusive)
+
+private fun completePredictedWord(value: TextFieldValue, suggestion: String): TextFieldValue {
+    val result = TextEditingPolicy.completeWord(value.text, value.selection.start, suggestion)
+    return TextFieldValue(result.text, selection = TextRange(result.cursor))
 }
 
-private fun commonSuffixLength(a: String, b: String, prefix: Int): Int {
-    val aRemaining = a.length - prefix
-    val bRemaining = b.length - prefix
-    val maxLen = minOf(aRemaining, bRemaining)
-    var count = 0
-    while (count < maxLen && a[a.length - 1 - count] == b[b.length - 1 - count]) {
-        count++
-    }
-    return count
+private fun insertPredictedText(value: TextFieldValue, text: String): TextFieldValue {
+    val result = TextEditingPolicy.insert(value.text, value.selection.start, text)
+    return TextFieldValue(result.text, selection = TextRange(result.cursor))
 }
 
 private val PauseTagRegex = Regex("""<(?:pause|break)(?:\\s+(?:duration|time)=["']([^"']+)["'])?[^>]*/>""", RegexOption.IGNORE_CASE)

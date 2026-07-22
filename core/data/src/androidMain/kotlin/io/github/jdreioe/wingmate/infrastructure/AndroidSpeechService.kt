@@ -14,6 +14,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Network
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
@@ -41,6 +42,7 @@ import androidx.annotation.RequiresPermission
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 
 /**
@@ -66,7 +68,20 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     private var mediaPlayer: MediaPlayer? = null
     private val playerLock = Any()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private data class PendingCache(val text: String, val voice: Voice?, val pitch: Double?, val rate: Double?)
+    private val pendingSpeechCache = ConcurrentHashMap.newKeySet<PendingCache>()
     private val audioManager: AudioManager by lazy { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+
+    init {
+        runCatching {
+            val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            connectivity.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    scope.launch(Dispatchers.IO) { retryPendingSpeechCache() }
+                }
+            })
+        }
+    }
     private val focusChangeListener = AudioManager.OnAudioFocusChangeListener { change ->
         // For simplicity: on full loss, stop playback; on other changes we ignore/duck handled by system
         if (change == AudioManager.AUDIOFOCUS_LOSS) {
@@ -307,14 +322,76 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     }
 
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
+        speakWithCachePolicy(text, voice, pitch, rate, cacheAudio = true)
+    }
+
+    override suspend fun speakWithCachePolicy(text: String, voice: Voice?, pitch: Double?, rate: Double?, cacheAudio: Boolean) {
         // Process text to extract pause tags and create segments
         val segments = SpeechTextProcessor.processText(text)
-        
-        // Use the enhanced speakSegments function
-        speakSegments(segments, voice, pitch, rate)
+        speakSegmentsInternal(segments, voice, pitch, rate, cacheAudio)
     }
 
     override suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
+        speakSegmentsInternal(segments, voice, pitch, rate, cacheAudio = true)
+    }
+
+    override suspend fun speakSegmentsWithCachePolicy(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?, cacheAudio: Boolean) {
+        speakSegmentsInternal(segments, voice, pitch, rate, cacheAudio)
+    }
+
+    override suspend fun cacheSpeech(text: String, voice: Voice?, pitch: Double?, rate: Double?): Boolean {
+        val normalizedText = SpeechTextProcessor.normalizeShorthandSsml(text).trim()
+        if (normalizedText.isEmpty()) return true
+        val request = PendingCache(normalizedText, voice, pitch, rate)
+        val settingsRepo = GlobalContext.getOrNull()?.let {
+            runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull()
+        }
+        val settings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
+        if (settings?.ttsEngine == io.github.jdreioe.wingmate.domain.TtsEngine.SYSTEM) return false
+        if (!isOnline()) {
+            pendingSpeechCache += request
+            return false
+        }
+
+        val cached = runCatching {
+            val config = getConfig() ?: return@runCatching false
+            val effectiveVoice = normalizeVoiceForAzure(voice)
+            val language = effectiveVoice.selectedLanguage.takeIf(String::isNotBlank)
+                ?: settings?.primaryLanguage?.takeIf(String::isNotBlank)
+                ?: effectiveVoice.primaryLanguage?.takeIf(String::isNotBlank)
+                ?: DEFAULT_AZURE_LANGUAGE
+            val voiceForSsml = effectiveVoice.copy(primaryLanguage = language, selectedLanguage = language)
+            val dictionary = runCatching {
+                GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().getAll()
+            }.getOrDefault(emptyList())
+            val dictionaryHash = dictionary.joinToString("|") { "${it.word}:${it.phoneme}:${it.alphabet}" }.hashCode()
+            val cacheKey = "${normalizedText}_${voiceForSsml.name}_${voiceForSsml.primaryLanguage}_${voiceForSsml.selectedLanguage}_${pitch}_${rate}_${dictionaryHash}".hashCode()
+            val root = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
+            val directory = File(root, "wingmate/audio").apply { mkdirs() }
+            val file = File(directory, "tts_$cacheKey.mp3")
+            if (!file.exists() || file.length() == 0L) {
+                val segments = SpeechTextProcessor.processText(normalizedText)
+                val ssml = if (segments.any { !it.languageTag.isNullOrBlank() || it.pauseDurationMs > 0 }) {
+                    AzureTtsClient.generateSsml(segments, voiceForSsml, dictionary)
+                } else {
+                    AzureTtsClient.generateSsml(normalizedText, voiceForSsml, dictionary)
+                }
+                val bytes = AzureTtsClient.synthesize(client, ssml, config)
+                file.outputStream().use { it.write(bytes) }
+            }
+            true
+        }.getOrDefault(false)
+
+        if (cached) pendingSpeechCache.remove(request) else pendingSpeechCache += request
+        return cached
+    }
+
+    override suspend fun retryPendingSpeechCache() {
+        if (!isOnline()) return
+        pendingSpeechCache.toList().forEach { cacheSpeech(it.text, it.voice, it.pitch, it.rate) }
+    }
+
+    private suspend fun speakSegmentsInternal(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?, cacheAudio: Boolean) {
         // Check user preference for TTS engine first
         val koin = GlobalContext.getOrNull()
         val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
@@ -341,7 +418,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         }
 
         // Try to reuse a cached audio file from history to save API calls (works even offline)
-        if (maybePlayFromHistoryCache(combinedText, voice, pitch, rate, uiSettings?.primaryLanguage)) {
+        if (cacheAudio && maybePlayFromHistoryCache(combinedText, voice, pitch, rate, uiSettings?.primaryLanguage)) {
             return
         }
 
@@ -391,16 +468,20 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                     GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().getAll() 
                 }.getOrDefault(emptyList())
 
-                val musicRoot = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
+                val musicRoot = if (cacheAudio) {
+                    context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
+                } else {
+                    context.cacheDir
+                }
                 val outDir = File(musicRoot, "wingmate/audio").apply { if (!exists()) mkdirs() }
                 
                 // Calculate hash early to check if file already exists
                 val dictHash = dict.joinToString("|") { "${it.word}:${it.phoneme}:${it.alphabet}" }.hashCode()
                 val cacheKey = "${combinedText}_${vForSsml.name}_${vForSsml.primaryLanguage}_${vForSsml.selectedLanguage}_${pitch}_${rate}_${dictHash}".hashCode()
-                val fileName = "tts_$cacheKey.mp3"
+                val fileName = if (cacheAudio) "tts_$cacheKey.mp3" else "tts_session_${System.nanoTime()}.mp3"
                 val outFile = File(outDir, fileName)
 
-                if (outFile.exists() && outFile.length() > 0) {
+                if (cacheAudio && outFile.exists() && outFile.length() > 0) {
                     // Cache hit! reuse the file without calling Azure
                     recordHistory(combinedText, vForSsml, outFile.absolutePath)
                     
@@ -429,8 +510,8 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 }
 
                 // Save history record
-                recordHistory(combinedText, vForSsml, outFile.absolutePath)
-                startPlayback(outFile, vForSsml)
+                recordHistory(combinedText, vForSsml, outFile.absolutePath.takeIf { cacheAudio })
+                startPlayback(outFile, vForSsml, deleteAfterPlayback = !cacheAudio)
             } catch (t: Throwable) {
                 println("Azure TTS failed, falling back to platform TTS: $t")
                 // Fallback to platform TTS on error
@@ -527,7 +608,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         return played
     }
     
-    private fun startPlayback(file: File, voice: Voice) {
+    private fun startPlayback(file: File, voice: Voice, deleteAfterPlayback: Boolean = false) {
         val player = MediaPlayer()
                 requestAudioFocus()
 
@@ -541,10 +622,12 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                     }
                 }
                 finishPlayback()
+                if (deleteAfterPlayback) runCatching { file.delete() }
             } catch (_: Throwable) {}
         }
         player.setOnErrorListener { mp, _, _ ->
             try { synchronized(playerLock) { if (mediaPlayer === mp) { mp.reset(); mp.release(); mediaPlayer = null } } } catch (_: Throwable) {}
+            if (deleteAfterPlayback) runCatching { file.delete() }
             finishPlayback()
             true
         }
@@ -621,6 +704,8 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             // Append a history record for this playback referencing the cached file
             runCatching {
                 val now = System.currentTimeMillis()
+                val visibleInHistory = koin?.getOrNull<io.github.jdreioe.wingmate.domain.SettingsRepository>()
+                    ?.get()?.historyVisible ?: true
                 withContext(Dispatchers.IO) {
                     saidRepo.add(
                         io.github.jdreioe.wingmate.domain.SaidText(
@@ -632,7 +717,8 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                             audioFilePath = file.absolutePath,
                             createdAt = now,
                             position = 0,
-                            primaryLanguage = v.selectedLanguage.takeIf(String::isNotBlank) ?: v.primaryLanguage
+                            primaryLanguage = v.selectedLanguage.takeIf(String::isNotBlank) ?: v.primaryLanguage,
+                            visibleInHistory = visibleInHistory
                         )
                     )
                 }
@@ -716,6 +802,8 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             runCatching {
                 val koin = GlobalContext.getOrNull()
                 val saidRepo = koin?.get<io.github.jdreioe.wingmate.domain.SaidTextRepository>() ?: return@runCatching
+                val visibleInHistory = koin.getOrNull<io.github.jdreioe.wingmate.domain.SettingsRepository>()
+                    ?.get()?.historyVisible ?: true
                 val now = System.currentTimeMillis()
                 
                 // Determine effective voice params for history
@@ -731,7 +819,8 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                         audioFilePath = audioPath,
                         createdAt = now,
                         position = 0,
-                        primaryLanguage = v.selectedLanguage.takeIf(String::isNotBlank) ?: v.primaryLanguage
+                        primaryLanguage = v.selectedLanguage.takeIf(String::isNotBlank) ?: v.primaryLanguage,
+                        visibleInHistory = visibleInHistory
                     )
                 )
                 println("DEBUG: Recorded history for: $text")

@@ -18,6 +18,7 @@ class SettingsModelTest {
     fun newInstallDefaultsToSystem() {
         val settings = Settings()
         assertEquals(TtsEngine.SYSTEM, settings.ttsEngine)
+        assertEquals(true, settings.historyVisible)
     }
 
     @Test
@@ -56,6 +57,14 @@ class SettingsModelTest {
         // With ignoreUnknownKeys = true, the old useSystemTts field is ignored
         // ttsEngine gets the default: SYSTEM
         assertEquals(TtsEngine.SYSTEM, settings.ttsEngine)
+        assertEquals(true, settings.historyVisible)
+    }
+
+    @Test
+    fun historyVisibilityRoundTrips() {
+        val encoded = json.encodeToString(Settings(historyVisible = false))
+        val decoded = json.decodeFromString<Settings>(encoded)
+        assertEquals(false, decoded.historyVisible)
     }
 
     @Test

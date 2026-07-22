@@ -142,9 +142,11 @@ internal class AndroidSqlOpenHelper(
                 audio_file_path TEXT,
                 created_at INTEGER,
                 position INTEGER,
-                primary_language TEXT
+                primary_language TEXT,
+                visible_in_history INTEGER NOT NULL DEFAULT 1
             );
         """.trimIndent())
+        ensureColumn(db, "said_texts", "visible_in_history", "INTEGER NOT NULL DEFAULT 1")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -185,6 +187,9 @@ internal class AndroidSqlOpenHelper(
         if (oldVersion < 7 && newVersion >= 7) {
             ensureColumn(db, "phrases", "is_hidden", "INTEGER NOT NULL DEFAULT 0")
         }
+        if (oldVersion < 8 && newVersion >= 8) {
+            ensureColumn(db, "said_texts", "visible_in_history", "INTEGER NOT NULL DEFAULT 1")
+        }
     }
 
     private fun ensureColumn(
@@ -208,6 +213,6 @@ internal class AndroidSqlOpenHelper(
     }
 
     companion object {
-        private const val DB_VERSION = 7
+        private const val DB_VERSION = 8
     }
 }

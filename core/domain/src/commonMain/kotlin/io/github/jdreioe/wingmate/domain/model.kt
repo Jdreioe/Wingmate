@@ -97,6 +97,9 @@ data class Settings(
     val selectionSoundEnabled: Boolean = false,
     val auditoryFishingEnabled: Boolean = false,
     val usageLoggingEnabled: Boolean = false,
+    // Controls whether cached speech history is exposed in the UI. Recording and
+    // local cache reuse continue when this is false.
+    val historyVisible: Boolean = true,
     // Switch-scanning configuration used by the native iOS accessibility UI.
     val scanningEnabled: Boolean = false,
     val scanPlaybackAreaEnabled: Boolean = true,
