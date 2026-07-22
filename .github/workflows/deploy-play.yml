@@ -28,7 +28,7 @@ jobs:
           infisical --version
 
       - name: Publish to Google Play
-        run: infisical run --projectId="$INFISICAL_PROJECT_ID" --env=system_env -- ./gradlew publishRelease
+        run: infisical run --projectId="$INFISICAL_PROJECT_ID" --env=prod -- ./gradlew publishRelease
         env:
           INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
           INFISICAL_PROJECT_ID: ad96050f-9132-4f4e-ae16-e46e4c5734fc
