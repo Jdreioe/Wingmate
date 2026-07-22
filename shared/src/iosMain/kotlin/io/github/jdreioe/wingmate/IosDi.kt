@@ -4,6 +4,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.github.jdreioe.wingmate.domain.CategoryRepository
+import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.PhraseRepository
@@ -16,6 +18,8 @@ import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.IosAudioClipboard
 import io.github.jdreioe.wingmate.infrastructure.IosCategoryRepository
+import io.github.jdreioe.wingmate.infrastructure.IosBoardRepository
+import io.github.jdreioe.wingmate.infrastructure.IosBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.IosConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.IosFileStorage
 import io.github.jdreioe.wingmate.infrastructure.IosPhraseRepository
@@ -56,6 +60,8 @@ fun overrideIosSpeechService() {
             singleOf(::IosVoiceRepository) { bind<VoiceRepository>() }
             singleOf(::IosSystemVoiceProvider) { bind<SystemVoiceProvider>() }
             singleOf(::IosSaidTextRepository) { bind<SaidTextRepository>() }
+            singleOf(::IosBoardRepository) { bind<BoardRepository>() }
+            singleOf(::IosBoardSetRepository) { bind<BoardSetRepository>() }
             // Persist phrases and categories on iOS as well
             singleOf(::IosPhraseRepository) { bind<PhraseRepository>() }
             singleOf(::IosCategoryRepository) { bind<CategoryRepository>() }

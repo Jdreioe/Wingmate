@@ -479,7 +479,6 @@ struct SymbolBoardWorkspaceView: View {
                     .padding(.horizontal)
             }
 
-            Spacer(minLength: 0)
         }
     }
 
@@ -490,18 +489,33 @@ struct SymbolBoardWorkspaceView: View {
             let cols = max(1, Int(board.grid?.columns ?? 1))
             let previewCols = Array(repeating: GridItem(.flexible(), spacing: 8), count: cols)
 
-            VStack(alignment: .leading, spacing: 10) {
-                LazyVGrid(columns: previewCols, spacing: 8) {
-                    ForEach(0..<(rows * cols), id: \.self) { idx in
-                        let row = idx / cols
-                        let col = idx % cols
-                        boardCellButton(row: row, col: col, isEditMode: isEditMode)
+            GeometryReader { geometry in
+                let gridPadding: CGFloat = 12
+                let rowSpacing: CGFloat = 8
+                let availableHeight = geometry.size.height
+                    - (gridPadding * 2)
+                    - (rowSpacing * CGFloat(max(0, rows - 1)))
+                let cellHeight = max(72, availableHeight / CGFloat(rows))
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVGrid(columns: previewCols, spacing: rowSpacing) {
+                        ForEach(0..<(rows * cols), id: \.self) { idx in
+                            let row = idx / cols
+                            let col = idx % cols
+                            boardCellButton(
+                                row: row,
+                                col: col,
+                                isEditMode: isEditMode,
+                                height: cellHeight
+                            )
+                        }
                     }
+                    .padding(gridPadding)
                 }
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
-            .padding(12)
-            .background(Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ProgressView()
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -509,7 +523,7 @@ struct SymbolBoardWorkspaceView: View {
         }
     }
 
-    private func boardCellButton(row: Int, col: Int, isEditMode: Bool) -> some View {
+    private func boardCellButton(row: Int, col: Int, isEditMode: Bool, height: CGFloat) -> some View {
         let cell = model.cellAt(row: row, col: col)
         let isLinked = trimmed(cell?.linkedBoardId) != nil
         let sourceCellId = "\(row):\(col)"
@@ -527,11 +541,11 @@ struct SymbolBoardWorkspaceView: View {
             } label: {
                 Group {
                     if let animation = activeSentenceAnimation, animation.sourceCellId == sourceCellId {
-                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode)
+                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, height: height)
                             .matchedGeometryEffect(id: animation.tokenId, in: sentenceAnimationNamespace, isSource: true)
                             .zIndex(3)
                     } else {
-                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode)
+                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, height: height)
                     }
                 }
             }
@@ -567,7 +581,7 @@ struct SymbolBoardWorkspaceView: View {
         }
     }
 
-    private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool) -> some View {
+    private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if model.labelAtTop && model.showButtonLabels {
                 boardCellLabel(cell)
@@ -612,7 +626,7 @@ struct SymbolBoardWorkspaceView: View {
             }
         }
         .padding(8)
-        .frame(minHeight: 72, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(model.highContrastMode ? Color(.systemBackground) : colorFromHex(cell?.backgroundColor, fallback: Color(.tertiarySystemBackground)))
