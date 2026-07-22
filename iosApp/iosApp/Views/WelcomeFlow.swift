@@ -629,6 +629,87 @@ struct WelcomeFlow: View {
 }
 
 // MARK: - Startup Mode Card Component
+struct TtsOptionCard: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let pros: [String]
+    let cons: [String]
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    Image(systemName: icon).font(.title2).foregroundColor(.blue)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).font(.headline).foregroundColor(.primary)
+                        Text(subtitle).font(.caption).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(isSelected ? .blue : .secondary)
+                }
+                ForEach(pros, id: \.self) { item in
+                    Label(item, systemImage: "checkmark").font(.caption).foregroundColor(.primary)
+                }
+                ForEach(cons, id: \.self) { item in
+                    Label(item, systemImage: "minus").font(.caption).foregroundColor(.secondary)
+                }
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct SelectedVoiceCard: View {
+    let voice: Shared.Voice
+    let onSpeak: () -> Void
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(voice.displayName ?? voice.name ?? NSLocalizedString("welcome_flow.choose_voice", comment: ""))
+                    .font(.headline)
+                Text(voice.selectedLanguage ?? voice.primaryLanguage ?? "")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            Spacer()
+            Button(action: onSpeak) { Image(systemName: "speaker.wave.2.fill") }
+                .buttonStyle(.bordered)
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+    }
+}
+
+struct VoicePreviewCard: View {
+    let title: String
+    @Binding var previewText: String
+    let onSpeak: () -> Void
+    let onStop: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.headline)
+            TextField(title, text: $previewText, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Button(action: onSpeak) { Label(NSLocalizedString("common.play", comment: ""), systemImage: "play.fill") }
+                    .buttonStyle(.borderedProminent)
+                Button(action: onStop) { Label(NSLocalizedString("common.stop", comment: ""), systemImage: "stop.fill") }
+                    .buttonStyle(.bordered)
+            }
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+    }
+}
+
 struct StartupModeCard: View {
     let title: String
     let description: String

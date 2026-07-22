@@ -31,6 +31,13 @@ Wingmate is developed by Jonas, who has Cerebral Palsy (CP) and extensive experi
 - Multi-user support
 - Cloud sync
 
+## iOS development
+
+Open `iosApp/iosApp.xcodeproj` in Xcode. Apple-platform dependencies are managed
+with Xcode's Swift Package Manager integration; CocoaPods is not used. The local
+Kotlin Multiplatform `Shared.framework` is built by the project's Xcode build
+phase.
+
 ## How to setup (the DYI version):
 
 - Install the app

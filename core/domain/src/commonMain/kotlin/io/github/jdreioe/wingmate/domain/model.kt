@@ -96,7 +96,17 @@ data class Settings(
     val dwellToSelectMillis: Long = 0,
     val selectionSoundEnabled: Boolean = false,
     val auditoryFishingEnabled: Boolean = false,
-    val usageLoggingEnabled: Boolean = false
+    val usageLoggingEnabled: Boolean = false,
+    // Switch-scanning configuration used by the native iOS accessibility UI.
+    val scanningEnabled: Boolean = false,
+    val scanPlaybackAreaEnabled: Boolean = true,
+    val scanInputFieldEnabled: Boolean = true,
+    val scanPhraseGridEnabled: Boolean = true,
+    val scanCategoryItemsEnabled: Boolean = true,
+    val scanTopBarEnabled: Boolean = true,
+    val scanPhraseGridOrder: String = "row-major",
+    val scanDwellTimeSeconds: Float = 1.0f,
+    val scanAutoAdvanceSeconds: Float = 1.2f
 )
 
 @Serializable

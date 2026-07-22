@@ -10,7 +10,6 @@ struct ContentView: View {
     @State private var showSecondaryLanguageSheet = false
     @State private var showWelcomeFlow = false
     @State private var hasCompletedWelcome = UserDefaults.standard.bool(forKey: "welcome_flow_completed")
-    @State private var isWideLayout = true
     @State private var showAddCategory = false
     @State private var showAddPhrase = false
     @State private var showUiSizeSheet = false
@@ -35,9 +34,6 @@ struct ContentView: View {
 
     private var chipHPadding: CGFloat { CGFloat(max(12, uiChipFontSize * 0.75)) }
     private var chipVPadding: CGFloat { CGFloat(max(8, uiChipFontSize * 0.45)) }
-
-    @State private var showRightPanel: Bool = false
-    @State private var autoCollapsedRightPanel: Bool = false
 
     private var shouldShowWelcomeFlow: Bool {
         showWelcomeFlow || !hasCompletedWelcome
@@ -120,67 +116,15 @@ struct ContentView: View {
                             let currentWideLayout = width > wideThreshold
                             let minTile: CGFloat = isPad ? 200 : 140
                             let spacing: CGFloat = isPad ? 12 : 8
-                            let rightPanelWidth: CGFloat = (currentWideLayout && showRightPanel) ? min(400, max(350, width * 0.35)) : 0
-                            let dividerWidth: CGFloat = (currentWideLayout && showRightPanel) ? max(1.0 / UIScreen.main.scale, 1) : 0
-                            let contentWidth = currentWideLayout ? max(0, width - rightPanelWidth - dividerWidth) : width
+                            let contentWidth = width
                             let available = max(contentWidth - spacing, minTile)
-                            let count = max(2, Int((available + spacing) / (minTile + spacing)))
+                            let adaptiveCount = max(2, Int((available + spacing) / (minTile + spacing)))
+                            let count = min(max(model.preferredGridColumns, 1), adaptiveCount)
                             let cols = Array(repeating: GridItem(.flexible(), spacing: spacing), count: count)
 
-                            Group {
-                                if currentWideLayout {
-                                    HStack(spacing: 0) {
-                                        mainContent(columns: cols)
-                                            .frame(width: contentWidth)
-                                        if showRightPanel {
-                                            HStack(spacing: 0) {
-                                                Divider()
-                                                RightSettingsPanel(
-                                                    model: model,
-                                                    uiTextFieldHeight: $uiTextFieldHeight,
-                                                    uiInputFontSize: $uiInputFontSize,
-                                                    uiChipFontSize: $uiChipFontSize,
-                                                    uiPlayIconSize: $uiPlayIconSize,
-                                                    openVoicePicker: { showVoiceSheet = true },
-                                                    openWelcomeFlow: { showWelcomeFlow = true },
-                                                    openPronunciation: { showPronunciationSheet = true }
-                                                )
-                                                .frame(width: rightPanelWidth)
-                                            }
-                                            .transition(.asymmetric(
-                                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                removal: .move(edge: .trailing).combined(with: .opacity)
-                                            ))
-                                        }
-                                    }
-                                    .onAppear { isWideLayout = true }
-                                    .animation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.1), value: showRightPanel)
-                                } else {
-                                    VStack(spacing: 0) {
-                                        mainContent(columns: cols)
-                                            .padding(16)
-                                    }
-                                    .onAppear {
-                                        isWideLayout = false
-                                        if showRightPanel {
-                                            showRightPanel = false
-                                            autoCollapsedRightPanel = true
-                                        }
-                                    }
-                                }
-                            }
-                            .onChange(of: currentWideLayout) { _, wide in
-                                isWideLayout = wide
-                                if wide {
-                                    if autoCollapsedRightPanel {
-                                        showRightPanel = true
-                                        autoCollapsedRightPanel = false
-                                    }
-                                } else if showRightPanel {
-                                    showRightPanel = false
-                                    autoCollapsedRightPanel = true
-                                }
-                            }
+                            mainContent(columns: cols)
+                                .frame(width: contentWidth)
+                                .padding(currentWideLayout ? 0 : 16)
                         }
                     }
                 }
@@ -201,11 +145,7 @@ struct ContentView: View {
 
                             Button(action: {
                                 withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.1)) {
-                                    if isWideLayout {
-                                        showRightPanel.toggle()
-                                    } else {
-                                        showSettingsPanel.toggle()
-                                    }
+                                    showSettingsPanel = true
                                 }
                             }) {
                                 Image(systemName: "slider.horizontal.3")
@@ -308,4 +248,3 @@ struct ContentView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View { ContentView() }
 }
-

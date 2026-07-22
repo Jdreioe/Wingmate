@@ -53,7 +53,6 @@ linuxApp/target/
 iosApp/build/
 iosApp/iosApp.xcodeproj/xcuserdata/
 iosApp/iosApp.xcodeproj/project.xcworkspace/xcuserdata/
-iosApp/iosApp.xcworkspace/
 iosApp/**/*.xcuserstate
 DerivedData/
 *.xcuserstate
@@ -66,9 +65,6 @@ DerivedData/
 *.dSYM
 *.dSYM.zip
 xcuserdata/
-
-## CocoaPods
-iosApp/Pods/
 
 ## Logs and crash reports
 *.log

@@ -259,6 +259,73 @@ class BoardSetUseCase(
         return board
     }
 
+    suspend fun renameBoardSet(boardSetId: String, name: String): ObfBoardSet? {
+        val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
+        if (boardSet.isLocked) return null
+        val normalized = name.trim().ifBlank { return null }
+        val updated = boardSet.copy(name = normalized, updatedAt = Clock.System.now().toEpochMilliseconds())
+        boardSetRepository.saveBoardSet(updated)
+        return updated
+    }
+
+    suspend fun renameBoard(boardSetId: String, boardId: String, name: String): ObfBoard? {
+        val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
+        if (boardSet.isLocked || boardId !in boardSet.boardIds) return null
+        val board = boardRepository.getBoard(boardId) ?: return null
+        val normalized = name.trim().ifBlank { return null }
+        val updated = board.copy(name = normalized)
+        boardRepository.saveBoard(updated)
+        touchBoardSet(boardSetId)
+        return updated
+    }
+
+    suspend fun resizeBoard(boardSetId: String, boardId: String, rows: Int, columns: Int): ObfBoard? {
+        val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
+        if (boardSet.isLocked || boardId !in boardSet.boardIds) return null
+        val board = boardRepository.getBoard(boardId) ?: return null
+        val oldGrid = board.grid
+        val safeRows = rows.coerceIn(1, 12)
+        val safeColumns = columns.coerceIn(1, 12)
+        val order = List(safeRows) { row ->
+            List(safeColumns) { column -> oldGrid?.order?.getOrNull(row)?.getOrNull(column) }
+        }
+        val retainedIds = order.flatten().filterNotNull().toSet()
+        val buttons = board.buttons.filter { it.id in retainedIds }
+        val imageIds = buttons.mapNotNull { it.imageId }.toSet()
+        val updated = board.copy(
+            grid = ObfGrid(safeRows, safeColumns, order),
+            buttons = buttons,
+            images = board.images.filter { it.id in imageIds }
+        )
+        boardRepository.saveBoard(updated)
+        touchBoardSet(boardSetId)
+        return updated
+    }
+
+    suspend fun setRootBoard(boardSetId: String, boardId: String): ObfBoardSet? {
+        val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
+        if (boardSet.isLocked || boardId !in boardSet.boardIds) return null
+        val updated = boardSet.copy(rootBoardId = boardId, updatedAt = Clock.System.now().toEpochMilliseconds())
+        boardSetRepository.saveBoardSet(updated)
+        return updated
+    }
+
+    suspend fun deleteBoard(boardSetId: String, boardId: String): ObfBoardSet? {
+        val graph = loadBoardSetGraph(boardSetId) ?: return null
+        if (graph.boardSet.isLocked || graph.boards.size <= 1 || graph.boardSet.rootBoardId == boardId) return null
+        if (boardId !in graph.boardSet.boardIds) return null
+        val remainingBoards = graph.boards.filterNot { it.id == boardId }.map { board ->
+            board.copy(buttons = board.buttons.map { button ->
+                if (button.loadBoard?.id == boardId) button.copy(loadBoard = null) else button
+            })
+        }
+        val updatedSet = graph.boardSet.copy(
+            boardIds = graph.boardSet.boardIds.filterNot { it == boardId },
+            updatedAt = Clock.System.now().toEpochMilliseconds()
+        )
+        return saveBoardSetGraph(BoardSetGraph(updatedSet, remainingBoards)).getOrThrow().boardSet
+    }
+
     suspend fun upsertBoardCellButton(
         boardSetId: String,
         boardId: String,

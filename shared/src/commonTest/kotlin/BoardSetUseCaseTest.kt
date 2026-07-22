@@ -175,6 +175,32 @@ class BoardSetUseCaseTest {
         assertEquals(listOf("home"), useCase.loadBoardSetGraph("set")?.boardSet?.boardIds)
     }
 
+    @Test
+    fun boardManagementOperationsUseThePersistedGraph() = runBlocking {
+        useCase.saveBoardSetGraph(linkedGraph()).getOrThrow()
+
+        assertEquals("Daily", useCase.renameBoardSet("set", "Daily")?.name)
+        assertEquals("Meals", useCase.renameBoard("set", "food", "Meals")?.name)
+        assertEquals("food", useCase.setRootBoard("set", "food")?.rootBoardId)
+
+        val resized = assertNotNull(useCase.resizeBoard("set", "food", rows = 3, columns = 2))
+        assertEquals(3, resized.grid?.rows)
+        assertEquals(2, resized.grid?.columns)
+        assertEquals("Meals", boardRepository.getBoard("food")?.name)
+    }
+
+    @Test
+    fun deletingNonRootBoardRemovesLinksAndTheBoard() = runBlocking {
+        useCase.saveBoardSetGraph(linkedGraph()).getOrThrow()
+
+        val updated = assertNotNull(useCase.deleteBoard("set", "food"))
+        val home = assertNotNull(boardRepository.getBoard("home"))
+
+        assertEquals(listOf("home"), updated.boardIds)
+        assertEquals(null, boardRepository.getBoard("food"))
+        assertEquals(null, home.buttons.single().loadBoard)
+    }
+
     private fun linkedGraph(): BoardSetGraph {
         val home = ObfBoard(
             format = "open-board-0.1",

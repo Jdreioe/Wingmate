@@ -4,6 +4,7 @@ import LocalAuthentication
 import PhotosUI
 import UniformTypeIdentifiers
 import UIKit
+import AudioToolbox
 
 private struct CellOpenSymbolsTokenResponse: Decodable {
     let access_token: String
@@ -39,6 +40,14 @@ private enum BoardWorkspaceMode: Equatable {
     case edit
 }
 
+private enum BoardManagementSheet: String, Identifiable {
+    case renameSet
+    case renameBoard
+    case resizeBoard
+
+    var id: String { rawValue }
+}
+
 private enum BoardSetRoute: Equatable {
     case library
     case workspace(boardSetId: String, mode: BoardWorkspaceMode)
@@ -49,6 +58,7 @@ struct SymbolBoardWorkspaceView: View {
     @Namespace private var sentenceAnimationNamespace
 
     @State private var route: BoardSetRoute = .library
+    @State private var hasAppliedStartupDestination = false
     @State private var showCreateBoardsetSheet = false
     @State private var showAddBoardSheet = false
 
@@ -64,6 +74,11 @@ struct SymbolBoardWorkspaceView: View {
     @State private var authErrorMessage: String? = nil
     @State private var isFullscreen: Bool = false
     @State private var showEditCellSheet: Bool = false
+    @State private var managementSheet: BoardManagementSheet? = nil
+    @State private var managementName: String = ""
+    @State private var managementRows: Int = 4
+    @State private var managementColumns: Int = 4
+    @State private var showDeleteBoardConfirmation: Bool = false
     @State private var editingRow: Int = 0
     @State private var editingCol: Int = 0
     @State private var editingLabel: String = ""
@@ -101,6 +116,14 @@ struct SymbolBoardWorkspaceView: View {
         }
         .task {
             await model.loadBoardSets()
+            if !hasAppliedStartupDestination {
+                hasAppliedStartupDestination = true
+                if let startupId = model.startupBoardSetId,
+                   model.boardSets.contains(where: { $0.id == startupId }) {
+                    await model.selectBoardSet(id: startupId)
+                    route = .workspace(boardSetId: startupId, mode: .run)
+                }
+            }
         }
         .sheet(isPresented: $showCreateBoardsetSheet) {
             createBoardsetSheet
@@ -110,6 +133,9 @@ struct SymbolBoardWorkspaceView: View {
         }
         .sheet(isPresented: $showEditCellSheet) {
             editCellSheet
+        }
+        .sheet(item: $managementSheet) { sheet in
+            boardManagementSheet(sheet)
         }
         .onChange(of: editingSelectedPhotoItem) { _, newItem in
             guard let newItem else { return }
@@ -166,6 +192,14 @@ struct SymbolBoardWorkspaceView: View {
         } message: {
             Text(authErrorMessage ?? NSLocalizedString("common.unknown_error", comment: ""))
         }
+        .alert("boardset.delete_board", isPresented: $showDeleteBoardConfirmation) {
+            Button("common.cancel", role: .cancel) {}
+            Button("common_delete", role: .destructive) {
+                Task { await model.deleteSelectedBoard() }
+            }
+        } message: {
+            Text("boardset.delete_board.message")
+        }
     }
 
     // MARK: - Library View
@@ -193,6 +227,14 @@ struct SymbolBoardWorkspaceView: View {
             }
             .padding(.horizontal)
             .padding(.top, 12)
+
+            if let status = model.boardStatusMessage, !status.isEmpty {
+                Text(status)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+            }
 
             if model.boardSets.isEmpty {
                 emptyLibraryState
@@ -300,12 +342,53 @@ struct SymbolBoardWorkspaceView: View {
                 Spacer()
 
                 if mode == .edit {
-                    Button(action: {
-                        route = .workspace(boardSetId: boardSetId, mode: .run)
-                    }) {
-                        Text(NSLocalizedString("board_workspace.finish", comment: ""))
-                            .font(.headline)
-                            .foregroundColor(.blue)
+                    HStack(spacing: 12) {
+                        Menu {
+                            Button {
+                                managementName = model.selectedBoardSet?.name ?? ""
+                                managementSheet = .renameSet
+                            } label: {
+                                Label("boardset.rename_set", systemImage: "pencil")
+                            }
+                            Button {
+                                managementName = model.selectedBoard?.name ?? ""
+                                managementSheet = .renameBoard
+                            } label: {
+                                Label("boardset.rename_board", systemImage: "rectangle.and.pencil.and.ellipsis")
+                            }
+                            Button {
+                                managementRows = max(1, Int(model.selectedBoard?.grid?.rows ?? 4))
+                                managementColumns = max(1, Int(model.selectedBoard?.grid?.columns ?? 4))
+                                managementSheet = .resizeBoard
+                            } label: {
+                                Label("boardset.resize_board", systemImage: "arrow.up.left.and.arrow.down.right")
+                            }
+                            if let set = model.selectedBoardSet,
+                               let boardId = model.selectedBoardId,
+                               boardId != set.rootBoardId {
+                                Button {
+                                    Task { await model.makeSelectedBoardRoot() }
+                                } label: {
+                                    Label("boardset.make_home", systemImage: "house")
+                                }
+                                Divider()
+                                Button(role: .destructive) {
+                                    showDeleteBoardConfirmation = true
+                                } label: {
+                                    Label("boardset.delete_board", systemImage: "trash")
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle").font(.title3)
+                        }
+
+                        Button(action: {
+                            route = .workspace(boardSetId: boardSetId, mode: .run)
+                        }) {
+                            Text(NSLocalizedString("board_workspace.finish", comment: ""))
+                                .font(.headline)
+                                .foregroundColor(.blue)
+                        }
                     }
                 } else {
                     Button(action: {
@@ -332,13 +415,18 @@ struct SymbolBoardWorkspaceView: View {
                             Button(action: {
                                 Task { await model.selectBoard(id: id) }
                             }) {
-                                Text(model.boardDisplayName(id: id))
-                                    .font(.subheadline)
-                                    .fontWeight(model.selectedBoardId == id ? .bold : .regular)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(model.selectedBoardId == id ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground))
-                                    .clipShape(Capsule())
+                                HStack(spacing: 5) {
+                                    if id == selectedSet.rootBoardId {
+                                        Image(systemName: "house.fill").font(.caption2)
+                                    }
+                                    Text(model.boardDisplayName(id: id))
+                                        .font(.subheadline)
+                                        .fontWeight(model.selectedBoardId == id ? .bold : .regular)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(model.selectedBoardId == id ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground))
+                                .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
                         }
@@ -431,6 +519,8 @@ struct SymbolBoardWorkspaceView: View {
                 if isEditMode && model.canEditSelectedBoardSet {
                     openCellEditor(row: row, col: col, existing: cell)
                 } else {
+                    guard model.holdToSelectMillis <= 0 else { return }
+                    if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
                     appendCellToSentenceIfNeeded(cell)
                     Task { await model.activateSelectedBoardCell(row: row, col: col) }
                 }
@@ -446,6 +536,21 @@ struct SymbolBoardWorkspaceView: View {
                 }
             }
             .buttonStyle(.plain)
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: max(0.01, model.holdToSelectMillis / 1_000))
+                    .onEnded { _ in
+                        guard !isEditMode, model.holdToSelectMillis > 0 else { return }
+                        if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
+                        appendCellToSentenceIfNeeded(cell)
+                        Task { await model.activateSelectedBoardCell(row: row, col: col) }
+                    }
+            )
+            .onHover { hovering in
+                if hovering && model.auditoryFishingEnabled,
+                   let preview = trimmed(cell?.vocalization) ?? trimmed(cell?.label) {
+                    model.speak(preview)
+                }
+            }
 
             if isEditMode, model.canEditSelectedBoardSet, cell != nil {
                 Button(role: .destructive) {
@@ -464,7 +569,11 @@ struct SymbolBoardWorkspaceView: View {
 
     private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            if let imageUrl = trimmed(cell?.imageUrl), let url = URL(string: imageUrl) {
+            if model.labelAtTop && model.showButtonLabels {
+                boardCellLabel(cell)
+            }
+
+            if model.showButtonSymbols, let imageUrl = trimmed(cell?.imageUrl), let url = URL(string: imageUrl) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -484,12 +593,9 @@ struct SymbolBoardWorkspaceView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             }
 
-            Text(trimmed(cell?.label) ?? NSLocalizedString("boardset.cell.empty", comment: ""))
-                .font(.subheadline)
-                .fontWeight(cell == nil ? .regular : .semibold)
-                .lineLimit(2)
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if !model.labelAtTop && model.showButtonLabels {
+                boardCellLabel(cell)
+            }
 
             if let linkedBoardId = trimmed(cell?.linkedBoardId) {
                 Label(model.boardDisplayName(id: linkedBoardId), systemImage: "arrowshape.turn.up.right")
@@ -509,12 +615,81 @@ struct SymbolBoardWorkspaceView: View {
         .frame(minHeight: 72, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(colorFromHex(cell?.backgroundColor, fallback: Color(.tertiarySystemBackground)))
+                .fill(model.highContrastMode ? Color(.systemBackground) : colorFromHex(cell?.backgroundColor, fallback: Color(.tertiarySystemBackground)))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator)), lineWidth: isLinked ? 1.5 : 1)
+                .stroke(model.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator)), lineWidth: model.highContrastMode ? 2 : (isLinked ? 1.5 : 1))
         )
+    }
+
+    private func boardCellLabel(_ cell: BoardCellInfo?) -> some View {
+        Text(trimmed(cell?.label) ?? NSLocalizedString("boardset.cell.empty", comment: ""))
+            .font(.subheadline)
+            .fontWeight(cell == nil ? .regular : .semibold)
+            .lineLimit(2)
+            .foregroundStyle(.primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func boardManagementSheet(_ sheet: BoardManagementSheet) -> some View {
+        NavigationStack {
+            Form {
+                switch sheet {
+                case .renameSet, .renameBoard:
+                    Section {
+                        TextField("boardset.name_placeholder", text: $managementName)
+                            .textInputAutocapitalization(.words)
+                    }
+                case .resizeBoard:
+                    Section {
+                        Stepper(value: $managementRows, in: 1...12) {
+                            Text(String(format: NSLocalizedString("boardset.rows", comment: ""), managementRows))
+                        }
+                        Stepper(value: $managementColumns, in: 1...12) {
+                            Text(String(format: NSLocalizedString("boardset.columns", comment: ""), managementColumns))
+                        }
+                    } header: {
+                        Text("boardset.grid")
+                    } footer: {
+                        Text("boardset.resize_warning")
+                    }
+                }
+            }
+            .navigationTitle(Text(managementTitle(sheet)))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("common.cancel") { managementSheet = nil }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("common.save") {
+                        Task {
+                            switch sheet {
+                            case .renameSet:
+                                await model.renameSelectedBoardSet(managementName)
+                            case .renameBoard:
+                                await model.renameSelectedBoard(managementName)
+                            case .resizeBoard:
+                                await model.resizeSelectedBoard(rows: managementRows, columns: managementColumns)
+                            }
+                            managementSheet = nil
+                        }
+                    }
+                    .disabled((sheet == .renameSet || sheet == .renameBoard) && managementName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func managementTitle(_ sheet: BoardManagementSheet) -> LocalizedStringKey {
+        switch sheet {
+        case .renameSet: "boardset.rename_set"
+        case .renameBoard: "boardset.rename_board"
+        case .resizeBoard: "boardset.resize_board"
+        }
     }
 
     private var createBoardsetSheet: some View {

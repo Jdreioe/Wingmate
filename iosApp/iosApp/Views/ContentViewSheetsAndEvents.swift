@@ -91,17 +91,18 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: Binding(get: { !isPad && showSettingsPanel }, set: { if !$0 { showSettingsPanel = false } })) {
+            .sheet(isPresented: $showSettingsPanel) {
                 NavigationStack {
-                    RightSettingsPanel(
+                    SettingsView(
                         model: model,
                         uiTextFieldHeight: uiTextFieldHeight,
                         uiInputFontSize: uiInputFontSize,
                         uiChipFontSize: uiChipFontSize,
                         uiPlayIconSize: uiPlayIconSize,
-                        openVoicePicker: { showVoiceSheet = true },
-                        openWelcomeFlow: { showWelcomeFlow = true },
-                        openPronunciation: { showPronunciationSheet = true }
+                        onRestartSetup: {
+                            showSettingsPanel = false
+                            showWelcomeFlow = true
+                        }
                     )
                 }
                 .presentationDetents([.large])

@@ -2,6 +2,7 @@ import SwiftUI
 import Shared
 import UIKit
 import Foundation
+import AudioToolbox
 
 struct CategoryChip: View {
     let title: String
@@ -244,15 +245,14 @@ struct SelectableTextView: UIViewRepresentable {
             onMarkSelectionAsSecondaryLanguage?(selectedRange)
         }
         context.coordinator.isProgrammaticUpdate = true
-        applyHighlighting(to: textView, desiredSelectedRange: selectedRange)
+        applyHighlighting(to: textView, desiredSelectedRange: selectedRange, force: true, coordinator: context.coordinator)
         context.coordinator.isProgrammaticUpdate = false
         return textView
     }
 
     func updateUIView(_ uiView: UITextView, context: Context) {
         context.coordinator.isProgrammaticUpdate = true
-        applyHighlighting(to: uiView, desiredSelectedRange: selectedRange)
-        uiView.font = UIFont.systemFont(ofSize: fontSize)
+        applyHighlighting(to: uiView, desiredSelectedRange: selectedRange, force: false, coordinator: context.coordinator)
         if let menuAwareView = uiView as? MenuAwareTextView {
             menuAwareView.secondaryLanguageActionTitle = NSLocalizedString("textfield.mark_secondary_language", comment: "")
             menuAwareView.allowsSecondaryLanguageAction = allowsSecondaryLanguageAction
@@ -260,47 +260,55 @@ struct SelectableTextView: UIViewRepresentable {
         context.coordinator.isProgrammaticUpdate = false
     }
 
-    private func applyHighlighting(to textView: UITextView, desiredSelectedRange: NSRange) {
+    private func applyHighlighting(
+        to textView: UITextView,
+        desiredSelectedRange: NSRange,
+        force: Bool,
+        coordinator: Coordinator
+    ) {
         let selected = (desiredSelectedRange.location == NSNotFound) ? textView.selectedRange : desiredSelectedRange
         let full = text as NSString
         let length = full.length
+        let validRanges = secondaryLanguageRanges.filter {
+            $0.location != NSNotFound && $0.length > 0 && $0.location + $0.length <= length
+        }
+        let textChangedExternally = textView.text != text
+        let formattingChanged = !rangesEqual(validRanges, coordinator.appliedHighlightRanges)
+            || (coordinator.appliedFontSize.map { $0 != fontSize } ?? true)
+        let needsTextUpdate = force || textChangedExternally || formattingChanged
 
         guard length > 0 else {
-            if textView.attributedText.length != 0 {
+            if needsTextUpdate && textView.attributedText.length != 0 {
                 textView.attributedText = NSAttributedString()
             }
+            coordinator.appliedHighlightRanges = []
+            coordinator.appliedFontSize = fontSize
             return
         }
 
-        let hasHighlights = secondaryLanguageRanges.contains { $0.location != NSNotFound && $0.length > 0 && $0.location + $0.length <= length }
-        let currentStringMatches = textView.attributedText.string == text
+        let hasHighlights = !validRanges.isEmpty
 
-        if hasHighlights {
+        if needsTextUpdate && hasHighlights {
             let attributed = NSMutableAttributedString(string: text)
             attributed.addAttributes([
                 .font: UIFont.systemFont(ofSize: fontSize),
                 .foregroundColor: UIColor.label
             ], range: NSRange(location: 0, length: length))
 
-            for range in secondaryLanguageRanges {
-                if range.location != NSNotFound,
-                   range.length > 0,
-                   range.location + range.length <= length {
-                    attributed.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.35), range: range)
-                }
+            for range in validRanges {
+                attributed.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.35), range: range)
             }
 
-            if currentStringMatches {
-                textView.textStorage.setAttributedString(attributed)
-            } else {
-                textView.attributedText = attributed
-            }
-        } else if !currentStringMatches {
+            textView.attributedText = attributed
+        } else if needsTextUpdate {
             textView.attributedText = NSAttributedString(string: text, attributes: [
                 .font: UIFont.systemFont(ofSize: fontSize),
                 .foregroundColor: UIColor.label
             ])
         }
+
+        coordinator.appliedHighlightRanges = validRanges
+        coordinator.appliedFontSize = fontSize
 
         let maxPos = textView.text.utf16.count
         let safeLocation = min(max(0, selected.location), maxPos)
@@ -309,10 +317,16 @@ struct SelectableTextView: UIViewRepresentable {
         if !NSEqualRanges(textView.selectedRange, clamped) {
             textView.selectedRange = clamped
         }
-        textView.typingAttributes = [
-            .font: UIFont.systemFont(ofSize: fontSize),
-            .foregroundColor: UIColor.label
-        ]
+        if needsTextUpdate {
+            textView.typingAttributes = [
+                .font: UIFont.systemFont(ofSize: fontSize),
+                .foregroundColor: UIColor.label
+            ]
+        }
+    }
+
+    private func rangesEqual(_ lhs: [NSRange], _ rhs: [NSRange]) -> Bool {
+        lhs.count == rhs.count && zip(lhs, rhs).allSatisfy { NSEqualRanges($0, $1) }
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
@@ -322,6 +336,8 @@ struct SelectableTextView: UIViewRepresentable {
         let onTextEdited: ((NSRange, String) -> Void)?
         let onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)?
         var isProgrammaticUpdate: Bool = false
+        var appliedHighlightRanges: [NSRange] = []
+        var appliedFontSize: CGFloat? = nil
 
         init(
             text: Binding<String>,
@@ -352,10 +368,8 @@ struct SelectableTextView: UIViewRepresentable {
         func textViewDidChangeSelection(_ textView: UITextView) {
             if isProgrammaticUpdate { return }
             let latestSelection = textView.selectedRange
-            DispatchQueue.main.async {
-                if !NSEqualRanges(self.selectedRange, latestSelection) {
-                    self.selectedRange = latestSelection
-                }
+            if !NSEqualRanges(selectedRange, latestSelection) {
+                selectedRange = latestSelection
             }
         }
     }
@@ -491,9 +505,20 @@ struct PhraseItemView: View {
         let accessibleName = ((title?.isEmpty == false ? title : phrase.text) ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        Button(action: { model.insertPhraseText(phrase) }) {
+        Button(action: {
+            guard model.holdToSelectMillis <= 0 else { return }
+            if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
+            model.insertPhraseText(phrase)
+        }) {
             VStack(alignment: .leading, spacing: 6) {
-                if let imageUrl = phrase.imageUrl,
+                if model.labelAtTop && model.showButtonLabels {
+                    Text(phrase.name ?? phrase.text)
+                        .font(.body)
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if model.showButtonSymbols, let imageUrl = phrase.imageUrl,
                    let url = URL(string: imageUrl) {
                     AsyncImage(url: url) { phase in
                         switch phase {
@@ -513,19 +538,35 @@ struct PhraseItemView: View {
                     }
                 }
 
-                Text(phrase.name ?? phrase.text)
-                    .font(.body)
-                    .lineLimit(3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !model.labelAtTop && model.showButtonLabels {
+                    Text(phrase.name ?? phrase.text)
+                        .font(.body)
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 // Secondary hint could be added here if needed
             }
             .padding(12)
             .frame(maxWidth: .infinity, minHeight: UIDevice.current.userInterfaceIdiom == .pad ? 150 : 120)
-            .background(tileShape.fill(bgColor))
-            .overlay(tileShape.stroke(Color(.separator), lineWidth: 1))
+            .background(tileShape.fill(model.highContrastMode ? Color(.systemBackground) : bgColor))
+            .overlay(tileShape.stroke(model.highContrastMode ? Color.primary : Color(.separator), lineWidth: model.highContrastMode ? 2 : 1))
             .contentShape(tileShape)
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: max(0.01, model.holdToSelectMillis / 1_000))
+                .onEnded { _ in
+                    guard model.holdToSelectMillis > 0 else { return }
+                    if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
+                    model.insertPhraseText(phrase)
+                }
+        )
+        .allowsHitTesting(!wiggle)
+        .onHover { hovering in
+            if hovering && model.auditoryFishingEnabled {
+                model.speak(accessibleName)
+            }
+        }
         .accessibilityLabel(Text(accessibleName.isEmpty ? NSLocalizedString("common.no_name", comment: "") : accessibleName))
         .accessibilityHint(Text(wiggle ? "accessibility.phrase.wiggle_hint" : "accessibility.phrase.insert_hint"))
         .accessibilityAction(named: Text("accessibility.phrase.speak_action")) { model.speak(phrase.text) }
