@@ -38,6 +38,9 @@
     <string name="board_sets_create_error">Skærmen kunne ikke oprettes</string>
     <string name="board_sets_deleted">Skærmen blev slettet</string>
     <string name="board_sets_delete_error">Skærmen kunne ikke slettes</string>
+    <string name="board_sets_import">Importer skærm</string>
+    <string name="board_sets_imported">Skærmen blev importeret</string>
+    <string name="board_sets_import_error">Skærmen kunne ikke importeres</string>
     <string name="board_workspace_title">Skærm</string>
     <string name="board_workspace_editing">Redigerer: %1$s</string>
     <string name="board_workspace_unlock_to_edit">Lås skærmen op før redigering</string>

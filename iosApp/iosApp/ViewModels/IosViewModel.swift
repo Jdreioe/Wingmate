@@ -1401,6 +1401,51 @@ final class IosViewModel: ObservableObject {
             ? NSLocalizedString("boardset.status.locked", comment: "")
             : NSLocalizedString("boardset.status.unlocked", comment: "")
     }
+
+    func deleteBoardSet(id: String) async {
+        do {
+            try await bridge.deleteBoardSet(id: id)
+            boardSets.removeAll { $0.id == id }
+            persistBoardSets()
+            if selectedBoardSetId == id {
+                selectedBoardSetId = boardSets.first?.id
+                if let set = selectedBoardSet {
+                    selectedBoardId = set.rootBoardId
+                    await loadSelectedBoard()
+                } else {
+                    selectedBoardId = nil
+                    selectedBoard = nil
+                    boardCells = []
+                }
+            }
+            boardStatusMessage = NSLocalizedString("boardset.status.deleted", comment: "")
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.delete_failed", comment: "")
+        }
+    }
+
+    func duplicateBoardSet(id: String) async {
+        do {
+            if let dup = try await bridge.duplicateBoardSet(id: id) {
+                let info = BoardSetInfo(
+                    id: dup.id,
+                    name: dup.name,
+                    rootBoardId: dup.rootBoardId,
+                    boardIds: dup.boardIds,
+                    isLocked: dup.isLocked,
+                    updatedAt: Date().timeIntervalSince1970
+                )
+                boardSets.insert(info, at: 0)
+                persistBoardSets()
+                selectedBoardSetId = info.id
+                selectedBoardId = info.rootBoardId
+                await loadSelectedBoard()
+                boardStatusMessage = NSLocalizedString("boardset.status.duplicated", comment: "")
+            }
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.duplicate_failed", comment: "")
+        }
+    }
 }
 
 private extension Float {

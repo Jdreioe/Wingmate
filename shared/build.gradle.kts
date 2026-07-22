@@ -28,6 +28,9 @@ kotlin {
             binaries.framework {
                 baseName = "Shared"
                 isStatic = false
+                // Swift code uses domain models such as Shared.Phrase. Kotlin/Native
+                // frameworks only expose dependency types when they are exported.
+                export(project(":core:domain"))
                 // Export Koin for Swift interop
                 export("io.insert-koin:koin-core:${libs.versions.koin.get()}")
             }

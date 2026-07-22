@@ -300,3 +300,77 @@
 "sentence.box.title" = "Sentence Box";
 "sentence.box.delete_phrase" = "Delete phrase from sentence";
 "sentence.box.speak" = "Speak sentence";
+
+/* Azure F0 Setup */
+"azure_setup.title" = "Azure Speech Service (Free Tier)";
+"azure_setup.free_tier.title" = "High-Quality Voice (Free Tier)";
+"azure_setup.free_tier.desc" = "Azure Text-to-Speech offers high-quality neural voices in many languages. The F0 free tier provides 500,000 free characters per month.";
+"azure_setup.portal.title" = "Set up in Azure Portal (Recommended)";
+"azure_setup.portal.desc" = "Opens a prefilled F0 Speech deployment in Azure Portal. Works with personal Microsoft accounts.";
+"azure_setup.existing_key.title" = "Enter an Existing Key";
+"azure_setup.existing_key.desc" = "Already created a Speech resource? Enter its Endpoint and Subscription Key.";
+"azure_setup.create.title" = "Create Your Free Speech Resource";
+"azure_setup.in_portal" = "In Azure Portal:";
+"azure_setup.steps" = "1. Choose your Azure subscription & resource group.\n2. Choose a region and select Create.\n3. After deployment, open Speech resources and select the resource.\n4. Go to Keys and Endpoint, then copy either Key and the Endpoint.";
+"azure_setup.open_portal" = "Open Azure Portal";
+"azure_setup.open_resources" = "Open Speech Resources";
+"azure_setup.have_credentials" = "I Have the Endpoint and Key";
+"azure_setup.limit" = "The F0 free tier permits 1 Speech resource per Azure subscription.";
+"azure_setup.credentials.title" = "Enter Azure Credentials";
+"azure_setup.credentials.desc" = "Paste the Endpoint and Subscription Key from Azure Portal.";
+"azure_setup.endpoint.label" = "Endpoint or Region";
+"azure_setup.key.label" = "Subscription Key";
+"azure_setup.save_continue" = "Save & Continue";
+"azure_setup.complete.title" = "Azure Connected!";
+"azure_setup.complete.desc" = "Your Azure Speech credentials have been saved securely on this device.";
+"azure_setup.error.endpoint" = "Please enter the Speech endpoint or region.";
+"azure_setup.error.key" = "Please enter a Speech subscription key.";
+"azure_setup.error.save" = "Failed to save Azure credentials: %@";
+
+/* Startup Mode Selection & Tour */
+"welcome_mode.title" = "How do you want to communicate?";
+"welcome_mode.subtitle" = "Choose what Wingmate opens. You can change this later in Settings.";
+"welcome_mode.keyboard.title" = "Keyboard and Phrases";
+"welcome_mode.keyboard.desc" = "Type messages and communicate with saved phrases and categories.";
+"welcome_mode.screens.title" = "Screens";
+"welcome_mode.screens.desc" = "Communicate with linked pages, fields, and symbols.";
+"welcome_mode.tour.title" = "A Quick Tour";
+"welcome_mode.tour.keyboard.title" = "Keyboard and Phrases";
+"welcome_mode.tour.keyboard.subtitle" = "Build a message with typing, then keep useful phrases close at hand.";
+"welcome_mode.tour.keyboard.step1" = "Type the message you want to speak in the text box.";
+"welcome_mode.tour.keyboard.step2" = "Tap saved phrases and categories for words you use often.";
+"welcome_mode.tour.keyboard.step3" = "Have the complete message spoken aloud, then start the next one.";
+"welcome_mode.tour.boardsets.title" = "Boardsets and Screens";
+"welcome_mode.tour.boardsets.subtitle" = "Communicate with visual grids of symbols and linked pages.";
+"welcome_mode.tour.boardsets.step1" = "Select a boardset from your library.";
+"welcome_mode.tour.boardsets.step2" = "Tap symbols in a grid to speak them or navigate to another page.";
+"welcome_mode.tour.boardsets.step3" = "Edit boardsets later to customize symbols and layout.";
+"welcome_mode.tour.phrase_preview_title" = "Phrase Screen";
+"welcome_mode.tour.phrase_preview_message" = "I would like some water, please.";
+"welcome_mode.tour.back" = "Back to choices";
+
+/* Analytics Consent */
+"welcome_analytics.title" = "Help Improve Wingmate";
+"welcome_analytics.desc" = "Optionally share anonymous feature-use events. We never send your phrases, speech text, Azure keys, or board content. You can change this later in Settings.";
+"welcome_analytics.opt_in" = "Share anonymous analytics";
+
+/* BoardSets Library & Workspace */
+"board_sets.library.title" = "Boardsets Library";
+"board_sets.library.subtitle" = "Visual grids of symbols and linked pages";
+"board_sets.library.empty_title" = "No Boardsets Yet";
+"board_sets.library.empty_body" = "Create a boardset to start communicating with visual symbols and pages.";
+"board_sets.library.open" = "Open";
+"board_sets.library.duplicate" = "Duplicate";
+"board_sets.library.delete_title" = "Delete Boardset";
+"board_sets.library.delete_message" = "Are you sure you want to delete '%@'?";
+"board_sets.status.deleted" = "Boardset deleted.";
+"board_sets.status.duplicated" = "Boardset duplicated.";
+"board_sets.error.delete_failed" = "Failed to delete boardset.";
+"board_sets.error.duplicate_failed" = "Failed to duplicate boardset.";
+"board_workspace.editing" = "Editing %@";
+"board_workspace.finish" = "Finish";
+"board_workspace.undo" = "Undo";
+"board_workspace.home" = "Home";
+"board_workspace.exit_library" = "Library";
+
+

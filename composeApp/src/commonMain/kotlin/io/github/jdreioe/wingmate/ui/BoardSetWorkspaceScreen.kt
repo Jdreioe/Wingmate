@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.PhraseUseCase
@@ -147,6 +148,7 @@ fun BoardSetManagerScreen(
     initialBoardSetId: String? = null
 ) {
     val useCase = koinInject<BoardSetUseCase>()
+    val boardImportService = koinInject<BoardImportService>()
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
     val koin = org.koin.compose.getKoin()
@@ -168,6 +170,8 @@ fun BoardSetManagerScreen(
     val createError = stringResource(Res.string.board_sets_create_error)
     val deletedMessage = stringResource(Res.string.board_sets_deleted)
     val deleteError = stringResource(Res.string.board_sets_delete_error)
+    val importedMessage = stringResource(Res.string.board_sets_imported)
+    val importError = stringResource(Res.string.board_sets_import_error)
     val defaultBoardName = stringResource(Res.string.board_dialog_default_board_name)
 
     fun refreshBoardSets() {
@@ -203,6 +207,18 @@ fun BoardSetManagerScreen(
             onBack = onBack,
             onOpenSettings = { showSettings = true },
             onCreate = { showCreateDialog = true },
+            onImport = {
+                scope.launch {
+                    runCatching { boardImportService.importBoardSet() }
+                        .onSuccess { imported ->
+                            if (imported != null) {
+                                statusMessage = importedMessage
+                                refreshBoardSets()
+                            }
+                        }
+                        .onFailure { statusMessage = it.message ?: importError }
+                }
+            },
             onOpen = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Run) },
             onEdit = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Edit) },
             onDuplicate = { boardSet ->
@@ -301,6 +317,7 @@ private fun BoardSetLibraryScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onCreate: () -> Unit,
+    onImport: () -> Unit,
     onOpen: (ObfBoardSet) -> Unit,
     onEdit: (ObfBoardSet) -> Unit,
     onDuplicate: (ObfBoardSet) -> Unit,
@@ -331,6 +348,12 @@ private fun BoardSetLibraryScreen(
                         Icon(
                             Icons.Default.Settings,
                             contentDescription = stringResource(Res.string.phrase_screen_app_settings)
+                        )
+                    }
+                    IconButton(onClick = onImport) {
+                        Icon(
+                            Icons.Default.ImportExport,
+                            contentDescription = stringResource(Res.string.board_sets_import)
                         )
                     }
                 }

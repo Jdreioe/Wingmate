@@ -34,10 +34,21 @@ private func resolveCellOpenSymbolsSecret() -> String? {
     return nil
 }
 
+private enum BoardWorkspaceMode: Equatable {
+    case run
+    case edit
+}
+
+private enum BoardSetRoute: Equatable {
+    case library
+    case workspace(boardSetId: String, mode: BoardWorkspaceMode)
+}
+
 struct SymbolBoardWorkspaceView: View {
     @ObservedObject var model: IosViewModel
     @Namespace private var sentenceAnimationNamespace
 
+    @State private var route: BoardSetRoute = .library
     @State private var showCreateBoardsetSheet = false
     @State private var showAddBoardSheet = false
 
@@ -49,8 +60,9 @@ struct SymbolBoardWorkspaceView: View {
     @State private var addBoardRows: Int = 4
     @State private var addBoardColumns: Int = 4
 
+    @State private var deleteTargetSet: BoardSetInfo? = nil
     @State private var authErrorMessage: String? = nil
-    @State private var isEditModeEnabled: Bool = false
+    @State private var isFullscreen: Bool = false
     @State private var showEditCellSheet: Bool = false
     @State private var editingRow: Int = 0
     @State private var editingCol: Int = 0
@@ -79,55 +91,13 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
-            boardsetStrip
-
-            if let selectedSet = model.selectedBoardSet {
-                boardsetControls(set: selectedSet)
-
-                if selectedSet.boardIds.count > 1 {
-                    Picker("boardset.board_picker", selection: Binding(
-                        get: { model.selectedBoardId ?? selectedSet.rootBoardId },
-                        set: { newId in
-                            Task { await model.selectBoard(id: newId) }
-                        }
-                    )) {
-                        ForEach(selectedSet.boardIds, id: \.self) { id in
-                            Text(model.boardDisplayName(id: id)).tag(id)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-
-                SentenceBoxView(
-                    phrases: boardSentenceTokens,
-                    onDelete: { index in
-                        guard boardSentenceTokens.indices.contains(index) else { return }
-                        let removedTokenId = boardSentenceTokens[index].id
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            boardSentenceTokens.remove(at: index)
-                        }
-                        if activeSentenceAnimation?.tokenId == removedTokenId {
-                            activeSentenceAnimation = nil
-                        }
-                    },
-                    onSpeak: {
-                        let sentence = boardSentenceText
-                        guard !sentence.isEmpty else { return }
-                        model.speak(sentence)
-                    },
-                    animationNamespace: sentenceAnimationNamespace,
-                    animatedTokenId: activeSentenceAnimation?.tokenId
-                )
-                .accessibilityElement(children: .contain)
-
-                boardPreview
-            } else {
-                emptyState
+        VStack(spacing: 0) {
+            switch route {
+            case .library:
+                libraryView
+            case .workspace(let boardSetId, let mode):
+                workspaceView(boardSetId: boardSetId, mode: mode)
             }
-
-            Spacer(minLength: 0)
         }
         .task {
             await model.loadBoardSets()
@@ -147,14 +117,6 @@ struct SymbolBoardWorkspaceView: View {
                 await importCellPhotoItem(newItem)
             }
         }
-        .onChange(of: model.selectedBoardId) { _, _ in
-            boardSentenceTokens = []
-            activeSentenceAnimation = nil
-        }
-        .onChange(of: model.selectedBoardSetId) { _, _ in
-            boardSentenceTokens = []
-            activeSentenceAnimation = nil
-        }
         .fileImporter(
             isPresented: $isImportingCellSymbolFile,
             allowedContentTypes: [.image],
@@ -171,6 +133,27 @@ struct SymbolBoardWorkspaceView: View {
             }
         }
         .alert(
+            NSLocalizedString("board_sets.library.delete_title", comment: ""),
+            isPresented: Binding(
+                get: { deleteTargetSet != nil },
+                set: { if !$0 { deleteTargetSet = nil } }
+            )
+        ) {
+            Button(NSLocalizedString("common_delete", comment: ""), role: .destructive) {
+                if let target = deleteTargetSet {
+                    Task {
+                        await model.deleteBoardSet(id: target.id)
+                        deleteTargetSet = nil
+                    }
+                }
+            }
+            Button(NSLocalizedString("common.cancel", comment: ""), role: .cancel) {
+                deleteTargetSet = nil
+            }
+        } message: {
+            Text(String(format: NSLocalizedString("board_sets.library.delete_message", comment: ""), deleteTargetSet?.name ?? ""))
+        }
+        .alert(
             NSLocalizedString("boardset.unlock.failed_title", comment: ""),
             isPresented: Binding(
                 get: { authErrorMessage != nil },
@@ -185,130 +168,246 @@ struct SymbolBoardWorkspaceView: View {
         }
     }
 
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("symbol.workspace.title")
-                    .font(.title3)
-                    .bold()
-                Text("symbol.workspace.subtitle")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+    // MARK: - Library View
+    @ViewBuilder
+    private var libraryView: some View {
+        VStack(spacing: 16) {
+            // Header bar
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(NSLocalizedString("board_sets.library.title", comment: ""))
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    Text(NSLocalizedString("board_sets.library.subtitle", comment: ""))
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Button(action: { showCreateBoardsetSheet = true }) {
+                    Label("boardset.create", systemImage: "plus")
+                        .font(.headline)
+                }
+                .buttonStyle(.borderedProminent)
             }
-            Spacer()
-            Button {
-                showCreateBoardsetSheet = true
-            } label: {
-                Label("boardset.create", systemImage: "plus")
+            .padding(.horizontal)
+            .padding(.top, 12)
+
+            if model.boardSets.isEmpty {
+                emptyLibraryState
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(model.boardSets) { set in
+                            BoardSetLibraryCard(
+                                set: set,
+                                onOpen: {
+                                    Task {
+                                        await model.selectBoardSet(id: set.id)
+                                        route = .workspace(boardSetId: set.id, mode: .run)
+                                    }
+                                },
+                                onEdit: {
+                                    Task {
+                                        await model.selectBoardSet(id: set.id)
+                                        route = .workspace(boardSetId: set.id, mode: .edit)
+                                    }
+                                },
+                                onDuplicate: {
+                                    Task { await model.duplicateBoardSet(id: set.id) }
+                                },
+                                onToggleLock: {
+                                    if set.isLocked {
+                                        authenticateAndUnlock(for: set)
+                                    } else {
+                                        Task {
+                                            await model.selectBoardSet(id: set.id)
+                                            model.setSelectedBoardSetLocked(true)
+                                        }
+                                    }
+                                },
+                                onDelete: {
+                                    deleteTargetSet = set
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 24)
+                }
+            }
+        }
+    }
+
+    private var emptyLibraryState: some View {
+        VStack(spacing: 16) {
+            Spacer(minLength: 40)
+            Image(systemName: "square.grid.3x3")
+                .font(.system(size: 60))
+                .foregroundColor(.secondary)
+
+            Text(NSLocalizedString("board_sets.library.empty_title", comment: ""))
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text(NSLocalizedString("board_sets.library.empty_body", comment: ""))
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+
+            Button(action: { showCreateBoardsetSheet = true }) {
+                Text(NSLocalizedString("boardset.create_first", comment: ""))
+                    .font(.headline)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
             }
             .buttonStyle(.borderedProminent)
+            Spacer(minLength: 40)
         }
     }
 
-    private var boardsetStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(model.boardSets) { set in
-                    Button {
-                        Task { await model.selectBoardSet(id: set.id) }
-                    } label: {
-                        HStack(spacing: 6) {
-                            if set.isLocked {
-                                Image(systemName: "lock.fill")
-                                    .font(.caption)
-                            }
-                            Text(set.name)
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(model.selectedBoardSetId == set.id ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground))
-                        .clipShape(Capsule())
+    // MARK: - Workspace View (Run & Edit Modes)
+    @ViewBuilder
+    private func workspaceView(boardSetId: String, mode: BoardWorkspaceMode) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Workspace Header
+            HStack {
+                Button(action: {
+                    route = .library
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                        Text(NSLocalizedString("board_workspace.exit_library", comment: ""))
                     }
-                    .buttonStyle(.plain)
+                    .font(.headline)
+                    .foregroundColor(.blue)
                 }
-            }
-        }
-    }
 
-    @ViewBuilder
-    private func boardsetControls(set: BoardSetInfo) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                Task { await model.saveSelectedBoardSet() }
-            } label: {
-                Label("boardset.save", systemImage: "square.and.arrow.down")
-            }
-            .buttonStyle(.bordered)
-            .disabled(model.selectedBoard == nil || !model.canEditSelectedBoardSet)
+                Spacer()
 
-            Button {
-                isEditModeEnabled.toggle()
-            } label: {
-                Label(
-                    isEditModeEnabled ? "boardset.edit_done" : "boardset.edit",
-                    systemImage: isEditModeEnabled ? "checkmark.circle.fill" : "pencil"
-                )
-            }
-            .buttonStyle(.bordered)
-            .disabled(model.selectedBoard == nil || !model.canEditSelectedBoardSet)
-
-            Button {
-                if set.isLocked {
-                    authenticateAndUnlock()
+                if mode == .edit {
+                    Text(String(format: NSLocalizedString("board_workspace.editing", comment: ""), model.selectedBoardSet?.name ?? ""))
+                        .font(.headline)
+                        .fontWeight(.bold)
                 } else {
-                    isEditModeEnabled = false
-                    model.setSelectedBoardSetLocked(true)
+                    Text(model.selectedBoard?.name ?? NSLocalizedString("boardset.untitled_board", comment: ""))
+                        .font(.headline)
+                        .fontWeight(.bold)
                 }
-            } label: {
-                Label(
-                    set.isLocked ? "boardset.unlock" : "boardset.lock",
-                    systemImage: set.isLocked ? "lock.open.fill" : "lock.fill"
-                )
+
+                Spacer()
+
+                if mode == .edit {
+                    Button(action: {
+                        route = .workspace(boardSetId: boardSetId, mode: .run)
+                    }) {
+                        Text(NSLocalizedString("board_workspace.finish", comment: ""))
+                            .font(.headline)
+                            .foregroundColor(.blue)
+                    }
+                } else {
+                    Button(action: {
+                        if model.canEditSelectedBoardSet {
+                            route = .workspace(boardSetId: boardSetId, mode: .edit)
+                        } else {
+                            authenticateAndUnlock(for: model.selectedBoardSet)
+                        }
+                    }) {
+                        Image(systemName: "pencil")
+                            .font(.title3)
+                            .foregroundColor(.blue)
+                    }
+                }
             }
-            .buttonStyle(.bordered)
+            .padding(.horizontal)
+            .padding(.top, 8)
 
-            Button {
-                showAddBoardSheet = true
-            } label: {
-                Label("boardset.add_board", systemImage: "plus.rectangle.on.rectangle")
+            // Sub-board Strip (in Edit Mode for quick switching)
+            if mode == .edit, let selectedSet = model.selectedBoardSet, selectedSet.boardIds.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(selectedSet.boardIds, id: \.self) { id in
+                            Button(action: {
+                                Task { await model.selectBoard(id: id) }
+                            }) {
+                                Text(model.boardDisplayName(id: id))
+                                    .font(.subheadline)
+                                    .fontWeight(model.selectedBoardId == id ? .bold : .regular)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(model.selectedBoardId == id ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground))
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
             }
-            .buttonStyle(.bordered)
-            .disabled(!model.canEditSelectedBoardSet)
-        }
 
-        if let status = model.boardStatusMessage, !status.isEmpty {
-            Text(status)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
+            // Controls & Lock status
+            if let selectedSet = model.selectedBoardSet {
+                if mode == .edit {
+                    HStack(spacing: 10) {
+                        Button(action: { showAddBoardSheet = true }) {
+                            Label("boardset.add_board", systemImage: "plus.rectangle.on.rectangle")
+                                .font(.subheadline)
+                        }
+                        .buttonStyle(.bordered)
 
-        if set.isLocked {
-            Label("boardset.locked_banner", systemImage: "lock.fill")
-                .font(.footnote)
-                .foregroundStyle(.orange)
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                }
+
+                // Sentence Box in Run mode
+                if mode == .run {
+                    SentenceBoxView(
+                        phrases: boardSentenceTokens,
+                        onDelete: { index in
+                            guard boardSentenceTokens.indices.contains(index) else { return }
+                            let removedTokenId = boardSentenceTokens[index].id
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                boardSentenceTokens.remove(at: index)
+                            }
+                            if activeSentenceAnimation?.tokenId == removedTokenId {
+                                activeSentenceAnimation = nil
+                            }
+                        },
+                        onSpeak: {
+                            let sentence = boardSentenceText
+                            guard !sentence.isEmpty else { return }
+                            model.speak(sentence)
+                        },
+                        animationNamespace: sentenceAnimationNamespace,
+                        animatedTokenId: activeSentenceAnimation?.tokenId
+                    )
+                    .padding(.horizontal)
+                }
+
+                boardPreview(isEditMode: mode == .edit)
+                    .padding(.horizontal)
+            }
+
+            Spacer(minLength: 0)
         }
     }
 
     @ViewBuilder
-    private var boardPreview: some View {
+    private func boardPreview(isEditMode: Bool) -> some View {
         if let board = model.selectedBoard {
             let rows = max(1, Int(board.grid?.rows ?? 1))
             let cols = max(1, Int(board.grid?.columns ?? 1))
             let previewCols = Array(repeating: GridItem(.flexible(), spacing: 8), count: cols)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text(board.name ?? NSLocalizedString("boardset.untitled_board", comment: ""))
-                    .font(.headline)
-                Text(String(format: NSLocalizedString("boardset.grid_summary", comment: ""), rows, cols, board.buttons.count))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
                 LazyVGrid(columns: previewCols, spacing: 8) {
                     ForEach(0..<(rows * cols), id: \.self) { idx in
                         let row = idx / cols
                         let col = idx % cols
-                        boardCellButton(row: row, col: col)
+                        boardCellButton(row: row, col: col, isEditMode: isEditMode)
                     }
                 }
             }
@@ -322,14 +421,14 @@ struct SymbolBoardWorkspaceView: View {
         }
     }
 
-    private func boardCellButton(row: Int, col: Int) -> some View {
+    private func boardCellButton(row: Int, col: Int, isEditMode: Bool) -> some View {
         let cell = model.cellAt(row: row, col: col)
         let isLinked = trimmed(cell?.linkedBoardId) != nil
         let sourceCellId = "\(row):\(col)"
 
         return ZStack(alignment: .topTrailing) {
             Button {
-                if isEditModeEnabled && model.canEditSelectedBoardSet {
+                if isEditMode && model.canEditSelectedBoardSet {
                     openCellEditor(row: row, col: col, existing: cell)
                 } else {
                     appendCellToSentenceIfNeeded(cell)
@@ -338,17 +437,17 @@ struct SymbolBoardWorkspaceView: View {
             } label: {
                 Group {
                     if let animation = activeSentenceAnimation, animation.sourceCellId == sourceCellId {
-                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked)
+                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode)
                             .matchedGeometryEffect(id: animation.tokenId, in: sentenceAnimationNamespace, isSource: true)
                             .zIndex(3)
                     } else {
-                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked)
+                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode)
                     }
                 }
             }
             .buttonStyle(.plain)
 
-            if isEditModeEnabled, model.canEditSelectedBoardSet, cell != nil {
+            if isEditMode, model.canEditSelectedBoardSet, cell != nil {
                 Button(role: .destructive) {
                     Task { await model.clearSelectedBoardCell(row: row, col: col) }
                 } label: {
@@ -359,29 +458,11 @@ struct SymbolBoardWorkspaceView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(4)
-                .accessibilityLabel(Text("boardset.cell.delete"))
-            }
-        }
-        .contextMenu {
-            if model.canEditSelectedBoardSet {
-                Button {
-                    openCellEditor(row: row, col: col, existing: cell)
-                } label: {
-                    Label("boardset.cell.edit_title", systemImage: "pencil")
-                }
-
-                if cell != nil {
-                    Button(role: .destructive) {
-                        Task { await model.clearSelectedBoardCell(row: row, col: col) }
-                    } label: {
-                        Label("boardset.cell.delete", systemImage: "trash")
-                    }
-                }
             }
         }
     }
 
-    private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool) -> some View {
+    private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if let imageUrl = trimmed(cell?.imageUrl), let url = URL(string: imageUrl) {
                 AsyncImage(url: url) { phase in
@@ -423,13 +504,6 @@ struct SymbolBoardWorkspaceView: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            if isEditModeEnabled && model.canEditSelectedBoardSet {
-                Text("\(row + 1), \(col + 1)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
         }
         .padding(8)
         .frame(minHeight: 72, alignment: .topLeading)
@@ -441,22 +515,6 @@ struct SymbolBoardWorkspaceView: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator)), lineWidth: isLinked ? 1.5 : 1)
         )
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "square.grid.3x3")
-                .font(.system(size: 36))
-                .foregroundStyle(.secondary)
-            Text("boardset.empty")
-                .foregroundStyle(.secondary)
-            Button("boardset.create_first") {
-                showCreateBoardsetSheet = true
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 40)
     }
 
     private var createBoardsetSheet: some View {
@@ -622,64 +680,6 @@ struct SymbolBoardWorkspaceView: View {
                             .font(.footnote)
                         }
                     }
-
-                    if editingSymbolSource == .openSymbols && !editingSymbolResults.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
-                                ForEach(editingSymbolResults.prefix(30), id: \.id) { symbol in
-                                    Button {
-                                        editingSymbolSource = .openSymbols
-                                        editingSelectedSymbolUrl = symbol.image_url
-                                        shouldClearEditingSymbol = false
-                                    } label: {
-                                        VStack(spacing: 6) {
-                                            if let imageUrl = symbol.image_url,
-                                               let url = URL(string: imageUrl) {
-                                                AsyncImage(url: url) { phase in
-                                                    switch phase {
-                                                    case .success(let image):
-                                                        image
-                                                            .resizable()
-                                                            .scaledToFit()
-                                                    case .failure(_):
-                                                        Image(systemName: "photo")
-                                                            .foregroundStyle(.secondary)
-                                                    case .empty:
-                                                        ProgressView()
-                                                    @unknown default:
-                                                        EmptyView()
-                                                    }
-                                                }
-                                                .frame(width: 56, height: 56)
-                                            } else {
-                                                Image(systemName: "photo")
-                                                    .frame(width: 56, height: 56)
-                                                    .foregroundStyle(.secondary)
-                                            }
-
-                                            Text(symbol.name)
-                                                .font(.caption2)
-                                                .lineLimit(2)
-                                                .multilineTextAlignment(.center)
-                                        }
-                                        .padding(8)
-                                        .frame(width: 92, height: 110)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 10)
-                                                .fill(editingSelectedSymbolUrl == symbol.image_url ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground))
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                    }
-
-                    if let editingSymbolError {
-                        Text(editingSymbolError)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                    }
                 }
 
                 Section("boardset.cell.linked_board") {
@@ -700,17 +700,6 @@ struct SymbolBoardWorkspaceView: View {
                     Toggle("boardset.cell.border_enabled", isOn: $useCustomBorderColor)
                     if useCustomBorderColor {
                         ColorPicker("boardset.cell.border_picker", selection: $editingBorderPickerColor, supportsOpacity: true)
-                    }
-                }
-
-                if model.cellAt(row: editingRow, col: editingCol) != nil {
-                    Section {
-                        Button("boardset.cell.clear", role: .destructive) {
-                            Task {
-                                await model.clearSelectedBoardCell(row: editingRow, col: editingCol)
-                                showEditCellSheet = false
-                            }
-                        }
                     }
                 }
             }
@@ -760,7 +749,6 @@ struct SymbolBoardWorkspaceView: View {
 
     private func appendCellToSentenceIfNeeded(_ cell: BoardCellInfo?) {
         guard let cell else { return }
-        // Do not add navigation cells to the sentence composition.
         if trimmed(cell.linkedBoardId) != nil { return }
 
         let title = trimmed(cell.label) ?? trimmed(cell.vocalization)
@@ -1017,7 +1005,8 @@ struct SymbolBoardWorkspaceView: View {
         return destination.absoluteString
     }
 
-    private func authenticateAndUnlock() {
+    private func authenticateAndUnlock(for set: BoardSetInfo?) {
+        guard let set else { return }
         let context = LAContext()
         var authError: NSError?
 
@@ -1032,12 +1021,99 @@ struct SymbolBoardWorkspaceView: View {
         ) { success, error in
             DispatchQueue.main.async {
                 if success {
-                    isEditModeEnabled = false
-                    model.setSelectedBoardSetLocked(false)
+                    Task {
+                        await model.selectBoardSet(id: set.id)
+                        model.setSelectedBoardSetLocked(false)
+                    }
                 } else {
                     authErrorMessage = error?.localizedDescription ?? NSLocalizedString("boardset.unlock.failed", comment: "")
                 }
             }
         }
+    }
+}
+
+// MARK: - BoardSet Library Card Component
+struct BoardSetLibraryCard: View {
+    let set: BoardSetInfo
+    let onOpen: () -> Void
+    let onEdit: () -> Void
+    let onDuplicate: () -> Void
+    let onToggleLock: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(set.name)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+
+                        if set.isLocked {
+                            Image(systemName: "lock.fill")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+                    }
+
+                    Text(String(format: NSLocalizedString("boardset.grid_summary", comment: ""), set.boardIds.count, 0, 0))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Button(action: onOpen) {
+                    HStack {
+                        Image(systemName: "play.fill")
+                        Text(NSLocalizedString("board_sets.library.open", comment: ""))
+                    }
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Button(action: onEdit) {
+                    Label("board_sets.library.open", systemImage: "pencil")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .disabled(set.isLocked)
+
+                Button(action: onDuplicate) {
+                    Label("board_sets.library.duplicate", systemImage: "doc.on.doc")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+
+                Button(action: onToggleLock) {
+                    Label(set.isLocked ? "boardset.unlock" : "boardset.lock", systemImage: set.isLocked ? "lock.open.fill" : "lock.fill")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.secondarySystemBackground))
+                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+        )
     }
 }

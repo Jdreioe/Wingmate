@@ -298,3 +298,77 @@
 "sentence.box.title" = "Sætningsboks";
 "sentence.box.delete_phrase" = "Slet frase fra sætning";
 "sentence.box.speak" = "Sig sætning";
+
+/* Azure F0 Setup */
+"azure_setup.title" = "Opsætning af Azure TTS";
+"azure_setup.free_tier.title" = "Stemme i høj kvalitet, gratis niveau";
+"azure_setup.free_tier.desc" = "Azure Text-to-Speech tilbyder neurale stemmer på mange sprog. F0-niveauet indeholder 500.000 tegn hver måned.";
+"azure_setup.portal.title" = "Opsæt i Azure Portal";
+"azure_setup.portal.desc" = "Åbn en forudfyldt F0 Speech-installation i Azure Portal. Det virker med private Microsoft-konti og holder Azure-logon i portalen.";
+"azure_setup.existing_key.title" = "Indtast en eksisterende nøgle";
+"azure_setup.existing_key.desc" = "Har du allerede en Speech-ressource? Indsæt dens endpoint og nøgle.";
+"azure_setup.create.title" = "Opret din gratis Speech-ressource";
+"azure_setup.in_portal" = "I Azure Portal:";
+"azure_setup.steps" = "1. Vælg dit Azure-abonnement og en ressourcegruppe.\n2. Vælg en region, og vælg derefter Opret.\n3. Efter installationen skal du åbne Speech-ressourcerne nedenfor og vælge den nye wingmate-f0-*-ressource.\n4. Vælg Nøgler og endpoint, og kopiér en af nøglerne samt endpointet.";
+"azure_setup.open_portal" = "Åbn Azure Portal";
+"azure_setup.open_resources" = "Åbn mine Speech-ressourcer";
+"azure_setup.have_credentials" = "Jeg har endpoint og nøgle";
+"azure_setup.limit" = "F0-niveauet tillader én Speech-ressource pr. abonnement.";
+"azure_setup.credentials.title" = "Indtast Azure-oplysninger";
+"azure_setup.credentials.desc" = "Indsæt endpointet og en af nøglerne fra Azure Portal → din Speech-ressource → Nøgler og endpoint.";
+"azure_setup.endpoint.label" = "Endpoint eller region";
+"azure_setup.key.label" = "Abonnementsnøgle";
+"azure_setup.save_continue" = "Gem og fortsæt";
+"azure_setup.complete.title" = "Sådan!";
+"azure_setup.complete.desc" = "Dine Azure Speech-oplysninger er gemt sikkert på denne enhed.";
+"azure_setup.error.endpoint" = "Indtast Speech-endpointet eller regionen.";
+"azure_setup.error.key" = "Indtast en Speech-abonnementsnøgle.";
+"azure_setup.error.save" = "Azure-oplysningerne kunne ikke gemmes: %@";
+
+/* Startup Mode Selection & Tour */
+"welcome_mode.title" = "Hvordan vil du kommunikere?";
+"welcome_mode.subtitle" = "Vælg hvad Wingmate skal åbne. Du kan ændre det senere i Indstillinger.";
+"welcome_mode.keyboard.title" = "Tastatur og fraser";
+"welcome_mode.keyboard.desc" = "Skriv beskeder, og kommuniker med gemte fraser og kategorier.";
+"welcome_mode.screens.title" = "Skærme";
+"welcome_mode.screens.desc" = "Kommuniker med forbundne sider, felter og symboler.";
+"welcome_mode.tour.title" = "En hurtig rundvisning";
+"welcome_mode.tour.keyboard.title" = "Tastatur og fraser";
+"welcome_mode.tour.keyboard.subtitle" = "Skriv en besked, og hav nyttige fraser lige ved hånden.";
+"welcome_mode.tour.keyboard.step1" = "Skriv den besked, du vil sige, i tekstfeltet.";
+"welcome_mode.tour.keyboard.step2" = "Tryk på gemte fraser og kategorier for ord, du ofte bruger.";
+"welcome_mode.tour.keyboard.step3" = "Få den færdige besked læst op, og start derefter på den næste.";
+"welcome_mode.tour.boardsets.title" = "Boardsets og skærme";
+"welcome_mode.tour.boardsets.subtitle" = "Kommuniker med visuelle gitre af symboler og forbundne sider.";
+"welcome_mode.tour.boardsets.step1" = "Vælg et boardset fra dit bibliotek.";
+"welcome_mode.tour.boardsets.step2" = "Tryk på symboler i et gitter for at få dem læst op eller åbne en anden side.";
+"welcome_mode.tour.boardsets.step3" = "Redigér boardsettet senere for at tilpasse symboler og layout.";
+"welcome_mode.tour.phrase_preview_title" = "Fraseskærm";
+"welcome_mode.tour.phrase_preview_message" = "Jeg vil gerne have noget vand, tak.";
+"welcome_mode.tour.back" = "Tilbage til valgmuligheder";
+
+/* Analytics Consent */
+"welcome_analytics.title" = "Hjælp med at forbedre Wingmate";
+"welcome_analytics.desc" = "Del valgfrit anonyme hændelser om brugen via Aptabase. Vi sender aldrig dine sætninger, taletekst, Azure-nøgler eller tavleindhold. Du kan ændre det senere i Indstillinger.";
+"welcome_analytics.opt_in" = "Del anonym analysedata";
+
+/* BoardSets Library & Workspace */
+"board_sets.library.title" = "Boardset bibliotek";
+"board_sets.library.subtitle" = "Visuelle gitre af symboler og forbundne sider";
+"board_sets.library.empty_title" = "Ingen boardsets endnu";
+"board_sets.library.empty_body" = "Opret et boardset for at begynde at kommunikere med visuelle symboler og sider.";
+"board_sets.library.open" = "Åbn";
+"board_sets.library.duplicate" = "Duplikér";
+"board_sets.library.delete_title" = "Slet boardset";
+"board_sets.library.delete_message" = "Er du sikker på, at du vil slette '%@'?";
+"board_sets.status.deleted" = "Boardset slettet.";
+"board_sets.status.duplicated" = "Boardset dupleret.";
+"board_sets.error.delete_failed" = "Kunne ikke slette boardset.";
+"board_sets.error.duplicate_failed" = "Kunne ikke duplikere boardset.";
+"board_workspace.editing" = "Redigerer %@";
+"board_workspace.finish" = "Færdig";
+"board_workspace.undo" = "Fortryd";
+"board_workspace.home" = "Hjem";
+"board_workspace.exit_library" = "Bibliotek";
+
+

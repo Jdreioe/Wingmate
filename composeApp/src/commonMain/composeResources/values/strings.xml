@@ -38,6 +38,9 @@
     <string name="board_sets_create_error">Unable to create screen</string>
     <string name="board_sets_deleted">Screen deleted</string>
     <string name="board_sets_delete_error">Unable to delete screen</string>
+    <string name="board_sets_import">Import screen</string>
+    <string name="board_sets_imported">Screen imported</string>
+    <string name="board_sets_import_error">Unable to import screen</string>
     <string name="board_workspace_title">Screen</string>
     <string name="board_workspace_editing">Editing: %1$s</string>
     <string name="board_workspace_unlock_to_edit">Unlock this screen before editing</string>

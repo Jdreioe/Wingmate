@@ -295,3 +295,77 @@
 "sentence.box.title" = "Satzfeld";
 "sentence.box.delete_phrase" = "Phrase aus Satz loschen";
 "sentence.box.speak" = "Satz sprechen";
+
+/* Azure F0 Setup */
+"azure_setup.title" = "Azure TTS Einrichtung";
+"azure_setup.free_tier.title" = "Hochwertige Stimme, kostenlose Stufe";
+"azure_setup.free_tier.desc" = "Azure Text-to-Speech bietet neuronale Stimmen in vielen Sprachen. Die kostenlose F0-Stufe enthält 500.000 Zeichen pro Monat.";
+"azure_setup.portal.title" = "Im Azure Portal einrichten";
+"azure_setup.portal.desc" = "Öffnet eine vorausgefüllte F0-Speech-Bereitstellung im Azure Portal. Funktioniert mit persönlichen Microsoft-Konten.";
+"azure_setup.existing_key.title" = "Bestehenden Schlüssel eingeben";
+"azure_setup.existing_key.desc" = "Hast du bereits eine Speech-Ressource? Füge deren Endpunkt und Schlüssel ein.";
+"azure_setup.create.title" = "Erstelle deine kostenlose Speech-Ressource";
+"azure_setup.in_portal" = "Im Azure Portal:";
+"azure_setup.steps" = "1. Wähle dein Azure-Abonnement und eine Ressourcengruppe.\n2. Wähle eine Region und klicke auf Erstellen.\n3. Öffne nach der Bereitstellung die Speech-Ressourcen und wähle die neue Ressource.\n4. Gehe zu Schlüssel und Endpunkt und kopiere einen Schlüssel sowie den Endpunkt.";
+"azure_setup.open_portal" = "Azure Portal öffnen";
+"azure_setup.open_resources" = "Meine Speech-Ressourcen öffnen";
+"azure_setup.have_credentials" = "Ich habe Endpunkt und Schlüssel";
+"azure_setup.limit" = "Die F0-Stufe erlaubt eine Speech-Ressource pro Abonnement.";
+"azure_setup.credentials.title" = "Azure-Zugangsdaten eingeben";
+"azure_setup.credentials.desc" = "Füge den Endpunkt und einen der Schlüssel aus dem Azure Portal ein.";
+"azure_setup.endpoint.label" = "Endpunkt oder Region";
+"azure_setup.key.label" = "Abonnementschlüssel";
+"azure_setup.save_continue" = "Speichern und weiter";
+"azure_setup.complete.title" = "Alles eingerichtet!";
+"azure_setup.complete.desc" = "Deine Azure Speech-Zugangsdaten wurden sicher auf diesem Gerät gespeichert.";
+"azure_setup.error.endpoint" = "Gib den Speech-Endpunkt oder die Region ein.";
+"azure_setup.error.key" = "Gib einen Speech-Abonnementschlüssel ein.";
+"azure_setup.error.save" = "Azure-Zugangsdaten konnten nicht gespeichert werden: %@";
+
+/* Startup Mode Selection & Tour */
+"welcome_mode.title" = "Wie möchtest du kommunizieren?";
+"welcome_mode.subtitle" = "Wähle, was Wingmate beim Start öffnet. Du kannst dies später in den Einstellungen ändern.";
+"welcome_mode.keyboard.title" = "Tastatur und Phrasen";
+"welcome_mode.keyboard.desc" = "Schreibe Nachrichten und kommuniziere mit gespeicherten Phrasen und Kategorien.";
+"welcome_mode.screens.title" = "Bildschirme";
+"welcome_mode.screens.desc" = "Kommuniziere mit verknüpften Seiten, Feldern und Symbolen.";
+"welcome_mode.tour.title" = "Eine kurze Tour";
+"welcome_mode.tour.keyboard.title" = "Tastatur und Phrasen";
+"welcome_mode.tour.keyboard.subtitle" = "Erstelle eine Nachricht durch Tippen und halte nützliche Phrasen bereit.";
+"welcome_mode.tour.keyboard.step1" = "Tippe die Nachricht, die du sprechen möchtest, in das Textfeld.";
+"welcome_mode.tour.keyboard.step2" = "Tippe auf gespeicherte Phrasen und Kategorien für häufig genutzte Wörter.";
+"welcome_mode.tour.keyboard.step3" = "Lass die fertige Nachricht laut vorlesen und starte dann die nächste.";
+"welcome_mode.tour.boardsets.title" = "Boardsets und Bildschirme";
+"welcome_mode.tour.boardsets.subtitle" = "Kommuniziere mit visuellen Symbolrastern und verknüpften Seiten.";
+"welcome_mode.tour.boardsets.step1" = "Wähle ein Boardset aus deiner Bibliothek.";
+"welcome_mode.tour.boardsets.step2" = "Tippe auf Symbole in einem Raster, um sie sprechen zu lassen oder eine andere Seite zu öffnen.";
+"welcome_mode.tour.boardsets.step3" = "Bearbeite das Boardset später, um Symbole und Layout anzupassen.";
+"welcome_mode.tour.phrase_preview_title" = "Phrasen-Bildschirm";
+"welcome_mode.tour.phrase_preview_message" = "Ich hätte gerne etwas Wasser, bitte.";
+"welcome_mode.tour.back" = "Zurück zur Auswahl";
+
+/* Analytics Consent */
+"welcome_analytics.title" = "Hilf mit, Wingmate zu verbessern";
+"welcome_analytics.desc" = "Teile optional anonyme Nutzungsdaten über Aptabase. Wir senden niemals deine Phrasen, Sprachausgabetext, Azure-Schlüssel oder Board-Inhalte. Du kannst dies später in den Einstellungen ändern.";
+"welcome_analytics.opt_in" = "Anonyme Analysedaten teilen";
+
+/* BoardSets Library & Workspace */
+"board_sets.library.title" = "Boardset-Bibliothek";
+"board_sets.library.subtitle" = "Visuelle Symbolraster und verknüpfte Seiten";
+"board_sets.library.empty_title" = "Noch keine Boardsets";
+"board_sets.library.empty_body" = "Erstelle ein Boardset, um mit visuellen Symbolen und Seiten zu kommunizieren.";
+"board_sets.library.open" = "Öffnen";
+"board_sets.library.duplicate" = "Duplizieren";
+"board_sets.library.delete_title" = "Boardset löschen";
+"board_sets.library.delete_message" = "Möchtest du '%@' wirklich löschen?";
+"board_sets.status.deleted" = "Boardset gelöscht.";
+"board_sets.status.duplicated" = "Boardset dupliziert.";
+"board_sets.error.delete_failed" = "Boardset konnte nicht gelöscht werden.";
+"board_sets.error.duplicate_failed" = "Boardset konnte nicht dupliziert werden.";
+"board_workspace.editing" = "%@ wird bearbeitet";
+"board_workspace.finish" = "Fertig";
+"board_workspace.undo" = "Rückgängig";
+"board_workspace.home" = "Startseite";
+"board_workspace.exit_library" = "Bibliothek";
+
+

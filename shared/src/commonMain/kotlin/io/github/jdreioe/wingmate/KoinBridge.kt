@@ -2,15 +2,19 @@ package io.github.jdreioe.wingmate
 
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
+import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.di.appModule
 import io.github.jdreioe.wingmate.initKoin
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
+import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -115,6 +119,13 @@ class KoinBridge : KoinComponent {
         get<ConfigRepository>().saveSpeechConfig(config)
     }
 
+    suspend fun saveAzureSpeechConfig(endpoint: String, subscriptionKey: String) {
+        get<ConfigRepository>().saveSpeechConfig(SpeechServiceConfig(endpoint.trim(), subscriptionKey.trim()))
+        val settingsUseCase: SettingsUseCase = get()
+        val settings = runCatching { settingsUseCase.get() }.getOrDefault(Settings())
+        settingsUseCase.update(settings.copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE))
+    }
+
     // Swift-friendly bridge to update phrase recording path
     fun updatePhraseRecording(phraseId: String, recordingPath: String?) {
         try {
@@ -123,6 +134,15 @@ class KoinBridge : KoinComponent {
             logger.warn(t) { "updatePhraseRecording() failed; swallowing to avoid Swift bridge crash" }
         }
     }
+
+    // --- BoardSet helpers ---
+    suspend fun listBoardSets(): List<ObfBoardSet> = get<BoardSetUseCase>().listBoardSets()
+    suspend fun getBoardSet(id: String): ObfBoardSet? = get<BoardSetUseCase>().getBoardSet(id)
+    suspend fun deleteBoardSet(id: String) { get<BoardSetUseCase>().deleteBoardSet(id) }
+    suspend fun duplicateBoardSet(id: String): ObfBoardSet? = get<BoardSetUseCase>().duplicateBoardSet(id)
+    suspend fun toggleBoardSetLocked(id: String): ObfBoardSet? = get<BoardSetUseCase>().toggleLocked(id)
+    suspend fun createBoardSet(name: String, rows: Int, columns: Int): ObfBoardSet = get<BoardSetUseCase>().createBoardSet(name, rows, columns)
+    suspend fun exportBoardSetAsObz(id: String): ByteArray? = get<BoardSetUseCase>().exportBoardSetAsObz(id)
 
     companion object {
         private var started: Boolean = false
