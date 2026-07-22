@@ -77,7 +77,7 @@ class KoinBridge : KoinComponent {
         val settingsUseCase: SettingsUseCase = get()
         val current = settingsUseCase.get()
         val candidate = voice.selectedLanguage
-            ?.takeIf { it.isNotEmpty() }
+            .takeIf { it.isNotEmpty() }
             ?: voice.primaryLanguage?.takeIf { it.isNotEmpty() }
             ?: current.primaryLanguage
         if (candidate != current.primaryLanguage) {
@@ -123,7 +123,10 @@ class KoinBridge : KoinComponent {
     suspend fun updateDwellToSelectMillis(millis: Long) = updateSettings { it.copy(dwellToSelectMillis = millis.coerceIn(0, 5_000)) }
     suspend fun updateSelectionSoundEnabled(enabled: Boolean) = updateSettings { it.copy(selectionSoundEnabled = enabled) }
     suspend fun updateAuditoryFishingEnabled(enabled: Boolean) = updateSettings { it.copy(auditoryFishingEnabled = enabled) }
-    suspend fun updateUsageLoggingEnabled(enabled: Boolean) = updateSettings { it.copy(usageLoggingEnabled = enabled) }
+    suspend fun updateUsageLoggingEnabled(enabled: Boolean) {
+        updateSettings { it.copy(usageLoggingEnabled = enabled) }
+        runCatching { get<io.github.jdreioe.wingmate.domain.AacLogger>().setEnabled(enabled) }
+    }
     suspend fun updateFeatureUsageReportingEnabled(enabled: Boolean) {
         updateSettings { it.copy(featureUsageReportingEnabled = enabled) }
         runCatching { get<io.github.jdreioe.wingmate.application.FeatureUsageReporter>().setEnabled(enabled) }
@@ -195,6 +198,7 @@ class KoinBridge : KoinComponent {
     suspend fun deleteBoardSet(id: String) { get<BoardSetUseCase>().deleteBoardSet(id) }
     suspend fun duplicateBoardSet(id: String): ObfBoardSet? = get<BoardSetUseCase>().duplicateBoardSet(id)
     suspend fun toggleBoardSetLocked(id: String): ObfBoardSet? = get<BoardSetUseCase>().toggleLocked(id)
+    suspend fun touchBoardSet(id: String): ObfBoardSet? = get<BoardSetUseCase>().touchBoardSet(id)
     suspend fun createBoardSet(name: String, rows: Int, columns: Int): ObfBoardSet = get<BoardSetUseCase>().createBoardSet(name, rows, columns)
     suspend fun createBoard(boardSetId: String, name: String, rows: Int, columns: Int): ObfBoard? =
         get<BoardSetUseCase>().createBoard(boardSetId, name, rows, columns)

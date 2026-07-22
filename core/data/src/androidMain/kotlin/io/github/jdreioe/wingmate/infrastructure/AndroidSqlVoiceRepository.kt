@@ -10,21 +10,21 @@ import kotlinx.serialization.json.Json
 
 class AndroidSqlVoiceRepository(private val context: Context) : VoiceRepository {
     private val helper by lazy { AndroidSqlOpenHelper(context) }
-    private val json = Json { prettyPrint = true }
+    private val json = Json { ignoreUnknownKeys = true }
 
     override suspend fun getVoices(): List<Voice> = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
         val cursor = db.query("voice_catalog", arrayOf("list"), "id = ?", arrayOf("1"), null, null, null)
         val list = if (cursor.moveToFirst()) {
             val text = cursor.getString(cursor.getColumnIndexOrThrow("list"))
-            runCatching { Json { ignoreUnknownKeys = true }.decodeFromString(ListSerializer(Voice.serializer()), text) }.getOrNull() ?: emptyList()
+            runCatching { json.decodeFromString(ListSerializer(Voice.serializer()), text) }.getOrNull() ?: emptyList()
         } else emptyList()
         cursor.close()
         list
     }
 
     override suspend fun saveVoices(list: List<Voice>) = withContext(Dispatchers.IO) {
-        val jsonList = Json { prettyPrint = false }.encodeToString(ListSerializer(Voice.serializer()), list)
+        val jsonList = json.encodeToString(ListSerializer(Voice.serializer()), list)
         val db = helper.writableDatabase
         db.execSQL("INSERT OR REPLACE INTO voice_catalog (id, list) VALUES (1, ?)", arrayOf(jsonList))
     }

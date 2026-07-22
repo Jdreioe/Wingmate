@@ -32,6 +32,7 @@ import io.github.jdreioe.wingmate.infrastructure.AndroidSqlVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSaidTextRepository
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
+import io.github.jdreioe.wingmate.infrastructure.AndroidSystemVoiceProvider
 import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import io.github.jdreioe.wingmate.platform.AndroidAudioClipboard
@@ -52,7 +53,7 @@ fun overrideAndroidSpeechService(context: Context, aptabaseAppKey: String) {
             single<Context> { context }
             singleOf(::AndroidSpeechService) { bind<SpeechService>() }
             singleOf(::AndroidPhraseRecordingService) { bind<PhraseRecordingService>() }
-            singleOf(::SystemVoiceProvider)
+            singleOf(::AndroidSystemVoiceProvider) { bind<SystemVoiceProvider>() }
             // Prefer SQLite-backed repositories on Android for parity with desktop
             singleOf(::AndroidSqlConfigRepository) { bind<ConfigRepository>() }
             // Audio clipboard support

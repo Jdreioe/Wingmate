@@ -1,12 +1,8 @@
 package io.github.jdreioe.wingmate.domain.obf
 
-import kotlinx.serialization.EncodeDefault
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
-
-@OptIn(ExperimentalSerializationApi::class)
 
 @Serializable
 data class ObfBoard(
@@ -25,7 +21,6 @@ data class ObfBoard(
     val sounds: List<ObfSound> = emptyList(),
     val strings: Map<String, Map<String, String>> = emptyMap(),
     val license: ObfLicense? = null,
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val extensions: Map<String, JsonElement> = emptyMap()
 ) {
     val isAbsoluteLayout: Boolean
@@ -57,7 +52,6 @@ data class ObfButton(
     val action: String? = null,
     val actions: List<String> = emptyList(),
     val hidden: Boolean = false,
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val extensions: Map<String, JsonElement> = emptyMap()
 ) {
     fun resolvedActions(): List<String> =
@@ -85,7 +79,6 @@ data class ObfImage(
     val dataUrl: String? = null,
     val symbol: ObfSymbol? = null,
     val license: ObfLicense? = null,
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val extensions: Map<String, JsonElement> = emptyMap()
 )
 
@@ -108,7 +101,6 @@ data class ObfSound(
     @SerialName("data_url")
     val dataUrl: String? = null,
     val license: ObfLicense? = null,
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val extensions: Map<String, JsonElement> = emptyMap()
 )
 
@@ -120,7 +112,6 @@ data class ObfLoadBoard(
     val path: String? = null,
     @SerialName("data_url")
     val dataUrl: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val extensions: Map<String, JsonElement> = emptyMap()
 )
 
@@ -137,7 +128,6 @@ data class ObfLicense(
     val authorUrl: String? = null,
     @SerialName("author_email")
     val authorEmail: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val extensions: Map<String, JsonElement> = emptyMap()
 )
 
@@ -146,7 +136,6 @@ data class ObfManifest(
     val format: String,
     val root: String,
     val paths: ObfManifestPaths,
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val extensions: Map<String, JsonElement> = emptyMap()
 )
 
@@ -155,6 +144,5 @@ data class ObfManifestPaths(
     val boards: Map<String, String> = emptyMap(),
     val images: Map<String, String> = emptyMap(),
     val sounds: Map<String, String> = emptyMap(),
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val extensions: Map<String, JsonElement> = emptyMap()
 )

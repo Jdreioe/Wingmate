@@ -103,7 +103,7 @@ class ObzExporter(
             var obj = mergeExtensions(raw, button.extensions)
             val loadBoard = button.loadBoard
             val rawLoadBoard = obj["load_board"] as? JsonObject
-            if (loadBoard != null && rawLoadBoard != null && loadBoard.extensions.isNotEmpty()) {
+            if (loadBoard != null && rawLoadBoard != null) {
                 obj = JsonObject(
                     obj.toMap() + ("load_board" to mergeExtensions(rawLoadBoard, loadBoard.extensions))
                 )
@@ -114,7 +114,7 @@ class ObzExporter(
             var obj = mergeExtensions(raw, image.extensions)
             val license = image.license
             val rawLicense = obj["license"] as? JsonObject
-            if (license != null && rawLicense != null && license.extensions.isNotEmpty()) {
+            if (license != null && rawLicense != null) {
                 obj = JsonObject(
                     obj.toMap() + ("license" to mergeExtensions(rawLicense, license.extensions))
                 )
@@ -125,7 +125,7 @@ class ObzExporter(
             var obj = mergeExtensions(raw, sound.extensions)
             val license = sound.license
             val rawLicense = obj["license"] as? JsonObject
-            if (license != null && rawLicense != null && license.extensions.isNotEmpty()) {
+            if (license != null && rawLicense != null) {
                 obj = JsonObject(
                     obj.toMap() + ("license" to mergeExtensions(rawLicense, license.extensions))
                 )
@@ -133,7 +133,7 @@ class ObzExporter(
             obj
         }
         val boardLicense = board.license
-        if (boardLicense != null && boardLicense.extensions.isNotEmpty()) {
+        if (boardLicense != null) {
             val rawLicense = result["license"] as? JsonObject
             if (rawLicense != null) {
                 result = JsonObject(
@@ -147,13 +147,11 @@ class ObzExporter(
     private fun serializeWithExtensions(serialized: JsonElement, manifest: ObfManifest): JsonElement {
         if (serialized !is JsonObject) return serialized
         var result = mergeExtensions(serialized, manifest.extensions)
-        if (manifest.paths.extensions.isNotEmpty()) {
-            val rawPaths = result["paths"] as? JsonObject
-            if (rawPaths != null) {
-                result = JsonObject(
-                    result.toMap() + ("paths" to mergeExtensions(rawPaths, manifest.paths.extensions))
-                )
-            }
+        val rawPaths = result["paths"] as? JsonObject
+        if (rawPaths != null) {
+            result = JsonObject(
+                result.toMap() + ("paths" to mergeExtensions(rawPaths, manifest.paths.extensions))
+            )
         }
         return result
     }
@@ -185,9 +183,14 @@ class ObzExporter(
      * known keys such as `id` or `format`. Only `ext_*` keys are emitted.
      */
     private fun mergeExtensions(base: JsonObject, extensions: Map<String, JsonElement>): JsonObject {
-        if (extensions.isEmpty()) return base
+        val publicBase = JsonObject(base.toMap() - INTERNAL_EXTENSIONS_KEY)
+        if (extensions.isEmpty()) return publicBase
         val safeExt = extensions.filterKeys { it.startsWith("ext_") }
-        if (safeExt.isEmpty()) return base
-        return JsonObject(safeExt + base.toMap())
+        if (safeExt.isEmpty()) return publicBase
+        return JsonObject(safeExt + publicBase.toMap())
+    }
+
+    private companion object {
+        const val INTERNAL_EXTENSIONS_KEY = "extensions"
     }
 }

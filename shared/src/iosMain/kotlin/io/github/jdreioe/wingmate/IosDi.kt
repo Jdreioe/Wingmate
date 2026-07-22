@@ -26,7 +26,9 @@ import io.github.jdreioe.wingmate.infrastructure.IosShareService
 import io.github.jdreioe.wingmate.infrastructure.IosSoundPlayer
 import io.github.jdreioe.wingmate.infrastructure.IosSpeechService
 import io.github.jdreioe.wingmate.infrastructure.IosVoiceRepository
+import io.github.jdreioe.wingmate.infrastructure.IosSystemVoiceProvider
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
+import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
 import io.github.jdreioe.wingmate.platform.AudioClipboard
 import io.github.jdreioe.wingmate.platform.ShareService
 import io.ktor.serialization.kotlinx.json.json
@@ -52,6 +54,7 @@ fun overrideIosSpeechService() {
             singleOf(::IosSettingsRepository) { bind<SettingsRepository>() }
             singleOf(::IosConfigRepository) { bind<ConfigRepository>() }
             singleOf(::IosVoiceRepository) { bind<VoiceRepository>() }
+            singleOf(::IosSystemVoiceProvider) { bind<SystemVoiceProvider>() }
             singleOf(::IosSaidTextRepository) { bind<SaidTextRepository>() }
             // Persist phrases and categories on iOS as well
             singleOf(::IosPhraseRepository) { bind<PhraseRepository>() }

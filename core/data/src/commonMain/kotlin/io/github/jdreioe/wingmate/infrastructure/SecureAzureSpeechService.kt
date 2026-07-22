@@ -181,7 +181,7 @@ class SecureAzureSpeechService(
      * Platform-specific audio playback.
      * Override this in platform implementations.
      */
-    protected open suspend fun playAudio(audioBytes: ByteArray) {
+    private suspend fun playAudio(audioBytes: ByteArray) {
         // Default implementation logs a warning
         // Platform implementations should override this
         logger.warn { "playAudio not implemented - ${audioBytes.size} bytes received" }

@@ -87,9 +87,9 @@ class InMemorySaidTextRepository : SaidTextRepository {
         delay(10)
         items.clear()
     }
-    override suspend fun addAll(list: List<SaidText>) {
+    override suspend fun addAll(items: List<SaidText>) {
         delay(10)
-        items.addAll(list)
+        this.items.addAll(items)
     }
 }
 

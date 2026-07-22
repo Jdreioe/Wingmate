@@ -1414,6 +1414,7 @@ final class IosViewModel: ObservableObject {
 
             selectedBoard = updatedBoard
             await refreshBoardCells()
+            if let setId = selectedBoardSetId { _ = try? await bridge.touchBoardSet(id: setId) }
             touchSelectedBoardSet(statusKey: "boardset.status.cell_saved")
         } catch {
             boardStatusMessage = NSLocalizedString("boardset.error.cell_update_failed", comment: "")
@@ -1442,6 +1443,7 @@ final class IosViewModel: ObservableObject {
 
             selectedBoard = updatedBoard
             await refreshBoardCells()
+            if let setId = selectedBoardSetId { _ = try? await bridge.touchBoardSet(id: setId) }
             touchSelectedBoardSet(statusKey: "boardset.status.cell_cleared")
         } catch {
             boardStatusMessage = NSLocalizedString("boardset.error.cell_clear_failed", comment: "")
@@ -1476,6 +1478,7 @@ final class IosViewModel: ObservableObject {
         do {
             let saved = try await bridge.saveBoard(board: board)
             if saved.boolValue {
+                if let setId = selectedBoardSetId { _ = try? await bridge.touchBoardSet(id: setId) }
                 touchSelectedBoardSet(statusKey: "boardset.status.saved")
             } else {
                 boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")

@@ -10,7 +10,7 @@ import java.util.*
  * JVM implementation of system TTS voice provider
  * Uses system TTS commands like espeak, festival, or say (macOS)
  */
-actual class SystemVoiceProvider actual constructor() {
+class JvmSystemVoiceProvider : SystemVoiceProvider {
     
     private fun isCommandAvailable(command: String): Boolean {
         return try {
@@ -26,7 +26,7 @@ actual class SystemVoiceProvider actual constructor() {
     /**
      * Get available system TTS voices
      */
-    actual suspend fun getSystemVoices(): List<Voice> = withContext(Dispatchers.IO) {
+    override suspend fun getSystemVoices(): List<Voice> = withContext(Dispatchers.IO) {
         val voices = mutableListOf<Voice>()
         
         // Try espeak or espeak-ng (Linux)
@@ -53,7 +53,7 @@ actual class SystemVoiceProvider actual constructor() {
                         voices.add(
                             Voice(
                                 name = "$espeakCommand-$voiceName",
-                                displayName = "${espeakCommand.capitalize()} $voiceName",
+                                displayName = "${espeakCommand.replaceFirstChar(Char::uppercaseChar)} $voiceName",
                                 primaryLanguage = lang,
                                 supportedLanguages = listOf(lang),
                                 gender = "Unknown"
@@ -122,7 +122,7 @@ actual class SystemVoiceProvider actual constructor() {
     /**
      * Get default system voice
      */
-    actual fun getDefaultSystemVoice(): Voice {
+    override fun getDefaultSystemVoice(): Voice {
         val locale = Locale.getDefault()
         val lang = locale.toLanguageTag()
         

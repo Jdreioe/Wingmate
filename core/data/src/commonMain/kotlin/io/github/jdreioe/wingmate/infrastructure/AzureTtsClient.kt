@@ -257,21 +257,12 @@ object AzureTtsClient {
 
     private fun resolveVoiceParams(voice: Voice): VoiceParams {
         val voiceName = voice.name ?: "en-US-JennyNeural"
-        val baseLang = when {
-            !voice.selectedLanguage.isNullOrBlank() -> voice.selectedLanguage!!
-            !voice.primaryLanguage.isNullOrBlank() -> voice.primaryLanguage!!
-            else -> "en-US"
-        }
-        val pitch = when {
-            voice.pitchForSSML != null -> voice.pitchForSSML!!
-            voice.pitch != null -> convertPitchToSSML(voice.pitch!!)
-            else -> "medium"
-        }
-        val rate = when {
-            voice.rateForSSML != null -> voice.rateForSSML!!
-            voice.rate != null -> convertRateToSSML(voice.rate!!)
-            else -> "medium"
-        }
+        val baseLang =
+            voice.selectedLanguage.takeIf(String::isNotBlank)
+                ?: voice.primaryLanguage?.takeIf(String::isNotBlank)
+                ?: "en-US"
+        val pitch = voice.pitchForSSML ?: voice.pitch?.let(::convertPitchToSSML) ?: "medium"
+        val rate = voice.rateForSSML ?: voice.rate?.let(::convertRateToSSML) ?: "medium"
         logger.debug { "resolveVoiceParams: voiceName=${voice.name} baseLang=$baseLang pitch=$pitch rate=$rate" }
         return VoiceParams(voiceName, baseLang, pitch, rate)
     }

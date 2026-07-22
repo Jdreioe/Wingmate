@@ -11,12 +11,12 @@ import platform.Foundation.localeIdentifier
  * iOS implementation of system TTS voice provider using AVSpeechSynthesis
  */
 @OptIn(ExperimentalForeignApi::class)
-actual class SystemVoiceProvider actual constructor() {
+class IosSystemVoiceProvider : SystemVoiceProvider {
     
     /**
      * Get available system TTS voices from AVSpeechSynthesis
      */
-    actual suspend fun getSystemVoices(): List<Voice> {
+    override suspend fun getSystemVoices(): List<Voice> {
         val voices = AVSpeechSynthesisVoice.speechVoices()
         return voices.mapNotNull { voiceObj ->
             val voice = voiceObj as? AVSpeechSynthesisVoice ?: return@mapNotNull null
@@ -37,7 +37,7 @@ actual class SystemVoiceProvider actual constructor() {
     /**
      * Get default system voice based on current locale
      */
-    actual fun getDefaultSystemVoice(): Voice {
+    override fun getDefaultSystemVoice(): Voice {
         val currentLocale = NSLocale.currentLocale
         val languageTag = currentLocale.localeIdentifier
         

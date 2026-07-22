@@ -13,7 +13,7 @@ import kotlin.coroutines.resume
 /**
  * Android implementation of system TTS voice provider
  */
-actual class SystemVoiceProvider actual constructor() {
+class AndroidSystemVoiceProvider : SystemVoiceProvider {
     
     private fun getContext(): Context {
         // Get context from Koin or other DI system
@@ -24,7 +24,7 @@ actual class SystemVoiceProvider actual constructor() {
     /**
      * Get available system TTS voices
      */
-    actual suspend fun getSystemVoices(): List<Voice> = withContext(Dispatchers.Main) {
+    override suspend fun getSystemVoices(): List<Voice> = withContext(Dispatchers.Main) {
         val context = getContext()
         val bootstrapTts = createInitializedTts(context) ?: return@withContext listOf(getDefaultSystemVoice())
 
@@ -33,7 +33,7 @@ actual class SystemVoiceProvider actual constructor() {
             val defaultEnginePackage = runCatching { bootstrapTts.defaultEngine }.getOrNull()
             val orderedEngineInfos = engineInfos.sortedWith(compareByDescending<TextToSpeech.EngineInfo> {
                 it.name == defaultEnginePackage
-            }.thenBy { it.label?.toString().orEmpty() })
+            }.thenBy { it.label.orEmpty() })
 
             val discoveredVoices = mutableListOf<Voice>()
             for (engineInfo in orderedEngineInfos) {
@@ -93,14 +93,14 @@ actual class SystemVoiceProvider actual constructor() {
             }
 
             continuation.invokeOnCancellation {
-                tempTts?.shutdown()
+                tempTts.shutdown()
             }
         }
     }
 
     private fun AndroidVoice.toWingmateVoice(engineInfo: TextToSpeech.EngineInfo): Voice {
         val languageTag = locale?.toLanguageTag().orEmpty()
-        val engineLabel = engineInfo.label?.toString()?.takeIf { it.isNotBlank() } ?: engineInfo.name
+        val engineLabel = engineInfo.label?.takeIf { it.isNotBlank() } ?: engineInfo.name
         return Voice(
             name = AndroidTtsVoiceId.encode(engineInfo.name, name),
             displayName = "$engineLabel - $name",
@@ -123,7 +123,7 @@ actual class SystemVoiceProvider actual constructor() {
     /**
      * Get default system voice based on current locale
      */
-    actual fun getDefaultSystemVoice(): Voice {
+    override fun getDefaultSystemVoice(): Voice {
         val locale = Locale.getDefault()
         return Voice(
             name = "system-default",

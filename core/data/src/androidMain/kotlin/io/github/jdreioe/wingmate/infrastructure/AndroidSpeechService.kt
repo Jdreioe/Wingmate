@@ -127,7 +127,6 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
     private val pendingTtsUtterances = AtomicInteger(0)
     private val mediaSession: MediaSession by lazy {
         MediaSession(context, "WingmateSpeechSession").apply {
-            setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
             setCallback(object : MediaSession.Callback() {
                 override fun onPause() {
                     scope.launch { runCatching { pause() } }
@@ -379,12 +378,11 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 val koin = GlobalContext.getOrNull()
                 val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
                 val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
-                val effectiveLang = when {
-                    v.selectedLanguage.isNotBlank() -> v.selectedLanguage
-                    !uiSettings?.primaryLanguage.isNullOrBlank() -> uiSettings!!.primaryLanguage
-                    !v.primaryLanguage.isNullOrBlank() -> v.primaryLanguage
-                    else -> "en-US"
-                } ?: "en-US"
+                val effectiveLang =
+                    v.selectedLanguage.takeIf(String::isNotBlank)
+                        ?: uiSettings?.primaryLanguage?.takeIf(String::isNotBlank)
+                        ?: v.primaryLanguage?.takeIf(String::isNotBlank)
+                        ?: "en-US"
 
                 val vForSsml = v.copy(primaryLanguage = effectiveLang, selectedLanguage = effectiveLang)
                 
@@ -597,7 +595,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 // Stricter language matching
                 .filter { 
                     val itemLang = it.primaryLanguage ?: ""
-                    val voiceLang = v.selectedLanguage?.ifBlank { v.primaryLanguage } ?: v.primaryLanguage ?: ""
+                    val voiceLang = v.selectedLanguage.ifBlank { v.primaryLanguage.orEmpty() }
                     itemLang == voiceLang
                 }
                 // Stricter pitch/rate matching to avoid playing "normal" speed for "slow" request
@@ -634,7 +632,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                             audioFilePath = file.absolutePath,
                             createdAt = now,
                             position = 0,
-                            primaryLanguage = v.selectedLanguage?.ifBlank { v.primaryLanguage }
+                            primaryLanguage = v.selectedLanguage.takeIf(String::isNotBlank) ?: v.primaryLanguage
                         )
                     )
                 }
@@ -733,7 +731,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                         audioFilePath = audioPath,
                         createdAt = now,
                         position = 0,
-                        primaryLanguage = v.selectedLanguage?.ifBlank { v.primaryLanguage } ?: v.primaryLanguage
+                        primaryLanguage = v.selectedLanguage.takeIf(String::isNotBlank) ?: v.primaryLanguage
                     )
                 )
                 println("DEBUG: Recorded history for: $text")

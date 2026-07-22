@@ -30,7 +30,9 @@ import io.github.jdreioe.wingmate.infrastructure.DesktopSqlBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.DesktopSqlSaidTextRepository
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import io.github.jdreioe.wingmate.infrastructure.JvmImageCacher
+import io.github.jdreioe.wingmate.infrastructure.JvmSystemVoiceProvider
 import io.github.jdreioe.wingmate.infrastructure.PartnerWindowManager
+import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
 import io.github.jdreioe.wingmate.platform.AudioClipboard
 import io.github.jdreioe.wingmate.platform.DesktopAudioClipboard
 import io.github.jdreioe.wingmate.platform.DesktopFilePicker
@@ -66,6 +68,7 @@ fun overrideDesktopSpeechService() {
             singleOf(::DesktopSqlPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
             // Persist selected voice on desktop
             singleOf(::DesktopSqlVoiceRepository) { bind<VoiceRepository>() }
+            singleOf(::JvmSystemVoiceProvider) { bind<SystemVoiceProvider>() }
             // Persist said texts on desktop
             singleOf(::DesktopSqlSaidTextRepository) { bind<SaidTextRepository>() }
             // Share service for desktop (opens file in default handler)

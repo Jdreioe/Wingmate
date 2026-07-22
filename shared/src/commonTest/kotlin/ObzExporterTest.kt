@@ -7,7 +7,11 @@ import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -70,6 +74,7 @@ class ObzExporterTest {
         val manifestStr = manifestEntry.decodeToString()
         assertTrue(manifestStr.contains("\"format\""))
         assertTrue(manifestStr.contains("\"root\""))
+        assertFalse(json.parseToJsonElement(manifestStr).containsObjectKey("extensions"))
     }
 
     @Test
@@ -149,6 +154,7 @@ class ObzExporterTest {
         )
 
         val exported = exporter.serializeBoard(board)
+        assertFalse(json.parseToJsonElement(exported).containsObjectKey("extensions"))
         assertTrue(exported.contains("ext_speaker_url"))
         assertTrue(exported.contains("data_url"))
         assertTrue(exported.contains("ext_btn"))
@@ -178,6 +184,42 @@ class ObzExporterTest {
         assertEquals("fresh", reparsed.images.single().extensions["ext_img"]?.jsonPrimitive?.contentOrNull)
         assertEquals("http://example.com/snd.mp3?auth=1", reparsed.sounds.single().dataUrl)
         assertEquals("4", reparsed.sounds.single().extensions["ext_snd"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun exportRemovesEmptyInternalExtensionMapsAtEveryLevel() {
+        val board = ObfBoard(
+            format = "open-board-0.1",
+            id = "empty-extensions",
+            license = ObfLicense(type = "private"),
+            buttons = listOf(
+                ObfButton(id = "b1", loadBoard = ObfLoadBoard(id = "other"))
+            ),
+            images = listOf(ObfImage(id = "i1", license = ObfLicense(type = "private"))),
+            sounds = listOf(ObfSound(id = "s1", license = ObfLicense(type = "private")))
+        )
+
+        val exported = json.parseToJsonElement(exporter.serializeBoard(board))
+
+        assertFalse(exported.containsObjectKey("extensions"))
+    }
+
+    @Test
+    fun internalSerializationRetainsExtensionMaps() {
+        val board = rootBoard.copy(
+            extensions = mapOf("ext_internal" to JsonPrimitive("preserved"))
+        )
+
+        val stored = json.encodeToString(ObfBoard.serializer(), board)
+        val restored = json.decodeFromString(ObfBoard.serializer(), stored)
+
+        assertEquals("preserved", restored.extensions["ext_internal"]?.jsonPrimitive?.content)
+    }
+
+    private fun JsonElement.containsObjectKey(key: String): Boolean = when (this) {
+        is JsonObject -> key in this || values.any { it.containsObjectKey(key) }
+        is JsonArray -> any { it.containsObjectKey(key) }
+        else -> false
     }
 
     private fun extractEntry(zip: ByteArray, entryName: String): ByteArray? {
