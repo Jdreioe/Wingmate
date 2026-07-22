@@ -16,6 +16,9 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      - name: Set Android version code
+        run: echo "WINGMATE_VERSION_CODE=$((10000 + GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))" >> "$GITHUB_ENV"
+
       - name: Install Infisical CLI
         run: |
           set -o pipefail

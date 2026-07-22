@@ -192,7 +192,8 @@ android {
     if (versionPropsFile.exists()) {
         versionPropsFile.inputStream().use { versionProps.load(it) }
     }
-    val vCode = (versionProps.getProperty("versionCode") ?: "1").toInt()
+    val vCode = System.getenv("WINGMATE_VERSION_CODE")?.toIntOrNull()
+        ?: (versionProps.getProperty("versionCode") ?: "1").toInt()
     val vName = versionProps.getProperty("versionName") ?: "1.0"
 
     val openSymbolsSecret = providers.provider { resolveOpenSymbolsSecretFromInfisical() }
@@ -254,13 +255,6 @@ android {
             println("Version code incremented to ${currentCode + 1}")
         }
     }
-
-    tasks.configureEach {
-        if (name == "bundleRelease" || name == "bundleReleaseStandard" || name == "bundleReleaseAab") {
-            dependsOn("incrementVersionCode")
-        }
-    }
-
 
     buildFeatures {
         compose = true
