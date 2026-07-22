@@ -10,6 +10,8 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.github.oshai.kotlinlogging.KotlinLogging
+import nl.adaptivity.xmlutil.EventType
+import nl.adaptivity.xmlutil.xmlStreaming
 
 private val logger = KotlinLogging.logger {}
 /**
@@ -125,6 +127,9 @@ object AzureTtsClient {
      */
     fun generateSsml(text: String, voice: Voice, dictionary: List<io.github.jdreioe.wingmate.domain.PronunciationEntry> = emptyList()): String {
         val params = resolveVoiceParams(voice)
+        if (voice.mathMode) {
+            return buildMathSsmlDocument(params, text)
+        }
         val normalized = SpeechTextProcessor.normalizeShorthandSsml(text)
         val processed = applyPronunciationDictionary(normalized, dictionary)
         val escaped = escapeForSsml(processed)
@@ -248,6 +253,13 @@ object AzureTtsClient {
         return result.toString()
     }
 
+    private fun escapeXmlText(text: String): String = text
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&apos;")
+
     private data class VoiceParams(
         val voiceName: String,
         val baseLang: String,
@@ -284,6 +296,255 @@ object AzureTtsClient {
                         </speak>
                 """.trimIndent()
     }
+
+    private fun buildMathSsmlDocument(params: VoiceParams, expression: String): String = """
+        <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="${params.baseLang}">
+            <voice name="${params.voiceName}">
+                <lang xml:lang="${params.baseLang}">
+                    ${mathMlElement(expression)}
+                </lang>
+            </voice>
+        </speak>
+    """.trimIndent()
+
+    /**
+     * Preserves native MathML 2/3 documents and fragments verbatim after checking that they are
+     * well-formed and contained by one MathML root. Plain calculator text uses the shorthand parser.
+     */
+    private fun mathMlElement(input: String): String {
+        val trimmed = input.trim()
+        if (trimmed.startsWith("<")) {
+            val candidate = if (trimmed.startsWith("<math", ignoreCase = true)) {
+                trimmed
+            } else {
+                "<math xmlns=\"$MATHML_NAMESPACE\">$trimmed</math>"
+            }
+            if (isContainedMathMl(candidate)) return candidate
+        }
+
+        return "<math xmlns=\"$MATHML_NAMESPACE\">${PlainTextMathMlParser(input).parse()}</math>"
+    }
+
+    /** Rejects declarations and multiple roots so MathML cannot escape into the surrounding SSML. */
+    private fun isContainedMathMl(candidate: String): Boolean = runCatching {
+        val reader = xmlStreaming.newGenericReader(candidate)
+        var rootSeen = false
+        var rootCompleted = false
+        var openElements = 0
+        try {
+            while (reader.hasNext()) {
+                when (reader.next()) {
+                    EventType.START_ELEMENT -> {
+                        if (openElements == 0) {
+                            if (rootSeen || rootCompleted || reader.localName != "math") return@runCatching false
+                            if (reader.namespaceURI.isNotEmpty() && reader.namespaceURI != MATHML_NAMESPACE) {
+                                return@runCatching false
+                            }
+                            rootSeen = true
+                        }
+                        openElements++
+                    }
+                    EventType.END_ELEMENT -> {
+                        openElements--
+                        if (openElements < 0) return@runCatching false
+                        if (openElements == 0) rootCompleted = true
+                    }
+                    EventType.TEXT,
+                    EventType.CDSECT,
+                    EventType.IGNORABLE_WHITESPACE -> {
+                        if (openElements == 0 && reader.text.isNotBlank()) return@runCatching false
+                    }
+                    EventType.DOCDECL,
+                    EventType.PROCESSING_INSTRUCTION -> return@runCatching false
+                    else -> Unit
+                }
+            }
+        } finally {
+            reader.close()
+        }
+        rootSeen && rootCompleted && openElements == 0
+    }.getOrDefault(false)
+
+    /** Converts calculator/keyboard input into safe presentation MathML for Azure Speech. */
+    private class PlainTextMathMlParser(private val expression: String) {
+        private var index = 0
+
+        fun parse(): String = parseSequence(stopAtClosingParenthesis = false).joinToString("")
+
+        private fun parseSequence(stopAtClosingParenthesis: Boolean): MutableList<String> {
+            val nodes = mutableListOf<String>()
+            while (index < expression.length) {
+                val character = expression[index]
+                when {
+                    character.isWhitespace() -> index++
+                    character == ')' && stopAtClosingParenthesis -> break
+                    character == '/' -> {
+                        index++
+                        val denominator = parseScriptedAtom()
+                        if (nodes.isNotEmpty() && denominator != null) {
+                            nodes[nodes.lastIndex] = "<mfrac>${nodes.last()}$denominator</mfrac>"
+                        } else {
+                            nodes += operatorNode("/")
+                            if (denominator != null) nodes += denominator
+                        }
+                    }
+                    character == '^' -> {
+                        index++
+                        val exponent = parseExponent()
+                        if (nodes.isNotEmpty() && exponent != null) {
+                            nodes[nodes.lastIndex] = "<msup>${nodes.last()}$exponent</msup>"
+                        } else {
+                            nodes += operatorNode("^")
+                            if (exponent != null) nodes += exponent
+                        }
+                    }
+                    character in SUPERSCRIPT_DIGITS -> {
+                        val exponent = readSuperscriptNumber()
+                        val exponentNode = numberNode(exponent)
+                        if (nodes.isNotEmpty()) {
+                            nodes[nodes.lastIndex] = "<msup>${nodes.last()}$exponentNode</msup>"
+                        } else {
+                            nodes += exponentNode
+                        }
+                    }
+                    else -> {
+                        val atom = parseAtom()
+                        if (nodes.lastOrNull()?.let(::isOperandNode) == true && isOperandNode(atom)) {
+                            nodes += operatorNode(INVISIBLE_TIMES)
+                        }
+                        nodes += atom
+                    }
+                }
+            }
+            return nodes
+        }
+
+        private fun parseScriptedAtom(): String? {
+            skipWhitespace()
+            if (index >= expression.length || expression[index] == ')') return null
+
+            var node = parseAtom()
+            var readingScripts = true
+            while (readingScripts && index < expression.length) {
+                when (expression[index]) {
+                    '^' -> {
+                        index++
+                        val exponent = parseExponent()
+                        if (exponent != null) node = "<msup>$node$exponent</msup>"
+                    }
+                    in SUPERSCRIPT_DIGITS -> {
+                        node = "<msup>$node${numberNode(readSuperscriptNumber())}</msup>"
+                    }
+                    else -> readingScripts = false
+                }
+            }
+            return node
+        }
+
+        private fun parseExponent(): String? {
+            skipWhitespace()
+            if (index >= expression.length) return null
+            if (expression[index] == '(') {
+                index++
+                val content = parseSequence(stopAtClosingParenthesis = true).joinToString("")
+                if (index < expression.length && expression[index] == ')') index++
+                return "<mrow>$content</mrow>"
+            }
+            return parseAtom()
+        }
+
+        private fun parseAtom(): String {
+            val character = expression[index]
+            return when {
+                character.isDigit() || (character == '.' && expression.getOrNull(index + 1)?.isDigit() == true) -> {
+                    val start = index
+                    var decimalPointSeen = false
+                    while (index < expression.length) {
+                        val next = expression[index]
+                        if (next.isDigit()) {
+                            index++
+                        } else if (next == '.' && !decimalPointSeen) {
+                            decimalPointSeen = true
+                            index++
+                        } else {
+                            break
+                        }
+                    }
+                    numberNode(expression.substring(start, index))
+                }
+                character.isLetter() || character == 'π' -> {
+                    val start = index++
+                    while (index < expression.length && expression[index].isLetter()) index++
+                    val identifier = identifierNode(expression.substring(start, index))
+                    skipWhitespace()
+                    if (index < expression.length && expression[index] == '(') {
+                        index++
+                        val arguments = parseSequence(stopAtClosingParenthesis = true).joinToString("")
+                        if (index < expression.length && expression[index] == ')') index++
+                        "<mrow>$identifier${operatorNode(FUNCTION_APPLICATION)}<mfenced>$arguments</mfenced></mrow>"
+                    } else {
+                        identifier
+                    }
+                }
+                character == '√' -> {
+                    index++
+                    skipWhitespace()
+                    if (index < expression.length && expression[index] == '(') {
+                        index++
+                        val content = parseSequence(stopAtClosingParenthesis = true).joinToString("")
+                        if (index < expression.length && expression[index] == ')') index++
+                        "<msqrt>$content</msqrt>"
+                    } else if (index < expression.length) {
+                        "<msqrt>${parseAtom()}</msqrt>"
+                    } else {
+                        operatorNode("√")
+                    }
+                }
+                character == '(' -> {
+                    index++
+                    val content = parseSequence(stopAtClosingParenthesis = true).joinToString("")
+                    if (index < expression.length && expression[index] == ')') index++
+                    "<mrow>${operatorNode("(")}$content${operatorNode(")")}</mrow>"
+                }
+                else -> {
+                    index++
+                    operatorNode(character.toString())
+                }
+            }
+        }
+
+        private fun readSuperscriptNumber(): String = buildString {
+            while (index < expression.length) {
+                val digit = SUPERSCRIPT_DIGIT_VALUES[expression[index]] ?: break
+                append(digit)
+                index++
+            }
+        }
+
+        private fun skipWhitespace() {
+            while (index < expression.length && expression[index].isWhitespace()) index++
+        }
+
+        private fun numberNode(value: String): String = "<mn>${escapeXmlText(value)}</mn>"
+        private fun identifierNode(value: String): String = "<mi>${escapeXmlText(value)}</mi>"
+        private fun operatorNode(value: String): String {
+            val normalized = if (value == "*") "×" else value
+            return "<mo>${escapeXmlText(normalized)}</mo>"
+        }
+
+        private fun isOperandNode(node: String): Boolean = !node.startsWith("<mo>")
+
+        companion object {
+            private const val FUNCTION_APPLICATION = "⁡"
+            private const val INVISIBLE_TIMES = "⁢"
+            private const val SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
+            private val SUPERSCRIPT_DIGIT_VALUES = SUPERSCRIPT_DIGITS
+                .mapIndexed { digit, character -> character to digit }
+                .toMap()
+        }
+    }
+
+    private const val MATHML_NAMESPACE = "http://www.w3.org/1998/Math/MathML"
     
     // ========================================================================
     // TOKEN-BASED AUTHENTICATION (Secure Backend)

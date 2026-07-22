@@ -46,6 +46,55 @@ class BoardSetSpeechCacheUseCaseTest {
         assertEquals("en-US-AvaNeural", speech.cached.single().second?.name)
     }
 
+    @Test
+    fun doesNotGenerateTtsForAFieldWithRecordedAudio() = runBlocking {
+        val settings = InMemorySettingsRepository().apply {
+            update(Settings(ttsEngine = TtsEngine.AZURE_USER_RESOURCE))
+        }
+        val speech = RecordingSpeechService()
+        val cache = BoardSetSpeechCacheUseCase(
+            InMemoryBoardSetRepository(),
+            InMemoryBoardRepository(),
+            settings,
+            InMemoryVoiceRepository(),
+            speech
+        )
+
+        cache.cacheField(
+            ObfBoard(format = "open-board-0.1", id = "home"),
+            ObfButton(id = "hello", label = "Hello", soundId = "recorded-hello")
+        )
+
+        assertTrue(speech.cached.isEmpty())
+    }
+
+    @Test
+    fun cachesMathFieldsWithMathModeAndTheirSelectedLanguage() = runBlocking {
+        val settings = InMemorySettingsRepository().apply {
+            update(Settings(ttsEngine = TtsEngine.AZURE_USER_RESOURCE, primaryLanguage = "en-US"))
+        }
+        val voices = InMemoryVoiceRepository().apply {
+            saveSelected(Voice(name = "en-US-AvaMultilingualNeural", selectedLanguage = "en-US"))
+        }
+        val speech = RecordingSpeechService()
+        val cache = BoardSetSpeechCacheUseCase(
+            InMemoryBoardSetRepository(),
+            InMemoryBoardRepository(),
+            settings,
+            voices,
+            speech
+        )
+
+        cache.cacheField(
+            ObfBoard(format = "open-board-0.1", id = "home"),
+            ObfButton(id = "equation", label = "x + 2", locale = "da-DK").withMathMode(true)
+        )
+
+        val cachedVoice = speech.cached.single().second
+        assertEquals("da-DK", cachedVoice?.selectedLanguage)
+        assertTrue(cachedVoice?.mathMode == true)
+    }
+
     private class RecordingSpeechService : SpeechService {
         val cached = mutableListOf<Pair<String, Voice?>>()
         override suspend fun cacheSpeech(text: String, voice: Voice?, pitch: Double?, rate: Double?): Boolean {

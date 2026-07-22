@@ -13,12 +13,15 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,20 +30,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+import io.github.jdreioe.wingmate.domain.PhraseRecordingService
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.getKoin
 import wingmatekmp.composeapp.generated.resources.*
 
 internal data class FieldLanguageOption(val tag: String, val label: String)
 internal data class FieldSpanOption(val rows: Int, val columns: Int)
+internal enum class BoardSetTemplate { Blank, Calculator }
 
 @Composable
 internal fun CreateBoardSetDialog(
     onDismiss: () -> Unit,
-    onCreate: (name: String, rows: Int, columns: Int) -> Unit
+    onCreate: (name: String, rows: Int, columns: Int, template: BoardSetTemplate) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var rowsText by remember { mutableStateOf("4") }
     var columnsText by remember { mutableStateOf("8") }
+    var template by remember { mutableStateOf(BoardSetTemplate.Blank) }
+    val calculatorName = stringResource(Res.string.calculator_default_name)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -53,7 +62,23 @@ internal fun CreateBoardSetDialog(
                     label = { Text(stringResource(Res.string.board_dialog_set_name)) },
                     singleLine = true
                 )
+                Text(stringResource(Res.string.board_dialog_template), style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = template == BoardSetTemplate.Blank,
+                        onClick = { template = BoardSetTemplate.Blank },
+                        label = { Text(stringResource(Res.string.board_dialog_template_blank)) }
+                    )
+                    FilterChip(
+                        selected = template == BoardSetTemplate.Calculator,
+                        onClick = {
+                            template = BoardSetTemplate.Calculator
+                            if (name.isBlank()) name = calculatorName
+                        },
+                        label = { Text(stringResource(Res.string.board_dialog_template_calculator)) }
+                    )
+                }
+                if (template == BoardSetTemplate.Blank) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = rowsText,
                         onValueChange = { rowsText = it.filter(Char::isDigit) },
@@ -73,7 +98,7 @@ internal fun CreateBoardSetDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(name, rowsText.toIntOrNull() ?: 4, columnsText.toIntOrNull() ?: 8) },
+                onClick = { onCreate(name, rowsText.toIntOrNull() ?: 4, columnsText.toIntOrNull() ?: 8, template) },
                 enabled = name.isNotBlank()
             ) { Text(stringResource(Res.string.board_dialog_create)) }
         },
@@ -142,9 +167,11 @@ internal fun EditBoardCellDialog(
     initialLabel: String,
     initialVocalization: String,
     initialImageUrl: String,
+    initialRecordingPath: String? = null,
     initialBackgroundColor: String? = null,
     availableLanguages: List<FieldLanguageOption> = emptyList(),
     initialLanguage: String? = null,
+    initialMathMode: Boolean = false,
     availableBoards: List<ObfBoard> = emptyList(),
     initialLinkedBoardId: String? = null,
     availableSpans: List<FieldSpanOption> = listOf(FieldSpanOption(rows = 1, columns = 1)),
@@ -158,8 +185,10 @@ internal fun EditBoardCellDialog(
         label: String,
         vocalization: String?,
         imageUrl: String?,
+        recordingPath: String?,
         backgroundColor: String?,
         language: String?,
+        mathMode: Boolean,
         linkedBoardId: String?,
         rowSpan: Int,
         columnSpan: Int,
@@ -171,8 +200,12 @@ internal fun EditBoardCellDialog(
     var label by remember { mutableStateOf(initialLabel) }
     var vocalization by remember { mutableStateOf(initialVocalization) }
     var imageUrl by remember { mutableStateOf(initialImageUrl) }
+    var recordingPath by remember { mutableStateOf(initialRecordingPath.orEmpty()) }
+    var recordingInProgress by remember { mutableStateOf(false) }
+    var recordingError by remember { mutableStateOf<String?>(null) }
     var backgroundColor by remember { mutableStateOf(initialBackgroundColor) }
     var language by remember { mutableStateOf(initialLanguage) }
+    var mathMode by remember { mutableStateOf(initialMathMode) }
     var linkedBoardId by remember { mutableStateOf(initialLinkedBoardId) }
     var action by remember { mutableStateOf(initialAction) }
     val actions by remember { mutableStateOf(initialActions) }
@@ -183,8 +216,37 @@ internal fun EditBoardCellDialog(
     var showLanguageMenu by remember { mutableStateOf(false) }
     var showBoardMenu by remember { mutableStateOf(false) }
     var showSymbolSearch by remember { mutableStateOf(false) }
+    var showImageSourcePicker by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
     var showSpanMenu by remember { mutableStateOf(false) }
+    val koin = getKoin()
+    val recordingService = remember(koin) { koin.getOrNull<PhraseRecordingService>() }
+    val scope = rememberCoroutineScope()
+    val micState = rememberMicrophonePermissionState()
+    var waitingForMicPermission by remember { mutableStateOf(false) }
+    val recordingStartFailed = stringResource(Res.string.phrase_recording_start_failed)
+    val recordingFinalizeFailed = stringResource(Res.string.phrase_recording_finalize_failed)
+
+    val startRecording: () -> Unit = {
+        if (micState.isGranted) {
+            scope.launch {
+                recordingError = null
+                recordingService?.startRecording("field-${row + 1}-${column + 1}")
+                    ?.onSuccess { recordingInProgress = true }
+                    ?.onFailure { recordingError = it.message ?: recordingStartFailed }
+            }
+        } else {
+            waitingForMicPermission = true
+            micState.request()
+        }
+    }
+
+    LaunchedEffect(micState.isGranted, waitingForMicPermission) {
+        if (micState.isGranted && waitingForMicPermission) {
+            waitingForMicPermission = false
+            startRecording()
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -211,19 +273,64 @@ internal fun EditBoardCellDialog(
                     label = { Text(stringResource(Res.string.board_dialog_vocalization)) },
                     singleLine = true
                 )
-                OutlinedTextField(
-                    value = imageUrl,
-                    onValueChange = { imageUrl = it },
-                    label = { Text(stringResource(Res.string.board_dialog_image_url)) },
-                    singleLine = true
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            stringResource(Res.string.speech_math_mode),
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        Text(
+                            stringResource(Res.string.speech_math_mode_description),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = mathMode, onCheckedChange = { mathMode = it })
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { showSymbolSearch = true }) { Text("OpenSymbols") }
+                    OutlinedButton(onClick = { showImageSourcePicker = true }) {
+                        Text(stringResource(Res.string.phrase_image_label))
+                    }
                     if (imageUrl.isNotBlank()) {
                         OutlinedButton(onClick = { imageUrl = "" }) {
                             Text(stringResource(Res.string.board_dialog_clear_image))
                         }
                     }
+                }
+                if (recordingService?.isSupported == true || recordingPath.isNotBlank()) {
+                    Text(
+                        stringResource(Res.string.phrase_recording_label),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (!recordingInProgress && recordingService?.isSupported == true) {
+                            OutlinedButton(onClick = startRecording) {
+                                Text(stringResource(if (recordingPath.isBlank()) Res.string.phrase_record_button else Res.string.phrase_replace_button))
+                            }
+                        }
+                        if (recordingInProgress) {
+                            OutlinedButton(onClick = {
+                                scope.launch {
+                                    recordingService?.stopRecording()
+                                        ?.onSuccess { recordingPath = it }
+                                        ?.onFailure { recordingError = it.message ?: recordingFinalizeFailed }
+                                    recordingInProgress = false
+                                }
+                            }) { Text(stringResource(Res.string.phrase_stop_button)) }
+                        }
+                        if (recordingPath.isNotBlank()) {
+                            TextButton(onClick = { recordingPath = "" }) {
+                                Text(stringResource(Res.string.phrase_clear_button))
+                            }
+                        }
+                    }
+                    if (recordingInProgress) {
+                        Text(stringResource(Res.string.phrase_recording_in_progress))
+                    }
+                    recordingError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
 
                 Row(
@@ -444,8 +551,10 @@ internal fun EditBoardCellDialog(
                         label.trim(),
                         vocalization.trim().ifBlank { null },
                         imageUrl.trim().ifBlank { null },
+                        recordingPath.trim().ifBlank { null },
                         backgroundColor,
                         language,
+                        mathMode,
                         linkedBoardId.takeIf { opensPage },
                         selectedSpan.rows,
                         selectedSpan.columns,
@@ -474,6 +583,20 @@ internal fun EditBoardCellDialog(
             onSelect = { selectedUrl ->
                 imageUrl = selectedUrl
                 showSymbolSearch = false
+            }
+        )
+    }
+
+    if (showImageSourcePicker) {
+        ImageSourcePickerDialog(
+            onDismiss = { showImageSourcePicker = false },
+            onPhoto = { pickedImage ->
+                imageUrl = pickedImage
+                showImageSourcePicker = false
+            },
+            onSymbol = {
+                showImageSourcePicker = false
+                showSymbolSearch = true
             }
         )
     }

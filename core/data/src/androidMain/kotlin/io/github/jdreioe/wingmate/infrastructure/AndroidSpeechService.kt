@@ -365,7 +365,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().getAll()
             }.getOrDefault(emptyList())
             val dictionaryHash = dictionary.joinToString("|") { "${it.word}:${it.phoneme}:${it.alphabet}" }.hashCode()
-            val cacheKey = "${normalizedText}_${voiceForSsml.name}_${voiceForSsml.primaryLanguage}_${voiceForSsml.selectedLanguage}_${pitch}_${rate}_${dictionaryHash}".hashCode()
+            val cacheKey = "${normalizedText}_${voiceForSsml.name}_${voiceForSsml.primaryLanguage}_${voiceForSsml.selectedLanguage}_${pitch}_${rate}_${voiceForSsml.mathMode}_${dictionaryHash}".hashCode()
             val root = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
             val directory = File(root, "wingmate/audio").apply { mkdirs() }
             val file = File(directory, "tts_$cacheKey.mp3")
@@ -376,6 +376,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 } else {
                     AzureTtsClient.generateSsml(normalizedText, voiceForSsml, dictionary)
                 }
+                println("Android Azure TTS SSML:\n$ssml")
                 val bytes = AzureTtsClient.synthesize(client, ssml, config)
                 file.outputStream().use { it.write(bytes) }
             }
@@ -477,7 +478,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 
                 // Calculate hash early to check if file already exists
                 val dictHash = dict.joinToString("|") { "${it.word}:${it.phoneme}:${it.alphabet}" }.hashCode()
-                val cacheKey = "${combinedText}_${vForSsml.name}_${vForSsml.primaryLanguage}_${vForSsml.selectedLanguage}_${pitch}_${rate}_${dictHash}".hashCode()
+                val cacheKey = "${combinedText}_${vForSsml.name}_${vForSsml.primaryLanguage}_${vForSsml.selectedLanguage}_${pitch}_${rate}_${vForSsml.mathMode}_${dictHash}".hashCode()
                 val fileName = if (cacheAudio) "tts_$cacheKey.mp3" else "tts_session_${System.nanoTime()}.mp3"
                 val outFile = File(outDir, fileName)
 
@@ -498,6 +499,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 } else {
                     AzureTtsClient.generateSsml(combinedText, vForSsml, dict)
                 }
+                println("Android Azure TTS SSML:\n$ssml")
                 val bytes = AzureTtsClient.synthesize(client, ssml, cfg)
 
                 // Persist to an app-private Music directory so history can reference it later

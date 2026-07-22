@@ -17,7 +17,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Client for Azure Resource Manager REST API.
- * Requires an access token obtained via MSAL (or other OAuth flow).
+ * Requires an access token obtained through an OAuth flow.
  */
 class AzureArmClient(private val httpClient: HttpClient) {
 

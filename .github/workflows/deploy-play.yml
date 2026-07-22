@@ -18,12 +18,17 @@ jobs:
 
       - name: Install Infisical CLI
         run: |
-          curl -1sLf 'https://dl.infisical.com/release/package/install.sh' | bash
+          set -o pipefail
+          curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | sudo -E bash
+          sudo apt-get update
+          sudo apt-get install -y infisical
+          infisical --version
 
       - name: Publish to Google Play
         run: infisical run -- ./gradlew publishRelease
         env:
           INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
+          INFISICAL_API_URL: https://eu.infisical.com
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4

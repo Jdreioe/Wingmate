@@ -60,7 +60,7 @@ class IosSpeechService(
         if (normalizedText.isBlank()) return
 
         val effectiveVoice = voice ?: defaultVoice()
-        val cacheKey = "text|$normalizedText|${effectiveVoice.name}|$pitch|$rate"
+        val cacheKey = "text|$normalizedText|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
         val cached = if (cacheAudio) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] } else null
         val audioBytes = cached ?: synthesize(normalizedText, effectiveVoice) ?: return
         if (cacheAudio && cached == null) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] = audioBytes }
@@ -76,7 +76,7 @@ class IosSpeechService(
         if (segments.isEmpty()) return
         val combinedText = segments.joinToString(separator = "") { it.text }
         val effectiveVoice = voice ?: defaultVoice()
-        val cacheKey = "segments|${segments.joinToString()}|${effectiveVoice.name}|$pitch|$rate"
+        val cacheKey = "segments|${segments.joinToString()}|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
         val cached = if (cacheAudio) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] } else null
         val audioBytes = cached ?: synthesizeSegments(segments, effectiveVoice) ?: return
         if (cacheAudio && cached == null) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] = audioBytes }
@@ -89,7 +89,7 @@ class IosSpeechService(
         if (normalizedText.isEmpty()) return true
         if (settingsRepository?.get()?.ttsEngine == TtsEngine.SYSTEM) return false
         val effectiveVoice = voice ?: defaultVoice()
-        val cacheKey = "text|$normalizedText|${effectiveVoice.name}|$pitch|$rate"
+        val cacheKey = "text|$normalizedText|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
         if (sentenceAudioCacheMutex.withLock { cacheKey in sentenceAudioCache }) return true
 
         val request = PendingCache(normalizedText, voice, pitch, rate)

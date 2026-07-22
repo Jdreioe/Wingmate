@@ -82,6 +82,10 @@
     <string name="board_cell_opens_board">Åbner siden: %1$s</string>
     <string name="board_cell_no_link">Åbner ikke en anden side</string>
     <string name="board_dialog_new_set">Ny skærm</string>
+    <string name="board_dialog_template">Skabelon</string>
+    <string name="board_dialog_template_blank">Tom</string>
+    <string name="board_dialog_template_calculator">Lommeregner</string>
+    <string name="calculator_default_name">Lommeregner</string>
     <string name="board_dialog_set_name">Skærmnavn</string>
     <string name="board_dialog_rows">Rækker</string>
     <string name="board_dialog_columns">Kolonner</string>
@@ -91,7 +95,6 @@
     <string name="board_dialog_edit_cell">Rediger felt (%1$d, %2$d)</string>
     <string name="board_dialog_label">Etiket</string>
     <string name="board_dialog_vocalization">Udtale (valgfri)</string>
-    <string name="board_dialog_image_url">Billed-URL (valgfri)</string>
     <string name="board_dialog_clear_image">Fjern billede</string>
     <string name="board_dialog_color">Feltfarve</string>
     <string name="board_dialog_pick_color">Vælg</string>
@@ -161,7 +164,7 @@
     <string name="azure_setup_error_key">Indtast en Speech-abonnementsnøgle.</string>
     <string name="azure_setup_error_save">Azure-oplysningerne kunne ikke gemmes: %1$s</string>
     <string name="welcome_analytics_title">Hjælp med at forbedre Wingmate</string>
-    <string name="welcome_analytics_description">Del valgfrit anonyme hændelser om brugen via Aptabase. Vi sender aldrig dine sætninger, taletekst, Azure-nøgler eller tavleindhold. Du kan ændre det senere i Indstillinger.</string>
+    <string name="welcome_analytics_description">Del valgfrit anonyme hændelser om brugen via Aptabase. Vi sender aldrig dine sætninger, taletekst, Azure-nøgler eller skærmindhold. Du kan ændre det senere i Indstillinger.</string>
     <string name="welcome_analytics_opt_in">Del anonym analysedata</string>
 
     <string name="voice_select_title">Vælg stemme</string>
@@ -188,8 +191,8 @@
     <string name="phrase_image_label">Billede</string>
     <string name="phrase_clear_image_cd">Ryd billede</string>
     <string name="phrase_select_image_title">Vælg billede</string>
-    <string name="phrase_pick_file">Vælg fil</string>
-    <string name="phrase_open_symbols">OpenSymbols</string>
+    <string name="phrase_pick_file">Foto</string>
+    <string name="phrase_open_symbols">Symbol</string>
     <string name="phrase_recording_label">Optagelse</string>
     <string name="phrase_record_hint">frase</string>
     <string name="phrase_recording_unavailable">Optagelse er ikke tilgængelig på denne platform.</string>
@@ -350,11 +353,11 @@
     <string name="welcome_mode_tour_keyboard_step_1">Skriv den besked, du vil sige, i tekstfeltet.</string>
     <string name="welcome_mode_tour_keyboard_step_2">Tryk på gemte fraser og kategorier for ord, du ofte bruger.</string>
     <string name="welcome_mode_tour_keyboard_step_3">Få den færdige besked læst op, og start derefter på den næste.</string>
-    <string name="welcome_mode_tour_boardsets_title">Boardsets og skærme</string>
+    <string name="welcome_mode_tour_boardsets_title">Skærme</string>
     <string name="welcome_mode_tour_boardsets_subtitle">Kommuniker med visuelle gitre af symboler og forbundne sider.</string>
-    <string name="welcome_mode_tour_boardsets_step_1">Vælg et boardset fra dit bibliotek.</string>
+    <string name="welcome_mode_tour_boardsets_step_1">Vælg en skærm fra dit bibliotek.</string>
     <string name="welcome_mode_tour_boardsets_step_2">Tryk på symboler i et gitter for at få dem læst op eller åbne en anden side.</string>
-    <string name="welcome_mode_tour_boardsets_step_3">Redigér boardsettet senere for at tilpasse symboler og layout.</string>
+    <string name="welcome_mode_tour_boardsets_step_3">Redigér skærmen senere for at tilpasse symboler og layout.</string>
     <string name="welcome_importing_board">Importerer side...</string>
     <string name="mode_switch_to_screens">Skift til skærme</string>
     <string name="mode_switch_to_keyboard">Skift til tastatur og fraser</string>
@@ -381,6 +384,8 @@
     <string name="phrase_screen_error">Fejl: %1$s</string>
     <string name="phrase_screen_enter_text_placeholder">Indtast tekst der skal tales</string>
     <string name="phrase_screen_ssml_controls">SSML-kontroller</string>
+    <string name="speech_math_mode">Matematik</string>
+    <string name="speech_math_mode_description">Læs matematiske udtryk i almindelig tekst med Azures matematikudtale</string>
     <string name="ui_settings_accessibility_title">Tilgængelighed</string>
     <string name="ui_settings_show_labels_title">Vis knaptekst</string>
     <string name="ui_settings_show_symbols_title">Vis knapsymboler</string>
@@ -405,8 +410,8 @@
     <string name="ui_settings_privacy_local_data_title">Lokale data</string>
     <string name="ui_settings_history_visible_title">Vis talehistorik</string>
     <string name="ui_settings_history_visible_desc">Kun tale afspillet, mens dette er slået til, vises i historikken. Skjult tale forbliver gemt lokalt, så lyd kan genbruges.</string>
-    <string name="ui_settings_board_cache_title">Sætningscache for tavlesæt</string>
-    <string name="ui_settings_board_cache_desc">Vælg for hvert tavlesæt, om hele talte sætninger skal gemmes. Deaktivering forbedrer privatlivet, men gentagelse kan kræve ny talesyntese og bruge flere tokens.</string>
-    <string name="ui_settings_board_cache_empty">Opret et tavlesæt for at konfigurere sætningscache.</string>
+    <string name="ui_settings_board_cache_title">Sætningscache for skærme</string>
+    <string name="ui_settings_board_cache_desc">Vælg for hver skærm, om hele talte sætninger skal gemmes. Deaktivering forbedrer privatlivet, men gentagelse kan kræve ny talesyntese og bruge flere tokens.</string>
+    <string name="ui_settings_board_cache_empty">Opret en skærm for at konfigurere sætningscache.</string>
     <string name="ui_settings_privacy_collection_title">Dataindsamling</string>
 </resources>

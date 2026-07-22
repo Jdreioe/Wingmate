@@ -927,9 +927,9 @@ final class IosViewModel: ObservableObject {
         ))
     }
 
-    private func mergeRanges(_ ranges: [NSRange], maxLength: Int) -> [NSRange] {
+    private func mergeRanges(_ inputRanges: [NSRange], maxLength: Int) -> [NSRange] {
         ranges(from: bridge.mergeTextSpans(
-            spans: textSpans(from: ranges),
+            spans: textSpans(from: inputRanges),
             textLength: Int32(maxLength)
         ))
     }

@@ -51,13 +51,6 @@
 -keep class org.koin.** { *; }
 -dontwarn org.koin.**
 
-# ── MSAL (Microsoft Authentication Library) ──────────────────
--keep class com.microsoft.identity.** { *; }
--dontwarn com.microsoft.identity.**
--keep class com.microsoft.aad.** { *; }
--dontwarn com.microsoft.aad.**
-
-
 # ── AndroidX / Jetpack Compose ───────────────────────────────
 # Compose compiler inserts metadata that R8 needs to preserve
 -dontwarn androidx.compose.**

@@ -48,6 +48,7 @@ class BoardSetSpeechCacheUseCase(
 
     suspend fun cacheField(board: ObfBoard, button: ObfButton) {
         if (!online || !usesAzure()) return
+        if (!button.soundId.isNullOrBlank()) return
         val settings = settingsRepository.get()
         val locale = button.locale ?: board.locale ?: settings.primaryLanguage
         val rawText = button.vocalization?.takeIf(String::isNotBlank)
@@ -56,6 +57,7 @@ class BoardSetSpeechCacheUseCase(
         val text = resolveObfLocalizedString(board.strings, locale, rawText)?.trim().orEmpty()
         if (text.isEmpty()) return
         val voice = voiceRepository.getSelected().withLanguageOverride(locale)
+            ?.copy(mathMode = button.mathMode)
         speechService.cacheSpeech(text, voice, voice?.pitch, voice?.rate)
     }
 

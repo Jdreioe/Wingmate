@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.domain
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 data class Voice(
@@ -16,6 +17,8 @@ data class Voice(
     val rate: Double? = null,
     val pitchForSSML: String? = null,
     val rateForSSML: String? = null,
+    /** Request Azure's Math-domain pronunciation rules for plain-text expressions. */
+    @Transient val mathMode: Boolean = false,
 )
 
 fun Voice?.withLanguageOverride(languageTag: String?): Voice? {

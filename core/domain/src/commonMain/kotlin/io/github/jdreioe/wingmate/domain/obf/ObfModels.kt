@@ -3,6 +3,10 @@ package io.github.jdreioe.wingmate.domain.obf
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+
+const val OBF_MATH_MODE_EXTENSION = "ext_wingmate_math_mode"
 
 @Serializable
 data class ObfBoard(
@@ -54,6 +58,17 @@ data class ObfButton(
     val hidden: Boolean = false,
     val extensions: Map<String, JsonElement> = emptyMap()
 ) {
+    val mathMode: Boolean
+        get() = (extensions[OBF_MATH_MODE_EXTENSION] as? JsonPrimitive)?.booleanOrNull == true
+
+    fun withMathMode(enabled: Boolean): ObfButton = copy(
+        extensions = if (enabled) {
+            extensions + (OBF_MATH_MODE_EXTENSION to JsonPrimitive(true))
+        } else {
+            extensions - OBF_MATH_MODE_EXTENSION
+        }
+    )
+
     fun resolvedActions(): List<String> =
         if (actions.isNotEmpty()) actions else listOfNotNull(action?.takeIf { it.isNotBlank() })
 }

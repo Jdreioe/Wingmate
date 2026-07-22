@@ -63,9 +63,11 @@ class DesktopSpeechService(
         
         var processedText = text
         
-        val entries = runCatching { dictionaryRepo.getAll() }.getOrDefault(emptyList())
-        if (entries.isNotEmpty()) {
-            processedText = applyDictionary(processedText, entries)
+        if (voice?.mathMode != true) {
+            val entries = runCatching { dictionaryRepo.getAll() }.getOrDefault(emptyList())
+            if (entries.isNotEmpty()) {
+                processedText = applyDictionary(processedText, entries)
+            }
         }
 
         // Check if text contains SSML markup (user inserted via sidebar buttons OR dictionary injection)

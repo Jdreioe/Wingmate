@@ -60,6 +60,7 @@ import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TextEditingPolicy
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.TextSpan
+import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import androidx.compose.ui.graphics.ImageBitmap
@@ -88,6 +89,7 @@ import wingmatekmp.composeapp.generated.resources.phrase_screen_share_last_sound
 import wingmatekmp.composeapp.generated.resources.phrase_screen_ssml_controls
 import wingmatekmp.composeapp.generated.resources.phrase_screen_toggle_fullscreen_cd
 import wingmatekmp.composeapp.generated.resources.phrase_screen_voice_settings
+import wingmatekmp.composeapp.generated.resources.speech_math_mode
 
 private data class ThoughtDraft(
     val input: TextFieldValue,
@@ -174,6 +176,7 @@ fun PhraseScreen(
 
             // Input state (hoisted so topBar History button can access it)
             var input by remember { mutableStateOf(TextFieldValue("")) }
+            var mathMode by remember { mutableStateOf(false) }
             var secondaryLanguageRanges by remember { mutableStateOf<List<TextRange>>(emptyList()) }
             var pinnedThoughtDraft by remember { mutableStateOf<ThoughtDraft?>(null) }
             var scratchThoughtDraft by remember { mutableStateOf<ThoughtDraft?>(null) }
@@ -330,6 +333,11 @@ fun PhraseScreen(
                             fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
                         )) },
                         actions = {
+                            FilterChip(
+                                selected = mathMode,
+                                onClick = { mathMode = !mathMode },
+                                label = { Text(stringResource(Res.string.speech_math_mode)) }
+                            )
                             IconButton(
                                 onClick = {
                                     featureUsageReporter.reportEvent(
@@ -408,11 +416,13 @@ fun PhraseScreen(
                                 uiScope.launch(Dispatchers.IO) {
                                     try {
                                         val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                                            .withLanguageOverride(settings.primaryLanguage)
+                                            ?.copy(mathMode = mathMode)
                                         val secondaryLang = settings.secondaryLanguage.takeIf { hasUsableSecondaryLanguage.value }
                                         val inputText = input.text
                                         
                                         val hasSSML = inputText.contains("<") && inputText.contains(">")
-                                        val canUseRecordedMix = !hasSSML && secondaryLanguageRanges.isEmpty()
+                                        val canUseRecordedMix = !mathMode && !hasSSML && secondaryLanguageRanges.isEmpty()
                                         val playedRecording = if (canUseRecordedMix) {
                                             runCatching {
                                                 trySpeakUsingRecordedPhrases(
@@ -431,7 +441,7 @@ fun PhraseScreen(
                                             if (hasSSML) {
                                                 speechService.speak(inputText, selected, selected?.pitch, selected?.rate)
                                             } else {
-                                                val segments = if (secondaryLanguageRanges.isNotEmpty() && secondaryLang != null) {
+                                                val segments = if (!mathMode && secondaryLanguageRanges.isNotEmpty() && secondaryLang != null) {
                                                     buildLanguageAwareSegments(inputText, secondaryLanguageRanges, secondaryLang)
                                                 } else emptyList()
                                                 if (segments.isNotEmpty()) {

@@ -105,9 +105,6 @@ fun AddPhraseDialog(
         )
     }
     val koin = getKoin()
-    val filePicker = remember(koin) {
-        koin.getOrNull<io.github.jdreioe.wingmate.platform.FilePicker>()
-    }
     val imageCacher = remember(koin) {
         koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.ImageCacher>()
     }
@@ -123,12 +120,29 @@ fun AddPhraseDialog(
     val recordingStartFailed = stringResource(Res.string.phrase_recording_start_failed)
     val recordingFinalizeFailed = stringResource(Res.string.phrase_recording_finalize_failed)
     val recordingPlayFailed = stringResource(Res.string.phrase_recording_play_failed)
-    val selectImageTitle = stringResource(Res.string.phrase_select_image_title)
     val micPermissionDeniedText = stringResource(Res.string.phrase_mic_permission_denied)
     val micPermissionSettingsText = stringResource(Res.string.phrase_mic_permission_settings)
 
     val micState = rememberMicrophonePermissionState()
     var waitingForMicPermission by remember { mutableStateOf(false) }
+
+    val startRecording: () -> Unit = {
+        if (micState.isGranted) {
+            scope.launch {
+                recordingError = null
+                val hint = initialPhrase?.id ?: text.ifBlank { altText }.ifBlank { recordingHintFallback }
+                recordingService?.startRecording(hint)
+                    ?.onSuccess { recordingInProgress = true }
+                    ?.onFailure {
+                        recordingInProgress = false
+                        recordingError = it.message ?: recordingStartFailed
+                    }
+            }
+        } else {
+            waitingForMicPermission = true
+            micState.request()
+        }
+    }
 
     LaunchedEffect(micState.isGranted, waitingForMicPermission) {
         if (micState.isGranted && waitingForMicPermission) {
@@ -181,6 +195,7 @@ fun AddPhraseDialog(
                 
                 // Image selection
                 var showSymbolSearch by remember { mutableStateOf(false) }
+                var showImageSourcePicker by remember { mutableStateOf(false) }
                 
                 Column {
                     Text(stringResource(Res.string.phrase_image_label), style = MaterialTheme.typography.labelMedium)
@@ -201,33 +216,29 @@ fun AddPhraseDialog(
                         }
                     }
                     
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                         // File Picker Button
-                        if (filePicker != null) {
-                            OutlinedButton(
-                                onClick = {
-                                    scope.launch {
-                                        val picked = filePicker.pickFile(selectImageTitle, listOf("png", "jpg", "jpeg", "svg"))
-                                        if (picked != null) {
-                                            // Ensure file protocol for local files
-                                            imageUrl = if (picked.startsWith("http")) picked else "file://$picked"
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(stringResource(Res.string.phrase_pick_file))
-                            }
-                        }
-                        
-                        // OpenSymbols Button
-                        OutlinedButton(
-                            onClick = { showSymbolSearch = true },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(stringResource(Res.string.phrase_open_symbols))
-                        }
+                    OutlinedButton(onClick = { showImageSourcePicker = true }) {
+                        Text(stringResource(Res.string.phrase_image_label))
                     }
+                }
+
+                if (showImageSourcePicker) {
+                    ImageSourcePickerDialog(
+                        onDismiss = { showImageSourcePicker = false },
+                        onPhoto = { pickedImage ->
+                            imageUrl = pickedImage
+                            showImageSourcePicker = false
+                        },
+                        onSymbol = {
+                            showImageSourcePicker = false
+                            showSymbolSearch = true
+                        },
+                        onRecord = if (recordingService?.isSupported == true) {
+                            {
+                                showImageSourcePicker = false
+                                startRecording()
+                            }
+                        } else null
+                    )
                 }
                 
                 if (showSymbolSearch) {
@@ -266,26 +277,7 @@ fun AddPhraseDialog(
 
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (canRecord && !recordingInProgress) {
-                                OutlinedButton(
-                                    onClick = {
-                                        if (micState.isGranted) {
-                                            scope.launch {
-                                                recordingError = null
-                                                val hint = initialPhrase?.id ?: text.ifBlank { altText }.ifBlank { recordingHintFallback }
-                                                val result = recordingService.startRecording(hint)
-                                                result
-                                                    .onSuccess { recordingInProgress = true }
-                                                    .onFailure {
-                                                        recordingInProgress = false
-                                                        recordingError = it.message ?: recordingStartFailed
-                                                    }
-                                            }
-                                        } else {
-                                            waitingForMicPermission = true
-                                            micState.request()
-                                        }
-                                    }
-                                ) {
+                                OutlinedButton(onClick = startRecording) {
                                     Text(
                                         if (recordingPath.isBlank()) {
                                             stringResource(Res.string.phrase_record_button)

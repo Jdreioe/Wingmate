@@ -92,8 +92,10 @@ import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -259,10 +261,13 @@ fun BoardSetManagerScreen(
     if (showCreateDialog) {
         CreateBoardSetDialog(
             onDismiss = { showCreateDialog = false },
-            onCreate = { name, rows, columns ->
+            onCreate = { name, rows, columns, template ->
                 scope.launch {
                     runCatching {
-                        useCase.createBoardSet(name.trim(), rows, columns, defaultBoardName)
+                        when (template) {
+                            BoardSetTemplate.Blank -> useCase.createBoardSet(name.trim(), rows, columns, defaultBoardName)
+                            BoardSetTemplate.Calculator -> useCase.createCalculatorBoardSet(name.trim())
+                        }
                     }
                         .onSuccess { created ->
                             showCreateDialog = false
@@ -813,7 +818,7 @@ private fun BoardSetWorkspaceScreen(
                                                         label = effect.text,
                                                         vocalization = effect.text,
                                                         locale = button.locale
-                                                    ) to null
+                                                    ).withMathMode(button.mathMode) to null
                                                 )
                                             }
                                         }
@@ -842,6 +847,8 @@ private fun BoardSetWorkspaceScreen(
                                 if (speakAfterActions) {
                                     speakSelectedButtons(
                                         selected = nextSelection,
+                                        board = activeBoard,
+                                        primaryLanguage = settings.primaryLanguage,
                                         voiceUseCase = voiceUseCase,
                                         speechService = speechService,
                                         cacheWholeSentence = activeGraph.boardSet.cacheWholeSentences,
@@ -867,7 +874,16 @@ private fun BoardSetWorkspaceScreen(
                                         activeBoard.sounds.firstOrNull { it.id == id }
                                     }
                                     scope.launch(Dispatchers.IO) {
-                                        val playedSound = playButtonSound(
+                                        val recordedPath = sound?.path?.takeIf { it.isNotBlank() }
+                                        val playedRecording = recordedPath?.let { path ->
+                                            runCatching {
+                                                speechService.speakRecordedAudio(
+                                                    audioFilePath = path,
+                                                    textForHistory = spokenText
+                                                )
+                                            }.getOrDefault(false)
+                                        } ?: false
+                                        val playedSound = playedRecording || playButtonSound(
                                             sound = sound,
                                             fileStorage = fileStorage,
                                             soundPlayer = soundPlayer
@@ -875,7 +891,8 @@ private fun BoardSetWorkspaceScreen(
                                         if (!playedSound && spokenText.isNotEmpty()) {
                                             runCatching {
                                                 val voice = voiceUseCase.selected()
-                                                    .withLanguageOverride(button.locale)
+                                                    .withLanguageOverride(button.locale ?: settings.primaryLanguage)
+                                                    ?.copy(mathMode = button.mathMode)
                                                 speechService.speak(spokenText, voice, voice?.pitch, voice?.rate)
                                             }
                                         }
@@ -906,50 +923,15 @@ private fun BoardSetWorkspaceScreen(
                         } else null,
                         homeBoardId = activeGraph.boardSet.rootBoardId,
                         onSpeakSentence = {
-                            val speechParts = selectedButtons.mapNotNull { (button, _) ->
-                                val resolved = resolveObfLocalizedString(
-                                    activeBoard.strings,
-                                    settings.primaryLanguage,
-                                    button.vocalization ?: button.label
-                                )
-                                resolved
-                                    ?.trim()
-                                    ?.takeIf(String::isNotEmpty)
-                                    ?.let { text -> text to button.locale }
-                            }
-                            val allSingleChars = speechParts.all { it.first.length <= 1 }
-                            val separator = if (allSingleChars) "" else " "
-                            val sentence = speechParts.joinToString(separator) { it.first }
-                            if (sentence.isNotEmpty()) {
-                                scope.launch(Dispatchers.IO) {
-                                    runCatching {
-                                        val voice = voiceUseCase.selected()
-                                        if (speechParts.any { !it.second.isNullOrBlank() }) {
-                                            val segments = speechParts.map { (text, language) ->
-                                                SpeechSegment(
-                                                    text = text,
-                                                    languageTag = language
-                                                )
-                                            }
-                                            speechService.speakSegmentsWithCachePolicy(
-                                                segments,
-                                                voice,
-                                                voice?.pitch,
-                                                voice?.rate,
-                                                cacheAudio = activeGraph.boardSet.cacheWholeSentences
-                                            )
-                                        } else {
-                                            speechService.speakWithCachePolicy(
-                                                sentence,
-                                                voice,
-                                                voice?.pitch,
-                                                voice?.rate,
-                                                cacheAudio = activeGraph.boardSet.cacheWholeSentences
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                            speakSelectedButtons(
+                                selected = selectedButtons,
+                                board = activeBoard,
+                                primaryLanguage = settings.primaryLanguage,
+                                voiceUseCase = voiceUseCase,
+                                speechService = speechService,
+                                cacheWholeSentence = activeGraph.boardSet.cacheWholeSentences,
+                                scope = scope
+                            )
                         },
                         onSaveSentence = {
                             val allSingleChars = selectedButtons.all {
@@ -1034,6 +1016,8 @@ private fun BoardSetWorkspaceScreen(
         val initialImageUrl = target.button?.imageId
             ?.let { id -> activeBoard.images.firstOrNull { it.id == id }?.url }
             .orEmpty()
+        val initialRecordingPath = target.button?.soundId
+            ?.let { id -> activeBoard.sounds.firstOrNull { it.id == id }?.path }
         EditBoardCellDialog(
             boardName = activeBoard.name ?: stringResource(Res.string.board_workspace_board_fallback),
             row = target.row,
@@ -1041,9 +1025,11 @@ private fun BoardSetWorkspaceScreen(
             initialLabel = target.button?.label.orEmpty(),
             initialVocalization = target.button?.vocalization.orEmpty(),
             initialImageUrl = initialImageUrl,
+            initialRecordingPath = initialRecordingPath,
             initialBackgroundColor = target.button?.backgroundColor,
             availableLanguages = availableFieldLanguages,
             initialLanguage = target.button?.locale,
+            initialMathMode = target.button?.mathMode == true,
             availableBoards = activeGraph.boards.filterNot { it.id == activeBoard.id },
             initialLinkedBoardId = activeGraph.resolveLinkedBoard(target.button?.loadBoard)?.id,
             initialAction = target.button?.action,
@@ -1053,7 +1039,7 @@ private fun BoardSetWorkspaceScreen(
             initialColumnSpan = currentSpan.columns,
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
-            onSave = { label, vocalization, imageUrl, backgroundColor, language, linkedBoardId,
+            onSave = { label, vocalization, imageUrl, recordingPath, backgroundColor, language, mathMode, linkedBoardId,
                        rowSpan, columnSpan, action, actions ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
@@ -1065,8 +1051,10 @@ private fun BoardSetWorkspaceScreen(
                         label = label,
                         vocalization = vocalization,
                         imageUrl = imageUrl,
+                        recordingPath = recordingPath,
                         backgroundColor = backgroundColor,
                         language = language,
+                        mathMode = mathMode,
                         linkedBoardId = linkedBoardId,
                         rowSpan = rowSpan,
                         columnSpan = columnSpan,
@@ -1395,8 +1383,10 @@ internal fun updateDraftCell(
     label: String,
     vocalization: String?,
     imageUrl: String?,
+    recordingPath: String? = null,
     backgroundColor: String?,
     language: String?,
+    mathMode: Boolean = false,
     linkedBoardId: String?,
     rowSpan: Int = 1,
     columnSpan: Int = 1,
@@ -1424,24 +1414,45 @@ internal fun updateDraftCell(
             board.images + ObfImage(id = createdImageId, url = normalizedUrl)
         }
     }
+    var soundId = existingButton?.soundId
+    val normalizedRecordingPath = recordingPath?.trim()?.ifBlank { null }
+    val sounds = when {
+        normalizedRecordingPath == null -> {
+            soundId = null
+            board.sounds
+        }
+        soundId != null -> board.sounds.map {
+            if (it.id == soundId) it.copy(path = normalizedRecordingPath, url = null, data = null) else it
+        }
+        else -> {
+            val createdSoundId = workspaceId("sound")
+            soundId = createdSoundId
+            board.sounds + ObfSound(
+                id = createdSoundId,
+                contentType = "audio/wav",
+                path = normalizedRecordingPath
+            )
+        }
+    }
     val button = (existingButton ?: ObfButton(id = buttonId)).copy(
         label = label.trim(),
         vocalization = vocalization?.trim()?.ifBlank { null },
         backgroundColor = backgroundColor?.trim()?.ifBlank { null },
         locale = language?.trim()?.ifBlank { null },
         imageId = imageId,
+        soundId = soundId,
         loadBoard = linkedBoardId?.let { targetId ->
             ObfLoadBoard(id = targetId, name = graph.boardsById[targetId]?.name)
         },
         action = action?.trim()?.ifBlank { null },
         actions = actions
-    )
+    ).withMathMode(mathMode)
     val buttons = if (existingButton == null) board.buttons + button else board.buttons.map {
         if (it.id == button.id) button else it
     }
     val updatedGrid = grid.withFieldSpan(row, column, buttonId, rowSpan, columnSpan)
         ?: return graph
-    val updatedBoard = board.copy(buttons = buttons, images = images, grid = updatedGrid)
+    val updatedBoard = board.copy(buttons = buttons, images = images, sounds = sounds, grid = updatedGrid)
     return graph.copy(boards = graph.boards.map { if (it.id == boardId) updatedBoard else it })
 }
 
@@ -1458,11 +1469,15 @@ internal fun clearDraftCell(
         values.map { value -> if (value == removedButtonId) null else value }
     }
     val removedImageId = board.buttons.firstOrNull { it.id == removedButtonId }?.imageId
+    val removedSoundId = board.buttons.firstOrNull { it.id == removedButtonId }?.soundId
     val buttons = board.buttons.filterNot { it.id == removedButtonId }
     val images = if (removedImageId != null && buttons.none { it.imageId == removedImageId }) {
         board.images.filterNot { it.id == removedImageId }
     } else board.images
-    val updatedBoard = board.copy(buttons = buttons, images = images, grid = grid.copy(order = order))
+    val sounds = if (removedSoundId != null && buttons.none { it.soundId == removedSoundId }) {
+        board.sounds.filterNot { it.id == removedSoundId }
+    } else board.sounds
+    val updatedBoard = board.copy(buttons = buttons, images = images, sounds = sounds, grid = grid.copy(order = order))
     return graph.copy(boards = graph.boards.map { if (it.id == boardId) updatedBoard else it })
 }
 
@@ -1811,43 +1826,94 @@ internal fun backspaceSentenceSelection(
 
 private fun speakSelectedButtons(
     selected: List<Pair<ObfButton, ImageBitmap?>>,
+    board: ObfBoard,
+    primaryLanguage: String,
     voiceUseCase: VoiceUseCase,
     speechService: SpeechService,
     cacheWholeSentence: Boolean,
     scope: kotlinx.coroutines.CoroutineScope
 ) {
+    data class PlaybackPart(
+        val text: String,
+        val language: String?,
+        val recordingPath: String?,
+        val mathMode: Boolean
+    )
+
     val speechParts = selected.mapNotNull { (button, _) ->
-        (button.vocalization ?: button.label)
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { text -> text to button.locale }
+        val text = (button.vocalization ?: button.label)?.takeIf { it.isNotEmpty() }
+            ?: return@mapNotNull null
+        val recordingPath = button.soundId
+            ?.let { soundId -> board.sounds.firstOrNull { it.id == soundId } }
+            ?.path
+            ?.takeIf { it.isNotBlank() }
+        PlaybackPart(text, button.locale, recordingPath, button.mathMode)
     }
-    val allSingleChars = speechParts.all { it.first.length <= 1 }
-    val separator = if (allSingleChars) "" else " "
-    val sentence = speechParts.joinToString(separator) { it.first }
-    if (sentence.isEmpty()) return
+    if (speechParts.isEmpty()) return
     scope.launch(Dispatchers.IO) {
         runCatching {
             val voice = voiceUseCase.selected()
-            if (speechParts.any { !it.second.isNullOrBlank() }) {
-                val segments = speechParts.map { (text, language) ->
-                    SpeechSegment(text = text, languageTag = language)
+            val pendingTts = mutableListOf<PlaybackPart>()
+
+            suspend fun speakPendingTts() {
+                if (pendingTts.isEmpty()) return
+                val separator = if (pendingTts.all { it.text.length <= 1 }) "" else " "
+                val sentence = pendingTts.joinToString(separator) { it.text }
+                val pendingVoice = voice
+                    .withLanguageOverride(pendingTts.first().language ?: primaryLanguage)
+                    ?.copy(mathMode = pendingTts.first().mathMode)
+                if (!pendingTts.first().mathMode && pendingTts.any { !it.language.isNullOrBlank() }) {
+                    val segments = pendingTts.map {
+                        SpeechSegment(text = it.text, languageTag = it.language)
+                    }
+                    speechService.speakSegmentsWithCachePolicy(
+                        segments,
+                        pendingVoice,
+                        pendingVoice?.pitch,
+                        pendingVoice?.rate,
+                        cacheAudio = cacheWholeSentence
+                    )
+                } else {
+                    speechService.speakWithCachePolicy(
+                        sentence,
+                        pendingVoice,
+                        pendingVoice?.pitch,
+                        pendingVoice?.rate,
+                        cacheAudio = cacheWholeSentence
+                    )
                 }
-                speechService.speakSegmentsWithCachePolicy(
-                    segments,
-                    voice,
-                    voice?.pitch,
-                    voice?.rate,
-                    cacheAudio = cacheWholeSentence
-                )
-            } else {
-                speechService.speakWithCachePolicy(
-                    sentence,
-                    voice,
-                    voice?.pitch,
-                    voice?.rate,
-                    cacheAudio = cacheWholeSentence
-                )
+                pendingTts.clear()
+                awaitSpeechPlayback(speechService)
             }
+
+            for (part in speechParts) {
+                if (pendingTts.isNotEmpty() && pendingTts.first().mathMode != part.mathMode) {
+                    speakPendingTts()
+                }
+                val recordingPath = part.recordingPath
+                if (recordingPath == null) {
+                    pendingTts += part
+                    continue
+                }
+                speakPendingTts()
+                val played = speechService.speakRecordedAudio(
+                    audioFilePath = recordingPath,
+                    textForHistory = part.text,
+                    voice = voice
+                )
+                if (!played) {
+                    pendingTts += part.copy(recordingPath = null)
+                }
+            }
+            speakPendingTts()
+        }
+    }
+}
+
+private suspend fun awaitSpeechPlayback(speechService: SpeechService) {
+    withTimeoutOrNull(120_000) {
+        while (speechService.isPlaying()) {
+            delay(20)
         }
     }
 }

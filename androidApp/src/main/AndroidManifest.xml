@@ -41,19 +41,5 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
 
-        <!-- MSAL redirect URI for browser-based auth -->
-        <activity
-            android:name="com.microsoft.identity.client.BrowserTabActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="msauth"
-                    android:host="com.hojmoseit.wingmate"
-                    android:path="/${entraRedirectHash}" />
-            </intent-filter>
-        </activity>
     </application>
 </manifest>

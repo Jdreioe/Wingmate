@@ -226,14 +226,7 @@ android {
         ).firstOrNull { !it.isNullOrBlank() } ?: ""
     }
 
-    val entraClientId = resolveConfigValue("ENTRA_CLIENT_ID")
     val aptabaseAppKey = resolveConfigValue("APTABASE_APP_KEY")
-    // Debug hash (from ~/.android/debug.keystore); ENTRA_REDIRECT_HASH is an alias
-    val entraRedirectHashDebug = resolveConfigValue("ENTRA_REDIRECT_HASH_DEBUG")
-        .ifBlank { resolveConfigValue("ENTRA_REDIRECT_HASH") }
-    // Release hash (from androidApp/release.keystore)
-    val entraRedirectHashRelease = resolveConfigValue("ENTRA_REDIRECT_HASH_RELEASE")
-        .ifBlank { entraRedirectHashDebug }
 
     defaultConfig {
         applicationId = "com.hojmoseit.wingmate"
@@ -248,45 +241,10 @@ android {
         )
         buildConfigField(
             "String",
-            "ENTRA_CLIENT_ID",
-            toBuildConfigStringLiteral(entraClientId)
-        )
-        buildConfigField(
-            "String",
             "APTABASE_APP_KEY",
             toBuildConfigStringLiteral(aptabaseAppKey)
         )
-        manifestPlaceholders["entraRedirectHash"] = entraRedirectHashDebug
     }
-
-    // Generate msal_config.json with real Entra values at build start.
-    // MSAL only needs the redirect URI registered in Entra to match ONE of them;
-    // the app's actual redirect is computed by MSAL from the installed signature.
-    // We ship the debug hash in the JSON as a fallback — the real check happens
-    // server-side against the registered redirect URIs.
-    val msalConfigFile = file("src/main/res/raw/msal_config.json")
-    val msalClientId = entraClientId.ifBlank { "YOUR_ENTRA_CLIENT_ID" }
-    val msalConfigHash = entraRedirectHashDebug.ifBlank { "YOUR_REDIRECT_HASH" }
-    msalConfigFile.writeText("""
-        {
-          "client_id": "$msalClientId",
-          "authorization_user_agent": "BROWSER",
-          "redirect_uri": "msauth://com.hojmoseit.wingmate/$msalConfigHash",
-          "account_mode": "SINGLE",
-          "broker_redirect_uri_registered": false,
-          "authorities": [
-            {
-              "type": "AAD",
-              "audience": {
-                "type": "AzureADandPersonalMicrosoftAccount",
-                "tenant_id": "common"
-              },
-              "default": true
-            }
-          ]
-        }
-    """.trimIndent())
-    println("msal_config.json: client_id=$msalClientId debug_hash=$entraRedirectHashDebug release_hash=$entraRedirectHashRelease")
 
     tasks.register("incrementVersionCode") {
         doLast {
@@ -347,7 +305,19 @@ android {
     buildTypes {
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
-            manifestPlaceholders["entraRedirectHash"] = entraRedirectHashRelease
+            // Keep a mapping file for Google Play so R8-obfuscated crash reports
+            // can be translated back to the original Kotlin/Java symbols.
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+
+            // Package unstripped native symbols from dependency-provided .so files
+            // for upload to Google Play Console alongside the App Bundle.
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
         }
     }
 }
@@ -416,11 +386,6 @@ dependencies {
     // DI
     implementation(libs.koin.core)
     implementation(libs.koin.android)
-
-    // MSAL for Microsoft sign-in
-    implementation(libs.msal) {
-        exclude(group = "com.microsoft.device.display")
-    }
 
     // Ktor engine for ARM API calls
     implementation("io.ktor:ktor-client-okhttp:2.3.12")

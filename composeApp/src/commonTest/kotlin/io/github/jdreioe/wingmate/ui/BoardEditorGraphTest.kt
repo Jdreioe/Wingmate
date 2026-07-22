@@ -9,6 +9,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class BoardEditorGraphTest {
     @Test
@@ -89,6 +90,31 @@ class BoardEditorGraphTest {
         val resized = resizeDraftBoard(pinned, page.id, rows = 2, columns = 2)
         assertEquals(2, resized.boards.last().grid?.rows)
         assertEquals("go_home", resized.boards.last().grid?.order?.last()?.first())
+    }
+
+    @Test
+    fun recordedFieldLinksItsSoundAndClearingTheFieldRemovesIt() {
+        val updated = updateDraftCell(
+            graph = graph(),
+            boardId = "home",
+            row = 0,
+            column = 0,
+            label = "Hello",
+            vocalization = "Hello",
+            imageUrl = null,
+            recordingPath = "/recordings/hello.wav",
+            backgroundColor = null,
+            language = null,
+            linkedBoardId = null
+        )
+
+        val board = updated.boards.single()
+        val button = board.buttons.single()
+        assertEquals(button.soundId, board.sounds.single().id)
+        assertEquals("/recordings/hello.wav", board.sounds.single().path)
+
+        val cleared = clearDraftCell(updated, "home", 0, 0).boards.single()
+        assertTrue(cleared.sounds.isEmpty())
     }
 
     private fun graph(
