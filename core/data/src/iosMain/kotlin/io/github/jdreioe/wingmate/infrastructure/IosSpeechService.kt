@@ -116,7 +116,7 @@ class IosSpeechService(
                 val regexBrackets = Regex("\\{\\{IPA\\|$langCode\\|\\[([^\\]]+)\\]")
                 regexBrackets.find(content)?.groupValues?.getOrNull(1)?.let { return it }
             }
-            null
+            return null
             }
             lookup(langCode, requireLanguageTag = false) ?: if (langCode != "en") lookup("en", requireLanguageTag = true) else null
         } catch (e: Exception) {

@@ -65,14 +65,13 @@ class RealAacLogger(
     private fun logEvent(event: OblEvent) {
         val dir = logDir ?: return
         scope.launch {
-            try {
+            runCatching {
                 val path = dir.toPath().resolve("usage_log.obl")
                 val json = Json.encodeToString(event)
-                fileSystem.appendingSink(path).buffer().use { sink ->
-                    sink.writeUtf8(json + "\n")
-                }
-            } catch (e: Exception) {
-                // Fail silently but maybe print to console in debug
+                val sink = fileSystem.appendingSink(path).buffer()
+                sink.writeUtf8(json + "\n")
+                sink.close()
+            }.onFailure { e ->
                 println("Failed to log OBL event: ${e.message}")
             }
         }

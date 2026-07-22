@@ -107,7 +107,7 @@ class BoardImportService(
         val boardIdMap = linkedMapOf<String, String>()
         boards.forEach { (board, _) ->
             if (board.id.isNotEmpty()) {
-                boardIdMap.putIfAbsent(board.id, newId("board"))
+                boardIdMap.getOrPut(board.id) { newId("board") }
             }
         }
 

@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate.infrastructure
 import io.github.jdreioe.wingmate.platform.ShareService
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
+import kotlinx.cinterop.ExperimentalForeignApi
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
 import platform.Foundation.NSURL
@@ -11,6 +12,7 @@ import platform.Foundation.NSData
 import platform.Foundation.create
 import platform.Foundation.writeToFile
 
+@OptIn(ExperimentalForeignApi::class)
 class IosShareService : ShareService {
     override fun shareAudio(filePath: String): Boolean {
         val url = NSURL.fileURLWithPath(filePath)
@@ -47,6 +49,7 @@ class IosShareService : ShareService {
         return true
     }
 
+    @OptIn(ExperimentalForeignApi::class)
     override fun shareFile(fileName: String, content: ByteArray): Boolean {
         val tmpDir = NSTemporaryDirectory() ?: return false
         val filePath = "$tmpDir/$fileName"
