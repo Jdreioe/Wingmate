@@ -84,7 +84,7 @@ class ObzExporter(
         val manifestJson = json.encodeToJsonElement(ObfManifest.serializer(), manifest)
         entries["manifest.json"] = json.encodeToString(serializeWithExtensions(manifestJson, manifest)).encodeToByteArray()
 
-        return ZipBuilder.build(entries)
+        return ZipBuilder.build(entries.toList()).getOrThrow()
     }
 
     /**
