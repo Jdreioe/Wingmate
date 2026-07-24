@@ -36,6 +36,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Home
@@ -77,6 +80,8 @@ import wingmatekmp.composeapp.generated.resources.board_workspace_speak_sentence
 import wingmatekmp.composeapp.generated.resources.board_workspace_home
 import wingmatekmp.composeapp.generated.resources.board_cell_opens_board
 
+enum class SentencePresentationMode { Normal, Fullscreen }
+
 private data class BoardGridItem(
     val row: Int,
     val column: Int,
@@ -98,8 +103,9 @@ fun ObfBoardView(
     isSaveSentenceEnabled: Boolean = selectedButtons.isNotEmpty(),
     onDeleteLast: () -> Unit = {},
     onClearSentence: () -> Unit = {},
-    showMessageBar: Boolean = !isEditMode,
-    showSentenceText: Boolean = false,
+    showActions: Boolean = true,
+    sentenceText: String = "",
+    presentationMode: SentencePresentationMode = SentencePresentationMode.Normal,
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
     homeBoardId: String? = null
@@ -113,29 +119,23 @@ fun ObfBoardView(
     val buttonsById = remember(board) { board.buttons.associateBy { it.id } }
 
     if (isAbsoluteLayout) {
-        if (showMessageBar) {
-            Column(modifier = modifier.fillMaxSize().padding(8.dp)) {
-                SymbolBar(
-                    selectedButtons = selectedButtons,
-                    imagesById = imagesById,
-                    extractedImages = extractedImages,
-                    onSpeak = onSpeakSentence,
-                    onSave = onSaveSentence,
-                    isSaveEnabled = isSaveSentenceEnabled,
-                    onDelete = onDeleteLast,
-                    onClear = onClearSentence,
-                    showSentenceText = showSentenceText,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(if (showSentenceText) 260.dp else 100.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    renderAbsoluteButtons(board, imagesById, extractedImages, isEditMode, onButtonClick, homeBoardId)
-                }
-            }
-        } else {
-            BoxWithConstraints(modifier = modifier.fillMaxSize().padding(8.dp)) {
+        Column(modifier = modifier.fillMaxSize().padding(8.dp)) {
+            SymbolBar(
+                selectedButtons = selectedButtons,
+                imagesById = imagesById,
+                extractedImages = extractedImages,
+                showActions = showActions,
+                sentenceText = sentenceText,
+                presentationMode = presentationMode,
+                onSpeak = onSpeakSentence,
+                onSave = onSaveSentence,
+                isSaveEnabled = isSaveSentenceEnabled,
+                onDelete = onDeleteLast,
+                onClear = onClearSentence,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 renderAbsoluteButtons(board, imagesById, extractedImages, isEditMode, onButtonClick, homeBoardId)
             }
         }
@@ -148,24 +148,22 @@ fun ObfBoardView(
             modifier = modifier.padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (showMessageBar) {
-                SymbolBar(
-                    selectedButtons = selectedButtons,
-                    imagesById = imagesById,
-                    extractedImages = extractedImages,
-                    onSpeak = onSpeakSentence,
-                    onSave = onSaveSentence,
-                    isSaveEnabled = isSaveSentenceEnabled,
-                    onDelete = onDeleteLast,
-                    onClear = onClearSentence,
-                    showSentenceText = showSentenceText,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(if (showSentenceText) 260.dp else 100.dp)
-                )
+            SymbolBar(
+                selectedButtons = selectedButtons,
+                imagesById = imagesById,
+                extractedImages = extractedImages,
+                showActions = showActions,
+                sentenceText = sentenceText,
+                presentationMode = presentationMode,
+                onSpeak = onSpeakSentence,
+                onSave = onSaveSentence,
+                isSaveEnabled = isSaveSentenceEnabled,
+                onDelete = onDeleteLast,
+                onClear = onClearSentence,
+                modifier = Modifier.fillMaxWidth()
+            )
 
-                Spacer(modifier = Modifier.height(8.dp))
-            }
+            Spacer(modifier = Modifier.height(8.dp))
 
             val gridItems = remember(grid, buttonsById) {
                 buildBoardGridItems(grid, buttonsById)
@@ -435,32 +433,70 @@ fun SymbolBar(
     selectedButtons: List<Pair<ObfButton, ImageBitmap?>>,
     imagesById: Map<String, io.github.jdreioe.wingmate.domain.obf.ObfImage>,
     extractedImages: Map<String, ByteArray>,
+    showActions: Boolean = true,
+    sentenceText: String = "",
+    presentationMode: SentencePresentationMode = SentencePresentationMode.Normal,
     onSpeak: () -> Unit,
     onSave: () -> Unit,
     isSaveEnabled: Boolean,
     onDelete: () -> Unit,
     onClear: () -> Unit,
-    showSentenceText: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val maxTextLines = when (presentationMode) {
+        SentencePresentationMode.Normal -> 2
+        SentencePresentationMode.Fullscreen -> 4
+    }
+    val textScrollState = rememberScrollState()
+    val symbolsScrollState = rememberLazyListState()
+
+    val hasContent = selectedButtons.isNotEmpty()
+    val effectiveSentenceText = if (hasContent && sentenceText.isBlank()) {
+        selectedButtons.joinToString(" ") { (button, _) ->
+            (button.label ?: button.vocalization).orEmpty()
+        }
+    } else sentenceText
+
+    val currentSentenceLength = effectiveSentenceText.length
+    var previousLength by remember { mutableStateOf(currentSentenceLength) }
+    LaunchedEffect(currentSentenceLength) {
+        if (currentSentenceLength > previousLength) {
+            val isNearBottom = textScrollState.value >= textScrollState.maxValue - 32
+            if (isNearBottom) {
+                textScrollState.animateScrollTo(textScrollState.maxValue)
+            }
+        }
+        previousLength = currentSentenceLength
+    }
+
+    LaunchedEffect(selectedButtons.size) {
+        if (selectedButtons.isNotEmpty()) {
+            symbolsScrollState.animateScrollToItem(selectedButtons.size - 1)
+        }
+    }
+
     Surface(
         modifier = modifier.shadow(2.dp, RoundedCornerShape(16.dp)),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-            if (showSentenceText) {
+        Column(modifier = Modifier.widthIn(max = 1200.dp).padding(8.dp)) {
+            if (effectiveSentenceText.isNotEmpty()) {
                 Box(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentAlignment = Alignment.CenterStart
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = (maxTextLines * 28).dp)
+                        .verticalScroll(textScrollState)
+                        .semantics {
+                            contentDescription = effectiveSentenceText
+                        },
+                    contentAlignment = Alignment.TopStart
                 ) {
                     Text(
-                        text = selectedButtons.joinToString(" ") { (button, _) ->
-                            (button.label ?: button.vocalization).orEmpty()
-                        },
+                        text = effectiveSentenceText,
                         fontSize = 48.sp,
                         lineHeight = 56.sp,
-                        maxLines = 2,
+                        maxLines = maxTextLines,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -470,20 +506,17 @@ fun SymbolBar(
             }
 
             Row(
-                modifier = if (showSentenceText) {
-                    Modifier.fillMaxWidth().height(80.dp)
-                } else {
-                    Modifier.weight(1f).fillMaxWidth()
-                },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 LazyRow(
                     modifier = Modifier.weight(1f).fillMaxHeight(),
+                    state = symbolsScrollState,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(selectedButtons) { (button, bitmap) ->
+                    items(selectedButtons, key = { it.first.id }) { (button, bitmap) ->
                         val resolvedBitmap = remember(button, bitmap) {
                             bitmap ?: button.imageId?.let { id ->
                                 imagesById[id]?.path?.let { path ->
@@ -512,23 +545,25 @@ fun SymbolBar(
                     }
                 }
 
-                VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
+                if (showActions) {
+                    VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    FilledIconButton(
-                        onClick = onSpeak,
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = stringResource(Res.string.board_workspace_speak_sentence))
-                    }
-                    IconButton(onClick = onSave, enabled = isSaveEnabled) {
-                        Icon(Icons.Default.Save, contentDescription = stringResource(Res.string.board_workspace_save_phrase))
-                    }
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.board_workspace_delete_last))
-                    }
-                    IconButton(onClick = onClear) {
-                        Icon(Icons.Default.Clear, contentDescription = stringResource(Res.string.board_workspace_clear_sentence))
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilledIconButton(
+                            onClick = onSpeak,
+                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = stringResource(Res.string.board_workspace_speak_sentence))
+                        }
+                        IconButton(onClick = onSave, enabled = isSaveEnabled) {
+                            Icon(Icons.Default.Save, contentDescription = stringResource(Res.string.board_workspace_save_phrase))
+                        }
+                        IconButton(onClick = onDelete) {
+                            Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.board_workspace_delete_last))
+                        }
+                        IconButton(onClick = onClear) {
+                            Icon(Icons.Default.Clear, contentDescription = stringResource(Res.string.board_workspace_clear_sentence))
+                        }
                     }
                 }
             }
