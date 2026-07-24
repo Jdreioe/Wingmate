@@ -570,7 +570,6 @@ private fun BoardSetWorkspaceScreen(
             statusMessage = unlockToEditMessage
             return
         }
-        selectedButtons = emptyList()
         boardStack = emptyList()
         editSession = BoardSetEditSession(graph, graph)
         mode = BoardWorkspaceMode.Edit
@@ -799,7 +798,7 @@ private fun BoardSetWorkspaceScreen(
                     ObfBoardView(
                         board = activeBoard,
                         isEditMode = mode == BoardWorkspaceMode.Edit,
-                        showMessageBar = mode == BoardWorkspaceMode.Run,
+                        showActions = mode == BoardWorkspaceMode.Run,
                         sentenceText = selectedButtons.joinToString(" ") { (button, _) ->
                             (button.label ?: button.vocalization).orEmpty()
                         },
