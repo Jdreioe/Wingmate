@@ -800,11 +800,7 @@ private fun BoardSetWorkspaceScreen(
                         board = activeBoard,
                         isEditMode = mode == BoardWorkspaceMode.Edit,
                         showMessageBar = mode == BoardWorkspaceMode.Run,
-                        sentenceText = selectedButtons.joinToString(" ") { (button, _) ->
-                            (button.label ?: button.vocalization).orEmpty()
-                        },
-                        presentationMode = if (isFullscreen) SentencePresentationMode.Fullscreen
-                            else SentencePresentationMode.Normal,
+                        showSentenceText = isFullscreen,
                         selectedButtons = selectedButtons,
                         onButtonClick = { button ->
                             val actions = parseObfButtonActions(button)

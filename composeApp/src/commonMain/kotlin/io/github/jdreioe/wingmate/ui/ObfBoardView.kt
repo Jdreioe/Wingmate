@@ -36,9 +36,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Home
@@ -80,8 +77,6 @@ import wingmatekmp.composeapp.generated.resources.board_workspace_speak_sentence
 import wingmatekmp.composeapp.generated.resources.board_workspace_home
 import wingmatekmp.composeapp.generated.resources.board_cell_opens_board
 
-enum class SentencePresentationMode { Normal, Fullscreen }
-
 private data class BoardGridItem(
     val row: Int,
     val column: Int,
@@ -104,8 +99,7 @@ fun ObfBoardView(
     onDeleteLast: () -> Unit = {},
     onClearSentence: () -> Unit = {},
     showMessageBar: Boolean = !isEditMode,
-    sentenceText: String = "",
-    presentationMode: SentencePresentationMode = SentencePresentationMode.Normal,
+    showSentenceText: Boolean = false,
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
     homeBoardId: String? = null
@@ -125,14 +119,15 @@ fun ObfBoardView(
                     selectedButtons = selectedButtons,
                     imagesById = imagesById,
                     extractedImages = extractedImages,
-                    sentenceText = sentenceText,
-                    presentationMode = presentationMode,
                     onSpeak = onSpeakSentence,
                     onSave = onSaveSentence,
                     isSaveEnabled = isSaveSentenceEnabled,
                     onDelete = onDeleteLast,
                     onClear = onClearSentence,
-                    modifier = Modifier.fillMaxWidth()
+                    showSentenceText = showSentenceText,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (showSentenceText) 260.dp else 100.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
@@ -158,14 +153,15 @@ fun ObfBoardView(
                     selectedButtons = selectedButtons,
                     imagesById = imagesById,
                     extractedImages = extractedImages,
-                    sentenceText = sentenceText,
-                    presentationMode = presentationMode,
                     onSpeak = onSpeakSentence,
                     onSave = onSaveSentence,
                     isSaveEnabled = isSaveSentenceEnabled,
                     onDelete = onDeleteLast,
                     onClear = onClearSentence,
-                    modifier = Modifier.fillMaxWidth()
+                    showSentenceText = showSentenceText,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (showSentenceText) 260.dp else 100.dp)
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -439,69 +435,32 @@ fun SymbolBar(
     selectedButtons: List<Pair<ObfButton, ImageBitmap?>>,
     imagesById: Map<String, io.github.jdreioe.wingmate.domain.obf.ObfImage>,
     extractedImages: Map<String, ByteArray>,
-    sentenceText: String = "",
-    presentationMode: SentencePresentationMode = SentencePresentationMode.Normal,
     onSpeak: () -> Unit,
     onSave: () -> Unit,
     isSaveEnabled: Boolean,
     onDelete: () -> Unit,
     onClear: () -> Unit,
+    showSentenceText: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val maxTextLines = when (presentationMode) {
-        SentencePresentationMode.Normal -> 4
-        SentencePresentationMode.Fullscreen -> 6
-    }
-    val textScrollState = rememberScrollState()
-    val symbolsScrollState = rememberLazyListState()
-
-    val hasContent = selectedButtons.isNotEmpty()
-    val effectiveSentenceText = if (hasContent && sentenceText.isBlank()) {
-        selectedButtons.joinToString(" ") { (button, _) ->
-            (button.label ?: button.vocalization).orEmpty()
-        }
-    } else sentenceText
-
-    val currentSentenceLength = effectiveSentenceText.length
-    var previousLength by remember { mutableStateOf(currentSentenceLength) }
-    LaunchedEffect(currentSentenceLength) {
-        if (currentSentenceLength > previousLength) {
-            val isNearBottom = textScrollState.value >= textScrollState.maxValue - 32
-            if (isNearBottom) {
-                textScrollState.animateScrollTo(textScrollState.maxValue)
-            }
-        }
-        previousLength = currentSentenceLength
-    }
-
-    LaunchedEffect(selectedButtons.size) {
-        if (selectedButtons.isNotEmpty()) {
-            symbolsScrollState.animateScrollToItem(selectedButtons.size - 1)
-        }
-    }
-
     Surface(
         modifier = modifier.shadow(2.dp, RoundedCornerShape(16.dp)),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.widthIn(max = 1200.dp).padding(8.dp)) {
-            if (effectiveSentenceText.isNotEmpty()) {
+        Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            if (showSentenceText) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = (maxTextLines * 28).dp)
-                        .verticalScroll(textScrollState)
-                        .semantics {
-                            contentDescription = effectiveSentenceText
-                        },
-                    contentAlignment = Alignment.TopStart
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.CenterStart
                 ) {
                     Text(
-                        text = effectiveSentenceText,
+                        text = selectedButtons.joinToString(" ") { (button, _) ->
+                            (button.label ?: button.vocalization).orEmpty()
+                        },
                         fontSize = 48.sp,
                         lineHeight = 56.sp,
-                        maxLines = maxTextLines,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -511,17 +470,20 @@ fun SymbolBar(
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                modifier = if (showSentenceText) {
+                    Modifier.fillMaxWidth().height(80.dp)
+                } else {
+                    Modifier.weight(1f).fillMaxWidth()
+                },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 LazyRow(
                     modifier = Modifier.weight(1f).fillMaxHeight(),
-                    state = symbolsScrollState,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(selectedButtons, key = { it.first.id }) { (button, bitmap) ->
+                    items(selectedButtons) { (button, bitmap) ->
                         val resolvedBitmap = remember(button, bitmap) {
                             bitmap ?: button.imageId?.let { id ->
                                 imagesById[id]?.path?.let { path ->
