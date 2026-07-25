@@ -71,11 +71,9 @@ import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
-import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.FileStorage
-import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechSegment
@@ -478,7 +476,6 @@ private fun BoardSetWorkspaceScreen(
     onExitToLibrary: () -> Unit
 ) {
     val useCase = koinInject<BoardSetUseCase>()
-    val phraseUseCase = koinInject<PhraseUseCase>()
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
     val soundPlayer = koinInject<SoundPlayer>()
@@ -504,14 +501,11 @@ private fun BoardSetWorkspaceScreen(
     var showRenameBoardSetDialog by remember { mutableStateOf(false) }
     var showResizeBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
-    var isSavingSentence by remember(boardSetId) { mutableStateOf(false) }
     var isExporting by remember(boardSetId) { mutableStateOf(false) }
     var isFullscreen by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(Res.string.board_workspace_unlock_to_edit)
     val savedMessage = stringResource(Res.string.board_workspace_saved)
     val saveErrorMessage = stringResource(Res.string.board_workspace_save_error)
-    val phraseSavedMessage = stringResource(Res.string.board_workspace_phrase_saved)
-    val phraseSaveErrorMessage = stringResource(Res.string.board_workspace_phrase_save_error)
     // Placeholder substituted in click handler (stringResource formatting is composition-only).
     val unsupportedActionTemplate = stringResource(Res.string.board_workspace_unsupported_action, "%ACTION%")
 
@@ -563,6 +557,32 @@ private fun BoardSetWorkspaceScreen(
 
     val activeGraph = editSession?.draft ?: savedGraph
     val activeBoard = activeGraph?.boardsById?.get(selectedBoardId)
+    val sentenceText = remember(selectedButtons, activeBoard?.strings, settings.primaryLanguage) {
+        buildResolvedSentence(
+            selected = selectedButtons,
+            board = activeBoard,
+            primaryLanguage = settings.primaryLanguage
+        )
+    }
+    val availableBoardActions = remember(activeBoard) {
+        val visibleGridButtonIds = activeBoard?.grid
+            ?.order
+            ?.flatten()
+            ?.filterNotNull()
+            ?.toSet()
+        activeBoard?.buttons
+            ?.asSequence()
+            ?.filter { button ->
+                !button.hidden &&
+                    (visibleGridButtonIds == null || button.id in visibleGridButtonIds)
+            }
+            ?.flatMap { parseObfButtonActions(it).asSequence() }
+            ?.toList()
+            .orEmpty()
+    }
+    val boardHasSpeakField = availableBoardActions.any { it == ObfButtonActionEffect.Speak }
+    val boardHasDeleteField = availableBoardActions.any { it == ObfButtonActionEffect.Backspace }
+    val boardHasClearField = availableBoardActions.any { it == ObfButtonActionEffect.Clear }
 
     fun startEditing() {
         val graph = savedGraph ?: return
@@ -800,7 +820,15 @@ private fun BoardSetWorkspaceScreen(
                         board = activeBoard,
                         isEditMode = mode == BoardWorkspaceMode.Edit,
                         showMessageBar = mode == BoardWorkspaceMode.Run,
-                        showSentenceText = isFullscreen,
+                        sentenceText = sentenceText,
+                        symbolBarPresentation = if (isFullscreen) {
+                            SymbolBarPresentation.Fullscreen
+                        } else {
+                            SymbolBarPresentation.Normal
+                        },
+                        showSpeakControl = !boardHasSpeakField,
+                        showDeleteControl = !boardHasDeleteField,
+                        showClearControl = !boardHasClearField,
                         selectedButtons = selectedButtons,
                         onButtonClick = { button ->
                             val actions = parseObfButtonActions(button)
@@ -933,39 +961,6 @@ private fun BoardSetWorkspaceScreen(
                                 scope = scope
                             )
                         },
-                        onSaveSentence = {
-                            val allSingleChars = selectedButtons.all {
-                                val text = (it.first.vocalization ?: it.first.label).orEmpty()
-                                text.length <= 1
-                            }
-                            val separator = if (allSingleChars) "" else " "
-                            val sentence = selectedButtons.joinToString(separator) {
-                                (it.first.vocalization ?: it.first.label).orEmpty()
-                            }.trim()
-                            if (sentence.isNotEmpty() && !isSavingSentence) {
-                                isSavingSentence = true
-                                scope.launch {
-                                    runCatching {
-                                        phraseUseCase.add(
-                                            Phrase(
-                                                id = workspaceId("phrase"),
-                                                text = sentence,
-                                                name = null,
-                                                backgroundColor = null,
-                                                parentId = null,
-                                                createdAt = Clock.System.now().toEpochMilliseconds()
-                                            )
-                                        )
-                                    }.onSuccess {
-                                        statusMessage = phraseSavedMessage
-                                    }.onFailure {
-                                        statusMessage = phraseSaveErrorMessage
-                                    }
-                                    isSavingSentence = false
-                                }
-                            }
-                        },
-                        isSaveSentenceEnabled = selectedButtons.isNotEmpty() && !isSavingSentence,
                         onDeleteLast = {
                             if (selectedButtons.isNotEmpty()) selectedButtons = selectedButtons.dropLast(1)
                         },
@@ -1824,6 +1819,22 @@ internal fun backspaceSentenceSelection(
     )
 }
 
+internal fun buildResolvedSentence(
+    selected: List<Pair<ObfButton, ImageBitmap?>>,
+    board: ObfBoard?,
+    primaryLanguage: String
+): String {
+    val tokens = selected.mapNotNull { (button, _) ->
+        resolveObfLocalizedString(
+            strings = board?.strings.orEmpty(),
+            locale = primaryLanguage,
+            rawValue = button.vocalization ?: button.label
+        )?.trim()?.takeIf { it.isNotEmpty() }
+    }
+    val separator = if (tokens.all { it.length <= 1 }) "" else " "
+    return tokens.joinToString(separator)
+}
+
 private fun speakSelectedButtons(
     selected: List<Pair<ObfButton, ImageBitmap?>>,
     board: ObfBoard,
@@ -1841,7 +1852,11 @@ private fun speakSelectedButtons(
     )
 
     val speechParts = selected.mapNotNull { (button, _) ->
-        val text = (button.vocalization ?: button.label)?.takeIf { it.isNotEmpty() }
+        val text = resolveObfLocalizedString(
+            strings = board.strings,
+            locale = primaryLanguage,
+            rawValue = button.vocalization ?: button.label
+        )?.trim()?.takeIf { it.isNotEmpty() }
             ?: return@mapNotNull null
         val recordingPath = button.soundId
             ?.let { soundId -> board.sounds.firstOrNull { it.id == soundId } }
