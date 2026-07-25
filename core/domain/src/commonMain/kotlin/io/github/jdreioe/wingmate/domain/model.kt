@@ -1,5 +1,7 @@
 package io.github.jdreioe.wingmate.domain
 
+import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
+import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -90,6 +92,10 @@ data class Settings(
     val showLabels: Boolean = true,
     val showSymbols: Boolean = true,
     val labelAtTop: Boolean = false,
+    // Global defaults inherited by Screens and then Pages.
+    val boardShowMessageBar: Boolean = true,
+    val boardActivationBehavior: BoardActivationBehavior = BoardActivationBehavior.SpeakAndAdd,
+    val boardReturnBehavior: BoardReturnBehavior = BoardReturnBehavior.Stay,
     val holdToSelectMillis: Long = 0,
     val gridColumns: Int = 3,
     val highContrastMode: Boolean = false,

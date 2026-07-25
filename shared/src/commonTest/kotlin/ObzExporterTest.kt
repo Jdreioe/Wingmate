@@ -5,6 +5,10 @@ import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLicense
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
+import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
+import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_SETTINGS_EXTENSION
+import io.github.jdreioe.wingmate.domain.obf.encodeBoardSettings
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
@@ -75,6 +79,26 @@ class ObzExporterTest {
         assertTrue(manifestStr.contains("\"format\""))
         assertTrue(manifestStr.contains("\"root\""))
         assertFalse(json.parseToJsonElement(manifestStr).containsObjectKey("extensions"))
+    }
+
+    @Test
+    fun manifestIncludesScreenSettingsExtension() = runBlocking {
+        val settings = BoardSettingsOverrides(
+            showLabels = false,
+            activationBehavior = BoardActivationBehavior.SpeakOnly
+        )
+        val zip = exporter.export(
+            boards = listOf(rootBoard),
+            rootBoardId = "root",
+            manifestExtensions = mapOf(
+                OBF_SCREEN_SETTINGS_EXTENSION to encodeBoardSettings(settings)
+            )
+        )
+
+        val manifest = extractEntry(zip, "manifest.json")?.decodeToString().orEmpty()
+        assertTrue(manifest.contains(OBF_SCREEN_SETTINGS_EXTENSION))
+        assertTrue(manifest.contains("speak_only"))
+        assertFalse(json.parseToJsonElement(manifest).containsObjectKey("extensions"))
     }
 
     @Test
