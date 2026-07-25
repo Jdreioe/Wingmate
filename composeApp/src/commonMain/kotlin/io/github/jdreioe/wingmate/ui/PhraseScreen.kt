@@ -1215,6 +1215,7 @@ fun PhraseScreen(
                                 board = currentBoard!!,
                                 extractedImages = extractedImages,
                                 selectedButtons = selectedObfButtons,
+                                sentenceText = input.text,
                                 onButtonClick = { button ->
                                     // Check if this is a linking button
                                     val loadBoard = button.loadBoard
