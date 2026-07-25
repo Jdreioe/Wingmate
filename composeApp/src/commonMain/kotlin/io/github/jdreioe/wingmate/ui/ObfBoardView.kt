@@ -28,6 +28,8 @@ import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfImageSource
 import io.github.jdreioe.wingmate.domain.obf.resolveObfImageSource
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
+import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
+import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -109,11 +111,20 @@ fun ObfBoardView(
     showMessageBar: Boolean = !isEditMode,
     sentenceText: String = "",
     symbolBarPresentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
+    boardSettings: ResolvedBoardSettings? = null,
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
     homeBoardId: String? = null
 ) {
     val settings by rememberReactiveSettings()
+    val effectiveBoardSettings = boardSettings ?: resolveBoardSettings(
+        appShowLabels = settings.showLabels,
+        appShowSymbols = settings.showSymbols,
+        appLabelAtTop = settings.labelAtTop,
+        appShowMessageBar = settings.boardShowMessageBar,
+        appActivationBehavior = settings.boardActivationBehavior,
+        appReturnBehavior = settings.boardReturnBehavior
+    )
     val imagesById = remember(board) { board.images.associateBy { it.id } }
     // Absolute positioning: if every button has top/left/width/height, render fractionally
     val isAbsoluteLayout = remember(board) { board.isAbsoluteLayout }
@@ -144,13 +155,29 @@ fun ObfBoardView(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                        renderAbsoluteButtons(board, imagesById, extractedImages, isEditMode, onButtonClick, homeBoardId)
+                        renderAbsoluteButtons(
+                            board,
+                            imagesById,
+                            extractedImages,
+                            isEditMode,
+                            onButtonClick,
+                            homeBoardId,
+                            effectiveBoardSettings
+                        )
                     }
                 }
             }
         } else {
             BoxWithConstraints(modifier = modifier.fillMaxSize().padding(8.dp)) {
-                renderAbsoluteButtons(board, imagesById, extractedImages, isEditMode, onButtonClick, homeBoardId)
+                renderAbsoluteButtons(
+                    board,
+                    imagesById,
+                    extractedImages,
+                    isEditMode,
+                    onButtonClick,
+                    homeBoardId,
+                    effectiveBoardSettings
+                )
             }
         }
     } else if (grid != null) {
@@ -217,7 +244,8 @@ fun ObfBoardView(
                                         isEditMode = isEditMode,
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
                                         boardStrings = board.strings,
-                                        locale = settings.primaryLanguage
+                                        locale = settings.primaryLanguage,
+                                        boardSettings = effectiveBoardSettings
                                     )
                                 } else if (isEditMode && button == null) {
                                     OutlinedCard(
@@ -288,7 +316,8 @@ fun ObfBoardView(
                                         onClick = { onButtonClick(button) },
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
                                         boardStrings = board.strings,
-                                        locale = settings.primaryLanguage
+                                        locale = settings.primaryLanguage,
+                                        boardSettings = effectiveBoardSettings
                                     )
                                 }
                             }
@@ -620,12 +649,21 @@ fun ObfButtonItem(
     isEditMode: Boolean = false,
     isHomeLink: Boolean = false,
     boardStrings: Map<String, Map<String, String>> = emptyMap(),
-    locale: String? = null
+    locale: String? = null,
+    boardSettings: ResolvedBoardSettings? = null
 ) {
     val speechService: SpeechService = koinInject()
     val voiceUseCase: VoiceUseCase = koinInject()
     val aacLogger: AacLogger = koinInject()
     val settings by rememberReactiveSettings()
+    val effectiveBoardSettings = boardSettings ?: resolveBoardSettings(
+        appShowLabels = settings.showLabels,
+        appShowSymbols = settings.showSymbols,
+        appLabelAtTop = settings.labelAtTop,
+        appShowMessageBar = settings.boardShowMessageBar,
+        appActivationBehavior = settings.boardActivationBehavior,
+        appReturnBehavior = settings.boardReturnBehavior
+    )
     val displayLabel = resolveObfLocalizedString(boardStrings, locale, button.label)
     val displayVocalization = resolveObfLocalizedString(boardStrings, locale, button.vocalization)
     
@@ -809,11 +847,12 @@ fun ObfButtonItem(
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxSize()
             ) {
-                val showImg = settings.showSymbols &&
+                val showImg = effectiveBoardSettings.showSymbols &&
                     (imageBitmap != null || !imageModel.isNullOrBlank() || symbolUnavailable)
-                val showLbl = settings.showLabels && !(displayLabel.isNullOrBlank() && displayVocalization.isNullOrBlank())
+                val showLbl = effectiveBoardSettings.showLabels &&
+                    !(displayLabel.isNullOrBlank() && displayVocalization.isNullOrBlank())
 
-                if (settings.labelAtTop && showImg && showLbl) {
+                if (effectiveBoardSettings.labelAtTop && showImg && showLbl) {
                     val labelText = displayLabel ?: displayVocalization ?: ""
                     Text(
                         text = labelText,
@@ -909,7 +948,8 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
     extractedImages: Map<String, ByteArray>,
     isEditMode: Boolean,
     onButtonClick: (ObfButton) -> Unit,
-    homeBoardId: String?
+    homeBoardId: String?,
+    boardSettings: ResolvedBoardSettings
 ) {
     val containerWidth = maxWidth
     val containerHeight = maxHeight
@@ -933,7 +973,8 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
                     },
                     onClick = { onButtonClick(button) },
                     isEditMode = isEditMode,
-                    isHomeLink = button.isHomeNavigation(homeBoardId)
+                    isHomeLink = button.isHomeNavigation(homeBoardId),
+                    boardSettings = boardSettings
                 )
             }
         }

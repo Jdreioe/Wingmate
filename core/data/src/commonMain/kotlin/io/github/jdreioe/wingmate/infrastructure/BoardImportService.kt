@@ -11,6 +11,9 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
+import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_SETTINGS_EXTENSION
+import io.github.jdreioe.wingmate.domain.obf.decodeBoardSettings
 import io.github.jdreioe.wingmate.platform.FilePicker
 import kotlin.random.Random
 import kotlin.time.Clock
@@ -61,7 +64,7 @@ class BoardImportService(
     private suspend fun importSingleObfGraph(filePath: String): BoardSetGraph? {
         val content = filePicker.readFileAsText(filePath) ?: return null
         val board = obfParser.parseBoard(content).getOrNull() ?: return null
-        return buildGraph(listOf(board to true), emptyMap())
+        return buildGraph(listOf(board to true), emptyMap(), BoardSettingsOverrides())
     }
 
     private suspend fun importObzGraph(filePath: String): BoardSetGraph? {
@@ -93,12 +96,18 @@ class BoardImportService(
             }
         }
 
-        return buildGraph(boards, mediaEntries)
+        return buildGraph(
+            boards = boards,
+            zipMedia = mediaEntries,
+            screenSettings = decodeBoardSettings(manifest.extensions[OBF_SCREEN_SETTINGS_EXTENSION])
+                ?: BoardSettingsOverrides()
+        )
     }
 
     private suspend fun buildGraph(
         boards: List<Pair<ObfBoard, Boolean>>,
-        zipMedia: Map<String, ByteArray>
+        zipMedia: Map<String, ByteArray>,
+        screenSettings: BoardSettingsOverrides
     ): BoardSetGraph? {
         if (boards.isEmpty()) return null
 
@@ -129,6 +138,7 @@ class BoardImportService(
             rootBoardId = rootNewId,
             boardIds = rewrittenBoards.map { it.id }.distinct(),
             isLocked = false,
+            screenSettings = screenSettings,
             createdAt = now,
             updatedAt = now
         )

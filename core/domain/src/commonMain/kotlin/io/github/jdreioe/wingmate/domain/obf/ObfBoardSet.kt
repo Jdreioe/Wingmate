@@ -11,6 +11,8 @@ data class ObfBoardSet(
     val isLocked: Boolean = false,
     /** Cache synthesized audio for complete sentences assembled in this board set. */
     val cacheWholeSentences: Boolean = true,
+    /** Screen-level defaults inherited by Pages unless they provide an override. */
+    val screenSettings: BoardSettingsOverrides = BoardSettingsOverrides(),
     val createdAt: Long,
     val updatedAt: Long
 )

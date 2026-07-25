@@ -1,5 +1,7 @@
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
+import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
@@ -19,6 +21,9 @@ class SettingsModelTest {
         val settings = Settings()
         assertEquals(TtsEngine.SYSTEM, settings.ttsEngine)
         assertEquals(true, settings.historyVisible)
+        assertEquals(true, settings.boardShowMessageBar)
+        assertEquals(BoardActivationBehavior.SpeakAndAdd, settings.boardActivationBehavior)
+        assertEquals(BoardReturnBehavior.Stay, settings.boardReturnBehavior)
     }
 
     @Test
@@ -65,6 +70,21 @@ class SettingsModelTest {
         val encoded = json.encodeToString(Settings(historyVisible = false))
         val decoded = json.decodeFromString<Settings>(encoded)
         assertEquals(false, decoded.historyVisible)
+    }
+
+    @Test
+    fun globalBoardDefaultsRoundTrip() {
+        val original = Settings(
+            boardShowMessageBar = false,
+            boardActivationBehavior = BoardActivationBehavior.SpeakOnly,
+            boardReturnBehavior = BoardReturnBehavior.StartPage
+        )
+
+        val decoded = json.decodeFromString<Settings>(json.encodeToString(original))
+
+        assertEquals(false, decoded.boardShowMessageBar)
+        assertEquals(BoardActivationBehavior.SpeakOnly, decoded.boardActivationBehavior)
+        assertEquals(BoardReturnBehavior.StartPage, decoded.boardReturnBehavior)
     }
 
     @Test

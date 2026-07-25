@@ -9,6 +9,8 @@ import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_SETTINGS_EXTENSION
+import io.github.jdreioe.wingmate.domain.obf.encodeBoardSettings
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.random.Random
@@ -544,7 +546,12 @@ class BoardSetUseCase(
             boards = graph.boards,
             rootBoardId = boardSet.rootBoardId,
             loadMedia = { path -> fileStorage?.loadBytes(path) },
-            soundBytes = soundBytes
+            soundBytes = soundBytes,
+            manifestExtensions = if (boardSet.screenSettings.isEmpty) {
+                emptyMap()
+            } else {
+                mapOf(OBF_SCREEN_SETTINGS_EXTENSION to encodeBoardSettings(boardSet.screenSettings))
+            }
         )
     }
 

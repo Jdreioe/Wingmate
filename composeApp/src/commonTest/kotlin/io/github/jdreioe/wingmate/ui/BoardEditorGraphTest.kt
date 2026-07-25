@@ -6,12 +6,41 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class BoardEditorGraphTest {
+    @Test
+    fun settingsVisitCommitsNameAndOverridesAsOneUndoableEdit() {
+        val graph = graph()
+        val settings = BoardSettingsOverrides(showMessageBar = false)
+        val updated = graph.copy(
+            boardSet = graph.boardSet.copy(
+                name = "Communication",
+                screenSettings = settings
+            ),
+            boards = graph.boards.map { board ->
+                if (board.id == "home") {
+                    board.copy(name = "Everyday").withPageSettingsOverrides(settings)
+                } else {
+                    board
+                }
+            }
+        )
+
+        val session = BoardSetEditSession(graph, graph).apply(updated)
+
+        assertEquals(1, session.undoStack.size)
+        assertEquals("Communication", session.draft.boardSet.name)
+        assertEquals(false, session.draft.rootBoard?.pageSettingsOverrides()?.showMessageBar)
+        assertEquals(graph, session.undo().draft)
+    }
+
     @Test
     fun screenAndIndividualPageNamesCanBeChangedIndependently() {
         val graph = graph()

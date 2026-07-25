@@ -17,6 +17,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.shape.CircleShape
@@ -39,6 +40,8 @@ import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
+import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.infrastructure.ArasaacDownloadProgress
 import io.github.jdreioe.wingmate.infrastructure.ArasaacSymbolDownloadService
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
@@ -101,6 +104,11 @@ fun SettingsScreen(
     var showLabels by remember { mutableStateOf(true) }
     var showSymbols by remember { mutableStateOf(true) }
     var labelAtTop by remember { mutableStateOf(false) }
+    var boardShowMessageBar by remember { mutableStateOf(true) }
+    var boardActivationBehavior by remember {
+        mutableStateOf(BoardActivationBehavior.SpeakAndAdd)
+    }
+    var boardReturnBehavior by remember { mutableStateOf(BoardReturnBehavior.Stay) }
     var gridColumns by remember { mutableStateOf(3) }
     var highContrastMode by remember { mutableStateOf(false) }
 
@@ -179,6 +187,9 @@ fun SettingsScreen(
         showLabels = s.showLabels
         showSymbols = s.showSymbols
         labelAtTop = s.labelAtTop
+        boardShowMessageBar = s.boardShowMessageBar
+        boardActivationBehavior = s.boardActivationBehavior
+        boardReturnBehavior = s.boardReturnBehavior
         holdToSelectMillis = s.holdToSelectMillis
         gridColumns = s.gridColumns
         highContrastMode = s.highContrastMode
@@ -411,11 +422,36 @@ fun SettingsScreen(
                                         inputFieldScale = inputFieldScale,
                                         onInputFieldScaleChange = { inputFieldScale = it; updateSettings { s -> s.copy(inputFieldScale = it) } },
                                         showLabels = showLabels,
-                                        onShowLabelsChange = { checked -> showLabels = checked; updateSettings { it.copy(showLabels = checked) } },
+                                        onShowLabelsChange = { checked ->
+                                            if (checked || showSymbols) {
+                                                showLabels = checked
+                                                updateSettings { it.copy(showLabels = checked) }
+                                            }
+                                        },
                                         showSymbols = showSymbols,
-                                        onShowSymbolsChange = { checked -> showSymbols = checked; updateSettings { it.copy(showSymbols = checked) } },
+                                        onShowSymbolsChange = { checked ->
+                                            if (checked || showLabels) {
+                                                showSymbols = checked
+                                                updateSettings { it.copy(showSymbols = checked) }
+                                            }
+                                        },
                                         labelAtTop = labelAtTop,
                                         onLabelAtTopChange = { checked -> labelAtTop = checked; updateSettings { it.copy(labelAtTop = checked) } },
+                                        boardShowMessageBar = boardShowMessageBar,
+                                        onBoardShowMessageBarChange = { checked ->
+                                            boardShowMessageBar = checked
+                                            updateSettings { it.copy(boardShowMessageBar = checked) }
+                                        },
+                                        boardActivationBehavior = boardActivationBehavior,
+                                        onBoardActivationBehaviorChange = { behavior ->
+                                            boardActivationBehavior = behavior
+                                            updateSettings { it.copy(boardActivationBehavior = behavior) }
+                                        },
+                                        boardReturnBehavior = boardReturnBehavior,
+                                        onBoardReturnBehaviorChange = { behavior ->
+                                            boardReturnBehavior = behavior
+                                            updateSettings { it.copy(boardReturnBehavior = behavior) }
+                                        },
                                         gridColumns = gridColumns,
                                         onGridColumnsChange = { gridColumns = it },
                                         onGridColumnsChangeFinished = { updateSettings { it.copy(gridColumns = gridColumns) } },
@@ -596,7 +632,11 @@ private fun SettingsHomePage(
                 stringResource(Res.string.ui_settings_label_at_top_title),
                 stringResource(Res.string.ui_settings_grid_columns_title),
                 stringResource(Res.string.ui_settings_high_contrast_title),
-                "contrast", "symbols", "labels"
+                stringResource(Res.string.board_settings_message_bar),
+                stringResource(Res.string.board_settings_activation),
+                stringResource(Res.string.board_settings_after_selection),
+                "contrast", "symbols", "labels", "communication", "message bar",
+                "speak and add", "return page"
             )
         ),
         SettingsCategoryItem(
@@ -754,6 +794,33 @@ private fun SettingsHomePage(
             iconContainerColor = Color(0xFFFFB77F),
             iconColor = Color(0xFF6B3000),
             keywords = listOf("contrast", "accessibility")
+        ),
+        SettingsCategoryItem(
+            tab = SettingsTab.Display,
+            title = stringResource(Res.string.board_settings_message_bar),
+            subtitle = stringResource(Res.string.board_settings_global_message_bar_desc),
+            icon = Icons.Filled.Tune,
+            iconContainerColor = Color(0xFFFFB77F),
+            iconColor = Color(0xFF6B3000),
+            keywords = listOf("communication", "message", "sentence", "bar")
+        ),
+        SettingsCategoryItem(
+            tab = SettingsTab.Display,
+            title = stringResource(Res.string.board_settings_activation),
+            subtitle = stringResource(Res.string.board_settings_global_activation_desc),
+            icon = Icons.Filled.Tune,
+            iconContainerColor = Color(0xFFFFB77F),
+            iconColor = Color(0xFF6B3000),
+            keywords = listOf("communication", "speak", "add", "button", "activation")
+        ),
+        SettingsCategoryItem(
+            tab = SettingsTab.Display,
+            title = stringResource(Res.string.board_settings_after_selection),
+            subtitle = stringResource(Res.string.board_settings_global_return_desc),
+            icon = Icons.Filled.Tune,
+            iconContainerColor = Color(0xFFFFB77F),
+            iconColor = Color(0xFF6B3000),
+            keywords = listOf("communication", "navigation", "return", "previous", "start page")
         ),
         SettingsCategoryItem(
             tab = SettingsTab.Display,
@@ -1146,6 +1213,12 @@ private fun DisplaySection(
     onShowSymbolsChange: (Boolean) -> Unit,
     labelAtTop: Boolean,
     onLabelAtTopChange: (Boolean) -> Unit,
+    boardShowMessageBar: Boolean,
+    onBoardShowMessageBarChange: (Boolean) -> Unit,
+    boardActivationBehavior: BoardActivationBehavior,
+    onBoardActivationBehaviorChange: (BoardActivationBehavior) -> Unit,
+    boardReturnBehavior: BoardReturnBehavior,
+    onBoardReturnBehaviorChange: (BoardReturnBehavior) -> Unit,
     gridColumns: Int,
     onGridColumnsChange: (Int) -> Unit,
     onGridColumnsChangeFinished: () -> Unit,
@@ -1200,6 +1273,82 @@ private fun DisplaySection(
         ScaleSlider("Buttons", buttonScale, onButtonScaleChange)
         SettingsGroupDivider()
         ScaleSlider("Input Fields", inputFieldScale, onInputFieldScaleChange)
+    }
+
+    SettingsGroup(title = stringResource(Res.string.board_settings_group_communication)) {
+        SettingsSwitch(
+            checked = boardShowMessageBar,
+            onCheckedChange = onBoardShowMessageBarChange,
+            title = stringResource(Res.string.board_settings_message_bar),
+            description = stringResource(Res.string.board_settings_global_message_bar_desc)
+        )
+        SettingsGroupDivider()
+        SettingsChoiceChips(
+            title = stringResource(Res.string.board_settings_activation),
+            description = stringResource(Res.string.board_settings_global_activation_desc),
+            selected = boardActivationBehavior,
+            options = BoardActivationBehavior.entries,
+            label = { behavior ->
+                stringResource(
+                    when (behavior) {
+                        BoardActivationBehavior.SpeakAndAdd -> Res.string.board_settings_activation_speak_add
+                        BoardActivationBehavior.AddOnly -> Res.string.board_settings_activation_add
+                        BoardActivationBehavior.SpeakOnly -> Res.string.board_settings_activation_speak
+                    }
+                )
+            },
+            onSelect = onBoardActivationBehaviorChange
+        )
+        SettingsGroupDivider()
+        SettingsChoiceChips(
+            title = stringResource(Res.string.board_settings_after_selection),
+            description = stringResource(Res.string.board_settings_global_return_desc),
+            selected = boardReturnBehavior,
+            options = BoardReturnBehavior.entries,
+            label = { behavior ->
+                stringResource(
+                    when (behavior) {
+                        BoardReturnBehavior.Stay -> Res.string.board_settings_return_stay
+                        BoardReturnBehavior.Previous -> Res.string.board_settings_return_previous
+                        BoardReturnBehavior.StartPage -> Res.string.board_settings_return_start
+                    }
+                )
+            },
+            onSelect = onBoardReturnBehaviorChange
+        )
+    }
+}
+
+@Composable
+private fun <T> SettingsChoiceChips(
+    title: String,
+    description: String,
+    selected: T,
+    options: List<T>,
+    label: @Composable (T) -> String,
+    onSelect: (T) -> Unit
+) {
+    Column(modifier = Modifier.padding(vertical = 12.dp)) {
+        Text(title, style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            options.forEach { option ->
+                FilterChip(
+                    selected = option == selected,
+                    onClick = { onSelect(option) },
+                    label = { Text(label(option)) }
+                )
+            }
+        }
     }
 }
 
@@ -2033,7 +2182,7 @@ private fun regionCodePart(localeTag: String): String? {
 // ─── Reusable Components ─────────────────────────────────────────────────────
 
 @Composable
-private fun SettingsGroup(
+internal fun SettingsGroup(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -2055,23 +2204,25 @@ private fun SettingsGroup(
 }
 
 @Composable
-private fun SettingsGroupDivider() {
+internal fun SettingsGroupDivider() {
     HorizontalDivider(
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
     )
 }
 
 @Composable
-private fun SettingsNavRow(
+internal fun SettingsNavRow(
     title: String,
     subtitle: String,
     icon: ImageVector,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
+            .alpha(if (enabled) 1f else 0.5f)
             .padding(vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -2098,7 +2249,7 @@ private fun SettingsNavRow(
 }
 
 @Composable
-private fun SettingsPreferenceRow(
+internal fun SettingsPreferenceRow(
     title: String,
     subtitle: String,
     content: @Composable RowScope.() -> Unit
@@ -2122,7 +2273,7 @@ private fun SettingsPreferenceRow(
 }
 
 @Composable
-private fun SettingsSwitch(
+internal fun SettingsSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     title: String,
