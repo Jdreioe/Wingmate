@@ -15,6 +15,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.*
 
 @Composable
 fun VoiceEngineSelectorScreen(
@@ -49,7 +51,7 @@ fun VoiceEngineSelectorScreen(
                 .padding(24.dp)
         ) {
             Text(
-                "Choose Voice Engine",
+                stringResource(Res.string.voice_engine_choose),
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -84,7 +86,7 @@ fun VoiceEngineSelectorScreen(
                             modifier = Modifier.padding(bottom = 8.dp)
                         ) {
                             Text(
-                                "🎙️ Azure TTS",
+                                stringResource(Res.string.voice_engine_azure_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                             )
@@ -92,35 +94,28 @@ fun VoiceEngineSelectorScreen(
                                 Spacer(Modifier.width(8.dp))
                                 AssistChip(
                                     onClick = { },
-                                    label = { Text("Selected", style = MaterialTheme.typography.labelSmall) }
+                                    label = { Text(stringResource(Res.string.common_selected), style = MaterialTheme.typography.labelSmall) }
                                 )
                             }
                         }
 
                         Text(
-                            "✅ Pros:",
+                            stringResource(Res.string.voice_engine_pros),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        Text("• 400+ high-quality neural voices", style = MaterialTheme.typography.bodySmall)
-                        Text("• 140+ languages and variants", style = MaterialTheme.typography.bodySmall)
-                        Text("• Natural pronunciation and intonation", style = MaterialTheme.typography.bodySmall)
-                        Text("• Consistent quality across devices", style = MaterialTheme.typography.bodySmall)
-                        Text("• Advanced voice controls (SSML)", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(Res.string.voice_engine_azure_pros), style = MaterialTheme.typography.bodySmall)
 
                         Spacer(Modifier.height(8.dp))
 
                         Text(
-                            "❌ Cons:",
+                            stringResource(Res.string.voice_engine_cons),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                             color = MaterialTheme.colorScheme.error
                         )
-                        Text("• Requires internet connection", style = MaterialTheme.typography.bodySmall)
-                        Text("• API key setup needed", style = MaterialTheme.typography.bodySmall)
-                        Text("• Cloud service (privacy consideration)", style = MaterialTheme.typography.bodySmall)
-                        Text("• May have slight network delay", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(Res.string.voice_engine_azure_cons), style = MaterialTheme.typography.bodySmall)
                     }
                 }
 
@@ -148,7 +143,7 @@ fun VoiceEngineSelectorScreen(
                             modifier = Modifier.padding(bottom = 8.dp)
                         ) {
                             Text(
-                                "📱 System TTS",
+                                stringResource(Res.string.voice_engine_system_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                             )
@@ -156,35 +151,28 @@ fun VoiceEngineSelectorScreen(
                                 Spacer(Modifier.width(8.dp))
                                 AssistChip(
                                     onClick = { },
-                                    label = { Text("Selected", style = MaterialTheme.typography.labelSmall) }
+                                    label = { Text(stringResource(Res.string.common_selected), style = MaterialTheme.typography.labelSmall) }
                                 )
                             }
                         }
 
                         Text(
-                            "✅ Pros:",
+                            stringResource(Res.string.voice_engine_pros),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        Text("• Works completely offline", style = MaterialTheme.typography.bodySmall)
-                        Text("• No setup or API keys required", style = MaterialTheme.typography.bodySmall)
-                        Text("• Respects system accessibility settings", style = MaterialTheme.typography.bodySmall)
-                        Text("• Fast response time", style = MaterialTheme.typography.bodySmall)
-                        Text("• Complete privacy (no cloud)", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(Res.string.voice_engine_system_pros), style = MaterialTheme.typography.bodySmall)
 
                         Spacer(Modifier.height(8.dp))
 
                         Text(
-                            "❌ Cons:",
+                            stringResource(Res.string.voice_engine_cons),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                             color = MaterialTheme.colorScheme.error
                         )
-                        Text("• Limited voice selection", style = MaterialTheme.typography.bodySmall)
-                        Text("• Quality varies by device", style = MaterialTheme.typography.bodySmall)
-                        Text("• Fewer language options", style = MaterialTheme.typography.bodySmall)
-                        Text("• Less natural sounding", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(Res.string.voice_engine_system_cons), style = MaterialTheme.typography.bodySmall)
                     }
                 }
 
@@ -197,13 +185,13 @@ fun VoiceEngineSelectorScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "💡 Our Recommendation:",
+                            stringResource(Res.string.voice_engine_recommendation_title),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "Choose Azure TTS for best quality and language variety. Choose System TTS for privacy and offline use.",
+                            stringResource(Res.string.voice_engine_recommendation),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
@@ -221,7 +209,7 @@ fun VoiceEngineSelectorScreen(
                         onClick = onCancel,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Cancel")
+                        Text(stringResource(Res.string.common_cancel))
                     }
 
                     Button(
@@ -245,7 +233,7 @@ fun VoiceEngineSelectorScreen(
                         },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Next")
+                        Text(stringResource(Res.string.common_next))
                     }
                 }
             }

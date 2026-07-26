@@ -22,6 +22,8 @@ import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.*
 
 @Composable
 fun SsmlSidebar(
@@ -78,7 +80,7 @@ fun SsmlSidebar(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                "Speech Controls", 
+                stringResource(Res.string.ssml_speech_controls),
                 style = MaterialTheme.typography.titleMedium, 
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -95,8 +97,8 @@ fun SsmlSidebar(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column {
-                            Text("Engine", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
-                            Text(if (ttsEngine == TtsEngine.SYSTEM) "System (Offline)" else "Azure (Premium)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(Res.string.ssml_engine), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
+                            Text(stringResource(if (ttsEngine == TtsEngine.SYSTEM) Res.string.ssml_system_offline else Res.string.ssml_azure_premium), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         }
                         Switch(
                             checked = ttsEngine == TtsEngine.SYSTEM, 
@@ -118,7 +120,7 @@ fun SsmlSidebar(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Voice: ${selectedVoice?.displayName ?: selectedVoice?.name ?: "(none)"}",
+                        text = stringResource(Res.string.ssml_voice, selectedVoice?.displayName ?: selectedVoice?.name ?: stringResource(Res.string.ssml_no_voice)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -130,11 +132,11 @@ fun SsmlSidebar(
                 colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Tone & Speed", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(Res.string.ssml_tone_speed), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     
                     // Pitch
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Text("Pitch", style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(48.dp))
+                        Text(stringResource(Res.string.ssml_pitch), style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(48.dp))
                         Slider(
                             value = pitch.toFloat(), 
                             onValueChange = { pitch = it.toDouble() }, 
@@ -146,7 +148,7 @@ fun SsmlSidebar(
                     
                     // Rate
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Text("Speed", style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(48.dp))
+                        Text(stringResource(Res.string.ssml_speed), style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(48.dp))
                         Slider(
                             value = rate.toFloat(), 
                             onValueChange = { rate = it.toDouble() }, 
@@ -167,7 +169,7 @@ fun SsmlSidebar(
                         modifier = Modifier.fillMaxWidth().height(36.dp),
                         enabled = selectedVoice != null
                     ) { 
-                        Text("Apply Settings") 
+                        Text(stringResource(Res.string.ssml_apply_settings))
                     }
                 }
             }
@@ -177,7 +179,7 @@ fun SsmlSidebar(
                 colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Add Pause", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(Res.string.ssml_add_pause), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         FilterChip(
@@ -207,8 +209,8 @@ fun SsmlSidebar(
                 colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Emphasis", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    Text("Highlight the ${if(hasSelection) "selected text" else "next word"} with:", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(Res.string.ssml_emphasis), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(if (hasSelection) Res.string.ssml_emphasis_selected else Res.string.ssml_emphasis_next), style = MaterialTheme.typography.bodySmall)
                     
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                         listOf("reduced", "moderate", "strong").forEach { level ->
@@ -218,7 +220,11 @@ fun SsmlSidebar(
                                     emphasis = level
                                     insertWithSelection("<emphasis level=\"$level\">", "</emphasis>", "text")
                                 },
-                                label = { Text(level.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }) }
+                                label = { Text(stringResource(when (level) {
+                                    "reduced" -> Res.string.ssml_emphasis_reduced
+                                    "moderate" -> Res.string.ssml_emphasis_moderate
+                                    else -> Res.string.ssml_emphasis_strong
+                                })) }
                             )
                         }
                     }
@@ -230,7 +236,7 @@ fun SsmlSidebar(
                  colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Read As...", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(Res.string.ssml_read_as), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     
                     var expanded by remember { mutableStateOf(false) }
                     
@@ -238,7 +244,14 @@ fun SsmlSidebar(
                         onClick = { expanded = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(sayAsType.replace("-", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() })
+                        Text(stringResource(when (sayAsType) {
+                            "characters", "spell-out" -> Res.string.ssml_type_spell_out
+                            "date" -> Res.string.ssml_type_date
+                            "time" -> Res.string.ssml_type_time
+                            "telephone" -> Res.string.ssml_type_telephone
+                            "currency" -> Res.string.ssml_type_currency
+                            else -> Res.string.ssml_type_number
+                        }))
                         Spacer(Modifier.width(8.dp))
                         Icon(Icons.Filled.ArrowDropDown, null)
                     }
@@ -247,7 +260,14 @@ fun SsmlSidebar(
                          DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                              listOf("spell-out", "date", "time", "telephone", "currency", "number").forEach { type ->
                                 DropdownMenuItem(
-                                    text = { Text(type) },
+                                    text = { Text(stringResource(when (type) {
+                                        "spell-out" -> Res.string.ssml_type_spell_out
+                                        "date" -> Res.string.ssml_type_date
+                                        "time" -> Res.string.ssml_type_time
+                                        "telephone" -> Res.string.ssml_type_telephone
+                                        "currency" -> Res.string.ssml_type_currency
+                                        else -> Res.string.ssml_type_number
+                                    })) },
                                     onClick = { 
                                         sayAsType = type
                                         expanded = false
@@ -265,7 +285,7 @@ fun SsmlSidebar(
                 Icon(Icons.Filled.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "Switch to Azure engine to hear the highest quality changes.", 
+                    stringResource(Res.string.ssml_azure_tip),
                     style = MaterialTheme.typography.labelSmall, 
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

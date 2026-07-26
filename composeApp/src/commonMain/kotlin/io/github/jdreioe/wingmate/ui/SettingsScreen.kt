@@ -721,7 +721,7 @@ private fun SettingsHomePage(
         // Speech
         SettingsCategoryItem(
             tab = SettingsTab.Speech,
-            title = "Text-to-Speech Engine",
+            title = stringResource(Res.string.ui_settings_tts_engine_group),
             subtitle = speechTitle,
             icon = Icons.Filled.RecordVoiceOver,
             iconContainerColor = Color(0xFF78D6F7),
@@ -824,7 +824,7 @@ private fun SettingsHomePage(
         ),
         SettingsCategoryItem(
             tab = SettingsTab.Display,
-            title = "Font Size",
+            title = stringResource(Res.string.ui_settings_font_size),
             subtitle = displayTitle,
             icon = Icons.Filled.Tune,
             iconContainerColor = Color(0xFFFFB77F),
@@ -833,7 +833,7 @@ private fun SettingsHomePage(
         ),
         SettingsCategoryItem(
             tab = SettingsTab.Display,
-            title = "Playback Icons",
+            title = stringResource(Res.string.ui_settings_playback_icons),
             subtitle = displayTitle,
             icon = Icons.Filled.Tune,
             iconContainerColor = Color(0xFFFFB77F),
@@ -842,7 +842,7 @@ private fun SettingsHomePage(
         ),
         SettingsCategoryItem(
             tab = SettingsTab.Display,
-            title = "Category Chips",
+            title = stringResource(Res.string.ui_settings_category_chips),
             subtitle = displayTitle,
             icon = Icons.Filled.Tune,
             iconContainerColor = Color(0xFFFFB77F),
@@ -851,7 +851,7 @@ private fun SettingsHomePage(
         ),
         SettingsCategoryItem(
             tab = SettingsTab.Display,
-            title = "Buttons",
+            title = stringResource(Res.string.ui_settings_buttons),
             subtitle = displayTitle,
             icon = Icons.Filled.Tune,
             iconContainerColor = Color(0xFFFFB77F),
@@ -860,7 +860,7 @@ private fun SettingsHomePage(
         ),
         SettingsCategoryItem(
             tab = SettingsTab.Display,
-            title = "Input Fields",
+            title = stringResource(Res.string.ui_settings_input_fields),
             subtitle = displayTitle,
             icon = Icons.Filled.Tune,
             iconContainerColor = Color(0xFFFFB77F),
@@ -1118,21 +1118,21 @@ private fun SpeechSection(
 ) {
     val showKeyboard = rememberShowKeyboardOnFocus()
 
-    SettingsGroup(title = "Text-to-Speech Engine") {
+    SettingsGroup(title = stringResource(Res.string.ui_settings_tts_engine_group)) {
         SettingsPreferenceRow(
-            title = "Speech engine",
-            subtitle = if (ttsEngine == TtsEngine.SYSTEM) "System TTS" else "Azure TTS"
+            title = stringResource(Res.string.ui_settings_speech_engine),
+            subtitle = stringResource(if (ttsEngine == TtsEngine.SYSTEM) Res.string.ui_settings_system_tts else Res.string.ui_settings_azure_tts)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = ttsEngine != TtsEngine.SYSTEM,
                     onClick = { onTtsEngineChange(TtsEngine.AZURE_USER_RESOURCE) },
-                    label = { Text("Azure") }
+                    label = { Text(stringResource(Res.string.ui_settings_azure)) }
                 )
                 FilterChip(
                     selected = ttsEngine == TtsEngine.SYSTEM,
                     onClick = { onTtsEngineChange(TtsEngine.SYSTEM) },
-                    label = { Text("System") }
+                    label = { Text(stringResource(Res.string.ui_settings_system)) }
                 )
             }
         }
@@ -1142,8 +1142,8 @@ private fun SpeechSection(
                 OutlinedTextField(
                     value = endpoint,
                     onValueChange = onEndpointChange,
-                    label = { Text("Region / Endpoint") },
-                    placeholder = { Text("e.g., eastus") },
+                    label = { Text(stringResource(Res.string.ui_settings_region_endpoint)) },
+                    placeholder = { Text(stringResource(Res.string.ui_settings_region_example)) },
                     modifier = Modifier.fillMaxWidth().then(showKeyboard),
                     shape = MaterialTheme.shapes.large
                 )
@@ -1151,7 +1151,7 @@ private fun SpeechSection(
                 OutlinedTextField(
                     value = subscriptionKey,
                     onValueChange = onSubscriptionKeyChange,
-                    label = { Text("Subscription Key") },
+                    label = { Text(stringResource(Res.string.ui_settings_subscription_key)) },
                     modifier = Modifier.fillMaxWidth().then(showKeyboard),
                     shape = MaterialTheme.shapes.large
                 )
@@ -1163,7 +1163,7 @@ private fun SpeechSection(
             onClick = onOpenF0Setup,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Set up free tier in Azure Portal")
+            Text(stringResource(Res.string.ui_settings_azure_free_tier))
         }
     }
 
@@ -1225,7 +1225,7 @@ private fun DisplaySection(
     highContrastMode: Boolean,
     onHighContrastModeChange: (Boolean) -> Unit
 ) {
-    SettingsGroup(title = "Grid Layout") {
+    SettingsGroup(title = stringResource(Res.string.ui_settings_grid_layout)) {
         SettingsSwitch(
             checked = showLabels,
             onCheckedChange = onShowLabelsChange,
@@ -1263,16 +1263,16 @@ private fun DisplaySection(
         )
     }
 
-    SettingsGroup(title = "UI Scaling") {
-        ScaleSlider("Font Size", fontSizeScale, onFontSizeScaleChange)
+    SettingsGroup(title = stringResource(Res.string.ui_settings_scaling)) {
+        ScaleSlider(stringResource(Res.string.ui_settings_font_size), fontSizeScale, onFontSizeScaleChange)
         SettingsGroupDivider()
-        ScaleSlider("Playback Icons", playbackIconScale, onPlaybackIconScaleChange)
+        ScaleSlider(stringResource(Res.string.ui_settings_playback_icons), playbackIconScale, onPlaybackIconScaleChange)
         SettingsGroupDivider()
-        ScaleSlider("Category Chips", categoryChipScale, onCategoryChipScaleChange)
+        ScaleSlider(stringResource(Res.string.ui_settings_category_chips), categoryChipScale, onCategoryChipScaleChange)
         SettingsGroupDivider()
-        ScaleSlider("Buttons", buttonScale, onButtonScaleChange)
+        ScaleSlider(stringResource(Res.string.ui_settings_buttons), buttonScale, onButtonScaleChange)
         SettingsGroupDivider()
-        ScaleSlider("Input Fields", inputFieldScale, onInputFieldScaleChange)
+        ScaleSlider(stringResource(Res.string.ui_settings_input_fields), inputFieldScale, onInputFieldScaleChange)
     }
 
     SettingsGroup(title = stringResource(Res.string.board_settings_group_communication)) {
@@ -1367,7 +1367,7 @@ private fun AccessibilitySection(
     auditoryFishingEnabled: Boolean,
     onAuditoryFishingChange: (Boolean) -> Unit
 ) {
-    SettingsGroup(title = "Touch & Timing") {
+    SettingsGroup(title = stringResource(Res.string.ui_settings_touch_timing)) {
         SettingsSlider(
             title = stringResource(Res.string.ui_settings_hold_to_select_title),
             description = stringResource(Res.string.ui_settings_hold_to_select_desc),
@@ -1391,7 +1391,7 @@ private fun AccessibilitySection(
         )
     }
 
-    SettingsGroup(title = "Feedback") {
+    SettingsGroup(title = stringResource(Res.string.ui_settings_feedback)) {
         SettingsSwitch(
             checked = selectionSoundEnabled,
             onCheckedChange = onSelectionSoundChange,
@@ -1609,7 +1609,7 @@ private fun GeneralSection(
     }
 
     if (partnerDeviceConnected) {
-        SettingsGroup(title = "Partner Window") {
+        SettingsGroup(title = stringResource(Res.string.ui_settings_partner_window_group)) {
             SettingsSwitch(
                 checked = partnerWindowEnabled,
                 onCheckedChange = onPartnerWindowChange,
@@ -1874,7 +1874,7 @@ private fun VoiceRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = voice.displayName ?: voice.name ?: "Unknown", style = MaterialTheme.typography.bodyLarge)
+            Text(text = voice.displayName ?: voice.name ?: stringResource(Res.string.common_unknown), style = MaterialTheme.typography.bodyLarge)
             Text(
                 text = voice.primaryLanguage?.let(::localizedLocaleDisplayName).orEmpty(),
                 style = MaterialTheme.typography.bodySmall,

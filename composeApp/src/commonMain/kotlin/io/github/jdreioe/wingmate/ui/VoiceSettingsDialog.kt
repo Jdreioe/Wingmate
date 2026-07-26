@@ -17,6 +17,8 @@ import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.*
 
 @Composable
 fun VoiceSettingsDialog(
@@ -35,6 +37,7 @@ fun VoiceSettingsDialog(
     val speechService = koinInject<SpeechService>()
     val settingsUseCase = koinInject<SettingsUseCase>()
     val scope = rememberCoroutineScope()
+    val testPhrase = stringResource(Res.string.voice_settings_test_phrase)
     
     // Get current TTS engine setting
     var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
@@ -45,7 +48,7 @@ fun VoiceSettingsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Voice Settings - ${voice.displayName ?: voice.name}") },
+        title = { Text(stringResource(Res.string.voice_settings_title, voice.displayName ?: voice.name ?: stringResource(Res.string.common_unknown))) },
         text = {
             Column(
                 Modifier
@@ -61,12 +64,15 @@ fun VoiceSettingsDialog(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            "Current Engine: ${if (ttsEngine == TtsEngine.SYSTEM) "System TTS" else "Azure TTS"}",
+                            stringResource(
+                                Res.string.voice_settings_current_engine,
+                                stringResource(if (ttsEngine == TtsEngine.SYSTEM) Res.string.ui_settings_system_tts else Res.string.ui_settings_azure_tts)
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            if (ttsEngine == TtsEngine.SYSTEM) "Using device's built-in text-to-speech" else "Using Microsoft Azure Cognitive Services",
+                            stringResource(if (ttsEngine == TtsEngine.SYSTEM) Res.string.voice_settings_system_description else Res.string.voice_settings_azure_description),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
@@ -76,12 +82,12 @@ fun VoiceSettingsDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 // Voice Settings
-                Text("Select language: $selectedLanguage")
+                Text(stringResource(Res.string.voice_settings_language, selectedLanguage))
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("Pitch: ${String.format("%.2f", pitch)}")
+                Text(stringResource(Res.string.voice_settings_pitch, String.format("%.2f", pitch)))
                 Slider(value = pitch.toFloat(), onValueChange = { pitch = it.toDouble() }, valueRange = 0.5f..2.0f)
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("Rate: ${String.format("%.2f", rate)}")
+                Text(stringResource(Res.string.voice_settings_rate, String.format("%.2f", rate)))
                 Slider(value = rate.toFloat(), onValueChange = { rate = it.toDouble() }, valueRange = 0.5f..2.0f)
                 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -96,13 +102,13 @@ fun VoiceSettingsDialog(
                             // test voice
                             scope.launch { 
                                 try { 
-                                    speechService.speak("This is a test of the voice settings.", voice.copy(pitch = pitch, rate = rate)) 
+                                    speechService.speak(testPhrase, voice.copy(pitch = pitch, rate = rate))
                                 } catch (_: Throwable) {} 
                             }
                         },
                         modifier = Modifier.weight(1f)
                     ) { 
-                        Text("Test Voice") 
+                        Text(stringResource(Res.string.test_voice_test_button))
                     }
                     
                     OutlinedButton(
@@ -111,24 +117,24 @@ fun VoiceSettingsDialog(
                     ) {
                         Icon(
                             Icons.Default.SwapHoriz,
-                            contentDescription = "Change Engine",
+                            contentDescription = stringResource(Res.string.voice_settings_change_engine),
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(4.dp))
-                        Text("Change Engine")
+                        Text(stringResource(Res.string.voice_settings_change_engine))
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_close)) }
         },
         dismissButton = {
             TextButton(onClick = {
                 val updated = voice.copy(selectedLanguage = selectedLanguage, pitch = pitch, rate = rate, pitchForSSML = null, rateForSSML = null)
                 onSave?.invoke(updated)
                 onDismiss()
-            }) { Text("Save") }
+            }) { Text(stringResource(Res.string.common_save)) }
         }
     )
     
@@ -138,7 +144,7 @@ fun VoiceSettingsDialog(
             onDismissRequest = { showEngineComparison = false },
             title = { 
                 Text(
-                    "TTS Engine Comparison",
+                    stringResource(Res.string.voice_settings_comparison),
                     style = MaterialTheme.typography.headlineSmall
                 ) 
             },
@@ -164,7 +170,7 @@ fun VoiceSettingsDialog(
                                 modifier = Modifier.padding(bottom = 8.dp)
                             ) {
                                 Text(
-                                    "Azure TTS",
+                                    stringResource(Res.string.ui_settings_azure_tts),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -172,34 +178,28 @@ fun VoiceSettingsDialog(
                                     Spacer(Modifier.width(8.dp))
                                     AssistChip(
                                         onClick = { },
-                                        label = { Text("Current") }
+                                        label = { Text(stringResource(Res.string.common_current)) }
                                     )
                                 }
                             }
                             
                             Text(
-                                "✅ Pros:",
+                                stringResource(Res.string.voice_engine_pros),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Text("• High-quality neural voices")
-                            Text("• 400+ voices in 140+ languages")
-                            Text("• Fine-tuned pronunciation")
-                            Text("• SSML support for advanced control")
-                            Text("• Consistent quality across devices")
+                            Text(stringResource(Res.string.voice_settings_azure_comparison_pros))
                             
                             Spacer(Modifier.height(8.dp))
                             
                             Text(
-                                "❌ Cons:",
+                                stringResource(Res.string.voice_engine_cons),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.error
                             )
-                            Text("• Requires internet connection")
-                            Text("• Uses cloud service (privacy consideration)")
-                            Text("• May have slight delay")
+                            Text(stringResource(Res.string.voice_settings_azure_comparison_cons))
                         }
                     }
                     
@@ -221,7 +221,7 @@ fun VoiceSettingsDialog(
                                 modifier = Modifier.padding(bottom = 8.dp)
                             ) {
                                 Text(
-                                    "System TTS",
+                                    stringResource(Res.string.ui_settings_system_tts),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -229,47 +229,40 @@ fun VoiceSettingsDialog(
                                     Spacer(Modifier.width(8.dp))
                                     AssistChip(
                                         onClick = { },
-                                        label = { Text("Current") }
+                                        label = { Text(stringResource(Res.string.common_current)) }
                                     )
                                 }
                             }
                             
                             Text(
-                                "✅ Pros:",
+                                stringResource(Res.string.voice_engine_pros),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Text("• Works offline")
-                            Text("• Respects system accessibility settings")
-                            Text("• No internet required")
-                            Text("• Fast response time")
-                            Text("• Complete privacy")
+                            Text(stringResource(Res.string.voice_settings_system_comparison_pros))
                             
                             Spacer(Modifier.height(8.dp))
                             
                             Text(
-                                "❌ Cons:",
+                                stringResource(Res.string.voice_engine_cons),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.error
                             )
-                            Text("• Limited voice selection")
-                            Text("• Quality depends on device")
-                            Text("• Fewer language options")
-                            Text("• Less natural sounding")
+                            Text(stringResource(Res.string.voice_settings_system_comparison_cons))
                         }
                     }
                     
                     Spacer(Modifier.height(16.dp))
                     
                     Text(
-                        "💡 Recommendation:",
+                        stringResource(Res.string.voice_settings_recommendation_title),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "Choose Azure TTS for best quality and language support, or System TTS for offline use and privacy.",
+                        stringResource(Res.string.voice_settings_recommendation),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -283,14 +276,14 @@ fun VoiceSettingsDialog(
                         onDismiss()
                     }
                 ) {
-                    Text("Change Engine")
+                    Text(stringResource(Res.string.voice_settings_change_engine))
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = { showEngineComparison = false }
                 ) {
-                    Text("Keep Current")
+                    Text(stringResource(Res.string.voice_settings_keep_current))
                 }
             }
         )

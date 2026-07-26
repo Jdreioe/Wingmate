@@ -13,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.*
 
 @Composable
 fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
@@ -43,14 +45,14 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
                 .padding(24.dp)
         ) {
             Text(
-                "Azure TTS Configuration", 
+                stringResource(Res.string.azure_config_title),
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground
             )
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            "Configure your Azure Cognitive Services settings to use high-quality neural voices.",
+            stringResource(Res.string.azure_config_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -65,8 +67,8 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
             OutlinedTextField(
                 value = endpoint,
                 onValueChange = { endpoint = it },
-                label = { Text("Azure Endpoint") },
-                placeholder = { Text("https://your-region.api.cognitive.microsoft.com/") },
+                label = { Text(stringResource(Res.string.azure_config_endpoint)) },
+                placeholder = { Text(stringResource(Res.string.azure_setup_endpoint_placeholder)) },
                 modifier = Modifier.fillMaxWidth().then(showKeyboard),
                 singleLine = true
             )
@@ -77,8 +79,8 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
             OutlinedTextField(
                 value = subscriptionKey,
                 onValueChange = { subscriptionKey = it },
-                label = { Text("Subscription Key") },
-                placeholder = { Text("Your Azure subscription key") },
+                label = { Text(stringResource(Res.string.ui_settings_subscription_key)) },
+                placeholder = { Text(stringResource(Res.string.azure_config_key_placeholder)) },
                 modifier = Modifier.fillMaxWidth().then(showKeyboard),
                 visualTransformation = PasswordVisualTransformation(),
                 singleLine = true
@@ -93,16 +95,13 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "ℹ️ How to get Azure credentials:",
+                        stringResource(Res.string.azure_config_help_title),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "1. Go to Azure portal (portal.azure.com)\n" +
-                        "2. Create a 'Speech Services' resource\n" +
-                        "3. Copy the endpoint URL and subscription key\n" +
-                        "4. Paste them in the fields above",
+                        stringResource(Res.string.azure_config_help_steps),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
@@ -120,7 +119,7 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
                     onClick = onBack,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Back")
+                    Text(stringResource(Res.string.common_back))
                 }
 
                 Button(
@@ -139,7 +138,7 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
                     modifier = Modifier.weight(1f),
                     enabled = endpoint.isNotBlank() && subscriptionKey.isNotBlank()
                 ) {
-                    Text("Continue")
+                    Text(stringResource(Res.string.common_continue))
                 }
             }
         }

@@ -40,6 +40,7 @@ import wingmatekmp.composeapp.generated.resources.voice_settings
 import wingmatekmp.composeapp.generated.resources.voice_showing_count
 import wingmatekmp.composeapp.generated.resources.voice_system_title
 import wingmatekmp.composeapp.generated.resources.voice_system_title_with_lang
+import wingmatekmp.composeapp.generated.resources.common_unknown
 
 @Composable
 fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow: (() -> Unit)? = null) {
@@ -348,7 +349,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                                     }
                                     .padding(8.dp)) {
                                     Column(Modifier.weight(1f)) {
-                                        Text(text = v.displayName ?: v.name ?: "Unknown")
+                                        Text(text = v.displayName ?: v.name ?: stringResource(Res.string.common_unknown))
                                         Text(text = v.primaryLanguage ?: "", modifier = Modifier.padding(top = 2.dp))
                                         if (selected?.name == v.name) {
                                             Text(
@@ -412,7 +413,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                                     }
                                     .padding(8.dp)) {
                                     Column(Modifier.weight(1f)) {
-                                        Text(text = v.displayName ?: v.name ?: "Unknown")
+                                        Text(text = v.displayName ?: v.name ?: stringResource(Res.string.common_unknown))
                                         Text(text = v.primaryLanguage ?: "", modifier = Modifier.padding(top = 2.dp))
                                     }
                                     Button(onClick = {
