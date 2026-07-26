@@ -34,6 +34,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
 import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.*
 import wingmatekmp.composeapp.generated.resources.common_next
 import wingmatekmp.composeapp.generated.resources.common_back
 import wingmatekmp.composeapp.generated.resources.common_continue
@@ -529,9 +530,9 @@ private fun PhraseScreenTourPreview() {
             }
             Spacer(Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TourPhraseButton("Hello", Modifier.weight(1f))
-                TourPhraseButton("Yes", Modifier.weight(1f))
-                TourPhraseButton("Help", Modifier.weight(1f))
+                TourPhraseButton(stringResource(Res.string.welcome_tour_phrase_hello), Modifier.weight(1f))
+                TourPhraseButton(stringResource(Res.string.welcome_tour_phrase_yes), Modifier.weight(1f))
+                TourPhraseButton(stringResource(Res.string.welcome_tour_phrase_help), Modifier.weight(1f))
             }
         }
     }

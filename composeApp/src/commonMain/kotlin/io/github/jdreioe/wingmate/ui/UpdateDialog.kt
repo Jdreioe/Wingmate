@@ -11,6 +11,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.*
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.*
 
 @Composable
 fun UpdateDialog(
@@ -21,12 +23,13 @@ fun UpdateDialog(
     onCheckForUpdates: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val noReleaseNotes = stringResource(Res.string.update_no_release_notes)
     
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { 
             Text(
-                "App Update Available", 
+                stringResource(Res.string.update_dialog_title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             ) 
@@ -40,7 +43,7 @@ fun UpdateDialog(
             ) {
                 // Version info
                 Text(
-                    "Version ${updateInfo.version.version} is available",
+                    stringResource(Res.string.update_version_available, updateInfo.version.version),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -49,11 +52,11 @@ fun UpdateDialog(
                 
                 // File info
                 Text(
-                    "File: ${updateInfo.assetName}",
+                    stringResource(Res.string.update_file, updateInfo.assetName),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    "Size: ${formatFileSize(updateInfo.assetSize)}",
+                    stringResource(Res.string.update_size, formatFileSize(updateInfo.assetSize)),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 
@@ -61,7 +64,7 @@ fun UpdateDialog(
                 
                 // Release notes
                 Text(
-                    "Release Notes:",
+                    stringResource(Res.string.update_release_notes),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -75,7 +78,7 @@ fun UpdateDialog(
                     )
                 ) {
                     Text(
-                        text = updateInfo.releaseNotes.ifBlank { "No release notes available." },
+                        text = updateInfo.releaseNotes.ifBlank { noReleaseNotes },
                         modifier = Modifier.padding(12.dp),
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -95,12 +98,12 @@ fun UpdateDialog(
                                 strokeWidth = 2.dp
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Downloading update...")
+                            Text(stringResource(Res.string.update_downloading))
                         }
                     }
                     UpdateStatus.DOWNLOADED -> {
                         Text(
-                            "✓ Download complete. Ready to install.",
+                            stringResource(Res.string.update_download_complete),
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -114,12 +117,12 @@ fun UpdateDialog(
                                 strokeWidth = 2.dp
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Installing update...")
+                            Text(stringResource(Res.string.update_installing))
                         }
                     }
                     UpdateStatus.ERROR -> {
                         Text(
-                            "❌ Update failed. Please try again.",
+                            stringResource(Res.string.update_failed),
                             color = MaterialTheme.colorScheme.error
                         )
                     }
@@ -129,11 +132,11 @@ fun UpdateDialog(
         },
         confirmButton = {
             val buttonText = when (updateStatus) {
-                UpdateStatus.AVAILABLE -> "Install Update"
-                UpdateStatus.DOWNLOADED -> "Install Now"
-                UpdateStatus.DOWNLOADING, UpdateStatus.INSTALLING -> "Please Wait..."
-                UpdateStatus.ERROR -> "Retry"
-                else -> "Install Update"
+                UpdateStatus.AVAILABLE -> stringResource(Res.string.update_install)
+                UpdateStatus.DOWNLOADED -> stringResource(Res.string.update_install_now)
+                UpdateStatus.DOWNLOADING, UpdateStatus.INSTALLING -> stringResource(Res.string.update_wait)
+                UpdateStatus.ERROR -> stringResource(Res.string.common_retry)
+                else -> stringResource(Res.string.update_install)
             }
             
             Button(
@@ -153,7 +156,7 @@ fun UpdateDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Later")
+                Text(stringResource(Res.string.update_later))
             }
         }
     )
@@ -183,13 +186,13 @@ fun UpdateNotificationCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Update Available",
+                        stringResource(Res.string.update_available),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        "Version ${updateInfo.version.version} is ready to install",
+                        stringResource(Res.string.update_version_ready, updateInfo.version.version),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -197,11 +200,11 @@ fun UpdateNotificationCard(
                 
                 Row {
                     TextButton(onClick = onDismiss) {
-                        Text("Dismiss")
+                        Text(stringResource(Res.string.update_dismiss))
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(onClick = onShowDetails) {
-                        Text("View Details")
+                        Text(stringResource(Res.string.update_view_details))
                     }
                 }
             }

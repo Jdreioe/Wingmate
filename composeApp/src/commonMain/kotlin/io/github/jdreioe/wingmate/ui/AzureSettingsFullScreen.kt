@@ -16,6 +16,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import io.github.jdreioe.wingmate.ui.isDesktop
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.*
 
 @Composable
 fun AzureSettingsFullScreen(
@@ -53,7 +55,7 @@ fun AzureSettingsFullScreen(
             .statusBarsPadding()
             .padding(24.dp)
     ) {
-        Text("Speech Settings", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(Res.string.speech_settings_title), style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(12.dp))
         
         if (loading) {
@@ -95,7 +97,7 @@ fun AzureSettingsFullScreen(
                         modifier = Modifier.padding(bottom = 8.dp)
                     ) {
                         Text(
-                            "🎙️ Azure TTS",
+                            stringResource(Res.string.voice_engine_azure_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                         )
@@ -103,35 +105,28 @@ fun AzureSettingsFullScreen(
                             Spacer(Modifier.width(8.dp))
                             AssistChip(
                                 onClick = { },
-                                label = { Text("Selected", style = MaterialTheme.typography.labelSmall) }
+                                label = { Text(stringResource(Res.string.common_selected), style = MaterialTheme.typography.labelSmall) }
                             )
                         }
                     }
                     
                     Text(
-                        "✅ Pros:",
+                        stringResource(Res.string.voice_engine_pros),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    Text("• 400+ high-quality neural voices", style = MaterialTheme.typography.bodySmall)
-                    Text("• 140+ languages and variants", style = MaterialTheme.typography.bodySmall)
-                    Text("• Natural pronunciation and intonation", style = MaterialTheme.typography.bodySmall)
-                    Text("• Consistent quality across devices", style = MaterialTheme.typography.bodySmall)
-                    Text("• Advanced voice controls (SSML)", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(Res.string.voice_engine_azure_pros), style = MaterialTheme.typography.bodySmall)
                     
                     Spacer(Modifier.height(8.dp))
                     
                     Text(
-                        "❌ Cons:",
+                        stringResource(Res.string.voice_engine_cons),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                         color = MaterialTheme.colorScheme.error
                     )
-                    Text("• Requires internet connection", style = MaterialTheme.typography.bodySmall)
-                    Text("• API key setup needed", style = MaterialTheme.typography.bodySmall)
-                    Text("• Cloud service (privacy consideration)", style = MaterialTheme.typography.bodySmall)
-                    Text("• May have slight network delay", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(Res.string.voice_engine_azure_cons), style = MaterialTheme.typography.bodySmall)
                 }
             }
             
@@ -169,7 +164,7 @@ fun AzureSettingsFullScreen(
                         modifier = Modifier.padding(bottom = 8.dp)
                     ) {
                         Text(
-                            "📱 System TTS",
+                            stringResource(Res.string.voice_engine_system_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                         )
@@ -177,35 +172,28 @@ fun AzureSettingsFullScreen(
                             Spacer(Modifier.width(8.dp))
                             AssistChip(
                                 onClick = { },
-                                label = { Text("Selected", style = MaterialTheme.typography.labelSmall) }
+                                label = { Text(stringResource(Res.string.common_selected), style = MaterialTheme.typography.labelSmall) }
                             )
                         }
                     }
                     
                     Text(
-                        "✅ Pros:",
+                        stringResource(Res.string.voice_engine_pros),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    Text("• Works completely offline", style = MaterialTheme.typography.bodySmall)
-                    Text("• No setup or API keys required", style = MaterialTheme.typography.bodySmall)
-                    Text("• Respects system accessibility settings", style = MaterialTheme.typography.bodySmall)
-                    Text("• Fast response time", style = MaterialTheme.typography.bodySmall)
-                    Text("• Complete privacy (no cloud)", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(Res.string.voice_engine_system_pros), style = MaterialTheme.typography.bodySmall)
                     
                     Spacer(Modifier.height(8.dp))
                     
                     Text(
-                        "❌ Cons:",
+                        stringResource(Res.string.voice_engine_cons),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                         color = MaterialTheme.colorScheme.error
                     )
-                    Text("• Limited voice selection", style = MaterialTheme.typography.bodySmall)
-                    Text("• Quality varies by device", style = MaterialTheme.typography.bodySmall)
-                    Text("• Fewer language options", style = MaterialTheme.typography.bodySmall)
-                    Text("• Less natural sounding", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(Res.string.voice_engine_system_cons), style = MaterialTheme.typography.bodySmall)
                 }
             }
             
@@ -218,13 +206,13 @@ fun AzureSettingsFullScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "💡 Our Recommendation:",
+                        stringResource(Res.string.voice_engine_recommendation_title),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Choose Azure TTS for best quality and language variety. Choose System TTS for privacy and offline use.",
+                        stringResource(Res.string.voice_engine_recommendation),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
@@ -238,9 +226,9 @@ fun AzureSettingsFullScreen(
                     Checkbox(checked = virtualMic, onCheckedChange = { checked -> virtualMic = checked })
                     Spacer(Modifier.width(8.dp))
                     Column {
-                        Text("Use virtual microphone for calls")
+                        Text(stringResource(Res.string.ui_settings_virtual_mic_title))
                         Text(
-                            "Routes TTS audio to a virtual device you can pick as mic in Zoom/Meet.",
+                            stringResource(Res.string.ui_settings_virtual_mic_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -251,23 +239,23 @@ fun AzureSettingsFullScreen(
             // Azure Configuration (only show when Azure TTS is selected)
             if (ttsEngine != TtsEngine.SYSTEM) {
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Azure Configuration", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(Res.string.azure_config_title), style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 val showKeyboard = rememberShowKeyboardOnFocus()
                 OutlinedTextField(
                     value = endpoint,
                     onValueChange = { endpoint = it },
-                    label = { Text("Region / Endpoint") },
-                    placeholder = { Text("e.g., eastus") },
+                    label = { Text(stringResource(Res.string.ui_settings_region_endpoint)) },
+                    placeholder = { Text(stringResource(Res.string.ui_settings_region_example)) },
                     modifier = Modifier.fillMaxWidth().then(showKeyboard)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = subscriptionKey,
                     onValueChange = { subscriptionKey = it },
-                    label = { Text("Subscription Key") },
-                    placeholder = { Text("Your Azure Speech service key") },
+                    label = { Text(stringResource(Res.string.ui_settings_subscription_key)) },
+                    placeholder = { Text(stringResource(Res.string.azure_config_key_placeholder)) },
                     modifier = Modifier.fillMaxWidth().then(showKeyboard)
                 )
             }
@@ -276,7 +264,7 @@ fun AzureSettingsFullScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = onCancel) { Text("Cancel") }
+            TextButton(onClick = onCancel) { Text(stringResource(Res.string.common_cancel)) }
             Spacer(modifier = Modifier.width(8.dp))
             Button(onClick = {
                 scope.launch {
@@ -295,7 +283,7 @@ fun AzureSettingsFullScreen(
                     }
                     onNext()
                 }
-            }) { Text("Next") }
+            }) { Text(stringResource(Res.string.common_next)) }
         }
     }
 }

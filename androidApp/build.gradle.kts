@@ -6,7 +6,29 @@ import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.Base64
 import java.util.Properties
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Sync
+import org.gradle.api.tasks.TaskAction
+
+abstract class IncrementVersionCodeTask : DefaultTask() {
+    @get:Internal
+    abstract val versionFile: RegularFileProperty
+
+    @TaskAction
+    fun increment() {
+        val file = versionFile.get().asFile
+        val properties = Properties()
+        if (file.exists()) {
+            file.inputStream().use(properties::load)
+        }
+        val nextCode = (properties.getProperty("versionCode")?.toIntOrNull() ?: 1) + 1
+        properties.setProperty("versionCode", nextCode.toString())
+        file.outputStream().use { properties.store(it, "Auto-incremented by build") }
+        logger.lifecycle("Version code incremented to $nextCode")
+    }
+}
 
 fun toBuildConfigStringLiteral(value: String): String {
     val escaped = value
@@ -247,13 +269,8 @@ android {
         )
     }
 
-    tasks.register("incrementVersionCode") {
-        doLast {
-            val currentCode = versionProps.getProperty("versionCode")?.toInt() ?: 1
-            versionProps.setProperty("versionCode", (currentCode + 1).toString())
-            versionPropsFile.outputStream().use { versionProps.store(it, "Auto-incremented by build") }
-            println("Version code incremented to ${currentCode + 1}")
-        }
+    tasks.register<IncrementVersionCodeTask>("incrementVersionCode") {
+        versionFile.set(layout.projectDirectory.file("../version.properties"))
     }
 
     buildFeatures {
@@ -316,13 +333,23 @@ android {
     }
 }
 
+// Persist the next version code after an app bundle task completes. The bundle
+// uses the code read during configuration; the next bundle picks up the
+// incremented value from version.properties.
+androidComponents.onVariants(androidComponents.selector().all()) { variant ->
+    val bundleTaskName = "bundle${variant.name.replaceFirstChar { it.uppercase() }}"
+    tasks.matching { it.name == bundleTaskName }.configureEach {
+        finalizedBy("incrementVersionCode")
+    }
+}
+
 play {
     val ciFile = file("$buildDir/tmp/play/service-account.json")
     serviceAccountCredentials.set(
         if (ciFile.exists()) ciFile
         else file("service-account.json")
     )
-    track.set("production")
+    track.set("alpha")
 }
 
 val syncComposeAppComposeResources by tasks.registering(Sync::class) {

@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Add
@@ -60,6 +62,7 @@ import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TextEditingPolicy
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.TextSpan
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
@@ -89,12 +92,16 @@ import wingmatekmp.composeapp.generated.resources.phrase_screen_share_last_sound
 import wingmatekmp.composeapp.generated.resources.phrase_screen_ssml_controls
 import wingmatekmp.composeapp.generated.resources.phrase_screen_toggle_fullscreen_cd
 import wingmatekmp.composeapp.generated.resources.phrase_screen_voice_settings
-import wingmatekmp.composeapp.generated.resources.speech_math_mode
+import wingmatekmp.composeapp.generated.resources.speech_math_mode_description
+import wingmatekmp.composeapp.generated.resources.*
 
 private data class ThoughtDraft(
     val input: TextFieldValue,
     val secondaryLanguageRanges: List<TextRange>,
 )
+
+internal fun supportsMathMode(ttsEngine: TtsEngine): Boolean =
+    ttsEngine != TtsEngine.SYSTEM
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -177,6 +184,11 @@ fun PhraseScreen(
             // Input state (hoisted so topBar History button can access it)
             var input by remember { mutableStateOf(TextFieldValue("")) }
             var mathMode by remember { mutableStateOf(false) }
+            LaunchedEffect(settings.ttsEngine) {
+                if (!supportsMathMode(settings.ttsEngine)) {
+                    mathMode = false
+                }
+            }
             var secondaryLanguageRanges by remember { mutableStateOf<List<TextRange>>(emptyList()) }
             var pinnedThoughtDraft by remember { mutableStateOf<ThoughtDraft?>(null) }
             var scratchThoughtDraft by remember { mutableStateOf<ThoughtDraft?>(null) }
@@ -333,11 +345,22 @@ fun PhraseScreen(
                             fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
                         )) },
                         actions = {
-                            FilterChip(
-                                selected = mathMode,
-                                onClick = { mathMode = !mathMode },
-                                label = { Text(stringResource(Res.string.speech_math_mode)) }
-                            )
+                            if (supportsMathMode(settings.ttsEngine)) {
+                                IconToggleButton(
+                                    checked = mathMode,
+                                    onCheckedChange = { mathMode = it }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Calculate,
+                                        contentDescription = stringResource(Res.string.speech_math_mode_description),
+                                        tint = if (mathMode) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        }
+                                    )
+                                }
+                            }
                             IconButton(
                                 onClick = {
                                     featureUsageReporter.reportEvent(
@@ -367,7 +390,11 @@ fun PhraseScreen(
                                 )
                             }) {
                                 Icon(
-                                    imageVector = Icons.Filled.Fullscreen,
+                                    imageVector = if (showFullscreen) {
+                                        Icons.Filled.FullscreenExit
+                                    } else {
+                                        Icons.Filled.Fullscreen
+                                    },
                                     contentDescription = stringResource(Res.string.phrase_screen_toggle_fullscreen_cd)
                                 )
                             }
@@ -394,6 +421,7 @@ fun PhraseScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .platformImePadding()
+                            .navigationBarsPadding()
                             // omit imePadding in common to avoid ambiguity across targets
                             .padding(16.dp)
                     ) {
@@ -703,12 +731,13 @@ fun PhraseScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
                     if (categoryUseCaseState.value == null) {
-                        Text("(Loading categories backend...)", style = MaterialTheme.typography.labelSmall.copy(
+                        Text(stringResource(Res.string.phrase_screen_loading), style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = MaterialTheme.typography.labelSmall.fontSize * settings.fontSizeScale
                         ), color = MaterialTheme.colorScheme.outline)
                     }
 
                     // Category chips
+                    val historyCategoryLabel = stringResource(Res.string.category_history)
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(horizontal = 0.dp)
@@ -718,7 +747,7 @@ fun PhraseScreen(
                             FilterChip(
                                 selected = selectedCategory == null,
                                 onClick = { selectedCategory = null },
-                                label = { Text("All", style = MaterialTheme.typography.bodyLarge.copy(
+                                label = { Text(stringResource(Res.string.category_all), style = MaterialTheme.typography.bodyLarge.copy(
                                     fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                 )) }
                             )
@@ -737,7 +766,7 @@ fun PhraseScreen(
                                             selectedCategory = category
                                         }
                                     },
-                                    label = { Text(category.name ?: "All", style = MaterialTheme.typography.bodyLarge.copy(
+                                    label = { Text(category.name ?: stringResource(Res.string.category_all), style = MaterialTheme.typography.bodyLarge.copy(
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) },
                                     modifier = Modifier
@@ -772,7 +801,7 @@ fun PhraseScreen(
                                 if (showCategoryMenu) {
                                     ModalBottomSheet(onDismissRequest = { showCategoryMenu = false }) {
                                         Column(modifier = Modifier.padding(bottom = 24.dp)) {
-                                    DropdownMenuItem(text = { Text("Move left", style = MaterialTheme.typography.bodyLarge.copy(
+                                    DropdownMenuItem(text = { Text(stringResource(Res.string.category_move_left), style = MaterialTheme.typography.bodyLarge.copy(
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) }, enabled = index > 0, onClick = {
                                         showCategoryMenu = false
@@ -785,7 +814,7 @@ fun PhraseScreen(
                                             }
                                         }
                                     })
-                                    DropdownMenuItem(text = { Text("Move right", style = MaterialTheme.typography.bodyLarge.copy(
+                                    DropdownMenuItem(text = { Text(stringResource(Res.string.category_move_right), style = MaterialTheme.typography.bodyLarge.copy(
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) }, enabled = index < categories.lastIndex, onClick = {
                                         showCategoryMenu = false
@@ -798,7 +827,7 @@ fun PhraseScreen(
                                             }
                                         }
                                     })
-                                    DropdownMenuItem(text = { Text("Delete (with phrases)", style = MaterialTheme.typography.bodyLarge.copy(
+                                    DropdownMenuItem(text = { Text(stringResource(Res.string.category_delete_with_phrases), style = MaterialTheme.typography.bodyLarge.copy(
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) }, onClick = {
                                         showCategoryMenu = false
@@ -815,8 +844,8 @@ fun PhraseScreen(
                             item {
                                 FilterChip(
                                     selected = selectedCategory?.id == HistoryCategoryId,
-                                    onClick = { selectedCategory = CategoryItem(id = HistoryCategoryId, name = "History") },
-                                    label = { Text("History", style = MaterialTheme.typography.bodyLarge.copy(
+                                    onClick = { selectedCategory = CategoryItem(id = HistoryCategoryId, name = historyCategoryLabel) },
+                                    label = { Text(stringResource(Res.string.category_history), style = MaterialTheme.typography.bodyLarge.copy(
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) }
                                 )
@@ -832,11 +861,11 @@ fun PhraseScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
                                             imageVector = Icons.Filled.Add,
-                                            contentDescription = "Add category",
+                                            contentDescription = stringResource(Res.string.category_add_cd),
                                             modifier = Modifier.size((16.dp * settings.playbackIconScale))
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Add", style = MaterialTheme.typography.bodyLarge.copy(
+                                        Text(stringResource(Res.string.common_add), style = MaterialTheme.typography.bodyLarge.copy(
                                             fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                         ))
                                     }
@@ -863,7 +892,7 @@ fun PhraseScreen(
                         var categoryName by remember { mutableStateOf("") }
                         AlertDialog(
                             onDismissRequest = { showAddCategoryDialog = false },
-                            title = { Text("Add Category", style = MaterialTheme.typography.titleLarge.copy(
+                            title = { Text(stringResource(Res.string.category_add_title), style = MaterialTheme.typography.titleLarge.copy(
                                 fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
                             )) },
                             text = {
@@ -871,7 +900,7 @@ fun PhraseScreen(
                                 OutlinedTextField(
                                     value = categoryName,
                                     onValueChange = { categoryName = it },
-                                    placeholder = { Text("Category name", style = MaterialTheme.typography.bodyLarge.copy(
+                                    placeholder = { Text(stringResource(Res.string.category_name_label), style = MaterialTheme.typography.bodyLarge.copy(
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) },
                                     singleLine = true,
@@ -918,7 +947,7 @@ fun PhraseScreen(
                                         categoryName = ""
                                     }
                                 ) {
-                                    Text("Add", style = MaterialTheme.typography.labelLarge.copy(
+                                    Text(stringResource(Res.string.common_add), style = MaterialTheme.typography.labelLarge.copy(
                                         fontSize = MaterialTheme.typography.labelLarge.fontSize * settings.fontSizeScale
                                     ))
                                 }
@@ -928,7 +957,7 @@ fun PhraseScreen(
                                     showAddCategoryDialog = false
                                     categoryName = ""
                                 }) {
-                                    Text("Cancel", style = MaterialTheme.typography.labelLarge.copy(
+                                    Text(stringResource(Res.string.common_cancel), style = MaterialTheme.typography.labelLarge.copy(
                                         fontSize = MaterialTheme.typography.labelLarge.fontSize * settings.fontSizeScale
                                     ))
                                 }
@@ -940,10 +969,10 @@ fun PhraseScreen(
                     if (confirmDeleteCategory != null) {
                         AlertDialog(
                             onDismissRequest = { confirmDeleteCategory = null },
-                            title = { Text("Delete Category", style = MaterialTheme.typography.titleLarge.copy(
+                            title = { Text(stringResource(Res.string.category_delete_title), style = MaterialTheme.typography.titleLarge.copy(
                                 fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
                             )) },
-                            text = { Text("Delete '${confirmDeleteCategory?.name}' and all phrases inside?", style = MaterialTheme.typography.bodyLarge.copy(
+                            text = { Text(stringResource(Res.string.category_delete_message, confirmDeleteCategory?.name.orEmpty()), style = MaterialTheme.typography.bodyLarge.copy(
                                 fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                             )) },
                             confirmButton = {
@@ -967,11 +996,11 @@ fun PhraseScreen(
                                             }
                                         }
                                     }
-                                }) { Text("Delete", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge.copy(
+                                }) { Text(stringResource(Res.string.common_delete), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge.copy(
                                     fontSize = MaterialTheme.typography.labelLarge.fontSize * settings.fontSizeScale
                                 )) }
                             },
-                            dismissButton = { TextButton(onClick = { confirmDeleteCategory = null }) { Text("Cancel", style = MaterialTheme.typography.labelLarge.copy(
+                            dismissButton = { TextButton(onClick = { confirmDeleteCategory = null }) { Text(stringResource(Res.string.common_cancel), style = MaterialTheme.typography.labelLarge.copy(
                                 fontSize = MaterialTheme.typography.labelLarge.fontSize * settings.fontSizeScale
                             )) } }
                         )
@@ -1147,10 +1176,10 @@ fun PhraseScreen(
                                             currentBoard = boardStack.last()
                                             boardStack = boardStack.dropLast(1)
                                         }) {
-                                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.common_back))
                                         }
                                     }
-                                    Text("${currentBoard?.name ?: "Board"}", style = MaterialTheme.typography.titleMedium)
+                                    Text(currentBoard?.name ?: stringResource(Res.string.board_legacy_fallback), style = MaterialTheme.typography.titleMedium)
                                 }
                                 // Right side: Erase and Home buttons
                                 Row {
@@ -1158,14 +1187,14 @@ fun PhraseScreen(
                                         input = TextFieldValue("")
                                         syncDisplayText("")
                                     }) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Erase")
+                                        Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.board_legacy_erase))
                                     }
                                     IconButton(onClick = { 
                                         currentBoard = null
                                         boardsMap = emptyMap()
                                         boardStack = emptyList()
                                     }) {
-                                        Icon(Icons.Default.Home, contentDescription = "Home")
+                                        Icon(Icons.Default.Home, contentDescription = stringResource(Res.string.board_legacy_home))
                                     }
                                 }
                             }
@@ -1179,7 +1208,7 @@ fun PhraseScreen(
                                     syncDisplayText(newValue.text)
                                 },
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).then(boardShowKeyboard),
-                                placeholder = { Text("Tap buttons to build a sentence...") },
+                                placeholder = { Text(stringResource(Res.string.board_legacy_build_sentence)) },
                                 trailingIcon = {
                                     if (input.text.isNotEmpty()) {
                                         IconButton(onClick = {
@@ -1200,7 +1229,7 @@ fun PhraseScreen(
                                                 }
                                             }
                                         }) {
-                                            Icon(Icons.Default.PlayArrow, contentDescription = "Speak")
+                                            Icon(Icons.Default.PlayArrow, contentDescription = stringResource(Res.string.board_legacy_speak))
                                         }
                                     }
                                 },

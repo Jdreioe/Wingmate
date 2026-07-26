@@ -22,6 +22,7 @@ import org.koin.compose.getKoin
 import wingmatekmp.composeapp.generated.resources.Res
 import wingmatekmp.composeapp.generated.resources.ui_settings_feature_reporting_desc
 import wingmatekmp.composeapp.generated.resources.ui_settings_feature_reporting_title
+import wingmatekmp.composeapp.generated.resources.*
 
 @Composable
 fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Unit)? = null) {
@@ -42,10 +43,10 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
     if (configRepo == null) {
         AlertDialog(
             onDismissRequest = onDismiss, 
-            title = { Text("Speech Settings") }, 
-            text = { Text("Config repository not available") }, 
+            title = { Text(stringResource(Res.string.speech_settings_title)) },
+            text = { Text(stringResource(Res.string.speech_settings_config_unavailable)) },
             confirmButton = {
-                TextButton(onClick = onDismiss) { Text("OK") }
+                TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_ok)) }
             }
         )
         return
@@ -121,14 +122,14 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Speech Settings") },
+        title = { Text(stringResource(Res.string.speech_settings_title)) },
         text = {
             if (loading) {
                 CircularProgressIndicator()
             } else {
                 Column {
                     // TTS Toggle
-                    Text("Text-to-Speech Engine", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(Res.string.ui_settings_tts_engine_group), style = MaterialTheme.typography.titleSmall)
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -136,13 +137,13 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                         FilterChip(
                             selected = ttsEngine != TtsEngine.SYSTEM,
                             onClick = { ttsEngine = TtsEngine.AZURE_USER_RESOURCE },
-                            label = { Text("Azure TTS") },
+                            label = { Text(stringResource(Res.string.ui_settings_azure_tts)) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = ttsEngine == TtsEngine.SYSTEM,
                             onClick = { ttsEngine = TtsEngine.SYSTEM },
-                            label = { Text("System TTS") },
+                            label = { Text(stringResource(Res.string.ui_settings_system_tts)) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -154,15 +155,15 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                         OutlinedTextField(
                             value = endpoint,
                             onValueChange = { endpoint = it },
-                            label = { Text("Region / Endpoint") },
-                            placeholder = { Text("e.g., eastus") },
+                            label = { Text(stringResource(Res.string.ui_settings_region_endpoint)) },
+                            placeholder = { Text(stringResource(Res.string.ui_settings_region_example)) },
                             modifier = Modifier.then(showKeyboard)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = subscriptionKey,
                             onValueChange = { subscriptionKey = it },
-                            label = { Text("Subscription Key") },
+                            label = { Text(stringResource(Res.string.ui_settings_subscription_key)) },
                             modifier = Modifier.then(showKeyboard)
                         )
                     }
@@ -174,9 +175,9 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                             Checkbox(checked = virtualMic, onCheckedChange = { checked -> virtualMic = checked })
                             Spacer(Modifier.width(8.dp))
                             Column {
-                                Text("Use virtual microphone for calls")
+                                Text(stringResource(Res.string.ui_settings_virtual_mic_title))
                                 Text(
-                                    "Routes TTS audio to a virtual device you can pick as mic in Zoom/Meet.",
+                                    stringResource(Res.string.ui_settings_virtual_mic_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -215,7 +216,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                     // UI Scaling Settings
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        "UI Scaling",
+                        stringResource(Res.string.ui_settings_scaling),
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
@@ -227,7 +228,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                         ) {
-                            Text("Font Size", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(Res.string.ui_settings_font_size), style = MaterialTheme.typography.bodyMedium)
                             Text("${(fontSizeScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
                         }
                         Slider(
@@ -253,7 +254,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                         ) {
-                            Text("Playback Icons", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(Res.string.ui_settings_playback_icons), style = MaterialTheme.typography.bodyMedium)
                             Text("${(playbackIconScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
                         }
                         Slider(
@@ -278,7 +279,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                         ) {
-                            Text("Category Chips", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(Res.string.ui_settings_category_chips), style = MaterialTheme.typography.bodyMedium)
                             Text("${(categoryChipScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
                         }
                         Slider(
@@ -303,7 +304,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                         ) {
-                            Text("Buttons", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(Res.string.ui_settings_buttons), style = MaterialTheme.typography.bodyMedium)
                             Text("${(buttonScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
                         }
                         Slider(
@@ -328,7 +329,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                         ) {
-                            Text("Input Fields", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(Res.string.ui_settings_input_fields), style = MaterialTheme.typography.bodyMedium)
                             Text("${(inputFieldScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
                         }
                         Slider(
@@ -386,11 +387,11 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                     onDismiss()
                 }
             }) {
-                Text("Save")
+                Text(stringResource(Res.string.common_save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
         }
     )
 }

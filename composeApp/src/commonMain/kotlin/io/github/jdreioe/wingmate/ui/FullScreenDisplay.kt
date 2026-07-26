@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.jdreioe.wingmate.presentation.DisplayTextBus
 import io.github.jdreioe.wingmate.presentation.DisplayWindowBus
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.fullscreen_close
 
 /**
  * Full-screen display for the current phrase text.
@@ -55,7 +58,7 @@ fun FullScreenDisplay(onClose: (() -> Unit)? = null) {
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Close full-screen"
+                    contentDescription = stringResource(Res.string.fullscreen_close)
                 )
             }
 
