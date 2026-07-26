@@ -1,6 +1,9 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.platform.FilePicker
+import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
+import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
+import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -92,6 +95,10 @@ class BoardImportServiceTest {
               "format": "open-board-0.1",
               "id": "food",
               "name": "Food",
+              "ext_wingmate_page_settings": {
+                "showMessageBar": false,
+                "returnBehavior": "previous"
+              },
               "buttons": [
                 { "id": "apple", "label": "Apple", "sound_id": "snd1" }
               ],
@@ -105,6 +112,10 @@ class BoardImportServiceTest {
             {
               "format": "open-board-0.1",
               "root": "boards/home.obf",
+              "ext_wingmate_screen_settings": {
+                "showSymbols": false,
+                "activationBehavior": "add_only"
+              },
               "paths": {
                 "boards": {
                   "home": "boards/home.obf",
@@ -137,6 +148,8 @@ class BoardImportServiceTest {
         val set = service.importBoardSetFromPath("pack.obz")
         assertNotNull(set)
         assertEquals(2, set.boardIds.size)
+        assertEquals(false, set.screenSettings.showSymbols)
+        assertEquals(BoardActivationBehavior.AddOnly, set.screenSettings.activationBehavior)
 
         val home = boardRepo.getBoard(set.rootBoardId)
         assertNotNull(home)
@@ -145,6 +158,8 @@ class BoardImportServiceTest {
         val food = boardRepo.getBoard(foodId)
         assertNotNull(food)
         assertEquals("Food", food.name)
+        assertEquals(false, food.pageSettingsOverrides().showMessageBar)
+        assertEquals(BoardReturnBehavior.Previous, food.pageSettingsOverrides().returnBehavior)
 
         val imagePath = home.images.single().path
         assertNotNull(imagePath)

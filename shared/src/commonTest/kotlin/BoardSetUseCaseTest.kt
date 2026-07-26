@@ -6,6 +6,10 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
+import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
@@ -103,7 +107,25 @@ class BoardSetUseCaseTest {
 
     @Test
     fun duplicateGraphRemapsInternalBoardLinks() = runBlocking {
-        useCase.saveBoardSetGraph(linkedGraph()).getOrThrow()
+        val configured = linkedGraph().let { graph ->
+            graph.copy(
+                boardSet = graph.boardSet.copy(
+                    screenSettings = BoardSettingsOverrides(showSymbols = false)
+                ),
+                boards = graph.boards.map { board ->
+                    if (board.id == "food") {
+                        board.withPageSettingsOverrides(
+                            BoardSettingsOverrides(
+                                activationBehavior = BoardActivationBehavior.SpeakOnly
+                            )
+                        )
+                    } else {
+                        board
+                    }
+                }
+            )
+        }
+        useCase.saveBoardSetGraph(configured).getOrThrow()
 
         val copiedSet = assertNotNull(useCase.duplicateBoardSet("set"))
         val copied = assertNotNull(useCase.loadBoardSetGraph(copiedSet.id))
@@ -114,6 +136,13 @@ class BoardSetUseCaseTest {
         assertTrue(copiedTarget in copiedSet.boardIds)
         assertNotEquals("food", copiedTarget)
         assertEquals(2, copied.boards.size)
+        assertEquals(false, copied.boardSet.screenSettings.showSymbols)
+        assertEquals(
+            BoardActivationBehavior.SpeakOnly,
+            copied.boards.first { it.id != copied.boardSet.rootBoardId }
+                .pageSettingsOverrides()
+                .activationBehavior
+        )
     }
 
     @Test

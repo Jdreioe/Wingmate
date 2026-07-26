@@ -24,7 +24,8 @@ class ObzExporter(
         boards: List<ObfBoard>,
         rootBoardId: String,
         loadMedia: suspend (path: String) -> ByteArray? = { null },
-        soundBytes: Map<String, ByteArray> = emptyMap()
+        soundBytes: Map<String, ByteArray> = emptyMap(),
+        manifestExtensions: Map<String, JsonElement> = emptyMap()
     ): ByteArray {
         val rootBoard = boards.firstOrNull { it.id == rootBoardId }
             ?: error("root board $rootBoardId not found")
@@ -79,12 +80,13 @@ class ObzExporter(
                 boards = boardFiles,
                 images = imageFiles,
                 sounds = soundFiles
-            )
+            ),
+            extensions = manifestExtensions
         )
         val manifestJson = json.encodeToJsonElement(ObfManifest.serializer(), manifest)
         entries["manifest.json"] = json.encodeToString(serializeWithExtensions(manifestJson, manifest)).encodeToByteArray()
 
-        return ZipBuilder.build(entries)
+        return ZipBuilder.build(entries.toList()).getOrThrow()
     }
 
     /**
