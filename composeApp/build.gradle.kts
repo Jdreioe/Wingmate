@@ -54,9 +54,9 @@ kotlin {
         
         val androidMain by getting {
             dependencies {
-                implementation("androidx.activity:activity-compose:1.10.1")
-                implementation("androidx.core:core-ktx:1.10.1")
-                implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
+                implementation(libs.androidx.activity.compose)
+                implementation(libs.androidx.core.ktx)
+                implementation(libs.androidx.lifecycle.runtimeKtx)
                 implementation("io.coil-kt.coil3:coil-network-okhttp:3.5.0")
             }
         }

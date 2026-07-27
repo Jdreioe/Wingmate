@@ -387,18 +387,17 @@ dependencies {
     androidTestImplementation(composeBom)
 
     // Common AndroidX helpers
-    implementation("androidx.core:core-ktx:1.10.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.lifecycle.runtimeKtx)
     implementation("androidx.lifecycle:lifecycle-runtime-compose:${libs.versions.androidx.lifecycle.get()}")
 
-    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation(libs.androidx.activity.compose)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    // Keep Material3 only; icons are available via material3 or the icons artifact if required
-    implementation("androidx.compose.material3:material3")
     // Provide Android Material Components which include platform Material3 styles/attrs
-    implementation("com.google.android.material:material:1.9.0")
+    implementation(libs.google.material)
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
@@ -412,7 +411,7 @@ dependencies {
     implementation("io.ktor:ktor-client-okhttp:2.3.12")
 
     // Dual-screen / WindowManager (API 34+ rear display & window area APIs)
-    implementation("androidx.window:window:1.3.0")
+    implementation(libs.androidx.window)
 
     // Unit testing
     testImplementation(libs.junit)
