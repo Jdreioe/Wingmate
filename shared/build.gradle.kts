@@ -77,7 +77,14 @@ kotlin {
             dependencies {
                 implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
                 implementation("io.ktor:ktor-client-okhttp:2.3.12")
-                implementation(libs.aptabase)
+                implementation(
+                    "com.github.aptabase:aptabase-kotlin:${libs.versions.aptabase.get()}"
+                ) {
+                    // Aptabase does not reference Material Components, but declares it as a
+                    // runtime dependency. Its retained dialogs call Android 15-deprecated
+                    // system-bar color APIs even though Wingmate never uses those dialogs.
+                    exclude(group = "com.google.android.material", module = "material")
+                }
                 // Required for FileProvider and core Android helpers used in androidMain
                 implementation("androidx.core:core-ktx:1.13.1")
                 // Compose Multiplatform for Android UI
