@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.ImportExport
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -36,6 +38,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -507,6 +510,7 @@ private fun BoardSetWorkspaceScreen(
     var settingsTarget by remember(boardSetId) { mutableStateOf<BoardSettingsTarget?>(null) }
     var isExporting by remember(boardSetId) { mutableStateOf(false) }
     var isFullscreen by remember(boardSetId) { mutableStateOf(false) }
+    var appBarMenuExpanded by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(Res.string.board_workspace_unlock_to_edit)
     val savedMessage = stringResource(Res.string.board_workspace_saved)
     val saveErrorMessage = stringResource(Res.string.board_workspace_save_error)
@@ -643,6 +647,40 @@ private fun BoardSetWorkspaceScreen(
         }
     }
 
+    fun exportBoardSet() {
+        scope.launch {
+            isExporting = true
+            statusMessage = null
+            try {
+                val graph = activeGraph
+                if (graph == null) {
+                    statusMessage = "Export failed: no board set loaded"
+                } else {
+                    val obzBytes = useCase.exportBoardSetAsObz(graph.boardSet.id)
+                    if (obzBytes != null) {
+                        val fileName = "${graph.boardSet.name}.obz"
+                        if (shareService != null) {
+                            val shared = shareService.shareFile(fileName, obzBytes)
+                            statusMessage = if (shared) {
+                                "Exported ${graph.boardSet.name}.obz"
+                            } else {
+                                "Export cancelled"
+                            }
+                        } else {
+                            statusMessage = "Export saved (${obzBytes.size} bytes)"
+                        }
+                    } else {
+                        statusMessage = "Export failed: no boards"
+                    }
+                }
+            } catch (e: Exception) {
+                statusMessage = "Export failed: ${e.message ?: "unknown error"}"
+            } finally {
+                isExporting = false
+            }
+        }
+    }
+
     val openSettingsTarget = settingsTarget
     if (
         openSettingsTarget != null &&
@@ -696,7 +734,9 @@ private fun BoardSetWorkspaceScreen(
 
     Scaffold(
         topBar = {
-            if (!isFullscreen) TopAppBar(
+            if (!isFullscreen) BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val useOverflowMenu = maxWidth < if (mode == BoardWorkspaceMode.Edit) 720.dp else 560.dp
+                TopAppBar(
                 title = {
                     Column {
                         Text(
@@ -727,7 +767,140 @@ private fun BoardSetWorkspaceScreen(
                     }
                 },
                 actions = {
-                    if (mode == BoardWorkspaceMode.Edit) {
+                    if (useOverflowMenu) {
+                        Box {
+                            IconButton(onClick = { appBarMenuExpanded = true }) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = stringResource(Res.string.common_more_actions)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = appBarMenuExpanded,
+                                onDismissRequest = { appBarMenuExpanded = false }
+                            ) {
+                                if (mode == BoardWorkspaceMode.Edit) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.board_workspace_undo)) },
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null) },
+                                        enabled = editSession?.undoStack?.isNotEmpty() == true,
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            editSession = editSession?.undo()
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.board_workspace_finish)) },
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            requestFinishEditing()
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.board_settings_page_title)) },
+                                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            settingsTarget = BoardSettingsTarget.Page
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.board_settings_screen_title)) },
+                                        leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            settingsTarget = BoardSettingsTarget.Screen
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.board_workspace_resize)) },
+                                        leadingIcon = { Icon(Icons.Default.ImportExport, contentDescription = null) },
+                                        enabled = activeBoard?.grid != null,
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            showResizeBoardDialog = true
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.board_workspace_set_home)) },
+                                        leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                                        enabled = activeBoard != null &&
+                                            activeBoard.id != activeGraph.boardSet.rootBoardId,
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            val session = editSession
+                                            val board = activeBoard
+                                            if (session != null && board != null) {
+                                                editSession = session.apply(setDraftRoot(session.draft, board.id))
+                                            }
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.board_workspace_delete)) },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Default.Delete,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        },
+                                        enabled = activeGraph?.boards?.size?.let { it > 1 } == true,
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            showDeleteBoardDialog = true
+                                        }
+                                    )
+                                } else {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.board_workspace_enter_fullscreen)) },
+                                        leadingIcon = { Icon(Icons.Default.Fullscreen, contentDescription = null) },
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            isFullscreen = true
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.mode_switch_to_keyboard)) },
+                                        leadingIcon = { Icon(Icons.Default.Keyboard, contentDescription = null) },
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            onSwitchToKeyboard()
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.phrase_screen_import_export_data)) },
+                                        leadingIcon = { Icon(Icons.Default.ImportExport, contentDescription = null) },
+                                        enabled = !isExporting,
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            exportBoardSet()
+                                        }
+                                    )
+                                    if (selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(Res.string.board_workspace_home)) },
+                                            leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                                            onClick = {
+                                                appBarMenuExpanded = false
+                                                selectedBoardId = activeGraph?.boardSet?.rootBoardId
+                                                boardStack = emptyList()
+                                            }
+                                        )
+                                    }
+                                    if (activeGraph?.boardSet?.isLocked == false) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(Res.string.board_workspace_edit)) },
+                                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                            onClick = {
+                                                appBarMenuExpanded = false
+                                                startEditing()
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else if (mode == BoardWorkspaceMode.Edit) {
                         IconButton(
                             onClick = { editSession = editSession?.undo() },
                             enabled = editSession?.undoStack?.isNotEmpty() == true
@@ -785,39 +958,7 @@ private fun BoardSetWorkspaceScreen(
                             )
                         }
                         IconButton(
-                            onClick = {
-                                scope.launch {
-                                    isExporting = true
-                                    statusMessage = null
-                                    try {
-                                        val graph = activeGraph
-                                        if (graph == null) {
-                                            statusMessage = "Export failed: no board set loaded"
-                                        } else {
-                                            val obzBytes = useCase.exportBoardSetAsObz(graph.boardSet.id)
-                                            if (obzBytes != null) {
-                                                val fileName = "${graph.boardSet.name}.obz"
-                                                if (shareService != null) {
-                                                    val shared = shareService.shareFile(fileName, obzBytes)
-                                                    statusMessage = if (shared) {
-                                                        "Exported ${graph.boardSet.name}.obz"
-                                                    } else {
-                                                        "Export cancelled"
-                                                    }
-                                                } else {
-                                                    statusMessage = "Export saved (${obzBytes.size} bytes)"
-                                                }
-                                            } else {
-                                                statusMessage = "Export failed: no boards"
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        statusMessage = "Export failed: ${e.message ?: "unknown error"}"
-                                    } finally {
-                                        isExporting = false
-                                    }
-                                }
-                            },
+                            onClick = ::exportBoardSet,
                             enabled = !isExporting
                         ) {
                             Icon(
@@ -849,7 +990,8 @@ private fun BoardSetWorkspaceScreen(
                         navigationIconContentColor = MaterialTheme.colorScheme.onSurface
                     )
                 } else TopAppBarDefaults.topAppBarColors()
-            )
+                )
+            }
         },
         floatingActionButton = {
             if (mode == BoardWorkspaceMode.Edit) {
