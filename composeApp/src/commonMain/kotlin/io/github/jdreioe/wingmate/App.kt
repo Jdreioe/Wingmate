@@ -114,7 +114,9 @@ fun App() {
                 currentScreen = Screen.Phrases
             }
 
-            Box(modifier = Modifier.fillMaxSize()) {
+            // Draw the Surface behind the system UI, while keeping all routed
+            // screen content and controls clear of bars, gestures, and cutouts.
+            Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
                 when (currentScreen) {
                     Screen.Welcome -> {
                         WelcomeScreen(

@@ -3,17 +3,17 @@ package io.github.jdreioe.wingmate.display
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import io.github.jdreioe.wingmate.configureEdgeToEdgeWindow
 import io.github.jdreioe.wingmate.ui.AppTheme
 import io.github.jdreioe.wingmate.ui.FullScreenDisplay
 
 class PrimaryDisplayActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        configureEdgeToEdgeWindow()
         setContent {
             AppTheme {
                 Box(Modifier.fillMaxSize()) {
@@ -24,6 +24,11 @@ class PrimaryDisplayActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        configureEdgeToEdgeWindow()
     }
 
     override fun onDestroy() {

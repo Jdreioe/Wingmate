@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.TopAppBarDefaults
@@ -155,6 +156,7 @@ fun PhraseScreen(
     var showUiLanguageDialog by remember { mutableStateOf(false) }
     var showSettingsExportDialog by remember { mutableStateOf(false) }
     var showSsmlDialog by remember { mutableStateOf(false) }
+    var appBarMenuExpanded by remember { mutableStateOf(false) }
     val showFullscreen by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsStateWithLifecycle()
     val selectBoardDialogTitle = stringResource(Res.string.phrase_screen_select_board_title)
 
@@ -336,84 +338,161 @@ fun PhraseScreen(
                     }
             }
 
+            val openBoardSets: () -> Unit = {
+                featureUsageReporter.reportEvent(
+                    FeatureUsageEvents.SCREEN_VIEW,
+                    "screen" to "boardsets"
+                )
+                onOpenBoardSetManager?.invoke()
+                Unit
+            }
+            val toggleFullscreen = {
+                io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(input.text)
+                if (showFullscreen) io.github.jdreioe.wingmate.presentation.DisplayWindowBus.close()
+                else io.github.jdreioe.wingmate.presentation.DisplayWindowBus.open()
+                featureUsageReporter.reportEvent(
+                    FeatureUsageEvents.FULLSCREEN_TOGGLE,
+                    "enabled" to (!showFullscreen).toString()
+                )
+            }
+            val openSettings = {
+                showSettingsDialog = true
+                featureUsageReporter.reportEvent(
+                    FeatureUsageEvents.SETTINGS_UPDATED,
+                    "action" to "open_app_settings"
+                )
+            }
 
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 topBar = {
-                    TopAppBar(
-                        title = { Text("Wingmate", style = MaterialTheme.typography.titleLarge.copy(
-                            fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
-                        )) },
-                        actions = {
-                            if (supportsMathMode(settings.ttsEngine)) {
-                                IconToggleButton(
-                                    checked = mathMode,
-                                    onCheckedChange = { mathMode = it }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Calculate,
-                                        contentDescription = stringResource(Res.string.speech_math_mode_description),
-                                        tint = if (mathMode) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        val useOverflowMenu = maxWidth <= 720.dp
+                        TopAppBar(
+                            title = { Text("Wingmate", style = MaterialTheme.typography.titleLarge.copy(
+                                fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
+                            )) },
+                            actions = {
+                                if (useOverflowMenu) {
+                                    Box {
+                                        IconButton(onClick = { appBarMenuExpanded = true }) {
+                                            Icon(
+                                                imageVector = Icons.Filled.MoreVert,
+                                                contentDescription = stringResource(Res.string.common_more_actions)
+                                            )
                                         }
-                                    )
+                                        DropdownMenu(
+                                            expanded = appBarMenuExpanded,
+                                            onDismissRequest = { appBarMenuExpanded = false }
+                                        ) {
+                                            if (supportsMathMode(settings.ttsEngine)) {
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(Res.string.speech_math_mode_description)) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Filled.Calculate,
+                                                            contentDescription = null,
+                                                            tint = if (mathMode) {
+                                                                MaterialTheme.colorScheme.primary
+                                                            } else {
+                                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                                            }
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        mathMode = !mathMode
+                                                        appBarMenuExpanded = false
+                                                    }
+                                                )
+                                            }
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(Res.string.mode_switch_to_screens)) },
+                                                leadingIcon = {
+                                                    Icon(Icons.Filled.GridView, contentDescription = null)
+                                                },
+                                                enabled = onOpenBoardSetManager != null,
+                                                onClick = {
+                                                    appBarMenuExpanded = false
+                                                    openBoardSets()
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(Res.string.phrase_screen_toggle_fullscreen_cd)) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = if (showFullscreen) {
+                                                            Icons.Filled.FullscreenExit
+                                                        } else {
+                                                            Icons.Filled.Fullscreen
+                                                        },
+                                                        contentDescription = null
+                                                    )
+                                                },
+                                                onClick = {
+                                                    appBarMenuExpanded = false
+                                                    toggleFullscreen()
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(Res.string.phrase_screen_app_settings)) },
+                                                leadingIcon = {
+                                                    Icon(Icons.Filled.Settings, contentDescription = null)
+                                                },
+                                                onClick = {
+                                                    appBarMenuExpanded = false
+                                                    openSettings()
+                                                }
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    if (supportsMathMode(settings.ttsEngine)) {
+                                        IconToggleButton(
+                                            checked = mathMode,
+                                            onCheckedChange = { mathMode = it }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Calculate,
+                                                contentDescription = stringResource(Res.string.speech_math_mode_description),
+                                                tint = if (mathMode) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                }
+                                            )
+                                        }
+                                    }
+                                    IconButton(
+                                        onClick = openBoardSets,
+                                        enabled = onOpenBoardSetManager != null
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.GridView,
+                                            contentDescription = stringResource(Res.string.mode_switch_to_screens)
+                                        )
+                                    }
+
+                                    IconButton(onClick = toggleFullscreen) {
+                                        Icon(
+                                            imageVector = if (showFullscreen) {
+                                                Icons.Filled.FullscreenExit
+                                            } else {
+                                                Icons.Filled.Fullscreen
+                                            },
+                                            contentDescription = stringResource(Res.string.phrase_screen_toggle_fullscreen_cd)
+                                        )
+                                    }
+
+                                    IconButton(onClick = openSettings) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Settings,
+                                            contentDescription = stringResource(Res.string.phrase_screen_app_settings)
+                                        )
+                                    }
                                 }
                             }
-                            IconButton(
-                                onClick = {
-                                    featureUsageReporter.reportEvent(
-                                        FeatureUsageEvents.SCREEN_VIEW,
-                                        "screen" to "boardsets"
-                                    )
-                                    onOpenBoardSetManager?.invoke()
-                                },
-                                enabled = onOpenBoardSetManager != null
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.GridView,
-                                    contentDescription = stringResource(Res.string.mode_switch_to_screens)
-                                )
-                            }
-
-                            // Fullscreen toggle: mirrors the current input text
-                            IconButton(onClick = {
-                                // Always mirror current text first
-                                io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(input.text)
-                                // Toggle the window state so it can be reopened reliably
-                                if (showFullscreen) io.github.jdreioe.wingmate.presentation.DisplayWindowBus.close()
-                                else io.github.jdreioe.wingmate.presentation.DisplayWindowBus.open()
-                                featureUsageReporter.reportEvent(
-                                    FeatureUsageEvents.FULLSCREEN_TOGGLE,
-                                    "enabled" to (!showFullscreen).toString()
-                                )
-                            }) {
-                                Icon(
-                                    imageVector = if (showFullscreen) {
-                                        Icons.Filled.FullscreenExit
-                                    } else {
-                                        Icons.Filled.Fullscreen
-                                    },
-                                    contentDescription = stringResource(Res.string.phrase_screen_toggle_fullscreen_cd)
-                                )
-                            }
-
-                            IconButton(onClick = {
-                                showSettingsDialog = true
-                                featureUsageReporter.reportEvent(
-                                    FeatureUsageEvents.SETTINGS_UPDATED,
-                                    "action" to "open_app_settings"
-                                )
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Filled.Settings,
-                                    contentDescription = stringResource(Res.string.phrase_screen_app_settings)
-                                )
-                            }
-
-                        }
-                    )
+                        )
+                    }
                 },
                 bottomBar = {
                     // Make the playback bar less obvious by removing elevation and background

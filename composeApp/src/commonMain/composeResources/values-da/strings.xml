@@ -42,6 +42,7 @@
     <string name="board_sets_imported">Skærmen blev importeret</string>
     <string name="board_sets_import_error">Skærmen kunne ikke importeres</string>
     <string name="board_workspace_title">Skærm</string>
+    <string name="common_more_actions">Flere handlinger</string>
     <string name="board_workspace_editing">Redigerer: %1$s</string>
     <string name="board_workspace_unlock_to_edit">Lås skærmen op før redigering</string>
     <string name="board_workspace_undo">Fortryd</string>

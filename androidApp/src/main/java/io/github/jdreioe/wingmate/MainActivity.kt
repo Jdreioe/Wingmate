@@ -26,7 +26,6 @@ import java.util.concurrent.Executor
 import io.github.jdreioe.wingmate.display.ExternalDisplayPresentation
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
@@ -68,8 +67,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Match Android 15+ edge-to-edge enforcement on older Android versions too.
-        enableEdgeToEdge()
+        configureEdgeToEdgeWindow()
 
         // Initialize FilePicker bridge
         runCatching {
@@ -166,6 +164,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        configureEdgeToEdgeWindow()
     }
 
     @OptIn(ExperimentalWindowApi::class)
