@@ -55,4 +55,7 @@ interface FileStorage {
      * Checks if a file exists.
      */
     suspend fun exists(fileName: String): Boolean
+
+    /** Removes one app-private file. Missing files are treated as success. */
+    suspend fun delete(fileName: String)
 }

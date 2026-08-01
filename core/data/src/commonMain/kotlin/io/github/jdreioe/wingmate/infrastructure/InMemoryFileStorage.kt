@@ -20,4 +20,9 @@ class InMemoryFileStorage : FileStorage {
 
     override suspend fun exists(fileName: String): Boolean =
         text.containsKey(fileName) || bytes.containsKey(fileName)
+
+    override suspend fun delete(fileName: String) {
+        text.remove(fileName)
+        bytes.remove(fileName)
+    }
 }

@@ -49,5 +49,10 @@ class JvmFileStorage(
         resolve(fileName).exists()
     }
 
+    override suspend fun delete(fileName: String) = withContext(Dispatchers.IO) {
+        val file = resolve(fileName)
+        if (file.exists() && !file.delete()) error("Could not delete $fileName")
+    }
+
     private fun resolve(fileName: String): File = File(rootDir, fileName)
 }

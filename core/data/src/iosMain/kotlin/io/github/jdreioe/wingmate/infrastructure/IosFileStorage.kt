@@ -64,6 +64,13 @@ class IosFileStorage : FileStorage {
         return NSFileManager.defaultManager.fileExistsAtPath(resolve(fileName))
     }
 
+    override suspend fun delete(fileName: String) {
+        val path = resolve(fileName)
+        if (NSFileManager.defaultManager.fileExistsAtPath(path)) {
+            NSFileManager.defaultManager.removeItemAtPath(path, error = null)
+        }
+    }
+
     private fun resolve(fileName: String): String {
         val trimmed = fileName.trimStart('/')
         return if (root.isBlank()) trimmed else "$root/$trimmed"

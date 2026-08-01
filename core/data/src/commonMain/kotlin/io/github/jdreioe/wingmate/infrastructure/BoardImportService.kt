@@ -10,133 +10,281 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfManifest
+import io.github.jdreioe.wingmate.domain.obf.ObfMediaUrlLoader
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_SETTINGS_EXTENSION
 import io.github.jdreioe.wingmate.domain.obf.decodeBoardSettings
+import io.github.jdreioe.wingmate.platform.ArchiveEntry
+import io.github.jdreioe.wingmate.platform.ArchiveReadError
+import io.github.jdreioe.wingmate.platform.ArchiveReadException
+import io.github.jdreioe.wingmate.platform.ArchiveReader
 import io.github.jdreioe.wingmate.platform.FilePicker
+import io.github.jdreioe.wingmate.platform.readEntryBytes
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 import kotlin.time.Clock
 
-/**
- * Imports OBF/OBZ packages into the board-set system, persisting every board in the
- * graph and rewriting zipped media paths into app-private [FileStorage] locations.
- */
+/** One validated import pipeline shared by every OBF/OBZ UI entry point. */
 class BoardImportService(
     private val obfParser: ObfParser,
     private val boardRepository: BoardRepository,
     private val boardSetRepository: BoardSetRepository,
     private val filePicker: FilePicker,
-    private val fileStorage: FileStorage? = null
+    private val fileStorage: FileStorage? = null,
+    private val validator: ObfValidator = ObfValidator(),
+    private val limits: ObzImportLimits = ObzImportLimits(),
+    private val urlLoader: ObfMediaUrlLoader = ObfMediaUrlLoader { null }
 ) {
-    /**
-     * Opens a file picker and imports the selected OBF/OBZ as a new board set.
-     * @return the created board set, or null if cancelled / failed
-     */
-    suspend fun importBoardSet(): ObfBoardSet? {
-        val filePath = filePicker.pickFile("Select Board File", listOf("obf", "obz", "json"))
-            ?: return null
-        return importBoardSetFromPath(filePath)
+    suspend fun importBoardSetResult(): BoardImportResult {
+        val filePath = try {
+            filePicker.pickFile("Select Board File", listOf("obf", "obz", "json"))
+        } catch (_: CancellationException) {
+            return BoardImportResult.Cancelled
+        } catch (error: Throwable) {
+            return failure(BoardImportErrorCode.FILE_UNREADABLE, error.message ?: "Could not open the file picker")
+        } ?: return BoardImportResult.Cancelled
+        return importBoardSetFromPathResult(filePath)
     }
 
-    /**
-     * Legacy entry point used by onboarding. Prefer [importBoardSet].
-     * @return true when a board set was created
-     */
-    suspend fun importBoards(isModern: Boolean = true): Boolean {
-        return importBoardSet() != null
-    }
+    /** Compatibility wrapper for callers that have not migrated to structured results. */
+    suspend fun importBoardSet(): ObfBoardSet? =
+        (importBoardSetResult() as? BoardImportResult.Success)?.boardSet
 
-    suspend fun importBoardSetFromPath(filePath: String): ObfBoardSet? {
-        val isObz = filePath.lowercase().endsWith(".obz")
-        val graph = if (isObz) {
-            importObzGraph(filePath)
-        } else {
-            importSingleObfGraph(filePath)
-        } ?: return null
+    suspend fun importBoards(isModern: Boolean = true): Boolean = importBoardSet() != null
 
-        val canonical = graph.canonicalizeBoardLinks()
-        canonical.boards.forEach { boardRepository.saveBoard(it) }
-        boardSetRepository.saveBoardSet(canonical.boardSet)
-        return canonical.boardSet
-    }
+    suspend fun importBoardSetFromPath(filePath: String): ObfBoardSet? =
+        (importBoardSetFromPathResult(filePath) as? BoardImportResult.Success)?.boardSet
 
-    private suspend fun importSingleObfGraph(filePath: String): BoardSetGraph? {
-        val content = filePicker.readFileAsText(filePath) ?: return null
-        val board = obfParser.parseBoard(content).getOrNull() ?: return null
-        return buildGraph(listOf(board to true), emptyMap(), BoardSettingsOverrides())
-    }
+    suspend fun importBoardSetFromPathResult(filePath: String): BoardImportResult {
+        val warnings = mutableListOf<BoardImportWarning>()
+        val storedPaths = mutableListOf<String>()
+        val savedBoardIds = mutableListOf<String>()
+        var savedSetId: String? = null
+        return try {
+            val graph = if (filePath.lowercase().endsWith(".obz")) {
+                importObzGraph(filePath, warnings, storedPaths)
+            } else {
+                importSingleObfGraph(filePath, warnings, storedPaths)
+            }.canonicalizeBoardLinks()
 
-    private suspend fun importObzGraph(filePath: String): BoardSetGraph? {
-        val entries = filePicker.readZipEntries(filePath) ?: return null
-        val manifestContent = entries["manifest.json"]?.decodeToString() ?: return null
-        val manifest = obfParser.parseManifest(manifestContent).getOrNull() ?: return null
-
-        val mediaEntries = entries.filterKeys { key ->
-            !key.endsWith(".json", ignoreCase = true) &&
-                !key.endsWith(".obf", ignoreCase = true) &&
-                key != "manifest.json"
-        }
-
-        val boards = mutableListOf<Pair<ObfBoard, Boolean>>()
-        val rootPath = manifest.root
-        val rootContent = entries[rootPath]?.decodeToString()
-            ?: entries.entries.firstOrNull { it.key.equals(rootPath, ignoreCase = true) }?.value?.decodeToString()
-        if (rootContent != null) {
-            obfParser.parseBoard(rootContent).getOrNull()?.let { boards.add(it to true) }
-        }
-        if (boards.none { it.second }) return null
-
-        manifest.paths.boards.forEach { (_, path) ->
-            if (path == rootPath) return@forEach
-            val content = entries[path]?.decodeToString()
-                ?: entries.entries.firstOrNull { it.key.equals(path, ignoreCase = true) }?.value?.decodeToString()
-            if (content != null) {
-                obfParser.parseBoard(content).getOrNull()?.let { boards.add(it to false) }
+            graph.boards.forEach { board ->
+                savedBoardIds += board.id
+                boardRepository.saveBoard(board)
             }
+            savedSetId = graph.boardSet.id
+            boardSetRepository.saveBoardSet(graph.boardSet)
+            BoardImportResult.Success(graph.boardSet, warnings)
+        } catch (_: CancellationException) {
+            rollback(savedSetId, savedBoardIds, storedPaths)
+            BoardImportResult.Cancelled
+        } catch (error: ImportFailure) {
+            rollback(savedSetId, savedBoardIds, storedPaths)
+            failure(error.code, error.message ?: error.code.name, warnings)
+        } catch (error: ArchiveReadException) {
+            rollback(savedSetId, savedBoardIds, storedPaths)
+            val code = if (error.error == ArchiveReadError.ENTRY_TOO_LARGE) {
+                BoardImportErrorCode.MEDIA_ENTRY_TOO_LARGE
+            } else {
+                BoardImportErrorCode.MALFORMED_ARCHIVE
+            }
+            failure(code, error.message ?: code.name, warnings)
+        } catch (error: Throwable) {
+            rollback(savedSetId, savedBoardIds, storedPaths)
+            failure(BoardImportErrorCode.PERSISTENCE_FAILED, error.message ?: "Import could not be saved", warnings)
+        }
+    }
+
+    private suspend fun rollback(setId: String?, boardIds: List<String>, paths: List<String>) =
+        withContext(NonCancellable) {
+            setId?.let { runCatching { boardSetRepository.deleteBoardSet(it) } }
+            boardIds.asReversed().forEach { runCatching { boardRepository.deleteBoard(it) } }
+            val storage = fileStorage
+            if (storage != null) paths.asReversed().forEach { runCatching { storage.delete(it) } }
         }
 
+    private suspend fun importSingleObfGraph(
+        filePath: String,
+        warnings: MutableList<BoardImportWarning>,
+        storedPaths: MutableList<String>
+    ): BoardSetGraph {
+        val content = filePicker.readFileAsText(filePath)
+            ?: throw ImportFailure(BoardImportErrorCode.FILE_UNREADABLE, "Could not read '$filePath'")
+        val board = obfParser.parseBoard(content).getOrElse {
+            throw ImportFailure(BoardImportErrorCode.MALFORMED_JSON, it.message ?: "Invalid OBF JSON")
+        }
+        validate(listOf(ParsedObfBoard(null, board)), board.id)
         return buildGraph(
-            boards = boards,
-            zipMedia = mediaEntries,
-            screenSettings = decodeBoardSettings(manifest.extensions[OBF_SCREEN_SETTINGS_EXTENSION])
-                ?: BoardSettingsOverrides()
+            boards = listOf(ParsedObfBoard(null, board)),
+            rootOriginalId = board.id,
+            archive = null,
+            archiveNames = emptySet(),
+            screenSettings = BoardSettingsOverrides(),
+            warnings = warnings,
+            storedPaths = storedPaths
         )
     }
 
-    private suspend fun buildGraph(
-        boards: List<Pair<ObfBoard, Boolean>>,
-        zipMedia: Map<String, ByteArray>,
-        screenSettings: BoardSettingsOverrides
-    ): BoardSetGraph? {
-        if (boards.isEmpty()) return null
+    private suspend fun importObzGraph(
+        filePath: String,
+        warnings: MutableList<BoardImportWarning>,
+        storedPaths: MutableList<String>
+    ): BoardSetGraph {
+        val archive = filePicker.openArchive(filePath)
+            ?: throw ImportFailure(BoardImportErrorCode.FILE_UNREADABLE, "Could not open '$filePath'")
+        try {
+            val entries = archive.entries()
+            validateArchive(entries)
+            val names = entries.filterNot { it.isDirectory }.map { it.name }.toSet()
+            if ("manifest.json" !in names) {
+                throw ImportFailure(BoardImportErrorCode.INVALID_MANIFEST, "manifest.json is missing")
+            }
+            val manifestBytes = readJsonEntry(archive, "manifest.json")
+            val manifest = obfParser.parseManifest(manifestBytes.decodeToString()).getOrElse {
+                throw ImportFailure(BoardImportErrorCode.INVALID_MANIFEST, it.message ?: "Invalid manifest.json")
+            }
+            val boardPaths = (listOf(manifest.root) + manifest.paths.boards.values).distinct()
+            val parsedBoards = boardPaths.map { path ->
+                if (path !in names) {
+                    throw ImportFailure(BoardImportErrorCode.INVALID_MANIFEST, "Board entry '$path' is missing")
+                }
+                val board = obfParser.parseBoard(readJsonEntry(archive, path).decodeToString()).getOrElse {
+                    throw ImportFailure(BoardImportErrorCode.MALFORMED_JSON, "Invalid board '$path': ${it.message}")
+                }
+                ParsedObfBoard(path, board)
+            }
+            val rootId = parsedBoards.firstOrNull { it.path == manifest.root }?.board?.id
+                ?: throw ImportFailure(BoardImportErrorCode.INVALID_MANIFEST, "Manifest root is not a board")
+            validate(parsedBoards, rootId, manifest, names)
+            return buildGraph(
+                boards = parsedBoards,
+                rootOriginalId = rootId,
+                archive = archive,
+                archiveNames = names,
+                screenSettings = decodeBoardSettings(manifest.extensions[OBF_SCREEN_SETTINGS_EXTENSION])
+                    ?: BoardSettingsOverrides(),
+                warnings = warnings,
+                storedPaths = storedPaths
+            )
+        } finally {
+            archive.close()
+        }
+    }
 
-        val now = Clock.System.now().toEpochMilliseconds()
-        val setId = newId("set")
-        val boardIdMap = linkedMapOf<String, String>()
-        boards.forEach { (board, _) ->
-            if (board.id.isNotEmpty()) {
-                boardIdMap.getOrPut(board.id) { newId("board") }
+    private suspend fun readJsonEntry(archive: ArchiveReader, path: String): ByteArray = try {
+        archive.readEntryBytes(path, limits.maxJsonEntryBytes)
+    } catch (error: ArchiveReadException) {
+        if (error.error == ArchiveReadError.ENTRY_TOO_LARGE) {
+            throw ImportFailure(BoardImportErrorCode.JSON_ENTRY_TOO_LARGE, "JSON entry '$path' exceeds ${limits.maxJsonEntryBytes} bytes")
+        }
+        throw error
+    }
+
+    private fun validateArchive(entries: List<ArchiveEntry>) {
+        if (entries.size > limits.maxEntries) {
+            throw ImportFailure(BoardImportErrorCode.TOO_MANY_ENTRIES, "Archive contains ${entries.size} entries; maximum is ${limits.maxEntries}")
+        }
+        val exact = mutableSetOf<String>()
+        val folded = mutableSetOf<String>()
+        var total = 0L
+        entries.forEach { entry ->
+            if (!isSafeArchivePath(entry.name)) {
+                throw ImportFailure(BoardImportErrorCode.UNSAFE_ENTRY_NAME, "Unsafe archive entry '${entry.name}'")
+            }
+            if (!exact.add(entry.name) || !folded.add(entry.name.lowercase())) {
+                throw ImportFailure(BoardImportErrorCode.DUPLICATE_ENTRY, "Duplicate or case-colliding entry '${entry.name}'")
+            }
+            if (entry.isEncrypted) {
+                throw ImportFailure(BoardImportErrorCode.ENCRYPTED_ENTRY, "Encrypted entry '${entry.name}' is not supported")
+            }
+            if (entry.uncompressedSize >= 0) {
+                val entryLimit = if (entry.isJson()) limits.maxJsonEntryBytes else limits.maxMediaEntryBytes
+                if (!entry.isDirectory && entry.uncompressedSize > entryLimit) {
+                    val code = if (entry.isJson()) BoardImportErrorCode.JSON_ENTRY_TOO_LARGE else BoardImportErrorCode.MEDIA_ENTRY_TOO_LARGE
+                    throw ImportFailure(code, "Entry '${entry.name}' exceeds $entryLimit bytes")
+                }
+                if (Long.MAX_VALUE - total < entry.uncompressedSize) {
+                    throw ImportFailure(BoardImportErrorCode.ARCHIVE_TOO_LARGE, "Archive size overflows the supported limit")
+                }
+                total += entry.uncompressedSize
+            }
+            if (entry.uncompressedSize > 0 && entry.compressedSize == 0L) {
+                throw ImportFailure(BoardImportErrorCode.COMPRESSION_RATIO_EXCEEDED, "Entry '${entry.name}' has an invalid compression ratio")
+            }
+            if (entry.uncompressedSize > 0 && entry.compressedSize > 0) {
+                val ratio = entry.uncompressedSize.toDouble() / entry.compressedSize.toDouble()
+                if (ratio > limits.maxCompressionRatio) {
+                    throw ImportFailure(BoardImportErrorCode.COMPRESSION_RATIO_EXCEEDED, "Entry '${entry.name}' exceeds ${limits.maxCompressionRatio}:1")
+                }
             }
         }
-
-        val rootOriginalId = boards.first { it.second }.first.id
-        val rootNewId = boardIdMap[rootOriginalId] ?: newId("board").also {
-            boardIdMap[rootOriginalId] = it
+        if (total > limits.maxTotalUncompressedBytes) {
+            throw ImportFailure(BoardImportErrorCode.ARCHIVE_TOO_LARGE, "Archive exceeds ${limits.maxTotalUncompressedBytes} uncompressed bytes")
         }
+    }
 
-        val rewrittenBoards = boards.map { (board, _) ->
-            val newBoardId = boardIdMap.getValue(board.id.ifEmpty { rootOriginalId })
-            rewriteBoard(board, newBoardId, boardIdMap, setId, zipMedia)
+    private fun ArchiveEntry.isJson(): Boolean =
+        name.equals("manifest.json", true) || name.endsWith(".json", true) || name.endsWith(".obf", true)
+
+    private fun isSafeArchivePath(name: String): Boolean {
+        if (name.isBlank() || name.startsWith('/') || name.startsWith('\\') || '\u0000' in name || '\uFFFD' in name) return false
+        if (name.length >= 2 && name[1] == ':' && name[0].isLetter()) return false
+        return name.replace('\\', '/').split('/').none { it == ".." }
+    }
+
+    private fun validate(
+        boards: List<ParsedObfBoard>,
+        rootId: String,
+        manifest: ObfManifest? = null,
+        names: Set<String> = emptySet()
+    ) {
+        val issues = validator.validate(boards, rootId, manifest, names)
+        if (issues.isNotEmpty()) {
+            val first = issues.first()
+            throw ImportFailure(BoardImportErrorCode.INVALID_GRAPH, "${first.field}: ${first.message}")
         }
+    }
 
+    private suspend fun buildGraph(
+        boards: List<ParsedObfBoard>,
+        rootOriginalId: String,
+        archive: ArchiveReader?,
+        archiveNames: Set<String>,
+        screenSettings: BoardSettingsOverrides,
+        warnings: MutableList<BoardImportWarning>,
+        storedPaths: MutableList<String>
+    ): BoardSetGraph {
+        val now = Clock.System.now().toEpochMilliseconds()
+        val setId = newId("set")
+        val boardIdMap = boards.associate { it.board.id to newId("board") }
+        val pathIdMap = boards.mapNotNull { parsed -> parsed.path?.let { it to parsed.board.id } }.toMap()
+        val rootNewId = boardIdMap[rootOriginalId]
+            ?: throw ImportFailure(BoardImportErrorCode.INVALID_GRAPH, "Root board ID is missing")
+
+        val rewrittenBoards = boards.map { parsed ->
+            val board = parsed.board
+            val images = board.images.map { image ->
+                persistImage(image, setId, archive, archiveNames, warnings, storedPaths)
+            }
+            val sounds = board.sounds.map { sound ->
+                persistSound(sound, setId, archive, archiveNames, warnings, storedPaths)
+            }
+            board.copy(
+                id = boardIdMap.getValue(board.id),
+                buttons = board.buttons.map { button -> rewriteButton(button, boardIdMap, pathIdMap) },
+                images = images,
+                sounds = sounds
+            )
+        }
+        val root = rewrittenBoards.first { it.id == rootNewId }
         val boardSet = ObfBoardSet(
             id = setId,
-            name = rewrittenBoards.firstOrNull { it.id == rootNewId }?.name
-                ?: rewrittenBoards.first().name
-                ?: "Imported board set",
+            name = root.name ?: "Imported board set",
             rootBoardId = rootNewId,
-            boardIds = rewrittenBoards.map { it.id }.distinct(),
+            boardIds = rewrittenBoards.map { it.id },
             isLocked = false,
             screenSettings = screenSettings,
             createdAt = now,
@@ -145,171 +293,163 @@ class BoardImportService(
         return BoardSetGraph(boardSet, rewrittenBoards)
     }
 
-    private suspend fun rewriteBoard(
-        board: ObfBoard,
-        newBoardId: String,
-        boardIdMap: Map<String, String>,
-        setId: String,
-        zipMedia: Map<String, ByteArray>
-    ): ObfBoard {
-        val imageIdMap = board.images.associate { it.id to it.id }
-        val soundIdMap = board.sounds.associate { it.id to it.id }
-
-        val images = board.images.map { image ->
-            persistImage(image, setId, zipMedia)
-        }
-        val sounds = board.sounds.map { sound ->
-            persistSound(sound, setId, zipMedia)
-        }
-        val buttons = board.buttons.map { button ->
-            rewriteButton(button, boardIdMap, imageIdMap, soundIdMap)
-        }
-        val grid = board.grid
-        return board.copy(
-            id = newBoardId,
-            buttons = buttons,
-            images = images,
-            sounds = sounds,
-            grid = grid
-        )
-    }
-
     private fun rewriteButton(
         button: ObfButton,
         boardIdMap: Map<String, String>,
-        imageIdMap: Map<String, String>,
-        soundIdMap: Map<String, String>
+        pathIdMap: Map<String, String>
     ): ObfButton {
-        val loadBoard = button.loadBoard?.let { link ->
-            val mappedId = link.id?.let { boardIdMap[it] } ?: link.id
-            ObfLoadBoard(
-                id = mappedId,
+        val link = button.loadBoard ?: return button
+        val originalTarget = link.id ?: link.path?.let(pathIdMap::get)
+        val mapped = originalTarget?.let(boardIdMap::get)
+        return button.copy(
+            loadBoard = ObfLoadBoard(
+                id = mapped ?: link.id,
                 name = link.name,
                 url = link.url,
-                path = link.path,
+                path = if (mapped == null) link.path else null,
                 dataUrl = link.dataUrl,
                 extensions = link.extensions
             )
-        }
-        return button.copy(
-            imageId = button.imageId?.let { imageIdMap[it] ?: it },
-            soundId = button.soundId?.let { soundIdMap[it] ?: it },
-            loadBoard = loadBoard
         )
     }
 
     private suspend fun persistImage(
         image: ObfImage,
         setId: String,
-        zipMedia: Map<String, ByteArray>
+        archive: ArchiveReader?,
+        archiveNames: Set<String>,
+        warnings: MutableList<BoardImportWarning>,
+        storedPaths: MutableList<String>
     ): ObfImage {
-        val storage = fileStorage ?: return image
-        val imagePath = image.path
-        val imageData = image.data
-        val bytes = when {
-            imagePath != null -> zipMedia[imagePath] ?: zipMedia.entries
-                .firstOrNull { it.key.equals(imagePath, ignoreCase = true) || it.key.endsWith("/$imagePath") }
-                ?.value
-            imageData != null -> decodeDataUri(imageData)
-            else -> null
-        } ?: return image
-
-        val extension = extensionFor(image.contentType, image.path, default = "bin")
-        val storedPath = "boardsets/$setId/images/${sanitize(image.id)}.$extension"
-        storage.saveBytes(storedPath, bytes)
-        return image.copy(path = storedPath, data = null, url = image.url)
+        val storage = fileStorage
+        val storedPath = "boardsets/$setId/images/${safeId(image.id)}.${extensionFor(image.contentType, image.path, "bin")}"
+        val stored = storage != null && persistResolvedMedia(
+            image.id, image.data, image.dataUrl, image.path, image.url,
+            archive, archiveNames, warnings, storage, storedPath, storedPaths
+        )
+        if (!stored) {
+            if (!image.path.isNullOrBlank() && image.data.isNullOrBlank() && image.dataUrl.isNullOrBlank() && image.url.isNullOrBlank()) {
+                throw ImportFailure(BoardImportErrorCode.MEDIA_UNRESOLVED, "Image '${image.id}' path '${image.path}' could not be read")
+            }
+            return if (image.path != null && image.path !in archiveNames) image.copy(path = null) else image
+        }
+        return image.copy(path = storedPath, data = null, dataUrl = null, url = null)
     }
 
     private suspend fun persistSound(
         sound: ObfSound,
         setId: String,
-        zipMedia: Map<String, ByteArray>
+        archive: ArchiveReader?,
+        archiveNames: Set<String>,
+        warnings: MutableList<BoardImportWarning>,
+        storedPaths: MutableList<String>
     ): ObfSound {
-        val storage = fileStorage ?: return sound
-        val soundPath = sound.path
-        val soundData = sound.data
-        val bytes = when {
-            soundPath != null -> zipMedia[soundPath] ?: zipMedia.entries
-                .firstOrNull { it.key.equals(soundPath, ignoreCase = true) || it.key.endsWith("/$soundPath") }
-                ?.value
-            soundData != null -> decodeDataUri(soundData)
-            else -> null
-        } ?: return sound
-
-        val extension = extensionFor(sound.contentType, sound.path, default = "mp3")
-        val storedPath = "boardsets/$setId/sounds/${sanitize(sound.id)}.$extension"
-        storage.saveBytes(storedPath, bytes)
-        return sound.copy(path = storedPath, data = null, url = sound.url)
-    }
-
-    private fun decodeDataUri(data: String): ByteArray? {
-        val payload = data.substringAfter("base64,", missingDelimiterValue = data)
-        return Base64Decoder.decodeOrNull(payload)
-    }
-
-    private fun extensionFor(contentType: String?, path: String?, default: String): String {
-        path?.substringAfterLast('.', missingDelimiterValue = "")
-            ?.takeIf { it.isNotBlank() && it.length <= 5 }
-            ?.let { return it.lowercase() }
-        return when (contentType?.lowercase()) {
-            "image/png" -> "png"
-            "image/jpeg", "image/jpg" -> "jpg"
-            "image/gif" -> "gif"
-            "image/svg+xml" -> "svg"
-            "image/webp" -> "webp"
-            "audio/mpeg", "audio/mp3" -> "mp3"
-            "audio/wav", "audio/x-wav" -> "wav"
-            "audio/ogg" -> "ogg"
-            else -> default
+        val storage = fileStorage
+        val storedPath = "boardsets/$setId/sounds/${safeId(sound.id)}.${extensionFor(sound.contentType, sound.path, "mp3")}"
+        val stored = storage != null && persistResolvedMedia(
+            sound.id, sound.data, sound.dataUrl, sound.path, sound.url,
+            archive, archiveNames, warnings, storage, storedPath, storedPaths
+        )
+        if (!stored) {
+            if (!sound.path.isNullOrBlank() && sound.data.isNullOrBlank() && sound.dataUrl.isNullOrBlank() && sound.url.isNullOrBlank()) {
+                throw ImportFailure(BoardImportErrorCode.MEDIA_UNRESOLVED, "Sound '${sound.id}' path '${sound.path}' could not be read")
+            }
+            return if (sound.path != null && sound.path !in archiveNames) sound.copy(path = null) else sound
         }
+        return sound.copy(path = storedPath, data = null, dataUrl = null, url = null)
     }
 
-    private fun sanitize(value: String): String =
-        value.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { newId("media") }
+    /** Resolves data → path → URL, warning and continuing after each unavailable source. */
+    private suspend fun persistResolvedMedia(
+        id: String,
+        data: String?,
+        dataUrl: String?,
+        path: String?,
+        url: String?,
+        archive: ArchiveReader?,
+        archiveNames: Set<String>,
+        warnings: MutableList<BoardImportWarning>,
+        storage: FileStorage,
+        destination: String,
+        storedPaths: MutableList<String>
+    ): Boolean {
+        if (!data.isNullOrBlank()) {
+            val payload = data.substringAfter("base64,", data)
+            Base64Decoder.decodeOrNull(payload)?.takeIf { it.isNotEmpty() }?.let {
+                if (destination !in storedPaths) storedPaths += destination
+                storage.saveBytes(destination, it)
+                return true
+            }
+            warnings += BoardImportWarning("malformed_data", "Media '$id' has malformed inline data")
+        }
+        if (!dataUrl.isNullOrBlank()) {
+            runCatching { urlLoader.load(dataUrl) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let {
+                if (destination !in storedPaths) storedPaths += destination
+                storage.saveBytes(destination, it)
+                return true
+            }
+            warnings += BoardImportWarning("unavailable_data_url", "Media '$id' data URL was unavailable")
+        }
+        if (!path.isNullOrBlank()) {
+            if (archive != null && path in archiveNames) {
+                try {
+                    if (destination !in storedPaths) storedPaths += destination
+                    storage.saveStream(destination) { emit ->
+                        archive.readEntry(path, limits.maxMediaEntryBytes, emit)
+                    }
+                    return true
+                } catch (error: ArchiveReadException) {
+                    runCatching { storage.delete(destination) }
+                    if (error.error == ArchiveReadError.ENTRY_TOO_LARGE) throw error
+                    warnings += BoardImportWarning("unreadable_path", "Media '$id' path '$path' could not be read")
+                }
+            } else if (archive != null) {
+                warnings += BoardImportWarning("missing_path", "Media '$id' path '$path' is missing")
+            } else {
+                storage.loadBytes(path)?.let {
+                    if (destination !in storedPaths) storedPaths += destination
+                    storage.saveBytes(destination, it)
+                    return true
+                }
+            }
+        }
+        if (!url.isNullOrBlank()) {
+            runCatching { urlLoader.load(url) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let {
+                if (destination !in storedPaths) storedPaths += destination
+                storage.saveBytes(destination, it)
+                return true
+            }
+            // Keeping a remote reference is a valid fallback; runtime may load it later.
+            warnings += BoardImportWarning("deferred_url", "Media '$id' will use its remote URL")
+        }
+        return false
+    }
+
+    private fun extensionFor(contentType: String?, path: String?, default: String): String = when (contentType?.lowercase()) {
+        "image/png" -> "png"
+        "image/jpeg", "image/jpg" -> "jpg"
+        "image/gif" -> "gif"
+        "image/svg+xml" -> "svg"
+        "image/webp" -> "webp"
+        "audio/mpeg", "audio/mp3" -> "mp3"
+        "audio/wav", "audio/x-wav" -> "wav"
+        "audio/ogg" -> "ogg"
+        else -> path?.substringAfterLast('.', "")?.lowercase()?.takeIf { it.matches(Regex("[a-z0-9]{1,5}")) } ?: default
+    }
+
+    private fun safeId(value: String): String =
+        value.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "media" }
 
     private fun newId(prefix: String): String {
-        val alphabet = "0123456789abcdef"
-        val suffix = buildString(8) {
-            repeat(8) { append(alphabet[Random.nextInt(alphabet.length)]) }
-        }
+        val suffix = buildString(12) { repeat(12) { append("0123456789abcdef"[Random.nextInt(16)]) } }
         return "${prefix}_$suffix"
     }
-}
 
-/** Minimal base64 decoder for data-URI payloads. */
-private fun String.decodeBase64Bytes(): ByteArray {
-    val table = IntArray(128) { -1 }
-    val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-    alphabet.forEachIndexed { index, c -> table[c.code] = index }
+    private fun failure(
+        code: BoardImportErrorCode,
+        context: String,
+        warnings: List<BoardImportWarning> = emptyList()
+    ) = BoardImportResult.Failure(code, context, warnings.toList())
 
-    val cleaned = filterNot { it.isWhitespace() }
-    if (cleaned.isEmpty()) return ByteArray(0)
-    require(cleaned.length % 4 == 0) { "Invalid base64 length" }
-
-    val padding = when {
-        cleaned.endsWith("==") -> 2
-        cleaned.endsWith("=") -> 1
-        else -> 0
-    }
-    val out = ByteArray(cleaned.length / 4 * 3 - padding)
-    var outIndex = 0
-    var i = 0
-    while (i < cleaned.length) {
-        val c0 = decodeBase64Char(table, cleaned[i])
-        val c1 = decodeBase64Char(table, cleaned[i + 1])
-        val c2 = if (cleaned[i + 2] == '=') 0 else decodeBase64Char(table, cleaned[i + 2])
-        val c3 = if (cleaned[i + 3] == '=') 0 else decodeBase64Char(table, cleaned[i + 3])
-        val triple = (c0 shl 18) or (c1 shl 12) or (c2 shl 6) or c3
-        if (outIndex < out.size) out[outIndex++] = ((triple shr 16) and 0xFF).toByte()
-        if (outIndex < out.size) out[outIndex++] = ((triple shr 8) and 0xFF).toByte()
-        if (outIndex < out.size) out[outIndex++] = (triple and 0xFF).toByte()
-        i += 4
-    }
-    return out
-}
-
-private fun decodeBase64Char(table: IntArray, char: Char): Int {
-    val value = table.getOrElse(char.code) { -1 }
-    require(value >= 0) { "Invalid base64 char: $char" }
-    return value
+    private class ImportFailure(val code: BoardImportErrorCode, message: String) : Exception(message)
 }

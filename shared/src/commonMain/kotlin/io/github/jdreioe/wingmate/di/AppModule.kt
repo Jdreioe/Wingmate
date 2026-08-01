@@ -70,7 +70,8 @@ val appModule = module {
             boardRepository = get(),
             boardSetRepository = get(),
             filePicker = get(),
-            fileStorage = getOrNull()
+            fileStorage = getOrNull(),
+            urlLoader = get()
         )
     }
     
