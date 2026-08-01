@@ -32,10 +32,35 @@ import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.roundToInt
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -80,8 +105,16 @@ import wingmatekmp.composeapp.generated.resources.board_workspace_delete_last
 import wingmatekmp.composeapp.generated.resources.board_workspace_speak_sentence
 import wingmatekmp.composeapp.generated.resources.board_workspace_home
 import wingmatekmp.composeapp.generated.resources.board_cell_opens_board
+import wingmatekmp.composeapp.generated.resources.board_resize_field_label
+import wingmatekmp.composeapp.generated.resources.board_resize_increase_width
+import wingmatekmp.composeapp.generated.resources.board_resize_decrease_width
+import wingmatekmp.composeapp.generated.resources.board_resize_increase_height
+import wingmatekmp.composeapp.generated.resources.board_resize_decrease_height
+import wingmatekmp.composeapp.generated.resources.board_resize_size
+import wingmatekmp.composeapp.generated.resources.board_resize_blocked_bounds
+import wingmatekmp.composeapp.generated.resources.board_resize_blocked_occupied
 
-private data class BoardGridItem(
+internal data class BoardGridItem(
     val row: Int,
     val column: Int,
     val rowSpan: Int,
@@ -114,6 +147,9 @@ fun ObfBoardView(
     boardSettings: ResolvedBoardSettings? = null,
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
+    selectedFieldAnchor: Pair<Int, Int>? = null,
+    selectedFieldSpans: List<GridFieldSpan> = emptyList(),
+    onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
     homeBoardId: String? = null
 ) {
     val settings by rememberReactiveSettings()
@@ -224,7 +260,10 @@ fun ObfBoardView(
                             columns = columns,
                             items = gridItems,
                             modifier = Modifier.fillMaxWidth().height(contentHeight),
-                            onMove = onCellMove
+                            onMove = onCellMove,
+                            selectedField = selectedFieldAnchor,
+                            selectedFieldSpans = selectedFieldSpans,
+                            onResizeField = onResizeField
                         ) { item ->
                             val button = item.button
                             val isVisible = button != null && (!button.hidden || isEditMode)
@@ -333,7 +372,7 @@ fun ObfBoardView(
     }
 }
 
-private fun buildBoardGridItems(
+internal fun buildBoardGridItems(
     grid: io.github.jdreioe.wingmate.domain.obf.ObfGrid,
     buttonsById: Map<String, ObfButton>
 ): List<BoardGridItem> {
@@ -392,48 +431,186 @@ private fun buildBoardGridItems(
 }
 
 @Composable
-private fun SpanningBoardGrid(
+internal fun SpanningBoardGrid(
     rows: Int,
     columns: Int,
     items: List<BoardGridItem>,
     modifier: Modifier = Modifier,
     onMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
+    selectedField: Pair<Int, Int>? = null,
+    selectedFieldSpans: List<GridFieldSpan> = emptyList(),
+    onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
     content: @Composable (BoardGridItem) -> Unit
 ) {
     var dragSource by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
     var dragTarget by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
+    var resizeCell by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
+    var gridSizePx by remember { mutableStateOf(IntSize.Zero) }
+    var handleOffsetInGrid by remember { mutableStateOf(Offset.Zero) }
+    var resizeStatus by remember { mutableStateOf<String?>(null) }
+    val density = LocalDensity.current
+    val horizontalGap = with(density) { 4.dp.toPx() }
+    val verticalGap = with(density) { 8.dp.toPx() }
+
+    LaunchedEffect(resizeStatus) {
+        if (resizeStatus != null) {
+            delay(2000)
+            resizeStatus = null
+        }
+    }
+
+    val selectedItem = remember(items, selectedField) {
+        items.firstOrNull { item ->
+            selectedField != null &&
+                item.row == selectedField.first &&
+                item.column == selectedField.second &&
+                item.button != null
+        }
+    }
+    val allowedSpans = remember(selectedFieldSpans) { selectedFieldSpans.toSet() }
+    val previewSpan = remember(resizeCell, selectedItem) {
+        val item = selectedItem ?: return@remember null
+        val cell = resizeCell ?: return@remember null
+        GridFieldSpan(
+            rows = (cell.first - item.row + 1).coerceAtLeast(1),
+            columns = (cell.second - item.column + 1).coerceAtLeast(1)
+        )
+    }
+    val previewValid = previewSpan?.let { it in allowedSpans } ?: true
+    val showPreview = resizeCell != null && selectedItem != null
+    val showHandle = selectedItem != null && onResizeField != null
+
+    val selectionColor = MaterialTheme.colorScheme.primary
+    val errorColor = MaterialTheme.colorScheme.error
+    val resizeLabel = stringResource(Res.string.board_resize_field_label)
+    val increaseWidthLabel = stringResource(Res.string.board_resize_increase_width)
+    val decreaseWidthLabel = stringResource(Res.string.board_resize_decrease_width)
+    val increaseHeightLabel = stringResource(Res.string.board_resize_increase_height)
+    val decreaseHeightLabel = stringResource(Res.string.board_resize_decrease_height)
+    val sizeAnnouncementFormat = stringResource(Res.string.board_resize_size)
+    val blockedBoundsMessage = stringResource(Res.string.board_resize_blocked_bounds)
+    val blockedOccupiedMessage = stringResource(Res.string.board_resize_blocked_occupied)
+
+    fun cellAt(position: Offset): Pair<Int, Int>? {
+        if (position.x < 0f || position.y < 0f) return null
+        if (position.x >= gridSizePx.width || position.y >= gridSizePx.height) return null
+        val cellWidth = (gridSizePx.width - horizontalGap * (columns - 1)).coerceAtLeast(0f) / columns
+        val cellHeight = (gridSizePx.height - verticalGap * (rows - 1)).coerceAtLeast(0f) / rows
+        val column = (position.x / (cellWidth + horizontalGap)).toInt().coerceIn(0, columns - 1)
+        val row = (position.y / (cellHeight + verticalGap)).toInt().coerceIn(0, rows - 1)
+        return row to column
+    }
+
+    fun announceSize(width: Int, height: Int) {
+        resizeStatus = String.format(sizeAnnouncementFormat, width, height)
+    }
+
+    fun blockedReason(span: GridFieldSpan): String {
+        val item = selectedItem ?: return ""
+        val outOfBounds = span.rows < 1 || span.columns < 1 ||
+            item.row + span.rows > rows || item.column + span.columns > columns
+        return if (outOfBounds) blockedBoundsMessage else blockedOccupiedMessage
+    }
+
+    fun resizeBy(deltaRows: Int, deltaColumns: Int): Boolean {
+        val item = selectedItem ?: return false
+        val current = GridFieldSpan(item.rowSpan, item.columnSpan)
+        val target = GridFieldSpan(current.rows + deltaRows, current.columns + deltaColumns)
+        if (target in allowedSpans && target != current) {
+            onResizeField?.invoke(item.row, item.column, target.rows, target.columns)
+            announceSize(target.columns, target.rows)
+            return true
+        }
+        resizeStatus = blockedReason(target)
+        return false
+    }
+
+    val currentSelectedItem by rememberUpdatedState(selectedItem)
+    val currentAllowedSpans by rememberUpdatedState(allowedSpans)
+    val currentOnResizeField by rememberUpdatedState(onResizeField)
+    val currentCellAt: (Offset) -> Pair<Int, Int>? by rememberUpdatedState { position ->
+        cellAt(position + handleOffsetInGrid)
+    }
+
+    val handleModifier = Modifier
+        .size(48.dp)
+        .testTag("resize-handle")
+        .onGloballyPositioned { handleOffsetInGrid = it.positionInParent() }
+        .focusable()
+        .onKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown && event.isShiftPressed) {
+                when (event.key) {
+                    Key.DirectionRight -> resizeBy(0, 1)
+                    Key.DirectionLeft -> resizeBy(0, -1)
+                    Key.DirectionDown -> resizeBy(1, 0)
+                    Key.DirectionUp -> resizeBy(-1, 0)
+                    else -> false
+                }
+            } else {
+                false
+            }
+        }
+        .semantics {
+            contentDescription = resizeLabel
+            customActions = listOf(
+                CustomAccessibilityAction(increaseWidthLabel) { resizeBy(0, 1) },
+                CustomAccessibilityAction(decreaseWidthLabel) { resizeBy(0, -1) },
+                CustomAccessibilityAction(increaseHeightLabel) { resizeBy(1, 0) },
+                CustomAccessibilityAction(decreaseHeightLabel) { resizeBy(-1, 0) }
+            )
+        }
+        .pointerInput(items, allowedSpans) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val start = awaitTouchSlopOrCancellation(down.id) { change, _ -> change.consume() }
+                    ?: return@awaitEachGesture
+                val startCell = currentCellAt(start.position)
+                resizeCell = startCell
+                var lastCell = startCell
+                drag(down.id) { change ->
+                    change.consume()
+                    currentCellAt(change.position)?.let { lastCell = it }
+                    resizeCell = lastCell
+                }
+                val item = currentSelectedItem
+                val finalCell = lastCell
+                val span = if (item != null && finalCell != null) {
+                    GridFieldSpan(
+                        rows = (finalCell.first - item.row + 1).coerceAtLeast(1),
+                        columns = (finalCell.second - item.column + 1).coerceAtLeast(1)
+                    )
+                } else {
+                    null
+                }
+                resizeCell = null
+                if (item != null && span != null) {
+                    val current = GridFieldSpan(item.rowSpan, item.columnSpan)
+                    if (span != current && span in currentAllowedSpans) {
+                        currentOnResizeField?.invoke(item.row, item.column, span.rows, span.columns)
+                        announceSize(span.columns, span.rows)
+                    }
+                }
+            }
+        }
+
     val dragModifier = if (onMove != null) {
         Modifier.pointerInput(rows, columns, items, onMove) {
-            val horizontalGap = 4.dp.toPx()
-            val verticalGap = 8.dp.toPx()
-
-            fun cellAt(position: Offset): Pair<Int, Int>? {
-                if (position.x < 0f || position.y < 0f || position.x >= size.width || position.y >= size.height) {
-                    return null
-                }
-                val cellWidth = (size.width - horizontalGap * (columns - 1)).coerceAtLeast(0f) / columns
-                val cellHeight = (size.height - verticalGap * (rows - 1)).coerceAtLeast(0f) / rows
-                val column = (position.x / (cellWidth + horizontalGap)).toInt().coerceIn(0, columns - 1)
-                val row = (position.y / (cellHeight + verticalGap)).toInt().coerceIn(0, rows - 1)
-                return row to column
-            }
-
-            fun fieldAt(cell: Pair<Int, Int>): BoardGridItem? = items.firstOrNull { item ->
-                cell.first in item.row until item.row + item.rowSpan &&
-                    cell.second in item.column until item.column + item.columnSpan
-            }
-
             detectDragGesturesAfterLongPress(
                 onDragStart = { position ->
                     val cell = cellAt(position)
-                    val field = cell?.let(::fieldAt)?.takeIf { it.button != null }
+                    val field = cell?.let { cellAt ->
+                        items.firstOrNull { item ->
+                            cellAt.first in item.row until item.row + item.rowSpan &&
+                                cellAt.second in item.column until item.column + item.columnSpan
+                        }
+                    }?.takeIf { it.button != null }
                     dragSource = field?.let { it.row to it.column }
                     dragTarget = dragSource
                 },
                 onDrag = { change, _ ->
                     if (dragSource != null) {
                         change.consume()
-                        dragTarget = cellAt(change.position)
+                        cellAt(change.position)?.let { dragTarget = it }
                     }
                 },
                 onDragEnd = {
@@ -454,50 +631,148 @@ private fun SpanningBoardGrid(
     } else {
         Modifier
     }
-    Layout(
-        modifier = modifier.then(dragModifier),
-        content = {
-            items.forEach { item ->
-                val isDropTarget = dragTarget?.let { target ->
-                    target.first in item.row until item.row + item.rowSpan &&
-                        target.second in item.column until item.column + item.columnSpan
-                } == true
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(
-                            if (isDropTarget) {
-                                Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
-                            } else {
-                                Modifier
+    Box(modifier = modifier) {
+        Layout(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(dragModifier)
+                .onSizeChanged { gridSizePx = it },
+            content = {
+                items.forEach { item ->
+                    key(item.row, item.column, item.button?.id) {
+                    val isDropTarget = dragTarget?.let { target ->
+                        target.first in item.row until item.row + item.rowSpan &&
+                            target.second in item.column until item.column + item.columnSpan
+                    } == true
+                    val isSelected = selectedItem?.let {
+                        it.row == item.row && it.column == item.column
+                    } == true
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (isSelected) {
+                                    Modifier.border(3.dp, selectionColor, RoundedCornerShape(12.dp))
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .then(
+                                if (isDropTarget) {
+                                    Modifier.border(3.dp, selectionColor, RoundedCornerShape(12.dp))
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    ) {
+                        content(item)
+                    }
+                }
+            }
+            if (showPreview) {
+                key("resize-preview") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .testTag("resize-preview")
+                            .semantics {
+                                contentDescription = if (previewValid) {
+                                    "resize-preview-valid"
+                                } else {
+                                    "resize-preview-invalid"
+                                }
                             }
+                            .border(
+                                3.dp,
+                                if (previewValid) selectionColor else errorColor,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .background(
+                                if (previewValid) {
+                                    selectionColor.copy(alpha = 0.2f)
+                                } else {
+                                    errorColor.copy(alpha = 0.2f)
+                                }
+                            )
+                    )
+                }
+            }
+            if (showHandle) {
+                key("resize-handle") {
+                    Box(modifier = handleModifier, contentAlignment = Alignment.BottomEnd) {
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .border(2.dp, selectionColor, RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.surface)
                         )
-                ) {
-                    content(item)
+                    }
                 }
             }
         }
     ) { measurables, constraints ->
-        val horizontalGap = 4.dp.roundToPx()
-        val verticalGap = 8.dp.roundToPx()
-        val availableWidth = (constraints.maxWidth - horizontalGap * (columns - 1)).coerceAtLeast(0)
-        val availableHeight = (constraints.maxHeight - verticalGap * (rows - 1)).coerceAtLeast(0)
+        val horizontalGapPx = 4.dp.roundToPx()
+        val verticalGapPx = 8.dp.roundToPx()
+        val availableWidth = (constraints.maxWidth - horizontalGapPx * (columns - 1)).coerceAtLeast(0)
+        val availableHeight = (constraints.maxHeight - verticalGapPx * (rows - 1)).coerceAtLeast(0)
         val cellWidth = availableWidth / columns
         val cellHeight = availableHeight / rows
+        val handlePx = 48.dp.toPx()
+        val previewIndex = items.size
+        val handleIndex = items.size + if (showPreview) 1 else 0
+        val handleSpan = previewSpan ?: selectedItem?.let { GridFieldSpan(it.rowSpan, it.columnSpan) }
         val placeables = measurables.mapIndexed { index, measurable ->
-            val item = items[index]
-            val width = cellWidth * item.columnSpan + horizontalGap * (item.columnSpan - 1)
-            val height = cellHeight * item.rowSpan + verticalGap * (item.rowSpan - 1)
-            measurable.measure(Constraints.fixed(width.coerceAtLeast(0), height.coerceAtLeast(0)))
+            if (showHandle && index == handleIndex) {
+                measurable.measure(Constraints.fixed(handlePx.roundToInt(), handlePx.roundToInt()))
+            } else {
+                val span = if (showPreview && index == previewIndex) {
+                    previewSpan ?: GridFieldSpan(1, 1)
+                } else {
+                    val item = items[index]
+                    GridFieldSpan(item.rowSpan, item.columnSpan)
+                }
+                val width = cellWidth * span.columns + horizontalGapPx * (span.columns - 1)
+                val height = cellHeight * span.rows + verticalGapPx * (span.rows - 1)
+                measurable.measure(Constraints.fixed(width.coerceAtLeast(0), height.coerceAtLeast(0)))
+            }
         }
         layout(constraints.maxWidth, constraints.maxHeight) {
             placeables.forEachIndexed { index, placeable ->
-                val item = items[index]
-                placeable.placeRelative(
-                    x = item.column * (cellWidth + horizontalGap),
-                    y = item.row * (cellHeight + verticalGap)
-                )
+                if (showHandle && index == handleIndex) {
+                    val item = selectedItem
+                    val span = handleSpan ?: return@forEachIndexed
+                    val x = ((item.column + span.columns) * (cellWidth + horizontalGapPx) - handlePx / 2f)
+                        .coerceIn(0f, (constraints.maxWidth - handlePx).coerceAtLeast(0f))
+                    val y = ((item.row + span.rows) * (cellHeight + verticalGapPx) - handlePx / 2f)
+                        .coerceIn(0f, (constraints.maxHeight - handlePx).coerceAtLeast(0f))
+                    placeable.placeRelative(x.roundToInt(), y.roundToInt())
+                } else {
+                    val item = if (showPreview && index == previewIndex) {
+                        selectedItem.copy(
+                            rowSpan = previewSpan?.rows ?: 1,
+                            columnSpan = previewSpan?.columns ?: 1
+                        )
+                    } else {
+                        items[index]
+                    }
+                    placeable.placeRelative(
+                        x = item.column * (cellWidth + horizontalGapPx),
+                        y = item.row * (cellHeight + verticalGapPx)
+                    )
+                }
             }
+        }
+    }
+        resizeStatus?.let { status ->
+            Box(
+                modifier = Modifier
+                    .size(1.dp)
+                    .alpha(0f)
+                    .semantics {
+                        liveRegion = LiveRegionMode.Polite
+                        contentDescription = status
+                    }
+            )
         }
     }
 }

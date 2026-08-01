@@ -146,6 +146,58 @@ class BoardEditorGraphTest {
         assertTrue(cleared.sounds.isEmpty())
     }
 
+    @Test
+    fun resizingAFieldKeepsItsRepeatedIdAndMakesOneUndoableEdit() {
+        val graph = graph(
+            order = listOf(
+                listOf("field", "field", null),
+                listOf("field", "field", null),
+                listOf(null, null, null)
+            )
+        )
+
+        val grown = resizeDraftField(graph, "home", 0, 0, rowSpan = 2, columnSpan = 3)
+
+        val grownGrid = grown.boards.single().grid
+        assertEquals(listOf("field", "field", "field"), grownGrid?.order?.first())
+        assertEquals(listOf("field", "field", "field"), grownGrid?.order?.get(1))
+        assertEquals(null, grownGrid?.order?.get(2)?.first())
+
+        val session = BoardSetEditSession(graph, graph).apply(grown)
+        assertEquals(1, session.undoStack.size)
+        assertEquals(graph, session.undo().draft)
+    }
+
+    @Test
+    fun resizingIsRejectedWhenItWouldCoverANeighborOrLeaveTheBoard() {
+        val graph = graph(
+            order = listOf(
+                listOf("field", null, null),
+                listOf(null, "neighbor", null)
+            )
+        )
+
+        assertEquals(graph, resizeDraftField(graph, "home", 0, 0, rowSpan = 2, columnSpan = 2))
+        assertEquals(graph, resizeDraftField(graph, "home", 0, 0, rowSpan = 2, columnSpan = 3))
+        assertEquals(graph, resizeDraftField(graph, "home", 0, 0, rowSpan = 0, columnSpan = 1))
+        assertEquals(graph, resizeDraftField(graph, "home", 1, 1, rowSpan = 1, columnSpan = 1))
+    }
+
+    @Test
+    fun resizingCanShrinkToSingleCell() {
+        val graph = graph(
+            order = listOf(
+                listOf("field", "field", null),
+                listOf("field", "field", null)
+            )
+        )
+
+        val shrunk = resizeDraftField(graph, "home", 0, 0, rowSpan = 1, columnSpan = 1)
+
+        assertEquals(listOf("field", null, null), shrunk.boards.single().grid?.order?.first())
+        assertEquals(listOf(null, null, null), shrunk.boards.single().grid?.order?.get(1))
+    }
+
     private fun graph(
         order: List<List<String?>> = listOf(
             listOf(null, null),
@@ -156,7 +208,11 @@ class BoardEditorGraphTest {
             format = "open-board-0.1",
             id = "home",
             name = "Home",
-            grid = ObfGrid(rows = 2, columns = 2, order = order)
+            grid = ObfGrid(
+                rows = order.size.coerceAtLeast(1),
+                columns = order.firstOrNull()?.size?.coerceAtLeast(1) ?: 1,
+                order = order
+            )
         )
         return BoardSetGraph(
             boardSet = ObfBoardSet(
