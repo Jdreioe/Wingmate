@@ -25,8 +25,8 @@ import androidx.compose.ui.unit.sp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
-import io.github.jdreioe.wingmate.domain.obf.ObfImageSource
-import io.github.jdreioe.wingmate.domain.obf.resolveObfImageSource
+import io.github.jdreioe.wingmate.domain.obf.ObfMediaSource
+import io.github.jdreioe.wingmate.domain.obf.obfImageSources
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
@@ -1057,34 +1057,33 @@ fun ObfButtonItem(
     }
     
     // Spec priority: data → path → url → symbol (extracted zip bytes count as path).
-    val imageSource = remember(image) { resolveObfImageSource(image) }
-    val syncBitmap = remember(imageSource, extractedImageBytes) {
-        when {
-            extractedImageBytes != null && imageSource is ObfImageSource.Path -> {
-                runCatching { extractedImageBytes.toComposeImageBitmap() }.getOrNull()
-            }
-            imageSource is ObfImageSource.DataUri -> {
-                runCatching {
-                    val data = imageSource.data
-                    val base64 = if (data.contains(",")) data.substringAfter(",") else data
-                    val bytes = Base64Decoder.decode(base64)
-                    bytes.toComposeImageBitmap()
+    val imageSources = remember(image) { obfImageSources(image) }
+    val imageBitmap = remember(imageSources, extractedImageBytes) {
+        imageSources.firstNotNullOfOrNull { source ->
+            when (source) {
+                is ObfMediaSource.Data -> runCatching {
+                    val base64 = source.value.substringAfter("base64,", source.value)
+                    Base64Decoder.decode(base64).toComposeImageBitmap()
                 }.getOrNull()
+                is ObfMediaSource.Path -> extractedImageBytes?.let { bytes ->
+                    runCatching { bytes.toComposeImageBitmap() }.getOrNull()
+                }
+                is ObfMediaSource.Url, is ObfMediaSource.Symbol -> null
             }
-            extractedImageBytes != null -> {
-                runCatching { extractedImageBytes.toComposeImageBitmap() }.getOrNull()
-            }
-            else -> null
         }
     }
-
-    val imageBitmap = syncBitmap
-    val imageModel = when (imageSource) {
-        is ObfImageSource.Url -> imageSource.url
-        is ObfImageSource.Path -> imageSource.path
-        else -> null
-    }
-    val symbolUnavailable = imageSource is ObfImageSource.Symbol && imageBitmap == null
+    val imageModel = if (imageBitmap == null) {
+        imageSources.firstNotNullOfOrNull { source ->
+            when (source) {
+                is ObfMediaSource.Url -> source.value
+                // Local paths are decoded above; if decoding failed, continue to the URL fallback.
+                is ObfMediaSource.Path -> null
+                else -> null
+            }
+        }
+    } else null
+    val symbolUnavailable = imageSources.any { it is ObfMediaSource.Symbol } && imageBitmap == null && imageModel == null
+    val symbolSet = (imageSources.firstOrNull { it is ObfMediaSource.Symbol } as? ObfMediaSource.Symbol)?.value?.set
     
     Card(
         modifier = Modifier
@@ -1176,7 +1175,7 @@ fun ObfButtonItem(
                     Spacer(modifier = Modifier.height(4.dp))
                     if (symbolUnavailable) {
                         SymbolUnavailablePlaceholder(
-                            symbolSet = imageSource.symbol.set,
+                            symbolSet = symbolSet,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp),
                             contentColor = contentColor
                         )
@@ -1193,7 +1192,7 @@ fun ObfButtonItem(
                     if (showImg) {
                         if (symbolUnavailable) {
                             SymbolUnavailablePlaceholder(
-                                symbolSet = imageSource.symbol.set,
+                                symbolSet = symbolSet,
                                 modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp),
                                 contentColor = contentColor
                             )

@@ -20,7 +20,7 @@ class ObfImageSourceTest {
     }
 
     @Test
-    fun prefersDataUrlOverPathWhenDataAbsent() {
+    fun prefersRemoteDataUrlOverPathWhenDataAbsent() {
         val image = ObfImage(
             id = "1",
             dataUrl = "https://example.com/download/image.png?auth=token",
@@ -28,7 +28,7 @@ class ObfImageSourceTest {
             url = "https://example.com/a.png"
         )
         assertEquals(
-            ObfImageSource.DataUri("https://example.com/download/image.png?auth=token"),
+            ObfImageSource.Url("https://example.com/download/image.png?auth=token"),
             resolveObfImageSource(image)
         )
     }
@@ -79,5 +79,25 @@ class ObfImageSourceTest {
     fun noneWhenEmpty() {
         assertEquals(ObfImageSource.None, resolveObfImageSource(null))
         assertEquals(ObfImageSource.None, resolveObfImageSource(ObfImage(id = "1")))
+    }
+
+    @Test
+    fun imageAndSoundExposeEquivalentOrderedFallbacks() {
+        val image = ObfImage(
+            id = "image", data = "inline", dataUrl = "https://data",
+            path = "media/path", url = "https://url", symbol = ObfSymbol(set = "set")
+        )
+        val sound = ObfSound(
+            id = "sound", data = "inline", dataUrl = "https://data",
+            path = "media/path", url = "https://url"
+        )
+        assertEquals(
+            listOf("Data", "Url", "Path", "Url", "Symbol"),
+            obfImageSources(image).map { it::class.simpleName }
+        )
+        assertEquals(
+            listOf("Data", "Url", "Path", "Url"),
+            obfSoundSources(sound).map { it::class.simpleName }
+        )
     }
 }

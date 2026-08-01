@@ -91,6 +91,9 @@ import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
+import io.github.jdreioe.wingmate.domain.obf.ObfMediaSource
+import io.github.jdreioe.wingmate.domain.obf.ObfMediaUrlLoader
+import io.github.jdreioe.wingmate.domain.obf.obfSoundSources
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
@@ -515,6 +518,7 @@ private fun BoardSetWorkspaceScreen(
     val fileStorage = koinInject<FileStorage>()
     val settings by rememberReactiveSettings()
     val koin = org.koin.compose.getKoin()
+    val mediaUrlLoader = remember(koin) { koin.getOrNull<ObfMediaUrlLoader>() }
     val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
     val scope = rememberCoroutineScope()
     var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
@@ -1162,7 +1166,9 @@ private fun BoardSetWorkspaceScreen(
                                     }
                                     if (shouldSpeakBoardSelection(resolvedBoardSettings.activationBehavior)) {
                                         scope.launch(Dispatchers.IO) {
-                                            val recordedPath = sound?.path?.takeIf { it.isNotBlank() }
+                                            val recordedPath = sound?.path?.takeIf {
+                                                it.isNotBlank() && sound.data.isNullOrBlank() && sound.dataUrl.isNullOrBlank()
+                                            }
                                             val playedRecording = recordedPath?.let { path ->
                                                 runCatching {
                                                     speechService.speakRecordedAudio(
@@ -1174,7 +1180,8 @@ private fun BoardSetWorkspaceScreen(
                                             val playedSound = playedRecording || playButtonSound(
                                                 sound = sound,
                                                 fileStorage = fileStorage,
-                                                soundPlayer = soundPlayer
+                                                soundPlayer = soundPlayer,
+                                                urlLoader = mediaUrlLoader
                                             )
                                             if (!playedSound && spokenText.isNotEmpty()) {
                                                 runCatching {
@@ -2209,22 +2216,24 @@ private suspend fun awaitSpeechPlayback(speechService: SpeechService) {
 internal suspend fun playButtonSound(
     sound: ObfSound?,
     fileStorage: FileStorage,
-    soundPlayer: SoundPlayer
+    soundPlayer: SoundPlayer,
+    urlLoader: ObfMediaUrlLoader? = null
 ): Boolean {
     if (sound == null) return false
-    val path = sound.path
-    val data = sound.data
-    val bytes = when {
-        !path.isNullOrBlank() -> fileStorage.loadBytes(path)
-        !data.isNullOrBlank() -> decodeObfDataUri(data)
-        else -> null
-    } ?: return false
-    if (bytes.isEmpty()) return false
-    return soundPlayer.playBytes(bytes, sound.contentType)
+    for (source in obfSoundSources(sound)) {
+        val bytes = when (source) {
+            is ObfMediaSource.Data -> decodeObfDataUri(source.value)
+            is ObfMediaSource.Path -> fileStorage.loadBytes(source.value)
+            is ObfMediaSource.Url -> urlLoader?.load(source.value)
+            is ObfMediaSource.Symbol -> null
+        }
+        if (bytes != null && bytes.isNotEmpty() && soundPlayer.playBytes(bytes, sound.contentType)) return true
+    }
+    return false
 }
 
 private fun decodeObfDataUri(data: String): ByteArray? {
-    return Base64Decoder.decodeOrNull(data)
+    return Base64Decoder.decodeOrNull(data.substringAfter("base64,", data))
 }
 
 private fun languageName(

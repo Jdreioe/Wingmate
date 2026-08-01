@@ -25,6 +25,9 @@ import io.github.jdreioe.wingmate.domain.AacLogger
 import io.github.jdreioe.wingmate.domain.NoopSoundPlayer
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SoundPlayer
+import io.github.jdreioe.wingmate.domain.obf.ObfMediaUrlLoader
+import io.github.jdreioe.wingmate.infrastructure.KtorObfMediaUrlLoader
+import io.ktor.client.HttpClient
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -45,6 +48,7 @@ val appModule = module {
     }
     
     singleOf(::ObfParser)
+    single<ObfMediaUrlLoader> { KtorObfMediaUrlLoader(getOrNull() ?: HttpClient()) }
     singleOf(::InMemoryBoardRepository) { bind<BoardRepository>() }
     singleOf(::InMemoryBoardSetRepository) { bind<BoardSetRepository>() }
     single { ObzExporter(getOrNull() ?: kotlinx.serialization.json.Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }) }
