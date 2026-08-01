@@ -24,6 +24,7 @@ struct BoardCellInfo: Identifiable, Equatable {
     var linkedBoardId: String?
     var imageId: String?
     var imageUrl: String?
+    var hidden: Bool
 
     var id: String { "\(row):\(col)" }
 }
@@ -154,6 +155,9 @@ final class IosViewModel: ObservableObject {
     @Published var boardNamesById: [String: String] = [:]
     @Published var boardStatusMessage: String? = nil
     @Published var sentencePhrases: [SentencePhraseToken] = []
+    @Published var editingAccessEnabled: Bool = false
+    @Published var editingAccessUnlocked: Bool = true
+    @Published var editingAccessSupported: Bool = true
 
     private var isApplyingSentencePhraseInput: Bool = false
 
@@ -176,6 +180,58 @@ final class IosViewModel: ObservableObject {
 
     var canEditSelectedBoardSet: Bool {
         !selectedBoardSetLocked
+    }
+
+    func refreshEditingAccess() async {
+        guard let state = try? await bridge.editingAccessState() else { return }
+        editingAccessEnabled = state.enabled
+        editingAccessUnlocked = state.unlocked
+        editingAccessSupported = state.supported
+    }
+
+    func unlockEditingAccess(_ code: String) async -> Bool {
+        let success = (try? await bridge.unlockEditing(code: code))?.boolValue ?? false
+        await refreshEditingAccess()
+        return success
+    }
+
+    func configureEditingAccess(_ code: String) async -> Bool {
+        do {
+            try await bridge.configureEditingAccess(code: code)
+            await refreshEditingAccess()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func disableEditingAccess(_ code: String) async -> Bool {
+        let success = (try? await bridge.disableEditingAccess(code: code))?.boolValue ?? false
+        await refreshEditingAccess()
+        return success
+    }
+
+    func recoverEditingAccess() async {
+        try? await bridge.recoverEditingAccess()
+        await refreshEditingAccess()
+    }
+
+    func lockEditingAccess() {
+        bridge.lockEditingAccess()
+        editingAccessUnlocked = !editingAccessEnabled
+    }
+
+    func editingIsAuthorized() async -> Bool {
+        await refreshEditingAccess()
+        return !editingAccessEnabled || editingAccessUnlocked
+    }
+
+    func shareCompleteBackup() async -> Bool {
+        (try? await bridge.shareCompleteBackup())?.boolValue ?? false
+    }
+
+    func restoreCompleteBackup(path: String) async -> String? {
+        try? await bridge.restoreCompleteBackup(path: path)
     }
 
     func boardDisplayName(id: String) -> String {
@@ -1367,7 +1423,8 @@ final class IosViewModel: ObservableObject {
                     borderColor: cell.borderColor,
                     linkedBoardId: cell.linkedBoardId,
                     imageId: cell.imageId,
-                    imageUrl: cell.imageUrl
+                    imageUrl: cell.imageUrl,
+                    hidden: cell.hidden
                 )
             }
         } catch {
@@ -1533,6 +1590,23 @@ final class IosViewModel: ObservableObject {
             ) else { return }
             selectedBoard = board
             await refreshBoardCells()
+            await loadBoardSets()
+            selectedBoardSetId = set.id
+            selectedBoardId = boardId
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
+        }
+    }
+
+    func setSelectedBoardBackgroundColor(_ color: String?) async {
+        guard let set = selectedBoardSet, let boardId = selectedBoardId, canEditSelectedBoardSet else { return }
+        do {
+            guard let board = try await bridge.setBoardBackgroundColor(
+                boardSetId: set.id,
+                boardId: boardId,
+                backgroundColor: normalizedOptionalText(color)
+            ) else { return }
+            selectedBoard = board
             await loadBoardSets()
             selectedBoardSetId = set.id
             selectedBoardId = boardId

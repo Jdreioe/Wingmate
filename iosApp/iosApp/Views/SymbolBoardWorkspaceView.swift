@@ -44,6 +44,7 @@ private enum BoardManagementSheet: String, Identifiable {
     case renameSet
     case renameBoard
     case resizeBoard
+    case backgroundColor
 
     var id: String { rawValue }
 }
@@ -55,6 +56,7 @@ private enum BoardSetRoute: Equatable {
 
 struct SymbolBoardWorkspaceView: View {
     @ObservedObject var model: IosViewModel
+    @Environment(\.scenePhase) private var scenePhase
     @Namespace private var sentenceAnimationNamespace
 
     @State private var route: BoardSetRoute = .library
@@ -78,6 +80,8 @@ struct SymbolBoardWorkspaceView: View {
     @State private var managementName: String = ""
     @State private var managementRows: Int = 4
     @State private var managementColumns: Int = 4
+    @State private var managementBackgroundColor: Color = Color(.secondarySystemBackground)
+    @State private var useCustomManagementBackground = false
     @State private var showDeleteBoardConfirmation: Bool = false
     @State private var editingRow: Int = 0
     @State private var editingCol: Int = 0
@@ -99,6 +103,12 @@ struct SymbolBoardWorkspaceView: View {
     @State private var shouldClearEditingSymbol: Bool = false
     @State private var boardSentenceTokens: [SentencePhraseToken] = []
     @State private var activeSentenceAnimation: ActiveSentenceAnimation? = nil
+    @State private var showHiddenButtons = false
+    @State private var showEditingAccessSheet = false
+    @State private var editingAccessCode = ""
+    @State private var pendingEditingBoardSetId: String? = nil
+    @State private var pendingDeleteBoardSetId: String? = nil
+    @State private var editingAccessError = false
 
     private struct ActiveSentenceAnimation: Equatable {
         let sourceCellId: String
@@ -137,6 +147,43 @@ struct SymbolBoardWorkspaceView: View {
         .sheet(item: $managementSheet) { sheet in
             boardManagementSheet(sheet)
         }
+        .sheet(isPresented: $showEditingAccessSheet) {
+            NavigationStack {
+                Form {
+                    SecureField("editing_access.current_code", text: $editingAccessCode)
+                        .keyboardType(.numberPad)
+                    if editingAccessError { Text("editing_access.incorrect").foregroundStyle(.red) }
+                }
+                .navigationTitle(Text("editing_access.title"))
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("common.cancel") { showEditingAccessSheet = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("common.ok") {
+                            Task {
+                                guard await model.unlockEditingAccess(editingAccessCode) else {
+                                    editingAccessError = true
+                                    return
+                                }
+                                showEditingAccessSheet = false
+                                editingAccessCode = ""
+                                if let deleteId = pendingDeleteBoardSetId {
+                                    pendingDeleteBoardSetId = nil
+                                    await model.deleteBoardSet(id: deleteId)
+                                } else if let id = pendingEditingBoardSetId {
+                                    pendingEditingBoardSetId = nil
+                                    route = .workspace(boardSetId: id, mode: .edit)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { model.lockEditingAccess() }
+        }
         .onChange(of: editingSelectedPhotoItem) { _, newItem in
             guard let newItem else { return }
             Task {
@@ -168,7 +215,15 @@ struct SymbolBoardWorkspaceView: View {
             Button(NSLocalizedString("common_delete", comment: ""), role: .destructive) {
                 if let target = deleteTargetSet {
                     Task {
-                        await model.deleteBoardSet(id: target.id)
+                        if await model.editingIsAuthorized() {
+                            await model.deleteBoardSet(id: target.id)
+                        } else {
+                            pendingDeleteBoardSetId = target.id
+                            pendingEditingBoardSetId = nil
+                            editingAccessCode = ""
+                            editingAccessError = false
+                            showEditingAccessSheet = true
+                        }
                         deleteTargetSet = nil
                     }
                 }
@@ -253,7 +308,7 @@ struct SymbolBoardWorkspaceView: View {
                                 onEdit: {
                                     Task {
                                         await model.selectBoardSet(id: set.id)
-                                        route = .workspace(boardSetId: set.id, mode: .edit)
+                                        await requestEnterEditing(boardSetId: set.id)
                                     }
                                 },
                                 onDuplicate: {
@@ -363,6 +418,18 @@ struct SymbolBoardWorkspaceView: View {
                             } label: {
                                 Label("boardset.resize_board", systemImage: "arrow.up.left.and.arrow.down.right")
                             }
+                            Button {
+                                if let value = model.selectedBoard?.backgroundColor {
+                                    managementBackgroundColor = colorFromHex(value, fallback: Color(.secondarySystemBackground))
+                                    useCustomManagementBackground = true
+                                } else {
+                                    managementBackgroundColor = Color(.secondarySystemBackground)
+                                    useCustomManagementBackground = false
+                                }
+                                managementSheet = .backgroundColor
+                            } label: {
+                                Label("boardset.background_color", systemImage: "paintpalette")
+                            }
                             if let set = model.selectedBoardSet,
                                let boardId = model.selectedBoardId,
                                boardId != set.rootBoardId {
@@ -391,9 +458,17 @@ struct SymbolBoardWorkspaceView: View {
                         }
                     }
                 } else {
+                    Button(action: { showHiddenButtons.toggle() }) {
+                        Image(systemName: showHiddenButtons ? "eye.slash" : "eye")
+                            .font(.title3)
+                            .foregroundColor(.blue)
+                    }
+                    .accessibilityLabel(
+                        Text(showHiddenButtons ? "board_workspace.hide_hidden" : "board_workspace.show_hidden")
+                    )
                     Button(action: {
                         if model.canEditSelectedBoardSet {
-                            route = .workspace(boardSetId: boardSetId, mode: .edit)
+                            Task { await requestEnterEditing(boardSetId: boardSetId) }
                         } else {
                             authenticateAndUnlock(for: model.selectedBoardSet)
                         }
@@ -512,7 +587,11 @@ struct SymbolBoardWorkspaceView: View {
                     }
                     .padding(gridPadding)
                 }
-                .background(Color(.secondarySystemBackground))
+                .background(
+                    model.highContrastMode
+                        ? Color(.systemBackground)
+                        : colorFromHex(board.backgroundColor, fallback: Color(.secondarySystemBackground))
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -527,6 +606,7 @@ struct SymbolBoardWorkspaceView: View {
         let cell = model.cellAt(row: row, col: col)
         let isLinked = trimmed(cell?.linkedBoardId) != nil
         let sourceCellId = "\(row):\(col)"
+        let hiddenInRunMode = cell?.hidden == true && !isEditMode && !showHiddenButtons
 
         return ZStack(alignment: .topTrailing) {
             Button {
@@ -578,7 +658,15 @@ struct SymbolBoardWorkspaceView: View {
                 .buttonStyle(.plain)
                 .padding(4)
             }
+            if cell?.hidden == true && !isEditMode && showHiddenButtons {
+                Image(systemName: "eye.fill")
+                    .foregroundStyle(.blue)
+                    .padding(6)
+                    .accessibilityLabel(Text("board_workspace.temporarily_revealed"))
+            }
         }
+        .opacity(hiddenInRunMode ? 0 : (cell?.hidden == true && isEditMode ? 0.5 : 1))
+        .allowsHitTesting(!hiddenInRunMode)
     }
 
     private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, height: CGFloat) -> some View {
@@ -669,6 +757,19 @@ struct SymbolBoardWorkspaceView: View {
                     } footer: {
                         Text("boardset.resize_warning")
                     }
+                case .backgroundColor:
+                    Section {
+                        Toggle("boardset.background_custom", isOn: $useCustomManagementBackground)
+                        if useCustomManagementBackground {
+                            ColorPicker(
+                                "boardset.background_color",
+                                selection: $managementBackgroundColor,
+                                supportsOpacity: false
+                            )
+                        }
+                    } footer: {
+                        Text("boardset.background_footer")
+                    }
                 }
             }
             .navigationTitle(Text(managementTitle(sheet)))
@@ -687,6 +788,10 @@ struct SymbolBoardWorkspaceView: View {
                                 await model.renameSelectedBoard(managementName)
                             case .resizeBoard:
                                 await model.resizeSelectedBoard(rows: managementRows, columns: managementColumns)
+                            case .backgroundColor:
+                                await model.setSelectedBoardBackgroundColor(
+                                    useCustomManagementBackground ? hexFromColor(managementBackgroundColor) : nil
+                                )
                             }
                             managementSheet = nil
                         }
@@ -703,6 +808,7 @@ struct SymbolBoardWorkspaceView: View {
         case .renameSet: "boardset.rename_set"
         case .renameBoard: "boardset.rename_board"
         case .resizeBoard: "boardset.resize_board"
+        case .backgroundColor: "boardset.background_color"
         }
     }
 
@@ -1218,6 +1324,18 @@ struct SymbolBoardWorkspaceView: View {
                     authErrorMessage = error?.localizedDescription ?? NSLocalizedString("boardset.unlock.failed", comment: "")
                 }
             }
+        }
+    }
+
+    @MainActor
+    private func requestEnterEditing(boardSetId: String) async {
+        if await model.editingIsAuthorized() {
+            route = .workspace(boardSetId: boardSetId, mode: .edit)
+        } else {
+            pendingEditingBoardSetId = boardSetId
+            editingAccessCode = ""
+            editingAccessError = false
+            showEditingAccessSheet = true
         }
     }
 }

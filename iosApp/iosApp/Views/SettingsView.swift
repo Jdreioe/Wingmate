@@ -1,5 +1,7 @@
 import SwiftUI
 import Shared
+import LocalAuthentication
+import UniformTypeIdentifiers
 
 private enum SettingsDestination: String, CaseIterable, Identifiable {
     case speech
@@ -402,6 +404,14 @@ private struct GeneralSettingsView: View {
             }
 
             Section {
+                EditingAccessSettingsView(model: model)
+            } header: {
+                Text("editing_access.title")
+            } footer: {
+                Text("editing_access.description")
+            }
+
+            Section {
                 Button(action: onRestartSetup) {
                     Label("settings.restart_setup", systemImage: "arrow.counterclockwise")
                 }
@@ -412,11 +422,82 @@ private struct GeneralSettingsView: View {
     }
 }
 
+private struct EditingAccessSettingsView: View {
+    @ObservedObject var model: IosViewModel
+    @State private var currentCode = ""
+    @State private var newCode = ""
+    @State private var confirmation = ""
+    @State private var error = false
+
+    var body: some View {
+        Group {
+            if !model.editingAccessSupported {
+                Text("editing_access.unavailable").foregroundStyle(.red)
+            } else {
+                if model.editingAccessEnabled {
+                    SecureField("editing_access.current_code", text: $currentCode)
+                        .keyboardType(.numberPad)
+                }
+                SecureField("editing_access.new_code", text: $newCode)
+                    .keyboardType(.numberPad)
+                SecureField("editing_access.confirm_code", text: $confirmation)
+                    .keyboardType(.numberPad)
+                if error { Text("editing_access.incorrect").foregroundStyle(.red) }
+
+                Button(model.editingAccessEnabled ? "editing_access.change" : "editing_access.enable") {
+                    Task {
+                        let valid = newCode.count >= 4 && newCode.count <= 8 && newCode == confirmation
+                        let unlocked = !model.editingAccessEnabled || await model.unlockEditingAccess(currentCode)
+                        guard valid, unlocked else { error = true; return }
+                        error = !(await model.configureEditingAccess(newCode))
+                        if !error { currentCode = ""; newCode = ""; confirmation = "" }
+                    }
+                }
+                .disabled(newCode != confirmation || newCode.count < 4 || newCode.count > 8)
+
+                if model.editingAccessEnabled {
+                    Button("editing_access.disable", role: .destructive) {
+                        Task { error = !(await model.disableEditingAccess(currentCode)) }
+                    }
+                    Button("editing_access.recover") { recoverWithDeviceAuthentication() }
+                }
+            }
+        }
+        .task { await model.refreshEditingAccess() }
+    }
+
+    private func recoverWithDeviceAuthentication() {
+        let context = LAContext()
+        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: NSLocalizedString("editing_access.recover_reason", comment: "")) { success, _ in
+            if success { Task { await model.recoverEditingAccess() } }
+        }
+    }
+}
+
 private struct PrivacySettingsView: View {
     @ObservedObject var model: IosViewModel
+    @State private var importingBackup = false
+    @State private var backupStatus: String? = nil
+    @State private var confirmRestoreURL: URL? = nil
 
     var body: some View {
         Form {
+            Section {
+                Button("backup.create") {
+                    Task {
+                        backupStatus = await model.shareCompleteBackup()
+                            ? NSLocalizedString("backup.exported", comment: "")
+                            : NSLocalizedString("backup.failed", comment: "")
+                    }
+                }
+                Button("backup.restore") { importingBackup = true }
+                if let backupStatus { Text(backupStatus).font(.footnote) }
+            } header: {
+                Text("backup.title")
+            } footer: {
+                Text("backup.description")
+            }
+
             Section {
                 Toggle("settings.privacy.show_history", isOn: Binding(
                     get: { model.historyVisible },
@@ -458,6 +539,33 @@ private struct PrivacySettingsView: View {
         }
         .navigationTitle(Text("settings.category.privacy"))
         .navigationBarTitleDisplayMode(.inline)
+        .fileImporter(isPresented: $importingBackup, allowedContentTypes: [.zip, .data]) { result in
+            if case .success(let url) = result { confirmRestoreURL = url }
+        }
+        .confirmationDialog(
+            "backup.replace_title",
+            isPresented: Binding(get: { confirmRestoreURL != nil }, set: { if !$0 { confirmRestoreURL = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("backup.replace_action", role: .destructive) {
+                guard let url = confirmRestoreURL else { return }
+                confirmRestoreURL = nil
+                Task {
+                    let accessed = url.startAccessingSecurityScopedResource()
+                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                    if let error = await model.restoreCompleteBackup(path: url.path) {
+                        backupStatus = error
+                    } else {
+                        backupStatus = NSLocalizedString("backup.restored", comment: "")
+                        await model.refreshParitySettings()
+                        await model.loadBoardSets()
+                    }
+                }
+            }
+            Button("common.cancel", role: .cancel) { confirmRestoreURL = nil }
+        } message: {
+            Text("backup.replace_warning")
+        }
     }
 }
 

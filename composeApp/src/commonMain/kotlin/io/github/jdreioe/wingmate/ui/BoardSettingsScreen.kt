@@ -1,6 +1,8 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +43,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -78,6 +83,7 @@ private data class BoardSettingChoice(
 internal fun BoardSettingsScreen(
     target: BoardSettingsTarget,
     initialName: String,
+    initialBackgroundColor: String?,
     screenSettings: BoardSettingsOverrides,
     pageSettings: BoardSettingsOverrides,
     appShowLabels: Boolean,
@@ -86,12 +92,14 @@ internal fun BoardSettingsScreen(
     appShowMessageBar: Boolean,
     appActivationBehavior: BoardActivationBehavior,
     appReturnBehavior: BoardReturnBehavior,
-    onCommit: (name: String, settings: BoardSettingsOverrides) -> Unit,
+    onCommit: (name: String, settings: BoardSettingsOverrides, backgroundColor: String?) -> Unit,
     onBack: () -> Unit
 ) {
     val initialOverrides = if (target == BoardSettingsTarget.Screen) screenSettings else pageSettings
     var name by remember(target, initialName) { mutableStateOf(initialName) }
     var draft by remember(target, initialOverrides) { mutableStateOf(initialOverrides) }
+    var backgroundColor by remember(target, initialBackgroundColor) { mutableStateOf(initialBackgroundColor) }
+    var showBackgroundColorPicker by remember(target) { mutableStateOf(false) }
     var preference by remember(target) { mutableStateOf<BoardSettingPreference?>(null) }
 
     val inherited = resolveBoardSettings(
@@ -115,7 +123,7 @@ internal fun BoardSettingsScreen(
     )
 
     fun finish() {
-        onCommit(name.trim().ifBlank { initialName }, draft)
+        onCommit(name.trim().ifBlank { initialName }, draft, backgroundColor)
         onBack()
     }
 
@@ -173,8 +181,14 @@ internal fun BoardSettingsScreen(
                     draft = draft,
                     resolved = resolved,
                     inherited = inherited,
+                    backgroundColor = backgroundColor,
+                    onBackgroundColorChange = { backgroundColor = it },
+                    onPickBackgroundColor = { showBackgroundColorPicker = true },
                     onOpenPreference = { preference = it },
-                    onReset = { draft = BoardSettingsOverrides() }
+                    onReset = {
+                        draft = BoardSettingsOverrides()
+                        if (target == BoardSettingsTarget.Page) backgroundColor = null
+                    }
                 )
             } else {
                 BoardSettingChoicesPage(
@@ -188,6 +202,20 @@ internal fun BoardSettingsScreen(
             }
         }
     }
+
+    if (showBackgroundColorPicker) {
+        ColorPickerDialog(
+            initialColor = parseObfColorOrNull(backgroundColor) ?: MaterialTheme.colorScheme.background,
+            initialUse = backgroundColor != null,
+            onDismiss = { showBackgroundColorPicker = false },
+            onPick = { color ->
+                backgroundColor = color?.let {
+                    "#" + (it.toArgb() and 0xFFFFFF).toString(16).padStart(6, '0').uppercase()
+                }
+                showBackgroundColorPicker = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -198,6 +226,9 @@ private fun BoardSettingsHome(
     draft: BoardSettingsOverrides,
     resolved: ResolvedBoardSettings,
     inherited: ResolvedBoardSettings,
+    backgroundColor: String?,
+    onBackgroundColorChange: (String?) -> Unit,
+    onPickBackgroundColor: () -> Unit,
     onOpenPreference: (BoardSettingPreference) -> Unit,
     onReset: () -> Unit
 ) {
@@ -243,6 +274,40 @@ private fun BoardSettingsHome(
         }
 
         SettingsGroup(title = stringResource(Res.string.board_settings_group_appearance)) {
+            if (target == BoardSettingsTarget.Page) {
+                val previewColor = parseObfColorOrNull(backgroundColor)
+                    ?: MaterialTheme.colorScheme.background
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier.size(40.dp).clip(MaterialTheme.shapes.medium)
+                            .background(previewColor)
+                            .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium)
+                    )
+                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                        Text(stringResource(Res.string.board_settings_background_color))
+                        Text(
+                            stringResource(
+                                if (backgroundColor == null) Res.string.board_settings_background_inherited
+                                else Res.string.board_settings_background_custom
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    OutlinedButton(onClick = onPickBackgroundColor) {
+                        Text(stringResource(Res.string.board_dialog_pick_color))
+                    }
+                    if (backgroundColor != null) {
+                        IconButton(onClick = { onBackgroundColorChange(null) }) {
+                            Icon(Icons.Default.Replay, contentDescription = stringResource(Res.string.board_settings_background_reset))
+                        }
+                    }
+                }
+                SettingsGroupDivider()
+            }
             BoardSettingNavRow(
                 title = stringResource(Res.string.board_settings_show_labels),
                 subtitle = settingSubtitle(target, BoardSettingPreference.ShowLabels, draft.showLabels, shownHidden(resolved.showLabels), shownHidden(inherited.showLabels)),
@@ -309,7 +374,7 @@ private fun BoardSettingsHome(
             OutlinedButton(
                 onClick = onReset,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                enabled = !draft.isEmpty
+                enabled = !draft.isEmpty || (target == BoardSettingsTarget.Page && backgroundColor != null)
             ) {
                 Text(
                     stringResource(
