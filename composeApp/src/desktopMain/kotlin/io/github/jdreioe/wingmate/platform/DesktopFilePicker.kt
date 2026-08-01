@@ -35,22 +35,13 @@ class DesktopFilePicker : FilePicker {
         }.getOrNull()
     }
 
-    override suspend fun readZipEntries(path: String): Map<String, ByteArray>? = withContext(Dispatchers.IO) {
-        runCatching {
-            val file = File(path)
-            val entries = mutableMapOf<String, ByteArray>()
-            java.util.zip.ZipFile(file).use { zip ->
-                val enumeration = zip.entries()
-                while (enumeration.hasMoreElements()) {
-                    val entry = enumeration.nextElement()
-                    if (!entry.isDirectory) {
-                        zip.getInputStream(entry).use { input ->
-                            entries[entry.name] = input.readBytes()
-                        }
-                    }
-                }
-            }
-            entries
-        }.getOrNull()
+    override suspend fun openArchive(path: String): ArchiveReader? = withContext(Dispatchers.IO) {
+        try {
+            JvmZipArchiveReader(File(path))
+        } catch (error: ArchiveReadException) {
+            throw error
+        } catch (_: Throwable) {
+            null
+        }
     }
 }

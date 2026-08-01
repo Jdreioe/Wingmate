@@ -29,6 +29,17 @@ class JvmFileStorage(
         file.writeBytes(content)
     }
 
+    override suspend fun saveStream(
+        fileName: String,
+        producer: suspend (suspend (ByteArray) -> Unit) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        val file = resolve(fileName)
+        file.parentFile?.mkdirs()
+        file.outputStream().buffered().use { output ->
+            producer { chunk -> output.write(chunk) }
+        }
+    }
+
     override suspend fun loadBytes(fileName: String): ByteArray? = withContext(Dispatchers.IO) {
         val file = resolve(fileName)
         if (file.exists()) file.readBytes() else null
