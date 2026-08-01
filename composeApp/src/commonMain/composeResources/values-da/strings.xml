@@ -242,6 +242,14 @@
     <string name="phrase_replace_button">Erstat</string>
     <string name="phrase_stop_button">Stop</string>
     <string name="phrase_play_button">Afspil</string>
+    <string name="playback_play">Afspil</string>
+    <string name="playback_resume">Fortsæt</string>
+    <string name="playback_pause">Pause</string>
+    <string name="playback_stop">Stop</string>
+    <string name="playback_secondary_language">Skift sekundært sprog</string>
+    <string name="playback_new_thought">Start en ny tanke</string>
+    <string name="playback_previous_thought">Gå tilbage til den forrige tanke</string>
+    <string name="prediction_insert_letter">Indsæt bogstavet %1$s</string>
     <string name="phrase_clear_button">Ryd</string>
     <string name="phrase_recording_in_progress">Optagelse i gang...</string>
     <string name="phrase_mic_permission_denied">Mikrofonen er påkrævet for at optage brugerdefinerede fraser.</string>

@@ -242,6 +242,14 @@
     <string name="phrase_replace_button">Replace</string>
     <string name="phrase_stop_button">Stop</string>
     <string name="phrase_play_button">Play</string>
+    <string name="playback_play">Play</string>
+    <string name="playback_resume">Resume</string>
+    <string name="playback_pause">Pause</string>
+    <string name="playback_stop">Stop</string>
+    <string name="playback_secondary_language">Toggle secondary language</string>
+    <string name="playback_new_thought">Start a new thought</string>
+    <string name="playback_previous_thought">Return to the previous thought</string>
+    <string name="prediction_insert_letter">Insert letter %1$s</string>
     <string name="phrase_clear_button">Clear</string>
     <string name="phrase_recording_in_progress">Recording in progress...</string>
     <string name="phrase_mic_permission_denied">Microphone access is required to record custom phrases.</string>

@@ -11,9 +11,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.PredictionResult
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.prediction_insert_letter
 
 /**
  * A horizontal bar showing word and letter predictions.
@@ -73,17 +80,22 @@ fun PredictionBar(
         
         // Letter predictions as small buttons
         predictions.letters.forEach { letter ->
+            val insertionLabel = stringResource(Res.string.prediction_insert_letter, letter.toString())
             Surface(
                 modifier = Modifier
-                    .size((32.dp * fontSizeScale).coerceAtLeast(28.dp))
-                    .clickable { onLetterSelected(letter) },
+                    .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                    .semantics {
+                        contentDescription = insertionLabel
+                        role = Role.Button
+                    }
+                    .clickable(role = Role.Button) { onLetterSelected(letter) },
                 shape = RoundedCornerShape(6.dp),
                 color = MaterialTheme.colorScheme.tertiaryContainer,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = letter.toString(),
