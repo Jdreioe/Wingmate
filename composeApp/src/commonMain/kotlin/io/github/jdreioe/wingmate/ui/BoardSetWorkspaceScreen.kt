@@ -70,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.ObzExportResult
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
@@ -683,21 +684,28 @@ private fun BoardSetWorkspaceScreen(
                 if (graph == null) {
                     statusMessage = "Export failed: no board set loaded"
                 } else {
-                    val obzBytes = useCase.exportBoardSetAsObz(graph.boardSet.id)
-                    if (obzBytes != null) {
-                        val fileName = "${graph.boardSet.name}.obz"
-                        if (shareService != null) {
-                            val shared = shareService.shareFile(fileName, obzBytes)
-                            statusMessage = if (shared) {
-                                "Exported ${graph.boardSet.name}.obz"
+                    when (val export = useCase.exportBoardSetAsObzResult(graph.boardSet.id)) {
+                        is ObzExportResult.Success -> {
+                            val obzBytes = export.bytes
+                            val fileName = "${graph.boardSet.name}.obz"
+                            if (shareService != null) {
+                                val shared = shareService.shareFile(fileName, obzBytes)
+                                statusMessage = if (shared) {
+                                    "Exported ${graph.boardSet.name}.obz"
+                                } else {
+                                    "Export cancelled"
+                                }
                             } else {
-                                "Export cancelled"
+                                statusMessage = "Export saved (${obzBytes.size} bytes)"
                             }
-                        } else {
-                            statusMessage = "Export saved (${obzBytes.size} bytes)"
                         }
-                    } else {
-                        statusMessage = "Export failed: no boards"
+                        is ObzExportResult.Failure -> {
+                            val resources = export.resources
+                                .takeIf { it.isNotEmpty() }
+                                ?.joinToString(prefix = ": ")
+                                .orEmpty()
+                            statusMessage = "Export failed: ${export.context}$resources"
+                        }
                     }
                 }
             } catch (e: Exception) {

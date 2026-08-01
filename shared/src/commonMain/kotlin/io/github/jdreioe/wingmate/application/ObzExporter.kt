@@ -1,8 +1,11 @@
 package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfManifest
 import io.github.jdreioe.wingmate.domain.obf.ObfManifestPaths
+import io.github.jdreioe.wingmate.domain.obf.ObfSound
+import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.obf.ZipBuilder
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -13,6 +16,23 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 
+sealed interface ObzExportResult {
+    data class Success(val bytes: ByteArray) : ObzExportResult
+    data class Failure(
+        val code: ObzExportErrorCode,
+        val context: String,
+        val resources: List<String> = emptyList()
+    ) : ObzExportResult
+}
+
+enum class ObzExportErrorCode {
+    ROOT_NOT_FOUND,
+    DUPLICATE_ID,
+    UNSAFE_ID,
+    UNRESOLVED_MEDIA,
+    ZIP_FAILED
+}
+
 class ObzExporter(
     private val json: Json = Json {
         prettyPrint = true
@@ -20,58 +40,69 @@ class ObzExporter(
         ignoreUnknownKeys = true
     }
 ) {
-    suspend fun export(
+    suspend fun exportResult(
         boards: List<ObfBoard>,
         rootBoardId: String,
         loadMedia: suspend (path: String) -> ByteArray? = { null },
-        soundBytes: Map<String, ByteArray> = emptyMap(),
         manifestExtensions: Map<String, JsonElement> = emptyMap()
-    ): ByteArray {
+    ): ObzExportResult {
         val rootBoard = boards.firstOrNull { it.id == rootBoardId }
-            ?: error("root board $rootBoardId not found")
+            ?: return ObzExportResult.Failure(ObzExportErrorCode.ROOT_NOT_FOUND, "Root board '$rootBoardId' was not found")
 
-        val boardFiles = mutableMapOf<String, String>()
+        val duplicateBoardIds = duplicates(boards.map { it.id })
+        val duplicateImageIds = duplicates(boards.flatMap { board -> board.images.map { it.id } })
+        val duplicateSoundIds = duplicates(boards.flatMap { board -> board.sounds.map { it.id } })
+        val duplicateIds = duplicateBoardIds + duplicateImageIds + duplicateSoundIds
+        if (duplicateIds.isNotEmpty()) {
+            return ObzExportResult.Failure(
+                ObzExportErrorCode.DUPLICATE_ID,
+                "Package-wide IDs must be unique",
+                duplicateIds.sorted()
+            )
+        }
+        val unsafeIds = (boards.map { it.id } + boards.flatMap { it.images.map(ObfImage::id) } + boards.flatMap { it.sounds.map(ObfSound::id) })
+            .filterNot(::isSafeId)
+        if (unsafeIds.isNotEmpty()) {
+            return ObzExportResult.Failure(ObzExportErrorCode.UNSAFE_ID, "Unsafe archive IDs", unsafeIds.distinct())
+        }
+
+        val boardFiles = boards.associate { it.id to "boards/${it.id}.obf" }
         val imageFiles = mutableMapOf<String, String>()
         val soundFiles = mutableMapOf<String, String>()
-
         val entries = mutableMapOf<String, ByteArray>()
+        val unresolved = mutableListOf<String>()
 
-        for (board in boards) {
-            val path = "boards/${board.id}.obf"
-            boardFiles[board.id] = path
+        val rewrittenBoards = boards.map { board ->
+            val images = board.images.map { image ->
+                rewriteImage(image, loadMedia, entries, imageFiles, unresolved)
+            }
+            val sounds = board.sounds.map { sound ->
+                rewriteSound(sound, loadMedia, entries, soundFiles, unresolved)
+            }
+            val buttons = board.buttons.map { button ->
+                val link = button.loadBoard
+                val localPath = link?.id?.let(boardFiles::get)
+                if (link != null && localPath != null) {
+                    button.copy(loadBoard = link.copy(path = localPath))
+                } else button
+            }
+            board.copy(images = images, sounds = sounds, buttons = buttons)
+        }
+        if (unresolved.isNotEmpty()) {
+            return ObzExportResult.Failure(
+                ObzExportErrorCode.UNRESOLVED_MEDIA,
+                "Local media could not be packaged",
+                unresolved.distinct()
+            )
+        }
+
+        rewrittenBoards.forEach { board ->
+            val path = boardFiles.getValue(board.id)
             val boardJson = json.encodeToJsonElement(ObfBoard.serializer(), board)
             entries[path] = json.encodeToString(serializeWithExtensions(boardJson, board)).encodeToByteArray()
         }
 
-        for (board in boards) {
-            for (image in board.images) {
-                val imgPath = image.path
-                if (imgPath != null && image.id !in imageFiles) {
-                    val filename = imgPath.substringAfterLast('/')
-                    val storedPath = "images/${image.id}/$filename"
-                    imageFiles[image.id] = storedPath
-                    loadMedia(imgPath)?.let { bytes ->
-                        entries[storedPath] = bytes
-                    }
-                }
-            }
-        }
-
-        for (board in boards) {
-            for (button in board.buttons) {
-                val soundId = button.soundId
-                if (soundId != null && soundId !in soundFiles) {
-                    val soundPath = "sounds/$soundId"
-                    soundFiles[soundId] = soundPath
-                    val bytes = soundBytes[soundId] ?: loadMedia(soundPath)
-                    if (bytes != null) {
-                        entries[soundPath] = bytes
-                    }
-                }
-            }
-        }
-
-        val rootPath = boardFiles[rootBoardId] ?: error("root path not found")
+        val rootPath = boardFiles.getValue(rootBoard.id)
 
         val manifest = ObfManifest(
             format = "open-board-0.1",
@@ -86,8 +117,100 @@ class ObzExporter(
         val manifestJson = json.encodeToJsonElement(ObfManifest.serializer(), manifest)
         entries["manifest.json"] = json.encodeToString(serializeWithExtensions(manifestJson, manifest)).encodeToByteArray()
 
-        return ZipBuilder.build(entries.toList()).getOrThrow()
+        return ZipBuilder.build(entries.toList()).fold(
+            onSuccess = { ObzExportResult.Success(it) },
+            onFailure = { ObzExportResult.Failure(ObzExportErrorCode.ZIP_FAILED, it.message ?: "Could not build OBZ") }
+        )
     }
+
+    suspend fun export(
+        boards: List<ObfBoard>,
+        rootBoardId: String,
+        loadMedia: suspend (path: String) -> ByteArray? = { null },
+        soundBytes: Map<String, ByteArray> = emptyMap(),
+        manifestExtensions: Map<String, JsonElement> = emptyMap()
+    ): ByteArray = when (val result = exportResult(boards, rootBoardId, { path ->
+        loadMedia(path) ?: soundBytes[path.substringAfterLast('/')]
+    }, manifestExtensions)) {
+        is ObzExportResult.Success -> result.bytes
+        is ObzExportResult.Failure -> error("${result.code}: ${result.context}: ${result.resources.joinToString()}")
+    }
+
+    private suspend fun rewriteImage(
+        image: ObfImage,
+        loadMedia: suspend (String) -> ByteArray?,
+        entries: MutableMap<String, ByteArray>,
+        manifestPaths: MutableMap<String, String>,
+        unresolved: MutableList<String>
+    ): ObfImage {
+        if (validInlineData(image.data)) return image.copy(path = null)
+        if (!image.dataUrl.isNullOrBlank()) return image.copy(path = null)
+        val path = image.path
+        if (!path.isNullOrBlank()) {
+            val bytes = runCatching { loadMedia(path) }.getOrNull()
+            if (bytes != null) {
+                val archivePath = "images/${image.id}.${extensionFor(image.contentType, path, "bin")}"
+                entries[archivePath] = bytes
+                manifestPaths[image.id] = archivePath
+                return image.copy(path = archivePath, data = null, dataUrl = null, url = null)
+            }
+            if (image.dataUrl.isNullOrBlank() && image.url.isNullOrBlank() && image.symbol == null) {
+                unresolved += "image:${image.id}:$path"
+            }
+            return image.copy(path = null)
+        }
+        return image
+    }
+
+    private suspend fun rewriteSound(
+        sound: ObfSound,
+        loadMedia: suspend (String) -> ByteArray?,
+        entries: MutableMap<String, ByteArray>,
+        manifestPaths: MutableMap<String, String>,
+        unresolved: MutableList<String>
+    ): ObfSound {
+        if (validInlineData(sound.data)) return sound.copy(path = null)
+        if (!sound.dataUrl.isNullOrBlank()) return sound.copy(path = null)
+        val path = sound.path
+        if (!path.isNullOrBlank()) {
+            val bytes = runCatching { loadMedia(path) }.getOrNull()
+            if (bytes != null) {
+                val archivePath = "sounds/${sound.id}.${extensionFor(sound.contentType, path, "bin")}"
+                entries[archivePath] = bytes
+                manifestPaths[sound.id] = archivePath
+                return sound.copy(path = archivePath, data = null, dataUrl = null, url = null)
+            }
+            if (sound.dataUrl.isNullOrBlank() && sound.url.isNullOrBlank()) {
+                unresolved += "sound:${sound.id}:$path"
+            }
+            return sound.copy(path = null)
+        }
+        return sound
+    }
+
+    private fun validInlineData(data: String?): Boolean {
+        if (data.isNullOrBlank()) return false
+        val payload = data.substringAfter("base64,", data)
+        return Base64Decoder.decodeOrNull(payload) != null
+    }
+
+    private fun extensionFor(contentType: String?, path: String?, default: String): String = when (contentType?.lowercase()) {
+        "image/png" -> "png"
+        "image/jpeg", "image/jpg" -> "jpg"
+        "image/gif" -> "gif"
+        "image/svg+xml" -> "svg"
+        "image/webp" -> "webp"
+        "audio/mpeg", "audio/mp3" -> "mp3"
+        "audio/wav", "audio/x-wav" -> "wav"
+        "audio/ogg" -> "ogg"
+        else -> path?.substringAfterLast('.', "")?.lowercase()?.takeIf { it.matches(Regex("[a-z0-9]{1,5}")) } ?: default
+    }
+
+    private fun duplicates(ids: List<String>): Set<String> =
+        ids.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
+
+    private fun isSafeId(id: String): Boolean = id.isNotBlank() && id != "." && id != ".." &&
+        id.none { it == '/' || it == '\\' || it == ':' || it.code < 32 }
 
     /**
      * Single-board OBF JSON with extension metadata merged back.
