@@ -1,6 +1,8 @@
 package io.github.jdreioe.wingmate.kde
 
 import io.github.jdreioe.wingmate.domain.*
+import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.Dispatchers
@@ -137,5 +139,51 @@ class JsonFileVoiceRepository : VoiceRepository {
     
     override suspend fun getSelected(): Voice? {
         return selectedVoice
+    }
+}
+
+class JsonFileBoardRepository : BoardRepository {
+    private val file = File(configDir, "boards.json")
+    private val boards = runCatching {
+        if (file.exists()) json.decodeFromString<List<ObfBoard>>(file.readText()).associateBy { it.id }.toMutableMap()
+        else mutableMapOf()
+    }.getOrElse { mutableMapOf() }
+
+    override suspend fun getBoard(id: String): ObfBoard? = withContext(Dispatchers.IO) { boards[id] }
+
+    override suspend fun saveBoard(board: ObfBoard) = withContext(Dispatchers.IO) {
+        boards[board.id] = board
+        file.writeText(json.encodeToString(boards.values.toList()))
+    }
+
+    override suspend fun listBoards(): List<ObfBoard> = withContext(Dispatchers.IO) { boards.values.toList() }
+
+    override suspend fun deleteBoard(id: String) = withContext(Dispatchers.IO) {
+        boards.remove(id)
+        file.writeText(json.encodeToString(boards.values.toList()))
+    }
+}
+
+class JsonFileBoardSetRepository : BoardSetRepository {
+    private val file = File(configDir, "board-sets.json")
+    private val boardSets = runCatching {
+        if (file.exists()) json.decodeFromString<List<ObfBoardSet>>(file.readText()).associateBy { it.id }.toMutableMap()
+        else mutableMapOf()
+    }.getOrElse { mutableMapOf() }
+
+    override suspend fun getBoardSet(id: String): ObfBoardSet? = withContext(Dispatchers.IO) { boardSets[id] }
+
+    override suspend fun saveBoardSet(boardSet: ObfBoardSet) = withContext(Dispatchers.IO) {
+        boardSets[boardSet.id] = boardSet
+        file.writeText(json.encodeToString(boardSets.values.toList()))
+    }
+
+    override suspend fun listBoardSets(): List<ObfBoardSet> = withContext(Dispatchers.IO) {
+        boardSets.values.sortedByDescending { it.updatedAt }
+    }
+
+    override suspend fun deleteBoardSet(id: String) = withContext(Dispatchers.IO) {
+        boardSets.remove(id)
+        file.writeText(json.encodeToString(boardSets.values.toList()))
     }
 }

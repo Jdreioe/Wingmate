@@ -2,7 +2,7 @@
 name = "wingmate-kde"
 version = "1.0.0"
 edition = "2021"
-description = "Wingmate Desktop - Communication Aid (KDE/Qt)"
+description = "Wingmate Desktop - native Linux communication aid"
 default-run = "wingmate-kde"
 
 [lib]
@@ -16,16 +16,31 @@ path = "src/main.rs"
 [[bin]]
 name = "partner-window-test"
 path = "src/bin/partner_window_test.rs"
+required-features = ["partner-window"]
+
+[features]
+default = []
+partner-window = [
+    "dep:ftdi-embedded-hal",
+    "dep:ftdi",
+    "dep:embedded-hal",
+    "dep:miniz_oxide",
+]
 
 [dependencies]
-qmetaobject = "0.2"
-cstr = "0.2"
+iced = { version = "0.14", features = ["tokio", "wgpu"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["time"] }
+url = "2"
+rfd = "0.15"
 
 # EVE display driver via FTDI FT232H
-ftdi-embedded-hal = { version = "0.24", features = ["ftdi"] }
-ftdi = "0.1"
-embedded-hal = "1.0"
-miniz_oxide = "0.8"
+ftdi-embedded-hal = { version = "0.24", features = ["ftdi"], optional = true }
+ftdi = { version = "0.1", optional = true }
+embedded-hal = { version = "1.0", optional = true }
+miniz_oxide = { version = "0.8", optional = true }
 
 # CLI test binary
 clap = { version = "4", features = ["derive"] }

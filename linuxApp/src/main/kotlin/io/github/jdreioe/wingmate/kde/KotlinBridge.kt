@@ -21,6 +21,17 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.VoiceRepository
+import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.StartupMode
+import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.infrastructure.BoardImportService
+import io.github.jdreioe.wingmate.infrastructure.ObfParser
+import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.domain.BoardSetRepository
+import io.github.jdreioe.wingmate.domain.UserDataManager
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.DictionaryLoader
 import org.koin.core.context.GlobalContext
@@ -29,6 +40,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 
 /**
@@ -48,7 +60,23 @@ class KotlinBridge(private val port: Int = 8765) {
     private val predictionService: TextPredictionService by lazy { GlobalContext.get().get() }
     private val saidTextRepository: SaidTextRepository by lazy { GlobalContext.get().get() }
     private val dictionaryLoader: DictionaryLoader by lazy { GlobalContext.get().get() }
+    private val boardSetUseCase: BoardSetUseCase by lazy {
+        BoardSetUseCase(
+            GlobalContext.get().get<BoardSetRepository>(),
+            GlobalContext.get().get<BoardRepository>(),
+            GlobalContext.get().get<FeatureUsageReporter>()
+        )
+    }
+    private val boardImportService: BoardImportService by lazy {
+        BoardImportService(
+            GlobalContext.get().get<ObfParser>(),
+            GlobalContext.get().get<BoardRepository>(),
+            GlobalContext.get().get<BoardSetRepository>(),
+            LinuxFilePicker()
+        )
+    }
     private val partnerWindowManager = PartnerWindowManager(settingsManager)
+    private val userDataManager = UserDataManager(saidTextRepository)
     
     private val json = Json { 
         ignoreUnknownKeys = true 
@@ -94,6 +122,18 @@ class KotlinBridge(private val port: Int = 8765) {
                 phraseViewModel.deletePhrase(id)
                 call.respond(HttpStatusCode.OK)
             }
+
+            put("/api/phrases/{id}") {
+                val id = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val body = json.parseToJsonElement(call.receiveText()).jsonObject
+                phraseViewModel.updatePhrase(
+                    id = id,
+                    text = body["text"]?.jsonPrimitive?.contentOrNull,
+                    name = body["name"]?.jsonPrimitive?.contentOrNull,
+                    recordingPath = body["recordingPath"]?.jsonPrimitive?.contentOrNull
+                )
+                call.respond(HttpStatusCode.OK)
+            }
             
             // Categories
             get("/api/categories") {
@@ -116,11 +156,25 @@ class KotlinBridge(private val port: Int = 8765) {
                 phraseViewModel.selectCategory(categoryId)
                 call.respond(HttpStatusCode.OK)
             }
+
+            delete("/api/categories/{id}") {
+                val id = call.parameters["id"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                phraseViewModel.deleteCategory(id)
+                call.respond(HttpStatusCode.OK)
+            }
             
             // Settings
             get("/api/settings") {
                 val settings = settingsManager.settings.firstOrNull()
-                call.respond(settings ?: mapOf("status" to "loading"))
+                if (settings == null) {
+                    call.respond(HttpStatusCode.ServiceUnavailable, mapOf("status" to "loading"))
+                } else {
+                    call.respondText(
+                        json.encodeToString(settings),
+                        ContentType.Application.Json,
+                        HttpStatusCode.OK
+                    )
+                }
             }
             
             put("/api/settings") {
@@ -144,9 +198,38 @@ class KotlinBridge(private val port: Int = 8765) {
                     val lang = jsonObj["secondaryLanguage"]?.jsonPrimitive?.contentOrNull
                     if (lang != null) newSettings = newSettings.copy(secondaryLanguage = lang)
                 }
+
+                jsonObj["startupMode"]?.jsonPrimitive?.contentOrNull?.let { value ->
+                    newSettings = newSettings.copy(startupMode = runCatching { StartupMode.valueOf(value) }.getOrDefault(newSettings.startupMode))
+                }
+                if (jsonObj.containsKey("forceDarkTheme")) {
+                    newSettings = newSettings.copy(forceDarkTheme = jsonObj["forceDarkTheme"]?.jsonPrimitive?.booleanOrNull)
+                }
+                jsonObj["featureUsageReportingEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(featureUsageReportingEnabled = it) }
+                jsonObj["showLabels"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(showLabels = it) }
+                jsonObj["showSymbols"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(showSymbols = it) }
+                jsonObj["labelAtTop"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(labelAtTop = it) }
+                jsonObj["gridColumns"]?.jsonPrimitive?.intOrNull?.let { newSettings = newSettings.copy(gridColumns = it.coerceIn(1, 12)) }
+                jsonObj["highContrastMode"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(highContrastMode = it) }
+                jsonObj["holdToSelectMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(holdToSelectMillis = it.coerceAtLeast(0)) }
+                jsonObj["dwellToSelectMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(dwellToSelectMillis = it.coerceAtLeast(0)) }
+                jsonObj["selectionSoundEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(selectionSoundEnabled = it) }
+                jsonObj["auditoryFishingEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(auditoryFishingEnabled = it) }
+                jsonObj["usageLoggingEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(usageLoggingEnabled = it) }
+                jsonObj["historyVisible"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(historyVisible = it) }
+                jsonObj["boardShowMessageBar"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(boardShowMessageBar = it) }
+                jsonObj["fontSizeScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(fontSizeScale = it.coerceIn(0.5f, 2f)) }
+                jsonObj["buttonScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(buttonScale = it.coerceIn(0.5f, 2f)) }
+                jsonObj["inputFieldScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(inputFieldScale = it.coerceIn(0.5f, 2f)) }
                 
                 println("[API] Updating settings to: $newSettings")
                 settingsManager.updateSettings(newSettings)
+                call.respond(HttpStatusCode.OK)
+            }
+
+            put("/api/settings/full") {
+                val updated = json.decodeFromString<Settings>(call.receiveText())
+                settingsManager.updateSettings(updated)
                 call.respond(HttpStatusCode.OK)
             }
             
@@ -294,6 +377,179 @@ class KotlinBridge(private val port: Int = 8765) {
             get("/api/pronunciation") {
                 val entries = pronunciationRepository.getAll()
                 call.respond(entries)
+            }
+
+            get("/api/history") {
+                call.respond(saidTextRepository.list().filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L })
+            }
+
+            delete("/api/history") {
+                saidTextRepository.deleteAll()
+                call.respond(HttpStatusCode.OK)
+            }
+
+            get("/api/history/export") {
+                call.respondText(userDataManager.exportData(), ContentType.Application.Json, HttpStatusCode.OK)
+            }
+
+            post("/api/history/import") {
+                userDataManager.importData(call.receiveText())
+                call.respond(HttpStatusCode.OK)
+            }
+
+            // Screen / board-set library and editor
+            get("/api/boardsets") {
+                call.respond(boardSetUseCase.listBoardSets())
+            }
+
+            post("/api/boardsets") {
+                val body = json.parseToJsonElement(call.receiveText()).jsonObject
+                val name = body["name"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+                if (name.isBlank()) return@post call.respond(HttpStatusCode.BadRequest)
+                val template = body["template"]?.jsonPrimitive?.contentOrNull ?: "blank"
+                val created = if (template.equals("calculator", ignoreCase = true)) {
+                    boardSetUseCase.createCalculatorBoardSet(name)
+                } else {
+                    boardSetUseCase.createBoardSet(
+                        name,
+                        body["rows"]?.jsonPrimitive?.intOrNull ?: 4,
+                        body["columns"]?.jsonPrimitive?.intOrNull ?: 4
+                    )
+                }
+                call.respond(HttpStatusCode.Created, created)
+            }
+
+            post("/api/boardsets/import") {
+                val path = json.parseToJsonElement(call.receiveText()).jsonObject["path"]?.jsonPrimitive?.contentOrNull
+                    ?: return@post call.respond(HttpStatusCode.BadRequest)
+                val imported = boardImportService.importBoardSetFromPath(path)
+                    ?: return@post call.respond(HttpStatusCode.BadRequest)
+                call.respond(HttpStatusCode.Created, imported)
+            }
+
+            get("/api/boardsets/{id}") {
+                try {
+                    val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+                    val graph = boardSetUseCase.loadBoardSetGraph(id)
+                        ?: return@get call.respond(HttpStatusCode.NotFound)
+                    call.respondText(
+                        json.encodeToString(BoardSetGraphResponse(graph.boardSet, graph.boards)),
+                        ContentType.Application.Json,
+                        HttpStatusCode.OK
+                    )
+                } catch (error: Throwable) {
+                    error.printStackTrace()
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (error.message ?: "unknown")))
+                }
+            }
+
+            delete("/api/boardsets/{id}") {
+                val id = call.parameters["id"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                boardSetUseCase.deleteBoardSet(id)
+                call.respond(HttpStatusCode.OK)
+            }
+
+            get("/api/boardsets/{id}/export") {
+                val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+                val bytes = boardSetUseCase.exportBoardSetAsObz(id)
+                    ?: return@get call.respond(HttpStatusCode.NotFound)
+                call.respondBytes(bytes, ContentType.Application.Zip, HttpStatusCode.OK)
+            }
+
+            post("/api/boardsets/{id}/duplicate") {
+                val id = call.parameters["id"] ?: return@post call.respond(HttpStatusCode.BadRequest)
+                val duplicated = boardSetUseCase.duplicateBoardSet(id)
+                    ?: return@post call.respond(HttpStatusCode.NotFound)
+                call.respond(HttpStatusCode.Created, duplicated)
+            }
+
+            put("/api/boardsets/{id}/lock") {
+                val id = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val updated = boardSetUseCase.toggleLocked(id)
+                    ?: return@put call.respond(HttpStatusCode.NotFound)
+                call.respond(updated)
+            }
+
+            put("/api/boardsets/{id}/name") {
+                val id = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val name = json.parseToJsonElement(call.receiveText()).jsonObject["name"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val updated = boardSetUseCase.renameBoardSet(id, name)
+                    ?: return@put call.respond(HttpStatusCode.BadRequest)
+                call.respond(updated)
+            }
+
+            post("/api/boardsets/{id}/boards") {
+                val id = call.parameters["id"] ?: return@post call.respond(HttpStatusCode.BadRequest)
+                val body = json.parseToJsonElement(call.receiveText()).jsonObject
+                val board = boardSetUseCase.createBoard(
+                    id,
+                    body["name"]?.jsonPrimitive?.contentOrNull ?: "Page",
+                    body["rows"]?.jsonPrimitive?.intOrNull ?: 4,
+                    body["columns"]?.jsonPrimitive?.intOrNull ?: 4
+                ) ?: return@post call.respond(HttpStatusCode.BadRequest)
+                call.respond(HttpStatusCode.Created, board)
+            }
+
+            put("/api/boardsets/{setId}/boards/{boardId}/name") {
+                val setId = call.parameters["setId"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val boardId = call.parameters["boardId"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val name = json.parseToJsonElement(call.receiveText()).jsonObject["name"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val board = boardSetUseCase.renameBoard(setId, boardId, name)
+                    ?: return@put call.respond(HttpStatusCode.BadRequest)
+                call.respond(board)
+            }
+
+            put("/api/boardsets/{setId}/boards/{boardId}/size") {
+                val setId = call.parameters["setId"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val boardId = call.parameters["boardId"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val body = json.parseToJsonElement(call.receiveText()).jsonObject
+                val board = boardSetUseCase.resizeBoard(
+                    setId, boardId,
+                    body["rows"]?.jsonPrimitive?.intOrNull ?: 4,
+                    body["columns"]?.jsonPrimitive?.intOrNull ?: 4
+                ) ?: return@put call.respond(HttpStatusCode.BadRequest)
+                call.respond(board)
+            }
+
+            delete("/api/boardsets/{setId}/boards/{boardId}") {
+                val setId = call.parameters["setId"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                val boardId = call.parameters["boardId"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                boardSetUseCase.deleteBoard(setId, boardId)
+                    ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                call.respond(HttpStatusCode.OK)
+            }
+
+            put("/api/boardsets/{setId}/boards/{boardId}/root") {
+                val setId = call.parameters["setId"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val boardId = call.parameters["boardId"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                boardSetUseCase.setRootBoard(setId, boardId)
+                    ?: return@put call.respond(HttpStatusCode.BadRequest)
+                call.respond(HttpStatusCode.OK)
+            }
+
+            put("/api/boardsets/{setId}/boards/{boardId}/cells/{row}/{column}") {
+                val setId = call.parameters["setId"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val boardId = call.parameters["boardId"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val row = call.parameters["row"]?.toIntOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val column = call.parameters["column"]?.toIntOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val body = json.parseToJsonElement(call.receiveText()).jsonObject
+                val board = boardSetUseCase.upsertBoardCellButton(
+                    setId, boardId, row, column,
+                    body["label"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                    body["vocalization"]?.jsonPrimitive?.contentOrNull,
+                    body["imageUrl"]?.jsonPrimitive?.contentOrNull
+                ) ?: return@put call.respond(HttpStatusCode.BadRequest)
+                call.respond(board)
+            }
+
+            delete("/api/boardsets/{setId}/boards/{boardId}/cells/{row}/{column}") {
+                val setId = call.parameters["setId"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                val boardId = call.parameters["boardId"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                val row = call.parameters["row"]?.toIntOrNull() ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                val column = call.parameters["column"]?.toIntOrNull() ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                val board = boardSetUseCase.clearBoardCellButton(setId, boardId, row, column)
+                    ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                call.respond(board)
             }
             
             post("/api/pronunciation") {
@@ -470,6 +726,12 @@ data class UpdateVoiceRequest(val voice: String)
 @Serializable
 data class SpeakRequest(val text: String)
 
+@Serializable
+data class BoardSetGraphResponse(
+    val boardSet: ObfBoardSet,
+    val boards: List<ObfBoard>
+)
+
 
 
 /**
@@ -487,6 +749,8 @@ fun main(args: Array<String>) {
         single<io.github.jdreioe.wingmate.domain.SettingsRepository> { JsonFileSettingsRepository() }
         single<io.github.jdreioe.wingmate.domain.ConfigRepository> { JsonFileConfigRepository() }
         single<io.github.jdreioe.wingmate.domain.VoiceRepository> { JsonFileVoiceRepository() }
+        single<io.github.jdreioe.wingmate.domain.BoardRepository> { JsonFileBoardRepository() }
+        single<io.github.jdreioe.wingmate.domain.BoardSetRepository> { JsonFileBoardSetRepository() }
         single<io.github.jdreioe.wingmate.domain.TextPredictionService> { SimpleNGramPredictionService() }
     }
 

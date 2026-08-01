@@ -13,8 +13,6 @@
 
 use crate::partner_window;
 
-use qmetaobject::prelude::*;
-
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -62,58 +60,33 @@ struct SharedState {
 
 // ─── QML-exposed QObject ────────────────────────────────────────────────────
 
-#[derive(QObject, Default)]
-#[allow(non_snake_case)]
-pub struct PartnerWindowBridge {
-    base: qt_base_class!(trait QObject),
-
-    // ── Properties ──
-    /// Whether mirroring is enabled by the user (persisted in settings).
-    enabled: qt_property!(bool; NOTIFY enabledChanged),
-    /// Whether the FTDI FT232H USB device is physically connected.
-    deviceConnected: qt_property!(bool; NOTIFY deviceConnectedChanged),
-    /// Whether the display is actively mirroring (enabled AND connected AND initialized).
-    active: qt_property!(bool; NOTIFY activeChanged),
-    /// EVE ROM font index (16-34, default 31).
-    fontSize: qt_property!(i32; NOTIFY fontSizeChanged),
-    /// Whether to show idle face after 10s of no text input.
-    idleEnabled: qt_property!(bool; NOTIFY idleEnabledChanged),
-
-    // ── Signals ──
-    enabledChanged: qt_signal!(),
-    deviceConnectedChanged: qt_signal!(),
-    activeChanged: qt_signal!(),
-    fontSizeChanged: qt_signal!(),
-    idleEnabledChanged: qt_signal!(),
-
-    // ── Invokable methods (called from QML) ──
-    updateText: qt_method!(fn(&mut self, text: QString)),
-    setEnabled: qt_method!(fn(&mut self, enabled: bool)),
-    setFontSize: qt_method!(fn(&mut self, font: i32)),
-    setIdleEnabled: qt_method!(fn(&mut self, enabled: bool)),
-    clear: qt_method!(fn(&self)),
-    shutdown: qt_method!(fn(&self)),
-    pollState: qt_method!(fn(&mut self)),
-
-    // ── Internal ──
-    #[allow(dead_code)]
+pub struct PartnerWindowController {
+    enabled: bool,
+    font_size: i32,
+    idle_enabled: bool,
     tx: Option<mpsc::Sender<PwCommand>>,
     shared: Option<Arc<Mutex<SharedState>>>,
 }
 
-#[allow(non_snake_case)]
-impl PartnerWindowBridge {
-    /// Start the background driver thread. Call once after constructing the QObject.
+impl Default for PartnerWindowController {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            font_size: 31,
+            idle_enabled: true,
+            tx: None,
+            shared: None,
+        }
+    }
+}
+
+impl PartnerWindowController {
     pub fn start(&mut self) {
         let (tx, rx) = mpsc::channel::<PwCommand>();
         let shared = Arc::new(Mutex::new(SharedState::default()));
 
         self.tx = Some(tx.clone());
         self.shared = Some(shared.clone());
-
-        // Initialize display settings with defaults
-        self.fontSize = 31;
-        self.idleEnabled = true;
 
         // Store a clone of the sender globally so the signal handler can
         // trigger shutdown even if Drop doesn't run (e.g. process::exit).
@@ -129,74 +102,57 @@ impl PartnerWindowBridge {
         println!("[PartnerWindow] Bridge started");
     }
 
-    // ── QML-callable methods ────────────────────────────────────────────
-    // camelCase names required by QML convention
-
-    fn updateText(&mut self, text: QString) {
-        let text = text.to_string();
+    pub fn update_text(&self, text: impl Into<String>) {
         if let Some(tx) = &self.tx {
-            let _ = tx.send(PwCommand::UpdateText(text));
+            let _ = tx.send(PwCommand::UpdateText(text.into()));
         }
     }
 
-    fn setEnabled(&mut self, enabled: bool) {
+    pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
-        self.enabledChanged();
         if let Some(tx) = &self.tx {
             let _ = tx.send(PwCommand::SetEnabled(enabled));
         }
     }
 
-    fn setFontSize(&mut self, font: i32) {
+    pub fn set_font_size(&mut self, font: i32) {
         let font = font.clamp(16, 34);
-        self.fontSize = font;
-        self.fontSizeChanged();
+        self.font_size = font;
         if let Some(tx) = &self.tx {
             let _ = tx.send(PwCommand::SetFont(font as i16));
         }
     }
 
-    fn setIdleEnabled(&mut self, enabled: bool) {
-        self.idleEnabled = enabled;
-        self.idleEnabledChanged();
+    pub fn set_idle_enabled(&mut self, enabled: bool) {
+        self.idle_enabled = enabled;
         if let Some(tx) = &self.tx {
             let _ = tx.send(PwCommand::SetIdleEnabled(enabled));
         }
     }
 
-    fn clear(&self) {
+    pub fn clear(&self) {
         if let Some(tx) = &self.tx {
             let _ = tx.send(PwCommand::Clear);
         }
     }
 
-    fn shutdown(&self) {
+    pub fn shutdown(&self) {
         if let Some(tx) = &self.tx {
             let _ = tx.send(PwCommand::Shutdown);
         }
     }
 
-    /// Poll shared state and update QObject properties.
-    /// Called periodically from the QML Timer component.
-    fn pollState(&mut self) {
-        if let Some(shared) = &self.shared {
-            if let Ok(state) = shared.lock() {
-                if self.deviceConnected != state.device_connected {
-                    self.deviceConnected = state.device_connected;
-                    self.deviceConnectedChanged();
-                }
-                if self.active != state.active {
-                    self.active = state.active;
-                    self.activeChanged();
-                }
-            }
-        }
+    pub fn state(&self) -> (bool, bool) {
+        self.shared
+            .as_ref()
+            .and_then(|state| state.lock().ok().map(|s| (s.device_connected, s.active)))
+            .unwrap_or((false, false))
     }
 }
 
 /// Ensure the FTDI device is released and the EVE display is powered off
 /// when the bridge is dropped (app close, signal, panic unwind, etc.).
-impl Drop for PartnerWindowBridge {
+impl Drop for PartnerWindowController {
     fn drop(&mut self) {
         println!("[PartnerWindow] Bridge dropping — sending shutdown to driver thread");
         if let Some(tx) = self.tx.take() {
@@ -214,10 +170,12 @@ fn driver_thread(rx: mpsc::Receiver<PwCommand>, shared: Arc<Mutex<SharedState>>)
     println!("[PartnerWindow] Background thread started");
 
     let mut enabled = false;
-    let mut driver: Option<partner_window::PartnerWindow<
-        ftdi_embedded_hal::SpiDevice<ftdi::Device>,
-        ftdi_embedded_hal::OutputPin<ftdi::Device>,
-    >> = None;
+    let mut driver: Option<
+        partner_window::PartnerWindow<
+            ftdi_embedded_hal::SpiDevice<ftdi::Device>,
+            ftdi_embedded_hal::OutputPin<ftdi::Device>,
+        >,
+    > = None;
     let mut last_text = String::new();
     let mut last_device_check = std::time::Instant::now();
     let mut font: i16 = 31;
@@ -301,7 +259,10 @@ fn driver_thread(rx: mpsc::Receiver<PwCommand>, shared: Arc<Mutex<SharedState>>)
                         transition_updates = 0;
                         pending_face_stage = None;
                     }
-                    println!("[PartnerWindow] Idle face: {}", if en { "enabled" } else { "disabled" });
+                    println!(
+                        "[PartnerWindow] Idle face: {}",
+                        if en { "enabled" } else { "disabled" }
+                    );
                 }
                 Ok(PwCommand::Clear) => {
                     if let Some(ref mut d) = driver {
@@ -372,26 +333,23 @@ fn driver_thread(rx: mpsc::Receiver<PwCommand>, shared: Arc<Mutex<SharedState>>)
                 // Auto-connect if enabled and device appeared
                 if enabled && connected {
                     match partner_window::open_ftdi() {
-                        Ok(mut pw) => {
-                            match pw.init() {
-                                Ok(()) => {
-                                    println!("[PartnerWindow] Display initialized successfully");
-                                    if !last_text.is_empty() {
-                                        let _ = pw.display_text_wrapped(
-                                            &last_text, font, (255, 255, 255),
-                                        );
-                                    }
-                                    driver = Some(pw);
-                                    if let Ok(mut s) = shared.lock() {
-                                        s.active = true;
-                                    }
+                        Ok(mut pw) => match pw.init() {
+                            Ok(()) => {
+                                println!("[PartnerWindow] Display initialized successfully");
+                                if !last_text.is_empty() {
+                                    let _ =
+                                        pw.display_text_wrapped(&last_text, font, (255, 255, 255));
                                 }
-                                Err(e) => {
-                                    eprintln!("[PartnerWindow] Init failed: {e}");
-                                    let _ = pw.shutdown();
+                                driver = Some(pw);
+                                if let Ok(mut s) = shared.lock() {
+                                    s.active = true;
                                 }
                             }
-                        }
+                            Err(e) => {
+                                eprintln!("[PartnerWindow] Init failed: {e}");
+                                let _ = pw.shutdown();
+                            }
+                        },
                         Err(e) => {
                             eprintln!("[PartnerWindow] Failed to open FTDI: {e}");
                         }
@@ -436,7 +394,9 @@ fn driver_thread(rx: mpsc::Receiver<PwCommand>, shared: Arc<Mutex<SharedState>>)
         thread::sleep(Duration::from_millis(50));
 
         // Idle face: if no text update for 10 seconds, show idle graphic
-        if idle_enabled && driver.is_some() && !showing_idle
+        if idle_enabled
+            && driver.is_some()
+            && !showing_idle
             && last_text_time.elapsed() >= Duration::from_secs(10)
         {
             // Reset any in-progress face transition
