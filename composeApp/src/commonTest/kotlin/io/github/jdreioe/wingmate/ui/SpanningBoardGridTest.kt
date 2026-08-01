@@ -98,8 +98,24 @@ class SpanningBoardGridTest {
         val bounds = handle.fetchSemanticsNode().boundsInRoot
         assertEquals(48f, bounds.width)
         assertEquals(48f, bounds.height)
-        assertTrue(bounds.left in 176f..181f, "handle x was ${bounds.left}")
-        assertTrue(bounds.top in 178f..183f, "handle y was ${bounds.top}")
+        assertTrue(bounds.left in 172f..177f, "handle x was ${bounds.left}")
+        assertTrue(bounds.top in 170f..175f, "handle y was ${bounds.top}")
+    }
+
+    @Test
+    fun draggingTheHandleHorizontallyOnlyGrowsTheWidth() = runComposeUiTest {
+        val commits = mutableListOf<Triple<Int, Int, GridFieldSpan>>()
+        val grid = emptyGrid(2, 2).withFieldSpan(0, 0, "field", 1, 1)!!
+        hostGrid(grid, commits)
+
+        onNodeWithTag("resize-handle").performTouchInput {
+            down(center)
+            moveBy(Offset(20f, 0f))
+            up()
+        }
+        runOnIdle {
+            assertEquals(listOf(Triple(0, 0, GridFieldSpan(1, 2))), commits)
+        }
     }
 
     @Test
@@ -145,10 +161,11 @@ class SpanningBoardGridTest {
     @Test
     fun releasingAnInvalidDragDoesNotCommit() = runComposeUiTest {
         val commits = mutableListOf<Triple<Int, Int, GridFieldSpan>>()
+        val labels = mutableMapOf<String, String>()
         val grid = emptyGrid(2, 2)
             .withFieldSpan(0, 0, "field", 1, 1)!!
             .withFieldSpan(1, 1, "other", 1, 1)!!
-        hostGrid(grid, commits)
+        hostGrid(grid, commits, labels)
 
         onNodeWithTag("resize-handle").performTouchInput {
             down(center)
@@ -158,6 +175,25 @@ class SpanningBoardGridTest {
         runOnIdle {
             assertTrue(commits.isEmpty())
             onNodeWithTag("resize-preview").assertDoesNotExist()
+            onNodeWithContentDescription(labels["blockedOccupied"]!!).assertExists()
+        }
+    }
+
+    @Test
+    fun releasingAnOutOfBoundsDragAnnouncesTheBlockingReason() = runComposeUiTest {
+        val commits = mutableListOf<Triple<Int, Int, GridFieldSpan>>()
+        val labels = mutableMapOf<String, String>()
+        val grid = emptyGrid(2, 2).withFieldSpan(0, 0, "field", 2, 2)!!
+        hostGrid(grid, commits, labels)
+
+        onNodeWithTag("resize-handle").performTouchInput {
+            down(center)
+            moveBy(Offset(100f, 100f))
+            up()
+        }
+        runOnIdle {
+            assertTrue(commits.isEmpty())
+            onNodeWithContentDescription(labels["blockedBounds"]!!).assertExists()
         }
     }
 

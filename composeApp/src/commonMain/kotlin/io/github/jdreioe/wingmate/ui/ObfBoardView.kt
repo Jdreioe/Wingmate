@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -121,6 +122,11 @@ internal data class BoardGridItem(
     val columnSpan: Int,
     val button: ObfButton?
 )
+
+internal fun fieldFontScale(rowSpan: Int, columnSpan: Int): Float {
+    val area = rowSpan.coerceAtLeast(1).toFloat() * columnSpan.coerceAtLeast(1)
+    return sqrt(sqrt(area)).coerceIn(1f, 2f)
+}
 
 enum class SymbolBarPresentation(val maxTextLines: Int, val maximumViewportFraction: Float) {
     Normal(maxTextLines = 4, maximumViewportFraction = 0.5f),
@@ -284,7 +290,8 @@ fun ObfBoardView(
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
                                         boardStrings = board.strings,
                                         locale = settings.primaryLanguage,
-                                        boardSettings = effectiveBoardSettings
+                                        boardSettings = effectiveBoardSettings,
+                                        fieldFontScale = fieldFontScale(item.rowSpan, item.columnSpan)
                                     )
                                 } else if (isEditMode && button == null) {
                                     OutlinedCard(
@@ -562,14 +569,21 @@ internal fun SpanningBoardGrid(
         .pointerInput(items, allowedSpans) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
+                val touchAnchorAdjustment = Offset(
+                    x = size.width / 2f - down.position.x,
+                    y = size.height / 2f - down.position.y
+                )
                 val start = awaitTouchSlopOrCancellation(down.id) { change, _ -> change.consume() }
                     ?: return@awaitEachGesture
-                val startCell = currentCellAt(start.position)
+                val startCell = currentCellAt(start.position + touchAnchorAdjustment)
                 resizeCell = startCell
                 var lastCell = startCell
+                var endedOutOfBounds = startCell == null
                 drag(down.id) { change ->
                     change.consume()
-                    currentCellAt(change.position)?.let { lastCell = it }
+                    val cell = currentCellAt(change.position + touchAnchorAdjustment)
+                    endedOutOfBounds = cell == null
+                    cell?.let { lastCell = it }
                     resizeCell = lastCell
                 }
                 val item = currentSelectedItem
@@ -583,11 +597,15 @@ internal fun SpanningBoardGrid(
                     null
                 }
                 resizeCell = null
-                if (item != null && span != null) {
+                if (item != null && endedOutOfBounds) {
+                    resizeStatus = blockedBoundsMessage
+                } else if (item != null && span != null) {
                     val current = GridFieldSpan(item.rowSpan, item.columnSpan)
                     if (span != current && span in currentAllowedSpans) {
                         currentOnResizeField?.invoke(item.row, item.column, span.rows, span.columns)
                         announceSize(span.columns, span.rows)
+                    } else if (span != current) {
+                        resizeStatus = blockedReason(span)
                     }
                 }
             }
@@ -699,7 +717,7 @@ internal fun SpanningBoardGrid(
             }
             if (showHandle) {
                 key("resize-handle") {
-                    Box(modifier = handleModifier, contentAlignment = Alignment.BottomEnd) {
+                    Box(modifier = handleModifier, contentAlignment = Alignment.Center) {
                         Box(
                             modifier = Modifier
                                 .size(20.dp)
@@ -741,9 +759,15 @@ internal fun SpanningBoardGrid(
                 if (showHandle && index == handleIndex) {
                     val item = selectedItem
                     val span = handleSpan ?: return@forEachIndexed
-                    val x = ((item.column + span.columns) * (cellWidth + horizontalGapPx) - handlePx / 2f)
+                    val x = (
+                        (item.column + span.columns) * (cellWidth + horizontalGapPx) -
+                            horizontalGapPx - handlePx / 2f
+                        )
                         .coerceIn(0f, (constraints.maxWidth - handlePx).coerceAtLeast(0f))
-                    val y = ((item.row + span.rows) * (cellHeight + verticalGapPx) - handlePx / 2f)
+                    val y = (
+                        (item.row + span.rows) * (cellHeight + verticalGapPx) -
+                            verticalGapPx - handlePx / 2f
+                        )
                         .coerceIn(0f, (constraints.maxHeight - handlePx).coerceAtLeast(0f))
                     placeable.placeRelative(x.roundToInt(), y.roundToInt())
                 } else {
@@ -925,7 +949,8 @@ fun ObfButtonItem(
     isHomeLink: Boolean = false,
     boardStrings: Map<String, Map<String, String>> = emptyMap(),
     locale: String? = null,
-    boardSettings: ResolvedBoardSettings? = null
+    boardSettings: ResolvedBoardSettings? = null,
+    fieldFontScale: Float = 1f
 ) {
     val speechService: SpeechService = koinInject()
     val voiceUseCase: VoiceUseCase = koinInject()
@@ -941,6 +966,17 @@ fun ObfButtonItem(
     )
     val displayLabel = resolveObfLocalizedString(boardStrings, locale, button.label)
     val displayVocalization = resolveObfLocalizedString(boardStrings, locale, button.vocalization)
+    val boundedFontScale = fieldFontScale.coerceIn(1f, 2f)
+    val scaledLabelMedium = MaterialTheme.typography.labelMedium.copy(
+        fontSize = MaterialTheme.typography.labelMedium.fontSize * boundedFontScale,
+        lineHeight = MaterialTheme.typography.labelMedium.lineHeight * boundedFontScale,
+        fontWeight = FontWeight.Bold
+    )
+    val scaledLabelSmall = MaterialTheme.typography.labelSmall.copy(
+        fontSize = MaterialTheme.typography.labelSmall.fontSize * boundedFontScale,
+        lineHeight = MaterialTheme.typography.labelSmall.lineHeight * boundedFontScale,
+        fontWeight = FontWeight.Bold
+    )
     
     // Page links navigate immediately; pulsing the outgoing button makes the
     // destination page appear to animate as the grid composition is reused.
@@ -1131,7 +1167,7 @@ fun ObfButtonItem(
                     val labelText = displayLabel ?: displayVocalization ?: ""
                     Text(
                         text = labelText,
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        style = scaledLabelMedium,
                         textAlign = TextAlign.Center,
                         color = contentColor,
                         maxLines = 1,
@@ -1174,7 +1210,7 @@ fun ObfButtonItem(
                         val labelText = displayLabel ?: displayVocalization ?: ""
                         Text(
                             text = labelText,
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            style = scaledLabelSmall,
                             textAlign = TextAlign.Center,
                             color = contentColor,
                             maxLines = if (showImg) 1 else 2,

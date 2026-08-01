@@ -137,6 +137,14 @@ class BoardGridSpanTest {
     }
 
     @Test
+    fun fieldFontScaleGrowsWithSpanAreaAndRemainsBounded() {
+        assertEquals(1f, fieldFontScale(rowSpan = 1, columnSpan = 1))
+        assertTrue(fieldFontScale(rowSpan = 1, columnSpan = 2) > 1f)
+        assertTrue(fieldFontScale(rowSpan = 2, columnSpan = 2) > fieldFontScale(1, 2))
+        assertEquals(2f, fieldFontScale(rowSpan = 20, columnSpan = 20))
+    }
+
+    @Test
     fun fieldCanShrinkToSingleCellKeepingItsAnchor() {
         val expanded = emptyGrid(rows = 3, columns = 3)
             .withFieldSpan(1, 1, "field", rowSpan = 2, columnSpan = 2)!!
