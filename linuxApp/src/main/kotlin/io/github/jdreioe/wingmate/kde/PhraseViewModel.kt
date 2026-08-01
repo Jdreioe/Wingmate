@@ -79,8 +79,7 @@ class PhraseViewModel {
     
     fun updatePhrase(id: String, text: String?, name: String? = null, recordingPath: String? = null) {
         scope.launch {
-            // UpdatePhraseUseCase takes (id, text, name, recordingPath)
-            updatePhraseUseCase.invoke(id, text, name, recordingPath)
+            updatePhraseUseCase.invoke(id, text, name, imageUrl = null, recordingPath = recordingPath)
             loadData()
         }
     }

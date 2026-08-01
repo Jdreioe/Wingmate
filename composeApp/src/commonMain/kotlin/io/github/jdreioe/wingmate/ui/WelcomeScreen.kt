@@ -28,6 +28,7 @@ import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.ui.PlatformBackHandler
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
+import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -70,11 +71,11 @@ import wingmatekmp.composeapp.generated.resources.welcome_title
 fun WelcomeScreen(
     onComplete: (startupMode: StartupMode, createScreen: Boolean, analyticsEnabled: Boolean) -> Unit
 ) {
-    val enableBoardImport = !isReleaseBuild()
     val koin = getKoin()
-    val boardImportService = remember(enableBoardImport, koin) {
-        if (enableBoardImport) koin.getOrNull<BoardImportService>() else null
+    val boardImportService = remember(koin) {
+        if (!isReleaseBuild()) koin.getOrNull<BoardImportService>() else null
     }
+    val enableBoardImport = boardImportService != null
     val featureUsageReporter = remember(koin) {
         koin.getOrNull<FeatureUsageReporter>()
     }
@@ -186,22 +187,23 @@ fun WelcomeScreen(
                                 "mode" to "classic"
                             )
                             try {
-                                val result = boardImportService?.importBoards(isModern = false) == true
-                                if (result) {
+                                when (val result = boardImportService?.importBoardSetResult()) {
+                                  is BoardImportResult.Success -> {
                                     featureUsageReporter?.reportEvent(
                                         FeatureUsageEvents.BOARD_IMPORT_COMPLETED,
                                         "mode" to "classic"
                                     )
                                     // Move to next step if successful
                                     step = 3
-                                } else {
+                                  }
+                                  is BoardImportResult.Failure -> {
                                     featureUsageReporter?.reportEvent(
                                         FeatureUsageEvents.BOARD_IMPORT_FAILED,
                                         "mode" to "classic",
-                                        "reason" to "cancelled_or_failed"
+                                        "reason" to result.code.name.lowercase()
                                     )
-                                    // Handle failure or cancellation (stay on screen)
-                                    // Ideally show snackbar, but for now just stop spinner
+                                  }
+                                  BoardImportResult.Cancelled, null -> Unit
                                 }
                             } catch (e: Throwable) {
                                 featureUsageReporter?.reportEvent(
@@ -223,19 +225,22 @@ fun WelcomeScreen(
                                 "mode" to "modern"
                             )
                             try {
-                                val result = boardImportService?.importBoards(isModern = true) == true
-                                if (result) {
+                                when (val result = boardImportService?.importBoardSetResult()) {
+                                  is BoardImportResult.Success -> {
                                     featureUsageReporter?.reportEvent(
                                         FeatureUsageEvents.BOARD_IMPORT_COMPLETED,
                                         "mode" to "modern"
                                     )
                                     step = 3
-                                } else {
+                                  }
+                                  is BoardImportResult.Failure -> {
                                     featureUsageReporter?.reportEvent(
                                         FeatureUsageEvents.BOARD_IMPORT_FAILED,
                                         "mode" to "modern",
-                                        "reason" to "cancelled_or_failed"
+                                        "reason" to result.code.name.lowercase()
                                     )
+                                  }
+                                  BoardImportResult.Cancelled, null -> Unit
                                 }
                             } catch (e: Throwable) {
                                 featureUsageReporter?.reportEvent(

@@ -1,4 +1,6 @@
 import io.github.jdreioe.wingmate.application.ObzExporter
+import io.github.jdreioe.wingmate.application.ObzExportErrorCode
+import io.github.jdreioe.wingmate.application.ObzExportResult
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
@@ -10,6 +12,16 @@ import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_SETTINGS_EXTENSION
 import io.github.jdreioe.wingmate.domain.obf.encodeBoardSettings
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
+import io.github.jdreioe.wingmate.infrastructure.BoardImportService
+import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
+import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
+import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
+import io.github.jdreioe.wingmate.infrastructure.InMemoryFileStorage
+import io.github.jdreioe.wingmate.platform.ArchiveEntry
+import io.github.jdreioe.wingmate.platform.ArchiveReadError
+import io.github.jdreioe.wingmate.platform.ArchiveReadException
+import io.github.jdreioe.wingmate.platform.ArchiveReader
+import io.github.jdreioe.wingmate.platform.FilePicker
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -25,11 +37,19 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.test.assertIs
 
 class ObzExporterTest {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val exporter = ObzExporter(json)
+    private val mediaLoader: suspend (String) -> ByteArray? = { path ->
+        when (path) {
+            "images/hello.png" -> "fake-png".encodeToByteArray()
+            "sounds/pizza.mp3" -> "fake-mp3".encodeToByteArray()
+            else -> null
+        }
+    }
 
     private val rootBoard = ObfBoard(
         format = "open-board-0.1",
@@ -51,6 +71,7 @@ class ObzExporterTest {
         buttons = listOf(
             ObfButton(id = "b3", label = "Pizza", soundId = "sound1")
         ),
+        sounds = listOf(ObfSound(id = "sound1", path = "sounds/pizza.mp3", contentType = "audio/mpeg")),
         images = emptyList()
     )
 
@@ -58,7 +79,8 @@ class ObzExporterTest {
     fun manifestContainsAllBoards() = runBlocking {
         val zip = exporter.export(
             boards = listOf(rootBoard, foodBoard),
-            rootBoardId = "root"
+            rootBoardId = "root",
+            loadMedia = mediaLoader
         )
         val zipStr = String(zip)
         assertTrue(zipStr.contains("manifest.json"))
@@ -70,7 +92,8 @@ class ObzExporterTest {
     fun manifestIsValidJson() = runBlocking {
         val zip = exporter.export(
             boards = listOf(rootBoard, foodBoard),
-            rootBoardId = "root"
+            rootBoardId = "root",
+            loadMedia = mediaLoader
         )
         // Extract manifest.json from zip (simple approach - find it by offset)
         val manifestEntry = extractEntry(zip, "manifest.json")
@@ -90,6 +113,7 @@ class ObzExporterTest {
         val zip = exporter.export(
             boards = listOf(rootBoard),
             rootBoardId = "root",
+            loadMedia = mediaLoader,
             manifestExtensions = mapOf(
                 OBF_SCREEN_SETTINGS_EXTENSION to encodeBoardSettings(settings)
             )
@@ -111,7 +135,7 @@ class ObzExporterTest {
                 if (path == "images/hello.png") imageBytes else null
             }
         )
-        val extracted = extractEntry(zip, "images/img1/hello.png")
+        val extracted = extractEntry(zip, "images/img1.png")
         assertNotNull(extracted)
         assertTrue(extracted.contentEquals(imageBytes))
     }
@@ -120,17 +144,89 @@ class ObzExporterTest {
     fun includesSoundPathInManifest() = runBlocking {
         val zip = exporter.export(
             boards = listOf(foodBoard),
-            rootBoardId = "food"
+            rootBoardId = "food",
+            loadMedia = mediaLoader
         )
         val manifestStr = extractEntry(zip, "manifest.json")?.decodeToString() ?: ""
         assertTrue(manifestStr.contains("sound1"))
+        assertNotNull(extractEntry(zip, "sounds/sound1.mp3"))
+        Unit
+    }
+
+    @Test
+    fun missingPathOnlyMediaReturnsTypedFailure() = runBlocking {
+        val result = exporter.exportResult(listOf(rootBoard), "root")
+        val failure = assertIs<ObzExportResult.Failure>(result)
+        assertEquals(ObzExportErrorCode.UNRESOLVED_MEDIA, failure.code)
+        assertTrue(failure.resources.single().contains("img1"))
+    }
+
+    @Test
+    fun exportedBoardsReferenceOnlyPackagedPaths() = runBlocking {
+        val privateBoard = rootBoard.copy(
+            images = listOf(ObfImage(id = "img1", path = "boardsets/private/images/source", contentType = "image/png"))
+        )
+        val result = exporter.exportResult(
+            listOf(privateBoard, foodBoard),
+            "root",
+            loadMedia = { path -> if (path.contains("private")) byteArrayOf(1) else mediaLoader(path) }
+        )
+        val zip = assertIs<ObzExportResult.Success>(result).bytes
+        val boardJson = extractEntry(zip, "boards/root.obf")?.decodeToString().orEmpty()
+        assertFalse(boardJson.contains("boardsets/private"))
+        assertTrue(boardJson.contains("images/img1.png"))
+        assertTrue(boardJson.contains("boards/food.obf"))
+        assertNotNull(extractEntry(zip, "images/img1.png"))
+        Unit
+    }
+
+    @Test
+    fun duplicateAndUnsafeIdsAreRejected() = runBlocking {
+        val duplicate = exporter.exportResult(listOf(rootBoard, rootBoard), "root", mediaLoader)
+        assertEquals(ObzExportErrorCode.DUPLICATE_ID, assertIs<ObzExportResult.Failure>(duplicate).code)
+
+        val unsafe = exporter.exportResult(listOf(rootBoard.copy(id = "../root")), "../root", mediaLoader)
+        assertEquals(ObzExportErrorCode.UNSAFE_ID, assertIs<ObzExportResult.Failure>(unsafe).code)
+    }
+
+    @Test
+    fun unicodeIdsProduceSafeUtf8Entries() = runBlocking {
+        val board = ObfBoard(format = "open-board-0.1", id = "hjem-æøå")
+        val result = exporter.exportResult(listOf(board), board.id)
+        val zip = assertIs<ObzExportResult.Success>(result).bytes
+        assertNotNull(extractEntry(zip, "boards/hjem-æøå.obf"))
+        Unit
+    }
+
+    @Test
+    fun exportedArchiveReimportsCompleteGraphAndMedia() = runBlocking {
+        val exported = exporter.exportResult(listOf(rootBoard, foodBoard), "root", mediaLoader)
+        val zip = assertIs<ObzExportResult.Success>(exported).bytes
+        val paths = listOf(
+            "manifest.json", "boards/root.obf", "boards/food.obf",
+            "images/img1.png", "sounds/sound1.mp3"
+        )
+        val entries = paths.associateWith { path -> assertNotNull(extractEntry(zip, path)) }
+        val boardRepo = InMemoryBoardRepository()
+        val setRepo = InMemoryBoardSetRepository()
+        val storage = InMemoryFileStorage()
+        val importer = BoardImportService(
+            ObfParser(), boardRepo, setRepo, MapArchivePicker(entries), storage
+        )
+        val imported = assertIs<BoardImportResult.Success>(importer.importBoardSetFromPathResult("roundtrip.obz"))
+        assertEquals(2, imported.boardSet.boardIds.size)
+        val home = assertNotNull(boardRepo.getBoard(imported.boardSet.rootBoardId))
+        assertNotNull(boardRepo.getBoard(assertNotNull(home.buttons.first { it.id == "b2" }.loadBoard?.id)))
+        assertTrue(storage.exists(assertNotNull(home.images.single().path)))
+        Unit
     }
 
     @Test
     fun singleBoardExportStillValid() = runBlocking {
         val zip = exporter.export(
             boards = listOf(rootBoard),
-            rootBoardId = "root"
+            rootBoardId = "root",
+            loadMedia = mediaLoader
         )
         val extracted = extractEntry(zip, "boards/root.obf")
         assertNotNull(extracted)
@@ -271,5 +367,28 @@ class ObzExporterTest {
             }
         }
         return null
+    }
+
+    private class MapArchivePicker(private val files: Map<String, ByteArray>) : FilePicker {
+        override suspend fun pickFile(title: String, extensions: List<String>): String? = null
+        override suspend fun readFileAsText(path: String): String? = null
+        override suspend fun openArchive(path: String): ArchiveReader = object : ArchiveReader {
+            override suspend fun entries() = files.map { (name, bytes) ->
+                ArchiveEntry(name, bytes.size.toLong(), bytes.size.toLong())
+            }
+
+            override suspend fun readEntry(
+                name: String,
+                maxBytes: Long,
+                onChunk: suspend (ByteArray) -> Unit
+            ) {
+                val bytes = files[name]
+                    ?: throw ArchiveReadException(ArchiveReadError.ENTRY_NOT_FOUND, name)
+                if (bytes.size > maxBytes) throw ArchiveReadException(ArchiveReadError.ENTRY_TOO_LARGE, name)
+                onChunk(bytes)
+            }
+
+            override suspend fun close() = Unit
+        }
     }
 }

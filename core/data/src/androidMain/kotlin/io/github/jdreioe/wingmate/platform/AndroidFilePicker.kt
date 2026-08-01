@@ -130,7 +130,7 @@ class AndroidFilePicker(private val context: Context) : FilePicker {
         }
     }
 
-    override suspend fun readZipEntries(path: String): Map<String, ByteArray>? {
+    override suspend fun openArchive(path: String): ArchiveReader? {
         return try {
             val file = if (path.startsWith("/")) {
                 java.io.File(path)
@@ -140,23 +140,9 @@ class AndroidFilePicker(private val context: Context) : FilePicker {
                 java.io.File(tempPath)
             }
             
-            val entries = mutableMapOf<String, ByteArray>()
-            java.util.zip.ZipFile(file).use { zip ->
-                val enumeration = zip.entries()
-                while (enumeration.hasMoreElements()) {
-                    val entry = enumeration.nextElement()
-                    if (!entry.isDirectory) {
-                        try {
-                            zip.getInputStream(entry).use { input ->
-                                entries[entry.name] = input.readBytes()
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                }
-            }
-            entries
+            AndroidZipArchiveReader(file)
+        } catch (e: ArchiveReadException) {
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
             null

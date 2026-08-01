@@ -37,7 +37,6 @@ import org.koin.compose.getKoin
 import wingmatekmp.composeapp.generated.resources.*
 
 internal data class FieldLanguageOption(val tag: String, val label: String)
-internal data class FieldSpanOption(val rows: Int, val columns: Int)
 internal enum class BoardSetTemplate { Blank, Calculator }
 
 @Composable
@@ -174,9 +173,6 @@ internal fun EditBoardCellDialog(
     initialMathMode: Boolean = false,
     availableBoards: List<ObfBoard> = emptyList(),
     initialLinkedBoardId: String? = null,
-    availableSpans: List<FieldSpanOption> = listOf(FieldSpanOption(rows = 1, columns = 1)),
-    initialRowSpan: Int = 1,
-    initialColumnSpan: Int = 1,
     initialAction: String? = null,
     initialActions: List<String> = emptyList(),
     hasExistingValue: Boolean,
@@ -190,8 +186,6 @@ internal fun EditBoardCellDialog(
         language: String?,
         mathMode: Boolean,
         linkedBoardId: String?,
-        rowSpan: Int,
-        columnSpan: Int,
         action: String?,
         actions: List<String>
     ) -> Unit,
@@ -209,16 +203,12 @@ internal fun EditBoardCellDialog(
     var linkedBoardId by remember { mutableStateOf(initialLinkedBoardId) }
     var action by remember { mutableStateOf(initialAction) }
     val actions by remember { mutableStateOf(initialActions) }
-    var selectedSpan by remember(initialRowSpan, initialColumnSpan) {
-        mutableStateOf(FieldSpanOption(initialRowSpan, initialColumnSpan))
-    }
     var opensPage by remember { mutableStateOf(initialLinkedBoardId != null) }
     var showLanguageMenu by remember { mutableStateOf(false) }
     var showBoardMenu by remember { mutableStateOf(false) }
     var showSymbolSearch by remember { mutableStateOf(false) }
     var showImageSourcePicker by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
-    var showSpanMenu by remember { mutableStateOf(false) }
     val koin = getKoin()
     val recordingService = remember(koin) { koin.getOrNull<PhraseRecordingService>() }
     val scope = rememberCoroutineScope()
@@ -368,52 +358,6 @@ internal fun EditBoardCellDialog(
                 }
 
                 Text(
-                    stringResource(Res.string.board_dialog_field_size),
-                    style = MaterialTheme.typography.labelLarge
-                )
-                Box {
-                    OutlinedButton(
-                        onClick = { showSpanMenu = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            stringResource(
-                                Res.string.board_dialog_field_size_value,
-                                selectedSpan.columns,
-                                selectedSpan.rows
-                            )
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showSpanMenu,
-                        onDismissRequest = { showSpanMenu = false }
-                    ) {
-                        availableSpans.forEach { span ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        stringResource(
-                                            Res.string.board_dialog_field_size_value,
-                                            span.columns,
-                                            span.rows
-                                        )
-                                    )
-                                },
-                                onClick = {
-                                    selectedSpan = span
-                                    showSpanMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
-                Text(
-                    stringResource(Res.string.board_dialog_field_size_help),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text(
                     stringResource(Res.string.board_dialog_language),
                     style = MaterialTheme.typography.labelLarge
                 )
@@ -556,8 +500,6 @@ internal fun EditBoardCellDialog(
                         language,
                         mathMode,
                         linkedBoardId.takeIf { opensPage },
-                        selectedSpan.rows,
-                        selectedSpan.columns,
                         action?.trim()?.ifBlank { null },
                         actions
                     )

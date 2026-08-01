@@ -19,10 +19,60 @@ interface FilePicker {
      */
     suspend fun readFileAsText(path: String): String?
     
+    /** Opens a bounded, streaming archive reader. The caller must close it. */
+    suspend fun openArchive(path: String): ArchiveReader?
+}
+
+data class ArchiveEntry(
+    val name: String,
+    val uncompressedSize: Long,
+    val compressedSize: Long,
+    val isDirectory: Boolean = false,
+    val isEncrypted: Boolean = false
+)
+
+/** Platform archive access without exposing JVM streams to common code. */
+interface ArchiveReader {
+    suspend fun entries(): List<ArchiveEntry>
+
     /**
-     * Reads all entries from a ZIP file.
-     * @param path The file path
-     * @return Map of entry name to content bytes, or null if failed
+     * Reads one entry in bounded chunks. Implementations must stop before delivering
+     * more than [maxBytes] and throw [ArchiveReadException] when the limit is exceeded.
      */
-    suspend fun readZipEntries(path: String): Map<String, ByteArray>?
+    suspend fun readEntry(
+        name: String,
+        maxBytes: Long,
+        onChunk: suspend (ByteArray) -> Unit
+    )
+
+    suspend fun close()
+}
+
+enum class ArchiveReadError {
+    ENTRY_NOT_FOUND,
+    ENTRY_TOO_LARGE,
+    MALFORMED_ARCHIVE,
+    IO_ERROR
+}
+
+class ArchiveReadException(
+    val error: ArchiveReadError,
+    message: String,
+    cause: Throwable? = null
+) : Exception(message, cause)
+
+suspend fun ArchiveReader.readEntryBytes(name: String, maxBytes: Long): ByteArray {
+    val chunks = mutableListOf<ByteArray>()
+    var size = 0
+    readEntry(name, maxBytes) { chunk ->
+        size += chunk.size
+        chunks += chunk
+    }
+    val result = ByteArray(size)
+    var offset = 0
+    chunks.forEach { chunk ->
+        chunk.copyInto(result, offset)
+        offset += chunk.size
+    }
+    return result
 }

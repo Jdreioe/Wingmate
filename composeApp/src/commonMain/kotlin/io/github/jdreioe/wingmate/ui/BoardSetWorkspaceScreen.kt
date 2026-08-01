@@ -70,8 +70,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.ObzExportResult
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
+import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -90,6 +92,9 @@ import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
+import io.github.jdreioe.wingmate.domain.obf.ObfMediaSource
+import io.github.jdreioe.wingmate.domain.obf.ObfMediaUrlLoader
+import io.github.jdreioe.wingmate.domain.obf.obfSoundSources
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
@@ -144,7 +149,31 @@ private data class WorkspaceCellTarget(
     val button: ObfButton?
 )
 
-internal data class GridFieldSpan(val rows: Int, val columns: Int)
+internal sealed interface CellTapResult {
+    data class Select(val anchor: Pair<Int, Int>) : CellTapResult
+    data class OpenDialog(
+        val row: Int,
+        val column: Int,
+        val button: ObfButton?
+    ) : CellTapResult
+}
+
+internal fun resolveCellTap(
+    grid: io.github.jdreioe.wingmate.domain.obf.ObfGrid?,
+    selectedField: Pair<Int, Int>?,
+    row: Int,
+    column: Int,
+    button: ObfButton?
+): CellTapResult {
+    val anchor = button?.let { grid?.fieldAnchorAt(row, column) }
+    return when {
+        anchor != null && anchor == selectedField -> CellTapResult.OpenDialog(row, column, button)
+        anchor != null -> CellTapResult.Select(anchor)
+        else -> CellTapResult.OpenDialog(row, column, button)
+    }
+}
+
+data class GridFieldSpan(val rows: Int, val columns: Int)
 
 /**
  * Board-set entry point with a familiar library -> Run/Edit workspace flow.
@@ -156,12 +185,12 @@ fun BoardSetManagerScreen(
     createOnLaunch: Boolean = false,
     initialBoardSetId: String? = null
 ) {
+    val koin = org.koin.compose.getKoin()
     val useCase = koinInject<BoardSetUseCase>()
     val boardSetSpeechCache = koinInject<BoardSetSpeechCacheUseCase>()
-    val boardImportService = koinInject<BoardImportService>()
+    val boardImportService = remember(koin) { koin.getOrNull<BoardImportService>() }
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
-    val koin = org.koin.compose.getKoin()
     val featureUsageReporter = koinInject<io.github.jdreioe.wingmate.application.FeatureUsageReporter>()
     val updateService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.UpdateService>() }
     val scope = rememberCoroutineScope()
@@ -218,19 +247,23 @@ fun BoardSetManagerScreen(
             onBack = onBack,
             onOpenSettings = { showSettings = true },
             onCreate = { showCreateDialog = true },
-            onImport = {
+            onImport = boardImportService?.let { importService -> {
                 scope.launch {
-                    runCatching { boardImportService.importBoardSet() }
-                        .onSuccess { imported ->
-                            if (imported != null) {
+                    when (val result = importService.importBoardSetResult()) {
+                        is BoardImportResult.Success -> {
+                                val imported = result.boardSet
                                 boardSetSpeechCache.cacheBoardSet(imported.id)
                                 statusMessage = importedMessage
                                 refreshBoardSets()
-                            }
+                                route = BoardSetRoute.Workspace(imported.id, BoardWorkspaceMode.Run)
                         }
-                        .onFailure { statusMessage = it.message ?: importError }
+                        BoardImportResult.Cancelled -> Unit
+                        is BoardImportResult.Failure -> {
+                            statusMessage = result.context.ifBlank { importError }
+                        }
+                    }
                 }
-            },
+            } },
             onOpen = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Run) },
             onEdit = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Edit) },
             onDuplicate = { boardSet ->
@@ -332,7 +365,7 @@ private fun BoardSetLibraryScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onCreate: () -> Unit,
-    onImport: () -> Unit,
+    onImport: (() -> Unit)?,
     onOpen: (ObfBoardSet) -> Unit,
     onEdit: (ObfBoardSet) -> Unit,
     onDuplicate: (ObfBoardSet) -> Unit,
@@ -365,11 +398,13 @@ private fun BoardSetLibraryScreen(
                             contentDescription = stringResource(Res.string.phrase_screen_app_settings)
                         )
                     }
-                    IconButton(onClick = onImport) {
-                        Icon(
-                            Icons.Default.ImportExport,
-                            contentDescription = stringResource(Res.string.board_sets_import)
-                        )
+                    if (onImport != null) {
+                        IconButton(onClick = onImport) {
+                            Icon(
+                                Icons.Default.ImportExport,
+                                contentDescription = stringResource(Res.string.board_sets_import)
+                            )
+                        }
                     }
                 }
             )
@@ -490,6 +525,7 @@ private fun BoardSetWorkspaceScreen(
     val fileStorage = koinInject<FileStorage>()
     val settings by rememberReactiveSettings()
     val koin = org.koin.compose.getKoin()
+    val mediaUrlLoader = remember(koin) { koin.getOrNull<ObfMediaUrlLoader>() }
     val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
     val scope = rememberCoroutineScope()
     var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
@@ -504,6 +540,7 @@ private fun BoardSetWorkspaceScreen(
     var statusMessage by remember(boardSetId) { mutableStateOf<String?>(null) }
     var showAddBoardDialog by remember { mutableStateOf(false) }
     var editingCell by remember { mutableStateOf<WorkspaceCellTarget?>(null) }
+    var selectedField by remember(boardSetId) { mutableStateOf<Pair<Int, Int>?>(null) }
     var showFinishDialog by remember { mutableStateOf(false) }
     var showResizeBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
@@ -623,6 +660,7 @@ private fun BoardSetWorkspaceScreen(
         }
         selectedButtons = emptyList()
         boardStack = emptyList()
+        selectedField = null
         editSession = BoardSetEditSession(graph, graph)
         mode = BoardWorkspaceMode.Edit
     }
@@ -631,6 +669,7 @@ private fun BoardSetWorkspaceScreen(
         val session = editSession ?: return
         if (session.isDirty) showFinishDialog = true
         else {
+            selectedField = null
             editSession = null
             mode = BoardWorkspaceMode.Run
         }
@@ -656,21 +695,28 @@ private fun BoardSetWorkspaceScreen(
                 if (graph == null) {
                     statusMessage = "Export failed: no board set loaded"
                 } else {
-                    val obzBytes = useCase.exportBoardSetAsObz(graph.boardSet.id)
-                    if (obzBytes != null) {
-                        val fileName = "${graph.boardSet.name}.obz"
-                        if (shareService != null) {
-                            val shared = shareService.shareFile(fileName, obzBytes)
-                            statusMessage = if (shared) {
-                                "Exported ${graph.boardSet.name}.obz"
+                    when (val export = useCase.exportBoardSetAsObzResult(graph.boardSet.id)) {
+                        is ObzExportResult.Success -> {
+                            val obzBytes = export.bytes
+                            val fileName = "${graph.boardSet.name}.obz"
+                            if (shareService != null) {
+                                val shared = shareService.shareFile(fileName, obzBytes)
+                                statusMessage = if (shared) {
+                                    "Exported ${graph.boardSet.name}.obz"
+                                } else {
+                                    "Export cancelled"
+                                }
                             } else {
-                                "Export cancelled"
+                                statusMessage = "Export saved (${obzBytes.size} bytes)"
                             }
-                        } else {
-                            statusMessage = "Export saved (${obzBytes.size} bytes)"
                         }
-                    } else {
-                        statusMessage = "Export failed: no boards"
+                        is ObzExportResult.Failure -> {
+                            val resources = export.resources
+                                .takeIf { it.isNotEmpty() }
+                                ?.joinToString(prefix = ": ")
+                                .orEmpty()
+                            statusMessage = "Export failed: ${export.context}$resources"
+                    }
                     }
                 }
             } catch (e: Exception) {
@@ -1031,6 +1077,7 @@ private fun BoardSetWorkspaceScreen(
                                 selectedBoardId = it
                                 boardStack = emptyList()
                                 selectedButtons = emptyList()
+                                selectedField = null
                             }
                         )
                     }
@@ -1126,7 +1173,9 @@ private fun BoardSetWorkspaceScreen(
                                     }
                                     if (shouldSpeakBoardSelection(resolvedBoardSettings.activationBehavior)) {
                                         scope.launch(Dispatchers.IO) {
-                                            val recordedPath = sound?.path?.takeIf { it.isNotBlank() }
+                                            val recordedPath = sound?.path?.takeIf {
+                                                it.isNotBlank() && sound.data.isNullOrBlank() && sound.dataUrl.isNullOrBlank()
+                                            }
                                             val playedRecording = recordedPath?.let { path ->
                                                 runCatching {
                                                     speechService.speakRecordedAudio(
@@ -1138,7 +1187,8 @@ private fun BoardSetWorkspaceScreen(
                                             val playedSound = playedRecording || playButtonSound(
                                                 sound = sound,
                                                 fileStorage = fileStorage,
-                                                soundPlayer = soundPlayer
+                                                soundPlayer = soundPlayer,
+                                                urlLoader = mediaUrlLoader
                                             )
                                             if (!playedSound && spokenText.isNotEmpty()) {
                                                 runCatching {
@@ -1164,13 +1214,30 @@ private fun BoardSetWorkspaceScreen(
                             }
                         },
                         onCellClick = if (mode == BoardWorkspaceMode.Edit) {
-                            { row, column, button -> editingCell = WorkspaceCellTarget(row, column, button) }
+                            { row, column, button ->
+                                when (
+                                    val result = resolveCellTap(
+                                        grid = activeBoard.grid,
+                                        selectedField = selectedField,
+                                        row = row,
+                                        column = column,
+                                        button = button
+                                    )
+                                ) {
+                                    is CellTapResult.Select -> selectedField = result.anchor
+                                    is CellTapResult.OpenDialog -> {
+                                        selectedField = null
+                                        editingCell = WorkspaceCellTarget(result.row, result.column, result.button)
+                                    }
+                                }
+                            }
                         } else null,
                         onCellMove = if (mode == BoardWorkspaceMode.Edit) {
                             { fromRow, fromColumn, toRow, toColumn ->
                                 val session = editSession
                                 val boardId = activeBoard.id
                                 if (session != null) {
+                                    selectedField = null
                                     editSession = session.apply(
                                         moveDraftField(
                                             session.draft,
@@ -1181,6 +1248,29 @@ private fun BoardSetWorkspaceScreen(
                                             toColumn
                                         )
                                     )
+                                }
+                            }
+                        } else null,
+                        selectedFieldAnchor = selectedField,
+                        selectedFieldSpans = remember(activeBoard?.grid, selectedField) {
+                            selectedField?.let { (row, column) ->
+                                activeBoard?.grid?.availableFieldSpansAt(row, column).orEmpty()
+                            }.orEmpty()
+                        },
+                        onResizeField = if (mode == BoardWorkspaceMode.Edit) {
+                            { anchorRow, anchorColumn, rowSpan, columnSpan ->
+                                val session = editSession ?: return@ObfBoardView
+                                val boardId = activeBoard.id
+                                val resized = resizeDraftField(
+                                    graph = session.draft,
+                                    boardId = boardId,
+                                    row = anchorRow,
+                                    column = anchorColumn,
+                                    rowSpan = rowSpan,
+                                    columnSpan = columnSpan
+                                )
+                                if (resized != session.draft) {
+                                    editSession = session.apply(resized)
                                 }
                             }
                         } else null,
@@ -1237,12 +1327,6 @@ private fun BoardSetWorkspaceScreen(
 
     val target = editingCell
     if (target != null && activeBoard != null) {
-        val currentSpan = activeBoard.grid?.fieldSpanAt(target.row, target.column)
-            ?: GridFieldSpan(rows = 1, columns = 1)
-        val availableSpans = activeBoard.grid
-            ?.availableFieldSpansAt(target.row, target.column)
-            .orEmpty()
-            .map { FieldSpanOption(rows = it.rows, columns = it.columns) }
         val initialImageUrl = target.button?.imageId
             ?.let { id -> activeBoard.images.firstOrNull { it.id == id }?.url }
             .orEmpty()
@@ -1264,13 +1348,10 @@ private fun BoardSetWorkspaceScreen(
             initialLinkedBoardId = activeGraph.resolveLinkedBoard(target.button?.loadBoard)?.id,
             initialAction = target.button?.action,
             initialActions = target.button?.actions.orEmpty(),
-            availableSpans = availableSpans,
-            initialRowSpan = currentSpan.rows,
-            initialColumnSpan = currentSpan.columns,
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
             onSave = { label, vocalization, imageUrl, recordingPath, backgroundColor, language, mathMode, linkedBoardId,
-                       rowSpan, columnSpan, action, actions ->
+                       action, actions ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
                     updateDraftCell(
@@ -1286,8 +1367,6 @@ private fun BoardSetWorkspaceScreen(
                         language = language,
                         mathMode = mathMode,
                         linkedBoardId = linkedBoardId,
-                        rowSpan = rowSpan,
-                        columnSpan = columnSpan,
                         action = action,
                         actions = actions
                     )
@@ -1317,6 +1396,7 @@ private fun BoardSetWorkspaceScreen(
                         useCase.saveBoardSetGraph(session.draft)
                             .onSuccess { saved ->
                                 savedGraph = saved
+                                selectedField = null
                                 editSession = null
                                 mode = BoardWorkspaceMode.Run
                                 statusMessage = savedMessage
@@ -1331,6 +1411,7 @@ private fun BoardSetWorkspaceScreen(
                 Row {
                     TextButton(onClick = {
                         showFinishDialog = false
+                        selectedField = null
                         editSession = null
                         mode = BoardWorkspaceMode.Run
                         selectedBoardId = savedGraph?.boardSet?.rootBoardId
@@ -1530,8 +1611,6 @@ internal fun updateDraftCell(
     language: String?,
     mathMode: Boolean = false,
     linkedBoardId: String?,
-    rowSpan: Int = 1,
-    columnSpan: Int = 1,
     action: String? = null,
     actions: List<String> = emptyList()
 ): BoardSetGraph {
@@ -1592,8 +1671,14 @@ internal fun updateDraftCell(
     val buttons = if (existingButton == null) board.buttons + button else board.buttons.map {
         if (it.id == button.id) button else it
     }
-    val updatedGrid = grid.withFieldSpan(row, column, buttonId, rowSpan, columnSpan)
-        ?: return graph
+    val existingSpan = grid.fieldSpanAt(row, column)
+    val updatedGrid = grid.withFieldSpan(
+        row = row,
+        column = column,
+        buttonId = buttonId,
+        rowSpan = existingSpan.rows,
+        columnSpan = existingSpan.columns
+    ) ?: return graph
     val updatedBoard = board.copy(buttons = buttons, images = images, sounds = sounds, grid = updatedGrid)
     return graph.copy(boards = graph.boards.map { if (it.id == boardId) updatedBoard else it })
 }
@@ -1640,6 +1725,15 @@ internal fun ObfGrid.fieldSpanAt(row: Int, column: Int): GridFieldSpan {
         rows = maxRow - minRow + 1,
         columns = maxColumn - minColumn + 1
     )
+}
+
+internal fun ObfGrid.fieldAnchorAt(row: Int, column: Int): Pair<Int, Int>? {
+    val buttonId = order.getOrNull(row)?.getOrNull(column) ?: return null
+    return normalizedOrder().flatMapIndexed { rowIndex, values ->
+        values.mapIndexedNotNull { columnIndex, value ->
+            if (value == buttonId) rowIndex to columnIndex else null
+        }
+    }.minWithOrNull(compareBy({ it.first }, { it.second }))
 }
 
 internal fun ObfGrid.availableFieldSpansAt(row: Int, column: Int): List<GridFieldSpan> {
@@ -1895,6 +1989,26 @@ internal fun moveDraftField(
     )
 }
 
+internal fun resizeDraftField(
+    graph: BoardSetGraph,
+    boardId: String,
+    row: Int,
+    column: Int,
+    rowSpan: Int,
+    columnSpan: Int
+): BoardSetGraph {
+    val board = graph.boardsById[boardId] ?: return graph
+    val grid = board.grid ?: return graph
+    val buttonId = grid.order.getOrNull(row)?.getOrNull(column) ?: return graph
+    val resizedGrid = grid.withFieldSpan(row, column, buttonId, rowSpan, columnSpan) ?: return graph
+    if (resizedGrid == grid) return graph
+    return graph.copy(
+        boards = graph.boards.map { current ->
+            if (current.id == boardId) current.copy(grid = resizedGrid) else current
+        }
+    )
+}
+
 internal fun BoardSetGraph.withHomeFieldsBottomLeft(): BoardSetGraph {
     val rootBoardId = boardSet.rootBoardId
     val normalizedBoards = boards.map { board ->
@@ -2109,22 +2223,24 @@ private suspend fun awaitSpeechPlayback(speechService: SpeechService) {
 internal suspend fun playButtonSound(
     sound: ObfSound?,
     fileStorage: FileStorage,
-    soundPlayer: SoundPlayer
+    soundPlayer: SoundPlayer,
+    urlLoader: ObfMediaUrlLoader? = null
 ): Boolean {
     if (sound == null) return false
-    val path = sound.path
-    val data = sound.data
-    val bytes = when {
-        !path.isNullOrBlank() -> fileStorage.loadBytes(path)
-        !data.isNullOrBlank() -> decodeObfDataUri(data)
-        else -> null
-    } ?: return false
-    if (bytes.isEmpty()) return false
-    return soundPlayer.playBytes(bytes, sound.contentType)
+    for (source in obfSoundSources(sound)) {
+        val bytes = when (source) {
+            is ObfMediaSource.Data -> decodeObfDataUri(source.value)
+            is ObfMediaSource.Path -> fileStorage.loadBytes(source.value)
+            is ObfMediaSource.Url -> urlLoader?.load(source.value)
+            is ObfMediaSource.Symbol -> null
+        }
+        if (bytes != null && bytes.isNotEmpty() && soundPlayer.playBytes(bytes, sound.contentType)) return true
+    }
+    return false
 }
 
 private fun decodeObfDataUri(data: String): ByteArray? {
-    return Base64Decoder.decodeOrNull(data)
+    return Base64Decoder.decodeOrNull(data.substringAfter("base64,", data))
 }
 
 private fun languageName(

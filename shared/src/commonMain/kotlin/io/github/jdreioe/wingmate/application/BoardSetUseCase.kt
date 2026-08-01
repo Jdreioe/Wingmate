@@ -513,40 +513,18 @@ class BoardSetUseCase(
         return json.encodeToString(rootBoard)
     }
 
-    suspend fun exportBoardSetAsObz(boardSetId: String): ByteArray? {
-        val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
+    suspend fun exportBoardSetAsObzResult(boardSetId: String): ObzExportResult {
+        val boardSet = boardSetRepository.getBoardSet(boardSetId)
+            ?: return ObzExportResult.Failure(ObzExportErrorCode.ROOT_NOT_FOUND, "Board set '$boardSetId' was not found")
         val allBoards = boardRepository.listBoards()
         val graph = BoardSetGraph(boardSet, allBoards.filter { it.id in boardSet.boardIds })
-        if (graph.boards.isEmpty()) return null
-
-        val soundBytes = mutableMapOf<String, ByteArray>()
-        if (fileStorage != null) {
-            for (board in graph.boards) {
-                for (button in board.buttons) {
-                    val soundId = button.soundId ?: continue
-                    if (soundId in soundBytes) continue
-                    // Try multiple storage path patterns
-                    val candidates = listOf(
-                        "sounds/$soundId",
-                        "$boardSetId/sounds/$soundId",
-                        "boardsets/$boardSetId/sounds/$soundId"
-                    )
-                    for (path in candidates) {
-                        val bytes = fileStorage.loadBytes(path)
-                        if (bytes != null) {
-                            soundBytes[soundId] = bytes
-                            break
-                        }
-                    }
-                }
-            }
+        if (graph.boards.isEmpty()) {
+            return ObzExportResult.Failure(ObzExportErrorCode.ROOT_NOT_FOUND, "Board set '$boardSetId' has no boards")
         }
-
-        return obzExporter.export(
+        return obzExporter.exportResult(
             boards = graph.boards,
             rootBoardId = boardSet.rootBoardId,
             loadMedia = { path -> fileStorage?.loadBytes(path) },
-            soundBytes = soundBytes,
             manifestExtensions = if (boardSet.screenSettings.isEmpty) {
                 emptyMap()
             } else {
@@ -554,6 +532,9 @@ class BoardSetUseCase(
             }
         )
     }
+
+    suspend fun exportBoardSetAsObz(boardSetId: String): ByteArray? =
+        (exportBoardSetAsObzResult(boardSetId) as? ObzExportResult.Success)?.bytes
 
     suspend fun getRootBoard(boardSetId: String): ObfBoard? {
         val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null

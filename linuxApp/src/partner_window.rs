@@ -11,8 +11,8 @@
 //! using `ftdi-embedded-hal` which handles all MPSSE setup, CS, purge, and sync
 //! correctly out of the box.
 
-use embedded_hal::spi::{Operation, SpiDevice};
 use embedded_hal::digital::OutputPin;
+use embedded_hal::spi::{Operation, SpiDevice};
 use ftdi_embedded_hal as hal;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -21,87 +21,87 @@ use std::time::{Duration, Instant};
 // EVE REGISTER ADDRESSES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-pub const REG_ID: u32         = 0x302000;
-pub const REG_FRAMES: u32     = 0x302004;
-pub const REG_CLOCK: u32      = 0x302008;
-pub const REG_FREQUENCY: u32  = 0x30200C;
-pub const REG_CPURESET: u32   = 0x302020;
-pub const REG_HCYCLE: u32     = 0x30202C;
-pub const REG_HOFFSET: u32    = 0x302030;
-pub const REG_HSIZE: u32      = 0x302034;
-pub const REG_HSYNC0: u32     = 0x302038;
-pub const REG_HSYNC1: u32     = 0x30203C;
-pub const REG_VCYCLE: u32     = 0x302040;
-pub const REG_VOFFSET: u32    = 0x302044;
-pub const REG_VSIZE: u32      = 0x302048;
-pub const REG_VSYNC0: u32     = 0x30204C;
-pub const REG_VSYNC1: u32     = 0x302050;
-pub const REG_DLSWAP: u32     = 0x302054;
-pub const REG_ROTATE: u32     = 0x302058;
-pub const REG_DITHER: u32     = 0x302060;
-pub const REG_SWIZZLE: u32    = 0x302064;
-pub const REG_CSPREAD: u32    = 0x302068;
-pub const REG_PCLK_POL: u32   = 0x30206C;
-pub const REG_PCLK: u32       = 0x302070;
-pub const REG_GPIO_DIR: u32   = 0x302090;
-pub const REG_GPIO: u32       = 0x302094;
-pub const REG_CMD_READ: u32   = 0x3020F8;
-pub const REG_CMD_WRITE: u32  = 0x3020FC;
+pub const REG_ID: u32 = 0x302000;
+pub const REG_FRAMES: u32 = 0x302004;
+pub const REG_CLOCK: u32 = 0x302008;
+pub const REG_FREQUENCY: u32 = 0x30200C;
+pub const REG_CPURESET: u32 = 0x302020;
+pub const REG_HCYCLE: u32 = 0x30202C;
+pub const REG_HOFFSET: u32 = 0x302030;
+pub const REG_HSIZE: u32 = 0x302034;
+pub const REG_HSYNC0: u32 = 0x302038;
+pub const REG_HSYNC1: u32 = 0x30203C;
+pub const REG_VCYCLE: u32 = 0x302040;
+pub const REG_VOFFSET: u32 = 0x302044;
+pub const REG_VSIZE: u32 = 0x302048;
+pub const REG_VSYNC0: u32 = 0x30204C;
+pub const REG_VSYNC1: u32 = 0x302050;
+pub const REG_DLSWAP: u32 = 0x302054;
+pub const REG_ROTATE: u32 = 0x302058;
+pub const REG_DITHER: u32 = 0x302060;
+pub const REG_SWIZZLE: u32 = 0x302064;
+pub const REG_CSPREAD: u32 = 0x302068;
+pub const REG_PCLK_POL: u32 = 0x30206C;
+pub const REG_PCLK: u32 = 0x302070;
+pub const REG_GPIO_DIR: u32 = 0x302090;
+pub const REG_GPIO: u32 = 0x302094;
+pub const REG_CMD_READ: u32 = 0x3020F8;
+pub const REG_CMD_WRITE: u32 = 0x3020FC;
 pub const REG_CMDB_SPACE: u32 = 0x302574;
 
-pub const RAM_DL: u32  = 0x300000; // Display list RAM (8 KB)
+pub const RAM_DL: u32 = 0x300000; // Display list RAM (8 KB)
 pub const RAM_CMD: u32 = 0x308000; // Coprocessor command ring buffer (4 KB)
-pub const RAM_G: u32   = 0x000000; // General-purpose graphics RAM (1 MB)
+pub const RAM_G: u32 = 0x000000; // General-purpose graphics RAM (1 MB)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DISPLAY PANEL CONFIGURATION (decoded from pcap captures)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-pub const DISPLAY_WIDTH: u16  = 480;
+pub const DISPLAY_WIDTH: u16 = 480;
 pub const DISPLAY_HEIGHT: u16 = 128;
-pub const HCYCLE: u16         = 531;
-pub const HOFFSET: u16        = 43;
-pub const HSYNC0: u16         = 0;
-pub const HSYNC1: u16         = 4;
-pub const VCYCLE: u16         = 292;
-pub const VOFFSET: u16        = 84;
-pub const VSYNC0: u16         = 0;
-pub const VSYNC1: u16         = 4;
-pub const PCLK_DIV: u8        = 9;
-pub const PCLK_POL_VAL: u8    = 1;
-pub const SWIZZLE_VAL: u16    = 0;
-pub const CSPREAD_VAL: u8     = 0;
-pub const DITHER_VAL: u8      = 1;
-pub const ROTATE_VAL: u32     = 4; // Mirrored landscape (partner sees correct text)
+pub const HCYCLE: u16 = 531;
+pub const HOFFSET: u16 = 43;
+pub const HSYNC0: u16 = 0;
+pub const HSYNC1: u16 = 4;
+pub const VCYCLE: u16 = 292;
+pub const VOFFSET: u16 = 84;
+pub const VSYNC0: u16 = 0;
+pub const VSYNC1: u16 = 4;
+pub const PCLK_DIV: u8 = 9;
+pub const PCLK_POL_VAL: u8 = 1;
+pub const SWIZZLE_VAL: u16 = 0;
+pub const CSPREAD_VAL: u8 = 0;
+pub const DITHER_VAL: u8 = 1;
+pub const ROTATE_VAL: u32 = 4; // Mirrored landscape (partner sees correct text)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EVE HOST COMMANDS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-pub const HOST_ACTIVE: u8  = 0x00;
+pub const HOST_ACTIVE: u8 = 0x00;
 pub const HOST_STANDBY: u8 = 0x41;
-pub const HOST_SLEEP: u8   = 0x42;
-pub const HOST_CLKEXT: u8  = 0x44;
-pub const HOST_CLKINT: u8  = 0x48;
+pub const HOST_SLEEP: u8 = 0x42;
+pub const HOST_CLKEXT: u8 = 0x44;
+pub const HOST_CLKINT: u8 = 0x48;
 pub const HOST_PWRDOWN: u8 = 0x50;
-pub const HOST_CLKSEL: u8  = 0x61;
+pub const HOST_CLKSEL: u8 = 0x61;
 pub const HOST_RST_PULSE: u8 = 0x68;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COPROCESSOR COMMANDS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-pub const CMD_DLSTART: u32   = 0xFFFFFF00;
-pub const CMD_SWAP: u32      = 0xFFFFFF01;
-pub const CMD_BGCOLOR: u32   = 0xFFFFFF09;
-pub const CMD_FGCOLOR: u32   = 0xFFFFFF0A;
-pub const CMD_TEXT: u32      = 0xFFFFFF0C;
-pub const CMD_BUTTON: u32    = 0xFFFFFF0D;
-pub const CMD_KEYS: u32     = 0xFFFFFF0E;
-pub const CMD_NUMBER: u32    = 0xFFFFFF2E;
-pub const CMD_SPINNER: u32   = 0xFFFFFF16;
-pub const CMD_STOP: u32     = 0xFFFFFF17;
-pub const CMD_INFLATE: u32   = 0xFFFFFF22;
+pub const CMD_DLSTART: u32 = 0xFFFFFF00;
+pub const CMD_SWAP: u32 = 0xFFFFFF01;
+pub const CMD_BGCOLOR: u32 = 0xFFFFFF09;
+pub const CMD_FGCOLOR: u32 = 0xFFFFFF0A;
+pub const CMD_TEXT: u32 = 0xFFFFFF0C;
+pub const CMD_BUTTON: u32 = 0xFFFFFF0D;
+pub const CMD_KEYS: u32 = 0xFFFFFF0E;
+pub const CMD_NUMBER: u32 = 0xFFFFFF2E;
+pub const CMD_SPINNER: u32 = 0xFFFFFF16;
+pub const CMD_STOP: u32 = 0xFFFFFF17;
+pub const CMD_INFLATE: u32 = 0xFFFFFF22;
 pub const CMD_LOADIMAGE: u32 = 0xFFFFFF24;
 pub const CMD_SETROTATE: u32 = 0xFFFFFF36;
 pub const CMD_SETBITMAP: u32 = 0xFFFFFF42;
@@ -218,11 +218,11 @@ pub fn scissor_size(w: u16, h: u16) -> u32 {
 }
 
 // Primitive types
-pub const BITMAPS: u8    = 1;
-pub const POINTS: u8     = 2;
-pub const LINES: u8      = 3;
+pub const BITMAPS: u8 = 1;
+pub const POINTS: u8 = 2;
+pub const LINES: u8 = 3;
 pub const LINE_STRIP: u8 = 4;
-pub const RECTS: u8      = 9;
+pub const RECTS: u8 = 9;
 
 // Bitmap formats
 pub const L8: u8 = 3;
@@ -259,7 +259,10 @@ impl std::fmt::Display for PwError {
             PwError::Spi(e) => write!(f, "SPI error: {e}"),
             PwError::Gpio(e) => write!(f, "GPIO error: {e}"),
             PwError::ChipNotResponding(id) => {
-                write!(f, "EVE chip not responding (REG_ID=0x{id:02X}, expected 0x7C)")
+                write!(
+                    f,
+                    "EVE chip not responding (REG_ID=0x{id:02X}, expected 0x7C)"
+                )
             }
             PwError::CoprocTimeout { rd, wr } => {
                 write!(f, "Coprocessor timeout (RD=0x{rd:04X}, WR=0x{wr:04X})")
@@ -373,10 +376,7 @@ where
         ];
         let mut read_buf = [0u8; 1];
         self.spi
-            .transaction(&mut [
-                Operation::Write(&write_buf),
-                Operation::Read(&mut read_buf),
-            ])
+            .transaction(&mut [Operation::Write(&write_buf), Operation::Read(&mut read_buf)])
             .map_err(|e| PwError::Spi(format!("{e:?}")))?;
         Ok(read_buf[0])
     }
@@ -391,10 +391,7 @@ where
         ];
         let mut read_buf = [0u8; 2];
         self.spi
-            .transaction(&mut [
-                Operation::Write(&write_buf),
-                Operation::Read(&mut read_buf),
-            ])
+            .transaction(&mut [Operation::Write(&write_buf), Operation::Read(&mut read_buf)])
             .map_err(|e| PwError::Spi(format!("{e:?}")))?;
         Ok(u16::from_le_bytes(read_buf))
     }
@@ -409,10 +406,7 @@ where
         ];
         let mut read_buf = [0u8; 4];
         self.spi
-            .transaction(&mut [
-                Operation::Write(&write_buf),
-                Operation::Read(&mut read_buf),
-            ])
+            .transaction(&mut [Operation::Write(&write_buf), Operation::Read(&mut read_buf)])
             .map_err(|e| PwError::Spi(format!("{e:?}")))?;
         Ok(u32::from_le_bytes(read_buf))
     }
@@ -466,7 +460,11 @@ where
         println!(
             "[+] REG_ID = 0x{:02X} {}",
             chip_id,
-            if chip_id == 0x7C { "✓" } else { "✗ UNEXPECTED" }
+            if chip_id == 0x7C {
+                "✓"
+            } else {
+                "✗ UNEXPECTED"
+            }
         );
         if chip_id != 0x7C {
             return Err(PwError::ChipNotResponding(chip_id));
@@ -709,7 +707,10 @@ where
 
         // Take last N lines — so the user always sees the most recent text (at cursor)
         let visible: Vec<&str> = if lines.len() > max_lines {
-            lines[lines.len() - max_lines..].iter().map(|s| s.as_str()).collect()
+            lines[lines.len() - max_lines..]
+                .iter()
+                .map(|s| s.as_str())
+                .collect()
         } else {
             lines.iter().map(|s| s.as_str()).collect()
         };
@@ -781,7 +782,7 @@ where
 
         // Compute stride (bytes per row)
         let stride = match format {
-            3 => width,  // L8: 1 byte per pixel
+            3 => width,     // L8: 1 byte per pixel
             7 => width * 2, // RGB565: 2 bytes per pixel
             _ => width,
         };
@@ -794,7 +795,9 @@ where
         self.cmd_word(bitmap_size(false, false, false, width, height))?;
         self.cmd_end()?;
 
-        println!("[EVE] Bitmap handle={handle} uploaded: {width}x{height} fmt={format} @ 0x{addr:06X}");
+        println!(
+            "[EVE] Bitmap handle={handle} uploaded: {width}x{height} fmt={format} @ 0x{addr:06X}"
+        );
         Ok(())
     }
 
@@ -815,7 +818,10 @@ where
         let (_char_w, line_h) = font_metrics(face_font);
         let lines = word_wrap(face_text, chars_per_line);
         let visible: Vec<&str> = if lines.len() > max_lines {
-            lines[lines.len() - max_lines..].iter().map(|s| s.as_str()).collect()
+            lines[lines.len() - max_lines..]
+                .iter()
+                .map(|s| s.as_str())
+                .collect()
         } else {
             lines.iter().map(|s| s.as_str()).collect()
         };
@@ -830,18 +836,24 @@ where
         // Draw face text
         self.cmd_word(color_rgb(face_color.0, face_color.1, face_color.2))?;
         for (i, line) in visible.iter().enumerate() {
-            if line.is_empty() { continue; }
+            if line.is_empty() {
+                continue;
+            }
             let y = y_start + (i as i16) * line_h;
             self.cmd_word(CMD_TEXT)?;
             let cx = DISPLAY_WIDTH as i16 / 2;
             self.cmd_word(u32::from_le_bytes([
-                cx as u8, (cx >> 8) as u8,
-                y as u8, (y >> 8) as u8,
+                cx as u8,
+                (cx >> 8) as u8,
+                y as u8,
+                (y >> 8) as u8,
             ]))?;
             let options: u16 = 0x0200;
             self.cmd_word(u32::from_le_bytes([
-                face_font as u8, (face_font >> 8) as u8,
-                options as u8, (options >> 8) as u8,
+                face_font as u8,
+                (face_font >> 8) as u8,
+                options as u8,
+                (options >> 8) as u8,
             ]))?;
             self.cmd_string(line)?;
         }
@@ -1029,10 +1041,7 @@ where
 /// Uses the open-source `ftdi` (libftdi) backend.
 /// CS is on D3, PD_N is on ADBUS6 (D6).
 pub fn open_ftdi() -> Result<
-    PartnerWindow<
-        hal::SpiDevice<ftdi::Device>,
-        hal::OutputPin<ftdi::Device>,
-    >,
+    PartnerWindow<hal::SpiDevice<ftdi::Device>, hal::OutputPin<ftdi::Device>>,
     Box<dyn std::error::Error>,
 > {
     let device = ftdi::find_by_vid_pid(0x0403, 0x6014)
@@ -1041,7 +1050,7 @@ pub fn open_ftdi() -> Result<
 
     let hal = hal::FtHal::init_freq(device, SPI_FREQ)?;
     let spi = hal.spi_device(3)?; // D3 = CS0
-    let pd_pin = hal.ad6()?;       // ADBUS6 = PD_N (D6)
+    let pd_pin = hal.ad6()?; // ADBUS6 = PD_N (D6)
 
     println!("[+] FTDI FT232H connected via libftdi");
     println!("    SPI frequency: {:.1} MHz", SPI_FREQ as f64 / 1e6);
@@ -1131,24 +1140,24 @@ pub fn font_metrics(font: i16) -> (usize, i16) {
     match font {
         16 => (8, 16),
         17 => (8, 16),
-        18 => (8, 16),      // 8×8
+        18 => (8, 16), // 8×8
         19 => (8, 16),
-        20 => (10, 20),     // Larger sans
+        20 => (10, 20), // Larger sans
         21 => (11, 20),
         22 => (12, 24),
         23 => (13, 26),
         24 => (14, 28),
         25 => (13, 26),
-        26 => (8, 22),      // Small serif
-        27 => (11, 24),     // Medium serif
-        28 => (14, 28),     // Large sans
+        26 => (8, 22),  // Small serif
+        27 => (11, 24), // Medium serif
+        28 => (14, 28), // Large sans
         29 => (16, 32),
         30 => (18, 36),
-        31 => (20, 40),     // Largest standard ROM font
-        32 => (24, 49),     // Extra large (if available on BT81x)
+        31 => (20, 40), // Largest standard ROM font
+        32 => (24, 49), // Extra large (if available on BT81x)
         33 => (32, 58),
         34 => (40, 70),
-        _ => (20, 40),      // Fallback to font 31 metrics
+        _ => (20, 40), // Fallback to font 31 metrics
     }
 }
 
@@ -1239,10 +1248,7 @@ where
 }
 
 /// Display text using EVE ROM fonts.
-pub fn test_text<S, P, Se, Pe>(
-    pw: &mut PartnerWindow<S, P>,
-    message: &str,
-) -> Result<(), PwError>
+pub fn test_text<S, P, Se, Pe>(pw: &mut PartnerWindow<S, P>, message: &str) -> Result<(), PwError>
 where
     S: SpiDevice<u8, Error = Se>,
     P: OutputPin<Error = Pe>,
@@ -1379,7 +1385,13 @@ where
     let mut x = DISPLAY_WIDTH as i16;
     let end_x = -(msg.len() as i16 * 20);
     while x > end_x {
-        pw.display_text(msg, Some(x), Some(DISPLAY_HEIGHT as i16 / 2), 31, (255, 255, 255))?;
+        pw.display_text(
+            msg,
+            Some(x),
+            Some(DISPLAY_HEIGHT as i16 / 2),
+            31,
+            (255, 255, 255),
+        )?;
         thread::sleep(Duration::from_millis(30));
         x -= 4;
     }

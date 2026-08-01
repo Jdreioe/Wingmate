@@ -42,6 +42,7 @@ kotlin {
                 implementation("io.ktor:ktor-client-okhttp:2.3.12")
                 implementation("androidx.core:core-ktx:1.13.1")
                 implementation("app.cash.sqldelight:android-driver:2.0.2")
+                implementation("org.apache.commons:commons-compress:1.27.1")
             }
         }
 
@@ -64,6 +65,7 @@ kotlin {
             dependencies {
                 implementation("io.ktor:ktor-client-okhttp:2.3.12")
                 implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
+                implementation("org.apache.commons:commons-compress:1.27.1")
             }
         }
     }

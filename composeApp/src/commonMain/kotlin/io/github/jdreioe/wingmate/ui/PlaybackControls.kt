@@ -17,9 +17,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.resources.stringResource
+import wingmatekmp.composeapp.generated.resources.Res
+import wingmatekmp.composeapp.generated.resources.playback_new_thought
+import wingmatekmp.composeapp.generated.resources.playback_pause
+import wingmatekmp.composeapp.generated.resources.playback_play
+import wingmatekmp.composeapp.generated.resources.playback_previous_thought
+import wingmatekmp.composeapp.generated.resources.playback_resume
+import wingmatekmp.composeapp.generated.resources.playback_secondary_language
+import wingmatekmp.composeapp.generated.resources.playback_stop
 
 @Composable
 fun PlaybackControls(
@@ -34,6 +47,15 @@ fun PlaybackControls(
     isSecondaryActionEnabled: Boolean = true,
     isOnThatThoughtActive: Boolean = false,
 ) {
+    val playLabel = stringResource(Res.string.playback_play)
+    val resumeLabel = stringResource(Res.string.playback_resume)
+    val pauseLabel = stringResource(Res.string.playback_pause)
+    val stopLabel = stringResource(Res.string.playback_stop)
+    val secondaryLabel = stringResource(Res.string.playback_secondary_language)
+    val thoughtLabel = stringResource(
+        if (isOnThatThoughtActive) Res.string.playback_previous_thought
+        else Res.string.playback_new_thought
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -48,24 +70,26 @@ fun PlaybackControls(
         ) {
             // Show Resume button if paused, otherwise show Play button
             if (isPaused && onResume != null) {
-                SmallIconButton(icon = Icons.Rounded.SkipNext, tint = MaterialTheme.colorScheme.primary, onClick = onResume)
+                SmallIconButton(icon = Icons.Rounded.SkipNext, label = resumeLabel, tint = MaterialTheme.colorScheme.primary, onClick = onResume)
             } else {
-                SmallIconButton(icon = Icons.Rounded.PlayArrow, tint = MaterialTheme.colorScheme.onSurface, onClick = onPlay)
+                SmallIconButton(icon = Icons.Rounded.PlayArrow, label = playLabel, tint = MaterialTheme.colorScheme.onSurface, onClick = onPlay)
             }
             
             if (onPlaySecondary != null) {
                 SmallIconButton(
                     icon = Icons.Rounded.Language,
+                    label = secondaryLabel,
                     tint = if (isSecondarySelectionActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                     onClick = { onPlaySecondary.invoke() },
                     selected = isSecondarySelectionActive,
                     enabled = isSecondaryActionEnabled
                 )
             }
-            SmallIconButton(icon = Icons.Rounded.Pause, tint = MaterialTheme.colorScheme.onSurface, onClick = onPause)
-            SmallIconButton(icon = Icons.Rounded.Stop, tint = MaterialTheme.colorScheme.onSurface, onClick = onStop)
+            SmallIconButton(icon = Icons.Rounded.Pause, label = pauseLabel, tint = MaterialTheme.colorScheme.onSurface, onClick = onPause)
+            SmallIconButton(icon = Icons.Rounded.Stop, label = stopLabel, tint = MaterialTheme.colorScheme.onSurface, onClick = onStop)
             SmallIconButton(
                 icon = Icons.Rounded.Bookmark,
+                label = thoughtLabel,
                 tint = if (isOnThatThoughtActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                 onClick = onThatThought,
                 selected = isOnThatThoughtActive
@@ -77,6 +101,7 @@ fun PlaybackControls(
 @Composable
 private fun SmallIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
     tint: Color,
     onClick: () -> Unit,
     selected: Boolean = false,
@@ -90,7 +115,7 @@ private fun SmallIconButton(
     val contentTint = if (enabled) tint else tint.copy(alpha = 0.3f)
     Box(
         modifier = Modifier
-            .size(44.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .background(color = background),
         contentAlignment = Alignment.Center
@@ -99,8 +124,12 @@ private fun SmallIconButton(
             onClick = onClick,
             enabled = enabled,
             modifier = Modifier
-                .size(44.dp)
-                .focusProperties { canFocus = false }
+                .size(48.dp)
+                .semantics {
+                    contentDescription = label
+                    role = Role.Button
+                    this.selected = selected
+                }
         ) {
             Icon(imageVector = icon, contentDescription = null, tint = contentTint)
         }

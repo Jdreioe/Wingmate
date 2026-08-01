@@ -29,6 +29,17 @@ class JvmFileStorage(
         file.writeBytes(content)
     }
 
+    override suspend fun saveStream(
+        fileName: String,
+        producer: suspend (suspend (ByteArray) -> Unit) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        val file = resolve(fileName)
+        file.parentFile?.mkdirs()
+        file.outputStream().buffered().use { output ->
+            producer { chunk -> output.write(chunk) }
+        }
+    }
+
     override suspend fun loadBytes(fileName: String): ByteArray? = withContext(Dispatchers.IO) {
         val file = resolve(fileName)
         if (file.exists()) file.readBytes() else null
@@ -36,6 +47,11 @@ class JvmFileStorage(
 
     override suspend fun exists(fileName: String): Boolean = withContext(Dispatchers.IO) {
         resolve(fileName).exists()
+    }
+
+    override suspend fun delete(fileName: String) = withContext(Dispatchers.IO) {
+        val file = resolve(fileName)
+        if (file.exists() && !file.delete()) error("Could not delete $fileName")
     }
 
     private fun resolve(fileName: String): File = File(rootDir, fileName)
