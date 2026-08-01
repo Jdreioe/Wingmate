@@ -141,7 +141,31 @@ private data class WorkspaceCellTarget(
     val button: ObfButton?
 )
 
-internal data class GridFieldSpan(val rows: Int, val columns: Int)
+internal sealed interface CellTapResult {
+    data class Select(val anchor: Pair<Int, Int>) : CellTapResult
+    data class OpenDialog(
+        val row: Int,
+        val column: Int,
+        val button: ObfButton?
+    ) : CellTapResult
+}
+
+internal fun resolveCellTap(
+    grid: io.github.jdreioe.wingmate.domain.obf.ObfGrid?,
+    selectedField: Pair<Int, Int>?,
+    row: Int,
+    column: Int,
+    button: ObfButton?
+): CellTapResult {
+    val anchor = button?.let { grid?.fieldAnchorAt(row, column) }
+    return when {
+        anchor != null && anchor == selectedField -> CellTapResult.OpenDialog(row, column, button)
+        anchor != null -> CellTapResult.Select(anchor)
+        else -> CellTapResult.OpenDialog(row, column, button)
+    }
+}
+
+data class GridFieldSpan(val rows: Int, val columns: Int)
 
 /**
  * Board-set entry point with a familiar library -> Run/Edit workspace flow.
@@ -501,6 +525,7 @@ private fun BoardSetWorkspaceScreen(
     var statusMessage by remember(boardSetId) { mutableStateOf<String?>(null) }
     var showAddBoardDialog by remember { mutableStateOf(false) }
     var editingCell by remember { mutableStateOf<WorkspaceCellTarget?>(null) }
+    var selectedField by remember(boardSetId) { mutableStateOf<Pair<Int, Int>?>(null) }
     var showFinishDialog by remember { mutableStateOf(false) }
     var showResizeBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
@@ -619,6 +644,7 @@ private fun BoardSetWorkspaceScreen(
         }
         selectedButtons = emptyList()
         boardStack = emptyList()
+        selectedField = null
         editSession = BoardSetEditSession(graph, graph)
         mode = BoardWorkspaceMode.Edit
     }
@@ -627,6 +653,7 @@ private fun BoardSetWorkspaceScreen(
         val session = editSession ?: return
         if (session.isDirty) showFinishDialog = true
         else {
+            selectedField = null
             editSession = null
             mode = BoardWorkspaceMode.Run
         }
@@ -889,6 +916,7 @@ private fun BoardSetWorkspaceScreen(
                                 selectedBoardId = it
                                 boardStack = emptyList()
                                 selectedButtons = emptyList()
+                                selectedField = null
                             }
                         )
                     }
@@ -1022,13 +1050,30 @@ private fun BoardSetWorkspaceScreen(
                             }
                         },
                         onCellClick = if (mode == BoardWorkspaceMode.Edit) {
-                            { row, column, button -> editingCell = WorkspaceCellTarget(row, column, button) }
+                            { row, column, button ->
+                                when (
+                                    val result = resolveCellTap(
+                                        grid = activeBoard.grid,
+                                        selectedField = selectedField,
+                                        row = row,
+                                        column = column,
+                                        button = button
+                                    )
+                                ) {
+                                    is CellTapResult.Select -> selectedField = result.anchor
+                                    is CellTapResult.OpenDialog -> {
+                                        selectedField = null
+                                        editingCell = WorkspaceCellTarget(result.row, result.column, result.button)
+                                    }
+                                }
+                            }
                         } else null,
                         onCellMove = if (mode == BoardWorkspaceMode.Edit) {
                             { fromRow, fromColumn, toRow, toColumn ->
                                 val session = editSession
                                 val boardId = activeBoard.id
                                 if (session != null) {
+                                    selectedField = null
                                     editSession = session.apply(
                                         moveDraftField(
                                             session.draft,
@@ -1039,6 +1084,29 @@ private fun BoardSetWorkspaceScreen(
                                             toColumn
                                         )
                                     )
+                                }
+                            }
+                        } else null,
+                        selectedFieldAnchor = selectedField,
+                        selectedFieldSpans = remember(activeBoard?.grid, selectedField) {
+                            selectedField?.let { (row, column) ->
+                                activeBoard?.grid?.availableFieldSpansAt(row, column).orEmpty()
+                            }.orEmpty()
+                        },
+                        onResizeField = if (mode == BoardWorkspaceMode.Edit) {
+                            { anchorRow, anchorColumn, rowSpan, columnSpan ->
+                                val session = editSession ?: return@ObfBoardView
+                                val boardId = activeBoard.id
+                                val resized = resizeDraftField(
+                                    graph = session.draft,
+                                    boardId = boardId,
+                                    row = anchorRow,
+                                    column = anchorColumn,
+                                    rowSpan = rowSpan,
+                                    columnSpan = columnSpan
+                                )
+                                if (resized != session.draft) {
+                                    editSession = session.apply(resized)
                                 }
                             }
                         } else null,
@@ -1095,12 +1163,6 @@ private fun BoardSetWorkspaceScreen(
 
     val target = editingCell
     if (target != null && activeBoard != null) {
-        val currentSpan = activeBoard.grid?.fieldSpanAt(target.row, target.column)
-            ?: GridFieldSpan(rows = 1, columns = 1)
-        val availableSpans = activeBoard.grid
-            ?.availableFieldSpansAt(target.row, target.column)
-            .orEmpty()
-            .map { FieldSpanOption(rows = it.rows, columns = it.columns) }
         val initialImageUrl = target.button?.imageId
             ?.let { id -> activeBoard.images.firstOrNull { it.id == id }?.url }
             .orEmpty()
@@ -1122,13 +1184,10 @@ private fun BoardSetWorkspaceScreen(
             initialLinkedBoardId = activeGraph.resolveLinkedBoard(target.button?.loadBoard)?.id,
             initialAction = target.button?.action,
             initialActions = target.button?.actions.orEmpty(),
-            availableSpans = availableSpans,
-            initialRowSpan = currentSpan.rows,
-            initialColumnSpan = currentSpan.columns,
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
             onSave = { label, vocalization, imageUrl, recordingPath, backgroundColor, language, mathMode, linkedBoardId,
-                       rowSpan, columnSpan, action, actions ->
+                       action, actions ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
                     updateDraftCell(
@@ -1144,8 +1203,6 @@ private fun BoardSetWorkspaceScreen(
                         language = language,
                         mathMode = mathMode,
                         linkedBoardId = linkedBoardId,
-                        rowSpan = rowSpan,
-                        columnSpan = columnSpan,
                         action = action,
                         actions = actions
                     )
@@ -1175,6 +1232,7 @@ private fun BoardSetWorkspaceScreen(
                         useCase.saveBoardSetGraph(session.draft)
                             .onSuccess { saved ->
                                 savedGraph = saved
+                                selectedField = null
                                 editSession = null
                                 mode = BoardWorkspaceMode.Run
                                 statusMessage = savedMessage
@@ -1189,6 +1247,7 @@ private fun BoardSetWorkspaceScreen(
                 Row {
                     TextButton(onClick = {
                         showFinishDialog = false
+                        selectedField = null
                         editSession = null
                         mode = BoardWorkspaceMode.Run
                         selectedBoardId = savedGraph?.boardSet?.rootBoardId
@@ -1388,8 +1447,6 @@ internal fun updateDraftCell(
     language: String?,
     mathMode: Boolean = false,
     linkedBoardId: String?,
-    rowSpan: Int = 1,
-    columnSpan: Int = 1,
     action: String? = null,
     actions: List<String> = emptyList()
 ): BoardSetGraph {
@@ -1450,8 +1507,14 @@ internal fun updateDraftCell(
     val buttons = if (existingButton == null) board.buttons + button else board.buttons.map {
         if (it.id == button.id) button else it
     }
-    val updatedGrid = grid.withFieldSpan(row, column, buttonId, rowSpan, columnSpan)
-        ?: return graph
+    val existingSpan = grid.fieldSpanAt(row, column)
+    val updatedGrid = grid.withFieldSpan(
+        row = row,
+        column = column,
+        buttonId = buttonId,
+        rowSpan = existingSpan.rows,
+        columnSpan = existingSpan.columns
+    ) ?: return graph
     val updatedBoard = board.copy(buttons = buttons, images = images, sounds = sounds, grid = updatedGrid)
     return graph.copy(boards = graph.boards.map { if (it.id == boardId) updatedBoard else it })
 }
@@ -1498,6 +1561,15 @@ internal fun ObfGrid.fieldSpanAt(row: Int, column: Int): GridFieldSpan {
         rows = maxRow - minRow + 1,
         columns = maxColumn - minColumn + 1
     )
+}
+
+internal fun ObfGrid.fieldAnchorAt(row: Int, column: Int): Pair<Int, Int>? {
+    val buttonId = order.getOrNull(row)?.getOrNull(column) ?: return null
+    return normalizedOrder().flatMapIndexed { rowIndex, values ->
+        values.mapIndexedNotNull { columnIndex, value ->
+            if (value == buttonId) rowIndex to columnIndex else null
+        }
+    }.minWithOrNull(compareBy({ it.first }, { it.second }))
 }
 
 internal fun ObfGrid.availableFieldSpansAt(row: Int, column: Int): List<GridFieldSpan> {
@@ -1749,6 +1821,26 @@ internal fun moveDraftField(
     return graph.copy(
         boards = graph.boards.map { current ->
             if (current.id == boardId) current.copy(grid = movedGrid) else current
+        }
+    )
+}
+
+internal fun resizeDraftField(
+    graph: BoardSetGraph,
+    boardId: String,
+    row: Int,
+    column: Int,
+    rowSpan: Int,
+    columnSpan: Int
+): BoardSetGraph {
+    val board = graph.boardsById[boardId] ?: return graph
+    val grid = board.grid ?: return graph
+    val buttonId = grid.order.getOrNull(row)?.getOrNull(column) ?: return graph
+    val resizedGrid = grid.withFieldSpan(row, column, buttonId, rowSpan, columnSpan) ?: return graph
+    if (resizedGrid == grid) return graph
+    return graph.copy(
+        boards = graph.boards.map { current ->
+            if (current.id == boardId) current.copy(grid = resizedGrid) else current
         }
     )
 }

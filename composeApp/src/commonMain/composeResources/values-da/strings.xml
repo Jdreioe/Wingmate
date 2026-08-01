@@ -57,6 +57,14 @@
     <string name="board_workspace_delete">Slet side</string>
     <string name="board_workspace_home">Startside</string>
     <string name="board_workspace_edit">Rediger skærm</string>
+    <string name="board_resize_field_label">Juster feltstørrelse</string>
+    <string name="board_resize_size">%1$d × %2$d</string>
+    <string name="board_resize_increase_width">Forøg bredde</string>
+    <string name="board_resize_decrease_width">Formindsk bredde</string>
+    <string name="board_resize_increase_height">Forøg højde</string>
+    <string name="board_resize_decrease_height">Formindsk højde</string>
+    <string name="board_resize_blocked_bounds">Kan ikke ændres: feltet rækker ud over tavlen</string>
+    <string name="board_resize_blocked_occupied">Kan ikke ændres: feltet dækker et andet felt</string>
     <string name="board_workspace_add">Tilføj side</string>
     <string name="board_workspace_load_error">Skærmen kunne ikke indlæses</string>
     <string name="board_workspace_back_to_library">Tilbage til skærme</string>
@@ -131,9 +139,6 @@
     <string name="board_dialog_clear_image">Fjern billede</string>
     <string name="board_dialog_color">Feltfarve</string>
     <string name="board_dialog_pick_color">Vælg</string>
-    <string name="board_dialog_field_size">Feltstørrelse</string>
-    <string name="board_dialog_field_size_value">%1$d × %2$d</string>
-    <string name="board_dialog_field_size_help">Bredde × højde i felter</string>
     <string name="board_dialog_language">Sprog</string>
     <string name="board_dialog_language_default">Brug standardsprog</string>
     <string name="board_dialog_language_english">Engelsk</string>

@@ -49,6 +49,9 @@ kotlin {
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
+                @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+                @Suppress("DEPRECATION")
+                implementation(compose.uiTest)
             }
         }
         
