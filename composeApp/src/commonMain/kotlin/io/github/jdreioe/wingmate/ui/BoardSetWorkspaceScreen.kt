@@ -73,6 +73,7 @@ import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.ObzExportResult
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
+import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -184,12 +185,12 @@ fun BoardSetManagerScreen(
     createOnLaunch: Boolean = false,
     initialBoardSetId: String? = null
 ) {
+    val koin = org.koin.compose.getKoin()
     val useCase = koinInject<BoardSetUseCase>()
     val boardSetSpeechCache = koinInject<BoardSetSpeechCacheUseCase>()
-    val boardImportService = koinInject<BoardImportService>()
+    val boardImportService = remember(koin) { koin.getOrNull<BoardImportService>() }
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
-    val koin = org.koin.compose.getKoin()
     val featureUsageReporter = koinInject<io.github.jdreioe.wingmate.application.FeatureUsageReporter>()
     val updateService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.UpdateService>() }
     val scope = rememberCoroutineScope()
@@ -246,19 +247,23 @@ fun BoardSetManagerScreen(
             onBack = onBack,
             onOpenSettings = { showSettings = true },
             onCreate = { showCreateDialog = true },
-            onImport = {
+            onImport = boardImportService?.let { importService -> {
                 scope.launch {
-                    runCatching { boardImportService.importBoardSet() }
-                        .onSuccess { imported ->
-                            if (imported != null) {
+                    when (val result = importService.importBoardSetResult()) {
+                        is BoardImportResult.Success -> {
+                                val imported = result.boardSet
                                 boardSetSpeechCache.cacheBoardSet(imported.id)
                                 statusMessage = importedMessage
                                 refreshBoardSets()
-                            }
+                                route = BoardSetRoute.Workspace(imported.id, BoardWorkspaceMode.Run)
                         }
-                        .onFailure { statusMessage = it.message ?: importError }
+                        BoardImportResult.Cancelled -> Unit
+                        is BoardImportResult.Failure -> {
+                            statusMessage = result.context.ifBlank { importError }
+                        }
+                    }
                 }
-            },
+            } },
             onOpen = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Run) },
             onEdit = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Edit) },
             onDuplicate = { boardSet ->
@@ -360,7 +365,7 @@ private fun BoardSetLibraryScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onCreate: () -> Unit,
-    onImport: () -> Unit,
+    onImport: (() -> Unit)?,
     onOpen: (ObfBoardSet) -> Unit,
     onEdit: (ObfBoardSet) -> Unit,
     onDuplicate: (ObfBoardSet) -> Unit,
@@ -393,11 +398,13 @@ private fun BoardSetLibraryScreen(
                             contentDescription = stringResource(Res.string.phrase_screen_app_settings)
                         )
                     }
-                    IconButton(onClick = onImport) {
-                        Icon(
-                            Icons.Default.ImportExport,
-                            contentDescription = stringResource(Res.string.board_sets_import)
-                        )
+                    if (onImport != null) {
+                        IconButton(onClick = onImport) {
+                            Icon(
+                                Icons.Default.ImportExport,
+                                contentDescription = stringResource(Res.string.board_sets_import)
+                            )
+                        }
                     }
                 }
             )
