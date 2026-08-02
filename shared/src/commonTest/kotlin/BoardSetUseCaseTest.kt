@@ -5,6 +5,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
+import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
@@ -219,6 +220,28 @@ class BoardSetUseCaseTest {
     }
 
     @Test
+    fun addingKeyboardLayerPersistsKeyboardSemantics() = runBlocking {
+        useCase.saveBoardSetGraph(linkedGraph()).getOrThrow()
+
+        val symbols = assertNotNull(
+            useCase.createBoard(
+                boardSetId = "set",
+                name = "Symbols",
+                rows = 5,
+                columns = 11,
+                keyboardLayout = ObfKeyboardLayout.Symbols
+            )
+        )
+        val reloaded = assertNotNull(boardRepository.getBoard(symbols.id))
+        val set = assertNotNull(boardSetRepository.getBoardSet("set"))
+
+        assertEquals(ObfKeyboardLayout.Symbols, reloaded.keyboardLayout)
+        assertTrue(reloaded.compactGrid)
+        assertTrue(reloaded.spellingMode)
+        assertTrue(symbols.id in set.boardIds)
+    }
+
+    @Test
     fun sentenceCachingIsConfiguredPerBoardSet() = runBlocking {
         useCase.saveBoardSetGraph(linkedGraph()).getOrThrow()
 
@@ -238,6 +261,32 @@ class BoardSetUseCaseTest {
         assertEquals(listOf("home"), updated.boardIds)
         assertEquals(null, boardRepository.getBoard("food"))
         assertEquals(null, home.buttons.single().loadBoard)
+    }
+
+    @Test
+    fun duplicatingAKeyboardBoardSetRetainsKeyboardSemantics() = runBlocking {
+        val originalSet = useCase.createKeyboardBoardSet("Keyboard")
+        val original = assertNotNull(useCase.loadBoardSetGraph(originalSet.id))
+
+        assertTrue(original.boards.all { it.isKeyboard })
+        assertTrue(original.boards.all { it.spellingMode })
+        assertTrue(original.boards.all { it.compactGrid })
+
+        val copiedSet = assertNotNull(useCase.duplicateBoardSet(originalSet.id))
+        val copied = assertNotNull(useCase.loadBoardSetGraph(copiedSet.id))
+
+        assertNotEquals(originalSet.id, copiedSet.id)
+        assertEquals(original.boards.size, copied.boards.size)
+        assertTrue(copied.boards.all { it.isKeyboard })
+        assertTrue(copied.boards.all { it.spellingMode })
+        assertTrue(copied.boards.all { it.compactGrid })
+        assertEquals(
+            original.boards.map { it.keyboardLayout },
+            copied.boards.map { it.keyboardLayout }
+        )
+        val copiedRoot = copied.boards.first { it.id == copiedSet.rootBoardId }
+        assertEquals(ObfKeyboardLayout.Qwerty, copiedRoot.keyboardLayout)
+        assertTrue(copied.boards.any { it.keyboardLayout == ObfKeyboardLayout.Symbols })
     }
 
     private fun linkedGraph(): BoardSetGraph {

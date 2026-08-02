@@ -1,9 +1,13 @@
 import io.github.jdreioe.wingmate.application.ObzExporter
 import io.github.jdreioe.wingmate.application.ObzExportErrorCode
 import io.github.jdreioe.wingmate.application.ObzExportResult
+import io.github.jdreioe.wingmate.application.KeyboardBoardTemplate
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonShape
+import io.github.jdreioe.wingmate.domain.obf.OBF_BUTTON_STYLE_EXTENSION
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.ObfLicense
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
@@ -86,6 +90,44 @@ class ObzExporterTest {
         assertTrue(zipStr.contains("manifest.json"))
         assertTrue(zipStr.contains("boards/root.obf"))
         assertTrue(zipStr.contains("boards/food.obf"))
+    }
+
+    @Test
+    fun keyboardBoardSetRoundTripsThroughObz() = runBlocking {
+        val boards = KeyboardBoardTemplate.boards()
+        val rootId = boards.first().id
+        val exported = exporter.exportResult(boards, rootId)
+        val zip = assertIs<ObzExportResult.Success>(exported).bytes
+
+        val paths = listOf("manifest.json") + boards.map { "boards/${it.id}.obf" }
+        val entries = paths.associateWith { path -> assertNotNull(extractEntry(zip, path)) }
+        val boardRepo = InMemoryBoardRepository()
+        val setRepo = InMemoryBoardSetRepository()
+        val storage = InMemoryFileStorage()
+        val importer = BoardImportService(
+            ObfParser(), boardRepo, setRepo, MapArchivePicker(entries), storage
+        )
+        val imported = assertIs<BoardImportResult.Success>(
+            importer.importBoardSetFromPathResult("keyboard.obz")
+        )
+
+        assertEquals(3, imported.boardSet.boardIds.size)
+        val root = assertNotNull(boardRepo.getBoard(imported.boardSet.rootBoardId))
+        assertTrue(root.isKeyboard)
+        assertEquals(ObfKeyboardLayout.Qwerty, root.keyboardLayout)
+        assertTrue(root.spellingMode)
+        assertTrue(root.compactGrid)
+
+        val shift = root.buttons.first { it.label == "⇧" }
+        val upper = assertNotNull(boardRepo.getBoard(assertNotNull(shift.loadBoard?.id)))
+        assertTrue(upper.isKeyboard)
+        assertEquals(ObfKeyboardLayout.Qwerty, upper.keyboardLayout)
+
+        val symbols = assertNotNull(
+            boardRepo.getBoard(assertNotNull(root.buttons.first { it.label == "123" }.loadBoard?.id))
+        )
+        assertEquals(ObfKeyboardLayout.Symbols, symbols.keyboardLayout)
+        Unit
     }
 
     @Test
@@ -322,6 +364,54 @@ class ObzExporterTest {
         val exported = json.parseToJsonElement(exporter.serializeBoard(board))
 
         assertFalse(exported.containsObjectKey("extensions"))
+    }
+
+    @Test
+    fun buttonShapeRoundTripsThroughObfWithUnknownFallback() {
+        val board = ObfBoard(
+            format = "open-board-0.1",
+            id = "shape-board",
+            buttons = listOf(
+                ObfButton(id = "b1").withShape(ObfButtonShape.Speech),
+                ObfButton(id = "b2").withShape(ObfButtonShape.Thought)
+            )
+        )
+
+        val serialized = exporter.serializeBoard(board)
+        assertTrue(serialized.contains(OBF_BUTTON_STYLE_EXTENSION))
+        assertTrue(serialized.contains("\"speech\""))
+        assertTrue(serialized.contains("\"thought\""))
+
+        val reparsed = ObfParser().parseBoard(serialized).getOrThrow()
+        assertEquals(ObfButtonShape.Speech, reparsed.buttons.first { it.id == "b1" }.shape)
+        assertEquals(ObfButtonShape.Thought, reparsed.buttons.first { it.id == "b2" }.shape)
+        assertEquals(
+            "speech",
+            reparsed.buttons.first { it.id == "b1" }.extensions[OBF_BUTTON_STYLE_EXTENSION]?.jsonPrimitive?.content
+        )
+    }
+
+    @Test
+    fun unknownButtonShapeValueSurvivesImportAndFallsBackToRounded() {
+        // A consumer/author that knows about a future shape must not break the
+        // default renderer: the raw value is preserved but resolves to Rounded.
+        val board = ObfBoard(
+            format = "open-board-0.1",
+            id = "unknown-shape",
+            buttons = listOf(
+                ObfButton(id = "b1", extensions = mapOf(
+                    OBF_BUTTON_STYLE_EXTENSION to JsonPrimitive("zigzag_squiggly")
+                ))
+            )
+        )
+
+        val serialized = exporter.serializeBoard(board)
+        val reparsed = ObfParser().parseBoard(serialized).getOrThrow()
+        assertEquals(ObfButtonShape.Rounded, reparsed.buttons.single().shape)
+        assertEquals(
+            "zigzag_squiggly",
+            reparsed.buttons.single().extensions[OBF_BUTTON_STYLE_EXTENSION]?.jsonPrimitive?.content
+        )
     }
 
     @Test

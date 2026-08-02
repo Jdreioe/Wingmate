@@ -1,5 +1,7 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,12 +12,17 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,24 +37,56 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonShape
+import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
+import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.domain.PhraseRecordingService
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
 import wingmatekmp.composeapp.generated.resources.*
 
 internal data class FieldLanguageOption(val tag: String, val label: String)
+
+private fun ObfButtonShape.labelRes(): StringResource = when (this) {
+    ObfButtonShape.Rounded -> Res.string.board_dialog_shape_rounded
+    ObfButtonShape.Square -> Res.string.board_dialog_shape_square
+    ObfButtonShape.Pill -> Res.string.board_dialog_shape_pill
+    ObfButtonShape.Speech -> Res.string.board_dialog_shape_speech
+    ObfButtonShape.Thought -> Res.string.board_dialog_shape_thought
+}
+
+/** Small, literal previews make the authoring choice understandable without
+ * requiring someone to save the field and leave the editor to inspect it. */
+@Composable
+private fun ButtonShapePreview(shape: ObfButtonShape, selected: Boolean) {
+    val resolvedShape = shape.toShape()
+    val fill = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+    val outline = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+    Box(
+        modifier = Modifier
+            .size(width = 28.dp, height = 20.dp)
+            .background(fill, resolvedShape)
+            .border(1.dp, outline, resolvedShape)
+    )
+}
 internal enum class BoardSetTemplate { Blank, Calculator, Keyboard }
 
 @Composable
 internal fun CreateBoardSetDialog(
     onDismiss: () -> Unit,
-    onCreate: (name: String, rows: Int, columns: Int, template: BoardSetTemplate) -> Unit
+    onCreate: (name: String, rows: Int, columns: Int, template: BoardSetTemplate, keyboardPreset: KeyboardPreset) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var rowsText by remember { mutableStateOf("4") }
     var columnsText by remember { mutableStateOf("8") }
     var template by remember { mutableStateOf(BoardSetTemplate.Blank) }
+    var keyboardPreset by remember { mutableStateOf(KeyboardPreset.Qwerty) }
     val calculatorName = stringResource(Res.string.calculator_default_name)
     val keyboardName = stringResource(Res.string.keyboard_default_name)
 
@@ -86,6 +125,23 @@ internal fun CreateBoardSetDialog(
                         label = { Text(stringResource(Res.string.board_dialog_template_keyboard)) }
                     )
                 }
+                if (template == BoardSetTemplate.Keyboard) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(Res.string.board_dialog_keyboard_preset),
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    FilterChip(
+                        selected = keyboardPreset == KeyboardPreset.Qwerty,
+                        onClick = { keyboardPreset = KeyboardPreset.Qwerty },
+                        label = { Text(stringResource(Res.string.board_dialog_keyboard_preset_qwerty)) }
+                    )
+                    FilterChip(
+                        selected = keyboardPreset == KeyboardPreset.Alphabetical,
+                        onClick = { keyboardPreset = KeyboardPreset.Alphabetical },
+                        label = { Text(stringResource(Res.string.board_dialog_keyboard_preset_alphabetical)) }
+                    )
+                }
                 if (template == BoardSetTemplate.Blank) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = rowsText,
@@ -106,7 +162,7 @@ internal fun CreateBoardSetDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(name, rowsText.toIntOrNull() ?: 4, columnsText.toIntOrNull() ?: 8, template) },
+                onClick = { onCreate(name, rowsText.toIntOrNull() ?: 4, columnsText.toIntOrNull() ?: 8, template, keyboardPreset) },
                 enabled = name.isNotBlank()
             ) { Text(stringResource(Res.string.board_dialog_create)) }
         },
@@ -118,8 +174,9 @@ internal fun CreateBoardSetDialog(
 
 @Composable
 internal fun CreateBoardDialog(
+    initialKeyboardLayout: ObfKeyboardLayout? = null,
     onDismiss: () -> Unit,
-    onCreate: (name: String, rows: Int, columns: Int) -> Unit
+    onCreate: (name: String, rows: Int, columns: Int, keyboardLayout: ObfKeyboardLayout?) -> Unit
 ) {
     val defaultBoardName = stringResource(Res.string.board_dialog_default_board_name)
     var name by remember { mutableStateOf(defaultBoardName) }
@@ -157,7 +214,14 @@ internal fun CreateBoardDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(name, rowsText.toIntOrNull() ?: 4, columnsText.toIntOrNull() ?: 8) },
+                onClick = {
+                    onCreate(
+                        name,
+                        rowsText.toIntOrNull() ?: 4,
+                        columnsText.toIntOrNull() ?: 8,
+                        initialKeyboardLayout
+                    )
+                },
                 enabled = name.isNotBlank()
             ) { Text(stringResource(Res.string.board_dialog_create)) }
         },
@@ -167,6 +231,7 @@ internal fun CreateBoardDialog(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun EditBoardCellDialog(
     boardName: String,
@@ -180,7 +245,9 @@ internal fun EditBoardCellDialog(
     availableLanguages: List<FieldLanguageOption> = emptyList(),
     initialLanguage: String? = null,
     initialMathMode: Boolean = false,
-initialHidden: Boolean = false,
+    initialHidden: Boolean = false,
+    initialShape: ObfButtonShape = ObfButtonShape.Rounded,
+    isKeyboardBoard: Boolean = false,
     showMathMode: Boolean = true,
     availableBoards: List<ObfBoard> = emptyList(),
     initialLinkedBoardId: String? = null,
@@ -199,7 +266,8 @@ initialHidden: Boolean = false,
         hidden: Boolean,
         linkedBoardId: String?,
         action: String?,
-        actions: List<String>
+        actions: List<String>,
+        shape: ObfButtonShape
     ) -> Unit,
     onClearCell: () -> Unit
 ) {
@@ -210,12 +278,44 @@ initialHidden: Boolean = false,
     var recordingInProgress by remember { mutableStateOf(false) }
     var recordingError by remember { mutableStateOf<String?>(null) }
     var backgroundColor by remember { mutableStateOf(initialBackgroundColor) }
+    var shape by remember { mutableStateOf(initialShape) }
     var language by remember { mutableStateOf(initialLanguage) }
     var mathMode by remember { mutableStateOf(initialMathMode) }
     var hidden by remember { mutableStateOf(initialHidden) }
     var linkedBoardId by remember { mutableStateOf(initialLinkedBoardId) }
-    var action by remember { mutableStateOf(initialAction) }
-    val actions by remember { mutableStateOf(initialActions) }
+    val initialInsertedText = (listOfNotNull(initialAction) + initialActions)
+        .firstOrNull { it.startsWith("+") }
+        ?.removePrefix("+")
+        .orEmpty()
+    var insertedText by remember { mutableStateOf(initialInsertedText) }
+    var insertedTextFollowsLabel by remember {
+        mutableStateOf(
+            initialInsertedText.isNotEmpty() &&
+                initialInsertedText == initialVocalization.ifBlank { initialLabel }
+        )
+    }
+    val knownActions = listOf(":spell", ":space", ":backspace", ":clear", ":home", ":speak", ":prediction")
+    var actions by remember {
+        mutableStateOf(
+            (listOfNotNull(initialAction) + initialActions)
+                .filter { it.isNotBlank() && !it.startsWith("+") }
+                .distinct()
+        )
+    }
+
+    fun toggleAction(value: String) {
+        actions = if (value in actions) actions - value else actions + value
+    }
+
+    fun moveAction(index: Int, direction: Int) {
+        val target = index + direction
+        if (target !in actions.indices) return
+        actions = actions.toMutableList().apply {
+            val tmp = this[index]
+            this[index] = this[target]
+            this[target] = tmp
+        }
+    }
     var opensPage by remember { mutableStateOf(initialLinkedBoardId != null) }
     var showLanguageMenu by remember { mutableStateOf(false) }
     var showBoardMenu by remember { mutableStateOf(false) }
@@ -225,6 +325,9 @@ initialHidden: Boolean = false,
     val koin = getKoin()
     val recordingService = remember(koin) { koin.getOrNull<PhraseRecordingService>() }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(label, vocalization, insertedTextFollowsLabel) {
+        if (insertedTextFollowsLabel) insertedText = vocalization.ifBlank { label }
+    }
     val micState = rememberMicrophonePermissionState()
     var waitingForMicPermission by remember { mutableStateOf(false) }
     val recordingStartFailed = stringResource(Res.string.phrase_recording_start_failed)
@@ -390,6 +493,31 @@ initialHidden: Boolean = false,
                 }
 
                 Text(
+                    stringResource(Res.string.board_dialog_shape),
+                    style = MaterialTheme.typography.labelLarge
+                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ObfButtonShape.entries.forEach { entry ->
+                        FilterChip(
+                            selected = shape == entry,
+                            onClick = { shape = entry },
+                            label = {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    ButtonShapePreview(entry, selected = shape == entry)
+                                    Text(stringResource(entry.labelRes()))
+                                }
+                            }
+                        )
+                    }
+                }
+                Text(
                     stringResource(Res.string.board_dialog_language),
                     style = MaterialTheme.typography.labelLarge
                 )
@@ -478,6 +606,18 @@ initialHidden: Boolean = false,
                     stringResource(Res.string.board_dialog_special_actions),
                     style = MaterialTheme.typography.labelLarge
                 )
+                if (isKeyboardBoard) {
+                    OutlinedTextField(
+                        value = insertedText,
+                        onValueChange = {
+                            insertedText = it
+                            insertedTextFollowsLabel = false
+                        },
+                        label = { Text(stringResource(Res.string.board_dialog_insert_text)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
                 Text(
                     stringResource(Res.string.board_dialog_special_actions_help),
                     style = MaterialTheme.typography.bodySmall,
@@ -487,61 +627,114 @@ initialHidden: Boolean = false,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    FilterChip(
-                        selected = action == ":spell",
-                        onClick = { action = if (action == ":spell") null else ":spell" },
-                        label = { Text(stringResource(Res.string.board_dialog_action_spell)) }
+                    knownActions.forEach { value ->
+                        val labelRes = when (value) {
+                            ":spell" -> Res.string.board_dialog_action_spell
+                            ":space" -> Res.string.board_dialog_action_space
+                            ":backspace" -> Res.string.board_dialog_action_erase
+                            ":clear" -> Res.string.board_dialog_action_clear
+                            ":home" -> Res.string.board_dialog_action_home
+                            ":speak" -> Res.string.board_dialog_action_speak_sentence
+                            ":prediction" -> Res.string.board_dialog_action_prediction
+                            else -> return@forEach
+                        }
+                        FilterChip(
+                            selected = value in actions,
+                            onClick = {
+                                if (value !in actions) {
+                                    insertedText = ""
+                                    insertedTextFollowsLabel = false
+                                }
+                                toggleAction(value)
+                            },
+                            label = { Text(stringResource(labelRes)) }
+                        )
+                    }
+                }
+                if (actions.size > 1) {
+                    Text(
+                        stringResource(Res.string.board_dialog_action_order),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    FilterChip(
-                        selected = action == ":space",
-                        onClick = { action = if (action == ":space") null else ":space" },
-                        label = { Text(stringResource(Res.string.board_dialog_action_space)) }
-                    )
-                    FilterChip(
-                        selected = action == ":backspace",
-                        onClick = { action = if (action == ":backspace") null else ":backspace" },
-                        label = { Text(stringResource(Res.string.board_dialog_action_erase)) }
-                    )
-                    FilterChip(
-                        selected = action == ":clear",
-                        onClick = { action = if (action == ":clear") null else ":clear" },
-                        label = { Text(stringResource(Res.string.board_dialog_action_clear)) }
-                    )
-                    FilterChip(
-                        selected = action == ":home",
-                        onClick = { action = if (action == ":home") null else ":home" },
-                        label = { Text(stringResource(Res.string.board_dialog_action_home)) }
-                    )
-                    FilterChip(
-                        selected = action == ":speak",
-                        onClick = { action = if (action == ":speak") null else ":speak" },
-                        label = { Text(stringResource(Res.string.board_dialog_action_speak_sentence)) }
-                    )
-                    FilterChip(
-                        selected = action == ":prediction",
-                        onClick = { action = if (action == ":prediction") null else ":prediction" },
-                        label = { Text(stringResource(Res.string.board_dialog_action_prediction)) }
-                    )
+                    actions.forEachIndexed { index, value ->
+                        val labelRes = when (value) {
+                            ":spell" -> Res.string.board_dialog_action_spell
+                            ":space" -> Res.string.board_dialog_action_space
+                            ":backspace" -> Res.string.board_dialog_action_erase
+                            ":clear" -> Res.string.board_dialog_action_clear
+                            ":home" -> Res.string.board_dialog_action_home
+                            ":speak" -> Res.string.board_dialog_action_speak_sentence
+                            ":prediction" -> Res.string.board_dialog_action_prediction
+                            else -> null
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    stringResource(Res.string.board_dialog_action_order_position, index + 1),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    labelRes?.let { stringResource(it) } ?: value,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                IconButton(
+                                    onClick = { moveAction(index, -1) },
+                                    enabled = index > 0
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowUp,
+                                        contentDescription = stringResource(Res.string.board_dialog_action_order_up)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { moveAction(index, 1) },
+                                    enabled = index < actions.lastIndex
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowDown,
+                                        contentDescription = stringResource(Res.string.board_dialog_action_order_down)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
-                    onSave(
-                        label.trim(),
-                        vocalization.trim().ifBlank { null },
-                        imageUrl.trim().ifBlank { null },
-                        recordingPath.trim().ifBlank { null },
-                        backgroundColor,
-                        language,
-                        mathMode,
-                        hidden,
-                        linkedBoardId.takeIf { opensPage },
-                        action?.trim()?.ifBlank { null },
-                        actions
-                    )
-                },
+TextButton(
+                        onClick = {
+                            val normalized = actions
+                                .plus(insertedText.takeIf { isKeyboardBoard && it.isNotEmpty() }?.let { "+$it" })
+                                .filterNotNull()
+                                .map { it.trim() }
+                                .filter { it.isNotBlank() }
+                                .distinct()
+                            onSave(
+                                label.trim(),
+                                vocalization.trim().ifBlank { null },
+                                imageUrl.trim().ifBlank { null },
+                                recordingPath.trim().ifBlank { null },
+                                backgroundColor,
+                                language,
+                                mathMode,
+                                hidden,
+                                linkedBoardId.takeIf { opensPage },
+                                normalized.singleOrNull(),
+                                if (normalized.size > 1) normalized else emptyList(),
+                                shape
+                            )
+                        },
                 enabled = label.isNotBlank() && (!opensPage || linkedBoardId != null)
             ) { Text(stringResource(Res.string.common_save)) }
         },

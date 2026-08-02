@@ -12,11 +12,39 @@ const val OBF_BUTTON_TYPE_EXTENSION = "ext_wingmate_button_type"
 const val OBF_COMPACT_GRID_EXTENSION = "ext_wingmate_compact_grid"
 const val OBF_GRID_HEIGHT_FRACTION_EXTENSION = "ext_wingmate_grid_height_fraction"
 const val OBF_SPELLING_MODE_EXTENSION = "ext_wingmate_spelling_mode"
+const val OBF_KEYBOARD_EXTENSION = "ext_wingmate_keyboard"
+const val OBF_BUTTON_STYLE_EXTENSION = "ext_wingmate_button_style"
 
-/** Wingmate-specific button behaviours, stored in OBF extensions for portability. */
+/**
+ * Wingmate-specific button behaviours, stored in OBF extensions for portability.
+ */
 enum class ObfButtonType(val wireValue: String) {
     Standard("standard"),
     NGramPrediction("ngram_prediction")
+}
+
+/**
+ * Visual shapes a button field can render as. Stored per-button in the
+ * `ext_wingmate_button_style` extension so it round-trips through OBF/OBZ and
+ * falls back to the default ([Rounded]) for consumers that do not know a value.
+ */
+enum class ObfButtonShape(val wireValue: String) {
+    Rounded("rounded"),
+    Square("square"),
+    Pill("pill"),
+    Speech("speech"),
+    Thought("thought")
+}
+
+/**
+ * Keyboard page kinds, stored in the board-level `ext_wingmate_keyboard`
+ * extension so keyboard boards can be recognized explicitly (instead of
+ * inferred from spelling mode or id prefixes) and round-trip through OBF/OBZ.
+ */
+enum class ObfKeyboardLayout(val wireValue: String) {
+    Qwerty("qwerty"),
+    Alphabetical("alphabetical"),
+    Symbols("symbols")
 }
 
 @Serializable
@@ -82,6 +110,24 @@ data class ObfBoard(
             extensions - OBF_SPELLING_MODE_EXTENSION
         }
     )
+
+    /**
+     * The keyboard page kind, or `null` for non-keyword boards. Presence of this
+     * extension is the authoritative way to identify a keyboard board; it is
+     * preserved by `copy` and therefore by duplicate/import flows.
+     */
+    val keyboardLayout: ObfKeyboardLayout?
+        get() = (extensions[OBF_KEYBOARD_EXTENSION] as? JsonPrimitive)?.contentOrNull
+            ?.let { value -> ObfKeyboardLayout.entries.firstOrNull { it.wireValue == value } }
+
+    val isKeyboard: Boolean
+        get() = keyboardLayout != null
+
+    fun withKeyboardLayout(layout: ObfKeyboardLayout?): ObfBoard = copy(
+        extensions = layout?.let {
+            extensions + (OBF_KEYBOARD_EXTENSION to JsonPrimitive(it.wireValue))
+        } ?: (extensions - OBF_KEYBOARD_EXTENSION)
+    )
 }
 
 @Serializable
@@ -130,6 +176,24 @@ data class ObfButton(
             extensions - OBF_BUTTON_TYPE_EXTENSION
         } else {
             extensions + (OBF_BUTTON_TYPE_EXTENSION to JsonPrimitive(type.wireValue))
+        }
+    )
+
+    /**
+     * The visual shape of this button, falling back to [ObfButtonShape.Rounded]
+     * when the extension is missing, non-string, or holds an unknown value so
+     * forward-compatible OBF/OBZ imports never crash.
+     */
+    val shape: ObfButtonShape
+        get() = ObfButtonShape.entries.firstOrNull {
+            it.wireValue == (extensions[OBF_BUTTON_STYLE_EXTENSION] as? JsonPrimitive)?.contentOrNull
+        } ?: ObfButtonShape.Rounded
+
+    fun withShape(shape: ObfButtonShape): ObfButton = copy(
+        extensions = if (shape == ObfButtonShape.Rounded) {
+            extensions - OBF_BUTTON_STYLE_EXTENSION
+        } else {
+            extensions + (OBF_BUTTON_STYLE_EXTENSION to JsonPrimitive(shape.wireValue))
         }
     )
 

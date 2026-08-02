@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.application.BackupRestoreResult
@@ -28,6 +29,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.core.component.KoinComponent
@@ -243,8 +245,26 @@ class KoinBridge : KoinComponent {
     fun updateBoardSetSpeechCacheOnline(online: Boolean) = get<BoardSetSpeechCacheUseCase>().setOnline(online)
     suspend fun touchBoardSet(id: String): ObfBoardSet? = get<BoardSetUseCase>().touchBoardSet(id)
     suspend fun createBoardSet(name: String, rows: Int, columns: Int): ObfBoardSet = get<BoardSetUseCase>().createBoardSet(name, rows, columns)
+    suspend fun createKeyboardBoardSet(name: String, preset: String): ObfBoardSet =
+        get<BoardSetUseCase>().createKeyboardBoardSet(
+            name,
+            if (preset.equals("alphabetical", ignoreCase = true)) KeyboardPreset.Alphabetical else KeyboardPreset.Qwerty
+        )
     suspend fun createBoard(boardSetId: String, name: String, rows: Int, columns: Int): ObfBoard? =
         get<BoardSetUseCase>().createBoard(boardSetId, name, rows, columns)
+    suspend fun createKeyboardBoard(
+        boardSetId: String,
+        name: String,
+        rows: Int,
+        columns: Int,
+        layout: String
+    ): ObfBoard? = get<BoardSetUseCase>().createBoard(
+        boardSetId,
+        name,
+        rows,
+        columns,
+        ObfKeyboardLayout.entries.firstOrNull { it.wireValue == layout } ?: ObfKeyboardLayout.Qwerty
+    )
     suspend fun renameBoardSet(boardSetId: String, name: String): ObfBoardSet? =
         get<BoardSetUseCase>().renameBoardSet(boardSetId, name)
     suspend fun renameBoard(boardSetId: String, boardId: String, name: String): ObfBoard? =
@@ -259,6 +279,10 @@ class KoinBridge : KoinComponent {
 
     // --- Swift-friendly board helpers ---
     suspend fun getBoard(id: String): ObfBoard? = get<BoardRepository>().getBoard(id)
+
+    fun boardKeyboardLayout(board: ObfBoard): String? = board.keyboardLayout?.wireValue
+
+    fun boardUsesSpellingMode(board: ObfBoard): Boolean = board.spellingMode
 
     suspend fun saveBoard(board: ObfBoard): Boolean = runCatching {
         get<BoardRepository>().saveBoard(board)
@@ -289,7 +313,8 @@ class KoinBridge : KoinComponent {
                 IosBoardCell(
                     row, col, id, button.label, button.vocalization,
                     button.backgroundColor, button.borderColor, button.loadBoard?.id,
-                    button.imageId, button.imageId?.let { images[it]?.url }, button.hidden
+                    button.imageId, button.imageId?.let { images[it]?.url }, button.hidden,
+                    button.resolvedActions()
                 )
             }
         }
@@ -298,7 +323,7 @@ class KoinBridge : KoinComponent {
     suspend fun upsertBoardCellButton(
         boardId: String, row: Int, col: Int, label: String?, vocalization: String?,
         backgroundColor: String?, borderColor: String?, linkedBoardId: String?,
-        imageUrl: String?, clearImage: Boolean
+        imageUrl: String?, clearImage: Boolean, actions: List<String>
     ): ObfBoard? {
         val repo = get<BoardRepository>()
         val board = repo.getBoard(boardId) ?: return null
@@ -314,11 +339,12 @@ class KoinBridge : KoinComponent {
             val image = ObfImage(id = imageId, url = imageUrl)
             images = images.filterNot { it.id == imageId } + image
         }
-        val button = ObfButton(
-            id = buttonId, label = label, vocalization = vocalization,
+        val button = (existing ?: ObfButton(id = buttonId)).copy(
+            label = label, vocalization = vocalization,
             imageId = imageId, backgroundColor = backgroundColor, borderColor = borderColor,
             loadBoard = linkedBoardId?.let { ObfLoadBoard(id = it) },
-            hidden = existing?.hidden ?: false
+            action = actions.singleOrNull(),
+            actions = if (actions.size > 1) actions else emptyList()
         )
         val buttons = board.buttons.filterNot { it.id == buttonId } + button
         val order = grid.order.mapIndexed { r, columns ->
@@ -511,7 +537,8 @@ data class IosBoardCell(
     val linkedBoardId: String?,
     val imageId: String?,
     val imageUrl: String?,
-    val hidden: Boolean
+    val hidden: Boolean,
+    val actions: List<String>
 )
 
 data class IosSettingsFlags(

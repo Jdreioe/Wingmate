@@ -23,6 +23,40 @@ private enum CellSymbolSource: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+private enum BoardSetCreationKind: String, CaseIterable, Identifiable {
+    case blank
+    case qwerty
+    case alphabetical
+
+    var id: String { rawValue }
+}
+
+private enum BoardKeyAction: String, CaseIterable, Identifiable {
+    case none = ""
+    case spell = ":spell"
+    case space = ":space"
+    case backspace = ":backspace"
+    case clear = ":clear"
+    case home = ":home"
+    case speak = ":speak"
+    case prediction = ":prediction"
+
+    var id: String { rawValue }
+
+    var localizationKey: LocalizedStringKey {
+        switch self {
+        case .none: "boardset.cell.action.none"
+        case .spell: "boardset.cell.action.spell"
+        case .space: "boardset.cell.action.space"
+        case .backspace: "boardset.cell.action.backspace"
+        case .clear: "boardset.cell.action.clear"
+        case .home: "boardset.cell.action.home"
+        case .speak: "boardset.cell.action.speak"
+        case .prediction: "boardset.cell.action.prediction"
+        }
+    }
+}
+
 private func resolveCellOpenSymbolsSecret() -> String? {
     let fromInfoRaw = Bundle.main.object(forInfoDictionaryKey: "OPEN_SYMBOLS_SECRET") as? String
     let fromInfo = fromInfoRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -67,10 +101,12 @@ struct SymbolBoardWorkspaceView: View {
     @State private var createBoardsetName: String = ""
     @State private var createBoardsetRows: Int = 4
     @State private var createBoardsetColumns: Int = 4
+    @State private var createBoardsetKind: BoardSetCreationKind = .blank
 
     @State private var addBoardName: String = ""
     @State private var addBoardRows: Int = 4
     @State private var addBoardColumns: Int = 4
+    @State private var addBoardKeyboardLayout: String = "qwerty"
 
     @State private var deleteTargetSet: BoardSetInfo? = nil
     @State private var authErrorMessage: String? = nil
@@ -87,6 +123,9 @@ struct SymbolBoardWorkspaceView: View {
     @State private var editingCol: Int = 0
     @State private var editingLabel: String = ""
     @State private var editingVocalization: String = ""
+    @State private var editingInsertedText: String = ""
+    @State private var editingActions: [String] = []
+    @State private var editingInsertedTextFollowsLabel = false
     @State private var editingBackgroundPickerColor: Color = Color(.tertiarySystemBackground)
     @State private var editingBorderPickerColor: Color = Color(.separator)
     @State private var useCustomBackgroundColor: Bool = false
@@ -514,7 +553,10 @@ struct SymbolBoardWorkspaceView: View {
             if let selectedSet = model.selectedBoardSet {
                 if mode == .edit {
                     HStack(spacing: 10) {
-                        Button(action: { showAddBoardSheet = true }) {
+                        Button(action: {
+                            addBoardKeyboardLayout = model.selectedBoardKeyboardLayout ?? "qwerty"
+                            showAddBoardSheet = true
+                        }) {
                             Label("boardset.add_board", systemImage: "plus.rectangle.on.rectangle")
                                 .font(.subheadline)
                         }
@@ -554,6 +596,9 @@ struct SymbolBoardWorkspaceView: View {
                     .padding(.horizontal)
             }
 
+        }
+        .task(id: boardPredictionTaskId) {
+            await model.refreshBoardPredictions(context: boardSentenceText)
         }
     }
 
@@ -615,8 +660,7 @@ struct SymbolBoardWorkspaceView: View {
                 } else {
                     guard model.holdToSelectMillis <= 0 else { return }
                     if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
-                    appendCellToSentenceIfNeeded(cell)
-                    Task { await model.activateSelectedBoardCell(row: row, col: col) }
+                    activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
                 }
             } label: {
                 Group {
@@ -635,8 +679,7 @@ struct SymbolBoardWorkspaceView: View {
                     .onEnded { _ in
                         guard !isEditMode, model.holdToSelectMillis > 0 else { return }
                         if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
-                        appendCellToSentenceIfNeeded(cell)
-                        Task { await model.activateSelectedBoardCell(row: row, col: col) }
+                        activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
                     }
             )
             .onHover { hovering in
@@ -645,6 +688,9 @@ struct SymbolBoardWorkspaceView: View {
                     model.speak(preview)
                 }
             }
+            .accessibilityLabel(Text(boardCellDisplayLabel(cell)))
+            .accessibilityHint(Text(boardCellAccessibilityHint(cell)))
+            .accessibilitySortPriority(Double(max(0, 10_000 - (row * 100 + col))))
 
             if isEditMode, model.canEditSelectedBoardSet, cell != nil {
                 Button(role: .destructive) {
@@ -667,6 +713,7 @@ struct SymbolBoardWorkspaceView: View {
         }
         .opacity(hiddenInRunMode ? 0 : (cell?.hidden == true && isEditMode ? 0.5 : 1))
         .allowsHitTesting(!hiddenInRunMode)
+        .accessibilityHidden(hiddenInRunMode || (model.scanningEnabled && !model.scanPhraseGridEnabled))
     }
 
     private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, height: CGFloat) -> some View {
@@ -726,7 +773,7 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private func boardCellLabel(_ cell: BoardCellInfo?) -> some View {
-        Text(trimmed(cell?.label) ?? NSLocalizedString("boardset.cell.empty", comment: ""))
+        Text(boardCellDisplayLabel(cell))
             .font(.subheadline)
             .fontWeight(cell == nil ? .regular : .semibold)
             .lineLimit(2)
@@ -818,12 +865,21 @@ struct SymbolBoardWorkspaceView: View {
                 Section("boardset.name") {
                     TextField(NSLocalizedString("boardset.name_placeholder", comment: ""), text: $createBoardsetName)
                 }
-                Section("boardset.grid") {
-                    Stepper(value: $createBoardsetRows, in: 1...12) {
-                        Text(String(format: NSLocalizedString("boardset.rows", comment: ""), createBoardsetRows))
+                Section("boardset.create_kind") {
+                    Picker("boardset.create_kind", selection: $createBoardsetKind) {
+                        Text("boardset.create_blank").tag(BoardSetCreationKind.blank)
+                        Text("boardset.create_keyboard_qwerty").tag(BoardSetCreationKind.qwerty)
+                        Text("boardset.create_keyboard_alphabetical").tag(BoardSetCreationKind.alphabetical)
                     }
-                    Stepper(value: $createBoardsetColumns, in: 1...12) {
-                        Text(String(format: NSLocalizedString("boardset.columns", comment: ""), createBoardsetColumns))
+                }
+                if createBoardsetKind == .blank {
+                    Section("boardset.grid") {
+                        Stepper(value: $createBoardsetRows, in: 1...12) {
+                            Text(String(format: NSLocalizedString("boardset.rows", comment: ""), createBoardsetRows))
+                        }
+                        Stepper(value: $createBoardsetColumns, in: 1...12) {
+                            Text(String(format: NSLocalizedString("boardset.columns", comment: ""), createBoardsetColumns))
+                        }
                     }
                 }
             }
@@ -837,10 +893,15 @@ struct SymbolBoardWorkspaceView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("common.save") {
                         Task {
-                            await model.createBoardSet(name: createBoardsetName, rows: createBoardsetRows, columns: createBoardsetColumns)
+                            if createBoardsetKind == .blank {
+                                await model.createBoardSet(name: createBoardsetName, rows: createBoardsetRows, columns: createBoardsetColumns)
+                            } else {
+                                await model.createKeyboardBoardSet(name: createBoardsetName, preset: createBoardsetKind.rawValue)
+                            }
                             createBoardsetName = ""
                             createBoardsetRows = 4
                             createBoardsetColumns = 4
+                            createBoardsetKind = .blank
                             showCreateBoardsetSheet = false
                         }
                     }
@@ -863,6 +924,15 @@ struct SymbolBoardWorkspaceView: View {
                         Text(String(format: NSLocalizedString("boardset.columns", comment: ""), addBoardColumns))
                     }
                 }
+                if model.selectedBoardKeyboardLayout != nil {
+                    Section("boardset.keyboard_layout") {
+                        Picker("boardset.keyboard_layout", selection: $addBoardKeyboardLayout) {
+                            Text("boardset.create_keyboard_qwerty").tag("qwerty")
+                            Text("boardset.create_keyboard_alphabetical").tag("alphabetical")
+                            Text("boardset.keyboard_symbols").tag("symbols")
+                        }
+                    }
+                }
             }
             .navigationTitle(Text("boardset.add_board"))
             .toolbar {
@@ -874,7 +944,16 @@ struct SymbolBoardWorkspaceView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("common.save") {
                         Task {
-                            await model.addBoardToSelectedSet(name: addBoardName, rows: addBoardRows, columns: addBoardColumns)
+                            if model.selectedBoardKeyboardLayout != nil {
+                                await model.addKeyboardBoardToSelectedSet(
+                                    name: addBoardName,
+                                    rows: addBoardRows,
+                                    columns: addBoardColumns,
+                                    layout: addBoardKeyboardLayout
+                                )
+                            } else {
+                                await model.addBoardToSelectedSet(name: addBoardName, rows: addBoardRows, columns: addBoardColumns)
+                            }
                             addBoardName = ""
                             addBoardRows = 4
                             addBoardColumns = 4
@@ -896,6 +975,57 @@ struct SymbolBoardWorkspaceView: View {
 
                 Section("boardset.cell.vocalization") {
                     TextField(NSLocalizedString("boardset.cell.vocalization", comment: ""), text: $editingVocalization)
+                }
+
+                if model.selectedBoardKeyboardLayout != nil {
+                    Section("boardset.cell.keyboard_action") {
+                        TextField("boardset.cell.insert_text", text: $editingInsertedText)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+                            .onChange(of: editingInsertedText) { _, text in
+                                editingInsertedTextFollowsLabel = false
+                                if !text.isEmpty { editingActions = [] }
+                            }
+                        ForEach(BoardKeyAction.allCases.filter { $0 != .none }) { action in
+                            Toggle(
+                                action.localizationKey,
+                                isOn: Binding(
+                                    get: { editingActions.contains(action.rawValue) },
+                                    set: { enabled in
+                                        if enabled {
+                                            editingInsertedText = ""
+                                            editingInsertedTextFollowsLabel = false
+                                            if !editingActions.contains(action.rawValue) {
+                                                editingActions.append(action.rawValue)
+                                            }
+                                        } else {
+                                            editingActions.removeAll { $0 == action.rawValue }
+                                        }
+                                    }
+                                )
+                            )
+                        }
+                        if editingActions.count > 1 {
+                            ForEach(Array(editingActions.enumerated()), id: \.offset) { index, rawAction in
+                                HStack {
+                                    Text(boardKeyActionLabel(rawAction))
+                                    Spacer()
+                                    Button {
+                                        moveEditingAction(at: index, by: -1)
+                                    } label: {
+                                        Image(systemName: "arrow.up")
+                                    }
+                                    .disabled(index == 0)
+                                    Button {
+                                        moveEditingAction(at: index, by: 1)
+                                    } label: {
+                                        Image(systemName: "arrow.down")
+                                    }
+                                    .disabled(index == editingActions.count - 1)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Section("phrase.symbol.section") {
@@ -1010,6 +1140,9 @@ struct SymbolBoardWorkspaceView: View {
                         Task {
                             let backgroundColorHex = useCustomBackgroundColor ? hexFromColor(editingBackgroundPickerColor) : nil
                             let borderColorHex = useCustomBorderColor ? hexFromColor(editingBorderPickerColor) : nil
+                            let followedText = trimmed(editingVocalization) ?? trimmed(editingLabel) ?? ""
+                            let insertedText = editingInsertedTextFollowsLabel ? followedText : editingInsertedText
+                            let actions = editingActions + (insertedText.isEmpty ? [] : ["+\(insertedText)"])
                             await model.upsertSelectedBoardCell(
                                 row: editingRow,
                                 col: editingCol,
@@ -1019,7 +1152,8 @@ struct SymbolBoardWorkspaceView: View {
                                 borderColor: borderColorHex,
                                 linkedBoardId: editingLinkedBoardId,
                                 imageUrl: editingSelectedSymbolUrl,
-                                clearImage: shouldClearEditingSymbol
+                                clearImage: shouldClearEditingSymbol,
+                                actions: actions
                             )
                             showEditCellSheet = false
                         }
@@ -1036,22 +1170,80 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private var boardSentenceText: String {
-        boardSentenceTokens
+        if model.selectedBoardUsesSpellingMode {
+            return boardSentenceTokens.map(\.text).joined()
+        }
+        return boardSentenceTokens
             .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }
 
-    private func appendCellToSentenceIfNeeded(_ cell: BoardCellInfo?) {
+    private var boardPredictionTaskId: String {
+        let predictors = model.boardCells
+            .filter { $0.actions.contains(where: { $0.lowercased().hasPrefix(":prediction") }) }
+            .map(\.buttonId)
+            .joined(separator: ",")
+        return "\(model.selectedBoardId ?? "")|\(predictors)|\(boardSentenceText)"
+    }
+
+    private func activateBoardCell(_ cell: BoardCellInfo?, row: Int, col: Int, sourceCellId: String) {
+        guard let cell else { return }
+        if trimmed(cell.linkedBoardId) != nil {
+            Task { await model.activateSelectedBoardCell(row: row, col: col) }
+            return
+        }
+        if cell.actions.isEmpty {
+            appendCellToSentenceIfNeeded(cell, sourceCellId: sourceCellId)
+            Task { await model.activateSelectedBoardCell(row: row, col: col) }
+            return
+        }
+
+        for rawAction in cell.actions {
+            let action = rawAction.trimmingCharacters(in: .whitespacesAndNewlines)
+            switch action.lowercased() {
+            case ":space":
+                appendCellToSentenceIfNeeded(cell, textOverride: " ", sourceCellId: sourceCellId)
+            case ":backspace":
+                backspaceBoardSentence()
+            case ":clear":
+                boardSentenceTokens.removeAll()
+            case ":speak":
+                let sentence = boardSentenceText
+                if !sentence.isEmpty, let boardSetId = model.selectedBoardSetId {
+                    model.speakBoardSentence(sentence, boardSetId: boardSetId)
+                }
+            case ":home":
+                if let rootId = model.selectedBoardSet?.rootBoardId {
+                    Task { await model.selectBoard(id: rootId) }
+                }
+            case ":prediction", ":predictions":
+                if let suggestion = model.boardPrediction(for: cell.buttonId) {
+                    let insertion = predictionInsertion(sentence: boardSentenceText, suggestion: suggestion)
+                    appendCellToSentenceIfNeeded(cell, textOverride: insertion, sourceCellId: sourceCellId)
+                }
+            case ":spell":
+                if let text = trimmed(cell.vocalization) ?? trimmed(cell.label) {
+                    appendCellToSentenceIfNeeded(cell, textOverride: text, sourceCellId: sourceCellId)
+                }
+            default:
+                if action.hasPrefix("+") {
+                    appendCellToSentenceIfNeeded(cell, textOverride: String(action.dropFirst()), sourceCellId: sourceCellId)
+                }
+            }
+        }
+    }
+
+    private func appendCellToSentenceIfNeeded(_ cell: BoardCellInfo?, textOverride: String? = nil, sourceCellId: String? = nil) {
         guard let cell else { return }
         if trimmed(cell.linkedBoardId) != nil { return }
 
-        let title = trimmed(cell.label) ?? trimmed(cell.vocalization)
-        let spokenText = trimmed(cell.vocalization) ?? trimmed(cell.label)
-        guard let title, let spokenText else { return }
+        let title = trimmed(textOverride) ?? trimmed(cell.label) ?? trimmed(cell.vocalization)
+        let spokenText = textOverride ?? trimmed(cell.vocalization) ?? trimmed(cell.label)
+        guard let title, let spokenText, !spokenText.isEmpty else { return }
 
         let tokenId = UUID().uuidString
-        activeSentenceAnimation = ActiveSentenceAnimation(sourceCellId: cell.id, tokenId: tokenId)
+        activeSentenceAnimation = ActiveSentenceAnimation(sourceCellId: sourceCellId ?? cell.id, tokenId: tokenId)
 
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
             boardSentenceTokens.append(
@@ -1074,11 +1266,78 @@ struct SymbolBoardWorkspaceView: View {
         }
     }
 
+    private func backspaceBoardSentence() {
+        guard let last = boardSentenceTokens.last else { return }
+        if last.text.count <= 1 {
+            boardSentenceTokens.removeLast()
+        } else {
+            boardSentenceTokens[boardSentenceTokens.count - 1].text.removeLast()
+            boardSentenceTokens[boardSentenceTokens.count - 1].title = boardSentenceTokens.last?.text ?? ""
+        }
+    }
+
+    private func predictionInsertion(sentence: String, suggestion: String) -> String {
+        let word = suggestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !word.isEmpty else { return "" }
+        let prefix = String(sentence.reversed().prefix { !$0.isWhitespace }.reversed())
+        if prefix.isEmpty { return word }
+        if word.lowercased().hasPrefix(prefix.lowercased()) {
+            return String(word.dropFirst(prefix.count))
+        }
+        return " \(word)"
+    }
+
+    private func boardCellDisplayLabel(_ cell: BoardCellInfo?) -> String {
+        guard let cell else { return NSLocalizedString("boardset.cell.empty", comment: "") }
+        if cell.actions.contains(where: { $0.lowercased() == ":prediction" || $0.lowercased() == ":predictions" }),
+           let prediction = model.boardPrediction(for: cell.buttonId) {
+            return prediction
+        }
+        return trimmed(cell.label) ?? NSLocalizedString("boardset.cell.empty", comment: "")
+    }
+
+    private func boardCellAccessibilityHint(_ cell: BoardCellInfo?) -> String {
+        guard let action = cell?.actions.first else { return "" }
+        switch action.lowercased() {
+        case ":space": return NSLocalizedString("boardset.cell.action.space", comment: "")
+        case ":backspace": return NSLocalizedString("boardset.cell.action.backspace", comment: "")
+        case ":clear": return NSLocalizedString("boardset.cell.action.clear", comment: "")
+        case ":home": return NSLocalizedString("boardset.cell.action.home", comment: "")
+        case ":speak": return NSLocalizedString("boardset.cell.action.speak", comment: "")
+        case ":prediction", ":predictions": return NSLocalizedString("boardset.cell.action.prediction", comment: "")
+        default: return ""
+        }
+    }
+
+    private func moveEditingAction(at index: Int, by offset: Int) {
+        let target = index + offset
+        guard editingActions.indices.contains(index), editingActions.indices.contains(target) else { return }
+        editingActions.swapAt(index, target)
+    }
+
+    private func boardKeyActionLabel(_ rawAction: String) -> String {
+        guard let action = BoardKeyAction(rawValue: rawAction) else { return rawAction }
+        switch action {
+        case .none: return NSLocalizedString("boardset.cell.action.none", comment: "")
+        case .spell: return NSLocalizedString("boardset.cell.action.spell", comment: "")
+        case .space: return NSLocalizedString("boardset.cell.action.space", comment: "")
+        case .backspace: return NSLocalizedString("boardset.cell.action.backspace", comment: "")
+        case .clear: return NSLocalizedString("boardset.cell.action.clear", comment: "")
+        case .home: return NSLocalizedString("boardset.cell.action.home", comment: "")
+        case .speak: return NSLocalizedString("boardset.cell.action.speak", comment: "")
+        case .prediction: return NSLocalizedString("boardset.cell.action.prediction", comment: "")
+        }
+    }
+
     private func openCellEditor(row: Int, col: Int, existing: BoardCellInfo?) {
         editingRow = row
         editingCol = col
         editingLabel = existing?.label ?? ""
         editingVocalization = existing?.vocalization ?? ""
+        let directText = existing?.actions.first(where: { $0.hasPrefix("+") }).map { String($0.dropFirst()) } ?? ""
+        editingInsertedText = directText
+        editingInsertedTextFollowsLabel = !directText.isEmpty && directText == (trimmed(existing?.vocalization) ?? trimmed(existing?.label) ?? "")
+        editingActions = existing?.actions.filter { !$0.hasPrefix("+") } ?? []
         if let backgroundHex = trimmed(existing?.backgroundColor) {
             useCustomBackgroundColor = true
             editingBackgroundPickerColor = colorFromHex(backgroundHex, fallback: Color(.tertiarySystemBackground))

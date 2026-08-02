@@ -4,14 +4,22 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonType
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
+import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+
+/**
+ * Authorable keyboard presets. Each preset produces lowercase, uppercase, and
+ * symbols pages whose letter pages are tagged with the matching layout so custom
+ * keyboards can be created, duplicated, and round-tripped with a stable identity.
+ */
+enum class KeyboardPreset { Qwerty, Alphabetical }
 
 /**
  * A ready-to-use, editable keyboard with lowercase, uppercase, and symbols pages.
  *
- * Every page ends with a prediction row: four n-gram prediction buttons (each
- * two cells wide), a "delete sentence" button, and a "say" button. The boards
- * are marked as spelling boards so word buttons do not auto-insert spaces.
+ * Every page starts with a prediction row above the keys: four n-gram prediction
+ * buttons (each two cells wide), a "delete sentence" button, and a "say" button.
+ * The boards are marked as spelling boards so word buttons do not auto-insert spaces.
  */
 object KeyboardBoardTemplate {
     private const val LOWERCASE = "keyboard-lowercase"
@@ -19,13 +27,36 @@ object KeyboardBoardTemplate {
     private const val SYMBOLS = "keyboard-symbols"
     private const val COLUMN_COUNT = 11
 
-    fun boards(): List<ObfBoard> = listOf(
-        keyboardBoard(LOWERCASE, "Keyboard", lowercaseRows()),
-        keyboardBoard(UPPERCASE, "Keyboard — uppercase", uppercaseRows()),
-        keyboardBoard(SYMBOLS, "Numbers & symbols", symbolRows())
-    )
+    fun boards(preset: KeyboardPreset = KeyboardPreset.Qwerty): List<ObfBoard> {
+        val (lower, upper, layout) = letters(preset)
+        return listOf(
+            keyboardBoard(LOWERCASE, "Keyboard", lowercaseRows(lower), layout),
+            keyboardBoard(UPPERCASE, "Keyboard — uppercase", uppercaseRows(upper), layout),
+            keyboardBoard(SYMBOLS, "Numbers & symbols", symbolRows(), ObfKeyboardLayout.Symbols)
+        )
+    }
 
-    private fun keyboardBoard(id: String, name: String, rows: List<List<Key?>>): ObfBoard {
+    private fun letters(
+        preset: KeyboardPreset
+    ): Triple<Triple<String, String, String>, Triple<String, String, String>, ObfKeyboardLayout> = when (preset) {
+        KeyboardPreset.Qwerty -> Triple(
+            Triple("qwertyuiop", "asdfghjkl", "zxcvbnm"),
+            Triple("QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"),
+            ObfKeyboardLayout.Qwerty
+        )
+        KeyboardPreset.Alphabetical -> Triple(
+            Triple("abcdefghij", "klmnopqrs", "tuvwxyz"),
+            Triple("ABCDEFGHIJ", "KLMNOPQRS", "TUVWXYZ"),
+            ObfKeyboardLayout.Alphabetical
+        )
+    }
+
+    private fun keyboardBoard(
+        id: String,
+        name: String,
+        rows: List<List<Key?>>,
+        layout: ObfKeyboardLayout
+    ): ObfBoard {
         val buttonKeys = rows.flatten().filterNotNull().distinct()
         val buttonIds = buttonKeys.mapIndexed { index, key -> key to "$id-key-$index" }.toMap()
         return ObfBoard(
@@ -46,23 +77,23 @@ object KeyboardBoardTemplate {
                 columns = COLUMN_COUNT,
                 order = rows.map { row -> row.map { key -> key?.let(buttonIds::getValue) } }
             )
-        ).withCompactGrid(true).withSpellingMode(true)
+        ).withCompactGrid(true).withSpellingMode(true).withKeyboardLayout(layout)
     }
 
-    private fun lowercaseRows(): List<List<Key?>> =
-        letterRows("qwertyuiop", "asdfghjkl", "zxcvbnm") +
-            listOf(controls(shiftKey("⇧", UPPERCASE), numberKey()), predictionsRow())
+    private fun lowercaseRows(letters: Triple<String, String, String>): List<List<Key?>> =
+        listOf(predictionsRow()) + letterRows(letters.first, letters.second, letters.third) +
+            listOf(controls(shiftKey("⇧", UPPERCASE), numberKey()))
 
-    private fun uppercaseRows(): List<List<Key?>> =
-        letterRows("QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM") +
-            listOf(controls(shiftKey("⇩", LOWERCASE), numberKey()), predictionsRow())
+    private fun uppercaseRows(letters: Triple<String, String, String>): List<List<Key?>> =
+        listOf(predictionsRow()) + letterRows(letters.first, letters.second, letters.third) +
+            listOf(controls(shiftKey("⇩", LOWERCASE), numberKey()))
 
     private fun symbolRows(): List<List<Key?>> = listOf(
+        predictionsRow(),
         characters("1234567890") + key("⌫", "backspace", ":backspace"),
         characters("-/:;()$&@_") + key("\"", "double quote", "+\""),
-        characters("#+=.,?!'[]") + spaceKey(),
-        controls(shiftKey("ABC", LOWERCASE), shiftKey("⇧", UPPERCASE)),
-        predictionsRow()
+        characters("#+=.,?!'[]") + key("~", "tilde", "+~"),
+        controls(shiftKey("ABC", LOWERCASE), shiftKey("⇧", UPPERCASE))
     )
 
     private fun letterRows(first: String, second: String, third: String): List<List<Key?>> = listOf(

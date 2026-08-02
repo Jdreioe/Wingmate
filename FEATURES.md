@@ -76,10 +76,10 @@ The following list is taken from the OpenAAC [AAC App Development](https://www.o
   Authors can set, preview, change, or clear a per-page grid background color while existing pages continue to inherit the theme default.
 - [ ] 💜 **set background image behind buttons**
   Users with visual impairments may find it easier to see the words or symbols on buttons with a black background, either filling the entire button, or just behind the actual image.
-- [ ] 💜 **customizable keyboards**
+- [x] 💜 **customizable keyboards**
   Some AAC apps user the built-in keyboard for spelling purposes, but depending on the user these keyboards may not be accessible. Additionally, some users may need larger buttons and a full keyboard doesn't fit on a single screen, or QWERTY may not be the most intuitive layout, so custom keyboards can provide value for different users.
-- [ ] 💜 **options for different-shaped buttons**
-  Some apps provide optional border shapes other than just a square or rounded square. They could be jagged edges, thought bubble or speech bubbles, etc.
+- [x] 💜 **options for different-shaped buttons**
+  Android authors can choose the rounded default, square, pill, speech bubble, or thought bubble per button. Shapes preserve the full rectangular touch target and round-trip with shared OBF/OBZ vocabulary data.
 
 </details>
 

@@ -27,6 +27,9 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfMediaSource
 import io.github.jdreioe.wingmate.domain.obf.obfImageSources
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonType
+import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
@@ -287,6 +290,52 @@ fun ObfBoardView(
                     buildBoardGridItems(grid, buttonsById)
                 }
                 val pageScrollState = rememberScrollState()
+                var focusedCell by remember(board.id) { mutableStateOf<Pair<Int, Int>?>(null) }
+                val isVisible: (ObfButton) -> Boolean = {
+                    isBoardButtonVisible(it, isEditMode, showHiddenButtons)
+                }
+                val buttonAtCell: (Int, Int) -> ObfButton? = { row, column ->
+                    boardCellButton(grid, buttonsById, isVisible, row, column)
+                }
+                val activateFocused: () -> Unit = {
+                    focusedCell?.let { cell ->
+                        buttonAtCell(cell.first, cell.second)?.let { button ->
+                            onCellClick?.invoke(cell.first, cell.second, button) ?: onButtonClick(button)
+                        }
+                    }
+                }
+                val gridNavModifier = if (!isEditMode) {
+                    Modifier
+                        .fillMaxSize()
+                        .testTag("board-grid")
+                        .focusable()
+                        .onKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                            when (event.key) {
+                                Key.DirectionLeft -> {
+                                    focusedCell = stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, 0, -1); true
+                                }
+                                Key.DirectionRight -> {
+                                    focusedCell = stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, 0, 1); true
+                                }
+                                Key.DirectionUp -> {
+                                    focusedCell = stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, -1, 0); true
+                                }
+                                Key.DirectionDown -> {
+                                    focusedCell = stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, 1, 0); true
+                                }
+                                Key.MoveHome -> {
+                                    focusedCell = firstFocusableBoardCell(grid, buttonsById, isVisible); true
+                                }
+                                Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar -> {
+                                    activateFocused(); true
+                                }
+                                else -> false
+                            }
+                        }
+                } else {
+                    Modifier.fillMaxSize()
+                }
                 BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     val availableGridHeight = maxHeight
                     val minimumCellHeight = (if (board.compactGrid) 72.dp else 96.dp) *
@@ -316,11 +365,12 @@ fun ObfBoardView(
                                 rows = rows,
                                 columns = columns,
                                 items = gridItems,
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = gridNavModifier,
                                 onMove = onCellMove,
                                 selectedField = selectedFieldAnchor,
                                 selectedFieldSpans = selectedFieldSpans,
-                                onResizeField = onResizeField
+                                onResizeField = onResizeField,
+                                focusedCell = focusedCell
                             ) { item ->
                             val button = item.button
                             val isVisible = button != null && isBoardButtonVisible(button, isEditMode, showHiddenButtons)
@@ -513,6 +563,7 @@ internal fun SpanningBoardGrid(
     selectedField: Pair<Int, Int>? = null,
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
+    focusedCell: Pair<Int, Int>? = null,
     content: @Composable (BoardGridItem) -> Unit
 ) {
     var dragSource by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -555,6 +606,7 @@ internal fun SpanningBoardGrid(
 
     val selectionColor = MaterialTheme.colorScheme.primary
     val errorColor = MaterialTheme.colorScheme.error
+    val focusColor = MaterialTheme.colorScheme.tertiary
     val resizeLabel = stringResource(Res.string.board_resize_field_label)
     val increaseWidthLabel = stringResource(Res.string.board_resize_increase_width)
     val decreaseWidthLabel = stringResource(Res.string.board_resize_decrease_width)
@@ -724,34 +776,48 @@ internal fun SpanningBoardGrid(
             content = {
                 items.forEach { item ->
                     key(item.row, item.column, item.button?.id) {
-                    val isDropTarget = dragTarget?.let { target ->
-                        target.first in item.row until item.row + item.rowSpan &&
-                            target.second in item.column until item.column + item.columnSpan
-                    } == true
-                    val isSelected = selectedItem?.let {
-                        it.row == item.row && it.column == item.column
-                    } == true
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(
-                                if (isSelected) {
-                                    Modifier.border(3.dp, selectionColor, RoundedCornerShape(12.dp))
-                                } else {
-                                    Modifier
-                                }
-                            )
-                            .then(
-                                if (isDropTarget) {
-                                    Modifier.border(3.dp, selectionColor, RoundedCornerShape(12.dp))
-                                } else {
-                                    Modifier
-                                }
-                            )
-                    ) {
-                        content(item)
+                        val isDropTarget = dragTarget?.let { target ->
+                            target.first in item.row until item.row + item.rowSpan &&
+                                target.second in item.column until item.column + item.columnSpan
+                        } == true
+                        val isSelected = selectedItem?.let {
+                            it.row == item.row && it.column == item.column
+                        } == true
+                        val isFocused = focusedCell?.let { focus ->
+                            focus.first in item.row until item.row + item.rowSpan &&
+                                focus.second in item.column until item.column + item.columnSpan
+                        } == true && item.button != null
+                        val ringShape = item.button?.shape?.toShape() ?: roundedShape()
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(
+                                    if (isSelected) {
+                                        Modifier.border(3.dp, selectionColor, ringShape)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .then(
+                                    if (isDropTarget) {
+                                        Modifier.border(3.dp, selectionColor, ringShape)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .then(
+                                    if (isFocused) {
+                                        Modifier
+                                            .testTag("board-focus-ring")
+                                            .border(3.dp, focusColor, ringShape)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        ) {
+                            content(item)
+                        }
                     }
-                }
             }
             if (showPreview) {
                 key("resize-preview") {
@@ -1029,7 +1095,10 @@ fun ObfButtonItem(
         appActivationBehavior = settings.boardActivationBehavior,
         appReturnBehavior = settings.boardReturnBehavior
     )
-    val displayLabel = labelOverride ?: resolveObfLocalizedString(boardStrings, locale, button.label)
+    val displayLabel = labelOverride
+        ?: if (button.type == ObfButtonType.NGramPrediction ||
+            parseObfButtonActions(button).any { it === ObfButtonActionEffect.Predictions }
+        ) "" else resolveObfLocalizedString(boardStrings, locale, button.label)
     val displayVocalization = resolveObfLocalizedString(boardStrings, locale, button.vocalization)
     val temporarilyRevealedDescription = stringResource(Res.string.board_workspace_temporarily_revealed)
     val boundedFontScale = fieldFontScale.coerceIn(1f, 2f)
@@ -1121,6 +1190,7 @@ fun ObfButtonItem(
         button.backgroundColor != null -> contrastingContentColor(bgColor)
         else -> MaterialTheme.colorScheme.onSurface
     }
+    val buttonShape = button.shape.toShape()
     
     // Spec priority: data → path → url → symbol (extracted zip bytes count as path).
     val imageSources = remember(image) { obfImageSources(image) }
@@ -1204,7 +1274,7 @@ fun ObfButtonItem(
                     )
                 }
             },
-        shape = RoundedCornerShape(12.dp),
+        shape = buttonShape,
         colors = CardDefaults.elevatedCardColors(containerColor = bgColor),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
         border = if (borderColor != null || settings.highContrastMode) {
@@ -1266,7 +1336,7 @@ fun ObfButtonItem(
                             bitmap = imageBitmap,
                             model = imageModel,
                             contentDescription = displayLabel,
-                            modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
+                            modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp).clip(buttonShape)
                         )
                     }
                 } else {
@@ -1283,7 +1353,7 @@ fun ObfButtonItem(
                                 bitmap = imageBitmap,
                                 model = imageModel,
                                 contentDescription = button.label,
-                                modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp)
+                                modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp).clip(buttonShape)
                             )
                         }
                     }

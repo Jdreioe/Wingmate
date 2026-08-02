@@ -161,6 +161,9 @@
     <string name="calculator_default_name">Lommeregner</string>
     <string name="board_dialog_template_keyboard">Tastatur</string>
     <string name="keyboard_default_name">Tastatur</string>
+    <string name="board_dialog_keyboard_preset">Layout</string>
+    <string name="board_dialog_keyboard_preset_qwerty">QWERTY</string>
+    <string name="board_dialog_keyboard_preset_alphabetical">Alfabetisk</string>
     <string name="board_dialog_set_name">Skærmnavn</string>
     <string name="board_dialog_rows">Rækker</string>
     <string name="board_dialog_columns">Kolonner</string>
@@ -175,6 +178,12 @@
     <string name="board_dialog_clear_image">Fjern billede</string>
     <string name="board_dialog_color">Feltfarve</string>
     <string name="board_dialog_pick_color">Vælg</string>
+    <string name="board_dialog_shape">Knapform</string>
+    <string name="board_dialog_shape_rounded">Rundet</string>
+    <string name="board_dialog_shape_square">Firkantet</string>
+    <string name="board_dialog_shape_pill">Pille</string>
+    <string name="board_dialog_shape_speech">Taleboble</string>
+    <string name="board_dialog_shape_thought">Tankeboble</string>
     <string name="board_dialog_language">Sprog</string>
     <string name="board_dialog_language_default">Brug standardsprog</string>
     <string name="board_dialog_language_english">Engelsk</string>
@@ -188,6 +197,7 @@
     <string name="board_dialog_choose_page">Vælg en side</string>
     <string name="board_dialog_clear_cell">Ryd felt</string>
     <string name="board_dialog_special_actions">Særlige handlinger</string>
+    <string name="board_dialog_insert_text">Tekst, som denne tast indsætter</string>
     <string name="board_dialog_action_spell">Stav et ord</string>
     <string name="board_dialog_action_space">Tilføj mellemrum</string>
     <string name="board_dialog_action_erase">Slet sidste tegn</string>
@@ -195,6 +205,10 @@
     <string name="board_dialog_action_home">Gå til startside</string>
     <string name="board_dialog_action_speak_sentence">Udtal sætning</string>
     <string name="board_dialog_action_prediction">Forudsig næste ord</string>
+    <string name="board_dialog_action_order">Handlingsrækkefølge</string>
+    <string name="board_dialog_action_order_position">%1$d.</string>
+    <string name="board_dialog_action_order_up">Flyt handling op</string>
+    <string name="board_dialog_action_order_down">Flyt handling ned</string>
     <string name="board_dialog_special_actions_help">Tryk for at vælge, hvad knappen skal gøre</string>
 
     <string name="language_dialog_title">Sprog</string>
