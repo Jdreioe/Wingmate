@@ -123,6 +123,8 @@ fun SettingsScreen(
     var dwellToSelectMillis by remember { mutableStateOf(0L) }
     var selectionSoundEnabled by remember { mutableStateOf(false) }
     var auditoryFishingEnabled by remember { mutableStateOf(false) }
+    var selectionDebounceMillis by remember { mutableStateOf(0L) }
+    var selectionHighlightMillis by remember { mutableStateOf(0L) }
     var usageLoggingEnabled by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -202,6 +204,8 @@ fun SettingsScreen(
         dwellToSelectMillis = s.dwellToSelectMillis
         selectionSoundEnabled = s.selectionSoundEnabled
         auditoryFishingEnabled = s.auditoryFishingEnabled
+        selectionDebounceMillis = s.selectionDebounceMillis
+        selectionHighlightMillis = s.selectionHighlightMillis
         usageLoggingEnabled = s.usageLoggingEnabled
         fontSizeScale = s.fontSizeScale
         playbackIconScale = s.playbackIconScale
@@ -474,7 +478,13 @@ fun SettingsScreen(
                                         selectionSoundEnabled = selectionSoundEnabled,
                                         onSelectionSoundChange = { checked -> selectionSoundEnabled = checked; updateSettings { it.copy(selectionSoundEnabled = checked) } },
                                         auditoryFishingEnabled = auditoryFishingEnabled,
-                                        onAuditoryFishingChange = { checked -> auditoryFishingEnabled = checked; updateSettings { it.copy(auditoryFishingEnabled = checked) } }
+                                        onAuditoryFishingChange = { checked -> auditoryFishingEnabled = checked; updateSettings { it.copy(auditoryFishingEnabled = checked) } },
+                                        selectionDebounceMillis = selectionDebounceMillis,
+                                        onSelectionDebounceChange = { selectionDebounceMillis = it },
+                                        onSelectionDebounceChangeFinished = { updateSettings { it.copy(selectionDebounceMillis = selectionDebounceMillis) } },
+                                        selectionHighlightMillis = selectionHighlightMillis,
+                                        onSelectionHighlightChange = { selectionHighlightMillis = it },
+                                        onSelectionHighlightChangeFinished = { updateSettings { it.copy(selectionHighlightMillis = selectionHighlightMillis) } }
                                     )
                                     SettingsTab.Privacy -> PrivacySection(
                                         historyVisible = historyVisible,
@@ -1383,7 +1393,13 @@ private fun AccessibilitySection(
     selectionSoundEnabled: Boolean,
     onSelectionSoundChange: (Boolean) -> Unit,
     auditoryFishingEnabled: Boolean,
-    onAuditoryFishingChange: (Boolean) -> Unit
+    onAuditoryFishingChange: (Boolean) -> Unit,
+    selectionDebounceMillis: Long,
+    onSelectionDebounceChange: (Long) -> Unit,
+    onSelectionDebounceChangeFinished: () -> Unit,
+    selectionHighlightMillis: Long,
+    onSelectionHighlightChange: (Long) -> Unit,
+    onSelectionHighlightChangeFinished: () -> Unit
 ) {
     SettingsGroup(title = stringResource(Res.string.ui_settings_touch_timing)) {
         SettingsSlider(
@@ -1407,6 +1423,17 @@ private fun AccessibilitySection(
             steps = 19,
             valueLabel = "${dwellToSelectMillis.toInt()} ms"
         )
+        SettingsGroupDivider()
+        SettingsSlider(
+            title = stringResource(Res.string.ui_settings_selection_debounce_title),
+            description = stringResource(Res.string.ui_settings_selection_debounce_desc),
+            value = selectionDebounceMillis.toFloat(),
+            onValueChange = { onSelectionDebounceChange(it.toLong()) },
+            onValueChangeFinished = onSelectionDebounceChangeFinished,
+            valueRange = 0f..1000f,
+            steps = 19,
+            valueLabel = "${selectionDebounceMillis.toInt()} ms"
+        )
     }
 
     SettingsGroup(title = stringResource(Res.string.ui_settings_feedback)) {
@@ -1421,6 +1448,17 @@ private fun AccessibilitySection(
             onCheckedChange = onAuditoryFishingChange,
             title = stringResource(Res.string.ui_settings_auditory_fishing_title),
             description = stringResource(Res.string.ui_settings_auditory_fishing_desc)
+        )
+        SettingsGroupDivider()
+        SettingsSlider(
+            title = stringResource(Res.string.ui_settings_selection_highlight_title),
+            description = stringResource(Res.string.ui_settings_selection_highlight_desc),
+            value = selectionHighlightMillis.toFloat(),
+            onValueChange = { onSelectionHighlightChange(it.toLong()) },
+            onValueChangeFinished = onSelectionHighlightChangeFinished,
+            valueRange = 0f..2000f,
+            steps = 19,
+            valueLabel = "${selectionHighlightMillis.toInt()} ms"
         )
     }
 }

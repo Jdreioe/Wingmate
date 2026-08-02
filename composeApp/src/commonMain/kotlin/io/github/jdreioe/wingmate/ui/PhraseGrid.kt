@@ -14,18 +14,24 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import io.github.jdreioe.wingmate.domain.CategoryItem
+import kotlinx.coroutines.delay
+import kotlin.time.Clock
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.application.SelectionDebouncer
+import io.github.jdreioe.wingmate.application.SelectionHighlight
 import org.jetbrains.compose.resources.stringResource
 import wingmatekmp.composeapp.generated.resources.Res
 import wingmatekmp.composeapp.generated.resources.phrase_add_cd
@@ -56,6 +62,11 @@ fun PhraseGrid(
     onCopyAudio: ((filePath: String) -> Unit)? = null,
 ) {
     val settings by rememberReactiveSettings()
+    // #118/#120: per-target activation debounce and time-bounded selection highlight.
+    val selectionDebouncer = remember { SelectionDebouncer() }
+    val selectionHighlight = remember { SelectionHighlight() }
+    var highlightedPhraseId by remember { mutableStateOf<String?>(null) }
+    var highlightGeneration by remember { mutableLongStateOf(0L) }
     // Filter out hidden phrases unless in wiggle mode
     val visiblePhrases = remember(phrases, isWiggleMode) {
         if (isWiggleMode) phrases else phrases.filter { !it.isHidden }
@@ -65,6 +76,33 @@ fun PhraseGrid(
     val itemCount = if (showAdd) visiblePhrases.size + 1 else visiblePhrases.size
 
     var showAddDialog by remember { mutableStateOf(false) }
+
+    // #120: expire the selection highlight after the configured duration.
+    LaunchedEffect(highlightGeneration) {
+        val id = highlightedPhraseId
+        val duration = settings.selectionHighlightMillis
+        if (id != null && duration > 0) {
+            delay(duration)
+            val now = Clock.System.now().toEpochMilliseconds()
+            if (selectionHighlight.highlightedTarget(now, duration) != id) {
+                highlightedPhraseId = null
+            }
+        }
+    }
+
+    // #118: return true when the target may activate, and record the selection highlight.
+    fun tryActivate(phraseId: String): Boolean {
+        val now = Clock.System.now().toEpochMilliseconds()
+        if (!selectionDebouncer.tryActivate(phraseId, now, settings.selectionDebounceMillis)) {
+            return false
+        }
+        selectionHighlight.activate(phraseId, now)
+        if (settings.selectionHighlightMillis > 0) {
+            highlightedPhraseId = phraseId
+            highlightGeneration = selectionHighlight.generation
+        }
+        return true
+    }
 
     LazyVerticalGrid(columns = GridCells.Fixed(settings.gridColumns), contentPadding = PaddingValues(4.dp)) {
         items(
@@ -99,11 +137,15 @@ fun PhraseGrid(
                 val categoryName = categories.firstOrNull { it.id == item.parentId }?.name
                 PhraseGridItem(
                     item = item,
-                    onPlay = { onPlay(item) },
+                    onPlay = {
+                        if (tryActivate(item.id)) onPlay(item)
+                    },
                     onSpeakSecondary = { onPlaySecondary?.invoke(item) },
                     onLongPress = { onLongPress(item); onToggleWiggleMode?.invoke() },
                     isEditMode = isWiggleMode,
-                    onTap = { onInsert?.invoke(item) },
+                    onTap = {
+                        if (tryActivate(item.id)) onInsert?.invoke(item)
+                    },
                     onMove = { oldIndex, newIndex -> onMove?.invoke(oldIndex, newIndex) },
                     onDelete = { onDeletePhrase?.invoke(item) },
                     categoryName = categoryName,
@@ -112,6 +154,7 @@ fun PhraseGrid(
                     index = index,
                     total = visiblePhrases.size,
                     readOnly = readOnly,
+                    isSelectionHighlighted = highlightedPhraseId == item.id,
                     onCopyAudio = onCopyAudio,
                 )
             }

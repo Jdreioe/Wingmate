@@ -175,6 +175,7 @@ fun ObfBoardView(
     boardSettings: ResolvedBoardSettings? = null,
     showHiddenButtons: Boolean = false,
     predictionLabels: Map<String, String> = emptyMap(),
+    highlightedButtonId: String? = null,
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
     selectedFieldAnchor: Pair<Int, Int>? = null,
@@ -236,7 +237,8 @@ fun ObfBoardView(
                             homeBoardId,
                             effectiveBoardSettings,
                             showHiddenButtons,
-                            predictionLabels
+                            predictionLabels,
+                            highlightedButtonId
                         )
                     }
                 }
@@ -252,7 +254,8 @@ fun ObfBoardView(
                     homeBoardId,
                     effectiveBoardSettings,
                     showHiddenButtons,
-                    predictionLabels
+                    predictionLabels,
+                    highlightedButtonId
                 )
             }
         }
@@ -394,6 +397,7 @@ fun ObfBoardView(
                                         locale = settings.primaryLanguage,
                                         boardSettings = effectiveBoardSettings,
                                         labelOverride = predictionLabels[button.id],
+                                        isSelectionHighlighted = button.id == highlightedButtonId,
                                         fieldFontScale = fieldFontScale(item.rowSpan, item.columnSpan)
                                     )
                                 } else if (isEditMode && button == null) {
@@ -1081,6 +1085,7 @@ fun ObfButtonItem(
     locale: String? = null,
     boardSettings: ResolvedBoardSettings? = null,
     labelOverride: String? = null,
+    isSelectionHighlighted: Boolean = false,
     fieldFontScale: Float = 1f
 ) {
     val speechService: SpeechService = koinInject()
@@ -1191,6 +1196,14 @@ fun ObfButtonItem(
         else -> MaterialTheme.colorScheme.onSurface
     }
     val buttonShape = button.shape.toShape()
+
+    // #120: high-contrast outline for the time-bounded selection highlight. Uses a distinct
+    // hue so it stays distinguishable from focus (primary) and the press pulse.
+    val selectionHighlightColor = if (settings.highContrastMode) {
+        highContrastContent
+    } else {
+        MaterialTheme.colorScheme.tertiary
+    }
     
     // Spec priority: data → path → url → symbol (extracted zip bytes count as path).
     val imageSources = remember(image) { obfImageSources(image) }
@@ -1399,6 +1412,13 @@ fun ObfButtonItem(
                     }
                 }
             }
+            if (isSelectionHighlighted) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .border(4.dp, selectionHighlightColor, RoundedCornerShape(12.dp))
+                )
+            }
         }
     }
 }
@@ -1413,7 +1433,8 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
     homeBoardId: String?,
     boardSettings: ResolvedBoardSettings,
     showHiddenButtons: Boolean,
-    predictionLabels: Map<String, String>
+    predictionLabels: Map<String, String>,
+    highlightedButtonId: String? = null
 ) {
     val containerWidth = maxWidth
     val containerHeight = maxHeight
@@ -1440,7 +1461,8 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
                     isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                     isHomeLink = button.isHomeNavigation(homeBoardId),
                     boardSettings = boardSettings,
-                    labelOverride = predictionLabels[button.id]
+                    labelOverride = predictionLabels[button.id],
+                    isSelectionHighlighted = button.id == highlightedButtonId
                 )
             }
         }

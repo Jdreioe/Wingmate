@@ -495,6 +495,10 @@
     <string name="phrase_edit_hidden_desc">Skjul denne frase fra gitteret</string>
     <string name="ui_settings_dwell_to_select_title">Dwell-valg (ms)</string>
     <string name="ui_settings_dwell_to_select_desc">Vælg ved at holde over uden at klikke. Sæt til 0 for at deaktivere.</string>
+    <string name="ui_settings_selection_debounce_title">Markeringsde-bounce (ms)</string>
+    <string name="ui_settings_selection_debounce_desc">Ignorer hurtige gentagne tryk på samme knap. Sæt til 0 for at deaktivere.</string>
+    <string name="ui_settings_selection_highlight_title">Markeringsfremhævning (ms)</string>
+    <string name="ui_settings_selection_highlight_desc">Vis en kort ramme efter at have valgt en knap. Sæt til 0 for at deaktivere.</string>
     <string name="ui_settings_selection_sound_title">Markeringslyd</string>
     <string name="ui_settings_auditory_fishing_title">Auditiv bekræftelse</string>
     <string name="ui_settings_auditory_fishing_desc">Hvisk mærkaten når en knap berøres eller holdes over.</string>

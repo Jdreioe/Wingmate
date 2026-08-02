@@ -102,6 +102,10 @@ data class Settings(
     val dwellToSelectMillis: Long = 0,
     val selectionSoundEnabled: Boolean = false,
     val auditoryFishingEnabled: Boolean = false,
+    // #118: ignore repeated activations of the same target inside this window (ms). 0 disables.
+    val selectionDebounceMillis: Long = 0,
+    // #120: show a time-bounded visual highlight on the last selected target (ms). 0 disables.
+    val selectionHighlightMillis: Long = 0,
     val usageLoggingEnabled: Boolean = false,
     // Controls whether cached speech history is exposed in the UI. Recording and
     // local cache reuse continue when this is false.

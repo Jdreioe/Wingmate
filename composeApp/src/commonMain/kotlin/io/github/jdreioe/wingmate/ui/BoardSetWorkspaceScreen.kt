@@ -59,6 +59,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -81,6 +82,8 @@ import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.EditingAccessController
+import io.github.jdreioe.wingmate.application.SelectionDebouncer
+import io.github.jdreioe.wingmate.application.SelectionHighlight
 import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.SoundPlayer
@@ -598,6 +601,11 @@ private fun BoardSetWorkspaceScreen(
     var selectedButtons by remember(boardSetId) {
         mutableStateOf<List<Pair<ObfButton, ImageBitmap?>>>(emptyList())
     }
+    // #118/#120: per-target activation debounce and time-bounded selection highlight.
+    val selectionDebouncer = remember(boardSetId) { SelectionDebouncer() }
+    val selectionHighlight = remember(boardSetId) { SelectionHighlight() }
+    var highlightedButtonId by remember(boardSetId) { mutableStateOf<String?>(null) }
+    var highlightGeneration by remember(boardSetId) { mutableLongStateOf(0L) }
     var isLoading by remember(boardSetId) { mutableStateOf(true) }
     var statusMessage by remember(boardSetId) { mutableStateOf<String?>(null) }
     var showAddBoardDialog by remember { mutableStateOf(false) }
@@ -688,6 +696,30 @@ private fun BoardSetWorkspaceScreen(
             mode = BoardWorkspaceMode.Run
         }
         isLoading = false
+    }
+
+    // #120: expire the selection highlight after the configured duration. Re-activating a
+    // target bumps the generation, restarting the timer so rapid selections never clear
+    // the highlight early (no stale overlays).
+    LaunchedEffect(highlightGeneration) {
+        val id = highlightedButtonId
+        val duration = settings.selectionHighlightMillis
+        if (id != null && duration > 0) {
+            delay(duration)
+            val now = Clock.System.now().toEpochMilliseconds()
+            if (selectionHighlight.highlightedTarget(now, duration) != id) {
+                highlightedButtonId = null
+            }
+        }
+    }
+
+    fun markButtonSelected(buttonId: String) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        selectionHighlight.activate(buttonId, now)
+        if (settings.selectionHighlightMillis > 0) {
+            highlightedButtonId = buttonId
+            highlightGeneration = selectionHighlight.generation
+        }
     }
 
     val activeGraph = editSession?.draft ?: savedGraph
@@ -1262,9 +1294,21 @@ private fun BoardSetWorkspaceScreen(
                         boardSettings = resolvedBoardSettings,
                         showHiddenButtons = showHiddenButtons,
                         selectedButtons = selectedButtons,
+                        highlightedButtonId = highlightedButtonId,
                         predictionLabels = predictionsById,
                         onButtonClick = { button ->
-                            val actions = parseObfButtonActions(button)
+                            run {
+                                // #118: ignore repeated activations of the same target inside the window.
+                                if (!selectionDebouncer.tryActivate(
+                                        button.id,
+                                        Clock.System.now().toEpochMilliseconds(),
+                                        settings.selectionDebounceMillis
+                                    )
+                                ) {
+                                    return@run
+                                }
+                                markButtonSelected(button.id)
+                                val actions = parseObfButtonActions(button)
                             if (actions.isNotEmpty()) {
                                 var speakAfterActions = false
                                 var navigateHome = false
@@ -1396,6 +1440,7 @@ private fun BoardSetWorkspaceScreen(
                                         boardStack = returned.second
                                     }
                                 }
+                            }
                             }
                         },
                         onCellClick = if (mode == BoardWorkspaceMode.Edit) {

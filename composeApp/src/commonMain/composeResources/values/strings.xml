@@ -507,6 +507,10 @@
     <string name="phrase_edit_hidden_desc">Hide this phrase from the grid</string>
     <string name="ui_settings_dwell_to_select_title">Dwell to select (ms)</string>
     <string name="ui_settings_dwell_to_select_desc">Select by hovering without clicking. Set to 0 to disable.</string>
+    <string name="ui_settings_selection_debounce_title">Selection debounce (ms)</string>
+    <string name="ui_settings_selection_debounce_desc">Ignore rapid repeated taps on the same button. Set to 0 to disable.</string>
+    <string name="ui_settings_selection_highlight_title">Selection highlight (ms)</string>
+    <string name="ui_settings_selection_highlight_desc">Show a brief outline after selecting a button. Set to 0 to disable.</string>
     <string name="ui_settings_selection_sound_title">Selection sound</string>
     <string name="ui_settings_auditory_fishing_title">Auditory fishing</string>
     <string name="ui_settings_auditory_fishing_desc">Whisper the label when a button is hovered or touched.</string>

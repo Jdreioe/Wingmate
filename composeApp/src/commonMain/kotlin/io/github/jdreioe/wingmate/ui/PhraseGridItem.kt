@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -81,6 +82,7 @@ fun PhraseGridItem(
     index: Int = 0,
     total: Int = 0,
     readOnly: Boolean = false,
+    isSelectionHighlighted: Boolean = false,
     onCopyAudio: ((filePath: String) -> Unit)? = null,
 ) {
     val koin = getKoin()
@@ -111,6 +113,13 @@ fun PhraseGridItem(
         settings.highContrastMode -> highContrastContent
         item.backgroundColor != null -> contrastingContentColor(bgColor)
         else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    // #120: distinct high-contrast outline for the time-bounded selection highlight.
+    val selectionHighlightColor = if (settings.highContrastMode) {
+        highContrastContent
+    } else {
+        MaterialTheme.colorScheme.tertiary
     }
     
     val speechService: SpeechService = koinInject()
@@ -366,6 +375,13 @@ fun PhraseGridItem(
                         Icon(imageVector = Icons.Filled.Close, contentDescription = deleteLabel, tint = contentColor)
                     }
                 }
+            }
+            if (isSelectionHighlighted) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .border(4.dp, selectionHighlightColor, RoundedCornerShape(8.dp))
+                )
             }
         }
     }
