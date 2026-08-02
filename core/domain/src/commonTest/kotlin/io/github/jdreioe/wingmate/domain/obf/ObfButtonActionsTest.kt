@@ -30,6 +30,14 @@ class ObfButtonActionsTest {
         assertEquals(ObfButtonActionEffect.Clear, parseObfButtonAction(":clear"))
         assertEquals(ObfButtonActionEffect.Speak, parseObfButtonAction(":speak"))
         assertEquals(ObfButtonActionEffect.Home, parseObfButtonAction(":home"))
+        assertEquals(ObfButtonActionEffect.Predictions, parseObfButtonAction(":prediction"))
+    }
+
+    @Test
+    fun parse_predictionsAlias_isSupported() {
+        assertEquals(ObfButtonActionEffect.Predictions, parseObfButtonAction(":predictions"))
+        assertEquals(ObfButtonActionEffect.Predictions, parseObfButtonAction(":PREDICTION"))
+        assertEquals(ObfButtonActionEffect.Predictions, parseObfButtonAction(" :predictions "))
     }
 
     @Test

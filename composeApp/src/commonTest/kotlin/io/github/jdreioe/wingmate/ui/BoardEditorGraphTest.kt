@@ -147,6 +147,41 @@ class BoardEditorGraphTest {
     }
 
     @Test
+    fun fieldVisibilityCanBeChangedWithoutRemovingTheField() {
+        val visible = updateDraftCell(
+            graph = graph(),
+            boardId = "home",
+            row = 0,
+            column = 0,
+            label = "Private",
+            vocalization = null,
+            imageUrl = null,
+            backgroundColor = null,
+            language = null,
+            hidden = false,
+            linkedBoardId = null
+        )
+
+        val hidden = updateDraftCell(
+            graph = visible,
+            boardId = "home",
+            row = 0,
+            column = 0,
+            label = "Private",
+            vocalization = null,
+            imageUrl = null,
+            backgroundColor = null,
+            language = null,
+            hidden = true,
+            linkedBoardId = null
+        )
+
+        assertEquals(1, hidden.boards.single().buttons.size)
+        assertTrue(hidden.boards.single().buttons.single().hidden)
+        assertEquals("Private", hidden.boards.single().buttons.single().label)
+    }
+
+    @Test
     fun resizingAFieldKeepsItsRepeatedIdAndMakesOneUndoableEdit() {
         val graph = graph(
             order = listOf(

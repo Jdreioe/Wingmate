@@ -18,17 +18,22 @@ fun contrastingContentColor(background: Color): Color {
  * - RGBA: rgba(255, 0, 0, 0.5)
  */
 fun parseHexToColor(hexMaybe: String?): Color {
-    if (hexMaybe.isNullOrBlank()) return Color.White
-    val s = hexMaybe.trim()
+    return parseObfColorOrNull(hexMaybe) ?: Color.White
+}
+
+/** Strict OBF/CSS color parsing for rendering user-authored board colors. */
+fun parseObfColorOrNull(value: String?): Color? {
+    if (value.isNullOrBlank()) return null
+    val s = value.trim()
     
     // Handle rgb(r, g, b) format
     if (s.startsWith("rgb(") && s.endsWith(")")) {
         val inner = s.removePrefix("rgb(").removeSuffix(")")
         val parts = inner.split(",").map { it.trim() }
         if (parts.size == 3) {
-            val r = parts[0].toIntOrNull() ?: 255
-            val g = parts[1].toIntOrNull() ?: 255
-            val b = parts[2].toIntOrNull() ?: 255
+            val r = parts[0].toIntOrNull()?.takeIf { it in 0..255 } ?: return null
+            val g = parts[1].toIntOrNull()?.takeIf { it in 0..255 } ?: return null
+            val b = parts[2].toIntOrNull()?.takeIf { it in 0..255 } ?: return null
             return Color(r, g, b)
         }
     }
@@ -38,10 +43,10 @@ fun parseHexToColor(hexMaybe: String?): Color {
         val inner = s.removePrefix("rgba(").removeSuffix(")")
         val parts = inner.split(",").map { it.trim() }
         if (parts.size == 4) {
-            val r = parts[0].toIntOrNull() ?: 255
-            val g = parts[1].toIntOrNull() ?: 255
-            val b = parts[2].toIntOrNull() ?: 255
-            val a = parts[3].toFloatOrNull() ?: 1f
+            val r = parts[0].toIntOrNull()?.takeIf { it in 0..255 } ?: return null
+            val g = parts[1].toIntOrNull()?.takeIf { it in 0..255 } ?: return null
+            val b = parts[2].toIntOrNull()?.takeIf { it in 0..255 } ?: return null
+            val a = parts[3].toFloatOrNull()?.takeIf { it in 0f..1f } ?: return null
             return Color(r, g, b, (a * 255).toInt())
         }
     }
@@ -53,8 +58,8 @@ fun parseHexToColor(hexMaybe: String?): Color {
         4 -> hex[0].toString() + hex[0] + hex.drop(1).map { "$it$it" }.joinToString("") // #ARGB
         6 -> "FF" + hex
         8 -> hex
-        else -> hex.padStart(8, 'F')
+        else -> return null
     }
-    val intVal = try { full.toLong(16).toInt() } catch (_: Throwable) { 0xFFFFFFFF.toInt() }
+    val intVal = try { full.toLong(16).toInt() } catch (_: Throwable) { return null }
     return Color(intVal)
 }

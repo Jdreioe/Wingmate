@@ -39,6 +39,18 @@ actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
 }
 
 @Composable
+actual fun PlatformBackgroundEffect(onBackground: () -> Unit) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, onBackground) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) onBackground()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+}
+
+@Composable
 actual fun rememberMicrophonePermissionState(): MicrophonePermissionState {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current

@@ -34,6 +34,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
@@ -62,15 +63,13 @@ import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
@@ -105,6 +104,7 @@ import wingmatekmp.composeapp.generated.resources.board_workspace_clear_sentence
 import wingmatekmp.composeapp.generated.resources.board_workspace_delete_last
 import wingmatekmp.composeapp.generated.resources.board_workspace_speak_sentence
 import wingmatekmp.composeapp.generated.resources.board_workspace_home
+import wingmatekmp.composeapp.generated.resources.board_workspace_temporarily_revealed
 import wingmatekmp.composeapp.generated.resources.board_cell_opens_board
 import wingmatekmp.composeapp.generated.resources.board_resize_field_label
 import wingmatekmp.composeapp.generated.resources.board_resize_increase_width
@@ -122,6 +122,25 @@ internal data class BoardGridItem(
     val columnSpan: Int,
     val button: ObfButton?
 )
+
+internal fun isBoardButtonVisible(
+    button: ObfButton,
+    isEditMode: Boolean,
+    showHiddenButtons: Boolean
+): Boolean = !button.hidden || isEditMode || showHiddenButtons
+
+internal class HiddenButtonsSession {
+    var revealed by mutableStateOf(false)
+        private set
+
+    fun toggle() {
+        revealed = !revealed
+    }
+
+    fun reset() {
+        revealed = false
+    }
+}
 
 internal fun fieldFontScale(rowSpan: Int, columnSpan: Int): Float {
     val area = rowSpan.coerceAtLeast(1).toFloat() * columnSpan.coerceAtLeast(1)
@@ -151,14 +170,22 @@ fun ObfBoardView(
     sentenceText: String = "",
     symbolBarPresentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
     boardSettings: ResolvedBoardSettings? = null,
+    showHiddenButtons: Boolean = false,
+    predictionLabels: Map<String, String> = emptyMap(),
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
     selectedFieldAnchor: Pair<Int, Int>? = null,
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
+    onGridHeightFractionChange: ((Float) -> Unit)? = null,
     homeBoardId: String? = null
 ) {
     val settings by rememberReactiveSettings()
+    val boardBackground = if (settings.highContrastMode) {
+        MaterialTheme.colorScheme.background
+    } else {
+        parseObfColorOrNull(board.backgroundColor) ?: MaterialTheme.colorScheme.background
+    }
     val effectiveBoardSettings = boardSettings ?: resolveBoardSettings(
         appShowLabels = settings.showLabels,
         appShowSymbols = settings.showSymbols,
@@ -176,7 +203,7 @@ fun ObfBoardView(
 
     if (isAbsoluteLayout) {
         if (showMessageBar) {
-            BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+            BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground)) {
                 val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
                 Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                     SymbolBar(
@@ -204,13 +231,15 @@ fun ObfBoardView(
                             isEditMode,
                             onButtonClick,
                             homeBoardId,
-                            effectiveBoardSettings
+                            effectiveBoardSettings,
+                            showHiddenButtons,
+                            predictionLabels
                         )
                     }
                 }
             }
         } else {
-            BoxWithConstraints(modifier = modifier.fillMaxSize().padding(8.dp)) {
+            BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground).padding(8.dp)) {
                 renderAbsoluteButtons(
                     board,
                     imagesById,
@@ -218,7 +247,9 @@ fun ObfBoardView(
                     isEditMode,
                     onButtonClick,
                     homeBoardId,
-                    effectiveBoardSettings
+                    effectiveBoardSettings,
+                    showHiddenButtons,
+                    predictionLabels
                 )
             }
         }
@@ -227,7 +258,7 @@ fun ObfBoardView(
         val rows = grid.rows.coerceAtLeast(1)
         
         // Use Column/Row for fixed grid that fills the space
-        BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground)) {
             val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
             Column(
                 modifier = Modifier.fillMaxSize().padding(8.dp),
@@ -257,22 +288,42 @@ fun ObfBoardView(
                 }
                 val pageScrollState = rememberScrollState()
                 BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    val minimumCellHeight = 96.dp * settings.inputFieldScale.coerceIn(0.5f, 2f)
+                    val availableGridHeight = maxHeight
+                    val minimumCellHeight = (if (board.compactGrid) 72.dp else 96.dp) *
+                        settings.inputFieldScale.coerceIn(0.5f, 2f)
                     val minimumContentHeight = minimumCellHeight * rows + 8.dp * (rows - 1)
-                    val contentHeight = maxOf(maxHeight, minimumContentHeight)
+                    val defaultHeightFraction = if (board.compactGrid) {
+                        (minimumContentHeight / availableGridHeight).coerceIn(0.15f, 1f)
+                    } else {
+                        1f
+                    }
+                    var previewHeightFraction by remember(
+                        board.id,
+                        board.gridHeightFraction,
+                        availableGridHeight
+                    ) {
+                        mutableFloatStateOf(board.gridHeightFraction ?: defaultHeightFraction)
+                    }
+                    val contentHeight = availableGridHeight * previewHeightFraction
                     Box(modifier = Modifier.fillMaxSize().verticalScroll(pageScrollState)) {
-                        SpanningBoardGrid(
-                            rows = rows,
-                            columns = columns,
-                            items = gridItems,
-                            modifier = Modifier.fillMaxWidth().height(contentHeight),
-                            onMove = onCellMove,
-                            selectedField = selectedFieldAnchor,
-                            selectedFieldSpans = selectedFieldSpans,
-                            onResizeField = onResizeField
-                        ) { item ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(contentHeight)
+                                .align(Alignment.BottomCenter)
+                        ) {
+                            SpanningBoardGrid(
+                                rows = rows,
+                                columns = columns,
+                                items = gridItems,
+                                modifier = Modifier.fillMaxSize(),
+                                onMove = onCellMove,
+                                selectedField = selectedFieldAnchor,
+                                selectedFieldSpans = selectedFieldSpans,
+                                onResizeField = onResizeField
+                            ) { item ->
                             val button = item.button
-                            val isVisible = button != null && (!button.hidden || isEditMode)
+                            val isVisible = button != null && isBoardButtonVisible(button, isEditMode, showHiddenButtons)
                             Box(modifier = Modifier.fillMaxSize()) {
                                 if (button != null && isVisible) {
                                     val image = button.imageId?.let { imagesById[it] }
@@ -287,10 +338,12 @@ fun ObfBoardView(
                                                 ?: onButtonClick(button)
                                         },
                                         isEditMode = isEditMode,
+                                        isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
                                         boardStrings = board.strings,
                                         locale = settings.primaryLanguage,
                                         boardSettings = effectiveBoardSettings,
+                                        labelOverride = predictionLabels[button.id],
                                         fieldFontScale = fieldFontScale(item.rowSpan, item.columnSpan)
                                     )
                                 } else if (isEditMode && button == null) {
@@ -310,6 +363,16 @@ fun ObfBoardView(
                                     Spacer(modifier = Modifier.fillMaxSize())
                                 }
                             }
+                            }
+                            if (isEditMode && onGridHeightFractionChange != null) {
+                                GridHeightResizeHandle(
+                                    currentFraction = previewHeightFraction,
+                                    availableHeight = availableGridHeight,
+                                    onFractionPreview = { previewHeightFraction = it },
+                                    onFractionCommit = onGridHeightFractionChange,
+                                    modifier = Modifier.align(Alignment.TopCenter)
+                                )
+                            }
                         }
                     }
                 }
@@ -317,7 +380,7 @@ fun ObfBoardView(
         }
     } else {
         // Fallback: scrollable grid for boards without explicit grid
-        BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground)) {
             val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
             Column(
                 modifier = Modifier.fillMaxSize().padding(4.dp),
@@ -345,7 +408,7 @@ fun ObfBoardView(
                     modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    board.buttons.chunked(4).forEach { rowButtons ->
+                    board.buttons.filter { isBoardButtonVisible(it, isEditMode, showHiddenButtons) }.chunked(4).forEach { rowButtons ->
                         Row(
                             modifier = Modifier.fillMaxWidth().height(100.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -360,16 +423,20 @@ fun ObfBoardView(
                                             image?.path?.let { path -> extractedImages[path] }
                                         },
                                         onClick = { onButtonClick(button) },
+                                        isEditMode = isEditMode,
+                                        isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
                                         boardStrings = board.strings,
                                         locale = settings.primaryLanguage,
-                                        boardSettings = effectiveBoardSettings
-                                    )
+                                        boardSettings = effectiveBoardSettings,
+                                        labelOverride = predictionLabels[button.id]
+                                        )
                                 }
                             }
                             // Fill remaining space if row is not complete
                             repeat(4 - rowButtons.size) {
                                 Spacer(modifier = Modifier.weight(1f))
+                            }
                             }
                         }
                     }
@@ -377,7 +444,6 @@ fun ObfBoardView(
             }
         }
     }
-}
 
 internal fun buildBoardGridItems(
     grid: io.github.jdreioe.wingmate.domain.obf.ObfGrid,
@@ -817,8 +883,6 @@ fun SymbolBar(
     modifier: Modifier = Modifier
 ) {
     val textScrollState = rememberScrollState()
-    val symbolListState = rememberLazyListState()
-    var previousItemCount by remember { mutableIntStateOf(0) }
     val textStyle = when (presentation) {
         SymbolBarPresentation.Normal -> MaterialTheme.typography.titleMedium
         SymbolBarPresentation.Fullscreen -> MaterialTheme.typography.headlineSmall
@@ -828,12 +892,9 @@ fun SymbolBar(
     }
 
     LaunchedEffect(selectedButtons.size) {
-        val appended = selectedButtons.size > previousItemCount
-        previousItemCount = selectedButtons.size
-        if (appended) {
+        if (selectedButtons.isNotEmpty()) {
             withFrameNanos { }
-            launch { textScrollState.animateScrollTo(textScrollState.maxValue) }
-            launch { symbolListState.animateScrollToItem(selectedButtons.lastIndex) }
+            textScrollState.animateScrollTo(textScrollState.maxValue)
         }
     }
 
@@ -842,100 +903,102 @@ fun SymbolBar(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-            if (sentenceText.isNotEmpty()) {
-                Box(
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 64.dp)
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(max = maximumTextHeight)
+                    .verticalScroll(textScrollState)
+                    .clearAndSetSemantics {
+                        contentDescription = sentenceText
+                    },
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text(
+                    text = sentenceText,
+                    style = textStyle,
                     modifier = Modifier
-                        .weight(1f, fill = false)
                         .fillMaxWidth()
-                        .heightIn(max = maximumTextHeight)
-                        .verticalScroll(textScrollState)
-                        .clearAndSetSemantics {
-                            contentDescription = sentenceText
-                        },
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    Text(
-                        text = sentenceText,
-                        style = textStyle,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(
-                                start = 8.dp,
-                                end = if (presentation == SymbolBarPresentation.Fullscreen) 64.dp else 8.dp,
-                                top = 4.dp,
-                                bottom = 4.dp
-                            )
-                    )
-                }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth().height(64.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                LazyRow(
-                    state = symbolListState,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    items(selectedButtons) { (button, bitmap) ->
-                        val resolvedBitmap = remember(button, bitmap) {
-                            bitmap ?: button.imageId?.let { id ->
-                                imagesById[id]?.path?.let { path ->
-                                    extractedImages[path]?.toComposeImageBitmap()
-                                }
-                            }
-                        }
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.width(60.dp)
-                        ) {
-                            if (resolvedBitmap != null) {
-                                Image(
-                                    bitmap = resolvedBitmap,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp))
-                                )
-                            }
-                            Text(
-                                text = button.label ?: "",
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+            if (showSpeak || showDelete || showClear) {
+                VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (showSpeak) {
+                    FilledIconButton(
+                        onClick = onSpeak,
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = stringResource(Res.string.board_workspace_speak_sentence))
                     }
                 }
-
-                if (showSpeak || showDelete || showClear) {
-                    VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
+                if (showDelete) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.board_workspace_delete_last))
+                    }
                 }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (showSpeak) {
-                        FilledIconButton(
-                            onClick = onSpeak,
-                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = stringResource(Res.string.board_workspace_speak_sentence))
-                        }
-                    }
-                    if (showDelete) {
-                        IconButton(onClick = onDelete) {
-                            Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.board_workspace_delete_last))
-                        }
-                    }
-                    if (showClear) {
-                        IconButton(onClick = onClear) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(Res.string.board_workspace_clear_sentence))
-                        }
+                if (showClear) {
+                    IconButton(onClick = onClear) {
+                        Icon(Icons.Default.Clear, contentDescription = stringResource(Res.string.board_workspace_clear_sentence))
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun GridHeightResizeHandle(
+    currentFraction: Float,
+    availableHeight: androidx.compose.ui.unit.Dp,
+    onFractionPreview: (Float) -> Unit,
+    onFractionCommit: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val availableHeightPx = with(LocalDensity.current) { availableHeight.toPx().coerceAtLeast(1f) }
+    var dragFraction by remember { mutableFloatStateOf(currentFraction) }
+    var dragStartFraction by remember { mutableFloatStateOf(currentFraction) }
+    val latestCurrentFraction by rememberUpdatedState(currentFraction)
+    val latestOnFractionPreview by rememberUpdatedState(onFractionPreview)
+    val latestOnFractionCommit by rememberUpdatedState(onFractionCommit)
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .pointerInput(availableHeightPx) {
+                detectVerticalDragGestures(
+                    onDragStart = {
+                        dragStartFraction = latestCurrentFraction
+                        dragFraction = latestCurrentFraction
+                    },
+                    onDragEnd = { latestOnFractionCommit(dragFraction) },
+                    onDragCancel = { latestOnFractionPreview(dragStartFraction) },
+                    onVerticalDrag = { change, dragAmount ->
+                        change.consume()
+                        dragFraction = (dragFraction - dragAmount / availableHeightPx).coerceIn(0.15f, 1f)
+                        latestOnFractionPreview(dragFraction)
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .width(72.dp)
+                .height(5.dp)
+                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+        )
     }
 }
 
@@ -946,10 +1009,12 @@ fun ObfButtonItem(
     extractedImageBytes: ByteArray? = null,
     onClick: () -> Unit,
     isEditMode: Boolean = false,
+    isTemporarilyRevealed: Boolean = false,
     isHomeLink: Boolean = false,
     boardStrings: Map<String, Map<String, String>> = emptyMap(),
     locale: String? = null,
     boardSettings: ResolvedBoardSettings? = null,
+    labelOverride: String? = null,
     fieldFontScale: Float = 1f
 ) {
     val speechService: SpeechService = koinInject()
@@ -964,8 +1029,9 @@ fun ObfButtonItem(
         appActivationBehavior = settings.boardActivationBehavior,
         appReturnBehavior = settings.boardReturnBehavior
     )
-    val displayLabel = resolveObfLocalizedString(boardStrings, locale, button.label)
+    val displayLabel = labelOverride ?: resolveObfLocalizedString(boardStrings, locale, button.label)
     val displayVocalization = resolveObfLocalizedString(boardStrings, locale, button.vocalization)
+    val temporarilyRevealedDescription = stringResource(Res.string.board_workspace_temporarily_revealed)
     val boundedFontScale = fieldFontScale.coerceIn(1f, 2f)
     val scaledLabelMedium = MaterialTheme.typography.labelMedium.copy(
         fontSize = MaterialTheme.typography.labelMedium.fontSize * boundedFontScale,
@@ -1091,6 +1157,14 @@ fun ObfButtonItem(
             .padding(if (settings.highContrastMode) 2.dp else 0.dp)
             .scale(scale)
             .alpha(if (button.hidden && isEditMode) 0.5f else 1f)
+            .semantics {
+                if (isTemporarilyRevealed) {
+                    contentDescription = listOfNotNull(
+                        displayLabel,
+                        temporarilyRevealedDescription
+                    ).joinToString(", ")
+                }
+            }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -1138,6 +1212,14 @@ fun ObfButtonItem(
         } else null,
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(4.dp), contentAlignment = Alignment.Center) {
+            if (isTemporarilyRevealed) {
+                Icon(
+                    Icons.Default.Visibility,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.align(Alignment.TopEnd).size(18.dp)
+                )
+            }
             // Dwell Progress Overlay
             if (dwellProgress > 0f) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -1259,7 +1341,9 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
     isEditMode: Boolean,
     onButtonClick: (ObfButton) -> Unit,
     homeBoardId: String?,
-    boardSettings: ResolvedBoardSettings
+    boardSettings: ResolvedBoardSettings,
+    showHiddenButtons: Boolean,
+    predictionLabels: Map<String, String>
 ) {
     val containerWidth = maxWidth
     val containerHeight = maxHeight
@@ -1268,7 +1352,7 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
         val top = (button.top ?: 0.0) * containerHeight.value
         val w = (button.width ?: 0.1) * containerWidth.value
         val h = (button.height ?: 0.1) * containerHeight.value
-        if (!button.hidden || isEditMode) {
+        if (isBoardButtonVisible(button, isEditMode, showHiddenButtons)) {
             val image = button.imageId?.let { imagesById[it] }
             Box(
                 modifier = Modifier
@@ -1283,8 +1367,10 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
                     },
                     onClick = { onButtonClick(button) },
                     isEditMode = isEditMode,
+                    isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                     isHomeLink = button.isHomeNavigation(homeBoardId),
-                    boardSettings = boardSettings
+                    boardSettings = boardSettings,
+                    labelOverride = predictionLabels[button.id]
                 )
             }
         }

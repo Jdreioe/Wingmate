@@ -84,7 +84,12 @@ chmod +x gradlew
 # === Build Shared Framework for iOS Device (Release) ===
 # Xcode Cloud typically builds Release + iphoneos for archiving
 echo "Building shared Kotlin framework for iosArm64 (Release)..."
-./gradlew :shared:linkReleaseFrameworkIosArm64 --quiet
+# Use a single-use daemon so its heap is returned before xcodebuild starts.
+# --stacktrace keeps the actionable compiler error visible in Xcode Cloud logs.
+./gradlew :shared:linkReleaseFrameworkIosArm64 \
+  --no-daemon \
+  --max-workers=2 \
+  --stacktrace
 
 # === Copy Framework to Xcode Search Path ===
 FRAMEWORK_SRC="shared/build/bin/iosArm64/releaseFramework/Shared.framework"

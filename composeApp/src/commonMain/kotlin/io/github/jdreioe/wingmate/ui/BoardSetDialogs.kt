@@ -37,7 +37,7 @@ import org.koin.compose.getKoin
 import wingmatekmp.composeapp.generated.resources.*
 
 internal data class FieldLanguageOption(val tag: String, val label: String)
-internal enum class BoardSetTemplate { Blank, Calculator }
+internal enum class BoardSetTemplate { Blank, Calculator, Keyboard }
 
 @Composable
 internal fun CreateBoardSetDialog(
@@ -49,6 +49,7 @@ internal fun CreateBoardSetDialog(
     var columnsText by remember { mutableStateOf("8") }
     var template by remember { mutableStateOf(BoardSetTemplate.Blank) }
     val calculatorName = stringResource(Res.string.calculator_default_name)
+    val keyboardName = stringResource(Res.string.keyboard_default_name)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -75,6 +76,14 @@ internal fun CreateBoardSetDialog(
                             if (name.isBlank()) name = calculatorName
                         },
                         label = { Text(stringResource(Res.string.board_dialog_template_calculator)) }
+                    )
+                    FilterChip(
+                        selected = template == BoardSetTemplate.Keyboard,
+                        onClick = {
+                            template = BoardSetTemplate.Keyboard
+                            if (name.isBlank()) name = keyboardName
+                        },
+                        label = { Text(stringResource(Res.string.board_dialog_template_keyboard)) }
                     )
                 }
                 if (template == BoardSetTemplate.Blank) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -171,6 +180,8 @@ internal fun EditBoardCellDialog(
     availableLanguages: List<FieldLanguageOption> = emptyList(),
     initialLanguage: String? = null,
     initialMathMode: Boolean = false,
+initialHidden: Boolean = false,
+    showMathMode: Boolean = true,
     availableBoards: List<ObfBoard> = emptyList(),
     initialLinkedBoardId: String? = null,
     initialAction: String? = null,
@@ -185,6 +196,7 @@ internal fun EditBoardCellDialog(
         backgroundColor: String?,
         language: String?,
         mathMode: Boolean,
+        hidden: Boolean,
         linkedBoardId: String?,
         action: String?,
         actions: List<String>
@@ -200,6 +212,7 @@ internal fun EditBoardCellDialog(
     var backgroundColor by remember { mutableStateOf(initialBackgroundColor) }
     var language by remember { mutableStateOf(initialLanguage) }
     var mathMode by remember { mutableStateOf(initialMathMode) }
+    var hidden by remember { mutableStateOf(initialHidden) }
     var linkedBoardId by remember { mutableStateOf(initialLinkedBoardId) }
     var action by remember { mutableStateOf(initialAction) }
     val actions by remember { mutableStateOf(initialActions) }
@@ -263,22 +276,41 @@ internal fun EditBoardCellDialog(
                     label = { Text(stringResource(Res.string.board_dialog_vocalization)) },
                     singleLine = true
                 )
+                if (showMathMode) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(Res.string.speech_math_mode),
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            Text(
+                                stringResource(Res.string.speech_math_mode_description),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = mathMode, onCheckedChange = { mathMode = it })
+                    }
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            stringResource(Res.string.speech_math_mode),
+                            stringResource(Res.string.board_dialog_hidden),
                             style = MaterialTheme.typography.labelLarge
                         )
                         Text(
-                            stringResource(Res.string.speech_math_mode_description),
+                            stringResource(Res.string.board_dialog_hidden_description),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Switch(checked = mathMode, onCheckedChange = { mathMode = it })
+                    Switch(checked = hidden, onCheckedChange = { hidden = it })
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { showImageSourcePicker = true }) {
@@ -485,6 +517,11 @@ internal fun EditBoardCellDialog(
                         onClick = { action = if (action == ":speak") null else ":speak" },
                         label = { Text(stringResource(Res.string.board_dialog_action_speak_sentence)) }
                     )
+                    FilterChip(
+                        selected = action == ":prediction",
+                        onClick = { action = if (action == ":prediction") null else ":prediction" },
+                        label = { Text(stringResource(Res.string.board_dialog_action_prediction)) }
+                    )
                 }
             }
         },
@@ -499,6 +536,7 @@ internal fun EditBoardCellDialog(
                         backgroundColor,
                         language,
                         mathMode,
+                        hidden,
                         linkedBoardId.takeIf { opensPage },
                         action?.trim()?.ifBlank { null },
                         actions

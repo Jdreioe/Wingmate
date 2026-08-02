@@ -48,7 +48,7 @@ class BoardSentenceTest {
     }
 
     @Test
-    fun blankTokensAreIgnored() {
+    fun explicitSpaceTokensArePreserved() {
         val selected = listOf(
             selectedButton(label = "Hello"),
             selectedButton(label = " "),
@@ -56,6 +56,42 @@ class BoardSentenceTest {
         )
 
         assertEquals("Hello there", buildResolvedSentence(selected, board(), "en"))
+    }
+
+    @Test
+    fun explicitSpaceBetweenKeyboardLettersIsPreserved() {
+        val selected = listOf(
+            selectedButton(label = "d"),
+            selectedButton(label = " "),
+            selectedButton(label = "e")
+        )
+
+        assertEquals("d e", buildResolvedSentence(selected, board(), "en"))
+    }
+
+    @Test
+    fun spellingBoardDoesNotAutoInsertSpaces() {
+        val spelling = board().withSpellingMode(true)
+        val selected = listOf(
+            selectedButton(label = "h"),
+            selectedButton(label = "e"),
+            selectedButton(label = "l"),
+            selectedButton(label = "lo")
+        )
+
+        assertEquals("hello", buildResolvedSentence(selected, spelling, "en"))
+    }
+
+    @Test
+    fun spellingBoardPreservesExplicitSpaceTokens() {
+        val spelling = board().withSpellingMode(true)
+        val selected = listOf(
+            selectedButton(label = "hello"),
+            selectedButton(label = " "),
+            selectedButton(label = "world")
+        )
+
+        assertEquals("hello world", buildResolvedSentence(selected, spelling, "en"))
     }
 
     @Test

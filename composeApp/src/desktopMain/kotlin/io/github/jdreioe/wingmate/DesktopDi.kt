@@ -33,6 +33,10 @@ import io.github.jdreioe.wingmate.infrastructure.JvmImageCacher
 import io.github.jdreioe.wingmate.infrastructure.JvmSystemVoiceProvider
 import io.github.jdreioe.wingmate.infrastructure.PartnerWindowManager
 import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
+import io.github.jdreioe.wingmate.infrastructure.DesktopSecureEditingCredentialStorage
+import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
+import io.github.jdreioe.wingmate.application.BackupMediaAccess
+import io.github.jdreioe.wingmate.infrastructure.DesktopBackupMediaAccess
 import io.github.jdreioe.wingmate.platform.AudioClipboard
 import io.github.jdreioe.wingmate.platform.DesktopAudioClipboard
 import io.github.jdreioe.wingmate.platform.DesktopFilePicker
@@ -82,6 +86,8 @@ fun overrideDesktopSpeechService() {
             singleOf(::JvmFileStorage) { bind<FileStorage>() }
             singleOf(::JvmSoundPlayer) { bind<SoundPlayer>() }
             singleOf(::JvmImageCacher) { bind<ImageCacher>() }
+            singleOf(::DesktopSecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
+            singleOf(::DesktopBackupMediaAccess) { bind<BackupMediaAccess>() }
             
             single { FileSystem.SYSTEM }
             single(named("logDir")) { DesktopPaths.dataDir().toAbsolutePath().toString() }

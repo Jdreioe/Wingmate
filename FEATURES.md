@@ -62,18 +62,18 @@ The following list is taken from the OpenAAC [AAC App Development](https://www.o
   Some apps support multiple symbol libraries, and it can be useful to quickly switch between them in batch. Some school districts or educational programs center their material around a particular symbol library, so being able to match AAC symbols to those used in other contexts is an oft-requested feature.
 - [ ] ⭐ **color coding of buttons by word type**
   This is often done with a variation of the Fitzgerald Key, and words of different parts of speech are colored differently. The benefits are twofold: it provides some basic instruction on grammar for the AAC user, and because words are often clustered by word type, it creates regions of color which help organize an potentially-large grid of options.
-- [ ] 💡 **quick access to hide/show buttons**
-  Sometimes called a "Babble" function, this allows the user, for a single session, to turn on all hidden buttons. This provides value for those who are exploring a new system but who, for varied regions, may not be best served by seeing all buttons all the time.
-- [ ] 💡 **option to lock editing behind an access code**
-  It is important to respect the AAC user, and ideally they would have control over their own vocabulary, but there may be cases where the AAC user is not proficient enough with their technology to reliably work the editing interface, or where they may be entering the editing interface on accident. Keep in mind that some users may be editing or deleting buttons as a method of communication and may feel they are being silenced or forcibly-controlled if they are locked out of this type of interface.
-- [ ] 💡 **offline backup**
-  Devices break and get reset. Sometimes administrators run a wipe of all campus devices without realizing the full repercussions, for example. It is important to provide users with a way to either manually or automatically store what they have on their device to a remote location. Some apps have their own cloud storage, others rely on storage provides like Apple, DropBox, etc.
+- [x] 💡 **quick access to hide/show buttons** (#99)
+  Hidden buttons can be temporarily revealed for the current session without modifying the saved board, and authors can change a button's persisted visibility from the field editor.
+- [x] 💡 **option to lock editing behind an access code** (#100)
+  Editing can be protected by an optional access code backed by platform-secure credential storage, with explicit change, disable, timeout, and recovery flows. Communication remains available while editing is locked.
+- [x] 💡 **Backup Wingmate** (#101)
+  A versioned `.wingmate-backup` archive can be created and restored offline across supported platforms. It contains vocabulary, referenced local media, recordings, settings, history, voices, dictionaries, and Azure configuration; restore validates the archive before atomically replacing data and refreshes the live app without a restart. Archives are not encrypted, and editing access codes remain excluded.
 - [x] 💡 **sharing vocabulary sets across users**
   The amount of work it takes to create or modify an AAC vocabulary is significant. Once someone has worked to create a vocabulary, there is often value in sharing it, either with other known users, or publicly for others to use.
 - [ ] 💡 **different-sized buttons**
   Some layouts work better with mostly-small buttons and some larger buttons, such as a keyboard with word suggestions. Additionally, some AAC vocabulary creators prefer to draw extra attention to certain buttons, and having them span columns or rows is a useful way to improve access or attention.
-- [ ] 💜 **choose grid background color**
-  Users with visual impairments may find it is easier to look at and understand buttons when there is a darker background to help bring things into focus (think, dark mode). Additionally, some vocabulary designers may use different-colored backgrounds in different views as a visual indicator of their purpose.
+- [x] 💜 **choose grid background color** (#102)
+  Authors can set, preview, change, or clear a per-page grid background color while existing pages continue to inherit the theme default.
 - [ ] 💜 **set background image behind buttons**
   Users with visual impairments may find it easier to see the words or symbols on buttons with a black background, either filling the entire button, or just behind the actual image.
 - [ ] 💜 **customizable keyboards**

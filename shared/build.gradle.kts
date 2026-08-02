@@ -56,6 +56,7 @@ kotlin {
                 implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
                 // Add logging for Kotlin Multiplatform
                 implementation("io.github.oshai:kotlin-logging:7.0.0")
+                implementation(libs.okio)
 
                 // MVIKotlin for BLoC pattern
                 val mviKotlinVersion = "3.3.0"

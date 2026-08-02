@@ -16,6 +16,7 @@ import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.application.VoiceUseCase
+import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import org.koin.compose.koinInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,6 +30,8 @@ fun App() {
     val settingsRepository = koinInject<SettingsRepository>()
     val featureUsageReporter = koinInject<FeatureUsageReporter>()
     val voiceUseCase = koinInject<VoiceUseCase>()
+    val backupManager = koinInject<CompleteBackupManager>()
+    val restoreRevision by backupManager.restoreRevision.collectAsState()
 
     AppTheme {
         Surface(
@@ -83,6 +86,16 @@ fun App() {
                 featureUsageReporter.reportEvent(FeatureUsageEvents.WELCOME_REOPENED)
             }
 
+            fun navigateAfterBackupRestore(settings: Settings, hasSelectedVoice: Boolean) {
+                createBoardSetOnLaunch = false
+                startupBoardSetId = settings.startupBoardSetId
+                welcomeCompleted = settings.welcomeFlowCompleted
+                featureUsageReporter.setEnabled(settings.featureUsageReportingEnabled)
+                if (hasSelectedVoice) {
+                    currentScreen = routeFor(settings.startupMode)
+                }
+            }
+
             LaunchedEffect(Unit) {
                 val settings = withContext(Dispatchers.Default) {
                     runCatching { settingsRepository.get() }.getOrNull()
@@ -98,6 +111,19 @@ fun App() {
                     "welcome_completed" to (welcomeCompleted == true).toString(),
                     "voice_selected" to hasSelectedVoice.toString()
                 )
+            }
+
+            LaunchedEffect(restoreRevision) {
+                if (restoreRevision == 0L) return@LaunchedEffect
+                val settings = withContext(Dispatchers.Default) { settingsRepository.get() }
+                val hasSelectedVoice = withContext(Dispatchers.Default) {
+                    voiceUseCase.selected() != null
+                }
+                createBoardSetOnLaunch = false
+                startupBoardSetId = settings.startupBoardSetId
+                welcomeCompleted = settings.welcomeFlowCompleted
+                featureUsageReporter.setEnabled(settings.featureUsageReportingEnabled)
+                currentScreen = if (hasSelectedVoice) routeFor(settings.startupMode) else Screen.Welcome
             }
 
             LaunchedEffect(currentScreen) {
@@ -117,38 +143,41 @@ fun App() {
             // Draw the Surface behind the system UI, while keeping all routed
             // screen content and controls clear of bars, gestures, and cutouts.
             Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-                when (currentScreen) {
-                    Screen.Welcome -> {
-                        WelcomeScreen(
-                            onComplete = ::completeWelcomeAndNavigate
-                        )
-                    }
-                    Screen.Phrases -> {
-                        PhraseScreen(
-                            onBackToWelcome = ::showWelcomeFlow,
-                            onOpenBoardSetManager = {
-                                createBoardSetOnLaunch = false
-                                startupBoardSetId = null
-                                currentScreen = Screen.BoardSets
-                            }
-                        )
-                    }
-                    Screen.BoardSets -> {
-                        BoardSetManagerScreen(
-                            onBackToWelcome = ::showWelcomeFlow,
-                            onBack = {
-                                createBoardSetOnLaunch = false
-                                currentScreen = Screen.Phrases
-                            },
-                            createOnLaunch = createBoardSetOnLaunch,
-                            initialBoardSetId = startupBoardSetId
-                        )
-                    }
-                    null -> {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
+                key(restoreRevision) {
+                    when (currentScreen) {
+                        Screen.Welcome -> {
+                            WelcomeScreen(
+                                onComplete = ::completeWelcomeAndNavigate,
+                                onBackupRestored = ::navigateAfterBackupRestore
                             )
+                        }
+                        Screen.Phrases -> {
+                            PhraseScreen(
+                                onBackToWelcome = ::showWelcomeFlow,
+                                onOpenBoardSetManager = {
+                                    createBoardSetOnLaunch = false
+                                    startupBoardSetId = null
+                                    currentScreen = Screen.BoardSets
+                                }
+                            )
+                        }
+                        Screen.BoardSets -> {
+                            BoardSetManagerScreen(
+                                onBackToWelcome = ::showWelcomeFlow,
+                                onBack = {
+                                    createBoardSetOnLaunch = false
+                                    currentScreen = Screen.Phrases
+                                },
+                                createOnLaunch = createBoardSetOnLaunch,
+                                initialBoardSetId = startupBoardSetId
+                            )
+                        }
+                        null -> {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
+                                )
+                            }
                         }
                     }
                 }

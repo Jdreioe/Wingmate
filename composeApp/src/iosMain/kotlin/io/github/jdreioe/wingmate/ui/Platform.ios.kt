@@ -17,6 +17,9 @@ actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
 }
 
 @Composable
+actual fun PlatformBackgroundEffect(onBackground: () -> Unit) = Unit
+
+@Composable
 actual fun rememberMicrophonePermissionState(): MicrophonePermissionState {
     return MicrophonePermissionState(
         isGranted = true,

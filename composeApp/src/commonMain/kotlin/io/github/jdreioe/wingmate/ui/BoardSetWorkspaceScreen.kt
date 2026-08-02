@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -77,17 +79,21 @@ import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
+import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechSegment
+import io.github.jdreioe.wingmate.domain.SaidTextRepository
+import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonType
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
@@ -193,6 +199,7 @@ fun BoardSetManagerScreen(
     val voiceUseCase = koinInject<VoiceUseCase>()
     val featureUsageReporter = koinInject<io.github.jdreioe.wingmate.application.FeatureUsageReporter>()
     val updateService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.UpdateService>() }
+    val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
     val scope = rememberCoroutineScope()
     var route by remember { mutableStateOf<BoardSetRoute>(BoardSetRoute.Library) }
     var boardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
@@ -201,6 +208,8 @@ fun BoardSetManagerScreen(
     var showSettings by remember { mutableStateOf(false) }
     var showImportExport by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ObfBoardSet?>(null) }
+    var pendingProtectedDelete by remember { mutableStateOf<ObfBoardSet?>(null) }
+    var showDeleteAccessDialog by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     val loadError = stringResource(Res.string.board_sets_load_error)
     val duplicatedMessage = stringResource(Res.string.board_sets_duplicated)
@@ -220,6 +229,17 @@ fun BoardSetManagerScreen(
                 .onSuccess { boardSets = it }
                 .onFailure { statusMessage = it.message ?: loadError }
             isLoading = false
+        }
+    }
+
+    fun deleteBoardSet(boardSet: ObfBoardSet) {
+        scope.launch {
+            runCatching { useCase.deleteBoardSet(boardSet.id) }
+                .onSuccess {
+                    statusMessage = deletedMessage
+                    refreshBoardSets()
+                }
+                .onFailure { statusMessage = it.message ?: deleteError }
         }
     }
 
@@ -301,17 +321,35 @@ fun BoardSetManagerScreen(
         CreateBoardSetDialog(
             onDismiss = { showCreateDialog = false },
             onCreate = { name, rows, columns, template ->
+                if (template != BoardSetTemplate.Blank) {
+                    showCreateDialog = false
+                }
                 scope.launch {
                     runCatching {
                         when (template) {
                             BoardSetTemplate.Blank -> useCase.createBoardSet(name.trim(), rows, columns, defaultBoardName)
                             BoardSetTemplate.Calculator -> useCase.createCalculatorBoardSet(name.trim())
+                            BoardSetTemplate.Keyboard -> useCase.createKeyboardBoardSet(name.trim())
                         }
                     }
                         .onSuccess { created ->
                             showCreateDialog = false
-                            refreshBoardSets()
-                            route = BoardSetRoute.Workspace(created.id, BoardWorkspaceMode.Edit)
+                            when (template) {
+                                BoardSetTemplate.Blank -> {
+                                    refreshBoardSets()
+                                    route = BoardSetRoute.Workspace(created.id, BoardWorkspaceMode.Edit)
+                                }
+                                BoardSetTemplate.Calculator -> {
+                                    boardSets = (listOf(created) + boardSets)
+                                        .distinctBy { it.id }
+                                        .sortedByDescending { it.updatedAt }
+                                }
+                                BoardSetTemplate.Keyboard -> {
+                                    boardSets = (listOf(created) + boardSets)
+                                        .distinctBy { it.id }
+                                        .sortedByDescending { it.updatedAt }
+                                }
+                            }
                         }
                         .onFailure { statusMessage = it.message ?: createError }
                 }
@@ -329,18 +367,34 @@ fun BoardSetManagerScreen(
                     onClick = {
                         deleteTarget = null
                         scope.launch {
-                            runCatching { useCase.deleteBoardSet(boardSet.id) }
-                                .onSuccess {
-                                    statusMessage = deletedMessage
-                                    refreshBoardSets()
-                                }
-                                .onFailure { statusMessage = it.message ?: deleteError }
+                            if (editingAccessController?.requiresUnlock() == true) {
+                                pendingProtectedDelete = boardSet
+                                showDeleteAccessDialog = true
+                            } else {
+                                deleteBoardSet(boardSet)
+                            }
                         }
                     }
                 ) { Text(stringResource(Res.string.common_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { deleteTarget = null }) { Text(stringResource(Res.string.common_cancel)) }
+            }
+        )
+    }
+
+    if (showDeleteAccessDialog && editingAccessController != null) {
+        EditingAccessDialog(
+            controller = editingAccessController,
+            mode = EditingAccessDialogMode.Unlock,
+            onDismiss = {
+                showDeleteAccessDialog = false
+                pendingProtectedDelete = null
+            },
+            onSuccess = {
+                showDeleteAccessDialog = false
+                pendingProtectedDelete?.let(::deleteBoardSet)
+                pendingProtectedDelete = null
             }
         )
     }
@@ -523,10 +577,14 @@ private fun BoardSetWorkspaceScreen(
     val voiceUseCase = koinInject<VoiceUseCase>()
     val soundPlayer = koinInject<SoundPlayer>()
     val fileStorage = koinInject<FileStorage>()
+    val saidTextRepository = koinInject<SaidTextRepository>()
     val settings by rememberReactiveSettings()
     val koin = org.koin.compose.getKoin()
+    val predictionService = remember(koin) { koin.getOrNull<TextPredictionService>() }
+    val dictionaryLoader = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.DictionaryLoader>() }
     val mediaUrlLoader = remember(koin) { koin.getOrNull<ObfMediaUrlLoader>() }
     val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
+    val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
     val scope = rememberCoroutineScope()
     var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
     var editSession by remember(boardSetId) { mutableStateOf<BoardSetEditSession?>(null) }
@@ -547,6 +605,9 @@ private fun BoardSetWorkspaceScreen(
     var settingsTarget by remember(boardSetId) { mutableStateOf<BoardSettingsTarget?>(null) }
     var isExporting by remember(boardSetId) { mutableStateOf(false) }
     var isFullscreen by remember(boardSetId) { mutableStateOf(false) }
+    val hiddenButtonsSession = remember(boardSetId) { HiddenButtonsSession() }
+    val showHiddenButtons = hiddenButtonsSession.revealed
+    var showEditingAccessDialog by remember(boardSetId) { mutableStateOf(false) }
     var appBarMenuExpanded by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(Res.string.board_workspace_unlock_to_edit)
     val savedMessage = stringResource(Res.string.board_workspace_saved)
@@ -586,6 +647,27 @@ private fun BoardSetWorkspaceScreen(
             .orEmpty()
     ).distinctBy { it.tag }
 
+    // Board keyboards must initialize the local model themselves: unlike the phrase screen,
+    // they may be the first communication surface a user opens.
+    LaunchedEffect(predictionService, saidTextRepository, settings.primaryLanguage) {
+        val service = predictionService ?: return@LaunchedEffect
+        runCatching {
+            val history = saidTextRepository.list()
+            val nGramService = service as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
+            if (nGramService != null) {
+                val dictionary = dictionaryLoader?.loadDictionary(settings.primaryLanguage).orEmpty()
+                if (dictionary.isNotEmpty()) {
+                    nGramService.setBaseLanguage(dictionary)
+                    nGramService.train(history, clear = false)
+                } else {
+                    nGramService.train(history)
+                }
+            } else {
+                service.train(history)
+            }
+        }
+    }
+
     LaunchedEffect(boardSetId) {
         isLoading = true
         val loaded = withContext(Dispatchers.Default) { useCase.loadBoardSetGraph(boardSetId) }
@@ -593,7 +675,12 @@ private fun BoardSetWorkspaceScreen(
         savedGraph = normalized
         selectedBoardId = normalized?.boardSet?.rootBoardId
         if (normalized != null && initialMode == BoardWorkspaceMode.Edit && !normalized.boardSet.isLocked) {
-            editSession = BoardSetEditSession(normalized, normalized)
+            if (editingAccessController?.requiresUnlock() == true) {
+                mode = BoardWorkspaceMode.Run
+                showEditingAccessDialog = true
+            } else {
+                editSession = BoardSetEditSession(normalized, normalized)
+            }
         } else if (normalized?.boardSet?.isLocked == true) {
             mode = BoardWorkspaceMode.Run
         }
@@ -632,7 +719,7 @@ private fun BoardSetWorkspaceScreen(
             primaryLanguage = settings.primaryLanguage
         )
     }
-    val availableBoardActions = remember(activeBoard) {
+    val availableBoardActions = remember(activeBoard, showHiddenButtons) {
         val visibleGridButtonIds = activeBoard?.grid
             ?.order
             ?.flatten()
@@ -641,7 +728,7 @@ private fun BoardSetWorkspaceScreen(
         activeBoard?.buttons
             ?.asSequence()
             ?.filter { button ->
-                !button.hidden &&
+                (!button.hidden || showHiddenButtons) &&
                     (visibleGridButtonIds == null || button.id in visibleGridButtonIds)
             }
             ?.flatMap { parseObfButtonActions(it).asSequence() }
@@ -651,8 +738,21 @@ private fun BoardSetWorkspaceScreen(
     val boardHasSpeakField = availableBoardActions.any { it == ObfButtonActionEffect.Speak }
     val boardHasDeleteField = availableBoardActions.any { it == ObfButtonActionEffect.Backspace }
     val boardHasClearField = availableBoardActions.any { it == ObfButtonActionEffect.Clear }
+    val predictionButtonIds = remember(activeBoard?.id, activeBoard?.grid, activeBoard?.buttons, showHiddenButtons) {
+        orderedPredictionButtonIds(activeBoard, showHiddenButtons)
+    }
+    var predictionsById by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    LaunchedEffect(sentenceText, predictionButtonIds, predictionService) {
+        predictionsById = emptyMap()
+        val service = predictionService?.takeIf { it.isTrained() } ?: return@LaunchedEffect
+        if (predictionButtonIds.isEmpty()) return@LaunchedEffect
+        val result = service.predict(sentenceText, maxWords = predictionButtonIds.size, maxLetters = 0)
+        predictionsById = predictionButtonIds.withIndex().mapNotNull { (index, id) ->
+            result.words.getOrNull(index)?.let { id to it }
+        }.toMap()
+    }
 
-    fun startEditing() {
+    fun enterEditing() {
         val graph = savedGraph ?: return
         if (graph.boardSet.isLocked) {
             statusMessage = unlockToEditMessage
@@ -663,6 +763,16 @@ private fun BoardSetWorkspaceScreen(
         selectedField = null
         editSession = BoardSetEditSession(graph, graph)
         mode = BoardWorkspaceMode.Edit
+    }
+
+    fun startEditing() {
+        scope.launch {
+            if (editingAccessController?.requiresUnlock() == true) {
+                showEditingAccessDialog = true
+            } else {
+                enterEditing()
+            }
+        }
     }
 
     fun requestFinishEditing() {
@@ -682,6 +792,7 @@ private fun BoardSetWorkspaceScreen(
             selectedBoardId = boardStack.last()
             boardStack = boardStack.dropLast(1)
         } else {
+            hiddenButtonsSession.reset()
             onExitToLibrary()
         }
     }
@@ -741,6 +852,7 @@ private fun BoardSetWorkspaceScreen(
             } else {
                 activeBoard.name.orEmpty()
             },
+            initialBackgroundColor = activeBoard.backgroundColor,
             screenSettings = activeGraph.boardSet.screenSettings,
             pageSettings = activeBoard.pageSettingsOverrides(),
             appShowLabels = settings.showLabels,
@@ -749,7 +861,7 @@ private fun BoardSetWorkspaceScreen(
             appShowMessageBar = settings.boardShowMessageBar,
             appActivationBehavior = settings.boardActivationBehavior,
             appReturnBehavior = settings.boardReturnBehavior,
-            onCommit = { name, updatedSettings ->
+            onCommit = { name, updatedSettings, updatedBackgroundColor ->
                 val session = editSession ?: return@BoardSettingsScreen
                 val updated = if (openSettingsTarget == BoardSettingsTarget.Screen) {
                     session.draft.copy(
@@ -762,7 +874,8 @@ private fun BoardSetWorkspaceScreen(
                     session.draft.copy(
                         boards = session.draft.boards.map { board ->
                             if (board.id == activeBoard.id) {
-                                board.copy(name = name).withPageSettingsOverrides(updatedSettings)
+                                board.copy(name = name, backgroundColor = updatedBackgroundColor)
+                                    .withPageSettingsOverrides(updatedSettings)
                             } else {
                                 board
                             }
@@ -777,6 +890,7 @@ private fun BoardSetWorkspaceScreen(
     }
 
     PlatformBackHandler(enabled = true, onBack = ::navigateBack)
+    PlatformBackgroundEffect { editingAccessController?.lock() }
 
     Scaffold(
         topBar = {
@@ -826,6 +940,14 @@ private fun BoardSetWorkspaceScreen(
                                 onDismissRequest = { appBarMenuExpanded = false }
                             ) {
                                 if (mode == BoardWorkspaceMode.Edit) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.board_workspace_add)) },
+                                        leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            showAddBoardDialog = true
+                                        }
+                                    )
                                     DropdownMenuItem(
                                         text = { Text(stringResource(Res.string.board_workspace_undo)) },
                                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null) },
@@ -897,6 +1019,24 @@ private fun BoardSetWorkspaceScreen(
                                         }
                                     )
                                 } else {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(stringResource(
+                                                if (showHiddenButtons) Res.string.board_workspace_hide_hidden
+                                                else Res.string.board_workspace_show_hidden
+                                            ))
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                if (showHiddenButtons) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            hiddenButtonsSession.toggle()
+                                        }
+                                    )
                                     DropdownMenuItem(
                                         text = { Text(stringResource(Res.string.board_workspace_enter_fullscreen)) },
                                         leadingIcon = { Icon(Icons.Default.Fullscreen, contentDescription = null) },
@@ -990,7 +1130,37 @@ private fun BoardSetWorkspaceScreen(
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
+                        Box {
+                            IconButton(onClick = { appBarMenuExpanded = true }) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = stringResource(Res.string.common_more_actions)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = appBarMenuExpanded,
+                                onDismissRequest = { appBarMenuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(Res.string.board_workspace_add)) },
+                                    leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                                    onClick = {
+                                        appBarMenuExpanded = false
+                                        showAddBoardDialog = true
+                                    }
+                                )
+                            }
+                        }
                     } else {
+                        IconButton(onClick = hiddenButtonsSession::toggle) {
+                            Icon(
+                                if (showHiddenButtons) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = stringResource(
+                                    if (showHiddenButtons) Res.string.board_workspace_hide_hidden
+                                    else Res.string.board_workspace_show_hidden
+                                )
+                            )
+                        }
                         IconButton(onClick = { isFullscreen = true }) {
                             Icon(
                                 Icons.Default.Fullscreen,
@@ -1039,15 +1209,6 @@ private fun BoardSetWorkspaceScreen(
                 )
             }
         },
-        floatingActionButton = {
-            if (mode == BoardWorkspaceMode.Edit) {
-                ExtendedFloatingActionButton(
-                    onClick = { showAddBoardDialog = true },
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text(stringResource(Res.string.board_workspace_add)) }
-                )
-            }
-        }
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             when {
@@ -1096,7 +1257,9 @@ private fun BoardSetWorkspaceScreen(
                         showDeleteControl = !boardHasDeleteField,
                         showClearControl = !boardHasClearField,
                         boardSettings = resolvedBoardSettings,
+                        showHiddenButtons = showHiddenButtons,
                         selectedButtons = selectedButtons,
+                        predictionLabels = predictionsById,
                         onButtonClick = { button ->
                             val actions = parseObfButtonActions(button)
                             if (actions.isNotEmpty()) {
@@ -1128,6 +1291,23 @@ private fun BoardSetWorkspaceScreen(
                                         }
                                         ObfButtonActionEffect.Home -> {
                                             navigateHome = true
+                                        }
+                                        ObfButtonActionEffect.Predictions -> {
+                                            val insertion = predictionButtonIds
+                                                .indexOf(button.id)
+                                                .takeIf { it != -1 }
+                                                ?.let { index -> predictionsById[button.id] }
+                                                ?.let { nGramPredictionInsertion(sentenceText, it) }
+                                            if (!insertion.isNullOrEmpty()) {
+                                                nextSelection = nextSelection + (
+                                                    ObfButton(
+                                                        id = workspaceId("prediction"),
+                                                        label = insertion,
+                                                        vocalization = insertion,
+                                                        locale = button.locale
+                                                    ) to null
+                                                )
+                                            }
                                         }
                                         is ObfButtonActionEffect.Unsupported -> {
                                             statusMessage = unsupportedActionTemplate.replace("%ACTION%", effect.action)
@@ -1274,6 +1454,19 @@ private fun BoardSetWorkspaceScreen(
                                 }
                             }
                         } else null,
+                        onGridHeightFractionChange = if (mode == BoardWorkspaceMode.Edit) {
+                            { fraction ->
+                                val session = editSession ?: return@ObfBoardView
+                                val boardId = activeBoard.id
+                                editSession = session.apply(
+                                    session.draft.copy(
+                                        boards = session.draft.boards.map { board ->
+                                            if (board.id == boardId) board.withGridHeightFraction(fraction) else board
+                                        }
+                                    )
+                                )
+                            }
+                        } else null,
                         homeBoardId = activeGraph.boardSet.rootBoardId,
                         onSpeakSentence = {
                             speakSelectedButtons(
@@ -1325,6 +1518,18 @@ private fun BoardSetWorkspaceScreen(
         )
     }
 
+    if (showEditingAccessDialog && editingAccessController != null) {
+        EditingAccessDialog(
+            controller = editingAccessController,
+            mode = EditingAccessDialogMode.Unlock,
+            onDismiss = { showEditingAccessDialog = false },
+            onSuccess = {
+                showEditingAccessDialog = false
+                enterEditing()
+            }
+        )
+    }
+
     val target = editingCell
     if (target != null && activeBoard != null) {
         val initialImageUrl = target.button?.imageId
@@ -1344,13 +1549,15 @@ private fun BoardSetWorkspaceScreen(
             availableLanguages = availableFieldLanguages,
             initialLanguage = target.button?.locale,
             initialMathMode = target.button?.mathMode == true,
+            initialHidden = target.button?.hidden == true,
+            showMathMode = supportsMathMode(settings.ttsEngine),
             availableBoards = activeGraph.boards.filterNot { it.id == activeBoard.id },
             initialLinkedBoardId = activeGraph.resolveLinkedBoard(target.button?.loadBoard)?.id,
             initialAction = target.button?.action,
             initialActions = target.button?.actions.orEmpty(),
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
-            onSave = { label, vocalization, imageUrl, recordingPath, backgroundColor, language, mathMode, linkedBoardId,
+            onSave = { label, vocalization, imageUrl, recordingPath, backgroundColor, language, mathMode, hidden, linkedBoardId,
                        action, actions ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
@@ -1366,6 +1573,7 @@ private fun BoardSetWorkspaceScreen(
                         backgroundColor = backgroundColor,
                         language = language,
                         mathMode = mathMode,
+                        hidden = hidden,
                         linkedBoardId = linkedBoardId,
                         action = action,
                         actions = actions
@@ -1610,6 +1818,7 @@ internal fun updateDraftCell(
     backgroundColor: String?,
     language: String?,
     mathMode: Boolean = false,
+    hidden: Boolean = false,
     linkedBoardId: String?,
     action: String? = null,
     actions: List<String> = emptyList()
@@ -1662,6 +1871,7 @@ internal fun updateDraftCell(
         locale = language?.trim()?.ifBlank { null },
         imageId = imageId,
         soundId = soundId,
+        hidden = hidden,
         loadBoard = linkedBoardId?.let { targetId ->
             ObfLoadBoard(id = targetId, name = graph.boardsById[targetId]?.name)
         },
@@ -2067,6 +2277,52 @@ private fun workspaceId(prefix: String): String {
  * Removes one character from the composed sentence. When the last token is a multi-character
  * spelling fragment, trims one character; otherwise drops the last token entirely.
  */
+/**
+ * Returns only the text that must be appended to accept an n-gram word suggestion.
+ * A matching partially typed word is completed; otherwise the suggestion starts a new word.
+ */
+/**
+ * Prediction buttons in board display order. A button is a predictor if it
+ * carries a `:prediction` action or uses the legacy n-gram button type.
+ * Order follows the grid (falling back to insertion order for absolute/grid-less boards).
+ */
+internal fun orderedPredictionButtonIds(
+    board: ObfBoard?,
+    showHiddenButtons: Boolean
+): List<String> {
+    val activeBoard = board ?: return emptyList()
+    fun isPredictor(button: ObfButton): Boolean =
+        button.type == ObfButtonType.NGramPrediction ||
+            parseObfButtonActions(button).any { it === ObfButtonActionEffect.Predictions }
+    val orderedIds = buildList {
+        activeBoard.grid?.order?.forEach { row ->
+            row.forEach { id ->
+                if (id != null && id !in this) add(id)
+            }
+        }
+        if (isEmpty()) {
+            addAll(activeBoard.buttons.map { it.id })
+        }
+    }
+    return orderedIds.filter { id ->
+        val button = activeBoard.buttons.firstOrNull { it.id == id }
+        button != null &&
+            (button.hidden && !showHiddenButtons).not() &&
+            isPredictor(button)
+    }
+}
+
+internal fun nGramPredictionInsertion(sentence: String, suggestion: String): String {
+    val word = suggestion.trim()
+    if (word.isEmpty()) return ""
+    val prefix = sentence.takeLastWhile { !it.isWhitespace() }
+    return when {
+        prefix.isEmpty() -> word
+        word.startsWith(prefix, ignoreCase = true) -> word.drop(prefix.length)
+        else -> " $word"
+    }
+}
+
 internal fun backspaceSentenceSelection(
     selected: List<Pair<ObfButton, ImageBitmap?>>
 ): List<Pair<ObfButton, ImageBitmap?>> {
@@ -2113,10 +2369,14 @@ internal fun buildResolvedSentence(
             strings = board?.strings.orEmpty(),
             locale = primaryLanguage,
             rawValue = button.vocalization ?: button.label
-        )?.trim()?.takeIf { it.isNotEmpty() }
+        )?.takeIf { it.isNotEmpty() }
     }
-    val separator = if (tokens.all { it.length <= 1 }) "" else " "
-    return tokens.joinToString(separator)
+    return if (board?.spellingMode == true) {
+        tokens.joinToString("")
+    } else {
+        val separator = if (tokens.any { it.any(Char::isWhitespace) } || tokens.all { it.length <= 1 }) "" else " "
+        tokens.joinToString(separator)
+    }
 }
 
 private fun speakSelectedButtons(
@@ -2140,7 +2400,7 @@ private fun speakSelectedButtons(
             strings = board.strings,
             locale = primaryLanguage,
             rawValue = button.vocalization ?: button.label
-        )?.trim()?.takeIf { it.isNotEmpty() }
+        )?.takeIf { it.isNotEmpty() }
             ?: return@mapNotNull null
         val recordingPath = button.soundId
             ?.let { soundId -> board.sounds.firstOrNull { it.id == soundId } }
@@ -2156,8 +2416,16 @@ private fun speakSelectedButtons(
 
             suspend fun speakPendingTts() {
                 if (pendingTts.isEmpty()) return
-                val separator = if (pendingTts.all { it.text.length <= 1 }) "" else " "
-                val sentence = pendingTts.joinToString(separator) { it.text }
+                val texts = pendingTts.map { it.text }
+                val sentence = if (board.spellingMode) {
+                    texts.joinToString("")
+                } else {
+                    val separator = if (
+                        texts.any { it.any(Char::isWhitespace) } ||
+                        texts.all { it.length <= 1 }
+                    ) "" else " "
+                    texts.joinToString(separator)
+                }
                 val pendingVoice = voice
                     .withLanguageOverride(pendingTts.first().language ?: primaryLanguage)
                     ?.copy(mathMode = pendingTts.first().mathMode)
