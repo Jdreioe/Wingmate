@@ -168,6 +168,8 @@
     <string name="board_dialog_edit_cell">Rediger felt (%1$d, %2$d)</string>
     <string name="board_dialog_label">Etiket</string>
     <string name="board_dialog_vocalization">Udtale (valgfri)</string>
+    <string name="board_dialog_hidden">Skjult i brugstilstand</string>
+    <string name="board_dialog_hidden_description">Behold knappen til redigering, men skjul den under normal kommunikation.</string>
     <string name="board_dialog_clear_image">Fjern billede</string>
     <string name="board_dialog_color">Feltfarve</string>
     <string name="board_dialog_pick_color">Vælg</string>

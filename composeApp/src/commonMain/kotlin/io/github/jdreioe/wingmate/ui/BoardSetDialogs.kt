@@ -171,6 +171,7 @@ internal fun EditBoardCellDialog(
     availableLanguages: List<FieldLanguageOption> = emptyList(),
     initialLanguage: String? = null,
     initialMathMode: Boolean = false,
+    initialHidden: Boolean = false,
     availableBoards: List<ObfBoard> = emptyList(),
     initialLinkedBoardId: String? = null,
     initialAction: String? = null,
@@ -185,6 +186,7 @@ internal fun EditBoardCellDialog(
         backgroundColor: String?,
         language: String?,
         mathMode: Boolean,
+        hidden: Boolean,
         linkedBoardId: String?,
         action: String?,
         actions: List<String>
@@ -200,6 +202,7 @@ internal fun EditBoardCellDialog(
     var backgroundColor by remember { mutableStateOf(initialBackgroundColor) }
     var language by remember { mutableStateOf(initialLanguage) }
     var mathMode by remember { mutableStateOf(initialMathMode) }
+    var hidden by remember { mutableStateOf(initialHidden) }
     var linkedBoardId by remember { mutableStateOf(initialLinkedBoardId) }
     var action by remember { mutableStateOf(initialAction) }
     val actions by remember { mutableStateOf(initialActions) }
@@ -279,6 +282,23 @@ internal fun EditBoardCellDialog(
                         )
                     }
                     Switch(checked = mathMode, onCheckedChange = { mathMode = it })
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            stringResource(Res.string.board_dialog_hidden),
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        Text(
+                            stringResource(Res.string.board_dialog_hidden_description),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = hidden, onCheckedChange = { hidden = it })
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { showImageSourcePicker = true }) {
@@ -499,6 +519,7 @@ internal fun EditBoardCellDialog(
                         backgroundColor,
                         language,
                         mathMode,
+                        hidden,
                         linkedBoardId.takeIf { opensPage },
                         action?.trim()?.ifBlank { null },
                         actions

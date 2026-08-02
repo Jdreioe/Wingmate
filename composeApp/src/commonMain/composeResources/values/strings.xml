@@ -168,6 +168,8 @@
     <string name="board_dialog_edit_cell">Edit field (%1$d, %2$d)</string>
     <string name="board_dialog_label">Label</string>
     <string name="board_dialog_vocalization">Vocalization (optional)</string>
+    <string name="board_dialog_hidden">Hidden in run mode</string>
+    <string name="board_dialog_hidden_description">Keep this button available for editing but hide it during normal communication.</string>
     <string name="board_dialog_clear_image">Clear image</string>
     <string name="board_dialog_color">Field color</string>
     <string name="board_dialog_pick_color">Pick</string>

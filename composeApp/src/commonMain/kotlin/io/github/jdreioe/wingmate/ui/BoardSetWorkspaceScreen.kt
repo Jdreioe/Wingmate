@@ -1440,13 +1440,14 @@ private fun BoardSetWorkspaceScreen(
             availableLanguages = availableFieldLanguages,
             initialLanguage = target.button?.locale,
             initialMathMode = target.button?.mathMode == true,
+            initialHidden = target.button?.hidden == true,
             availableBoards = activeGraph.boards.filterNot { it.id == activeBoard.id },
             initialLinkedBoardId = activeGraph.resolveLinkedBoard(target.button?.loadBoard)?.id,
             initialAction = target.button?.action,
             initialActions = target.button?.actions.orEmpty(),
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
-            onSave = { label, vocalization, imageUrl, recordingPath, backgroundColor, language, mathMode, linkedBoardId,
+            onSave = { label, vocalization, imageUrl, recordingPath, backgroundColor, language, mathMode, hidden, linkedBoardId,
                        action, actions ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
@@ -1462,6 +1463,7 @@ private fun BoardSetWorkspaceScreen(
                         backgroundColor = backgroundColor,
                         language = language,
                         mathMode = mathMode,
+                        hidden = hidden,
                         linkedBoardId = linkedBoardId,
                         action = action,
                         actions = actions
@@ -1706,6 +1708,7 @@ internal fun updateDraftCell(
     backgroundColor: String?,
     language: String?,
     mathMode: Boolean = false,
+    hidden: Boolean = false,
     linkedBoardId: String?,
     action: String? = null,
     actions: List<String> = emptyList()
@@ -1758,6 +1761,7 @@ internal fun updateDraftCell(
         locale = language?.trim()?.ifBlank { null },
         imageId = imageId,
         soundId = soundId,
+        hidden = hidden,
         loadBoard = linkedBoardId?.let { targetId ->
             ObfLoadBoard(id = targetId, name = graph.boardsById[targetId]?.name)
         },
