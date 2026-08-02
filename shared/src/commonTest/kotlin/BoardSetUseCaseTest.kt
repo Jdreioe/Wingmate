@@ -220,6 +220,28 @@ class BoardSetUseCaseTest {
     }
 
     @Test
+    fun addingKeyboardLayerPersistsKeyboardSemantics() = runBlocking {
+        useCase.saveBoardSetGraph(linkedGraph()).getOrThrow()
+
+        val symbols = assertNotNull(
+            useCase.createBoard(
+                boardSetId = "set",
+                name = "Symbols",
+                rows = 5,
+                columns = 11,
+                keyboardLayout = ObfKeyboardLayout.Symbols
+            )
+        )
+        val reloaded = assertNotNull(boardRepository.getBoard(symbols.id))
+        val set = assertNotNull(boardSetRepository.getBoardSet("set"))
+
+        assertEquals(ObfKeyboardLayout.Symbols, reloaded.keyboardLayout)
+        assertTrue(reloaded.compactGrid)
+        assertTrue(reloaded.spellingMode)
+        assertTrue(symbols.id in set.boardIds)
+    }
+
+    @Test
     fun sentenceCachingIsConfiguredPerBoardSet() = runBlocking {
         useCase.saveBoardSetGraph(linkedGraph()).getOrThrow()
 

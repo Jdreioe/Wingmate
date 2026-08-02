@@ -178,6 +178,12 @@
     <string name="board_dialog_clear_image">Clear image</string>
     <string name="board_dialog_color">Field color</string>
     <string name="board_dialog_pick_color">Pick</string>
+    <string name="board_dialog_shape">Button shape</string>
+    <string name="board_dialog_shape_rounded">Rounded</string>
+    <string name="board_dialog_shape_square">Square</string>
+    <string name="board_dialog_shape_pill">Pill</string>
+    <string name="board_dialog_shape_speech">Speech</string>
+    <string name="board_dialog_shape_thought">Thought</string>
     <string name="board_dialog_language">Language</string>
     <string name="board_dialog_language_default">Use default language</string>
     <string name="board_dialog_language_english">English</string>
@@ -191,6 +197,7 @@
     <string name="board_dialog_choose_page">Choose a page</string>
     <string name="board_dialog_clear_cell">Clear field</string>
     <string name="board_dialog_special_actions">Special actions</string>
+    <string name="board_dialog_insert_text">Text inserted by this key</string>
     <string name="board_dialog_action_spell">Spell a word</string>
     <string name="board_dialog_action_space">Add a space</string>
     <string name="board_dialog_action_erase">Erase last character</string>
@@ -198,6 +205,10 @@
     <string name="board_dialog_action_home">Go to home page</string>
     <string name="board_dialog_action_speak_sentence">Speak sentence</string>
     <string name="board_dialog_action_prediction">Predict next word</string>
+    <string name="board_dialog_action_order">Action order</string>
+    <string name="board_dialog_action_order_position">%1$d.</string>
+    <string name="board_dialog_action_order_up">Move action up</string>
+    <string name="board_dialog_action_order_down">Move action down</string>
     <string name="board_dialog_special_actions_help">Tap an action to set what this button does</string>
 
     <string name="language_dialog_title">Language</string>

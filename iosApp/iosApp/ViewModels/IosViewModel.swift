@@ -25,6 +25,7 @@ struct BoardCellInfo: Identifiable, Equatable {
     var imageId: String?
     var imageUrl: String?
     var hidden: Bool
+    var actions: [String]
 
     var id: String { "\(row):\(col)" }
 }
@@ -152,6 +153,9 @@ final class IosViewModel: ObservableObject {
     @Published var selectedBoardId: String? = nil
     @Published var selectedBoard: Shared.ObfBoard? = nil
     @Published var boardCells: [BoardCellInfo] = []
+    @Published var selectedBoardKeyboardLayout: String? = nil
+    @Published var selectedBoardUsesSpellingMode: Bool = false
+    @Published var boardPredictionsByButtonId: [String: String] = [:]
     @Published var boardNamesById: [String: String] = [:]
     @Published var boardStatusMessage: String? = nil
     @Published var sentencePhrases: [SentencePhraseToken] = []
@@ -1332,6 +1336,21 @@ final class IosViewModel: ObservableObject {
         }
     }
 
+    func createKeyboardBoardSet(name: String, preset: String) async {
+        let boardsetName = normalizedBoardsetName(name)
+        do {
+            let sharedSet = try await bridge.createKeyboardBoardSet(name: boardsetName, preset: preset)
+            let set = boardSetInfo(from: sharedSet)
+            await loadBoardSets()
+            selectedBoardSetId = set.id
+            selectedBoardId = set.rootBoardId
+            await loadSelectedBoard()
+            boardStatusMessage = NSLocalizedString("boardset.status.created", comment: "")
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+        }
+    }
+
     func addBoardToSelectedSet(name: String, rows: Int, columns: Int) async {
         guard let set = selectedBoardSet else { return }
         guard !set.isLocked else {
@@ -1365,6 +1384,34 @@ final class IosViewModel: ObservableObject {
         }
     }
 
+    func addKeyboardBoardToSelectedSet(name: String, rows: Int, columns: Int, layout: String) async {
+        guard let set = selectedBoardSet, !set.isLocked else {
+            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
+            return
+        }
+        do {
+            guard let board = try await bridge.createKeyboardBoard(
+                boardSetId: set.id,
+                name: normalizedBoardsetName(name),
+                rows: Int32(min(max(rows, 1), 12)),
+                columns: Int32(min(max(columns, 1), 12)),
+                layout: layout
+            ) else {
+                boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+                return
+            }
+            await loadBoardSets()
+            selectedBoardSetId = set.id
+            selectedBoardId = board.id
+            selectedBoard = board
+            await refreshSelectedBoardMetadata()
+            await refreshBoardCells()
+            boardStatusMessage = NSLocalizedString("boardset.status.board_added", comment: "")
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+        }
+    }
+
     func selectBoardSet(id: String) async {
         guard boardSets.contains(where: { $0.id == id }) else { return }
         selectedBoardSetId = id
@@ -1389,10 +1436,14 @@ final class IosViewModel: ObservableObject {
         guard let id = selectedBoardId else {
             selectedBoard = nil
             boardCells = []
+            selectedBoardKeyboardLayout = nil
+            selectedBoardUsesSpellingMode = false
+            boardPredictionsByButtonId = [:]
             return
         }
         do {
             selectedBoard = try await bridge.getBoard(id: id)
+            await refreshSelectedBoardMetadata()
             let boardName = selectedBoard?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !boardName.isEmpty {
                 boardNamesById[id] = boardName
@@ -1401,6 +1452,22 @@ final class IosViewModel: ObservableObject {
         } catch {
             selectedBoard = nil
             boardCells = []
+            selectedBoardKeyboardLayout = nil
+            selectedBoardUsesSpellingMode = false
+            boardPredictionsByButtonId = [:]
+        }
+    }
+
+    private func refreshSelectedBoardMetadata() async {
+        guard let board = selectedBoard else {
+            selectedBoardKeyboardLayout = nil
+            selectedBoardUsesSpellingMode = false
+            return
+        }
+        selectedBoardKeyboardLayout = bridge.boardKeyboardLayout(board: board)
+        selectedBoardUsesSpellingMode = bridge.boardUsesSpellingMode(board: board)
+        if selectedBoardKeyboardLayout != nil {
+            _ = try? await bridge.trainPredictionModel()
         }
     }
 
@@ -1424,7 +1491,8 @@ final class IosViewModel: ObservableObject {
                     linkedBoardId: cell.linkedBoardId,
                     imageId: cell.imageId,
                     imageUrl: cell.imageUrl,
-                    hidden: cell.hidden
+                    hidden: cell.hidden,
+                    actions: cell.actions
                 )
             }
         } catch {
@@ -1441,7 +1509,8 @@ final class IosViewModel: ObservableObject {
         borderColor: String?,
         linkedBoardId: String?,
         imageUrl: String?,
-        clearImage: Bool
+        clearImage: Bool,
+        actions: [String]
     ) async {
         guard let boardId = selectedBoardId else {
             boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
@@ -1470,7 +1539,8 @@ final class IosViewModel: ObservableObject {
                 borderColor: normalizedBorder,
                 linkedBoardId: normalizedLink,
                 imageUrl: normalizedImageUrl,
-                clearImage: clearImage
+                clearImage: clearImage,
+                actions: actions
             ) else {
                 boardStatusMessage = NSLocalizedString("boardset.error.cell_update_failed", comment: "")
                 return
@@ -1527,6 +1597,30 @@ final class IosViewModel: ObservableObject {
         if let textToSpeak = normalizedOptionalText(cell.vocalization) ?? normalizedOptionalText(cell.label) {
             speak(textToSpeak)
         }
+    }
+
+    func refreshBoardPredictions(context: String) async {
+        var seenIds = Set<String>()
+        let predictorIds = boardCells
+            .filter { cell in cell.actions.contains { $0.lowercased() == ":prediction" || $0.lowercased() == ":predictions" } }
+            .map(\.buttonId)
+            .filter { seenIds.insert($0).inserted }
+        guard !predictorIds.isEmpty else {
+            boardPredictionsByButtonId = [:]
+            return
+        }
+        let result = (try? await bridge.predict(
+            context: context,
+            maxWords: Int32(predictorIds.count),
+            maxLetters: 0
+        )) ?? Shared.PredictionResult(words: [], letters: [])
+        boardPredictionsByButtonId = Dictionary(
+            uniqueKeysWithValues: zip(predictorIds, result.words).map { ($0.0, $0.1) }
+        )
+    }
+
+    func boardPrediction(for buttonId: String) -> String? {
+        boardPredictionsByButtonId[buttonId]
     }
 
     func saveSelectedBoardSet() async {

@@ -95,8 +95,10 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonType
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonShape
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import io.github.jdreioe.wingmate.domain.obf.ObfMediaSource
@@ -109,6 +111,7 @@ import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -611,7 +614,6 @@ private fun BoardSetWorkspaceScreen(
     var showEditingAccessDialog by remember(boardSetId) { mutableStateOf(false) }
     var appBarMenuExpanded by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(Res.string.board_workspace_unlock_to_edit)
-    val savedMessage = stringResource(Res.string.board_workspace_saved)
     val saveErrorMessage = stringResource(Res.string.board_workspace_save_error)
     // Placeholder substituted in click handler (stringResource formatting is composition-only).
     val unsupportedActionTemplate = stringResource(Res.string.board_workspace_unsupported_action, "%ACTION%")
@@ -1267,6 +1269,7 @@ private fun BoardSetWorkspaceScreen(
                                 var speakAfterActions = false
                                 var navigateHome = false
                                 var nextSelection = selectedButtons
+                                var selectionToSpeak: List<Pair<ObfButton, ImageBitmap?>> = emptyList()
                                 for (effect in actions) {
                                     when (effect) {
                                         is ObfButtonActionEffect.AppendText -> {
@@ -1289,6 +1292,7 @@ private fun BoardSetWorkspaceScreen(
                                         }
                                         ObfButtonActionEffect.Speak -> {
                                             speakAfterActions = true
+                                            selectionToSpeak = nextSelection
                                         }
                                         ObfButtonActionEffect.Home -> {
                                             navigateHome = true
@@ -1322,7 +1326,7 @@ private fun BoardSetWorkspaceScreen(
                                 }
                                 if (speakAfterActions) {
                                     speakSelectedButtons(
-                                        selected = nextSelection,
+                                        selected = selectionToSpeak,
                                         board = activeBoard,
                                         primaryLanguage = settings.primaryLanguage,
                                         voiceUseCase = voiceUseCase,
@@ -1508,10 +1512,11 @@ private fun BoardSetWorkspaceScreen(
 
     if (showAddBoardDialog) {
         CreateBoardDialog(
+            initialKeyboardLayout = activeBoard?.keyboardLayout,
             onDismiss = { showAddBoardDialog = false },
-            onCreate = { name, rows, columns ->
+            onCreate = { name, rows, columns, keyboardLayout ->
                 val session = editSession ?: return@CreateBoardDialog
-                val updated = addDraftBoard(session.draft, name, rows, columns)
+                val updated = addDraftBoard(session.draft, name, rows, columns, keyboardLayout)
                 editSession = session.apply(updated)
                 selectedBoardId = updated.boards.last().id
                 showAddBoardDialog = false
@@ -1551,6 +1556,8 @@ private fun BoardSetWorkspaceScreen(
             initialLanguage = target.button?.locale,
             initialMathMode = target.button?.mathMode == true,
             initialHidden = target.button?.hidden == true,
+            initialShape = target.button?.shape ?: ObfButtonShape.Rounded,
+            isKeyboardBoard = activeBoard.isKeyboard,
             showMathMode = supportsMathMode(settings.ttsEngine),
             availableBoards = activeGraph.boards.filterNot { it.id == activeBoard.id },
             initialLinkedBoardId = activeGraph.resolveLinkedBoard(target.button?.loadBoard)?.id,
@@ -1559,7 +1566,7 @@ private fun BoardSetWorkspaceScreen(
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
             onSave = { label, vocalization, imageUrl, recordingPath, backgroundColor, language, mathMode, hidden, linkedBoardId,
-                       action, actions ->
+                       action, actions, shape ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
                     updateDraftCell(
@@ -1577,7 +1584,8 @@ private fun BoardSetWorkspaceScreen(
                         hidden = hidden,
                         linkedBoardId = linkedBoardId,
                         action = action,
-                        actions = actions
+                        actions = actions,
+                        shape = shape
                     )
                 )
                 editingCell = null
@@ -1601,18 +1609,25 @@ private fun BoardSetWorkspaceScreen(
                 Button(onClick = {
                     val session = editSession ?: return@Button
                     showFinishDialog = false
-                    scope.launch {
-                        useCase.saveBoardSetGraph(session.draft)
-                            .onSuccess { saved ->
-                                savedGraph = saved
-                                selectedField = null
-                                editSession = null
-                                mode = BoardWorkspaceMode.Run
-                                statusMessage = savedMessage
-                            }
-                            .onFailure {
-                                statusMessage = it.message ?: saveErrorMessage
-                            }
+                    selectedField = null
+                    editSession = null
+                    mode = BoardWorkspaceMode.Run
+                    val graph = session.draft
+                    // Persist on an application-scoped scope so leaving this screen can't
+                    // cancel the write halfway; branch back to the main thread for state updates.
+                    val appScope = koin.get<CoroutineScope>()
+                    appScope.launch(Dispatchers.Main) {
+                        withContext(Dispatchers.Default) {
+                            useCase.saveBoardSetGraph(graph)
+                        }.onSuccess { saved ->
+                            savedGraph = saved
+                        }.onFailure { error ->
+                            // Persistence failed: drop back into editing with the draft intact
+                            // so the user does not lose their work.
+                            mode = BoardWorkspaceMode.Edit
+                            editSession = session
+                            statusMessage = error.message ?: saveErrorMessage
+                        }
                     }
                 }) { Text(stringResource(Res.string.board_workspace_save_changes)) }
             },
@@ -1786,12 +1801,13 @@ private fun addDraftBoard(
     graph: BoardSetGraph,
     name: String,
     rows: Int,
-    columns: Int
+    columns: Int,
+    keyboardLayout: ObfKeyboardLayout? = null
 ): BoardSetGraph {
     val boardId = workspaceId("board")
     val safeRows = rows.coerceAtLeast(1)
     val safeColumns = columns.coerceAtLeast(1)
-    val board = ObfBoard(
+    var board = ObfBoard(
         format = "open-board-0.1",
         id = boardId,
         name = name.trim(),
@@ -1801,6 +1817,12 @@ private fun addDraftBoard(
             order = List(safeRows) { List(safeColumns) { null } }
         )
     )
+    if (keyboardLayout != null) {
+        board = board
+            .withCompactGrid(true)
+            .withSpellingMode(true)
+            .withKeyboardLayout(keyboardLayout)
+    }
     return graph.copy(
         boardSet = graph.boardSet.copy(boardIds = graph.boardSet.boardIds + boardId),
         boards = graph.boards + board
@@ -1822,7 +1844,8 @@ internal fun updateDraftCell(
     hidden: Boolean = false,
     linkedBoardId: String?,
     action: String? = null,
-    actions: List<String> = emptyList()
+    actions: List<String> = emptyList(),
+    shape: ObfButtonShape = ObfButtonShape.Rounded
 ): BoardSetGraph {
     val board = graph.boardsById[boardId] ?: return graph
     val grid = board.grid ?: return graph
@@ -1878,7 +1901,7 @@ internal fun updateDraftCell(
         },
         action = action?.trim()?.ifBlank { null },
         actions = actions
-    ).withMathMode(mathMode)
+    ).withMathMode(mathMode).withShape(shape)
     val buttons = if (existingButton == null) board.buttons + button else board.buttons.map {
         if (it.id == button.id) button else it
     }

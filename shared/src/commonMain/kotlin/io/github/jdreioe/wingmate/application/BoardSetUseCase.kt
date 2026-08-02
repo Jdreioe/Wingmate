@@ -9,6 +9,7 @@ import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_SETTINGS_EXTENSION
 import io.github.jdreioe.wingmate.domain.obf.encodeBoardSettings
 import kotlinx.serialization.encodeToString
@@ -247,7 +248,8 @@ class BoardSetUseCase(
         boardSetId: String,
         name: String,
         rows: Int,
-        columns: Int
+        columns: Int,
+        keyboardLayout: ObfKeyboardLayout? = null
     ): ObfBoard? {
         val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
         if (boardSet.isLocked) return null
@@ -256,7 +258,7 @@ class BoardSetUseCase(
         val normalizedColumns = columns.coerceAtLeast(1)
         val boardId = generateId("board")
 
-        val board = ObfBoard(
+        var board = ObfBoard(
             format = "open-board-0.1",
             id = boardId,
             name = name,
@@ -266,6 +268,12 @@ class BoardSetUseCase(
                 order = List(normalizedRows) { List(normalizedColumns) { null } }
             )
         )
+        if (keyboardLayout != null) {
+            board = board
+                .withCompactGrid(true)
+                .withSpellingMode(true)
+                .withKeyboardLayout(keyboardLayout)
+        }
 
         boardRepository.saveBoard(board)
         boardSetRepository.saveBoardSet(
