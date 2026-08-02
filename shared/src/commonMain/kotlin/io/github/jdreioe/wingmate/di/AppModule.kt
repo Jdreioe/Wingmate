@@ -28,6 +28,9 @@ import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.obf.ObfMediaUrlLoader
 import io.github.jdreioe.wingmate.infrastructure.KtorObfMediaUrlLoader
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -36,6 +39,10 @@ import org.koin.dsl.module
 
 val appModule = module {
     singleOf(::DefaultStoreFactory) { bind<StoreFactory>() }
+
+    // Application-scoped coroutine scope: outlives any single screen so long-running
+    // work (e.g. board-set persistence) is not cancelled when its UI leaves composition.
+    single<CoroutineScope> { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     
     single {
         kotlinx.serialization.json.Json {
