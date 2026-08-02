@@ -109,6 +109,11 @@ struct ContentView: View {
                                 hasCompletedWelcome = true
                                 showWelcomeFlow = false
                                 UserDefaults.standard.set(true, forKey: "welcome_flow_completed")
+                            },
+                            onRestoreComplete: {
+                                hasCompletedWelcome = true
+                                showWelcomeFlow = false
+                                UserDefaults.standard.set(true, forKey: "welcome_flow_completed")
                             }
                         )
                     } else {

@@ -33,6 +33,10 @@ import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSaidTextRepository
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.AndroidSystemVoiceProvider
+import io.github.jdreioe.wingmate.infrastructure.AndroidSecureEditingCredentialStorage
+import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
+import io.github.jdreioe.wingmate.application.BackupMediaAccess
+import io.github.jdreioe.wingmate.infrastructure.AndroidBackupMediaAccess
 import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import io.github.jdreioe.wingmate.platform.AndroidAudioClipboard
@@ -72,6 +76,8 @@ fun overrideAndroidSpeechService(context: Context, aptabaseAppKey: String) {
             singleOf(::AndroidFileStorage) { bind<FileStorage>() }
             singleOf(::AndroidSoundPlayer) { bind<SoundPlayer>() }
             singleOf(::AndroidFilePicker) { bind<FilePicker>() }
+            singleOf(::AndroidSecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
+            singleOf(::AndroidBackupMediaAccess) { bind<BackupMediaAccess>() }
             singleOf(::AndroidImageCacher) { bind<ImageCacher>() }
             singleOf(::SimpleNGramPredictionService) { bind<TextPredictionService>() }
             single<FeatureUsageReporter> {

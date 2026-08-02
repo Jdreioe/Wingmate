@@ -3,6 +3,10 @@ package io.github.jdreioe.wingmate
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.EditingAccessController
+import io.github.jdreioe.wingmate.application.CompleteBackupManager
+import io.github.jdreioe.wingmate.application.BackupRestoreResult
+import io.github.jdreioe.wingmate.platform.ShareService
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.di.appModule
@@ -285,7 +289,7 @@ class KoinBridge : KoinComponent {
                 IosBoardCell(
                     row, col, id, button.label, button.vocalization,
                     button.backgroundColor, button.borderColor, button.loadBoard?.id,
-                    button.imageId, button.imageId?.let { images[it]?.url }
+                    button.imageId, button.imageId?.let { images[it]?.url }, button.hidden
                 )
             }
         }
@@ -313,7 +317,8 @@ class KoinBridge : KoinComponent {
         val button = ObfButton(
             id = buttonId, label = label, vocalization = vocalization,
             imageId = imageId, backgroundColor = backgroundColor, borderColor = borderColor,
-            loadBoard = linkedBoardId?.let { ObfLoadBoard(id = it) }
+            loadBoard = linkedBoardId?.let { ObfLoadBoard(id = it) },
+            hidden = existing?.hidden ?: false
         )
         val buttons = board.buttons.filterNot { it.id == buttonId } + button
         val order = grid.order.mapIndexed { r, columns ->
@@ -340,6 +345,46 @@ class KoinBridge : KoinComponent {
         return board.copy(buttons = buttons, images = board.images.filter { it.id in usedImages }, grid = grid.copy(order = order))
             .also { repo.saveBoard(it) }
     }
+
+    suspend fun setBoardBackgroundColor(
+        boardSetId: String,
+        boardId: String,
+        backgroundColor: String?
+    ): ObfBoard? = runCatching {
+        val repo = get<BoardRepository>()
+        val board = repo.getBoard(boardId) ?: return@runCatching null
+        val updated = board.copy(backgroundColor = backgroundColor?.trim()?.takeIf(String::isNotEmpty))
+        repo.saveBoard(updated)
+        get<BoardSetUseCase>().touchBoardSet(boardSetId)
+        updated
+    }.getOrNull()
+
+    suspend fun editingAccessState(): io.github.jdreioe.wingmate.application.EditingAccessState =
+        get<EditingAccessController>().refresh()
+
+    suspend fun configureEditingAccess(code: String) = get<EditingAccessController>().configure(code)
+
+    suspend fun unlockEditing(code: String): Boolean = get<EditingAccessController>().unlock(code)
+
+    suspend fun disableEditingAccess(code: String): Boolean = get<EditingAccessController>().disable(code)
+
+    fun lockEditingAccess() = get<EditingAccessController>().lock()
+
+    suspend fun recoverEditingAccess() = get<EditingAccessController>().recover()
+
+    suspend fun shareCompleteBackup(): Boolean {
+        val bytes = get<CompleteBackupManager>().exportBackup()
+        return get<ShareService>().shareFile("wingmate-backup.wingmate-backup", bytes)
+    }
+
+    suspend fun restoreCompleteBackup(path: String): String? =
+        when (val result = get<CompleteBackupManager>().restoreBackup(path)) {
+            is BackupRestoreResult.Success -> {
+                phraseListStoreOrNull()?.accept(PhraseListStore.Intent.Refresh)
+                null
+            }
+            is BackupRestoreResult.Failure -> result.message
+        }
 
     companion object {
         private var started: Boolean = false
@@ -465,7 +510,8 @@ data class IosBoardCell(
     val borderColor: String?,
     val linkedBoardId: String?,
     val imageId: String?,
-    val imageUrl: String?
+    val imageUrl: String?,
+    val hidden: Boolean
 )
 
 data class IosSettingsFlags(

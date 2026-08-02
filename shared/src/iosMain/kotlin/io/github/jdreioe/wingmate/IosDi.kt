@@ -31,10 +31,16 @@ import io.github.jdreioe.wingmate.infrastructure.IosSoundPlayer
 import io.github.jdreioe.wingmate.infrastructure.IosSpeechService
 import io.github.jdreioe.wingmate.infrastructure.IosVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.IosSystemVoiceProvider
+import io.github.jdreioe.wingmate.infrastructure.IosSecureEditingCredentialStorage
+import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
+import io.github.jdreioe.wingmate.application.BackupMediaAccess
+import io.github.jdreioe.wingmate.infrastructure.IosBackupMediaAccess
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
 import io.github.jdreioe.wingmate.platform.AudioClipboard
 import io.github.jdreioe.wingmate.platform.ShareService
+import io.github.jdreioe.wingmate.platform.FilePicker
+import io.github.jdreioe.wingmate.platform.IosFilePicker
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.koin.core.context.loadKoinModules
@@ -77,6 +83,9 @@ fun overrideIosSpeechService() {
             // Pronunciation dictionary (persisted)
             singleOf(::IosPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
             singleOf(::IosFileStorage) { bind<FileStorage>() }
+            singleOf(::IosSecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
+            singleOf(::IosBackupMediaAccess) { bind<BackupMediaAccess>() }
+            singleOf(::IosFilePicker) { bind<FilePicker>() }
             singleOf(::IosSoundPlayer) { bind<SoundPlayer>() }
         }
     )

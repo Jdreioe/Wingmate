@@ -1,5 +1,6 @@
 import SwiftUI
 import Shared
+import UniformTypeIdentifiers
 
 struct WelcomeFlow: View {
     @ObservedObject var model: IosViewModel
@@ -15,9 +16,14 @@ struct WelcomeFlow: View {
     @State private var languageOptions: [String] = []
     @State private var previewText: String = NSLocalizedString("welcome_flow.test_text", comment: "")
     @State private var analyticsEnabled: Bool = UserDefaults.standard.bool(forKey: "analytics_enabled")
+    @State private var importingBackup = false
+    @State private var confirmRestoreURL: URL? = nil
+    @State private var restoreStatus: String? = nil
+    @State private var isRestoring = false
 
     let onComplete: () -> Void
     let onSkip: () -> Void
+    let onRestoreComplete: () -> Void
 
     private let totalSteps = 8
 
@@ -122,6 +128,42 @@ struct WelcomeFlow: View {
             selectedVoice = model.selectedVoice
             selectedUseSystemTts = model.useSystemTts
         }
+        .fileImporter(isPresented: $importingBackup, allowedContentTypes: [.zip, .data]) { result in
+            if case .success(let url) = result { confirmRestoreURL = url }
+        }
+        .confirmationDialog(
+            "backup.replace_title",
+            isPresented: Binding(
+                get: { confirmRestoreURL != nil },
+                set: { if !$0 { confirmRestoreURL = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("backup.replace_action", role: .destructive) {
+                guard let url = confirmRestoreURL else { return }
+                confirmRestoreURL = nil
+                isRestoring = true
+                restoreStatus = nil
+                Task {
+                    let accessed = url.startAccessingSecurityScopedResource()
+                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                    if let error = await model.restoreCompleteBackup(path: url.path) {
+                        restoreStatus = error
+                        isRestoring = false
+                    } else {
+                        await model.refreshParitySettings()
+                        await model.refreshAzureConfiguration()
+                        model.refreshVoiceAndLanguages()
+                        await model.loadBoardSets()
+                        isRestoring = false
+                        onRestoreComplete()
+                    }
+                }
+            }
+            Button("common.cancel", role: .cancel) { confirmRestoreURL = nil }
+        } message: {
+            Text("backup.replace_warning")
+        }
     }
 
     // MARK: - Step 0: Welcome Intro
@@ -141,6 +183,21 @@ struct WelcomeFlow: View {
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)
                 .padding(.horizontal)
+
+            Button("backup.restore") { importingBackup = true }
+                .buttonStyle(.bordered)
+                .disabled(isRestoring)
+
+            if isRestoring {
+                ProgressView()
+            }
+
+            if let restoreStatus {
+                Text(restoreStatus)
+                    .font(.footnote)
+                    .foregroundColor(.red)
+                    .multilineTextAlignment(.center)
+            }
         }
     }
 

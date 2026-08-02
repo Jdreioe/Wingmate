@@ -29,6 +29,11 @@ import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.SettingsStateManager
+import io.github.jdreioe.wingmate.application.EditingAccessController
+import io.github.jdreioe.wingmate.application.CompleteBackupManager
+import io.github.jdreioe.wingmate.application.BackupRestoreResult
+import io.github.jdreioe.wingmate.platform.FilePicker
+import io.github.jdreioe.wingmate.platform.ShareService
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
@@ -51,6 +56,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.time.Clock
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
@@ -696,8 +702,11 @@ private fun SettingsHomePage(
                 stringResource(Res.string.ui_settings_partner_window_title),
                 stringResource(Res.string.ui_settings_partner_window_desc),
                 stringResource(Res.string.phrase_screen_welcome_screen),
+                stringResource(Res.string.backup_title),
+                stringResource(Res.string.backup_create),
+                stringResource(Res.string.backup_restore),
                 "startup", "arasaac", "offline",
-                "partner", "welcome", "restore", "boards", "screens"
+                "partner", "welcome", "boards", "screens", "backup", "restore"
             )
         )
     )
@@ -923,6 +932,15 @@ private fun SettingsHomePage(
             keywords = listOf("history", "cache", "local data")
         ),
         // General
+        SettingsCategoryItem(
+            tab = SettingsTab.General,
+            title = stringResource(Res.string.backup_title),
+            subtitle = stringResource(Res.string.backup_description),
+            icon = Icons.Filled.Storage,
+            iconContainerColor = Color(0xFFA9D49A),
+            iconColor = Color(0xFF1D4E18),
+            keywords = listOf("backup", "restore", "azure", "data")
+        ),
         SettingsCategoryItem(
             tab = SettingsTab.General,
             title = stringResource(Res.string.ui_settings_startup_mode_title),
@@ -1410,6 +1428,83 @@ private fun AccessibilitySection(
 // ─── Privacy Tab ─────────────────────────────────────────────────────────────
 
 @Composable
+private fun BackupSettingsGroup() {
+    val koin = getKoin()
+    val backupManager = remember(koin) { koin.getOrNull<CompleteBackupManager>() }
+    val backupFilePicker = remember(koin) { koin.getOrNull<FilePicker>() }
+    val backupShareService = remember(koin) { koin.getOrNull<ShareService>() }
+    val backupScope = rememberCoroutineScope()
+    var backupStatus by remember { mutableStateOf<String?>(null) }
+    var backupWorking by remember { mutableStateOf(false) }
+    var pendingRestorePath by remember { mutableStateOf<String?>(null) }
+    val exported = stringResource(Res.string.backup_exported)
+    val restored = stringResource(Res.string.backup_restored)
+    val cancelled = stringResource(Res.string.backup_cancelled)
+
+    SettingsGroup(title = stringResource(Res.string.backup_title)) {
+        Text(
+            stringResource(Res.string.backup_description),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                enabled = !backupWorking && backupManager != null && backupShareService != null,
+                onClick = {
+                    backupWorking = true
+                    backupScope.launch {
+                        backupStatus = runCatching {
+                            val bytes = checkNotNull(backupManager).exportBackup()
+                            if (checkNotNull(backupShareService).shareFile("wingmate-${Clock.System.now().toEpochMilliseconds()}.wingmate-backup", bytes)) exported else cancelled
+                        }.getOrElse { it.message ?: "Backup failed" }
+                        backupWorking = false
+                    }
+                }
+            ) { Text(stringResource(Res.string.backup_create)) }
+            OutlinedButton(
+                enabled = !backupWorking && backupManager != null && backupFilePicker != null,
+                onClick = {
+                    backupScope.launch {
+                        pendingRestorePath = backupFilePicker?.pickFile(
+                            title = "Restore Wingmate backup",
+                            extensions = listOf("wingmate-backup", "zip")
+                        )
+                    }
+                }
+            ) { Text(stringResource(Res.string.backup_restore)) }
+        }
+        backupStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+    }
+
+    val restorePath = pendingRestorePath
+    if (restorePath != null) {
+        AlertDialog(
+            onDismissRequest = { pendingRestorePath = null },
+            title = { Text(stringResource(Res.string.backup_replace_title)) },
+            text = { Text(stringResource(Res.string.backup_replace_warning)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingRestorePath = null
+                    backupWorking = true
+                    backupScope.launch {
+                        backupStatus = when (val result = backupManager?.restoreBackup(restorePath)) {
+                            is BackupRestoreResult.Success -> restored
+                            is BackupRestoreResult.Failure -> result.message
+                            null -> "Backup restore unavailable"
+                        }
+                        backupWorking = false
+                    }
+                }) { Text(stringResource(Res.string.backup_replace_action)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRestorePath = null }) { Text(stringResource(Res.string.common_cancel)) }
+            }
+        )
+    }
+}
+
+@Composable
 private fun PrivacySection(
     historyVisible: Boolean,
     onHistoryVisibleChange: (Boolean) -> Unit,
@@ -1470,6 +1565,7 @@ private fun PrivacySection(
             description = stringResource(Res.string.ui_settings_usage_logging_desc)
         )
     }
+
 }
 
 // ─── General Tab ─────────────────────────────────────────────────────────────
@@ -1493,6 +1589,51 @@ private fun GeneralSection(
     arasaacFailedCount: Int,
     onDownloadArasaac: () -> Unit
 ) {
+    val editingAccessController = getKoin().getOrNull<EditingAccessController>()
+    val editingAccessState by editingAccessController?.state?.collectAsStateWithLifecycle()
+        ?: remember { mutableStateOf(io.github.jdreioe.wingmate.application.EditingAccessState(supported = false)) }
+    var editingAccessDialog by remember { mutableStateOf<EditingAccessDialogMode?>(null) }
+    LaunchedEffect(editingAccessController) { editingAccessController?.refresh() }
+
+    BackupSettingsGroup()
+
+    SettingsGroup(title = stringResource(Res.string.editing_access_title)) {
+        Text(
+            stringResource(Res.string.editing_access_description),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(12.dp))
+        if (!editingAccessState.supported) {
+            Text(stringResource(Res.string.editing_access_unavailable), color = MaterialTheme.colorScheme.error)
+        } else if (!editingAccessState.enabled) {
+            OutlinedButton(
+                onClick = { editingAccessDialog = EditingAccessDialogMode.Configure },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(stringResource(Res.string.editing_access_enable)) }
+        } else {
+            if (!editingAccessState.unlocked) {
+                OutlinedButton(
+                    onClick = { editingAccessDialog = EditingAccessDialogMode.Unlock },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(stringResource(Res.string.editing_access_unlock_title)) }
+            }
+            OutlinedButton(
+                onClick = { editingAccessDialog = EditingAccessDialogMode.Configure },
+                enabled = editingAccessState.unlocked,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(stringResource(Res.string.editing_access_change)) }
+            OutlinedButton(
+                onClick = { editingAccessDialog = EditingAccessDialogMode.Disable },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(stringResource(Res.string.editing_access_disable)) }
+            OutlinedButton(
+                onClick = { editingAccessController?.lock() },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(stringResource(Res.string.editing_access_lock_now)) }
+        }
+    }
+
     SettingsGroup(title = stringResource(Res.string.ui_settings_startup_mode_title)) {
         Text(
             stringResource(Res.string.ui_settings_startup_mode_desc),
@@ -1617,6 +1758,16 @@ private fun GeneralSection(
                 description = stringResource(Res.string.ui_settings_partner_window_desc)
             )
         }
+    }
+
+    val dialogMode = editingAccessDialog
+    if (editingAccessController != null && dialogMode != null) {
+        EditingAccessDialog(
+            controller = editingAccessController,
+            mode = dialogMode,
+            onDismiss = { editingAccessDialog = null },
+            onSuccess = { editingAccessDialog = null }
+        )
     }
 }
 

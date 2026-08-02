@@ -71,6 +71,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
@@ -105,6 +106,7 @@ import wingmatekmp.composeapp.generated.resources.board_workspace_clear_sentence
 import wingmatekmp.composeapp.generated.resources.board_workspace_delete_last
 import wingmatekmp.composeapp.generated.resources.board_workspace_speak_sentence
 import wingmatekmp.composeapp.generated.resources.board_workspace_home
+import wingmatekmp.composeapp.generated.resources.board_workspace_temporarily_revealed
 import wingmatekmp.composeapp.generated.resources.board_cell_opens_board
 import wingmatekmp.composeapp.generated.resources.board_resize_field_label
 import wingmatekmp.composeapp.generated.resources.board_resize_increase_width
@@ -122,6 +124,25 @@ internal data class BoardGridItem(
     val columnSpan: Int,
     val button: ObfButton?
 )
+
+internal fun isBoardButtonVisible(
+    button: ObfButton,
+    isEditMode: Boolean,
+    showHiddenButtons: Boolean
+): Boolean = !button.hidden || isEditMode || showHiddenButtons
+
+internal class HiddenButtonsSession {
+    var revealed by mutableStateOf(false)
+        private set
+
+    fun toggle() {
+        revealed = !revealed
+    }
+
+    fun reset() {
+        revealed = false
+    }
+}
 
 internal fun fieldFontScale(rowSpan: Int, columnSpan: Int): Float {
     val area = rowSpan.coerceAtLeast(1).toFloat() * columnSpan.coerceAtLeast(1)
@@ -151,6 +172,7 @@ fun ObfBoardView(
     sentenceText: String = "",
     symbolBarPresentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
     boardSettings: ResolvedBoardSettings? = null,
+    showHiddenButtons: Boolean = false,
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
     selectedFieldAnchor: Pair<Int, Int>? = null,
@@ -159,6 +181,11 @@ fun ObfBoardView(
     homeBoardId: String? = null
 ) {
     val settings by rememberReactiveSettings()
+    val boardBackground = if (settings.highContrastMode) {
+        MaterialTheme.colorScheme.background
+    } else {
+        parseObfColorOrNull(board.backgroundColor) ?: MaterialTheme.colorScheme.background
+    }
     val effectiveBoardSettings = boardSettings ?: resolveBoardSettings(
         appShowLabels = settings.showLabels,
         appShowSymbols = settings.showSymbols,
@@ -176,7 +203,7 @@ fun ObfBoardView(
 
     if (isAbsoluteLayout) {
         if (showMessageBar) {
-            BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+            BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground)) {
                 val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
                 Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                     SymbolBar(
@@ -204,13 +231,14 @@ fun ObfBoardView(
                             isEditMode,
                             onButtonClick,
                             homeBoardId,
-                            effectiveBoardSettings
+                            effectiveBoardSettings,
+                            showHiddenButtons
                         )
                     }
                 }
             }
         } else {
-            BoxWithConstraints(modifier = modifier.fillMaxSize().padding(8.dp)) {
+            BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground).padding(8.dp)) {
                 renderAbsoluteButtons(
                     board,
                     imagesById,
@@ -218,7 +246,8 @@ fun ObfBoardView(
                     isEditMode,
                     onButtonClick,
                     homeBoardId,
-                    effectiveBoardSettings
+                    effectiveBoardSettings,
+                    showHiddenButtons
                 )
             }
         }
@@ -227,7 +256,7 @@ fun ObfBoardView(
         val rows = grid.rows.coerceAtLeast(1)
         
         // Use Column/Row for fixed grid that fills the space
-        BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground)) {
             val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
             Column(
                 modifier = Modifier.fillMaxSize().padding(8.dp),
@@ -272,7 +301,7 @@ fun ObfBoardView(
                             onResizeField = onResizeField
                         ) { item ->
                             val button = item.button
-                            val isVisible = button != null && (!button.hidden || isEditMode)
+                            val isVisible = button != null && isBoardButtonVisible(button, isEditMode, showHiddenButtons)
                             Box(modifier = Modifier.fillMaxSize()) {
                                 if (button != null && isVisible) {
                                     val image = button.imageId?.let { imagesById[it] }
@@ -287,6 +316,7 @@ fun ObfBoardView(
                                                 ?: onButtonClick(button)
                                         },
                                         isEditMode = isEditMode,
+                                        isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
                                         boardStrings = board.strings,
                                         locale = settings.primaryLanguage,
@@ -317,7 +347,7 @@ fun ObfBoardView(
         }
     } else {
         // Fallback: scrollable grid for boards without explicit grid
-        BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground)) {
             val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
             Column(
                 modifier = Modifier.fillMaxSize().padding(4.dp),
@@ -345,7 +375,7 @@ fun ObfBoardView(
                     modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    board.buttons.chunked(4).forEach { rowButtons ->
+                    board.buttons.filter { isBoardButtonVisible(it, isEditMode, showHiddenButtons) }.chunked(4).forEach { rowButtons ->
                         Row(
                             modifier = Modifier.fillMaxWidth().height(100.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -360,6 +390,8 @@ fun ObfBoardView(
                                             image?.path?.let { path -> extractedImages[path] }
                                         },
                                         onClick = { onButtonClick(button) },
+                                        isEditMode = isEditMode,
+                                        isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
                                         boardStrings = board.strings,
                                         locale = settings.primaryLanguage,
@@ -946,6 +978,7 @@ fun ObfButtonItem(
     extractedImageBytes: ByteArray? = null,
     onClick: () -> Unit,
     isEditMode: Boolean = false,
+    isTemporarilyRevealed: Boolean = false,
     isHomeLink: Boolean = false,
     boardStrings: Map<String, Map<String, String>> = emptyMap(),
     locale: String? = null,
@@ -966,6 +999,7 @@ fun ObfButtonItem(
     )
     val displayLabel = resolveObfLocalizedString(boardStrings, locale, button.label)
     val displayVocalization = resolveObfLocalizedString(boardStrings, locale, button.vocalization)
+    val temporarilyRevealedDescription = stringResource(Res.string.board_workspace_temporarily_revealed)
     val boundedFontScale = fieldFontScale.coerceIn(1f, 2f)
     val scaledLabelMedium = MaterialTheme.typography.labelMedium.copy(
         fontSize = MaterialTheme.typography.labelMedium.fontSize * boundedFontScale,
@@ -1091,6 +1125,14 @@ fun ObfButtonItem(
             .padding(if (settings.highContrastMode) 2.dp else 0.dp)
             .scale(scale)
             .alpha(if (button.hidden && isEditMode) 0.5f else 1f)
+            .semantics {
+                if (isTemporarilyRevealed) {
+                    contentDescription = listOfNotNull(
+                        displayLabel,
+                        temporarilyRevealedDescription
+                    ).joinToString(", ")
+                }
+            }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -1138,6 +1180,14 @@ fun ObfButtonItem(
         } else null,
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(4.dp), contentAlignment = Alignment.Center) {
+            if (isTemporarilyRevealed) {
+                Icon(
+                    Icons.Default.Visibility,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.align(Alignment.TopEnd).size(18.dp)
+                )
+            }
             // Dwell Progress Overlay
             if (dwellProgress > 0f) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -1259,7 +1309,8 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
     isEditMode: Boolean,
     onButtonClick: (ObfButton) -> Unit,
     homeBoardId: String?,
-    boardSettings: ResolvedBoardSettings
+    boardSettings: ResolvedBoardSettings,
+    showHiddenButtons: Boolean
 ) {
     val containerWidth = maxWidth
     val containerHeight = maxHeight
@@ -1268,7 +1319,7 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
         val top = (button.top ?: 0.0) * containerHeight.value
         val w = (button.width ?: 0.1) * containerWidth.value
         val h = (button.height ?: 0.1) * containerHeight.value
-        if (!button.hidden || isEditMode) {
+        if (isBoardButtonVisible(button, isEditMode, showHiddenButtons)) {
             val image = button.imageId?.let { imagesById[it] }
             Box(
                 modifier = Modifier
@@ -1283,6 +1334,7 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
                     },
                     onClick = { onButtonClick(button) },
                     isEditMode = isEditMode,
+                    isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                     isHomeLink = button.isHomeNavigation(homeBoardId),
                     boardSettings = boardSettings
                 )

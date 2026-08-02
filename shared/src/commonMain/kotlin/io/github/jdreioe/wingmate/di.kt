@@ -14,6 +14,14 @@ import io.github.jdreioe.wingmate.domain.AzureF0Provisioner
 import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.UserDataManager
+import io.github.jdreioe.wingmate.application.DefaultEditingAccessStore
+import io.github.jdreioe.wingmate.application.EditingAccessController
+import io.github.jdreioe.wingmate.application.EditingAccessStore
+import io.github.jdreioe.wingmate.application.InMemorySecureEditingCredentialStorage
+import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
+import io.github.jdreioe.wingmate.application.BackupMediaAccess
+import io.github.jdreioe.wingmate.application.CompleteBackupManager
+import io.github.jdreioe.wingmate.application.UnavailableBackupMediaAccess
 import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
@@ -45,7 +53,17 @@ import io.ktor.client.HttpClient
 
 @Suppress("unused")
 fun initKoin(extra: Module? = null) {
-    val coreDataModule: Module = module {
+    val coreDataModule = createCoreDataModule()
+
+    startKoin {
+        allowOverride(true)
+        // Include base bindings, MVIKotlin store module, and any extra platform-specific modules
+        val modulesList = listOf(coreDataModule, appModule) + listOfNotNull(extra)
+        modules(modulesList)
+    }
+}
+
+internal fun createCoreDataModule(): Module = module {
         singleOf(::InMemoryPhraseRepository) { bind<PhraseRepository>() }
         singleOf(::InMemoryCategoryRepository) { bind<CategoryRepository>() }
         singleOf(::InMemorySettingsRepository) { bind<SettingsRepository>() }
@@ -64,19 +82,32 @@ fun initKoin(extra: Module? = null) {
         singleOf(::CategoryUseCase)
         singleOf(::SettingsUseCase)
         singleOf(::UserDataManager)
+        singleOf(::InMemorySecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
+        // Use explicit constructors here: Koin's constructor-reference DSL attempts
+        // to inject Kotlin parameters that have default values (iterations/timeout).
+        single<EditingAccessStore> { DefaultEditingAccessStore(get()) }
+        single { EditingAccessController(get()) }
+        singleOf(::UnavailableBackupMediaAccess) { bind<BackupMediaAccess>() }
+        single {
+            CompleteBackupManager(
+                boardRepository = get(),
+                boardSetRepository = get(),
+                phraseRepository = get(),
+                categoryRepository = get(),
+                settingsRepository = get(),
+                voiceRepository = get(),
+                saidTextRepository = get(),
+                dictionaryRepository = get(),
+                configRepository = get(),
+                filePicker = getOrNull(),
+                mediaAccess = get()
+            )
+        }
         singleOf(::SettingsStateManager)
         singleOf(::VoiceUseCase)
         factory { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>(), get<CategoryUseCase>()) }
         factory { SettingsBloc(get<SettingsUseCase>()) }
         factory { VoiceBloc(get<VoiceUseCase>()) }
-    }
-
-    startKoin {
-        allowOverride(true)
-        // Include base bindings, MVIKotlin store module, and any extra platform-specific modules
-        val modulesList = listOf(coreDataModule, appModule) + listOfNotNull(extra)
-        modules(modulesList)
-    }
 }
 
 // Convenience no-arg for Swift where optional bridging might produce a different symbol name
