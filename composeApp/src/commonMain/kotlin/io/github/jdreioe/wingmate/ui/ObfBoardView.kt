@@ -1130,13 +1130,16 @@ fun ObfButtonItem(
 
     // Dwell logic state
     var isHovered by remember { mutableStateOf(false) }
+    var isPointerDown by remember { mutableStateOf(false) }
     var dwellProgress by remember { mutableStateOf(0f) }
     
     // Stable scope for fire-and-forget speech (survives hover changes)
     val fishingScope = rememberCoroutineScope()
 
-    LaunchedEffect(isHovered, settings.dwellToSelectMillis) {
-        if (isHovered && settings.dwellToSelectMillis > 0 && !isEditMode) {
+    // Dwell-to-select must not fire while the pointer is pressed: pressing is an explicit
+    // action, not a dwell, so hover-dwell activation is suspended for the press duration.
+    LaunchedEffect(isHovered, isPointerDown, settings.dwellToSelectMillis) {
+        if (isHovered && !isPointerDown && settings.dwellToSelectMillis > 0 && !isEditMode) {
             val startTime = System.currentTimeMillis()
             val duration = settings.dwellToSelectMillis
             
@@ -1154,7 +1157,7 @@ fun ObfButtonItem(
                 }
             }
             
-            while (isHovered) {
+            while (isHovered && !isPointerDown) {
                 val now = System.currentTimeMillis()
                 val elapsed = now - startTime
                 dwellProgress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
@@ -1255,6 +1258,8 @@ fun ObfButtonItem(
                         when (event.type) {
                             PointerEventType.Enter -> isHovered = true
                             PointerEventType.Exit -> isHovered = false
+                            PointerEventType.Press -> isPointerDown = true
+                            PointerEventType.Release -> isPointerDown = false
                         }
                     }
                 }

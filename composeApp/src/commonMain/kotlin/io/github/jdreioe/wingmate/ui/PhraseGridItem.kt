@@ -56,6 +56,7 @@ import androidx.compose.material3.SmallFloatingActionButton
 import io.github.jdreioe.wingmate.domain.Phrase
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
+import kotlin.time.Clock
 import wingmatekmp.composeapp.generated.resources.Res
 import wingmatekmp.composeapp.generated.resources.common_delete
 import wingmatekmp.composeapp.generated.resources.phrase_item_copy_soundfile
@@ -135,13 +136,18 @@ fun PhraseGridItem(
 
     // Dwell logic state
     var isHovered by remember { mutableStateOf(false) }
+    var isPointerDown by remember { mutableStateOf(false) }
     var dwellProgress by remember { mutableStateOf(0f) }
+    var showMenu by remember { mutableStateOf(false) }
     
     // Stable scope for fire-and-forget speech (survives hover changes)
     val fishingScope = rememberCoroutineScope()
 
-    androidx.compose.runtime.LaunchedEffect(isHovered, settings.dwellToSelectMillis) {
-        if (isHovered && settings.dwellToSelectMillis > 0 && !isEditMode) {
+    // Dwell-to-select must not fire while the pointer is pressed: pressing (a long-press
+    // that opens the context menu) is an explicit action, not a dwell. Gating on the
+    // pointer-up state keeps a long-press from selecting the phrase first.
+    androidx.compose.runtime.LaunchedEffect(isHovered, isPointerDown, settings.dwellToSelectMillis, showMenu) {
+        if (isHovered && !isPointerDown && settings.dwellToSelectMillis > 0 && !isEditMode && !showMenu) {
             val startTime = System.currentTimeMillis()
             val duration = settings.dwellToSelectMillis
             
@@ -152,7 +158,7 @@ fun PhraseGridItem(
                 }
             }
             
-            while (isHovered) {
+            while (isHovered && !isPointerDown && !showMenu) {
                 val now = System.currentTimeMillis()
                 val elapsed = now - startTime
                 dwellProgress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
@@ -171,8 +177,6 @@ fun PhraseGridItem(
         }
     }
 
-    var showMenu by remember { mutableStateOf(false) }
-
         Card(
         modifier = Modifier
             .padding(4.dp)
@@ -187,6 +191,8 @@ fun PhraseGridItem(
                         when (event.type) {
                             PointerEventType.Enter -> isHovered = true
                             PointerEventType.Exit -> isHovered = false
+                            PointerEventType.Press -> isPointerDown = true
+                            PointerEventType.Release -> isPointerDown = false
                         }
                     }
                 }
@@ -203,13 +209,19 @@ fun PhraseGridItem(
                     baseModifier.pointerInput(settings.holdToSelectMillis) {
                         detectTapGestures(
                             onPress = {
-                                val completed = withTimeoutOrNull(settings.holdToSelectMillis) {
+                                // A long-press (context menu) must never also speak or insert the
+                                // phrase. Wait out the long-press window and only hold-to-select
+                                // when the press ends before it.
+                                val startTime = Clock.System.now().toEpochMilliseconds()
+                                val releasedBeforeLongPress = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                                     tryAwaitRelease()
-                                    false
-                                } ?: true
-                                if (completed) {
-                                    primaryAction()
-                                    tryAwaitRelease()
+                                    true
+                                } ?: false
+                                if (releasedBeforeLongPress) {
+                                    val heldMillis = Clock.System.now().toEpochMilliseconds() - startTime
+                                    if (heldMillis >= settings.holdToSelectMillis) {
+                                        primaryAction()
+                                    }
                                 }
                             },
                             onLongPress = { showMenu = true }
