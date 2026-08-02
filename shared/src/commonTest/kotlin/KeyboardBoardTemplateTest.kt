@@ -17,8 +17,11 @@ class KeyboardBoardTemplateTest {
         assertEquals(11, board.grid?.columns)
         assertEquals(5, board.grid?.rows)
         assertTrue(board.grid?.order?.all { it.size == 11 } == true)
-        assertEquals(ObfButtonActionEffect.AppendText("q"), parseObfButtonActions(board.buttons.first()).single())
-        assertEquals(listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"), board.buttons.take(10).map { it.label })
+        assertEquals(ObfButtonActionEffect.Predictions, parseObfButtonActions(board.buttons.first()).single())
+        val qButton = board.buttons.first { it.label == "q" }
+        assertEquals("q", qButton.label)
+        assertEquals(ObfButtonActionEffect.AppendText("q"), parseObfButtonActions(qButton).single())
+        assertTrue(board.grid?.order?.first()?.any { id -> board.buttons.first { it.id == id }.label == "Predict" } == true)
         val spaceId = board.buttons.first { it.action == ":space" }.id
         assertEquals(9, board.grid?.order?.last { it.any { id -> id == spaceId } }?.count { it == spaceId })
         assertTrue(board.buttons.any { it.action == ":space" })

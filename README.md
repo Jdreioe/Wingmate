@@ -11,6 +11,9 @@ For a list of features, look at FEATURES.md
 PhraseScreen is the screen, I primarily have used.
 OBF/OBZ is still work in progress
 
+See [Supported platforms](docs/PLATFORM_SUPPORT.md) for the client support and
+feature-parity policy used when planning and accepting new work.
+
 
 ## OpenSymbols Secret (Secure Config)
 

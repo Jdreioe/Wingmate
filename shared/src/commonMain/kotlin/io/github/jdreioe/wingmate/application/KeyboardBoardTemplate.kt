@@ -9,9 +9,9 @@ import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 /**
  * A ready-to-use, editable keyboard with lowercase, uppercase, and symbols pages.
  *
- * Every page ends with a prediction row: four n-gram prediction buttons (each
- * two cells wide), a "delete sentence" button, and a "say" button. The boards
- * are marked as spelling boards so word buttons do not auto-insert spaces.
+ * Every page starts with a prediction row above the keys: four n-gram prediction
+ * buttons (each two cells wide), a "delete sentence" button, and a "say" button.
+ * The boards are marked as spelling boards so word buttons do not auto-insert spaces.
  */
 object KeyboardBoardTemplate {
     private const val LOWERCASE = "keyboard-lowercase"
@@ -50,19 +50,19 @@ object KeyboardBoardTemplate {
     }
 
     private fun lowercaseRows(): List<List<Key?>> =
-        letterRows("qwertyuiop", "asdfghjkl", "zxcvbnm") +
-            listOf(controls(shiftKey("⇧", UPPERCASE), numberKey()), predictionsRow())
+        listOf(predictionsRow()) + letterRows("qwertyuiop", "asdfghjkl", "zxcvbnm") +
+            listOf(controls(shiftKey("⇧", UPPERCASE), numberKey()))
 
     private fun uppercaseRows(): List<List<Key?>> =
-        letterRows("QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM") +
-            listOf(controls(shiftKey("⇩", LOWERCASE), numberKey()), predictionsRow())
+        listOf(predictionsRow()) + letterRows("QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM") +
+            listOf(controls(shiftKey("⇩", LOWERCASE), numberKey()))
 
     private fun symbolRows(): List<List<Key?>> = listOf(
+        predictionsRow(),
         characters("1234567890") + key("⌫", "backspace", ":backspace"),
         characters("-/:;()$&@_") + key("\"", "double quote", "+\""),
-        characters("#+=.,?!'[]") + spaceKey(),
-        controls(shiftKey("ABC", LOWERCASE), shiftKey("⇧", UPPERCASE)),
-        predictionsRow()
+        characters("#+=.,?!'[]") + key("~", "tilde", "+~"),
+        controls(shiftKey("ABC", LOWERCASE), shiftKey("⇧", UPPERCASE))
     )
 
     private fun letterRows(first: String, second: String, third: String): List<List<Key?>> = listOf(
