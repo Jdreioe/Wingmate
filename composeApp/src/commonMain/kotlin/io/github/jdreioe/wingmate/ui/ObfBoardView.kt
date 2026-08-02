@@ -34,6 +34,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
@@ -62,9 +63,6 @@ import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Home
@@ -178,6 +176,7 @@ fun ObfBoardView(
     selectedFieldAnchor: Pair<Int, Int>? = null,
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
+    onGridHeightFractionChange: ((Float) -> Unit)? = null,
     homeBoardId: String? = null
 ) {
     val settings by rememberReactiveSettings()
@@ -286,20 +285,40 @@ fun ObfBoardView(
                 }
                 val pageScrollState = rememberScrollState()
                 BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    val minimumCellHeight = 96.dp * settings.inputFieldScale.coerceIn(0.5f, 2f)
+                    val availableGridHeight = maxHeight
+                    val minimumCellHeight = (if (board.compactGrid) 72.dp else 96.dp) *
+                        settings.inputFieldScale.coerceIn(0.5f, 2f)
                     val minimumContentHeight = minimumCellHeight * rows + 8.dp * (rows - 1)
-                    val contentHeight = maxOf(maxHeight, minimumContentHeight)
+                    val defaultHeightFraction = if (board.compactGrid) {
+                        (minimumContentHeight / availableGridHeight).coerceIn(0.15f, 1f)
+                    } else {
+                        1f
+                    }
+                    var previewHeightFraction by remember(
+                        board.id,
+                        board.gridHeightFraction,
+                        availableGridHeight
+                    ) {
+                        mutableFloatStateOf(board.gridHeightFraction ?: defaultHeightFraction)
+                    }
+                    val contentHeight = availableGridHeight * previewHeightFraction
                     Box(modifier = Modifier.fillMaxSize().verticalScroll(pageScrollState)) {
-                        SpanningBoardGrid(
-                            rows = rows,
-                            columns = columns,
-                            items = gridItems,
-                            modifier = Modifier.fillMaxWidth().height(contentHeight),
-                            onMove = onCellMove,
-                            selectedField = selectedFieldAnchor,
-                            selectedFieldSpans = selectedFieldSpans,
-                            onResizeField = onResizeField
-                        ) { item ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(contentHeight)
+                                .align(Alignment.BottomCenter)
+                        ) {
+                            SpanningBoardGrid(
+                                rows = rows,
+                                columns = columns,
+                                items = gridItems,
+                                modifier = Modifier.fillMaxSize(),
+                                onMove = onCellMove,
+                                selectedField = selectedFieldAnchor,
+                                selectedFieldSpans = selectedFieldSpans,
+                                onResizeField = onResizeField
+                            ) { item ->
                             val button = item.button
                             val isVisible = button != null && isBoardButtonVisible(button, isEditMode, showHiddenButtons)
                             Box(modifier = Modifier.fillMaxSize()) {
@@ -339,6 +358,16 @@ fun ObfBoardView(
                                 } else {
                                     Spacer(modifier = Modifier.fillMaxSize())
                                 }
+                            }
+                            }
+                            if (isEditMode && onGridHeightFractionChange != null) {
+                                GridHeightResizeHandle(
+                                    currentFraction = previewHeightFraction,
+                                    availableHeight = availableGridHeight,
+                                    onFractionPreview = { previewHeightFraction = it },
+                                    onFractionCommit = onGridHeightFractionChange,
+                                    modifier = Modifier.align(Alignment.TopCenter)
+                                )
                             }
                         }
                     }
@@ -403,13 +432,13 @@ fun ObfBoardView(
                             repeat(4 - rowButtons.size) {
                                 Spacer(modifier = Modifier.weight(1f))
                             }
+                            }
                         }
                     }
                 }
             }
         }
     }
-}
 
 internal fun buildBoardGridItems(
     grid: io.github.jdreioe.wingmate.domain.obf.ObfGrid,
@@ -849,8 +878,6 @@ fun SymbolBar(
     modifier: Modifier = Modifier
 ) {
     val textScrollState = rememberScrollState()
-    val symbolListState = rememberLazyListState()
-    var previousItemCount by remember { mutableIntStateOf(0) }
     val textStyle = when (presentation) {
         SymbolBarPresentation.Normal -> MaterialTheme.typography.titleMedium
         SymbolBarPresentation.Fullscreen -> MaterialTheme.typography.headlineSmall
@@ -860,12 +887,9 @@ fun SymbolBar(
     }
 
     LaunchedEffect(selectedButtons.size) {
-        val appended = selectedButtons.size > previousItemCount
-        previousItemCount = selectedButtons.size
-        if (appended) {
+        if (selectedButtons.isNotEmpty()) {
             withFrameNanos { }
-            launch { textScrollState.animateScrollTo(textScrollState.maxValue) }
-            launch { symbolListState.animateScrollToItem(selectedButtons.lastIndex) }
+            textScrollState.animateScrollTo(textScrollState.maxValue)
         }
     }
 
@@ -874,100 +898,102 @@ fun SymbolBar(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-            if (sentenceText.isNotEmpty()) {
-                Box(
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 64.dp)
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(max = maximumTextHeight)
+                    .verticalScroll(textScrollState)
+                    .clearAndSetSemantics {
+                        contentDescription = sentenceText
+                    },
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text(
+                    text = sentenceText,
+                    style = textStyle,
                     modifier = Modifier
-                        .weight(1f, fill = false)
                         .fillMaxWidth()
-                        .heightIn(max = maximumTextHeight)
-                        .verticalScroll(textScrollState)
-                        .clearAndSetSemantics {
-                            contentDescription = sentenceText
-                        },
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    Text(
-                        text = sentenceText,
-                        style = textStyle,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(
-                                start = 8.dp,
-                                end = if (presentation == SymbolBarPresentation.Fullscreen) 64.dp else 8.dp,
-                                top = 4.dp,
-                                bottom = 4.dp
-                            )
-                    )
-                }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth().height(64.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                LazyRow(
-                    state = symbolListState,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    items(selectedButtons) { (button, bitmap) ->
-                        val resolvedBitmap = remember(button, bitmap) {
-                            bitmap ?: button.imageId?.let { id ->
-                                imagesById[id]?.path?.let { path ->
-                                    extractedImages[path]?.toComposeImageBitmap()
-                                }
-                            }
-                        }
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.width(60.dp)
-                        ) {
-                            if (resolvedBitmap != null) {
-                                Image(
-                                    bitmap = resolvedBitmap,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp))
-                                )
-                            }
-                            Text(
-                                text = button.label ?: "",
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+            if (showSpeak || showDelete || showClear) {
+                VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (showSpeak) {
+                    FilledIconButton(
+                        onClick = onSpeak,
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = stringResource(Res.string.board_workspace_speak_sentence))
                     }
                 }
-
-                if (showSpeak || showDelete || showClear) {
-                    VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
+                if (showDelete) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.board_workspace_delete_last))
+                    }
                 }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (showSpeak) {
-                        FilledIconButton(
-                            onClick = onSpeak,
-                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = stringResource(Res.string.board_workspace_speak_sentence))
-                        }
-                    }
-                    if (showDelete) {
-                        IconButton(onClick = onDelete) {
-                            Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.board_workspace_delete_last))
-                        }
-                    }
-                    if (showClear) {
-                        IconButton(onClick = onClear) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(Res.string.board_workspace_clear_sentence))
-                        }
+                if (showClear) {
+                    IconButton(onClick = onClear) {
+                        Icon(Icons.Default.Clear, contentDescription = stringResource(Res.string.board_workspace_clear_sentence))
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun GridHeightResizeHandle(
+    currentFraction: Float,
+    availableHeight: androidx.compose.ui.unit.Dp,
+    onFractionPreview: (Float) -> Unit,
+    onFractionCommit: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val availableHeightPx = with(LocalDensity.current) { availableHeight.toPx().coerceAtLeast(1f) }
+    var dragFraction by remember { mutableFloatStateOf(currentFraction) }
+    var dragStartFraction by remember { mutableFloatStateOf(currentFraction) }
+    val latestCurrentFraction by rememberUpdatedState(currentFraction)
+    val latestOnFractionPreview by rememberUpdatedState(onFractionPreview)
+    val latestOnFractionCommit by rememberUpdatedState(onFractionCommit)
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .pointerInput(availableHeightPx) {
+                detectVerticalDragGestures(
+                    onDragStart = {
+                        dragStartFraction = latestCurrentFraction
+                        dragFraction = latestCurrentFraction
+                    },
+                    onDragEnd = { latestOnFractionCommit(dragFraction) },
+                    onDragCancel = { latestOnFractionPreview(dragStartFraction) },
+                    onVerticalDrag = { change, dragAmount ->
+                        change.consume()
+                        dragFraction = (dragFraction - dragAmount / availableHeightPx).coerceIn(0.15f, 1f)
+                        latestOnFractionPreview(dragFraction)
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .width(72.dp)
+                .height(5.dp)
+                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+        )
     }
 }
 

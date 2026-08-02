@@ -37,7 +37,7 @@ import org.koin.compose.getKoin
 import wingmatekmp.composeapp.generated.resources.*
 
 internal data class FieldLanguageOption(val tag: String, val label: String)
-internal enum class BoardSetTemplate { Blank, Calculator }
+internal enum class BoardSetTemplate { Blank, Calculator, Keyboard }
 
 @Composable
 internal fun CreateBoardSetDialog(
@@ -49,6 +49,7 @@ internal fun CreateBoardSetDialog(
     var columnsText by remember { mutableStateOf("8") }
     var template by remember { mutableStateOf(BoardSetTemplate.Blank) }
     val calculatorName = stringResource(Res.string.calculator_default_name)
+    val keyboardName = stringResource(Res.string.keyboard_default_name)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -75,6 +76,14 @@ internal fun CreateBoardSetDialog(
                             if (name.isBlank()) name = calculatorName
                         },
                         label = { Text(stringResource(Res.string.board_dialog_template_calculator)) }
+                    )
+                    FilterChip(
+                        selected = template == BoardSetTemplate.Keyboard,
+                        onClick = {
+                            template = BoardSetTemplate.Keyboard
+                            if (name.isBlank()) name = keyboardName
+                        },
+                        label = { Text(stringResource(Res.string.board_dialog_template_keyboard)) }
                     )
                 }
                 if (template == BoardSetTemplate.Blank) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

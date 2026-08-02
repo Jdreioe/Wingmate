@@ -201,6 +201,9 @@ class BoardSetUseCase(
     suspend fun createCalculatorBoardSet(name: String = "Calculator"): ObfBoardSet =
         createBoardSetFromBoards(name, CalculatorBoardTemplate.boards())
 
+    suspend fun createKeyboardBoardSet(name: String = "Keyboard"): ObfBoardSet =
+        createBoardSetFromBoards(name, KeyboardBoardTemplate.boards())
+
     suspend fun toggleLocked(boardSetId: String): ObfBoardSet? {
         val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
         val updated = boardSet.copy(

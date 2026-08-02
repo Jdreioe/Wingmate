@@ -159,6 +159,8 @@
     <string name="board_dialog_template_blank">Blank</string>
     <string name="board_dialog_template_calculator">Calculator</string>
     <string name="calculator_default_name">Calculator</string>
+    <string name="board_dialog_template_keyboard">Keyboard</string>
+    <string name="keyboard_default_name">Keyboard</string>
     <string name="board_dialog_set_name">Screen name</string>
     <string name="board_dialog_rows">Rows</string>
     <string name="board_dialog_columns">Columns</string>

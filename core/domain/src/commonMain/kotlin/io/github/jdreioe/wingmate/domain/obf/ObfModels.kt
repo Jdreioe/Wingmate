@@ -5,8 +5,18 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 
 const val OBF_MATH_MODE_EXTENSION = "ext_wingmate_math_mode"
+const val OBF_BUTTON_TYPE_EXTENSION = "ext_wingmate_button_type"
+const val OBF_COMPACT_GRID_EXTENSION = "ext_wingmate_compact_grid"
+const val OBF_GRID_HEIGHT_FRACTION_EXTENSION = "ext_wingmate_grid_height_fraction"
+
+/** Wingmate-specific button behaviours, stored in OBF extensions for portability. */
+enum class ObfButtonType(val wireValue: String) {
+    Standard("standard"),
+    NGramPrediction("ngram_prediction")
+}
 
 @Serializable
 data class ObfBoard(
@@ -31,6 +41,32 @@ data class ObfBoard(
         get() = buttons.isNotEmpty() && buttons.all {
             it.top != null && it.left != null && it.width != null && it.height != null
         }
+
+    /** Keeps keyboard-style grids at touch-friendly key heights instead of stretching to the page. */
+    val compactGrid: Boolean
+        get() = (extensions[OBF_COMPACT_GRID_EXTENSION] as? JsonPrimitive)?.booleanOrNull == true
+
+    fun withCompactGrid(enabled: Boolean): ObfBoard = copy(
+        extensions = if (enabled) {
+            extensions + (OBF_COMPACT_GRID_EXTENSION to JsonPrimitive(true))
+        } else {
+            extensions - OBF_COMPACT_GRID_EXTENSION
+        }
+    )
+
+    /** Optional editor-controlled share of the available board area used by a grid. */
+    val gridHeightFraction: Float?
+        get() = (extensions[OBF_GRID_HEIGHT_FRACTION_EXTENSION] as? JsonPrimitive)
+            ?.contentOrNull
+            ?.toFloatOrNull()
+            ?.coerceIn(0.15f, 1f)
+
+    fun withGridHeightFraction(fraction: Float?): ObfBoard = copy(
+        extensions = fraction?.let {
+            extensions + (OBF_GRID_HEIGHT_FRACTION_EXTENSION to JsonPrimitive(it.coerceIn(0.15f, 1f)))
+        } ?: (extensions - OBF_GRID_HEIGHT_FRACTION_EXTENSION)
+    )
+
 }
 
 @Serializable
@@ -61,11 +97,24 @@ data class ObfButton(
     val mathMode: Boolean
         get() = (extensions[OBF_MATH_MODE_EXTENSION] as? JsonPrimitive)?.booleanOrNull == true
 
+    val type: ObfButtonType
+        get() = ObfButtonType.entries.firstOrNull {
+            it.wireValue == (extensions[OBF_BUTTON_TYPE_EXTENSION] as? JsonPrimitive)?.contentOrNull
+        } ?: ObfButtonType.Standard
+
     fun withMathMode(enabled: Boolean): ObfButton = copy(
         extensions = if (enabled) {
             extensions + (OBF_MATH_MODE_EXTENSION to JsonPrimitive(true))
         } else {
             extensions - OBF_MATH_MODE_EXTENSION
+        }
+    )
+
+    fun withType(type: ObfButtonType): ObfButton = copy(
+        extensions = if (type == ObfButtonType.Standard) {
+            extensions - OBF_BUTTON_TYPE_EXTENSION
+        } else {
+            extensions + (OBF_BUTTON_TYPE_EXTENSION to JsonPrimitive(type.wireValue))
         }
     )
 

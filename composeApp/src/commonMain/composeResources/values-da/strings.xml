@@ -159,6 +159,8 @@
     <string name="board_dialog_template_blank">Tom</string>
     <string name="board_dialog_template_calculator">Lommeregner</string>
     <string name="calculator_default_name">Lommeregner</string>
+    <string name="board_dialog_template_keyboard">Tastatur</string>
+    <string name="keyboard_default_name">Tastatur</string>
     <string name="board_dialog_set_name">Skærmnavn</string>
     <string name="board_dialog_rows">Rækker</string>
     <string name="board_dialog_columns">Kolonner</string>

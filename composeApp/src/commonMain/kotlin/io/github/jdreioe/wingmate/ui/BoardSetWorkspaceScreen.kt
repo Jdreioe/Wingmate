@@ -85,12 +85,15 @@ import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechSegment
+import io.github.jdreioe.wingmate.domain.SaidTextRepository
+import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonType
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
@@ -318,7 +321,7 @@ fun BoardSetManagerScreen(
         CreateBoardSetDialog(
             onDismiss = { showCreateDialog = false },
             onCreate = { name, rows, columns, template ->
-                if (template == BoardSetTemplate.Calculator) {
+                if (template != BoardSetTemplate.Blank) {
                     showCreateDialog = false
                 }
                 scope.launch {
@@ -326,6 +329,7 @@ fun BoardSetManagerScreen(
                         when (template) {
                             BoardSetTemplate.Blank -> useCase.createBoardSet(name.trim(), rows, columns, defaultBoardName)
                             BoardSetTemplate.Calculator -> useCase.createCalculatorBoardSet(name.trim())
+                            BoardSetTemplate.Keyboard -> useCase.createKeyboardBoardSet(name.trim())
                         }
                     }
                         .onSuccess { created ->
@@ -336,6 +340,11 @@ fun BoardSetManagerScreen(
                                     route = BoardSetRoute.Workspace(created.id, BoardWorkspaceMode.Edit)
                                 }
                                 BoardSetTemplate.Calculator -> {
+                                    boardSets = (listOf(created) + boardSets)
+                                        .distinctBy { it.id }
+                                        .sortedByDescending { it.updatedAt }
+                                }
+                                BoardSetTemplate.Keyboard -> {
                                     boardSets = (listOf(created) + boardSets)
                                         .distinctBy { it.id }
                                         .sortedByDescending { it.updatedAt }
@@ -568,8 +577,11 @@ private fun BoardSetWorkspaceScreen(
     val voiceUseCase = koinInject<VoiceUseCase>()
     val soundPlayer = koinInject<SoundPlayer>()
     val fileStorage = koinInject<FileStorage>()
+    val saidTextRepository = koinInject<SaidTextRepository>()
     val settings by rememberReactiveSettings()
     val koin = org.koin.compose.getKoin()
+    val predictionService = remember(koin) { koin.getOrNull<TextPredictionService>() }
+    val dictionaryLoader = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.DictionaryLoader>() }
     val mediaUrlLoader = remember(koin) { koin.getOrNull<ObfMediaUrlLoader>() }
     val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
     val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
@@ -634,6 +646,27 @@ private fun BoardSetWorkspaceScreen(
             ?.let(::listOf)
             .orEmpty()
     ).distinctBy { it.tag }
+
+    // Board keyboards must initialize the local model themselves: unlike the phrase screen,
+    // they may be the first communication surface a user opens.
+    LaunchedEffect(predictionService, saidTextRepository, settings.primaryLanguage) {
+        val service = predictionService ?: return@LaunchedEffect
+        runCatching {
+            val history = saidTextRepository.list()
+            val nGramService = service as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
+            if (nGramService != null) {
+                val dictionary = dictionaryLoader?.loadDictionary(settings.primaryLanguage).orEmpty()
+                if (dictionary.isNotEmpty()) {
+                    nGramService.setBaseLanguage(dictionary)
+                    nGramService.train(history, clear = false)
+                } else {
+                    nGramService.train(history)
+                }
+            } else {
+                service.train(history)
+            }
+        }
+    }
 
     LaunchedEffect(boardSetId) {
         isLoading = true
@@ -895,6 +928,14 @@ private fun BoardSetWorkspaceScreen(
                             ) {
                                 if (mode == BoardWorkspaceMode.Edit) {
                                     DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.board_workspace_add)) },
+                                        leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            showAddBoardDialog = true
+                                        }
+                                    )
+                                    DropdownMenuItem(
                                         text = { Text(stringResource(Res.string.board_workspace_undo)) },
                                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null) },
                                         enabled = editSession?.undoStack?.isNotEmpty() == true,
@@ -1076,6 +1117,27 @@ private fun BoardSetWorkspaceScreen(
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
+                        Box {
+                            IconButton(onClick = { appBarMenuExpanded = true }) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = stringResource(Res.string.common_more_actions)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = appBarMenuExpanded,
+                                onDismissRequest = { appBarMenuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(Res.string.board_workspace_add)) },
+                                    leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                                    onClick = {
+                                        appBarMenuExpanded = false
+                                        showAddBoardDialog = true
+                                    }
+                                )
+                            }
+                        }
                     } else {
                         IconButton(onClick = hiddenButtonsSession::toggle) {
                             Icon(
@@ -1134,15 +1196,6 @@ private fun BoardSetWorkspaceScreen(
                 )
             }
         },
-        floatingActionButton = {
-            if (mode == BoardWorkspaceMode.Edit) {
-                ExtendedFloatingActionButton(
-                    onClick = { showAddBoardDialog = true },
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text(stringResource(Res.string.board_workspace_add)) }
-                )
-            }
-        }
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             when {
@@ -1193,7 +1246,28 @@ private fun BoardSetWorkspaceScreen(
                         boardSettings = resolvedBoardSettings,
                         showHiddenButtons = showHiddenButtons,
                         selectedButtons = selectedButtons,
-                        onButtonClick = { button ->
+                        onButtonClick = buttonClick@{ button ->
+                            if (button.type == ObfButtonType.NGramPrediction) {
+                                scope.launch {
+                                    val word = predictionService
+                                        ?.takeIf { it.isTrained() }
+                                        ?.predict(sentenceText, maxWords = 1, maxLetters = 0)
+                                        ?.words
+                                        ?.firstOrNull()
+                                    val insertion = word?.let { nGramPredictionInsertion(sentenceText, it) }
+                                    if (!insertion.isNullOrEmpty()) {
+                                        selectedButtons = selectedButtons + (
+                                            ObfButton(
+                                                id = workspaceId("prediction"),
+                                                label = insertion,
+                                                vocalization = insertion,
+                                                locale = button.locale
+                                            ) to null
+                                        )
+                                    }
+                                }
+                                return@buttonClick
+                            }
                             val actions = parseObfButtonActions(button)
                             if (actions.isNotEmpty()) {
                                 var speakAfterActions = false
@@ -1368,6 +1442,19 @@ private fun BoardSetWorkspaceScreen(
                                 if (resized != session.draft) {
                                     editSession = session.apply(resized)
                                 }
+                            }
+                        } else null,
+                        onGridHeightFractionChange = if (mode == BoardWorkspaceMode.Edit) {
+                            { fraction ->
+                                val session = editSession ?: return@ObfBoardView
+                                val boardId = activeBoard.id
+                                editSession = session.apply(
+                                    session.draft.copy(
+                                        boards = session.draft.boards.map { board ->
+                                            if (board.id == boardId) board.withGridHeightFraction(fraction) else board
+                                        }
+                                    )
+                                )
                             }
                         } else null,
                         homeBoardId = activeGraph.boardSet.rootBoardId,
@@ -2180,6 +2267,21 @@ private fun workspaceId(prefix: String): String {
  * Removes one character from the composed sentence. When the last token is a multi-character
  * spelling fragment, trims one character; otherwise drops the last token entirely.
  */
+/**
+ * Returns only the text that must be appended to accept an n-gram word suggestion.
+ * A matching partially typed word is completed; otherwise the suggestion starts a new word.
+ */
+internal fun nGramPredictionInsertion(sentence: String, suggestion: String): String {
+    val word = suggestion.trim()
+    if (word.isEmpty()) return ""
+    val prefix = sentence.takeLastWhile { !it.isWhitespace() }
+    return when {
+        prefix.isEmpty() -> word
+        word.startsWith(prefix, ignoreCase = true) -> word.drop(prefix.length)
+        else -> " $word"
+    }
+}
+
 internal fun backspaceSentenceSelection(
     selected: List<Pair<ObfButton, ImageBitmap?>>
 ): List<Pair<ObfButton, ImageBitmap?>> {
@@ -2226,9 +2328,9 @@ internal fun buildResolvedSentence(
             strings = board?.strings.orEmpty(),
             locale = primaryLanguage,
             rawValue = button.vocalization ?: button.label
-        )?.trim()?.takeIf { it.isNotEmpty() }
+        )?.takeIf { it.isNotEmpty() }
     }
-    val separator = if (tokens.all { it.length <= 1 }) "" else " "
+    val separator = if (tokens.any { it.any(Char::isWhitespace) } || tokens.all { it.length <= 1 }) "" else " "
     return tokens.joinToString(separator)
 }
 
@@ -2253,7 +2355,7 @@ private fun speakSelectedButtons(
             strings = board.strings,
             locale = primaryLanguage,
             rawValue = button.vocalization ?: button.label
-        )?.trim()?.takeIf { it.isNotEmpty() }
+        )?.takeIf { it.isNotEmpty() }
             ?: return@mapNotNull null
         val recordingPath = button.soundId
             ?.let { soundId -> board.sounds.firstOrNull { it.id == soundId } }
@@ -2269,7 +2371,10 @@ private fun speakSelectedButtons(
 
             suspend fun speakPendingTts() {
                 if (pendingTts.isEmpty()) return
-                val separator = if (pendingTts.all { it.text.length <= 1 }) "" else " "
+                val separator = if (
+                    pendingTts.any { it.text.any(Char::isWhitespace) } ||
+                    pendingTts.all { it.text.length <= 1 }
+                ) "" else " "
                 val sentence = pendingTts.joinToString(separator) { it.text }
                 val pendingVoice = voice
                     .withLanguageOverride(pendingTts.first().language ?: primaryLanguage)
