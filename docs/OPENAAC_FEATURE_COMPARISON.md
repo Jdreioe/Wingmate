@@ -40,15 +40,15 @@ OpenAAC ranks features by expectation of availability: 🟢 Standard, ✅ Most A
 | Add photos from device/camera | ⭐ | ✅ image picker + iOS PhotosPicker |
 | Easily switch symbol sets | ⭐ | 🟡 multiple sources (ARASAAC, OpenSymbols, photos), no batch switching |
 | Color coding of buttons by word type (Fitzgerald Key) | ⭐ | ❌ (manual per-button colors only) |
-| Quick access hide/show (babble) | 💡 | ❌ |
-| Lock editing behind access code | 💡 | ❌ |
-| Offline backup | 💡 | 🟡 desktop JAR `.backup`, history JSON export/import; no full vocabulary backup/restore |
-| Share vocabulary sets across users | 💡 | 🟡 OBZ import/export enables sharing; no dedicated share UI |
-| Different-sized buttons (spanning) | 💡 | ❌ |
-| Choose grid background color / dark mode | 💜 | ❌ |
+| Quick access hide/show (babble) | 💡 | ✅ |
+| Lock editing behind access code | 💡 | ✅ |
+| Offline backup | 💡 | ✅ |
+| Share vocabulary sets across users | 💡 | ✅ OBZ import/export enables sharing; no dedicated share UI |
+| Different-sized buttons (spanning) | 💡 | ✅ |
+| Choose grid background color / dark mode | 💜 |✅ |
 | Background image behind buttons | 💜 | ❌ |
 | Customizable keyboards | 💜 | ❌ (Compose TextField, OS keyboard) |
-| Different-shaped buttons | 💜 | ❌ |
+| Different-shaped buttons | 💜 | ✅ |
 
 ## Access
 
@@ -90,9 +90,9 @@ OpenAAC ranks features by expectation of availability: 🟢 Standard, ✅ Most A
 | Backspace button | 🟢 | ✅ |
 | Clear sentence on select | ✅ | 🟡 playback/auto-clear not verified |
 | Quick access phrases | ✅ | ❌ |
-| Option to include images in sentence box | ⭐ | ❌ |
+| Option to include images in sentence box | ⭐ | ❌ (soon-ish) |
 | Saved phrases | ⭐ | ✅ save sentences & categories |
-| Hold that thought | ⭐ | ✅ "On that thought" / pinned + scratch thought drafts |
+| Hold that thought | ⭐ | ✅ "On that thought" / pinned + scratch thought drafts (soon in Screens) |
 | Repeat louder | ⭐ | ❌ |
 | Share sentence externally | ⭐ | ✅ share service + clipboard fallback |
 | Flip text to show someone else | 💡 | ❌ |
@@ -102,9 +102,9 @@ OpenAAC ranks features by expectation of availability: 🟢 Standard, ✅ Most A
 
 | OpenAAC Feature | Key | Wingmate |
 |---|---|---|
-| Pre-populated vocabularies | 🟢 | ✅ board templates (calculator, core talk) + sample OBF/OBZ |
+| Pre-populated vocabularies | 🟢 | ✅ board templates (calculator + keyboard). Easy to add |
 | Places for personalized words | 🟢 | ✅ |
-| Core words in pre-populated vocabularies | ✅ | ✅ core-talk sample; community boards importable |
+| Core words in pre-populated vocabularies | ✅ | ✅ community boards importable |
 | Category-based layout option | ✅ | ✅ categories/folders |
 | Multiple grid sizes pre-built | ✅ | ✅ configurable grid columns |
 | Motor planning-based layout option | ⭐ | 🟡 board return behavior (stay/previous/start) supports consistent navigation |
@@ -118,11 +118,11 @@ OpenAAC ranks features by expectation of availability: 🟢 Standard, ✅ Most A
 |---|---|---|
 | Spelling by keys | 🟢 | ✅ text input |
 | Word prediction | ✅ | ✅ n-gram prediction bar |
-| Punctuation keys | ⭐ | 🟡 OS keyboard provides punctuation; in-app keyboard not verified |
-| Capitalization | ⭐ | 🟡 OS keyboard; app-level capitalization not verified |
-| Personalized word prediction results | ⭐ | ✅ n-gram trained on user history |
-| Read last sentence on punctuation end | ⭐ | ❌ |
-| Option to use native on-screen keyboard | 💡 | 🟡 Compose TextField + software keyboard modifier; no explicit switch |
+| Punctuation keys | ⭐ | 🟡 OS keyboard provides punctuation; Template supports it|
+| Capitalization | ⭐ | 🟡 OS keyboard; app does not auto caåitilize|
+| Personalized word prediction results | ⭐ | ✅ n-gram trained on user history (opt in soon) |
+| Read last sentence on punctuation end | ⭐ |  |
+| Option to use native on-screen keyboard | 💡 | ✅ |
 | Audio output options (phonics vs. letter name) | 💡 | ❌ |
 | Swipe spelling | 💜 | ❌ |
 
@@ -161,7 +161,7 @@ OpenAAC ranks features by expectation of availability: 🟢 Standard, ✅ Most A
 |---|---|---|
 | Works offline (images, links, audio) | 🟢 | ✅ audio caching, offline voice download, connectivity-aware fallback |
 | Copy plaintext to clipboard | ✅ | ✅ |
-| Data logging | ✅ | ✅ OBL-style usage logging + opt-in Aptabase analytics |
+| Data logging | ✅ | ✅ OBL-style usage logging + opt-in Aptabase analytics (OBL not yet fully implemented) |
 | Easily-reachable alert button | ⭐ | ❌ |
 | Shortcuts for current day/month in spoken content | ⭐ | ❌ |
 | Navigation sidebar | ⭐ | ❌ |
@@ -178,34 +178,14 @@ OpenAAC ranks features by expectation of availability: 🟢 Standard, ✅ Most A
 | Abbreviation auto-expansion | 💡 | ❌ |
 | Auto-contractions | 💡 | ❌ |
 | Sentence repairs (reorder/edit in sentence box) | 💡 | ❌ |
-| Launch extra tools (calculator, whiteboard, video) | 💜 | ✅ calculator board templates; no whiteboard/video |
+| Launch extra tools (calculator, whiteboard, video) | 💜 | ✅ calculator board; no whiteboard/video |
 | "Show me how" for user-inputted phrase | 💜 | ❌ |
 | Cross-platform support | 💜 | ✅ iOS, Android, Desktop (Compose), Linux (Qt/QML) |
-| Sync content across devices | 💜 | ❌ 🔜 (cloud sync in future goals) |
+| Sync content across devices | 💜 | ✅ (Backup / Restore) |
 | Battery level indicator | 💜 | ❌ |
 | Launch third-party tools (aac_shim) | 💜 | ❌ |
 | Act as keyboard for other apps | 💜 | ❌ |
 
 ---
-
-## Summary
-
-- **Implemented:** OBF/OBZ import/export, symbol sources (ARASAAC, OpenSymbols,
-  photos), Azure + system TTS with offline waterfall, sentence bar with
-  "hold that thought", saved phrases, n-gram prediction, primary/secondary
-  languages, external display, scanning + dwell/hold/auditory fishing,
-  usage logging, cross-platform.
-- **Strong OpenAAC-mandated areas already covered:** 🟢 Standard items are
-  nearly all present; ✅ Most Apps items mostly present.
-- **Biggest gaps vs. ⭐ Top Apps:** search/find-a-button, PDF export, alert
-  button, saved quick phrases, repeat louder, inflection/variant support,
-  batch symbol-set switching, word-type color coding, multi-language inflections.
-- **Biggest gaps vs. access expectations:** scanning depth (region, auditory,
-  accept-on-release variants), debounce, zoom; eye gaze/head tracking is
-  available via OS support (iOS 18+ Eye/Head Tracking, Switch Control, Voice
-  Control, Windows Eye Control) but there is no in-app gaze code or calibration.
-- **Planned (README):** cloud sync, multi-user, hand gestures,
-  premium subscription, SQLDelight metadata cache.
-
 *Based on OpenAAC considerations page (https://www.openaac.org/considerations.html)
 and Wingmate codebase survey, August 2026.*
