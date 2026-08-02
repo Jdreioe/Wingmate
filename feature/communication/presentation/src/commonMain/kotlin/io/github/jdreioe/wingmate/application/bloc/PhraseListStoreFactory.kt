@@ -51,6 +51,7 @@ class PhraseListStoreFactory(
 
         override fun executeIntent(intent: PhraseListStore.Intent, getState: () -> PhraseListStore.State) {
             when (intent) {
+                PhraseListStore.Intent.Refresh -> loadPhrasesAndCategories()
                 is PhraseListStore.Intent.AddPhrase -> addPhrase(intent.text, getState().selectedCategoryId)
                 is PhraseListStore.Intent.AddCategory -> addCategory(intent.name, getState().selectedCategoryId)
                 is PhraseListStore.Intent.SelectCategory -> dispatch(Msg.CategorySelected(intent.categoryId))

@@ -447,8 +447,8 @@
 "editing_access.recover" = "Reset using device authentication";
 "editing_access.incorrect" = "The code was not accepted.";
 "editing_access.recover_reason" = "Reset the Wingmate editing code";
-"backup.title" = "Offline backup";
-"backup.description" = "Includes vocabulary, media, recordings, settings, history, voices, and dictionaries. Credentials and access codes are excluded.";
+"backup.title" = "Backup Wingmate";
+"backup.description" = "Includes vocabulary, media, recordings, settings, history, voices, dictionaries, and Azure configuration. Backup files are not encrypted; editing access codes are excluded.";
 "backup.create" = "Create backup";
 "backup.restore" = "Restore backup";
 "backup.exported" = "Backup ready to save";

@@ -702,8 +702,11 @@ private fun SettingsHomePage(
                 stringResource(Res.string.ui_settings_partner_window_title),
                 stringResource(Res.string.ui_settings_partner_window_desc),
                 stringResource(Res.string.phrase_screen_welcome_screen),
+                stringResource(Res.string.backup_title),
+                stringResource(Res.string.backup_create),
+                stringResource(Res.string.backup_restore),
                 "startup", "arasaac", "offline",
-                "partner", "welcome", "restore", "boards", "screens"
+                "partner", "welcome", "boards", "screens", "backup", "restore"
             )
         )
     )
@@ -929,6 +932,15 @@ private fun SettingsHomePage(
             keywords = listOf("history", "cache", "local data")
         ),
         // General
+        SettingsCategoryItem(
+            tab = SettingsTab.General,
+            title = stringResource(Res.string.backup_title),
+            subtitle = stringResource(Res.string.backup_description),
+            icon = Icons.Filled.Storage,
+            iconContainerColor = Color(0xFFA9D49A),
+            iconColor = Color(0xFF1D4E18),
+            keywords = listOf("backup", "restore", "azure", "data")
+        ),
         SettingsCategoryItem(
             tab = SettingsTab.General,
             title = stringResource(Res.string.ui_settings_startup_mode_title),
@@ -1416,16 +1428,7 @@ private fun AccessibilitySection(
 // ─── Privacy Tab ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun PrivacySection(
-    historyVisible: Boolean,
-    onHistoryVisibleChange: (Boolean) -> Unit,
-    boardSets: List<ObfBoardSet>,
-    onBoardSetSentenceCachingChange: (ObfBoardSet, Boolean) -> Unit,
-    usageLoggingEnabled: Boolean,
-    onUsageLoggingChange: (Boolean) -> Unit,
-    featureUsageReportingEnabled: Boolean,
-    onFeatureReportingChange: (Boolean) -> Unit
-) {
+private fun BackupSettingsGroup() {
     val koin = getKoin()
     val backupManager = remember(koin) { koin.getOrNull<CompleteBackupManager>() }
     val backupFilePicker = remember(koin) { koin.getOrNull<FilePicker>() }
@@ -1474,6 +1477,44 @@ private fun PrivacySection(
         backupStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     }
 
+    val restorePath = pendingRestorePath
+    if (restorePath != null) {
+        AlertDialog(
+            onDismissRequest = { pendingRestorePath = null },
+            title = { Text(stringResource(Res.string.backup_replace_title)) },
+            text = { Text(stringResource(Res.string.backup_replace_warning)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingRestorePath = null
+                    backupWorking = true
+                    backupScope.launch {
+                        backupStatus = when (val result = backupManager?.restoreBackup(restorePath)) {
+                            is BackupRestoreResult.Success -> restored
+                            is BackupRestoreResult.Failure -> result.message
+                            null -> "Backup restore unavailable"
+                        }
+                        backupWorking = false
+                    }
+                }) { Text(stringResource(Res.string.backup_replace_action)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRestorePath = null }) { Text(stringResource(Res.string.common_cancel)) }
+            }
+        )
+    }
+}
+
+@Composable
+private fun PrivacySection(
+    historyVisible: Boolean,
+    onHistoryVisibleChange: (Boolean) -> Unit,
+    boardSets: List<ObfBoardSet>,
+    onBoardSetSentenceCachingChange: (ObfBoardSet, Boolean) -> Unit,
+    usageLoggingEnabled: Boolean,
+    onUsageLoggingChange: (Boolean) -> Unit,
+    featureUsageReportingEnabled: Boolean,
+    onFeatureReportingChange: (Boolean) -> Unit
+) {
     SettingsGroup(title = stringResource(Res.string.ui_settings_privacy_local_data_title)) {
         SettingsSwitch(
             checked = historyVisible,
@@ -1525,31 +1566,6 @@ private fun PrivacySection(
         )
     }
 
-    val restorePath = pendingRestorePath
-    if (restorePath != null) {
-        AlertDialog(
-            onDismissRequest = { pendingRestorePath = null },
-            title = { Text(stringResource(Res.string.backup_replace_title)) },
-            text = { Text(stringResource(Res.string.backup_replace_warning)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingRestorePath = null
-                    backupWorking = true
-                    backupScope.launch {
-                        backupStatus = when (val result = backupManager?.restoreBackup(restorePath)) {
-                            is BackupRestoreResult.Success -> restored
-                            is BackupRestoreResult.Failure -> result.message
-                            null -> "Backup restore unavailable"
-                        }
-                        backupWorking = false
-                    }
-                }) { Text(stringResource(Res.string.backup_replace_action)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingRestorePath = null }) { Text(stringResource(Res.string.common_cancel)) }
-            }
-        )
-    }
 }
 
 // ─── General Tab ─────────────────────────────────────────────────────────────
@@ -1578,6 +1594,8 @@ private fun GeneralSection(
         ?: remember { mutableStateOf(io.github.jdreioe.wingmate.application.EditingAccessState(supported = false)) }
     var editingAccessDialog by remember { mutableStateOf<EditingAccessDialogMode?>(null) }
     LaunchedEffect(editingAccessController) { editingAccessController?.refresh() }
+
+    BackupSettingsGroup()
 
     SettingsGroup(title = stringResource(Res.string.editing_access_title)) {
         Text(

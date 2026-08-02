@@ -558,6 +558,8 @@ private struct PrivacySettingsView: View {
                     } else {
                         backupStatus = NSLocalizedString("backup.restored", comment: "")
                         await model.refreshParitySettings()
+                        await model.refreshAzureConfiguration()
+                        model.refreshVoiceAndLanguages()
                         await model.loadBoardSets()
                     }
                 }

@@ -20,8 +20,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.application.BackupRestoreResult
+import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
+import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
@@ -29,6 +32,7 @@ import io.github.jdreioe.wingmate.ui.PlatformBackHandler
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
+import io.github.jdreioe.wingmate.platform.FilePicker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -69,7 +73,8 @@ import wingmatekmp.composeapp.generated.resources.welcome_title
 
 @Composable
 fun WelcomeScreen(
-    onComplete: (startupMode: StartupMode, createScreen: Boolean, analyticsEnabled: Boolean) -> Unit
+    onComplete: (startupMode: StartupMode, createScreen: Boolean, analyticsEnabled: Boolean) -> Unit,
+    onBackupRestored: (settings: Settings, hasSelectedVoice: Boolean) -> Unit
 ) {
     val koin = getKoin()
     val boardImportService = remember(koin) {
@@ -79,6 +84,8 @@ fun WelcomeScreen(
     val featureUsageReporter = remember(koin) {
         koin.getOrNull<FeatureUsageReporter>()
     }
+    val backupManager = remember(koin) { koin.getOrNull<CompleteBackupManager>() }
+    val backupFilePicker = remember(koin) { koin.getOrNull<FilePicker>() }
 
     var step by remember { mutableStateOf(0) }
     var startupMode by remember { mutableStateOf(StartupMode.Keyboard) }
@@ -86,6 +93,9 @@ fun WelcomeScreen(
     var createScreenOnComplete by remember { mutableStateOf(false) }
     var voiceSelectorFollowsAzureSetup by remember { mutableStateOf(false) }
     var analyticsEnabled by remember { mutableStateOf(false) }
+    var pendingRestorePath by remember { mutableStateOf<String?>(null) }
+    var restoreStatus by remember { mutableStateOf<String?>(null) }
+    var isRestoring by remember { mutableStateOf(false) }
     
     // Import state
     var isImporting by remember { mutableStateOf(false) }
@@ -138,6 +148,35 @@ fun WelcomeScreen(
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(onClick = { step = 1 }) { Text(stringResource(Res.string.common_next)) }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        enabled = !isRestoring && backupManager != null && backupFilePicker != null,
+                        onClick = {
+                            scope.launch {
+                                pendingRestorePath = backupFilePicker?.pickFile(
+                                    title = "Restore Wingmate backup",
+                                    extensions = listOf("wingmate-backup", "zip")
+                                )
+                            }
+                        }
+                    ) {
+                        if (isRestoring) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(stringResource(Res.string.backup_restore))
+                    }
+                    restoreStatus?.let {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }
@@ -334,6 +373,38 @@ fun WelcomeScreen(
             onEnabledChange = { analyticsEnabled = it },
             onBack = { step = 7 },
             onContinue = { onComplete(startupMode, createScreenOnComplete, analyticsEnabled) }
+        )
+    }
+
+    val restorePath = pendingRestorePath
+    if (restorePath != null) {
+        AlertDialog(
+            onDismissRequest = { pendingRestorePath = null },
+            title = { Text(stringResource(Res.string.backup_replace_title)) },
+            text = { Text(stringResource(Res.string.backup_replace_warning)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingRestorePath = null
+                    isRestoring = true
+                    restoreStatus = null
+                    scope.launch {
+                        when (val result = backupManager?.restoreBackup(restorePath)) {
+                            is BackupRestoreResult.Success -> onBackupRestored(
+                                result.payload.settings,
+                                result.payload.selectedVoice != null
+                            )
+                            is BackupRestoreResult.Failure -> restoreStatus = result.message
+                            null -> restoreStatus = "Backup restore unavailable"
+                        }
+                        isRestoring = false
+                    }
+                }) { Text(stringResource(Res.string.backup_replace_action)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRestorePath = null }) {
+                    Text(stringResource(Res.string.common_cancel))
+                }
+            }
         )
     }
 }

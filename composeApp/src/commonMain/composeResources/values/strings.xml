@@ -74,8 +74,8 @@
     <string name="editing_access_confirm_code">Confirm code</string>
     <string name="editing_access_code_help">Enter 4 to 8 digits. This code never blocks communication.</string>
     <string name="editing_access_incorrect">The code was not accepted.</string>
-    <string name="backup_title">Offline backup</string>
-    <string name="backup_description">Save boards, phrases, media, recordings, settings, history, voices, and dictionaries. Credentials and access codes are excluded.</string>
+    <string name="backup_title">Backup Wingmate</string>
+    <string name="backup_description">Save boards, phrases, media, recordings, settings, history, voices, dictionaries, and Azure configuration. Backup files are not encrypted; editing access codes are excluded.</string>
     <string name="backup_create">Create backup</string>
     <string name="backup_restore">Restore backup</string>
     <string name="backup_exported">Backup ready to save</string>

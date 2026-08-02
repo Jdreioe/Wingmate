@@ -446,8 +446,8 @@
 "editing_access.recover" = "Nulstil med enhedsgodkendelse";
 "editing_access.incorrect" = "Koden blev ikke godkendt.";
 "editing_access.recover_reason" = "Nulstil Wingmates redigeringskode";
-"backup.title" = "Offline-sikkerhedskopi";
-"backup.description" = "Indeholder ordforråd, medier, optagelser, indstillinger, historik, stemmer og ordbøger. Legitimationsoplysninger og adgangskoder udelades.";
+"backup.title" = "Sikkerhedskopiér Wingmate";
+"backup.description" = "Indeholder ordforråd, medier, optagelser, indstillinger, historik, stemmer, ordbøger og Azure-konfiguration. Sikkerhedskopier er ikke krypterede; redigeringskoder udelades.";
 "backup.create" = "Opret sikkerhedskopi";
 "backup.restore" = "Gendan sikkerhedskopi";
 "backup.exported" = "Sikkerhedskopien er klar til at blive gemt";

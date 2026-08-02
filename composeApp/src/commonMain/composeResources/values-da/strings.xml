@@ -74,8 +74,8 @@
     <string name="editing_access_confirm_code">Bekræft kode</string>
     <string name="editing_access_code_help">Indtast 4 til 8 cifre. Koden blokerer aldrig kommunikation.</string>
     <string name="editing_access_incorrect">Koden blev ikke godkendt.</string>
-    <string name="backup_title">Offline-sikkerhedskopi</string>
-    <string name="backup_description">Gem tavler, fraser, medier, optagelser, indstillinger, historik, stemmer og ordbøger. Legitimationsoplysninger og adgangskoder udelades.</string>
+    <string name="backup_title">Sikkerhedskopiér Wingmate</string>
+    <string name="backup_description">Gem tavler, fraser, medier, optagelser, indstillinger, historik, stemmer, ordbøger og Azure-konfiguration. Sikkerhedskopier er ikke krypterede; redigeringskoder udelades.</string>
     <string name="backup_create">Opret sikkerhedskopi</string>
     <string name="backup_restore">Gendan sikkerhedskopi</string>
     <string name="backup_exported">Sikkerhedskopien er klar til at blive gemt</string>

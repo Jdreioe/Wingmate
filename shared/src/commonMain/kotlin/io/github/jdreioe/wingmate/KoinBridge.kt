@@ -379,7 +379,10 @@ class KoinBridge : KoinComponent {
 
     suspend fun restoreCompleteBackup(path: String): String? =
         when (val result = get<CompleteBackupManager>().restoreBackup(path)) {
-            is BackupRestoreResult.Success -> null
+            is BackupRestoreResult.Success -> {
+                phraseListStoreOrNull()?.accept(PhraseListStore.Intent.Refresh)
+                null
+            }
             is BackupRestoreResult.Failure -> result.message
         }
 

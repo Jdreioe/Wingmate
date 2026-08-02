@@ -4,6 +4,7 @@ import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.CategoryRepository
+import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
@@ -12,6 +13,7 @@ import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
@@ -22,6 +24,8 @@ import io.github.jdreioe.wingmate.platform.ArchiveEntry
 import io.github.jdreioe.wingmate.platform.readEntryBytes
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -50,7 +54,8 @@ data class WingmateBackupPayload(
     val voices: List<Voice>,
     val selectedVoice: Voice?,
     val history: List<SaidText>,
-    val dictionary: List<PronunciationEntry>
+    val dictionary: List<PronunciationEntry>,
+    val azureSpeechConfig: SpeechServiceConfig? = null
 )
 
 @Serializable
@@ -83,11 +88,14 @@ class CompleteBackupManager(
     private val voiceRepository: VoiceRepository,
     private val saidTextRepository: SaidTextRepository,
     private val dictionaryRepository: PronunciationDictionaryRepository,
+    private val configRepository: ConfigRepository,
     private val filePicker: FilePicker?,
     private val mediaAccess: BackupMediaAccess
 ) {
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true; prettyPrint = true }
     private val restoreMutex = Mutex()
+    private val mutableRestoreRevision = MutableStateFlow(0L)
+    val restoreRevision = mutableRestoreRevision.asStateFlow()
 
     suspend fun exportBackup(): ByteArray {
         val original = snapshot()
@@ -188,6 +196,7 @@ class CompleteBackupManager(
                 runCatching { replaceAll(previous) }
                 throw error
             }
+            mutableRestoreRevision.value += 1
             BackupRestoreResult.Success(payload)
         } catch (error: Throwable) {
             restoredMedia.forEach { runCatching { mediaAccess.deleteRestored(it) } }
@@ -206,7 +215,8 @@ class CompleteBackupManager(
         voices = voiceRepository.getVoices(),
         selectedVoice = voiceRepository.getSelected(),
         history = saidTextRepository.list(),
-        dictionary = dictionaryRepository.getAll()
+        dictionary = dictionaryRepository.getAll(),
+        azureSpeechConfig = configRepository.getSpeechConfig()
     )
 
     private suspend fun replaceAll(payload: WingmateBackupPayload) {
@@ -226,6 +236,7 @@ class CompleteBackupManager(
         payload.selectedVoice?.let { voiceRepository.saveSelected(it) }
         saidTextRepository.addAll(payload.history)
         payload.dictionary.forEach { dictionaryRepository.add(it) }
+        payload.azureSpeechConfig?.let { configRepository.saveSpeechConfig(it) }
     }
 
     private fun validatePayload(payload: WingmateBackupPayload) {

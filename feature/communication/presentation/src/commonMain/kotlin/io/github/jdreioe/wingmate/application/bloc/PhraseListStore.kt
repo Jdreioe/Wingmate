@@ -7,6 +7,7 @@ import io.github.jdreioe.wingmate.domain.Voice
 
 interface PhraseListStore : Store<PhraseListStore.Intent, PhraseListStore.State, Nothing> {
     sealed class Intent {
+        data object Refresh : Intent()
         data class AddPhrase(
             val text: String,
             val name: String? = null,

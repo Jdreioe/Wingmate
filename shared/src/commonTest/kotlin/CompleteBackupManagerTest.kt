@@ -3,12 +3,14 @@ import io.github.jdreioe.wingmate.application.BackupRestoreResult
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
+import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryCategoryRepository
+import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryPronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemorySaidTextRepository
@@ -37,6 +39,8 @@ class CompleteBackupManagerTest {
         val voices = InMemoryVoiceRepository()
         val history = InMemorySaidTextRepository()
         val dictionary = InMemoryPronunciationDictionaryRepository()
+        val config = InMemoryConfigRepository()
+        config.saveSpeechConfig(SpeechServiceConfig("northeurope", "azure-secret"))
         boards.saveBoard(
             ObfBoard(
                 format = "open-board-0.1",
@@ -53,7 +57,7 @@ class CompleteBackupManagerTest {
             override suspend fun deleteRestored(path: String) = Unit
         }
         val manager = CompleteBackupManager(
-            boards, sets, phrases, categories, settings, voices, history, dictionary,
+            boards, sets, phrases, categories, settings, voices, history, dictionary, config,
             filePicker = null,
             mediaAccess = media
         )
@@ -63,7 +67,8 @@ class CompleteBackupManagerTest {
         assertContains(archiveText, "My private board")
         assertContains(archiveText, "Need water")
         assertContains(archiveText, "audio-content")
-        assertFalse(archiveText.contains("subscriptionKey"))
+        assertContains(archiveText, "northeurope")
+        assertContains(archiveText, "azure-secret")
         assertFalse(archiveText.contains("editingAccessCredential"))
     }
 
@@ -84,22 +89,29 @@ class CompleteBackupManagerTest {
         )
         source.phrases.add(Phrase("phrase", "Need water", createdAt = 1, recordingPath = "/recordings/hello.m4a"))
         source.dictionary.add(PronunciationEntry("AAC", "A A C"))
+        source.config.saveSpeechConfig(SpeechServiceConfig("westeurope", "restored-key"))
         val exportingMedia = TestMediaAccess(mapOf("/recordings/hello.m4a" to "audio-content".encodeToByteArray()))
         val exported = source.manager(filePicker = null, media = exportingMedia).exportBackup()
 
         val target = Repositories()
         target.boards.saveBoard(ObfBoard(format = "open-board-0.1", id = "old", name = "Old board"))
         val restoringMedia = TestMediaAccess()
-        val result = target.manager(MapArchivePicker(readStoredZip(exported)), restoringMedia)
-            .restoreBackup("backup.wingmate-backup")
+        val restoringManager = target.manager(MapArchivePicker(readStoredZip(exported)), restoringMedia)
+        assertEquals(0L, restoringManager.restoreRevision.value)
+        val result = restoringManager.restoreBackup("backup.wingmate-backup")
 
         assertIs<BackupRestoreResult.Success>(result)
+        assertEquals(1L, restoringManager.restoreRevision.value)
         assertEquals(listOf("board"), target.boards.listBoards().map { it.id })
         assertEquals("#123456", target.boards.getBoard("board")?.backgroundColor)
         assertEquals(listOf("Need water"), target.phrases.getAll().map { it.text })
         assertEquals(listOf("AAC"), target.dictionary.getAll().map { it.word })
         assertEquals("audio-content", restoringMedia.restored.single().second.decodeToString())
         assertContains(target.phrases.getAll().single().recordingPath.orEmpty(), "restored/")
+        assertEquals(
+            SpeechServiceConfig("westeurope", "restored-key"),
+            target.config.getSpeechConfig()
+        )
     }
 
     @Test
@@ -127,9 +139,10 @@ class CompleteBackupManagerTest {
         val voices = InMemoryVoiceRepository()
         val history = InMemorySaidTextRepository()
         val dictionary = InMemoryPronunciationDictionaryRepository()
+        val config = InMemoryConfigRepository()
 
         fun manager(filePicker: FilePicker?, media: BackupMediaAccess) = CompleteBackupManager(
-            boards, sets, phrases, categories, settings, voices, history, dictionary, filePicker, media
+            boards, sets, phrases, categories, settings, voices, history, dictionary, config, filePicker, media
         )
     }
 

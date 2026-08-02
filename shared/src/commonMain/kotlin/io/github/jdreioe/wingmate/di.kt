@@ -98,6 +98,7 @@ internal fun createCoreDataModule(): Module = module {
                 voiceRepository = get(),
                 saidTextRepository = get(),
                 dictionaryRepository = get(),
+                configRepository = get(),
                 filePicker = getOrNull(),
                 mediaAccess = get()
             )
