@@ -1,9 +1,11 @@
 import io.github.jdreioe.wingmate.application.ObzExporter
 import io.github.jdreioe.wingmate.application.ObzExportErrorCode
 import io.github.jdreioe.wingmate.application.ObzExportResult
+import io.github.jdreioe.wingmate.application.KeyboardBoardTemplate
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.ObfLicense
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
@@ -86,6 +88,44 @@ class ObzExporterTest {
         assertTrue(zipStr.contains("manifest.json"))
         assertTrue(zipStr.contains("boards/root.obf"))
         assertTrue(zipStr.contains("boards/food.obf"))
+    }
+
+    @Test
+    fun keyboardBoardSetRoundTripsThroughObz() = runBlocking {
+        val boards = KeyboardBoardTemplate.boards()
+        val rootId = boards.first().id
+        val exported = exporter.exportResult(boards, rootId)
+        val zip = assertIs<ObzExportResult.Success>(exported).bytes
+
+        val paths = listOf("manifest.json") + boards.map { "boards/${it.id}.obf" }
+        val entries = paths.associateWith { path -> assertNotNull(extractEntry(zip, path)) }
+        val boardRepo = InMemoryBoardRepository()
+        val setRepo = InMemoryBoardSetRepository()
+        val storage = InMemoryFileStorage()
+        val importer = BoardImportService(
+            ObfParser(), boardRepo, setRepo, MapArchivePicker(entries), storage
+        )
+        val imported = assertIs<BoardImportResult.Success>(
+            importer.importBoardSetFromPathResult("keyboard.obz")
+        )
+
+        assertEquals(3, imported.boardSet.boardIds.size)
+        val root = assertNotNull(boardRepo.getBoard(imported.boardSet.rootBoardId))
+        assertTrue(root.isKeyboard)
+        assertEquals(ObfKeyboardLayout.Qwerty, root.keyboardLayout)
+        assertTrue(root.spellingMode)
+        assertTrue(root.compactGrid)
+
+        val shift = root.buttons.first { it.label == "⇧" }
+        val upper = assertNotNull(boardRepo.getBoard(assertNotNull(shift.loadBoard?.id)))
+        assertTrue(upper.isKeyboard)
+        assertEquals(ObfKeyboardLayout.Qwerty, upper.keyboardLayout)
+
+        val symbols = assertNotNull(
+            boardRepo.getBoard(assertNotNull(root.buttons.first { it.label == "123" }.loadBoard?.id))
+        )
+        assertEquals(ObfKeyboardLayout.Symbols, symbols.keyboardLayout)
+        Unit
     }
 
     @Test

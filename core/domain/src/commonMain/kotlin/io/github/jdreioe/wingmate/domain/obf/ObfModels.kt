@@ -12,11 +12,23 @@ const val OBF_BUTTON_TYPE_EXTENSION = "ext_wingmate_button_type"
 const val OBF_COMPACT_GRID_EXTENSION = "ext_wingmate_compact_grid"
 const val OBF_GRID_HEIGHT_FRACTION_EXTENSION = "ext_wingmate_grid_height_fraction"
 const val OBF_SPELLING_MODE_EXTENSION = "ext_wingmate_spelling_mode"
+const val OBF_KEYBOARD_EXTENSION = "ext_wingmate_keyboard"
 
 /** Wingmate-specific button behaviours, stored in OBF extensions for portability. */
 enum class ObfButtonType(val wireValue: String) {
     Standard("standard"),
     NGramPrediction("ngram_prediction")
+}
+
+/**
+ * Keyboard page kinds, stored in the board-level `ext_wingmate_keyboard`
+ * extension so keyboard boards can be recognized explicitly (instead of
+ * inferred from spelling mode or id prefixes) and round-trip through OBF/OBZ.
+ */
+enum class ObfKeyboardLayout(val wireValue: String) {
+    Qwerty("qwerty"),
+    Alphabetical("alphabetical"),
+    Symbols("symbols")
 }
 
 @Serializable
@@ -81,6 +93,24 @@ data class ObfBoard(
         } else {
             extensions - OBF_SPELLING_MODE_EXTENSION
         }
+    )
+
+    /**
+     * The keyboard page kind, or `null` for non-keyword boards. Presence of this
+     * extension is the authoritative way to identify a keyboard board; it is
+     * preserved by `copy` and therefore by duplicate/import flows.
+     */
+    val keyboardLayout: ObfKeyboardLayout?
+        get() = (extensions[OBF_KEYBOARD_EXTENSION] as? JsonPrimitive)?.contentOrNull
+            ?.let { value -> ObfKeyboardLayout.entries.firstOrNull { it.wireValue == value } }
+
+    val isKeyboard: Boolean
+        get() = keyboardLayout != null
+
+    fun withKeyboardLayout(layout: ObfKeyboardLayout?): ObfBoard = copy(
+        extensions = layout?.let {
+            extensions + (OBF_KEYBOARD_EXTENSION to JsonPrimitive(it.wireValue))
+        } ?: (extensions - OBF_KEYBOARD_EXTENSION)
     )
 }
 

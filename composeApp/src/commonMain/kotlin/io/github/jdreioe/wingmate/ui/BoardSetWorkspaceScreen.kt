@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.ObzExportResult
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
+import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
@@ -320,7 +321,7 @@ fun BoardSetManagerScreen(
     if (showCreateDialog) {
         CreateBoardSetDialog(
             onDismiss = { showCreateDialog = false },
-            onCreate = { name, rows, columns, template ->
+            onCreate = { name, rows, columns, template, keyboardPreset ->
                 if (template != BoardSetTemplate.Blank) {
                     showCreateDialog = false
                 }
@@ -329,7 +330,7 @@ fun BoardSetManagerScreen(
                         when (template) {
                             BoardSetTemplate.Blank -> useCase.createBoardSet(name.trim(), rows, columns, defaultBoardName)
                             BoardSetTemplate.Calculator -> useCase.createCalculatorBoardSet(name.trim())
-                            BoardSetTemplate.Keyboard -> useCase.createKeyboardBoardSet(name.trim())
+                            BoardSetTemplate.Keyboard -> useCase.createKeyboardBoardSet(name.trim(), keyboardPreset)
                         }
                     }
                         .onSuccess { created ->

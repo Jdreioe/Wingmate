@@ -161,6 +161,9 @@
     <string name="calculator_default_name">Calculator</string>
     <string name="board_dialog_template_keyboard">Keyboard</string>
     <string name="keyboard_default_name">Keyboard</string>
+    <string name="board_dialog_keyboard_preset">Layout</string>
+    <string name="board_dialog_keyboard_preset_qwerty">QWERTY</string>
+    <string name="board_dialog_keyboard_preset_alphabetical">Alphabetical</string>
     <string name="board_dialog_set_name">Screen name</string>
     <string name="board_dialog_rows">Rows</string>
     <string name="board_dialog_columns">Columns</string>

@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.domain.PhraseRecordingService
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -42,12 +43,13 @@ internal enum class BoardSetTemplate { Blank, Calculator, Keyboard }
 @Composable
 internal fun CreateBoardSetDialog(
     onDismiss: () -> Unit,
-    onCreate: (name: String, rows: Int, columns: Int, template: BoardSetTemplate) -> Unit
+    onCreate: (name: String, rows: Int, columns: Int, template: BoardSetTemplate, keyboardPreset: KeyboardPreset) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var rowsText by remember { mutableStateOf("4") }
     var columnsText by remember { mutableStateOf("8") }
     var template by remember { mutableStateOf(BoardSetTemplate.Blank) }
+    var keyboardPreset by remember { mutableStateOf(KeyboardPreset.Qwerty) }
     val calculatorName = stringResource(Res.string.calculator_default_name)
     val keyboardName = stringResource(Res.string.keyboard_default_name)
 
@@ -86,6 +88,23 @@ internal fun CreateBoardSetDialog(
                         label = { Text(stringResource(Res.string.board_dialog_template_keyboard)) }
                     )
                 }
+                if (template == BoardSetTemplate.Keyboard) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(Res.string.board_dialog_keyboard_preset),
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    FilterChip(
+                        selected = keyboardPreset == KeyboardPreset.Qwerty,
+                        onClick = { keyboardPreset = KeyboardPreset.Qwerty },
+                        label = { Text(stringResource(Res.string.board_dialog_keyboard_preset_qwerty)) }
+                    )
+                    FilterChip(
+                        selected = keyboardPreset == KeyboardPreset.Alphabetical,
+                        onClick = { keyboardPreset = KeyboardPreset.Alphabetical },
+                        label = { Text(stringResource(Res.string.board_dialog_keyboard_preset_alphabetical)) }
+                    )
+                }
                 if (template == BoardSetTemplate.Blank) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = rowsText,
@@ -106,7 +125,7 @@ internal fun CreateBoardSetDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(name, rowsText.toIntOrNull() ?: 4, columnsText.toIntOrNull() ?: 8, template) },
+                onClick = { onCreate(name, rowsText.toIntOrNull() ?: 4, columnsText.toIntOrNull() ?: 8, template, keyboardPreset) },
                 enabled = name.isNotBlank()
             ) { Text(stringResource(Res.string.board_dialog_create)) }
         },

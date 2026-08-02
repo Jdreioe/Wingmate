@@ -287,6 +287,52 @@ fun ObfBoardView(
                     buildBoardGridItems(grid, buttonsById)
                 }
                 val pageScrollState = rememberScrollState()
+                var focusedCell by remember(board.id) { mutableStateOf<Pair<Int, Int>?>(null) }
+                val isVisible: (ObfButton) -> Boolean = {
+                    isBoardButtonVisible(it, isEditMode, showHiddenButtons)
+                }
+                val buttonAtCell: (Int, Int) -> ObfButton? = { row, column ->
+                    boardCellButton(grid, buttonsById, isVisible, row, column)
+                }
+                val activateFocused: () -> Unit = {
+                    focusedCell?.let { cell ->
+                        buttonAtCell(cell.first, cell.second)?.let { button ->
+                            onCellClick?.invoke(cell.first, cell.second, button) ?: onButtonClick(button)
+                        }
+                    }
+                }
+                val gridNavModifier = if (!isEditMode) {
+                    Modifier
+                        .fillMaxSize()
+                        .testTag("board-grid")
+                        .focusable()
+                        .onKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                            when (event.key) {
+                                Key.DirectionLeft -> {
+                                    focusedCell = stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, 0, -1); true
+                                }
+                                Key.DirectionRight -> {
+                                    focusedCell = stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, 0, 1); true
+                                }
+                                Key.DirectionUp -> {
+                                    focusedCell = stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, -1, 0); true
+                                }
+                                Key.DirectionDown -> {
+                                    focusedCell = stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, 1, 0); true
+                                }
+                                Key.MoveHome -> {
+                                    focusedCell = firstFocusableBoardCell(grid, buttonsById, isVisible); true
+                                }
+                                Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar -> {
+                                    activateFocused(); true
+                                }
+                                else -> false
+                            }
+                        }
+                } else {
+                    Modifier.fillMaxSize()
+                }
                 BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     val availableGridHeight = maxHeight
                     val minimumCellHeight = (if (board.compactGrid) 72.dp else 96.dp) *
@@ -316,11 +362,12 @@ fun ObfBoardView(
                                 rows = rows,
                                 columns = columns,
                                 items = gridItems,
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = gridNavModifier,
                                 onMove = onCellMove,
                                 selectedField = selectedFieldAnchor,
                                 selectedFieldSpans = selectedFieldSpans,
-                                onResizeField = onResizeField
+                                onResizeField = onResizeField,
+                                focusedCell = focusedCell
                             ) { item ->
                             val button = item.button
                             val isVisible = button != null && isBoardButtonVisible(button, isEditMode, showHiddenButtons)
@@ -513,6 +560,7 @@ internal fun SpanningBoardGrid(
     selectedField: Pair<Int, Int>? = null,
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
+    focusedCell: Pair<Int, Int>? = null,
     content: @Composable (BoardGridItem) -> Unit
 ) {
     var dragSource by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -555,6 +603,7 @@ internal fun SpanningBoardGrid(
 
     val selectionColor = MaterialTheme.colorScheme.primary
     val errorColor = MaterialTheme.colorScheme.error
+    val focusColor = MaterialTheme.colorScheme.tertiary
     val resizeLabel = stringResource(Res.string.board_resize_field_label)
     val increaseWidthLabel = stringResource(Res.string.board_resize_increase_width)
     val decreaseWidthLabel = stringResource(Res.string.board_resize_decrease_width)
@@ -731,6 +780,10 @@ internal fun SpanningBoardGrid(
                     val isSelected = selectedItem?.let {
                         it.row == item.row && it.column == item.column
                     } == true
+                    val isFocused = focusedCell?.let { focus ->
+                        focus.first in item.row until item.row + item.rowSpan &&
+                            focus.second in item.column until item.column + item.columnSpan
+                    } == true && item.button != null
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -744,6 +797,15 @@ internal fun SpanningBoardGrid(
                             .then(
                                 if (isDropTarget) {
                                     Modifier.border(3.dp, selectionColor, RoundedCornerShape(12.dp))
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .then(
+                                if (isFocused) {
+                                    Modifier
+                                        .testTag("board-focus-ring")
+                                        .border(3.dp, focusColor, RoundedCornerShape(12.dp))
                                 } else {
                                     Modifier
                                 }
