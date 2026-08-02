@@ -171,7 +171,8 @@ internal fun EditBoardCellDialog(
     availableLanguages: List<FieldLanguageOption> = emptyList(),
     initialLanguage: String? = null,
     initialMathMode: Boolean = false,
-    initialHidden: Boolean = false,
+initialHidden: Boolean = false,
+    showMathMode: Boolean = true,
     availableBoards: List<ObfBoard> = emptyList(),
     initialLinkedBoardId: String? = null,
     initialAction: String? = null,
@@ -266,22 +267,24 @@ internal fun EditBoardCellDialog(
                     label = { Text(stringResource(Res.string.board_dialog_vocalization)) },
                     singleLine = true
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            stringResource(Res.string.speech_math_mode),
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                        Text(
-                            stringResource(Res.string.speech_math_mode_description),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                if (showMathMode) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(Res.string.speech_math_mode),
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            Text(
+                                stringResource(Res.string.speech_math_mode_description),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = mathMode, onCheckedChange = { mathMode = it })
                     }
-                    Switch(checked = mathMode, onCheckedChange = { mathMode = it })
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),

@@ -318,6 +318,9 @@ fun BoardSetManagerScreen(
         CreateBoardSetDialog(
             onDismiss = { showCreateDialog = false },
             onCreate = { name, rows, columns, template ->
+                if (template == BoardSetTemplate.Calculator) {
+                    showCreateDialog = false
+                }
                 scope.launch {
                     runCatching {
                         when (template) {
@@ -327,8 +330,17 @@ fun BoardSetManagerScreen(
                     }
                         .onSuccess { created ->
                             showCreateDialog = false
-                            refreshBoardSets()
-                            route = BoardSetRoute.Workspace(created.id, BoardWorkspaceMode.Edit)
+                            when (template) {
+                                BoardSetTemplate.Blank -> {
+                                    refreshBoardSets()
+                                    route = BoardSetRoute.Workspace(created.id, BoardWorkspaceMode.Edit)
+                                }
+                                BoardSetTemplate.Calculator -> {
+                                    boardSets = (listOf(created) + boardSets)
+                                        .distinctBy { it.id }
+                                        .sortedByDescending { it.updatedAt }
+                                }
+                            }
                         }
                         .onFailure { statusMessage = it.message ?: createError }
                 }
@@ -1441,6 +1453,7 @@ private fun BoardSetWorkspaceScreen(
             initialLanguage = target.button?.locale,
             initialMathMode = target.button?.mathMode == true,
             initialHidden = target.button?.hidden == true,
+            showMathMode = supportsMathMode(settings.ttsEngine),
             availableBoards = activeGraph.boards.filterNot { it.id == activeBoard.id },
             initialLinkedBoardId = activeGraph.resolveLinkedBoard(target.button?.loadBoard)?.id,
             initialAction = target.button?.action,

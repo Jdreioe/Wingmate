@@ -387,7 +387,7 @@ fun PhraseScreen(
                                         ) {
                                             if (supportsMathMode(settings.ttsEngine)) {
                                                 DropdownMenuItem(
-                                                    text = { Text(stringResource(Res.string.speech_math_mode_description)) },
+                                                    text = { Text(stringResource(Res.string.speech_math_mode)) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Filled.Calculate,
