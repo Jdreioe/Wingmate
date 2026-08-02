@@ -738,6 +738,19 @@ private fun BoardSetWorkspaceScreen(
     val boardHasSpeakField = availableBoardActions.any { it == ObfButtonActionEffect.Speak }
     val boardHasDeleteField = availableBoardActions.any { it == ObfButtonActionEffect.Backspace }
     val boardHasClearField = availableBoardActions.any { it == ObfButtonActionEffect.Clear }
+    val predictionButtonIds = remember(activeBoard?.id, activeBoard?.grid, activeBoard?.buttons, showHiddenButtons) {
+        orderedPredictionButtonIds(activeBoard, showHiddenButtons)
+    }
+    var predictionsById by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    LaunchedEffect(sentenceText, predictionButtonIds, predictionService) {
+        predictionsById = emptyMap()
+        val service = predictionService?.takeIf { it.isTrained() } ?: return@LaunchedEffect
+        if (predictionButtonIds.isEmpty()) return@LaunchedEffect
+        val result = service.predict(sentenceText, maxWords = predictionButtonIds.size, maxLetters = 0)
+        predictionsById = predictionButtonIds.withIndex().mapNotNull { (index, id) ->
+            result.words.getOrNull(index)?.let { id to it }
+        }.toMap()
+    }
 
     fun enterEditing() {
         val graph = savedGraph ?: return
@@ -1246,28 +1259,8 @@ private fun BoardSetWorkspaceScreen(
                         boardSettings = resolvedBoardSettings,
                         showHiddenButtons = showHiddenButtons,
                         selectedButtons = selectedButtons,
-                        onButtonClick = buttonClick@{ button ->
-                            if (button.type == ObfButtonType.NGramPrediction) {
-                                scope.launch {
-                                    val word = predictionService
-                                        ?.takeIf { it.isTrained() }
-                                        ?.predict(sentenceText, maxWords = 1, maxLetters = 0)
-                                        ?.words
-                                        ?.firstOrNull()
-                                    val insertion = word?.let { nGramPredictionInsertion(sentenceText, it) }
-                                    if (!insertion.isNullOrEmpty()) {
-                                        selectedButtons = selectedButtons + (
-                                            ObfButton(
-                                                id = workspaceId("prediction"),
-                                                label = insertion,
-                                                vocalization = insertion,
-                                                locale = button.locale
-                                            ) to null
-                                        )
-                                    }
-                                }
-                                return@buttonClick
-                            }
+                        predictionLabels = predictionsById,
+                        onButtonClick = { button ->
                             val actions = parseObfButtonActions(button)
                             if (actions.isNotEmpty()) {
                                 var speakAfterActions = false
@@ -1298,6 +1291,23 @@ private fun BoardSetWorkspaceScreen(
                                         }
                                         ObfButtonActionEffect.Home -> {
                                             navigateHome = true
+                                        }
+                                        ObfButtonActionEffect.Predictions -> {
+                                            val insertion = predictionButtonIds
+                                                .indexOf(button.id)
+                                                .takeIf { it != -1 }
+                                                ?.let { index -> predictionsById[button.id] }
+                                                ?.let { nGramPredictionInsertion(sentenceText, it) }
+                                            if (!insertion.isNullOrEmpty()) {
+                                                nextSelection = nextSelection + (
+                                                    ObfButton(
+                                                        id = workspaceId("prediction"),
+                                                        label = insertion,
+                                                        vocalization = insertion,
+                                                        locale = button.locale
+                                                    ) to null
+                                                )
+                                            }
                                         }
                                         is ObfButtonActionEffect.Unsupported -> {
                                             statusMessage = unsupportedActionTemplate.replace("%ACTION%", effect.action)
@@ -2271,6 +2281,37 @@ private fun workspaceId(prefix: String): String {
  * Returns only the text that must be appended to accept an n-gram word suggestion.
  * A matching partially typed word is completed; otherwise the suggestion starts a new word.
  */
+/**
+ * Prediction buttons in board display order. A button is a predictor if it
+ * carries a `:prediction` action or uses the legacy n-gram button type.
+ * Order follows the grid (falling back to insertion order for absolute/grid-less boards).
+ */
+internal fun orderedPredictionButtonIds(
+    board: ObfBoard?,
+    showHiddenButtons: Boolean
+): List<String> {
+    val activeBoard = board ?: return emptyList()
+    fun isPredictor(button: ObfButton): Boolean =
+        button.type == ObfButtonType.NGramPrediction ||
+            parseObfButtonActions(button).any { it === ObfButtonActionEffect.Predictions }
+    val orderedIds = buildList {
+        activeBoard.grid?.order?.forEach { row ->
+            row.forEach { id ->
+                if (id != null && id !in this) add(id)
+            }
+        }
+        if (isEmpty()) {
+            addAll(activeBoard.buttons.map { it.id })
+        }
+    }
+    return orderedIds.filter { id ->
+        val button = activeBoard.buttons.firstOrNull { it.id == id }
+        button != null &&
+            (button.hidden && !showHiddenButtons).not() &&
+            isPredictor(button)
+    }
+}
+
 internal fun nGramPredictionInsertion(sentence: String, suggestion: String): String {
     val word = suggestion.trim()
     if (word.isEmpty()) return ""
@@ -2330,8 +2371,12 @@ internal fun buildResolvedSentence(
             rawValue = button.vocalization ?: button.label
         )?.takeIf { it.isNotEmpty() }
     }
-    val separator = if (tokens.any { it.any(Char::isWhitespace) } || tokens.all { it.length <= 1 }) "" else " "
-    return tokens.joinToString(separator)
+    return if (board?.spellingMode == true) {
+        tokens.joinToString("")
+    } else {
+        val separator = if (tokens.any { it.any(Char::isWhitespace) } || tokens.all { it.length <= 1 }) "" else " "
+        tokens.joinToString(separator)
+    }
 }
 
 private fun speakSelectedButtons(
@@ -2371,11 +2416,16 @@ private fun speakSelectedButtons(
 
             suspend fun speakPendingTts() {
                 if (pendingTts.isEmpty()) return
-                val separator = if (
-                    pendingTts.any { it.text.any(Char::isWhitespace) } ||
-                    pendingTts.all { it.text.length <= 1 }
-                ) "" else " "
-                val sentence = pendingTts.joinToString(separator) { it.text }
+                val texts = pendingTts.map { it.text }
+                val sentence = if (board.spellingMode) {
+                    texts.joinToString("")
+                } else {
+                    val separator = if (
+                        texts.any { it.any(Char::isWhitespace) } ||
+                        texts.all { it.length <= 1 }
+                    ) "" else " "
+                    texts.joinToString(separator)
+                }
                 val pendingVoice = voice
                     .withLanguageOverride(pendingTts.first().language ?: primaryLanguage)
                     ?.copy(mathMode = pendingTts.first().mathMode)

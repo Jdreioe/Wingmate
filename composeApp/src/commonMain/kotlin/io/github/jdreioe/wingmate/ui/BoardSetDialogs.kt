@@ -517,6 +517,11 @@ initialHidden: Boolean = false,
                         onClick = { action = if (action == ":speak") null else ":speak" },
                         label = { Text(stringResource(Res.string.board_dialog_action_speak_sentence)) }
                     )
+                    FilterChip(
+                        selected = action == ":prediction",
+                        onClick = { action = if (action == ":prediction") null else ":prediction" },
+                        label = { Text(stringResource(Res.string.board_dialog_action_prediction)) }
+                    )
                 }
             }
         },

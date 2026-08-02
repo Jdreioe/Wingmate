@@ -194,6 +194,7 @@
     <string name="board_dialog_action_clear">Clear sentence</string>
     <string name="board_dialog_action_home">Go to home page</string>
     <string name="board_dialog_action_speak_sentence">Speak sentence</string>
+    <string name="board_dialog_action_prediction">Predict next word</string>
     <string name="board_dialog_special_actions_help">Tap an action to set what this button does</string>
 
     <string name="language_dialog_title">Language</string>

@@ -70,6 +70,31 @@ class BoardSentenceTest {
     }
 
     @Test
+    fun spellingBoardDoesNotAutoInsertSpaces() {
+        val spelling = board().withSpellingMode(true)
+        val selected = listOf(
+            selectedButton(label = "h"),
+            selectedButton(label = "e"),
+            selectedButton(label = "l"),
+            selectedButton(label = "lo")
+        )
+
+        assertEquals("hello", buildResolvedSentence(selected, spelling, "en"))
+    }
+
+    @Test
+    fun spellingBoardPreservesExplicitSpaceTokens() {
+        val spelling = board().withSpellingMode(true)
+        val selected = listOf(
+            selectedButton(label = "hello"),
+            selectedButton(label = " "),
+            selectedButton(label = "world")
+        )
+
+        assertEquals("hello world", buildResolvedSentence(selected, spelling, "en"))
+    }
+
+    @Test
     fun soundPlaybackFallsBackFromMalformedDataToStoredPath() = runBlocking {
         val storage = InMemoryFileStorage()
         storage.saveBytes("sound.mp3", byteArrayOf(7, 8))

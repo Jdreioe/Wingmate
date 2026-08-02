@@ -216,7 +216,8 @@ android {
     }
     val vCode = System.getenv("WINGMATE_VERSION_CODE")?.toIntOrNull()
         ?: (versionProps.getProperty("versionCode") ?: "1").toInt()
-    val vName = versionProps.getProperty("versionName") ?: "1.0"
+    val vName = System.getenv("WINGMATE_VERSION_NAME")
+        ?: (versionProps.getProperty("versionName") ?: "1.0")
 
     val openSymbolsSecret = providers.provider { resolveOpenSymbolsSecretFromInfisical() }
         .orElse(providers.environmentVariable("WINGMATE_OPENSYMBOLS_SECRET"))

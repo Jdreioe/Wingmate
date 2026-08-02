@@ -9,6 +9,7 @@ sealed class ObfButtonActionEffect {
     data object Clear : ObfButtonActionEffect()
     data object Speak : ObfButtonActionEffect()
     data object Home : ObfButtonActionEffect()
+    data object Predictions : ObfButtonActionEffect()
     data class Unsupported(val action: String) : ObfButtonActionEffect()
 }
 
@@ -22,6 +23,7 @@ sealed class ObfButtonActionEffect {
  * - `:clear` clear the sentence
  * - `:speak` speak the current sentence
  * - `:home` navigate to the board set root
+ * - `:prediction` (or `:predictions`) insert an n-gram word prediction
  */
 fun parseObfButtonAction(raw: String): ObfButtonActionEffect {
     if (raw.isEmpty()) return ObfButtonActionEffect.Unsupported(raw)
@@ -39,6 +41,8 @@ fun parseObfButtonAction(raw: String): ObfButtonActionEffect {
         action.equals(":clear", ignoreCase = true) -> ObfButtonActionEffect.Clear
         action.equals(":speak", ignoreCase = true) -> ObfButtonActionEffect.Speak
         action.equals(":home", ignoreCase = true) -> ObfButtonActionEffect.Home
+        action.equals(":prediction", ignoreCase = true) -> ObfButtonActionEffect.Predictions
+        action.equals(":predictions", ignoreCase = true) -> ObfButtonActionEffect.Predictions
         else -> ObfButtonActionEffect.Unsupported(action)
     }
 }

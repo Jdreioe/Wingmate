@@ -171,6 +171,7 @@ fun ObfBoardView(
     symbolBarPresentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
     boardSettings: ResolvedBoardSettings? = null,
     showHiddenButtons: Boolean = false,
+    predictionLabels: Map<String, String> = emptyMap(),
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
     selectedFieldAnchor: Pair<Int, Int>? = null,
@@ -231,7 +232,8 @@ fun ObfBoardView(
                             onButtonClick,
                             homeBoardId,
                             effectiveBoardSettings,
-                            showHiddenButtons
+                            showHiddenButtons,
+                            predictionLabels
                         )
                     }
                 }
@@ -246,7 +248,8 @@ fun ObfBoardView(
                     onButtonClick,
                     homeBoardId,
                     effectiveBoardSettings,
-                    showHiddenButtons
+                    showHiddenButtons,
+                    predictionLabels
                 )
             }
         }
@@ -340,6 +343,7 @@ fun ObfBoardView(
                                         boardStrings = board.strings,
                                         locale = settings.primaryLanguage,
                                         boardSettings = effectiveBoardSettings,
+                                        labelOverride = predictionLabels[button.id],
                                         fieldFontScale = fieldFontScale(item.rowSpan, item.columnSpan)
                                     )
                                 } else if (isEditMode && button == null) {
@@ -424,8 +428,9 @@ fun ObfBoardView(
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
                                         boardStrings = board.strings,
                                         locale = settings.primaryLanguage,
-                                        boardSettings = effectiveBoardSettings
-                                    )
+                                        boardSettings = effectiveBoardSettings,
+                                        labelOverride = predictionLabels[button.id]
+                                        )
                                 }
                             }
                             // Fill remaining space if row is not complete
@@ -1009,6 +1014,7 @@ fun ObfButtonItem(
     boardStrings: Map<String, Map<String, String>> = emptyMap(),
     locale: String? = null,
     boardSettings: ResolvedBoardSettings? = null,
+    labelOverride: String? = null,
     fieldFontScale: Float = 1f
 ) {
     val speechService: SpeechService = koinInject()
@@ -1023,7 +1029,7 @@ fun ObfButtonItem(
         appActivationBehavior = settings.boardActivationBehavior,
         appReturnBehavior = settings.boardReturnBehavior
     )
-    val displayLabel = resolveObfLocalizedString(boardStrings, locale, button.label)
+    val displayLabel = labelOverride ?: resolveObfLocalizedString(boardStrings, locale, button.label)
     val displayVocalization = resolveObfLocalizedString(boardStrings, locale, button.vocalization)
     val temporarilyRevealedDescription = stringResource(Res.string.board_workspace_temporarily_revealed)
     val boundedFontScale = fieldFontScale.coerceIn(1f, 2f)
@@ -1336,7 +1342,8 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
     onButtonClick: (ObfButton) -> Unit,
     homeBoardId: String?,
     boardSettings: ResolvedBoardSettings,
-    showHiddenButtons: Boolean
+    showHiddenButtons: Boolean,
+    predictionLabels: Map<String, String>
 ) {
     val containerWidth = maxWidth
     val containerHeight = maxHeight
@@ -1362,7 +1369,8 @@ private fun BoxWithConstraintsScope.renderAbsoluteButtons(
                     isEditMode = isEditMode,
                     isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                     isHomeLink = button.isHomeNavigation(homeBoardId),
-                    boardSettings = boardSettings
+                    boardSettings = boardSettings,
+                    labelOverride = predictionLabels[button.id]
                 )
             }
         }

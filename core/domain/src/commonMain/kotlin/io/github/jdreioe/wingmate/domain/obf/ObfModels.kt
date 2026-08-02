@@ -11,6 +11,7 @@ const val OBF_MATH_MODE_EXTENSION = "ext_wingmate_math_mode"
 const val OBF_BUTTON_TYPE_EXTENSION = "ext_wingmate_button_type"
 const val OBF_COMPACT_GRID_EXTENSION = "ext_wingmate_compact_grid"
 const val OBF_GRID_HEIGHT_FRACTION_EXTENSION = "ext_wingmate_grid_height_fraction"
+const val OBF_SPELLING_MODE_EXTENSION = "ext_wingmate_spelling_mode"
 
 /** Wingmate-specific button behaviours, stored in OBF extensions for portability. */
 enum class ObfButtonType(val wireValue: String) {
@@ -67,6 +68,20 @@ data class ObfBoard(
         } ?: (extensions - OBF_GRID_HEIGHT_FRACTION_EXTENSION)
     )
 
+    /**
+     * Spelling boards (e.g. the keyboard preset) compose characters/predictions
+     * without auto-inserting a space between tokens; word boards join words by space.
+     */
+    val spellingMode: Boolean
+        get() = (extensions[OBF_SPELLING_MODE_EXTENSION] as? JsonPrimitive)?.booleanOrNull == true
+
+    fun withSpellingMode(enabled: Boolean): ObfBoard = copy(
+        extensions = if (enabled) {
+            extensions + (OBF_SPELLING_MODE_EXTENSION to JsonPrimitive(true))
+        } else {
+            extensions - OBF_SPELLING_MODE_EXTENSION
+        }
+    )
 }
 
 @Serializable
