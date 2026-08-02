@@ -830,7 +830,7 @@ private fun BoardSetWorkspaceScreen(
                                 ?.joinToString(prefix = ": ")
                                 .orEmpty()
                             statusMessage = "Export failed: ${export.context}$resources"
-                        }
+                    }
                     }
                 }
             } catch (e: Exception) {
