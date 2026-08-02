@@ -53,7 +53,17 @@ import io.ktor.client.HttpClient
 
 @Suppress("unused")
 fun initKoin(extra: Module? = null) {
-    val coreDataModule: Module = module {
+    val coreDataModule = createCoreDataModule()
+
+    startKoin {
+        allowOverride(true)
+        // Include base bindings, MVIKotlin store module, and any extra platform-specific modules
+        val modulesList = listOf(coreDataModule, appModule) + listOfNotNull(extra)
+        modules(modulesList)
+    }
+}
+
+internal fun createCoreDataModule(): Module = module {
         singleOf(::InMemoryPhraseRepository) { bind<PhraseRepository>() }
         singleOf(::InMemoryCategoryRepository) { bind<CategoryRepository>() }
         singleOf(::InMemorySettingsRepository) { bind<SettingsRepository>() }
@@ -73,8 +83,10 @@ fun initKoin(extra: Module? = null) {
         singleOf(::SettingsUseCase)
         singleOf(::UserDataManager)
         singleOf(::InMemorySecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
-        singleOf(::DefaultEditingAccessStore) { bind<EditingAccessStore>() }
-        singleOf(::EditingAccessController)
+        // Use explicit constructors here: Koin's constructor-reference DSL attempts
+        // to inject Kotlin parameters that have default values (iterations/timeout).
+        single<EditingAccessStore> { DefaultEditingAccessStore(get()) }
+        single { EditingAccessController(get()) }
         singleOf(::UnavailableBackupMediaAccess) { bind<BackupMediaAccess>() }
         single {
             CompleteBackupManager(
@@ -95,14 +107,6 @@ fun initKoin(extra: Module? = null) {
         factory { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>(), get<CategoryUseCase>()) }
         factory { SettingsBloc(get<SettingsUseCase>()) }
         factory { VoiceBloc(get<VoiceUseCase>()) }
-    }
-
-    startKoin {
-        allowOverride(true)
-        // Include base bindings, MVIKotlin store module, and any extra platform-specific modules
-        val modulesList = listOf(coreDataModule, appModule) + listOfNotNull(extra)
-        modules(modulesList)
-    }
 }
 
 // Convenience no-arg for Swift where optional bridging might produce a different symbol name
