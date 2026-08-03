@@ -32,6 +32,9 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.application.SelectionDebouncer
 import io.github.jdreioe.wingmate.application.SelectionHighlight
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
 import org.jetbrains.compose.resources.stringResource
 import wingmatekmp.composeapp.generated.resources.Res
 import wingmatekmp.composeapp.generated.resources.phrase_add_cd
@@ -40,6 +43,21 @@ import wingmatekmp.composeapp.generated.resources.phrase_add_cd
  * PhraseGrid – a Compose port of the Flutter PhraseGrid.
  * Backwards-compatible: existing call sites (phrases, onPlay, onLongPress) still work.
  */
+
+/**
+ * Extends the platform long-press timeout by the selection debounce duration so the
+ * long-press context menu requires a deliberately longer hold than an ordinary tap.
+ * Without this, a debounced (ignored) tap followed by a slow hold is misread as a
+ * long-press and opens the menu unexpectedly.
+ */
+private class DebounceAwareViewConfiguration(
+    private val delegate: ViewConfiguration,
+    private val extraLongPressMillis: Long
+) : ViewConfiguration by delegate {
+    override val longPressTimeoutMillis: Long =
+        delegate.longPressTimeoutMillis + extraLongPressMillis
+}
+
 @Composable
 fun PhraseGrid(
     phrases: List<Phrase>,
@@ -104,59 +122,70 @@ fun PhraseGrid(
         return true
     }
 
-    LazyVerticalGrid(columns = GridCells.Fixed(settings.gridColumns), contentPadding = PaddingValues(4.dp)) {
-        items(
-            count = itemCount,
-            key = { index -> if (showAdd && index == visiblePhrases.size) "add_tile" else visiblePhrases[index].id }
-        ) { index ->
-            if (showAdd && index == visiblePhrases.size) {
-                // Add button as card
-                Card(
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .clickable { onAddPhrase?.invoke(); showAddDialog = true },
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+    // #118: the long-press context menu requires a hold of debounce + the platform
+    // long-press timeout, so a debounced tap followed by a slow hold is not misread as
+    // a long-press.
+    val baseViewConfiguration = LocalViewConfiguration.current
+    val debounceAwareViewConfiguration = remember(baseViewConfiguration, settings.selectionDebounceMillis) {
+        DebounceAwareViewConfiguration(baseViewConfiguration, settings.selectionDebounceMillis)
+    }
+    CompositionLocalProvider(
+        LocalViewConfiguration provides debounceAwareViewConfiguration
+    ) {
+        LazyVerticalGrid(columns = GridCells.Fixed(settings.gridColumns), contentPadding = PaddingValues(4.dp)) {
+            items(
+                count = itemCount,
+                key = { index -> if (showAdd && index == visiblePhrases.size) "add_tile" else visiblePhrases[index].id }
+            ) { index ->
+                if (showAdd && index == visiblePhrases.size) {
+                    // Add button as card
+                    Card(
+                        modifier = Modifier
+                            .padding(4.dp)
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .clickable { onAddPhrase?.invoke(); showAddDialog = true },
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Add,
-                            contentDescription = stringResource(Res.string.phrase_add_cd),
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp)
-                        )
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = stringResource(Res.string.phrase_add_cd),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
                     }
+                } else {
+                    val item = visiblePhrases[index]
+                    // When edit mode is active, expose move and delete buttons
+                    val categoryName = categories.firstOrNull { it.id == item.parentId }?.name
+                    PhraseGridItem(
+                        item = item,
+                        onPlay = {
+                            if (tryActivate(item.id)) onPlay(item)
+                        },
+                        onSpeakSecondary = { onPlaySecondary?.invoke(item) },
+                        onLongPress = { onLongPress(item); onToggleWiggleMode?.invoke() },
+                        isEditMode = isWiggleMode,
+                        onTap = {
+                            if (tryActivate(item.id)) onInsert?.invoke(item)
+                        },
+                        onMove = { oldIndex, newIndex -> onMove?.invoke(oldIndex, newIndex) },
+                        onDelete = { onDeletePhrase?.invoke(item) },
+                        categoryName = categoryName,
+                        phraseHeight = phraseHeight,
+                        phraseFontSize = phraseFontSize,
+                        index = index,
+                        total = visiblePhrases.size,
+                        readOnly = readOnly,
+                        isSelectionHighlighted = highlightedPhraseId == item.id,
+                        onCopyAudio = onCopyAudio,
+                    )
                 }
-            } else {
-                val item = visiblePhrases[index]
-                // When edit mode is active, expose move and delete buttons
-                val categoryName = categories.firstOrNull { it.id == item.parentId }?.name
-                PhraseGridItem(
-                    item = item,
-                    onPlay = {
-                        if (tryActivate(item.id)) onPlay(item)
-                    },
-                    onSpeakSecondary = { onPlaySecondary?.invoke(item) },
-                    onLongPress = { onLongPress(item); onToggleWiggleMode?.invoke() },
-                    isEditMode = isWiggleMode,
-                    onTap = {
-                        if (tryActivate(item.id)) onInsert?.invoke(item)
-                    },
-                    onMove = { oldIndex, newIndex -> onMove?.invoke(oldIndex, newIndex) },
-                    onDelete = { onDeletePhrase?.invoke(item) },
-                    categoryName = categoryName,
-                    phraseHeight = phraseHeight,
-                    phraseFontSize = phraseFontSize,
-                    index = index,
-                    total = visiblePhrases.size,
-                    readOnly = readOnly,
-                    isSelectionHighlighted = highlightedPhraseId == item.id,
-                    onCopyAudio = onCopyAudio,
-                )
             }
         }
     }
