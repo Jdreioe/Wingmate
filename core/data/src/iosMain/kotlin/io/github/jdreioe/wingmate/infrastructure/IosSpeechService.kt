@@ -10,11 +10,14 @@ import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
@@ -24,7 +27,11 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import platform.AVFAudio.AVAudioPlayer
+import platform.Foundation.NSData
 import platform.Foundation.NSFileManager
+import platform.Foundation.NSURL
+import platform.Foundation.create
 
 private val logger = KotlinLogging.logger {}
 
@@ -35,6 +42,7 @@ class IosSpeechService(
     private val pronunciationDictionaryRepository: PronunciationDictionaryRepository? = null,
     private val saidRepo: SaidTextRepository? = null,
     private val settingsRepository: SettingsRepository? = null,
+    private val voiceRepository: VoiceRepository? = null,
 ) : SpeechService {
 
     private val sentenceAudioCache = mutableMapOf<String, ByteArray>()
@@ -42,6 +50,7 @@ class IosSpeechService(
     private data class PendingCache(val text: String, val voice: Voice?, val pitch: Double?, val rate: Double?)
     private val pendingSpeechCache = mutableSetOf<PendingCache>()
     private val pendingSpeechCacheMutex = Mutex()
+    private var currentPlayer: AVAudioPlayer? = null
 
     init {
         configureAudioSession()
@@ -125,15 +134,18 @@ class IosSpeechService(
     }
 
     override suspend fun pause() = withContext(Dispatchers.Main) {
-        // No-op on iOS for now.
+        currentPlayer?.pause()
+        Unit
     }
 
     override suspend fun stop() = withContext(Dispatchers.Main) {
-        // No-op on iOS for now.
+        currentPlayer?.stop()
+        currentPlayer = null
     }
 
-    override suspend fun resume() {
-        // No-op on iOS for now.
+    override suspend fun resume() = withContext(Dispatchers.Main) {
+        currentPlayer?.play()
+        Unit
     }
 
     override fun isPlaying(): Boolean = false
@@ -189,20 +201,43 @@ class IosSpeechService(
     }
 
     private suspend fun playFile(path: String) = withContext(Dispatchers.Main) {
-        // Playback is intentionally a no-op in the shared iOS metadata implementation.
+        runCatching {
+            val url = NSURL.fileURLWithPath(path)
+            val audioPlayer = AVAudioPlayer(contentsOfURL = url, error = null)
+            currentPlayer?.stop()
+            currentPlayer = audioPlayer
+            audioPlayer.prepareToPlay()
+            audioPlayer.play()
+        }.onFailure { t ->
+            logger.warn(t) { "Failed to play recorded audio: $path" }
+        }
     }
 
     private suspend fun playAudio(audioBytes: ByteArray) = withContext(Dispatchers.Main) {
-        // Playback is intentionally a no-op in the shared iOS metadata implementation.
+        if (audioBytes.isEmpty()) return@withContext
+        runCatching {
+            val data = audioBytes.usePinned { pinned ->
+                NSData.create(bytes = pinned.addressOf(0), length = audioBytes.size.toULong())
+            }
+            val audioPlayer = AVAudioPlayer(data = data, error = null)
+            currentPlayer?.stop()
+            currentPlayer = audioPlayer
+            audioPlayer.prepareToPlay()
+            audioPlayer.play()
+        }.onFailure { t ->
+            logger.warn(t) { "Failed to play synthesized Azure audio" }
+        }
     }
 
-    private fun defaultVoice(): Voice = Voice(
-        id = null,
-        name = "en-US-JennyNeural",
-        displayName = "Default Voice",
-        primaryLanguage = "en-US",
-        selectedLanguage = "en-US"
-    )
+    private suspend fun defaultVoice(): Voice =
+        runCatching { voiceRepository?.getSelected() }.getOrNull()
+            ?: Voice(
+                id = null,
+                name = "en-US-JennyNeural",
+                displayName = "Default Voice",
+                primaryLanguage = "en-US",
+                selectedLanguage = "en-US"
+            )
 
     private suspend fun trySaveHistory(text: String, voice: Voice?, pitch: Double?, rate: Double?, filePath: String?) {
         val repo = saidRepo ?: return

@@ -1100,6 +1100,8 @@ class DesktopSpeechService(
             val commands = listOf(
                 // ffplay with volume boost and better audio driver selection for PipeWire/PulseAudio
                 listOf("ffplay", "-nodisp", "-autoexit", "-volume", "100", audioFile.absolutePath),
+                // afplay is the built-in macOS audio player (plays MP3)
+                listOf("afplay", audioFile.absolutePath),
                 listOf("mpg123", audioFile.absolutePath),
                 listOf("paplay", audioFile.absolutePath)
             )
