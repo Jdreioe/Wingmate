@@ -324,6 +324,7 @@ struct Wingmate {
     onboarding_screens: bool,
     selected_category: Option<String>,
     settings: Settings,
+    selected_voice_name: Option<String>,
     settings_category: SettingsCategory,
     new_phrase: String,
     new_category: String,
@@ -360,6 +361,7 @@ enum Message {
     LoadedPhrases(Result<Vec<Phrase>, String>),
     LoadedCategories(Result<Vec<Category>, String>),
     LoadedVoices(Result<Vec<Voice>, String>),
+    LoadedSelectedVoice(Result<Voice, String>),
     LoadedSettings(Result<Settings, String>),
     LoadedDictionary(Result<Vec<Pronunciation>, String>),
     LoadedPredictions(Result<Predictions, String>),
@@ -534,6 +536,7 @@ impl cosmic::Application for Wingmate {
             onboarding_screens: false,
             selected_category: None,
             settings: Settings::default(),
+            selected_voice_name: None,
             settings_category: SettingsCategory::Speech,
             new_phrase: String::new(),
             new_category: String::new(),
@@ -614,6 +617,10 @@ impl cosmic::Application for Wingmate {
             Message::LoadedVoices(result) => match result {
                 Ok(v) => self.voices = v,
                 Err(e) => self.status = e,
+            },
+            Message::LoadedSelectedVoice(result) => match result {
+                Ok(v) => self.selected_voice_name = v.name,
+                Err(_) => {}
             },
             Message::LoadedSettings(result) => match result {
                 Ok(v) => {
@@ -992,11 +999,15 @@ impl cosmic::Application for Wingmate {
                 match result {
                     Ok(status) if status == "ok" => {
                         self.status = "Backup restored successfully".to_string();
-                        // Reload data so the restored boards/phrases appear immediately.
+                        // Reload everything so the restored settings/voices/boards appear immediately.
                         let api = self.api.clone();
                         return Task::batch([
+                            api.load_settings().map(cosmic::Action::App),
+                            api.load_selected_voice().map(cosmic::Action::App),
+                            api.load_voices().map(cosmic::Action::App),
                             api.load_board_sets().map(cosmic::Action::App),
                             api.load_phrases().map(cosmic::Action::App),
+                            api.load_categories().map(cosmic::Action::App),
                         ]);
                     }
                     Ok(status) => self.status = format!("Backup import: {status}"),
@@ -1775,11 +1786,12 @@ impl Wingmate {
 
     fn speech_settings_view(&self) -> Element<'_, Message> {
         let voice_names: Vec<String> = self.voices.iter().filter_map(|v| v.name.clone()).collect();
-        let selected_voice = if voice_names.contains(&self.settings.voice) {
-            Some(self.settings.voice.clone())
-        } else {
-            None
-        };
+        let active_voice = self
+            .selected_voice_name
+            .clone()
+            .filter(|name| voice_names.contains(name))
+            .or_else(|| Some(self.settings.voice.clone()).filter(|name| voice_names.contains(name)));
+        let selected_voice = active_voice;
         let mut languages: Vec<String> = self
             .voices
             .iter()
@@ -2125,6 +2137,7 @@ impl Api {
             self.load_phrases(),
             self.load_categories(),
             self.load_voices(),
+            self.load_selected_voice(),
             self.load_settings(),
             self.load_history(),
             self.load_board_sets(),
@@ -2140,6 +2153,9 @@ impl Api {
     }
     fn load_voices(&self) -> Task<Message> {
         self.get("/api/voices", Message::LoadedVoices)
+    }
+    fn load_selected_voice(&self) -> Task<Message> {
+        self.get("/api/voices/selected", Message::LoadedSelectedVoice)
     }
     fn load_settings(&self) -> Task<Message> {
         self.get("/api/settings", Message::LoadedSettings)

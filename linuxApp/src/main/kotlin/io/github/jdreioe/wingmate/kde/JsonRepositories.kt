@@ -95,7 +95,9 @@ class JsonFileConfigRepository : ConfigRepository {
 
 class JsonFileVoiceRepository : VoiceRepository {
     private val file = File(configDir, "voices.json")
+    private val selectedFile = File(configDir, "selected-voice.json")
     private val voices = mutableListOf<Voice>()
+    private var selectedVoice: Voice? = null
 
     init {
         println("[PERSISTENCE] JsonFileVoiceRepository init. File: ${file.absolutePath}")
@@ -106,6 +108,15 @@ class JsonFileVoiceRepository : VoiceRepository {
                 println("[PERSISTENCE] Loaded ${voices.size} voices from disk.")
             } catch (e: Exception) {
                 println("[PERSISTENCE] Error loading voices: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+        if (selectedFile.exists()) {
+            try {
+                selectedVoice = json.decodeFromString<Voice>(selectedFile.readText())
+                println("[PERSISTENCE] Loaded selected voice: ${selectedVoice?.name}")
+            } catch (e: Exception) {
+                println("[PERSISTENCE] Error loading selected voice: ${e.message}")
                 e.printStackTrace()
             }
         }
@@ -128,17 +139,19 @@ class JsonFileVoiceRepository : VoiceRepository {
             e.printStackTrace()
         }
     }
-    
-    // We don't really persist "selected" voice in this repo, as it is in SettingsRepository
-    private var selectedVoice: Voice? = null
-    
-    override suspend fun saveSelected(voice: Voice) {
-        println("[PERSISTENCE] saveSelected voice (in-memory only for clean app session): ${voice.name}")
+
+    override suspend fun saveSelected(voice: Voice) = withContext(Dispatchers.IO) {
+        println("[PERSISTENCE] saveSelected voice: ${voice.name}")
         selectedVoice = voice
+        try {
+            selectedFile.writeText(json.encodeToString(voice))
+        } catch (e: Exception) {
+            println("[PERSISTENCE] Error saving selected voice: ${e.message}")
+        }
     }
-    
-    override suspend fun getSelected(): Voice? {
-        return selectedVoice
+
+    override suspend fun getSelected(): Voice? = withContext(Dispatchers.IO) {
+        selectedVoice
     }
 }
 

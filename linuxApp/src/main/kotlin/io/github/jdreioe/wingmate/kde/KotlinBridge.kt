@@ -374,6 +374,14 @@ class KotlinBridge(private val port: Int = 8765) {
                 val voices = voiceRepository.getVoices()
                 call.respond(voices)
             }
+            get("/api/voices/selected") {
+                val selected = voiceRepository.getSelected()
+                if (selected == null) {
+                    call.respond(HttpStatusCode.OK, mapOf<String, Any?>())
+                } else {
+                    call.respond(selected)
+                }
+            }
             post("/api/speak/stop") {
                 scope.launch {
                     speechService.stop()
