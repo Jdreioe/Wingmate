@@ -11,6 +11,8 @@ dependencies {
     implementation(project(":shared"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("com.arkivanov.mvikotlin:mvikotlin:3.3.0")
+    implementation("com.arkivanov.mvikotlin:mvikotlin-main:3.3.0")
     
     // Ktor server for the native UI bridge
     implementation("io.ktor:ktor-server-core:2.3.12")

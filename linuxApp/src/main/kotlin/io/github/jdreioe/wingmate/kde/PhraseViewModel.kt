@@ -1,56 +1,47 @@
 package io.github.jdreioe.wingmate.kde
 
-import io.github.jdreioe.wingmate.application.usecase.*
-import io.github.jdreioe.wingmate.domain.*
+import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
+import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
+import io.github.jdreioe.wingmate.domain.CategoryItem
+import io.github.jdreioe.wingmate.domain.Phrase
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.koin.core.context.GlobalContext
 
 /**
- * Bridge between the native UI and Kotlin business logic.
- * Exposes phrase and category management to the UI.
+ * Thin read-model over the shared [PhraseListStore] (single source of truth,
+ * same as iOS/Android). Reads come from the shared use case; every write is
+ * routed through the store so category/folder semantics stay canonical.
  */
 class PhraseViewModel {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    
+
     private val phrasesUseCase: GetPhrasesAndCategoriesUseCase by lazy {
         GlobalContext.get().get()
     }
-    
-    private val addPhraseUseCase: AddPhraseUseCase by lazy {
+
+    private val phraseListStore: PhraseListStore by lazy {
         GlobalContext.get().get()
     }
-    
-    private val updatePhraseUseCase: UpdatePhraseUseCase by lazy {
-        GlobalContext.get().get()
-    }
-    
-    private val deletePhraseUseCase: DeletePhraseUseCase by lazy {
-        GlobalContext.get().get()
-    }
-    
-    private val phraseRepository: PhraseRepository by lazy {
-        GlobalContext.get().get()
-    }
-    
+
     private val _phrases = MutableStateFlow<List<Phrase>>(emptyList())
     val phrases: StateFlow<List<Phrase>> = _phrases.asStateFlow()
-    
+
     private val _categories = MutableStateFlow<List<CategoryItem>>(emptyList())
     val categories: StateFlow<List<CategoryItem>> = _categories.asStateFlow()
-    
+
     private val _currentCategory = MutableStateFlow<String?>(null)
     val currentCategory: StateFlow<String?> = _currentCategory.asStateFlow()
-    
+
     init {
         loadData()
     }
-    
+
     fun loadData() {
         scope.launch {
             val (phrases, folders) = phrasesUseCase.invoke()
             _phrases.value = phrases.filter { it.parentId == _currentCategory.value }
-            // folders are Phrase objects with linkedBoardId
+            // Folders are Phrase objects with linkedBoardId; keep the wire shape stable.
             _categories.value = folders.map { phrase ->
                 CategoryItem(
                     id = phrase.id,
@@ -60,63 +51,47 @@ class PhraseViewModel {
             }
         }
     }
-    
+
     fun selectCategory(categoryId: String?) {
         _currentCategory.value = categoryId
+        phraseListStore.accept(PhraseListStore.Intent.SelectCategory(categoryId))
         scope.launch {
             val (phrases, _) = phrasesUseCase.invoke()
             _phrases.value = phrases.filter { it.parentId == categoryId }
         }
     }
-    
+
     fun addPhrase(text: String, imageUrl: String? = null) {
-        scope.launch {
-            // AddPhraseUseCase takes (text: String, categoryId: String?)
-            addPhraseUseCase.invoke(text, _currentCategory.value)
-            loadData()
-        }
+        phraseListStore.accept(
+            PhraseListStore.Intent.AddPhrase(text = text, imageUrl = imageUrl)
+        )
+        loadData()
     }
-    
+
     fun updatePhrase(id: String, text: String?, name: String? = null, recordingPath: String? = null) {
-        scope.launch {
-            updatePhraseUseCase.invoke(id, text, name, imageUrl = null, recordingPath = recordingPath)
-            loadData()
+        if (recordingPath != null) {
+            phraseListStore.accept(PhraseListStore.Intent.UpdatePhraseRecording(id = id, recordingPath = recordingPath))
+        } else {
+            phraseListStore.accept(PhraseListStore.Intent.UpdatePhrase(id = id, text = text, name = name))
         }
+        loadData()
     }
-    
+
     fun deletePhrase(phraseId: String) {
-        scope.launch {
-            deletePhraseUseCase.invoke(phraseId)
-            loadData()
-        }
+        phraseListStore.accept(PhraseListStore.Intent.DeletePhrase(phraseId = phraseId))
+        loadData()
     }
-    
-    // Categories are now represented as Phrases with linkedBoardId
+
     fun addCategory(name: String) {
-        scope.launch {
-            // Create a folder (Phrase with linkedBoardId pointing to a new board)
-            val folderId = java.util.UUID.randomUUID().toString()
-            val folder = Phrase(
-                id = folderId,
-                text = name,
-                linkedBoardId = folderId, // Self-referential for now
-                parentId = _currentCategory.value,
-                createdAt = System.currentTimeMillis(),
-                isGridItem = false // Folders appear in category bar, not grid
-            )
-            phraseRepository.add(folder)
-            loadData()
-        }
+        phraseListStore.accept(PhraseListStore.Intent.AddCategory(name = name))
+        loadData()
     }
-    
+
     fun deleteCategory(categoryId: String) {
-        scope.launch {
-            // Delete the folder phrase
-            phraseRepository.delete(categoryId)
-            loadData()
-        }
+        phraseListStore.accept(PhraseListStore.Intent.DeleteCategory(categoryId = categoryId))
+        loadData()
     }
-    
+
     fun cleanup() {
         scope.cancel()
     }
