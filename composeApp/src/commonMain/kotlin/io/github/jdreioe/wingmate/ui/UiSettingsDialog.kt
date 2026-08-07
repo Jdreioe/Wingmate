@@ -40,6 +40,10 @@ import wingmatekmp.composeapp.generated.resources.ui_settings_grid_columns_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_high_contrast_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_dwell_to_select_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_dwell_to_select_desc
+import wingmatekmp.composeapp.generated.resources.ui_settings_selection_debounce_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_selection_debounce_desc
+import wingmatekmp.composeapp.generated.resources.ui_settings_selection_highlight_title
+import wingmatekmp.composeapp.generated.resources.ui_settings_selection_highlight_desc
 import wingmatekmp.composeapp.generated.resources.ui_settings_selection_sound_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_auditory_fishing_title
 import wingmatekmp.composeapp.generated.resources.ui_settings_auditory_fishing_desc
@@ -80,6 +84,8 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
     var gridColumns by remember { mutableStateOf(3) }
     var highContrastMode by remember { mutableStateOf(false) }
     var dwellToSelectMillis by remember { mutableStateOf(0L) }
+    var selectionDebounceMillis by remember { mutableStateOf(0L) }
+    var selectionHighlightMillis by remember { mutableStateOf(0L) }
     var selectionSoundEnabled by remember { mutableStateOf(false) }
     var auditoryFishingEnabled by remember { mutableStateOf(false) }
     var usageLoggingEnabled by remember { mutableStateOf(false) }
@@ -110,6 +116,8 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
         highContrastMode = s.highContrastMode
         featureUsageReporter.setEnabled(s.featureUsageReportingEnabled)
         dwellToSelectMillis = s.dwellToSelectMillis
+        selectionDebounceMillis = s.selectionDebounceMillis
+        selectionHighlightMillis = s.selectionHighlightMillis
         selectionSoundEnabled = s.selectionSoundEnabled
         auditoryFishingEnabled = s.auditoryFishingEnabled
         usageLoggingEnabled = s.usageLoggingEnabled
@@ -335,6 +343,50 @@ fun UiSettingsDialog(onDismissRequest: () -> Unit) {
                     steps = 19 // 250ms steps
                 )
                 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Selection Debounce (#118)
+                Text(
+                    "${stringResource(Res.string.ui_settings_selection_debounce_title)}: ${selectionDebounceMillis.toInt()} ms",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    stringResource(Res.string.ui_settings_selection_debounce_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Slider(
+                    value = selectionDebounceMillis.toFloat(),
+                    onValueChange = { selectionDebounceMillis = it.toLong() },
+                    onValueChangeFinished = {
+                        updateSettings { it.copy(selectionDebounceMillis = selectionDebounceMillis) }
+                    },
+                    valueRange = 0f..1000f,
+                    steps = 19
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Selection Highlight (#120)
+                Text(
+                    "${stringResource(Res.string.ui_settings_selection_highlight_title)}: ${selectionHighlightMillis.toInt()} ms",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    stringResource(Res.string.ui_settings_selection_highlight_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Slider(
+                    value = selectionHighlightMillis.toFloat(),
+                    onValueChange = { selectionHighlightMillis = it.toLong() },
+                    onValueChangeFinished = {
+                        updateSettings { it.copy(selectionHighlightMillis = selectionHighlightMillis) }
+                    },
+                    valueRange = 0f..2000f,
+                    steps = 19
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Selection Sound

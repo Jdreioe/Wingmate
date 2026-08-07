@@ -398,6 +398,7 @@
 "settings.accessibility.touch_timing" = "Berührung & Timing";
 "settings.accessibility.hold" = "Zum Auswählen halten";
 "settings.accessibility.dwell" = "Verweilen zum Auswählen";
+"settings.accessibility.debounce" = "Auswahl-Debounce";
 "settings.accessibility.feedback" = "Feedback & Protokollierung";
 "settings.accessibility.selection_sound" = "Auswahlton";
 "settings.accessibility.auditory_fishing" = "Akustische Suche";

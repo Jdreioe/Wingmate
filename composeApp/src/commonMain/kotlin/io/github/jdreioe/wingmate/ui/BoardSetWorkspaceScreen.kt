@@ -82,7 +82,6 @@ import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.EditingAccessController
-import io.github.jdreioe.wingmate.application.SelectionDebouncer
 import io.github.jdreioe.wingmate.application.SelectionHighlight
 import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.FileStorage
@@ -601,8 +600,7 @@ private fun BoardSetWorkspaceScreen(
     var selectedButtons by remember(boardSetId) {
         mutableStateOf<List<Pair<ObfButton, ImageBitmap?>>>(emptyList())
     }
-    // #118/#120: per-target activation debounce and time-bounded selection highlight.
-    val selectionDebouncer = remember(boardSetId) { SelectionDebouncer() }
+    // #120: time-bounded selection highlight.
     val selectionHighlight = remember(boardSetId) { SelectionHighlight() }
     var highlightedButtonId by remember(boardSetId) { mutableStateOf<String?>(null) }
     var highlightGeneration by remember(boardSetId) { mutableLongStateOf(0L) }
@@ -1298,15 +1296,8 @@ private fun BoardSetWorkspaceScreen(
                         predictionLabels = predictionsById,
                         onButtonClick = { button ->
                             run {
-                                // #118: ignore repeated activations of the same target inside the window.
-                                if (!selectionDebouncer.tryActivate(
-                                        button.id,
-                                        Clock.System.now().toEpochMilliseconds(),
-                                        settings.selectionDebounceMillis
-                                    )
-                                ) {
-                                    return@run
-                                }
+                                // #118: debounce gating now lives in ObfButtonItem, which only
+                                // dispatches accepted activations.
                                 markButtonSelected(button.id)
                                 val actions = parseObfButtonActions(button)
                             if (actions.isNotEmpty()) {
