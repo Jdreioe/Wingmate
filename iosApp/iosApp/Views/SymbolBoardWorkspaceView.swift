@@ -6,11 +6,7 @@ import UniformTypeIdentifiers
 import UIKit
 import AudioToolbox
 
-private struct CellOpenSymbolsTokenResponse: Decodable {
-    let access_token: String
-}
-
-private struct CellOpenSymbolsSymbolResult: Decodable {
+private struct CellOpenSymbolsSymbolResult {
     let id: Int64
     let name: String
     let image_url: String?
@@ -1426,12 +1422,8 @@ struct SymbolBoardWorkspaceView: View {
         let trimmed = editingSymbolQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        guard let openSymbolsSecret = resolveCellOpenSymbolsSecret() else {
-            await MainActor.run {
-                editingSymbolError = NSLocalizedString("phrase.symbol.error.missing_secret", comment: "")
-            }
-            return
-        }
+        let bridge = KoinBridge()
+        bridge.setOpenSymbolsSecret(secret: resolveCellOpenSymbolsSecret())
 
         await MainActor.run {
             isSearchingCellSymbols = true
@@ -1439,66 +1431,21 @@ struct SymbolBoardWorkspaceView: View {
             editingSymbolResults = []
         }
 
-        do {
-            guard let tokenUrl = URL(string: "https://www.opensymbols.org/api/v2/token") else {
-                await MainActor.run {
-                    isSearchingCellSymbols = false
-                    editingSymbolError = NSLocalizedString("phrase.symbol.error.token_url", comment: "")
-                }
-                return
-            }
-
-            var tokenRequest = URLRequest(url: tokenUrl)
-            tokenRequest.httpMethod = "POST"
-            tokenRequest.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-            tokenRequest.httpBody = "secret=\(openSymbolsSecret)".data(using: .utf8)
-
-            let (tokenData, tokenResponse) = try await URLSession.shared.data(for: tokenRequest)
-            guard let tokenHttp = tokenResponse as? HTTPURLResponse, tokenHttp.statusCode == 200 else {
-                await MainActor.run {
-                    isSearchingCellSymbols = false
-                    editingSymbolError = NSLocalizedString("phrase.symbol.error.auth_failed", comment: "")
-                }
-                return
-            }
-
-            let token = try JSONDecoder().decode(CellOpenSymbolsTokenResponse.self, from: tokenData).access_token
-
-            var components = URLComponents(string: "https://www.opensymbols.org/api/v2/symbols")
-            components?.queryItems = [
-                URLQueryItem(name: "q", value: trimmed),
-                URLQueryItem(name: "locale", value: "en"),
-                URLQueryItem(name: "access_token", value: token)
-            ]
-
-            guard let symbolsUrl = components?.url else {
-                await MainActor.run {
-                    isSearchingCellSymbols = false
-                    editingSymbolError = NSLocalizedString("phrase.symbol.error.search_url", comment: "")
-                }
-                return
-            }
-
-            let (symbolsData, symbolsResponse) = try await URLSession.shared.data(from: symbolsUrl)
-            guard let symbolsHttp = symbolsResponse as? HTTPURLResponse, symbolsHttp.statusCode == 200 else {
-                await MainActor.run {
-                    isSearchingCellSymbols = false
-                    editingSymbolError = NSLocalizedString("phrase.symbol.error.search_failed", comment: "")
-                }
-                return
-            }
-
-            let decoded = try JSONDecoder().decode([CellOpenSymbolsSymbolResult].self, from: symbolsData)
-
-            await MainActor.run {
-                editingSymbolResults = decoded
-                isSearchingCellSymbols = false
-            }
-        } catch {
+        guard let result = try? await bridge.openSymbolsSearch(query: trimmed, locale: "en") else {
             await MainActor.run {
                 isSearchingCellSymbols = false
-                editingSymbolError = error.localizedDescription
+                editingSymbolError = NSLocalizedString("phrase.symbol.error.search_failed", comment: "")
             }
+            return
+        }
+
+        await MainActor.run {
+            if result.errorCode.isEmpty {
+                editingSymbolResults = result.symbols.map { CellOpenSymbolsSymbolResult(id: $0.id, name: $0.name ?? "", image_url: $0.imageUrl) }
+            } else {
+                editingSymbolError = NSLocalizedString("phrase.symbol.error.\(result.errorCode)", comment: "")
+            }
+            isSearchingCellSymbols = false
         }
     }
 

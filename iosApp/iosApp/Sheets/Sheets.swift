@@ -4,11 +4,7 @@ import AVFoundation
 import PhotosUI
 import UniformTypeIdentifiers
 
-private struct OpenSymbolsTokenResponse: Decodable {
-    let access_token: String
-}
-
-private struct OpenSymbolsSymbolResult: Decodable {
+private struct OpenSymbolsSymbolResult {
     let id: Int64
     let name: String
     let image_url: String?
@@ -31,6 +27,19 @@ private func resolveOpenSymbolsSecret() -> String? {
     if let fromEnv, !fromEnv.isEmpty { return fromEnv }
 
     return nil
+}
+
+private func searchOpenSymbolsUsingBridge(_ query: String) async -> (results: [OpenSymbolsSymbolResult], errorCode: String?) {
+    let bridge = KoinBridge()
+    bridge.setOpenSymbolsSecret(secret: resolveOpenSymbolsSecret())
+    guard let result = try? await bridge.openSymbolsSearch(query: query, locale: "en") else {
+        return ([], "search_failed")
+    }
+    if result.errorCode.isEmpty {
+        let mapped = result.symbols.map { OpenSymbolsSymbolResult(id: $0.id, name: $0.name ?? "", image_url: $0.imageUrl) }
+        return (mapped, nil)
+    }
+    return ([], result.errorCode)
 }
 
 struct WelcomeScreenIOS: View {
@@ -515,79 +524,21 @@ struct AddPhraseSheet: View {
         let trimmed = symbolQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        guard let openSymbolsSecret = resolveOpenSymbolsSecret() else {
-            await MainActor.run {
-                symbolSearchError = NSLocalizedString("phrase.symbol.error.missing_secret", comment: "")
-            }
-            return
-        }
-
         await MainActor.run {
             isSearchingSymbols = true
             symbolSearchError = nil
             symbolResults = []
         }
 
-        do {
-            guard let tokenUrl = URL(string: "https://www.opensymbols.org/api/v2/token") else {
-                await MainActor.run {
-                    isSearchingSymbols = false
-                    symbolSearchError = NSLocalizedString("phrase.symbol.error.token_url", comment: "")
-                }
-                return
+        let (results, errorCode) = await searchOpenSymbolsUsingBridge(trimmed)
+
+        await MainActor.run {
+            if let errorCode {
+                symbolSearchError = NSLocalizedString("phrase.symbol.error.\(errorCode)", comment: "")
+            } else {
+                symbolResults = results
             }
-
-            var tokenRequest = URLRequest(url: tokenUrl)
-            tokenRequest.httpMethod = "POST"
-            tokenRequest.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-            tokenRequest.httpBody = "secret=\(openSymbolsSecret)".data(using: .utf8)
-
-            let (tokenData, tokenResponse) = try await URLSession.shared.data(for: tokenRequest)
-            guard let tokenHttp = tokenResponse as? HTTPURLResponse, tokenHttp.statusCode == 200 else {
-                await MainActor.run {
-                    isSearchingSymbols = false
-                    symbolSearchError = NSLocalizedString("phrase.symbol.error.auth_failed", comment: "")
-                }
-                return
-            }
-
-            let token = try JSONDecoder().decode(OpenSymbolsTokenResponse.self, from: tokenData).access_token
-
-            var components = URLComponents(string: "https://www.opensymbols.org/api/v2/symbols")
-            components?.queryItems = [
-                URLQueryItem(name: "q", value: trimmed),
-                URLQueryItem(name: "locale", value: "en"),
-                URLQueryItem(name: "access_token", value: token)
-            ]
-
-            guard let symbolsUrl = components?.url else {
-                await MainActor.run {
-                    isSearchingSymbols = false
-                    symbolSearchError = NSLocalizedString("phrase.symbol.error.search_url", comment: "")
-                }
-                return
-            }
-
-            let (symbolsData, symbolsResponse) = try await URLSession.shared.data(from: symbolsUrl)
-            guard let symbolsHttp = symbolsResponse as? HTTPURLResponse, symbolsHttp.statusCode == 200 else {
-                await MainActor.run {
-                    isSearchingSymbols = false
-                    symbolSearchError = NSLocalizedString("phrase.symbol.error.search_failed", comment: "")
-                }
-                return
-            }
-
-            let decoded = try JSONDecoder().decode([OpenSymbolsSymbolResult].self, from: symbolsData)
-
-            await MainActor.run {
-                symbolResults = decoded
-                isSearchingSymbols = false
-            }
-        } catch {
-            await MainActor.run {
-                isSearchingSymbols = false
-                symbolSearchError = error.localizedDescription
-            }
+            isSearchingSymbols = false
         }
     }
 
@@ -1061,79 +1012,21 @@ struct EditPhraseSheet: View {
         let trimmed = symbolQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        guard let openSymbolsSecret = resolveOpenSymbolsSecret() else {
-            await MainActor.run {
-                symbolSearchError = NSLocalizedString("phrase.symbol.error.missing_secret", comment: "")
-            }
-            return
-        }
-
         await MainActor.run {
             isSearchingSymbols = true
             symbolSearchError = nil
             symbolResults = []
         }
 
-        do {
-            guard let tokenUrl = URL(string: "https://www.opensymbols.org/api/v2/token") else {
-                await MainActor.run {
-                    isSearchingSymbols = false
-                    symbolSearchError = NSLocalizedString("phrase.symbol.error.token_url", comment: "")
-                }
-                return
+        let (results, errorCode) = await searchOpenSymbolsUsingBridge(trimmed)
+
+        await MainActor.run {
+            if let errorCode {
+                symbolSearchError = NSLocalizedString("phrase.symbol.error.\(errorCode)", comment: "")
+            } else {
+                symbolResults = results
             }
-
-            var tokenRequest = URLRequest(url: tokenUrl)
-            tokenRequest.httpMethod = "POST"
-            tokenRequest.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-            tokenRequest.httpBody = "secret=\(openSymbolsSecret)".data(using: .utf8)
-
-            let (tokenData, tokenResponse) = try await URLSession.shared.data(for: tokenRequest)
-            guard let tokenHttp = tokenResponse as? HTTPURLResponse, tokenHttp.statusCode == 200 else {
-                await MainActor.run {
-                    isSearchingSymbols = false
-                    symbolSearchError = NSLocalizedString("phrase.symbol.error.auth_failed", comment: "")
-                }
-                return
-            }
-
-            let token = try JSONDecoder().decode(OpenSymbolsTokenResponse.self, from: tokenData).access_token
-
-            var components = URLComponents(string: "https://www.opensymbols.org/api/v2/symbols")
-            components?.queryItems = [
-                URLQueryItem(name: "q", value: trimmed),
-                URLQueryItem(name: "locale", value: "en"),
-                URLQueryItem(name: "access_token", value: token)
-            ]
-
-            guard let symbolsUrl = components?.url else {
-                await MainActor.run {
-                    isSearchingSymbols = false
-                    symbolSearchError = NSLocalizedString("phrase.symbol.error.search_url", comment: "")
-                }
-                return
-            }
-
-            let (symbolsData, symbolsResponse) = try await URLSession.shared.data(from: symbolsUrl)
-            guard let symbolsHttp = symbolsResponse as? HTTPURLResponse, symbolsHttp.statusCode == 200 else {
-                await MainActor.run {
-                    isSearchingSymbols = false
-                    symbolSearchError = NSLocalizedString("phrase.symbol.error.search_failed", comment: "")
-                }
-                return
-            }
-
-            let decoded = try JSONDecoder().decode([OpenSymbolsSymbolResult].self, from: symbolsData)
-
-            await MainActor.run {
-                symbolResults = decoded
-                isSearchingSymbols = false
-            }
-        } catch {
-            await MainActor.run {
-                isSearchingSymbols = false
-                symbolSearchError = error.localizedDescription
-            }
+            isSearchingSymbols = false
         }
     }
 

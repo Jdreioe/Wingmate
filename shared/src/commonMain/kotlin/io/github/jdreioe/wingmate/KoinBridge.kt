@@ -31,6 +31,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -522,7 +523,49 @@ class KoinBridge : KoinComponent {
             get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().delete(word)
         } catch (_: Throwable) {}
     }
+
+    // --- OpenSymbols helpers (route through shared client, not Swift) ---
+    fun setOpenSymbolsSecret(secret: String?) {
+        OpenSymbolsClient.setSharedSecret(secret)
+    }
+
+    suspend fun openSymbolsSearch(query: String, locale: String): IosOpenSymbolsResult {
+        return when (val result = OpenSymbolsClient.search(query, locale)) {
+            is OpenSymbolsClient.SearchResponse.Success -> IosOpenSymbolsResult(
+                symbols = result.symbols.map {
+                    IosOpenSymbol(id = it.id, name = it.name, imageUrl = it.image_url)
+                },
+                errorCode = ""
+            )
+            is OpenSymbolsClient.SearchResponse.Failure -> IosOpenSymbolsResult(
+                symbols = emptyList(),
+                errorCode = result.error.toIosErrorCode()
+            )
+        }
+    }
 }
+
+private fun OpenSymbolsClient.SearchError.toIosErrorCode(): String = when (this) {
+    OpenSymbolsClient.SearchError.NotConfigured -> "missing_secret"
+    OpenSymbolsClient.SearchError.Authentication,
+    OpenSymbolsClient.SearchError.TokenExpired,
+    -> "auth_failed"
+    OpenSymbolsClient.SearchError.Throttled,
+    OpenSymbolsClient.SearchError.Network,
+    OpenSymbolsClient.SearchError.Server,
+    -> "search_failed"
+}
+
+data class IosOpenSymbol(
+    val id: Long,
+    val name: String? = null,
+    val imageUrl: String? = null,
+)
+
+data class IosOpenSymbolsResult(
+    val symbols: List<IosOpenSymbol> = emptyList(),
+    val errorCode: String = "",
+)
 
 private val logger = KotlinLogging.logger {}
 
