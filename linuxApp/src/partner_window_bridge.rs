@@ -1,14 +1,14 @@
-//! QObject bridge exposing the Partner Window EVE driver to QML.
+//! Bridge exposing the Partner Window EVE driver to the Iced UI.
 //!
 //! Architecture:
-//!   QML thread  ──Qt signal──▶  PartnerWindowBridge (QObject)
-//!                                      │  mpsc::channel
+//!   UI thread  ──mpsc::channel──▶  PartnerWindowBridge
+//!                                      │
 //!                                      ▼
 //!                               Background thread
 //!                               (open_ftdi → init → displayText loop)
 //!
 //! The background thread owns the FTDI device and EVE driver exclusively.
-//! The QObject methods (called from the QML main thread) simply push commands
+//! The bridge methods (called from the UI thread) simply push commands
 //! through a channel — they never block on SPI.
 
 use crate::partner_window;
@@ -33,7 +33,7 @@ pub fn send_global_shutdown() {
     }
 }
 
-// ─── Commands sent from QML thread to background thread ─────────────────────
+// ─── Commands sent from UI thread to background thread ──────────────────────
 
 enum PwCommand {
     /// Update the displayed text.
@@ -50,7 +50,7 @@ enum PwCommand {
     Shutdown,
 }
 
-// ─── Shared state (background thread writes, QObject reads) ─────────────────
+// ─── Shared state (background thread writes, UI thread reads) ───────────────
 
 #[derive(Default, Clone)]
 struct SharedState {
@@ -58,7 +58,7 @@ struct SharedState {
     active: bool,
 }
 
-// ─── QML-exposed QObject ────────────────────────────────────────────────────
+// ─── Controller exposed to the Iced UI ───────────────────────────────────────
 
 pub struct PartnerWindowController {
     enabled: bool,

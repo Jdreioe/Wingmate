@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.*
 import org.koin.core.context.GlobalContext
 
 /**
- * Bridge between QML and Kotlin business logic.
+ * Bridge between the native UI and Kotlin business logic.
  * Exposes phrase and category management to the UI.
  */
 class PhraseViewModel {

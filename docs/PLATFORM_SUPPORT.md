@@ -10,7 +10,7 @@ acceptance testing.
 | Android | Compose Multiplatform | Supported | Supported | Required for shared and Compose features |
 | Desktop | Compose Multiplatform on JVM | Supported | Supported | Required for shared and Compose features |
 | iOS | SwiftUI with the shared Kotlin bridge | Supported | Supported | Required for shared features; native UI and accessibility work must be included |
-| Linux standalone | Qt/QML | Supported for its existing phrase and partner-window workflows | Not currently exposed | Maintain existing behavior; board-feature parity is out of scope until the board workspace is added |
+| Linux standalone | Rust (Iced) | Supported for its existing phrase and partner-window workflows | Not currently exposed | Maintain existing behavior; board-feature parity is out of scope until the board workspace is added |
 
 ## Feature acceptance policy
 
@@ -22,8 +22,8 @@ acceptance testing.
   windowing, file access, or accessibility behavior differs.
 - iOS features must expose the required data and operations through the shared
   bridge and provide equivalent SwiftUI and VoiceOver behavior.
-- The standalone Linux Qt/QML client must continue to build and retain its
-  existing workflows, but new board features do not require a second QML
+- The standalone Linux Rust (Iced) client must continue to build and retain its
+  existing workflows, but new board features do not require a second native UI
   implementation unless an issue explicitly adds that scope.
 - Platform-specific limitations must be recorded in the implementing issue and
   release notes; they must not be silently treated as feature parity.

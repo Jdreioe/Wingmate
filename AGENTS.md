@@ -9,9 +9,8 @@
 ### Module Structure
 ```
 /shared           - Core business logic (KMP: Android, iOS, JVM)
-/androidApp       - Android-specific UI and entry point
+/androidApp       - Android Compose UI (sole Android client)
 /iosApp           - SwiftUI iOS application
-/composeApp       - Compose UI (Android-only; being dissolved into androidApp)
 /linuxApp         - Native Linux client (Rust/Iced + Ktor bridge)
 ```
 
@@ -30,7 +29,7 @@ shared/src/commonMain/kotlin/io/github/jdreioe/wingmate/
   (`shared/src/commonMain/kotlin/io/github/jdreioe/wingmate/KoinBridge.kt`) and the
   Linux HTTP bridge (`linuxApp/.../kde/KotlinBridge.kt`).
 - **UI stays native.** SwiftUI (iOS), Compose (Android), Rust/Iced (Linux). No shared
-  Compose-Multiplatform UI (`composeApp` is deprecated and being dissolved).
+  Compose-Multiplatform UI; Android owns its Compose UI in `androidApp`.
 - **No Swift/Rust re-implementation of shared logic** without a bridge call-through.
 
 ## Key Patterns

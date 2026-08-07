@@ -14,8 +14,8 @@ Wingmate keeps **one KMP logic module** and **independent native UIs**.
 | --- | --- | --- | --- |
 | Android | Jetpack Compose (Android-native) | Migrating off shared Compose | Standalone native Compose |
 | iOS / iPadOS | SwiftUI | Uses shared `KoinBridge` | Native SwiftUI, full parity |
-| Linux standalone | Qt/QML + Rust + Jetty/Ktor bridge | Native Qt app | Native Qt/QML, **full** parity incl. boards/OBF |
-| Desktop (Compose JVM) | Compose Multiplatform | **To be retired** | Replaced by Linux Qt on Linux, Mac base= iOS app |
+| Linux standalone | Rust (Iced) + Ktor bridge | Native Rust (Iced) app | Native Iced, **full** parity incl. boards/OBF |
+| Desktop (Compose JVM) | Compose Multiplatform | **To be retired** | Replaced by Linux Iced on Linux, Mac base= iOS app |
 | Windows | — (future) | Not built yet | Native Windows app (Qt/reuse of Linux shareable) |
 | macOS | — | — | Build from iOSApp codebase |
 
@@ -33,7 +33,7 @@ Rules:
 Compose as a required client. This roadmap overrides that for the new direction:
 
 - Linux standalone must reach **feature parity** for boards, OBF/OBZ import/export,
-  backup/restore, symbol search, and editing access — **keeping Qt/QML**.
+  backup/restore, symbol search, and editing access — **keeping the native Rust (Iced) client**.
 - The Compose `desktopApp` and the shared `composeApp` become deprecated targets to
   be dissolved once each feature exists natively elsewhere.
 
@@ -69,11 +69,11 @@ Compose as a required client. This roadmap overrides that for the new direction:
   targets.
 - Ensure `androidApp` uses the same shared KMP logic module (unchanged).
 
-### Phase 4 — Linux board/OBF parity (keep Qt)
+### Phase 4 — Linux board/OBF parity (native Iced client)
 - Add board workspace + OBF/OBZ import/export + backup + symbol search + editing
-  access to the Qt/QML client using the **Kotlin bridge** (`linuxApp/.../KotlinBridge.kt`)
+  access to the Iced client using the **Kotlin bridge** (`linuxApp/.../KotlinBridge.kt`)
   rather than reimplementing.
-- Add QML pages/views mirroring the Android/iOS board workspace semantics.
+- Add Iced views mirroring the Android/iOS board workspace semantics.
 
 ### Phase 5 — Build/release parity
 - Single canonical shared framework target consumed by Xcode; unify CI
@@ -84,7 +84,7 @@ Compose as a required client. This roadmap overrides that for the new direction:
 
 `[x]` = present, `[~]` = partial/planned, `[ ]` = missing. Cell is the client.
 
-| Feature | Shared logic (Kotlin) | Android (Compose) | iOS (SwiftUI) | Linux (Qt) |
+| Feature | Shared logic (Kotlin) | Android (Compose) | iOS (SwiftUI) | Linux (Iced) |
 | --- | --- | --- | --- | --- |
 | Phrase grid (`PhraseScreen`) | x | x | x | x |
 | Categories CRUD / reorder | x | x | x | x |
@@ -102,20 +102,20 @@ Compose as a required client. This roadmap overrides that for the new direction:
 | System/Azure TTS | x | x | x | x |
 | Voice selection | x | x | x | [ ] planned |
 | Settings | x | x | x | x |
-| Secondary / full-screen display | x (Android) | x | [ ] planned | partner window (Qt) |
+| Secondary / full-screen display | x (Android) | x | [ ] planned | partner window (Rust) |
 | Custom keyboards / board set templates | x | x | x | [ ] planned |
 
 ### Note on `[ ]` cells
 `[ ]` in the Linux column does **not** mean the feature is absent from logic — the
-logic is shared; the Qt UI is missing. Each Phase-4 item is an attribution task.
+logic is shared; the native Iced UI is missing. Each Phase-4 item is an attribution task.
 
 ## 5. Acceptance criteria
 
 A feature/go to **parity** when:
 1. Shared behavior passes in commonTest (KMP).
-2. The behavior works in Android (Compose), iOS (SwiftUI), and Linux (Qt) — or a
+2. The behavior works in Android (Compose), iOS (SwiftUI), and Linux (Iced) — or a
    documented native-only exception with release-note coverage.
-3. No Swift/QML/Qt re-implementation of shared logic without a bridge call-through.
+3. No Swift/QML/Qt-style re-implementation of shared logic without a bridge call-through.
 4. Build/release produces all platform artifacts from one command set.
 
 ## 6. Out of scope for now

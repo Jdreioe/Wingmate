@@ -18,8 +18,6 @@ The application supports both Wayland and X11 and follows the user's light/dark 
 - external partner-window mirroring and display settings
 - non-blocking communication with the shared Kotlin business-logic service
 
-The older `src/*.qml` files are retained temporarily as migration reference, but they are not loaded or packaged by the Rust executable.
-
 ## Prerequisites
 
 - Rust stable

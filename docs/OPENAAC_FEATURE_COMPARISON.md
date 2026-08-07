@@ -180,7 +180,7 @@ OpenAAC ranks features by expectation of availability: 🟢 Standard, ✅ Most A
 | Sentence repairs (reorder/edit in sentence box) | 💡 | ❌ |
 | Launch extra tools (calculator, whiteboard, video) | 💜 | ✅ calculator board; no whiteboard/video |
 | "Show me how" for user-inputted phrase | 💜 | ❌ |
-| Cross-platform support | 💜 | ✅ iOS, Android, Desktop (Compose), Linux (Qt/QML) |
+| Cross-platform support | 💜 | ✅ iOS, Android, Desktop (Compose), Linux (Rust/Iced) |
 | Sync content across devices | 💜 | ✅ (Backup / Restore) |
 | Battery level indicator | 💜 | ❌ |
 | Launch third-party tools (aac_shim) | 💜 | ❌ |

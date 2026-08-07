@@ -12,7 +12,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     
-    // Ktor server for QML bridge
+    // Ktor server for the native UI bridge
     implementation("io.ktor:ktor-server-core:2.3.12")
     implementation("io.ktor:ktor-server-netty:2.3.12")
     implementation("io.ktor:ktor-server-content-negotiation:2.3.12")
