@@ -738,7 +738,24 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, width: CGFloat, height: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        if cell == nil && isEditMode {
+            return AnyView(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.clear)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(Color(.separator), style: StrokeStyle(lineWidth: 1, dash: [4]))
+                        )
+                    Image(systemName: "plus")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: width, height: height)
+            )
+        }
+        return AnyView(
+            VStack(alignment: .leading, spacing: 4) {
             if model.labelAtTop && model.showButtonLabels {
                 boardCellLabel(cell)
             }
@@ -790,6 +807,7 @@ struct SymbolBoardWorkspaceView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(model.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator)), lineWidth: model.highContrastMode ? 2 : (isLinked ? 1.5 : 1))
+        )
         )
     }
 
