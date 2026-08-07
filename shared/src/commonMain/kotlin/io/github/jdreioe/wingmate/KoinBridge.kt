@@ -403,7 +403,11 @@ class KoinBridge : KoinComponent {
                     resolveObfLocalizedString(board.strings, locale, button.vocalization),
                     button.backgroundColor, button.borderColor, button.loadBoard?.id,
                     button.imageId, button.imageId?.let { images[it]?.url }, button.hidden,
-                    button.resolvedActions()
+                    button.resolvedActions(),
+                    button.soundId,
+                    board.sounds.firstOrNull { it.id == button.soundId }?.let { sound ->
+                        sound.dataUrl ?: sound.data?.let { "data:audio;base64,$it" } ?: sound.url
+                    }
                 )
             }
         }
@@ -675,7 +679,9 @@ data class IosBoardCell(
     val imageId: String?,
     val imageUrl: String?,
     val hidden: Boolean,
-    val actions: List<String>
+    val actions: List<String>,
+    val soundId: String? = null,
+    val soundDataUrl: String? = null,
 )
 
 data class IosSettingsFlags(

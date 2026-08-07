@@ -1253,6 +1253,9 @@ struct SymbolBoardWorkspaceView: View {
             let behavior = model.boardActivationBehavior
             let shouldAdd = behavior != "SpeakOnly"
             let shouldSpeak = behavior != "AddOnly"
+            if let sound = trimmed(cell.soundDataUrl) {
+                model.playBoardButtonSound(sound)
+            }
             if shouldAdd {
                 appendCellToSentenceIfNeeded(cell, sourceCellId: sourceCellId)
             }
@@ -1304,6 +1307,9 @@ struct SymbolBoardWorkspaceView: View {
             }
         }
         if isContentActivation {
+            if let sound = trimmed(cell.soundDataUrl) {
+                model.playBoardButtonSound(sound)
+            }
             Task { await model.activateBoardSelectionHighlight(buttonId: cell.buttonId) }
             Task { await model.applyBoardReturnBehavior() }
         }

@@ -26,6 +26,8 @@ struct BoardCellInfo: Identifiable, Equatable {
     var imageUrl: String?
     var hidden: Bool
     var actions: [String]
+    var soundId: String? = nil
+    var soundDataUrl: String? = nil
 
     var id: String { "\(row):\(col)" }
 }
@@ -628,6 +630,31 @@ final class IosViewModel: ObservableObject {
             return
         }
         Task { _ = try? await bridge.speakBoardSentence(text: text, cacheAudio: cacheAudio) }
+    }
+
+    func playBoardButtonSound(_ dataUrl: String) {
+        guard !dataUrl.isEmpty else { return }
+        AudioSessionHelper.activatePlayback()
+        if let url = playableURL(from: dataUrl) {
+            hybrid.play(segments: [.audio(url)], language: primaryLanguage)
+        }
+    }
+
+    private func playableURL(from dataUrl: String) -> URL? {
+        if let base64Range = dataUrl.range(of: "base64,") {
+            let encoded = String(dataUrl[base64Range.upperBound...])
+            guard let data = Data(base64Encoded: encoded) else { return nil }
+            let ext = dataUrl.hasPrefix("data:audio/mpeg") ? "mp3" : "caf"
+            let temp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("wingmate-button-sound-\(UUID().uuidString).\(ext)")
+            do {
+                try data.write(to: temp)
+                return temp
+            } catch {
+                return nil
+            }
+        }
+        return URL(string: dataUrl)
     }
 
     private func textWithSecondaryLanguageMarkup(from plainText: String) -> String {
@@ -1563,7 +1590,9 @@ final class IosViewModel: ObservableObject {
                     imageId: cell.imageId,
                     imageUrl: cell.imageUrl,
                     hidden: cell.hidden,
-                    actions: cell.actions
+                    actions: cell.actions,
+                    soundId: cell.soundId,
+                    soundDataUrl: cell.soundDataUrl
                 )
             }
         } catch {
