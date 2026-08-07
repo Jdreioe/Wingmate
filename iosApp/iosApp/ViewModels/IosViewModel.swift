@@ -1563,6 +1563,10 @@ final class IosViewModel: ObservableObject {
         CGFloat(bridge.boardFieldFontScale(rowSpan: Int32(rowSpan), columnSpan: Int32(columnSpan)))
     }
 
+    func boardJoinSentenceText(tokens: [String], spellingMode: Bool) -> String {
+        bridge.boardJoinSentenceText(tokens: tokens, spellingMode: spellingMode)
+    }
+
     func loadSelectedBoard() async {
         guard let id = selectedBoardId else {
             selectedBoard = nil

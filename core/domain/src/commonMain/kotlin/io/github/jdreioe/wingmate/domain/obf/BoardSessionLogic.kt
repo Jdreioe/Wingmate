@@ -80,12 +80,50 @@ fun buildResolvedSentence(
             rawValue = button.vocalization ?: button.label
         )?.takeIf { it.isNotEmpty() }
     }
-    return if (spellingMode) {
+    return joinSentenceText(tokens, spellingMode)
+}
+
+/**
+ * Join composed sentence tokens, honoring spelling mode (no separators) versus
+ * normal mode (spaces, omitting separators between single characters or around
+ * tokens that already carry whitespace). Shared by every client's sentence bar.
+ */
+fun joinSentenceText(tokens: List<String>, spellingMode: Boolean): String =
+    if (spellingMode) {
         tokens.joinToString("")
     } else {
         val separator = if (tokens.any { it.any(Char::isWhitespace) } || tokens.all { it.length <= 1 }) "" else " "
         tokens.joinToString(separator)
     }
+
+/**
+ * A resolved speech fragment for one board button: the localized text to speak,
+ * the button's language override, an optional recorded-audio path, and math mode.
+ */
+data class ButtonSpeechPart(
+    val text: String,
+    val language: String?,
+    val recordingPath: String?,
+    val mathMode: Boolean
+)
+
+/** Resolve one board button into its speech fragment. */
+fun ObfBoard.buttonSpeechPart(button: ObfButton, primaryLanguage: String): ButtonSpeechPart? {
+    val text = resolveObfLocalizedString(
+        strings = strings,
+        locale = primaryLanguage,
+        rawValue = button.vocalization ?: button.label
+    )?.takeIf { it.isNotEmpty() } ?: return null
+    val recordingPath = button.soundId
+        ?.let { soundId -> sounds.firstOrNull { it.id == soundId } }
+        ?.path
+        ?.takeIf { it.isNotBlank() }
+    return ButtonSpeechPart(
+        text = text,
+        language = button.locale,
+        recordingPath = recordingPath,
+        mathMode = button.mathMode
+    )
 }
 
 /** The ids of the board's prediction buttons, in grid order. */

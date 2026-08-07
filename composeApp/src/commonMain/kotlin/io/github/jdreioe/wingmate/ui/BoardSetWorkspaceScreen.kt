@@ -132,6 +132,8 @@ import io.github.jdreioe.wingmate.domain.obf.resizeDraftField
 import io.github.jdreioe.wingmate.domain.obf.withHomeFieldsBottomLeft
 import io.github.jdreioe.wingmate.domain.obf.updateDraftCell
 import io.github.jdreioe.wingmate.domain.obf.clearDraftCell
+import io.github.jdreioe.wingmate.domain.obf.joinSentenceText
+import io.github.jdreioe.wingmate.domain.obf.buttonSpeechPart
 import io.github.jdreioe.wingmate.domain.obf.normalizedOrder
 import io.github.jdreioe.wingmate.domain.obf.fieldSpanAt
 import io.github.jdreioe.wingmate.domain.obf.fieldAnchorAt
@@ -1932,17 +1934,14 @@ private fun speakSelectedButtons(
     )
 
     val speechParts = selected.mapNotNull { (button, _) ->
-        val text = resolveObfLocalizedString(
-            strings = board.strings,
-            locale = primaryLanguage,
-            rawValue = button.vocalization ?: button.label
-        )?.takeIf { it.isNotEmpty() }
-            ?: return@mapNotNull null
-        val recordingPath = button.soundId
-            ?.let { soundId -> board.sounds.firstOrNull { it.id == soundId } }
-            ?.path
-            ?.takeIf { it.isNotBlank() }
-        PlaybackPart(text, button.locale, recordingPath, button.mathMode)
+        board.buttonSpeechPart(button, primaryLanguage)?.let {
+            PlaybackPart(
+                text = it.text,
+                language = it.language,
+                recordingPath = it.recordingPath,
+                mathMode = it.mathMode
+            )
+        }
     }
     if (speechParts.isEmpty()) return
     scope.launch(Dispatchers.IO) {
@@ -1953,15 +1952,7 @@ private fun speakSelectedButtons(
             suspend fun speakPendingTts() {
                 if (pendingTts.isEmpty()) return
                 val texts = pendingTts.map { it.text }
-                val sentence = if (board.spellingMode) {
-                    texts.joinToString("")
-                } else {
-                    val separator = if (
-                        texts.any { it.any(Char::isWhitespace) } ||
-                        texts.all { it.length <= 1 }
-                    ) "" else " "
-                    texts.joinToString(separator)
-                }
+                val sentence = joinSentenceText(texts, board.spellingMode)
                 val pendingVoice = voice
                     .withLanguageOverride(pendingTts.first().language ?: primaryLanguage)
                     ?.copy(mathMode = pendingTts.first().mathMode)

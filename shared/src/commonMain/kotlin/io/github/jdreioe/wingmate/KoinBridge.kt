@@ -43,6 +43,8 @@ import io.github.jdreioe.wingmate.domain.obf.fieldItems
 import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
 import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion
+import io.github.jdreioe.wingmate.domain.obf.joinSentenceText
+import io.github.jdreioe.wingmate.domain.obf.buttonSpeechPart
 import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
 import io.github.jdreioe.wingmate.domain.obf.shouldSpeakBoardSelection
 import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
@@ -498,6 +500,21 @@ class KoinBridge : KoinComponent {
     fun boardFieldFontScale(rowSpan: Int, columnSpan: Int): Float =
         io.github.jdreioe.wingmate.domain.obf.fieldFontScale(rowSpan, columnSpan)
 
+    fun boardJoinSentenceText(tokens: List<String>, spellingMode: Boolean): String =
+        joinSentenceText(tokens, spellingMode)
+
+    suspend fun boardButtonSpeechPart(boardId: String, buttonId: String, textOverride: String?): IosButtonSpeechPart? {
+        val board = get<BoardRepository>().getBoard(boardId) ?: return null
+        val button = board.buttons.firstOrNull { it.id == buttonId } ?: return null
+        val part = board.buttonSpeechPart(button, get<SettingsUseCase>().get().primaryLanguage) ?: return null
+        return IosButtonSpeechPart(
+            text = textOverride ?: part.text,
+            language = part.language,
+            recordingPath = part.recordingPath,
+            mathMode = part.mathMode
+        )
+    }
+
     suspend fun upsertBoardCellButton(
         boardId: String, row: Int, col: Int, label: String?, vocalization: String?,
         backgroundColor: String?, borderColor: String?, linkedBoardId: String?,
@@ -804,6 +821,13 @@ data class IosGridFieldSpan(
 data class IosBoardReturnResult(
     val boardId: String?,
     val boardStack: List<String>
+)
+
+data class IosButtonSpeechPart(
+    val text: String,
+    val language: String?,
+    val recordingPath: String?,
+    val mathMode: Boolean
 )
 
 data class IosResolvedBoardSettings(

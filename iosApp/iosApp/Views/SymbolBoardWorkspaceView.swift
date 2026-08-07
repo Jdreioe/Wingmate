@@ -1278,13 +1278,8 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private var boardSentenceText: String {
-        if model.selectedBoardUsesSpellingMode {
-            return boardSentenceTokens.map(\.text).joined()
-        }
-        return boardSentenceTokens
-            .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
+        let tokens = boardSentenceTokens.map(\.text)
+        return model.boardJoinSentenceText(tokens: tokens, spellingMode: model.selectedBoardUsesSpellingMode)
     }
 
     private var boardPredictionTaskId: String {
