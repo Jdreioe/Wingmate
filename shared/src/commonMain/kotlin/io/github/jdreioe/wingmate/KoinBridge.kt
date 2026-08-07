@@ -34,6 +34,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
@@ -391,12 +392,15 @@ class KoinBridge : KoinComponent {
         val grid = board.grid ?: return emptyList()
         val buttons = board.buttons.associateBy { it.id }
         val images = board.images.associateBy { it.id }
+        val locale = get<SettingsUseCase>().get().primaryLanguage
         return grid.order.flatMapIndexed { row, columns ->
             columns.mapIndexedNotNull { col, buttonId ->
                 val id = buttonId ?: return@mapIndexedNotNull null
                 val button = buttons[id] ?: return@mapIndexedNotNull null
                 IosBoardCell(
-                    row, col, id, button.label, button.vocalization,
+                    row, col, id,
+                    resolveObfLocalizedString(board.strings, locale, button.label),
+                    resolveObfLocalizedString(board.strings, locale, button.vocalization),
                     button.backgroundColor, button.borderColor, button.loadBoard?.id,
                     button.imageId, button.imageId?.let { images[it]?.url }, button.hidden,
                     button.resolvedActions()
