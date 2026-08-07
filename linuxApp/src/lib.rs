@@ -1,3 +1,5 @@
+pub mod i18n;
+
 #[cfg(feature = "partner-window")]
 pub mod partner_window;
 #[cfg(feature = "partner-window")]

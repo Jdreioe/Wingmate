@@ -32,14 +32,14 @@ From the repository root:
 
 ```bash
 ./gradlew :linuxApp:fatJar
-cargo build --manifest-path linuxApp/Cargo.toml --release --bin wingmate-kde
-./linuxApp/target/release/wingmate-kde
+cargo build --manifest-path linuxApp/Cargo.toml --release --bin wingmate
+./linuxApp/target/release/wingmate
 ```
 
 For a machine connected to the FTDI/EVE partner display, install the `libftdi1` development package and build with:
 
 ```bash
-cargo build --manifest-path linuxApp/Cargo.toml --release --bin wingmate-kde --features partner-window
+cargo build --manifest-path linuxApp/Cargo.toml --release --bin wingmate --features partner-window
 ```
 
 When launched from either the repository root or `linuxApp/`, the executable discovers `linuxApp/build/libs/linuxApp-all.jar` automatically. Packagers can set `WINGMATE_LINUXAPP_JAR` to an absolute installed path. To use an already-running bridge, set `WINGMATE_API_URL`.
@@ -54,5 +54,5 @@ When launched from either the repository root or `linuxApp/`, the executable dis
 Check the native layer with:
 
 ```bash
-cargo check --manifest-path linuxApp/Cargo.toml --bin wingmate-kde
+cargo check --manifest-path linuxApp/Cargo.toml --bin wingmate
 ```

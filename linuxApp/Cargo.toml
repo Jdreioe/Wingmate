@@ -1,16 +1,16 @@
 [package]
-name = "wingmate-kde"
+name = "wingmate"
 version = "1.0.0"
 edition = "2021"
-description = "Wingmate Desktop - native Linux communication aid"
-default-run = "wingmate-kde"
+description = "Wingmate - native Linux communication aid"
+default-run = "wingmate"
 
 [lib]
-name = "wingmate_kde"
+name = "wingmate"
 path = "src/lib.rs"
 
 [[bin]]
-name = "wingmate-kde"
+name = "wingmate"
 path = "src/main.rs"
 
 [[bin]]
@@ -28,13 +28,23 @@ partner-window = [
 ]
 
 [dependencies]
-iced = { version = "0.14", features = ["tokio", "wgpu"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["time"] }
 url = "2"
 rfd = "0.15"
+
+# COSMIC application framework (libcosmic)
+libcosmic = { git = "https://github.com/pop-os/libcosmic.git", features = [
+    "about",
+    "single-instance",
+    "wgpu",
+    "xdg-portal",
+] }
+i18n-embed = { version = "0.16", features = ["fluent-system", "desktop-requester"] }
+i18n-embed-fl = "0.10"
+rust-embed = "8.8.0"
 
 # EVE display driver via FTDI FT232H
 ftdi-embedded-hal = { version = "0.24", features = ["ftdi"], optional = true }
@@ -47,3 +57,8 @@ clap = { version = "4", features = ["derive"] }
 
 # Signal handling for graceful shutdown
 ctrlc = "3.4"
+
+# zune-jpeg 0.5.15 has a macro-hygiene bug on Rust >= 1.94 (missing semicolon
+# after warn!); the fix is not yet in a stable release, so we vendor a patched copy.
+[patch.crates-io]
+zune-jpeg = { path = "third_party/zune-jpeg" }

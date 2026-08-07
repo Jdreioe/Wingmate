@@ -1,32 +1,38 @@
-use iced::widget::{
+use cosmic::iced::widget::{
     button, checkbox, column, container, pick_list, row, scrollable, slider, text, text_input,
     Space,
 };
-use iced::{theme, Element, Fill, Subscription, Task, Theme};
+use cosmic::iced::{Fill, Subscription, Task};
+use cosmic::prelude::*;
 use reqwest::{Client, Method};
 use serde::Deserialize;
 use std::env;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::time::Duration;
-use wingmate_kde::partner_window_bridge::{self, PartnerWindowController};
+use wingmate::partner_window_bridge::{self, PartnerWindowController};
+
+mod i18n;
 
 const DEFAULT_API_URL: &str = "http://127.0.0.1:8765";
 
-fn main() -> iced::Result {
+fn main() -> cosmic::iced::Result {
     ctrlc::set_handler(|| {
         partner_window_bridge::send_global_shutdown();
         std::process::exit(0);
     })
     .expect("failed to install signal handler");
 
-    iced::application(Wingmate::boot, Wingmate::update, Wingmate::view)
-        .title("Wingmate")
-        .subscription(Wingmate::subscription)
-        .theme(Wingmate::theme)
-        .window_size((1280.0, 800.0))
-        .antialiasing(true)
-        .run()
+    let requested_languages = i18n_embed::DesktopLanguageRequester::requested_languages();
+    i18n::init(&requested_languages);
+
+    let settings = cosmic::app::Settings::default().size_limits(
+        cosmic::iced::Limits::NONE
+            .min_width(720.0)
+            .min_height(480.0),
+    );
+
+    cosmic::app::run::<Wingmate>(settings, ())
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -269,6 +275,8 @@ impl Drop for BackendProcess {
 }
 
 struct Wingmate {
+    core: cosmic::Core,
+    nav: cosmic::widget::nav_bar::Model,
     api: Api,
     _backend: BackendProcess,
     partner: PartnerWindowController,
@@ -289,7 +297,6 @@ struct Wingmate {
     onboarding_screens: bool,
     selected_category: Option<String>,
     settings: Settings,
-    system_theme: theme::Mode,
     settings_category: SettingsCategory,
     new_phrase: String,
     new_category: String,
@@ -354,7 +361,6 @@ enum Message {
     PrimaryLanguageChanged(String),
     SecondaryLanguageChanged(String),
     ThemeChanged(String),
-    SystemThemeChanged(theme::Mode),
     SelectSettingsCategory(SettingsCategory),
     PartnerEnabled(bool),
     PartnerFontChanged(i32),
@@ -409,17 +415,65 @@ enum Message {
     SaveBoardCell,
     ClearBoardCell,
     CancelBoardCell,
-    Refresh,
 }
 
-impl Wingmate {
-    fn boot() -> (Self, Task<Message>) {
+impl cosmic::Application for Wingmate {
+    type Executor = cosmic::executor::Default;
+    type Flags = ();
+    type Message = Message;
+    const APP_ID: &'static str = "com.hojmoseit.wingmate";
+
+    fn core(&self) -> &cosmic::Core {
+        &self.core
+    }
+
+    fn core_mut(&mut self) -> &mut cosmic::Core {
+        &mut self.core
+    }
+
+    fn nav_model(&self) -> Option<&cosmic::widget::nav_bar::Model> {
+        Some(&self.nav)
+    }
+
+    fn on_nav_select(&mut self, id: cosmic::widget::nav_bar::Id) -> Task<cosmic::Action<Message>> {
+        self.nav.activate(id);
+        if let Some(&page) = self.nav.data::<Page>(self.nav.active()) {
+            return self.navigate(page);
+        }
+        Task::none()
+    }
+
+    fn init(
+        core: cosmic::Core,
+        _flags: Self::Flags,
+    ) -> (Self, Task<cosmic::Action<Message>>) {
         let api = Api::new();
         let backend = BackendProcess(start_bridge_server());
         let mut partner = PartnerWindowController::default();
         partner.start();
 
+        let mut nav = cosmic::widget::nav_bar::Model::default();
+        nav.insert()
+            .text("Communicate")
+            .data::<Page>(Page::Communicate)
+            .icon(cosmic::widget::icon::from_name("preferences-desktop-keyboard-shortcuts"))
+            .activate();
+        nav.insert()
+            .text("Screens")
+            .data::<Page>(Page::Screens)
+            .icon(cosmic::widget::icon::from_name("applications-graphics-symbolic"));
+        nav.insert()
+            .text("Dictionary")
+            .data::<Page>(Page::Dictionary)
+            .icon(cosmic::widget::icon::from_name("preferences-desktop-font"));
+        nav.insert()
+            .text("Settings")
+            .data::<Page>(Page::Settings)
+            .icon(cosmic::widget::icon::from_name("preferences-system-symbolic"));
+
         let state = Self {
+            core,
+            nav,
             api: api.clone(),
             _backend: backend,
             partner,
@@ -440,7 +494,6 @@ impl Wingmate {
             onboarding_screens: false,
             selected_category: None,
             settings: Settings::default(),
-            system_theme: theme::Mode::None,
             settings_category: SettingsCategory::Speech,
             new_phrase: String::new(),
             new_category: String::new(),
@@ -464,49 +517,22 @@ impl Wingmate {
             status: "Starting Wingmate services…".into(),
         };
 
-        (
-            state,
-            Task::batch([
-                api.bootstrap(),
-                iced::system::theme().map(Message::SystemThemeChanged),
-            ]),
-        )
-    }
-
-    fn theme(&self) -> Theme {
-        match self.settings.force_dark_theme {
-            Some(true) => Theme::Dark,
-            Some(false) => Theme::Light,
-            None => match self.system_theme {
-                theme::Mode::Dark => Theme::Dark,
-                theme::Mode::None | theme::Mode::Light => Theme::Light,
-            },
-        }
+        (state, api.bootstrap().map(cosmic::Action::App))
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        iced::system::theme_changes().map(Message::SystemThemeChanged)
+        Subscription::none()
     }
 
-    fn update(&mut self, message: Message) -> Task<Message> {
+    fn update(&mut self, message: Message) -> Task<cosmic::Action<Message>> {
         match message {
             Message::Navigate(page) => {
-                self.page = page;
-                if page == Page::Dictionary {
-                    return self.api.load_dictionary();
-                }
-                if page == Page::Screens {
-                    self.board_graph = None;
-                    return self.api.load_board_sets();
-                }
-                if page == Page::Communicate && self.settings.history_visible {
-                    return self.api.load_history();
-                }
+                return self.navigate(page);
             }
             Message::DraftChanged(value) => {
                 self.draft = value.clone();
                 self.partner.update_text(value.clone());
-                return self.api.predict(value);
+                return self.api.predict(value).map(cosmic::Action::App);
             }
             Message::PredictionSelected(word) => {
                 self.pending_prediction_word = Some(word.clone());
@@ -522,14 +548,15 @@ impl Wingmate {
                         .await
                     },
                     Message::PredictionInsertionLoaded,
-                );
+                )
+                .map(cosmic::Action::App);
             }
             Message::PredictionInsertionLoaded(result) => {
                 if let Some(_word) = self.pending_prediction_word.take() {
                     let insertion = result.map(|r| r.insertion).unwrap_or_default();
                     self.draft = format!("{}{} ", self.draft, insertion);
                     self.partner.update_text(self.draft.clone());
-                    return self.api.learn(self.draft.clone());
+                    return self.api.learn(self.draft.clone()).map(cosmic::Action::App);
                 }
             }
             Message::LoadedPhrases(result) => match result {
@@ -594,13 +621,13 @@ impl Wingmate {
             },
             Message::SelectCategory(id) => {
                 self.selected_category = id.clone();
-                return self.api.select_category(id);
+                return self.api.select_category(id).map(cosmic::Action::App);
             }
             Message::CategorySelected(result) => {
                 if let Err(e) = result {
                     self.status = e;
                 }
-                return self.api.load_phrases();
+                return self.api.load_phrases().map(cosmic::Action::App);
             }
             Message::Speak(text) => {
                 if text.trim().is_empty() {
@@ -608,9 +635,9 @@ impl Wingmate {
                 }
                 self.partner.update_text(text.clone());
                 self.status = "Speaking…".into();
-                return self.api.speak(text);
+                return self.api.speak(text).map(cosmic::Action::App);
             }
-            Message::SpeechAction(action) => return self.api.empty_post(action),
+            Message::SpeechAction(action) => return self.api.empty_post(action).map(cosmic::Action::App),
             Message::ActionFinished(result) => {
                 self.status = result.map(|_| "Ready".to_string()).unwrap_or_else(|e| e);
             }
@@ -618,10 +645,10 @@ impl Wingmate {
             Message::AddPhrase => {
                 let value = std::mem::take(&mut self.new_phrase);
                 if !value.trim().is_empty() {
-                    return self.api.add_phrase(value);
+                    return self.api.add_phrase(value).map(cosmic::Action::App);
                 }
             }
-            Message::DeletePhrase(id) => return self.api.delete_phrase(id),
+            Message::DeletePhrase(id) => return self.api.delete_phrase(id).map(cosmic::Action::App),
             Message::EditPhrase(id) => {
                 if let Some(phrase) = self.phrases.iter().find(|p| p.id == id) {
                     self.editing_phrase_id = Some(id);
@@ -637,7 +664,7 @@ impl Wingmate {
                         id,
                         self.phrase_editor_text.clone(),
                         self.phrase_editor_voice.clone(),
-                    );
+                    ).map(cosmic::Action::App);
                 }
             }
             Message::CancelPhraseEdit => self.editing_phrase_id = None,
@@ -645,28 +672,28 @@ impl Wingmate {
             Message::AddCategory => {
                 let value = std::mem::take(&mut self.new_category);
                 if !value.trim().is_empty() {
-                    return self.api.add_category(value);
+                    return self.api.add_category(value).map(cosmic::Action::App);
                 }
             }
-            Message::DeleteCategory(id) => return self.api.delete_category(id),
+            Message::DeleteCategory(id) => return self.api.delete_category(id).map(cosmic::Action::App),
             Message::VoiceSelected(voice) => {
                 self.settings.voice = voice.clone();
                 return self
                     .api
-                    .put_json("/api/settings/voice", serde_json::json!({"voice": voice}));
+                    .put_json("/api/settings/voice", serde_json::json!({"voice": voice})).map(cosmic::Action::App);
             }
             Message::RateChanged(rate) => {
                 self.settings.speech_rate = rate;
                 return self
                     .api
-                    .put_json("/api/settings/rate", serde_json::json!({"rate": rate}));
+                    .put_json("/api/settings/rate", serde_json::json!({"rate": rate})).map(cosmic::Action::App);
             }
             Message::EngineChanged(engine) => {
                 self.settings.tts_engine = engine.clone();
                 return self.api.put_json(
                     "/api/settings/systemtts",
                     serde_json::json!({"ttsEngine": engine}),
-                );
+                ).map(cosmic::Action::App);
             }
             Message::AzureEndpointChanged(value) => self.azure_endpoint = value,
             Message::AzureKeyChanged(value) => self.azure_key = value,
@@ -674,6 +701,7 @@ impl Wingmate {
                 return self
                     .api
                     .save_azure_config(self.azure_endpoint.clone(), self.azure_key.clone())
+                    .map(cosmic::Action::App);
             }
             Message::PrimaryLanguageChanged(language) => {
                 self.settings.primary_language = language.clone();
@@ -681,7 +709,7 @@ impl Wingmate {
                 return self.api.put_json(
                     "/api/settings",
                     serde_json::json!({"primaryLanguage": language}),
-                );
+                ).map(cosmic::Action::App);
             }
             Message::SecondaryLanguageChanged(language) => {
                 self.settings.secondary_language = if language == "Disabled" {
@@ -692,7 +720,7 @@ impl Wingmate {
                 return self.api.put_json(
                     "/api/settings",
                     serde_json::json!({"secondaryLanguage": self.settings.secondary_language}),
-                );
+                ).map(cosmic::Action::App);
             }
             Message::ThemeChanged(theme) => {
                 self.settings.force_dark_theme = match theme.as_str() {
@@ -703,9 +731,8 @@ impl Wingmate {
                 return self.api.put_json(
                     "/api/settings",
                     serde_json::json!({"forceDarkTheme": self.settings.force_dark_theme}),
-                );
+                ).map(cosmic::Action::App);
             }
-            Message::SystemThemeChanged(mode) => self.system_theme = mode,
             Message::SelectSettingsCategory(category) => self.settings_category = category,
             Message::PartnerEnabled(enabled) => {
                 self.settings.partner_window_enabled = enabled;
@@ -713,17 +740,17 @@ impl Wingmate {
                 return self.api.put_json(
                     "/api/settings/partnerwindow",
                     serde_json::json!({"enabled": enabled}),
-                );
+                ).map(cosmic::Action::App);
             }
             Message::PartnerFontChanged(font) => {
                 self.settings.partner_window_font_size = font;
                 self.partner.set_font_size(font);
-                return self.api.partner_display(&self.settings);
+                return self.api.partner_display(&self.settings).map(cosmic::Action::App);
             }
             Message::PartnerIdleChanged(enabled) => {
                 self.settings.partner_window_idle_enabled = enabled;
                 self.partner.set_idle_enabled(enabled);
-                return self.api.partner_display(&self.settings);
+                return self.api.partner_display(&self.settings).map(cosmic::Action::App);
             }
             Message::SettingBool(key, enabled) => {
                 match key {
@@ -749,81 +776,81 @@ impl Wingmate {
                 }
                 return self
                     .api
-                    .patch_setting(key, serde_json::Value::Bool(enabled));
+                    .patch_setting(key, serde_json::Value::Bool(enabled)).map(cosmic::Action::App);
             }
             Message::FontScaleChanged(v) => {
                 self.settings.font_size_scale = v;
                 return self
                     .api
-                    .patch_setting("fontSizeScale", serde_json::json!(v));
+                    .patch_setting("fontSizeScale", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::ButtonScaleChanged(v) => {
                 self.settings.button_scale = v;
-                return self.api.patch_setting("buttonScale", serde_json::json!(v));
+                return self.api.patch_setting("buttonScale", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::InputScaleChanged(v) => {
                 self.settings.input_field_scale = v;
                 return self
                     .api
-                    .patch_setting("inputFieldScale", serde_json::json!(v));
+                    .patch_setting("inputFieldScale", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::GridColumnsChanged(v) => {
                 self.settings.grid_columns = v;
-                return self.api.patch_setting("gridColumns", serde_json::json!(v));
+                return self.api.patch_setting("gridColumns", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::HoldChanged(v) => {
                 self.settings.hold_to_select_millis = v;
                 return self
                     .api
-                    .patch_setting("holdToSelectMillis", serde_json::json!(v));
+                    .patch_setting("holdToSelectMillis", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::DwellChanged(v) => {
                 self.settings.dwell_to_select_millis = v;
                 return self
                     .api
-                    .patch_setting("dwellToSelectMillis", serde_json::json!(v));
+                    .patch_setting("dwellToSelectMillis", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::SelectionHighlightChanged(v) => {
                 self.settings.selection_highlight_millis = v;
                 return self
                     .api
-                    .patch_setting("selectionHighlightMillis", serde_json::json!(v));
+                    .patch_setting("selectionHighlightMillis", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::SelectionDebounceChanged(v) => {
                 self.settings.selection_debounce_millis = v;
                 return self
                     .api
-                    .patch_setting("selectionDebounceMillis", serde_json::json!(v));
+                    .patch_setting("selectionDebounceMillis", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::ScanDwellChanged(v) => {
                 self.settings.scan_dwell_time_seconds = v;
                 return self
                     .api
-                    .patch_setting("scanDwellTimeSeconds", serde_json::json!(v));
+                    .patch_setting("scanDwellTimeSeconds", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::ScanAutoAdvanceChanged(v) => {
                 self.settings.scan_auto_advance_seconds = v;
                 return self
                     .api
-                    .patch_setting("scanAutoAdvanceSeconds", serde_json::json!(v));
+                    .patch_setting("scanAutoAdvanceSeconds", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::ScanOrderChanged(v) => {
                 self.settings.scan_phrase_grid_order = v.clone();
                 return self
                     .api
-                    .patch_setting("scanPhraseGridOrder", serde_json::json!(v));
+                    .patch_setting("scanPhraseGridOrder", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::StartupBoardSetChanged(v) => {
                 self.settings.startup_board_set_id = Some(v.clone());
                 return self
                     .api
-                    .patch_setting("startupBoardSetId", serde_json::json!(v));
+                    .patch_setting("startupBoardSetId", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::StartupModeChanged(v) => {
                 self.settings.startup_mode = v.clone();
                 return self
                     .api
-                    .patch_setting("startupMode", serde_json::json!(v));
+                    .patch_setting("startupMode", serde_json::json!(v)).map(cosmic::Action::App);
             }
             Message::NewWordChanged(v) => self.new_word = v,
             Message::NewPhonemeChanged(v) => self.new_phoneme = v,
@@ -831,17 +858,17 @@ impl Wingmate {
                 let word = std::mem::take(&mut self.new_word);
                 let phoneme = std::mem::take(&mut self.new_phoneme);
                 if !word.trim().is_empty() && !phoneme.trim().is_empty() {
-                    return self.api.add_pronunciation(word, phoneme);
+                    return self.api.add_pronunciation(word, phoneme).map(cosmic::Action::App);
                 }
             }
-            Message::DeletePronunciation(word) => return self.api.delete_pronunciation(word),
-            Message::ClearHistory => return self.api.clear_history(),
+            Message::DeletePronunciation(word) => return self.api.delete_pronunciation(word).map(cosmic::Action::App),
+            Message::ClearHistory => return self.api.clear_history().map(cosmic::Action::App),
             Message::ImportHistory => {
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter("JSON", &["json"])
                     .pick_file()
                 {
-                    return self.api.import_history(path);
+                    return self.api.import_history(path).map(cosmic::Action::App);
                 }
             }
             Message::ExportHistory => {
@@ -850,7 +877,7 @@ impl Wingmate {
                     .add_filter("JSON", &["json"])
                     .save_file()
                 {
-                    return self.api.export_history(path);
+                    return self.api.export_history(path).map(cosmic::Action::App);
                 }
             }
             Message::AppendMarkup(markup) => {
@@ -888,16 +915,16 @@ impl Wingmate {
                 };
                 return self
                     .api
-                    .complete_onboarding(self.onboarding_analytics, self.onboarding_screens);
+                    .complete_onboarding(self.onboarding_analytics, self.onboarding_screens).map(cosmic::Action::App);
             }
             Message::OpenBoardSet(id, edit) => {
                 self.board_edit_mode = edit;
-                return self.api.load_board_graph(id);
+                return self.api.load_board_graph(id).map(cosmic::Action::App);
             }
             Message::ExitBoardSet => {
                 self.board_graph = None;
                 self.active_board_id = None;
-                return self.api.load_board_sets();
+                return self.api.load_board_sets().map(cosmic::Action::App);
             }
             Message::BoardSetNameChanged(v) => self.new_board_set = v,
             Message::PageNameChanged(v) => self.new_page = v,
@@ -912,7 +939,7 @@ impl Wingmate {
                         self.board_rows,
                         self.board_columns,
                         self.calculator_template,
-                    );
+                    ).map(cosmic::Action::App);
                 }
             }
             Message::ImportBoardSet => {
@@ -922,7 +949,7 @@ impl Wingmate {
                 {
                     return self
                         .api
-                        .import_board_set(path.to_string_lossy().into_owned());
+                        .import_board_set(path.to_string_lossy().into_owned()).map(cosmic::Action::App);
                 }
             }
             Message::ExportBoardSet(id, name) => {
@@ -931,16 +958,16 @@ impl Wingmate {
                     .add_filter("Open Board Archive", &["obz"])
                     .save_file()
                 {
-                    return self.api.export_board_set(id, path);
+                    return self.api.export_board_set(id, path).map(cosmic::Action::App);
                 }
             }
             Message::DuplicateBoardSet(id) => {
-                return self.api.board_set_action(id, "duplicate", Method::POST)
+                return self.api.board_set_action(id, "duplicate", Method::POST).map(cosmic::Action::App)
             }
             Message::ToggleBoardSetLock(id) => {
-                return self.api.board_set_action(id, "lock", Method::PUT)
+                return self.api.board_set_action(id, "lock", Method::PUT).map(cosmic::Action::App)
             }
-            Message::DeleteBoardSet(id) => return self.api.delete_board_set(id),
+            Message::DeleteBoardSet(id) => return self.api.delete_board_set(id).map(cosmic::Action::App),
             Message::CreatePage => {
                 if let Some(graph) = &self.board_graph {
                     let name = std::mem::take(&mut self.new_page);
@@ -950,7 +977,7 @@ impl Wingmate {
                             name,
                             self.board_rows,
                             self.board_columns,
-                        );
+                        ).map(cosmic::Action::App);
                     }
                 }
             }
@@ -985,7 +1012,7 @@ impl Wingmate {
                         column,
                         self.cell_label.clone(),
                         self.cell_vocalization.clone(),
-                    );
+                    ).map(cosmic::Action::App);
                 }
             }
             Message::ClearBoardCell => {
@@ -999,11 +1026,10 @@ impl Wingmate {
                         board_id.clone(),
                         row,
                         column,
-                    );
+                    ).map(cosmic::Action::App);
                 }
             }
             Message::CancelBoardCell => self.editing_cell = None,
-            Message::Refresh => return self.api.bootstrap(),
         }
         Task::none()
     }
@@ -1018,38 +1044,8 @@ impl Wingmate {
         if self.page == Page::Fullscreen {
             return self.fullscreen_view();
         }
-        let nav = column![
-            text("Wingmate").size(26),
-            Space::new().height(12),
-            nav_button(
-                "Communicate",
-                self.page == Page::Communicate,
-                Message::Navigate(Page::Communicate)
-            ),
-            nav_button(
-                "Screens",
-                self.page == Page::Screens,
-                Message::Navigate(Page::Screens)
-            ),
-            nav_button(
-                "Dictionary",
-                self.page == Page::Dictionary,
-                Message::Navigate(Page::Dictionary)
-            ),
-            nav_button(
-                "Settings",
-                self.page == Page::Settings,
-                Message::Navigate(Page::Settings)
-            ),
-            Space::new().height(Fill),
-            text(&self.status).size(13),
-            button("Refresh").on_press(Message::Refresh),
-        ]
-        .spacing(8)
-        .padding(18)
-        .width(190);
 
-        let content = match self.page {
+        let content: Element<'_, Message> = match self.page {
             Page::Welcome => unreachable!(),
             Page::Communicate => self.communicate_view(),
             Page::Screens => self.screens_view(),
@@ -1058,11 +1054,24 @@ impl Wingmate {
             Page::Fullscreen => unreachable!(),
         };
 
-        row![
-            container(nav).height(Fill),
-            container(content).padding(24).width(Fill).height(Fill)
-        ]
-        .into()
+        container(content).padding(24).width(Fill).height(Fill).into()
+    }
+}
+
+impl Wingmate {
+    fn navigate(&mut self, page: Page) -> Task<cosmic::Action<Message>> {
+        self.page = page;
+        match page {
+            Page::Dictionary => self.api.load_dictionary().map(cosmic::Action::App),
+            Page::Screens => {
+                self.board_graph = None;
+                self.api.load_board_sets().map(cosmic::Action::App)
+            }
+            Page::Communicate if self.settings.history_visible => {
+                self.api.load_history().map(cosmic::Action::App)
+            }
+            _ => Task::none(),
+        }
     }
 
     fn communicate_view(&self) -> Element<'_, Message> {
@@ -1300,7 +1309,7 @@ impl Wingmate {
                             button("Delete").on_press(Message::DeleteBoardSet(set.id.clone())),
                         ]
                         .spacing(8)
-                        .align_y(iced::Alignment::Center),
+                        .align_y(cosmic::iced::alignment::Alignment::Center),
                     )
                     .padding(10),
                 )
@@ -1325,7 +1334,7 @@ impl Wingmate {
                 button("Create").on_press(Message::CreateBoardSet),
             ]
             .spacing(8)
-            .align_y(iced::Alignment::Center),
+            .align_y(cosmic::iced::alignment::Alignment::Center),
         ]
         .spacing(14)
         .into()
@@ -1451,7 +1460,7 @@ impl Wingmate {
                 button("Keyboard").on_press(Message::Navigate(Page::Communicate)),
             ]
             .spacing(10)
-            .align_y(iced::Alignment::Center),
+            .align_y(cosmic::iced::alignment::Alignment::Center),
             scrollable(pages)
                 .direction(scrollable::Direction::Horizontal(
                     scrollable::Scrollbar::default()
@@ -1485,7 +1494,7 @@ impl Wingmate {
                         text(&entry.phoneme).width(Fill),
                         button("Remove").on_press(Message::DeletePronunciation(entry.word.clone())),
                     ]
-                    .align_y(iced::Alignment::Center),
+                    .align_y(cosmic::iced::alignment::Alignment::Center),
                 )
             });
 
@@ -1850,7 +1859,7 @@ fn settings_row<'a>(label: &'a str, control: Element<'a, Message>) -> Element<'a
         text(label).width(210),
         container(control).width(360),
     ]
-    .align_y(iced::Alignment::Center)
+    .align_y(cosmic::iced::alignment::Alignment::Center)
     .into()
 }
 

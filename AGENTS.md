@@ -89,10 +89,10 @@ All data access goes through interfaces in `core/domain/.../domain/repository.kt
 ./gradlew :core:domain:jvmTest
 
 # Linux standalone
-./gradlew :linuxApp:fatJar && cargo build --manifest-path linuxApp/Cargo.toml --bin wingmate-kde
+./gradlew :linuxApp:fatJar && cargo build --manifest-path linuxApp/Cargo.toml --bin wingmate
 
 # Linux Rust check
-cargo check --manifest-path linuxApp/Cargo.toml --bin wingmate-kde
+cargo check --manifest-path linuxApp/Cargo.toml --bin wingmate
 ```
 
 Note: Swift changes cannot be compiled on Linux; they must be verified in Xcode.
