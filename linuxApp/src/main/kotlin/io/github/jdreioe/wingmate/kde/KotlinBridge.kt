@@ -865,6 +865,7 @@ fun main(args: Array<String>) {
         single<io.github.jdreioe.wingmate.domain.BoardSetRepository> { JsonFileBoardSetRepository() }
         single<io.github.jdreioe.wingmate.domain.TextPredictionService> { SimpleNGramPredictionService() }
         single<io.github.jdreioe.wingmate.platform.FilePicker> { LinuxFilePicker() }
+        single<io.github.jdreioe.wingmate.application.BackupMediaAccess> { LinuxBackupMediaAccess() }
     }
 
     // Initialize Koin DI with overrides
