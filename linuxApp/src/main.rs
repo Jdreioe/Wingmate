@@ -163,6 +163,22 @@ struct Pronunciation {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+struct Symbol {
+    #[serde(default)]
+    id: i64,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default, rename = "imageUrl")]
+    image_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct SymbolSearchResult {
+    #[serde(default)]
+    symbols: Vec<Symbol>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct Predictions {
     #[serde(default)]
     words: Vec<String>,
@@ -214,14 +230,16 @@ struct Board {
     #[serde(default)]
     buttons: Vec<BoardButton>,
     #[serde(default)]
+    images: Vec<BoardImage>,
+    #[serde(default)]
     grid: Option<BoardGrid>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct BoardGrid {
-    rows: usize,
-    columns: usize,
-    order: Vec<Vec<Option<String>>>,
+struct BoardImage {
+    id: String,
+    #[serde(default)]
+    url: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -234,7 +252,16 @@ struct BoardButton {
     #[serde(default)]
     background_color: Option<String>,
     #[serde(default)]
+    image_id: Option<String>,
+    #[serde(default)]
     load_board: Option<BoardLink>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct BoardGrid {
+    rows: usize,
+    columns: usize,
+    order: Vec<Vec<Option<String>>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -314,6 +341,10 @@ struct Wingmate {
     editing_cell: Option<(usize, usize)>,
     cell_label: String,
     cell_vocalization: String,
+    cell_image_url: Option<String>,
+    symbol_query: String,
+    symbols: Vec<Symbol>,
+    symbol_loading: bool,
     pending_prediction_word: Option<String>,
     azure_endpoint: String,
     azure_key: String,
@@ -386,6 +417,10 @@ enum Message {
     ClearHistory,
     ImportHistory,
     ExportHistory,
+    ExportBackup,
+    ImportBackup,
+    BackupExported(Result<String, String>),
+    BackupImported(Result<String, String>),
     AppendMarkup(&'static str),
     ToggleThought,
     OnboardingNext,
@@ -412,6 +447,11 @@ enum Message {
     SelectBoardCell(usize, usize),
     CellLabelChanged(String),
     CellVoiceChanged(String),
+    CellSymbolQueryChanged(String),
+    CellSymbolSearch,
+    CellSymbolsLoaded(Result<SymbolSearchResult, String>),
+    CellSymbolPicked(usize),
+    CellSymbolCleared,
     SaveBoardCell,
     ClearBoardCell,
     CancelBoardCell,
@@ -511,6 +551,10 @@ impl cosmic::Application for Wingmate {
             editing_cell: None,
             cell_label: String::new(),
             cell_vocalization: String::new(),
+            cell_image_url: None,
+            symbol_query: String::new(),
+            symbols: vec![],
+            symbol_loading: false,
             pending_prediction_word: None,
             azure_endpoint: String::new(),
             azure_key: String::new(),
@@ -880,6 +924,76 @@ impl cosmic::Application for Wingmate {
                     return self.api.export_history(path).map(cosmic::Action::App);
                 }
             }
+            Message::ExportBackup => {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_file_name("wingmate-backup.wingmate-backup")
+                    .add_filter("Wingmate backup", &["wingmate-backup", "backup", "zip"])
+                    .save_file()
+                {
+                    let api = self.api.clone();
+                    return Task::perform(
+                        async move {
+                            api.request_json::<serde_json::Value>(
+                                Method::GET,
+                                "/api/backup/export",
+                                None,
+                            )
+                            .await
+                            .map(|json| {
+                                let file_name = json.get("fileName").and_then(|v| v.as_str()).unwrap_or("wingmate-backup.wingmate-backup").to_string();
+                                (file_name, json.get("data").and_then(|v| v.as_str()).unwrap_or("").to_string())
+                            })
+                            .and_then(|(name, data)| {
+                                use base64::Engine as _;
+                                let bytes = base64::engine::general_purpose::STANDARD
+                                    .decode(&data)
+                                    .map_err(|e| format!("Could not decode backup: {e}"))?;
+                                std::fs::write(&path, bytes)
+                                    .map_err(|e| format!("Could not write backup: {e}"))?;
+                                Ok(name)
+                            })
+                        },
+                        Message::BackupExported,
+                    )
+                    .map(cosmic::Action::App);
+                }
+            }
+            Message::ImportBackup => {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Wingmate backup", &["wingmate-backup", "backup", "zip"])
+                    .pick_file()
+                {
+                    let api = self.api.clone();
+                    return Task::perform(
+                        async move {
+                            api.request_json::<serde_json::Value>(
+                                Method::POST,
+                                "/api/backup/import",
+                                Some(serde_json::json!({"path": path.to_string_lossy().to_string()})),
+                            )
+                            .await
+                            .map(|json| {
+                                json.get("status").and_then(|v| v.as_str()).unwrap_or("ok").to_string()
+                            })
+                        },
+                        Message::BackupImported,
+                    )
+                    .map(cosmic::Action::App);
+                }
+            }
+            Message::BackupExported(result) => {
+                match result {
+                    Ok(name) => self.status = format!("Backup saved: {name}"),
+                    Err(e) => self.status = format!("Backup failed: {e}"),
+                }
+            }
+            Message::BackupImported(result) => {
+                match result {
+                    Ok(status) if status == "ok" => self.status = "Backup restored successfully".to_string(),
+                    Ok(status) => self.status = format!("Backup import: {status}"),
+                    Err(e) => self.status = format!("Backup import failed: {e}"),
+                }
+            }
             Message::AppendMarkup(markup) => {
                 self.draft.push_str(markup);
                 self.partner.update_text(self.draft.clone());
@@ -987,18 +1101,70 @@ impl cosmic::Application for Wingmate {
                 self.editing_cell = Some((row, column));
                 self.cell_label.clear();
                 self.cell_vocalization.clear();
-                if let Some((label, vocalization)) = self.board_cell(row, column).map(|button| {
-                    (
-                        button.label.clone().unwrap_or_default(),
-                        button.vocalization.clone().unwrap_or_default(),
-                    )
-                }) {
+                self.cell_image_url = None;
+                self.symbol_query.clear();
+                self.symbols.clear();
+                if let Some(button) = self.board_cell(row, column) {
+                    let label = button.label.clone().unwrap_or_default();
+                    let vocalization = button.vocalization.clone().unwrap_or_default();
+                    let image_id = button.image_id.clone();
+                    let image_url = image_id.as_ref().and_then(|image_id| {
+                        let active_id = self.active_board_id.clone();
+                        let graph = &self.board_graph;
+                        graph
+                            .as_ref()?
+                            .boards
+                            .iter()
+                            .find(|board| board.id == active_id.as_deref().unwrap_or_default())?
+                            .images
+                            .iter()
+                            .find(|image| &image.id == image_id)?
+                            .url
+                            .clone()
+                    });
                     self.cell_label = label;
                     self.cell_vocalization = vocalization;
+                    self.cell_image_url = image_url;
                 }
             }
             Message::CellLabelChanged(v) => self.cell_label = v,
             Message::CellVoiceChanged(v) => self.cell_vocalization = v,
+            Message::CellSymbolQueryChanged(v) => {
+                self.symbol_query = v;
+            }
+            Message::CellSymbolSearch => {
+                let query = self.symbol_query.clone();
+                if query.trim().is_empty() {
+                    return Task::none();
+                }
+                self.symbol_loading = true;
+                let api = self.api.clone();
+                return Task::perform(
+                    async move {
+                        api.request_json(
+                            Method::POST,
+                            "/api/symbols/search",
+                            Some(serde_json::json!({"query": query, "locale": "en"})),
+                        )
+                        .await
+                    },
+                    Message::CellSymbolsLoaded,
+                )
+                .map(cosmic::Action::App);
+            }
+            Message::CellSymbolsLoaded(result) => {
+                self.symbol_loading = false;
+                match result {
+                    Ok(search) => self.symbols = search.symbols,
+                    Err(e) => self.status = format!("Symbol search failed: {e}"),
+                }
+            }
+            Message::CellSymbolPicked(index) => {
+                if let Some(symbol) = self.symbols.get(index) {
+                    self.cell_image_url = symbol.image_url.clone();
+                }
+            }
+            Message::CellSymbolCleared => self.cell_image_url = None,
             Message::SaveBoardCell => {
                 if let (Some(graph), Some(board_id), Some((row, column))) = (
                     &self.board_graph,
@@ -1012,6 +1178,7 @@ impl cosmic::Application for Wingmate {
                         column,
                         self.cell_label.clone(),
                         self.cell_vocalization.clone(),
+                        self.cell_image_url.clone(),
                     ).map(cosmic::Action::App);
                 }
             }
@@ -1342,7 +1509,7 @@ impl Wingmate {
 
     fn board_workspace_view<'a>(&'a self, graph: &'a BoardGraph) -> Element<'a, Message> {
         if let Some((row_index, column_index)) = self.editing_cell {
-            return column![
+            let mut editor = column![
                 text("Edit board field").size(30),
                 text_input("Label", &self.cell_label).on_input(Message::CellLabelChanged),
                 text_input(
@@ -1351,19 +1518,55 @@ impl Wingmate {
                 )
                 .on_input(Message::CellVoiceChanged),
                 row![
+                    text_input("Search symbols (OpenSymbols)", &self.symbol_query)
+                        .on_input(Message::CellSymbolQueryChanged)
+                        .on_submit(Message::CellSymbolSearch)
+                        .width(360),
+                    button("Search").on_press(Message::CellSymbolSearch),
+                    {
+                        let el: Element<'_, Message> = if self.cell_image_url.is_some() {
+                            button("Remove image").on_press(Message::CellSymbolCleared).into()
+                        } else {
+                            Space::new().into()
+                        };
+                        el
+                    },
+                ]
+                .spacing(8)
+                .align_y(cosmic::iced::alignment::Alignment::Center),
+            ]
+            .spacing(16);
+
+            if self.symbol_loading {
+                editor = editor.push(text("Searching…").size(15));
+            }
+            if !self.symbols.is_empty() {
+                let results = row(self.symbols.iter().enumerate().take(20).map(|(index, symbol)| {
+                    button(text(symbol.name.clone().unwrap_or_else(|| format!("#{}", symbol.id))))
+                        .on_press(Message::CellSymbolPicked(index))
+                        .into()
+                }))
+                .spacing(6)
+                .wrap();
+                editor = editor.push(results);
+            }
+            if let Some(image_url) = &self.cell_image_url {
+                editor = editor.push(text(format!("Symbol: {image_url}")).size(13));
+            }
+
+            return editor
+                .push(row![
                     button("Save").on_press(Message::SaveBoardCell),
                     button("Clear field").on_press(Message::ClearBoardCell),
                     button("Cancel").on_press(Message::CancelBoardCell),
                 ]
-                .spacing(10),
-                text(format!(
+                .spacing(10))
+                .push(text(format!(
                     "Row {}, column {}",
                     row_index + 1,
                     column_index + 1
-                )),
-            ]
-            .spacing(16)
-            .into();
+                )))
+                .into();
         }
 
         let active_id = self
@@ -1391,6 +1594,12 @@ impl Wingmate {
                         .and_then(|button| button.label.as_deref())
                         .unwrap_or(if self.board_edit_mode { "+" } else { "" });
                     let label = if button_data
+                        .and_then(|button| button.image_id.as_ref())
+                        .is_some()
+                        && self.settings.show_symbols
+                    {
+                        format!("▣  {raw_label}")
+                    } else if button_data
                         .and_then(|button| button.background_color.as_ref())
                         .is_some()
                     {
@@ -1816,6 +2025,13 @@ impl Wingmate {
                     button("Export speech history…").on_press(Message::ExportHistory),
                     button("Import speech history…").on_press(Message::ImportHistory),
                     button("Clear speech history").on_press(Message::ClearHistory),
+                ]
+                .spacing(8),
+                Space::new().height(6),
+                text("Backup / restore (all settings, boards, phrases)").size(16),
+                row![
+                    button("Export backup…").on_press(Message::ExportBackup),
+                    button("Import backup…").on_press(Message::ImportBackup),
                 ]
                 .spacing(8),
             ]
@@ -2315,6 +2531,7 @@ impl Api {
         column: usize,
         label: String,
         vocalization: String,
+        image_url: Option<String>,
     ) -> Task<Message> {
         let api = self.clone();
         Task::perform(
@@ -2327,7 +2544,7 @@ impl Api {
                 api.request_unit(
                     Method::PUT,
                     &path,
-                    Some(serde_json::json!({"label": label, "vocalization": vocalization})),
+                    Some(serde_json::json!({"label": label, "vocalization": vocalization, "imageUrl": image_url})),
                 )
                 .await?;
                 let graph_path = format!("/api/boardsets/{}", encode_segment(&set_id));

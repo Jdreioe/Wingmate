@@ -3,6 +3,9 @@ package io.github.jdreioe.wingmate.kde
 import io.github.jdreioe.wingmate.initKoin
 import org.koin.dsl.module
 import io.ktor.http.*
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.utils.io.core.readBytes
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -27,6 +30,7 @@ import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion
+import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
@@ -417,6 +421,80 @@ class KotlinBridge(private val port: Int = 8765) {
                 call.respond(HttpStatusCode.OK)
             }
 
+            // Full backup/restore (settings, phrases, boards, categories, voices, history)
+            get("/api/backup/export") {
+                try {
+                    val bytes = GlobalContext.get().get<io.github.jdreioe.wingmate.application.CompleteBackupManager>().exportBackup()
+                    call.respond(
+                        HttpStatusCode.OK,
+                        mapOf("fileName" to "wingmate-backup.wingmate-backup", "data" to java.util.Base64.getEncoder().encodeToString(bytes))
+                    )
+                } catch (error: Throwable) {
+                    error.printStackTrace()
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (error.message ?: "export failed")))
+                }
+            }
+
+            post("/api/backup/import") {
+                try {
+                    val body = json.parseToJsonElement(call.receiveText()).jsonObject
+                    val path = body["path"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                    if (path.isBlank()) return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing path"))
+                    val result = GlobalContext.get().get<io.github.jdreioe.wingmate.application.CompleteBackupManager>().restoreBackup(path)
+                    val message = when (result) {
+                        is io.github.jdreioe.wingmate.application.BackupRestoreResult.Success -> "ok"
+                        is io.github.jdreioe.wingmate.application.BackupRestoreResult.Failure -> result.message
+                    }
+                    call.respond(HttpStatusCode.OK, mapOf("status" to message))
+                } catch (error: Throwable) {
+                    error.printStackTrace()
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (error.message ?: "import failed")))
+                }
+            }
+
+            // OpenSymbols symbol search
+            post("/api/symbols/search") {
+                try {
+                    val body = json.parseToJsonElement(call.receiveText()).jsonObject
+                    val query = body["query"]?.jsonPrimitive?.contentOrNull ?: ""
+                    val locale = body["locale"]?.jsonPrimitive?.contentOrNull ?: "en"
+                    val result = OpenSymbolsClient.search(query, locale)
+                    val symbols = when (result) {
+                        is OpenSymbolsClient.SearchResponse.Success -> result.symbols.map {
+                            mapOf("id" to it.id, "name" to it.name, "imageUrl" to it.image_url)
+                        }
+                        is OpenSymbolsClient.SearchResponse.Failure -> emptyList<Map<String, Any?>>()
+                    }
+                    call.respond(mapOf("symbols" to symbols))
+                } catch (error: Throwable) {
+                    call.respond(HttpStatusCode.OK, mapOf("symbols" to emptyList<Map<String, Any?>>()))
+                }
+            }
+
+            // Proxy-fetch an image URL through the shared HTTP client, returning base64 bytes.
+            // Lets the Rust UI render remote symbol images without its own HTTP/network stack.
+            post("/api/images/fetch") {
+                try {
+                    val body = json.parseToJsonElement(call.receiveText()).jsonObject
+                    val url = body["url"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                    if (url.isBlank()) return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing url"))
+                    val client = io.ktor.client.HttpClient {
+                        install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) {
+                            json(Json { ignoreUnknownKeys = true })
+                        }
+                    }
+                    try {
+                        val response = client.get(url)
+                        val bytes = response.bodyAsChannel().readRemaining(Long.MAX_VALUE).readBytes()
+                        call.respond(mapOf("data" to java.util.Base64.getEncoder().encodeToString(bytes), "contentType" to (response.contentType()?.toString() ?: "image/png")))
+                    } finally {
+                        client.close()
+                    }
+                } catch (error: Throwable) {
+                    call.respond(HttpStatusCode.OK, mapOf("data" to "", "contentType" to "image/png"))
+                }
+            }
+
             // Screen / board-set library and editor
             get("/api/boardsets") {
                 call.respond(boardSetUseCase.listBoardSets())
@@ -786,10 +864,24 @@ fun main(args: Array<String>) {
         single<io.github.jdreioe.wingmate.domain.BoardRepository> { JsonFileBoardRepository() }
         single<io.github.jdreioe.wingmate.domain.BoardSetRepository> { JsonFileBoardSetRepository() }
         single<io.github.jdreioe.wingmate.domain.TextPredictionService> { SimpleNGramPredictionService() }
+        single<io.github.jdreioe.wingmate.platform.FilePicker> { LinuxFilePicker() }
     }
 
     // Initialize Koin DI with overrides
     initKoin(persistenceModule)
+
+    // Configure OpenSymbols secret for symbol search (env or local.properties).
+    val openSymbolsSecret = sequenceOf(
+        System.getenv("WINGMATE_OPENSYMBOLS_SECRET"),
+        System.getenv("OPENSYMBOLS_SECRET"),
+        System.getenv("openSymbols"),
+    ).firstOrNull { !it.isNullOrBlank() }
+    OpenSymbolsClient.setSharedSecret(openSymbolsSecret)
+    if (openSymbolsSecret.isNullOrBlank()) {
+        println("[SYMBOLS] OpenSymbols secret not configured; symbol search disabled")
+    } else {
+        println("[SYMBOLS] OpenSymbols secret configured")
+    }
     
     val bridge = KotlinBridge()
     bridge.start(skipPartnerWindow = noPartnerWindow)
