@@ -10,6 +10,10 @@ use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::time::Duration;
 use wingmate_kde::partner_window_bridge::{self, PartnerWindowController};
+#[cfg(feature = "tracking")]
+use wingmate_kde::tracking::{start_default, AffineCalibration, Point, TrackEvent, Tracker};
+#[cfg(feature = "tracking")]
+use std::sync::{Arc, Mutex};
 
 const DEFAULT_API_URL: &str = "http://127.0.0.1:8765";
 
@@ -269,6 +273,14 @@ struct Wingmate {
     azure_endpoint: String,
     azure_key: String,
     status: String,
+    #[cfg(feature = "tracking")]
+    head_tracker: Option<Tracker>,
+    #[cfg(feature = "tracking")]
+    head_source: Option<Arc<Mutex<std::sync::mpsc::Receiver<TrackEvent>>>>,
+    #[cfg(feature = "tracking")]
+    head_pointer: Option<Point>,
+    #[cfg(feature = "tracking")]
+    head_tracking: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -359,6 +371,10 @@ enum Message {
     ClearBoardCell,
     CancelBoardCell,
     Refresh,
+    #[cfg(feature = "tracking")]
+    HeadTick,
+    #[cfg(feature = "tracking")]
+    HeadToggle,
 }
 
 impl Wingmate {
@@ -409,6 +425,14 @@ impl Wingmate {
             azure_endpoint: String::new(),
             azure_key: String::new(),
             status: "Starting Wingmate services…".into(),
+            #[cfg(feature = "tracking")]
+            head_tracker: None,
+            #[cfg(feature = "tracking")]
+            head_source: None,
+            #[cfg(feature = "tracking")]
+            head_pointer: None,
+            #[cfg(feature = "tracking")]
+            head_tracking: false,
         };
 
         (
@@ -432,7 +456,16 @@ impl Wingmate {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        iced::system::theme_changes().map(Message::SystemThemeChanged)
+        let base = iced::system::theme_changes().map(Message::SystemThemeChanged);
+
+        #[cfg(feature = "tracking")]
+        if self.head_tracking {
+            let drain = iced::time::every(std::time::Duration::from_millis(33))
+                .map(|_| Message::HeadTick);
+            return Subscription::batch(vec![base, drain]);
+        }
+
+        base
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -888,6 +921,54 @@ impl Wingmate {
             }
             Message::CancelBoardCell => self.editing_cell = None,
             Message::Refresh => return self.api.bootstrap(),
+            #[cfg(feature = "tracking")]
+            Message::HeadTick => {
+                let mut disconnected = false;
+                if let Some(source) = &self.head_source {
+                    let rx = source.lock().unwrap();
+                    loop {
+                        match rx.try_recv() {
+                            Ok(TrackEvent::Position(p)) => {
+                                self.head_pointer = Some(Point { x: p.x, y: p.y });
+                            }
+                            Ok(TrackEvent::Lost) => {
+                                self.head_pointer = None;
+                            }
+                            Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                                disconnected = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if disconnected {
+                    self.head_source = None;
+                    self.head_tracker = None;
+                    self.head_tracking = false;
+                    self.head_pointer = None;
+                    self.status = "Head tracking lost".into();
+                }
+            }
+            #[cfg(feature = "tracking")]
+            Message::HeadToggle => {
+                self.head_tracking = !self.head_tracking;
+                if self.head_tracking {
+                    match start_default(0, AffineCalibration::IDENTITY, 0.4) {
+                        Ok((tracker, rx)) => {
+                            self.head_tracker = Some(tracker);
+                            self.head_source = Some(Arc::new(Mutex::new(rx)));
+                            self.status = "Head tracking started".into();
+                        }
+                        Err(e) => self.status = format!("Head tracking failed: {e}").into(),
+                    }
+                } else {
+                    self.head_source = None;
+                    self.head_tracker = None;
+                    self.head_pointer = None;
+                    self.status = "Head tracking stopped".into();
+                }
+            }
         }
         Task::none()
     }
@@ -1390,6 +1471,30 @@ impl Wingmate {
         .into()
     }
 
+    #[cfg(feature = "tracking")]
+    fn head_tracking_section(&self) -> Element<'_, Message> {
+        column![
+            text("Head tracking").size(22),
+            button(if self.head_tracking {
+                "Head tracking: ON (click to disable)"
+            } else {
+                "Head tracking: OFF (click to enable)"
+            })
+            .on_press(Message::HeadToggle),
+            text(match &self.head_pointer {
+                Some(p) => format!("Pointer: x={:.2} y={:.2}", p.x, p.y),
+                None => "Pointer: not detected".into(),
+            }),
+        ]
+        .spacing(8)
+        .into()
+    }
+
+    #[cfg(not(feature = "tracking"))]
+    fn head_tracking_section(&self) -> Element<'_, Message> {
+        column![].into()
+    }
+
     fn settings_view(&self) -> Element<'_, Message> {
         let voice_names: Vec<String> = self.voices.iter().filter_map(|v| v.name.clone()).collect();
         let selected_voice = if voice_names.contains(&self.settings.voice) {
@@ -1610,6 +1715,7 @@ impl Wingmate {
             checkbox(self.settings.auditory_fishing_enabled)
                 .label("Auditory fishing")
                 .on_toggle(|v| Message::SettingBool("auditoryFishingEnabled", v)),
+            self.head_tracking_section(),
             Space::new().height(18),
             text("Privacy and data").size(22),
             checkbox(self.settings.history_visible)
