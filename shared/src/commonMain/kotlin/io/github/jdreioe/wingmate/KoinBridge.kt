@@ -16,6 +16,8 @@ import io.github.jdreioe.wingmate.initKoin
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
+import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
@@ -93,6 +95,9 @@ class KoinBridge : KoinComponent {
     }
 
     // --- Simple bridging helpers for Swift UI ---
+    /** Split text into speech segments honoring shorthand SSML pauses and language tags. */
+    fun processSpeechText(text: String): List<SpeechSegment> = SpeechTextProcessor.processText(text)
+
     suspend fun speak(text: String) {
         try {
             get<SpeechService>().speak(text)

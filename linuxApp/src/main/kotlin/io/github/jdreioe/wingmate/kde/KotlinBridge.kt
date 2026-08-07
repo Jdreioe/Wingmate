@@ -16,6 +16,7 @@ import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.Voice
@@ -306,9 +307,11 @@ class KotlinBridge(private val port: Int = 8765) {
                             // Default is SYSTEM.
                             if (settings?.ttsEngine == io.github.jdreioe.wingmate.domain.TtsEngine.SYSTEM) {
                                 println("[SPEECH] Using System TTS (LinuxSpeechService)")
-                                speechService.speak(text, voice)
+                                // Split into segments so shorthand pauses/language tags are honored.
+                                speechService.speakSegments(SpeechTextProcessor.processText(text), voice)
                             } else {
                                 println("[SPEECH] Using Azure TTS (AzureSpeechService)")
+                                // AzureTtsClient.generateSsml handles shorthand SSML itself.
                                 azureSpeechService.speak(text, voice)
                             }
                         } catch (e: Exception) {

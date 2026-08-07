@@ -89,25 +89,25 @@ object SpeechTextProcessor {
         val normalizedText = normalizeShorthandSsml(text)
         // Expand shortcodes like [0.5s] to <break time="0.5s"/>
         val expandedText = normalizedText.replace(Regex("\\[(\\d+(\\.\\d+)?)s\\]")) {
-            "<break time=\"${it.groupValues[1]}s\"/>" 
+            "<break time=\"${it.groupValues[1]}s\"/>"
         }
 
         // First, merge lines that don't end with proper punctuation
         val mergedText = mergeIncompleteLines(expandedText)
-        
+
         val segments = mutableListOf<SpeechSegment>()
-        
+
         // Regular expression to match pause tags
         val pauseRegex = Regex("""<(?:pause|break)(?:\s+(?:duration|time)=["']([^"']+)["'])?[^>]*/>""", RegexOption.IGNORE_CASE)
-        
+
         var currentIndex = 0
-        
+
         pauseRegex.findAll(mergedText).forEach { match ->
             // Add text segment before the pause tag
             val textBeforePause = mergedText.substring(currentIndex, match.range.first).trim()
             if (textBeforePause.isNotEmpty()) {
                 val pauseDuration = parseDuration(match.groupValues.getOrNull(1))
-                segments.add(SpeechSegment(textBeforePause, pauseDuration))
+                segments.add(textWithLanguageTag(textBeforePause, pauseDuration))
             } else if (segments.isNotEmpty()) {
                 // If there's no text before the pause, add the pause to the last segment
                 val lastSegment = segments.removeLastOrNull()
@@ -116,22 +116,47 @@ object SpeechTextProcessor {
                     segments.add(lastSegment.copy(pauseDurationMs = lastSegment.pauseDurationMs + pauseDuration))
                 }
             }
-            
+
             currentIndex = match.range.last + 1
         }
-        
+
         // Add remaining text after the last pause tag
         val remainingText = mergedText.substring(currentIndex).trim()
         if (remainingText.isNotEmpty()) {
-            segments.add(SpeechSegment(remainingText))
+            segments.add(textWithLanguageTag(remainingText, 0))
         }
-        
+
         // If no pause tags were found, return the entire text as a single segment
         if (segments.isEmpty() && mergedText.trim().isNotEmpty()) {
-            segments.add(SpeechSegment(mergedText.trim()))
+            segments.add(textWithLanguageTag(mergedText.trim(), 0))
         }
-        
+
         return segments
+    }
+
+    /**
+     * Extract a `<lang xml:lang="...">text</lang>` wrapper into [SpeechSegment.languageTag]
+     * and strip the wrapper from the segment text so native TTS engines (AVSpeechSynthesizer,
+     * espeak/piper) never speak markup literally. Azure reads [SpeechSegment.languageTag]
+     * to rebuild proper SSML.
+     */
+    private fun textWithLanguageTag(text: String, pauseDurationMs: Long): SpeechSegment {
+        val langTagRegex = Regex(
+            """(?s)<\s*lang\s+xml:lang=["']([^"']+)["']\s*>(.*?)<\s*/\s*lang\s*>""",
+            RegexOption.IGNORE_CASE
+        )
+        var clean = text
+        var languageTag: String? = null
+        var offset = 0
+        for (match in langTagRegex.findAll(text)) {
+            languageTag = match.groupValues[1]
+            val start = match.range.first + offset
+            val end = match.range.last + 1 + offset
+            val inner = match.groupValues[2]
+            clean = clean.replaceRange(start, end, inner)
+            offset += inner.length - (end - start)
+        }
+        return SpeechSegment(text = clean.trim(), pauseDurationMs = pauseDurationMs, languageTag = languageTag)
     }
     
     /**

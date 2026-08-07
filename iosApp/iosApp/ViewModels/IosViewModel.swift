@@ -627,36 +627,37 @@ final class IosViewModel: ObservableObject {
 
         // If user prefers system TTS, use it directly
         if useSystemTts {
-            SystemTtsManager.shared.speak(
-                plain,
-                language: primaryLanguage,
-                secondaryLanguage: isInputText ? secondaryLanguage : nil,
-                secondaryLanguageRanges: isInputText ? secondaryLanguageRanges : []
-            )
+            speakSystemText(plain, isInputText: isInputText)
             return
         }
         
         // If Azure is not configured, always use on-device TTS to keep the app working
         if !azureConfigured {
-            SystemTtsManager.shared.speak(
-                plain,
-                language: primaryLanguage,
-                secondaryLanguage: isInputText ? secondaryLanguage : nil,
-                secondaryLanguageRanges: isInputText ? secondaryLanguageRanges : []
-            )
+            speakSystemText(plain, isInputText: isInputText)
             return
         }
         // Otherwise, allow offline fallback when enabled
         if !isOnline && useSystemTtsWhenOffline {
-            SystemTtsManager.shared.speak(
-                plain,
-                language: primaryLanguage,
-                secondaryLanguage: isInputText ? secondaryLanguage : nil,
-                secondaryLanguageRanges: isInputText ? secondaryLanguageRanges : []
-            )
+            speakSystemText(plain, isInputText: isInputText)
             return
         }
         Task { _ = try? await bridge.speak(text: t) }
+    }
+
+    /// Speak on-device, honoring shorthand SSML (pauses + language tags) via shared
+    /// SpeechTextProcessor when no secondary-language splitting is required.
+    private func speakSystemText(_ text: String, isInputText: Bool) {
+        if !isInputText || secondaryLanguageRanges.isEmpty {
+            let segments = bridge.processSpeechText(text: text)
+            SystemTtsManager.shared.speak(segments: segments, language: primaryLanguage)
+        } else {
+            SystemTtsManager.shared.speak(
+                text,
+                language: primaryLanguage,
+                secondaryLanguage: secondaryLanguage,
+                secondaryLanguageRanges: secondaryLanguageRanges
+            )
+        }
     }
 
     func speakBoardSentence(_ text: String, boardSetId: String) {
@@ -664,7 +665,8 @@ final class IosViewModel: ObservableObject {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         AudioSessionHelper.activatePlayback()
         if useSystemTts || !azureConfigured || (!isOnline && useSystemTtsWhenOffline) {
-            SystemTtsManager.shared.speak(text, language: primaryLanguage)
+            let segments = bridge.processSpeechText(text: text)
+            SystemTtsManager.shared.speak(segments: segments, language: primaryLanguage)
             return
         }
         Task { _ = try? await bridge.speakBoardSentence(text: text, cacheAudio: cacheAudio) }

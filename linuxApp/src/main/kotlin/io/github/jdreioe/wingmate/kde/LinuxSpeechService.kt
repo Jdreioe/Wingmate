@@ -46,9 +46,16 @@ class LinuxSpeechService : SpeechService {
     }
     
     override suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
-        // Combine all segments and speak
-        val combinedText = segments.joinToString(" ") { it.text }
-        speak(combinedText, voice, pitch, rate)
+        // Speak each segment individually so per-segment pauses (shorthand SSML) are honored.
+        for (segment in segments) {
+            val text = segment.text.trim()
+            if (text.isNotEmpty()) {
+                speak(text, voice, pitch, rate)
+            }
+            if (segment.pauseDurationMs > 0) {
+                Thread.sleep(segment.pauseDurationMs)
+            }
+        }
     }
     
     override suspend fun pause() {
