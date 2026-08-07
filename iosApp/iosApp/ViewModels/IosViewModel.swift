@@ -165,6 +165,7 @@ final class IosViewModel: ObservableObject {
     @Published var selectionHighlightMillis: Int64 = 0
     @Published var highlightedButtonId: String? = nil
     private var selectionHighlightGeneration: Int64 = 0
+    @Published var boardShowMessageBar: Bool = true
 
     private var isApplyingSentencePhraseInput: Bool = false
 
@@ -412,6 +413,7 @@ final class IosViewModel: ObservableObject {
                 self.selectionSoundEnabled = settings.selectionSoundEnabled
                 self.auditoryFishingEnabled = settings.auditoryFishingEnabled
                 self.selectionHighlightMillis = settings.selectionHighlightMillis
+                self.boardShowMessageBar = settings.boardShowMessageBar
                 self.usageLoggingEnabled = settings.usageLoggingEnabled
                 self.featureUsageReportingEnabled = settings.featureUsageReportingEnabled
                 self.historyVisible = settings.historyVisible
@@ -855,6 +857,11 @@ final class IosViewModel: ObservableObject {
     func setAuditoryFishingEnabled(_ enabled: Bool) {
         auditoryFishingEnabled = enabled
         Task { _ = try? await bridge.updateAuditoryFishingEnabled(enabled: enabled) }
+    }
+
+    func setBoardShowMessageBar(_ enabled: Bool) {
+        boardShowMessageBar = enabled
+        Task { _ = try? await bridge.updateBoardShowMessageBar(enabled: enabled) }
     }
 
     func setUsageLoggingEnabled(_ enabled: Bool) {

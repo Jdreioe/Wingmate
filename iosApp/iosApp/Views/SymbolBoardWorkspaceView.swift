@@ -567,7 +567,7 @@ struct SymbolBoardWorkspaceView: View {
                 }
 
                 // Sentence Box in Run mode
-                if mode == .run {
+                if mode == .run && model.boardShowMessageBar {
                     SentenceBoxView(
                         phrases: boardSentenceTokens,
                         onDelete: { index in

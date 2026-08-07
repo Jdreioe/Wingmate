@@ -438,6 +438,7 @@
 "board_workspace.hide_hidden" = "Hide temporarily revealed buttons";
 "board_workspace.temporarily_revealed" = "Temporarily revealed hidden button";
 "board_cell_opens_board" = "Opens page: %1$s";
+"settings.display.message_bar" = "Show message bar";
 "editing_access.title" = "Editing access";
 "editing_access.description" = "Optionally require a code for editing. Communication is always available.";
 "editing_access.unavailable" = "Secure storage is unavailable on this device.";
