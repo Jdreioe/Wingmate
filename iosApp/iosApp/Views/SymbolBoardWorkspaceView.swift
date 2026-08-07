@@ -754,6 +754,7 @@ struct SymbolBoardWorkspaceView: View {
                 .frame(width: width, height: height)
             )
         }
+        let isHighlighted = model.highlightedButtonId != nil && model.highlightedButtonId == cell?.buttonId
         return AnyView(
             VStack(alignment: .leading, spacing: 4) {
             if model.labelAtTop && model.showButtonLabels {
@@ -806,7 +807,10 @@ struct SymbolBoardWorkspaceView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(model.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator)), lineWidth: model.highContrastMode ? 2 : (isLinked ? 1.5 : 1))
+                .stroke(isHighlighted
+                    ? (model.highContrastMode ? Color.white : Color.accentColor)
+                    : (model.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator))),
+                    lineWidth: isHighlighted ? 4 : (model.highContrastMode ? 2 : (isLinked ? 1.5 : 1)))
         )
         )
     }
@@ -1234,14 +1238,19 @@ struct SymbolBoardWorkspaceView: View {
         }
         if cell.actions.isEmpty {
             appendCellToSentenceIfNeeded(cell, sourceCellId: sourceCellId)
-            Task { await model.activateSelectedBoardCell(row: row, col: col) }
+            Task {
+                await model.activateSelectedBoardCell(row: row, col: col)
+                await model.activateBoardSelectionHighlight(buttonId: cell.buttonId)
+            }
             return
         }
 
+        var isContentActivation = false
         for rawAction in cell.actions {
             let action = rawAction.trimmingCharacters(in: .whitespacesAndNewlines)
             switch action.lowercased() {
             case ":space":
+                isContentActivation = true
                 appendCellToSentenceIfNeeded(cell, textOverride: " ", sourceCellId: sourceCellId)
             case ":backspace":
                 backspaceBoardSentence()
@@ -1258,18 +1267,24 @@ struct SymbolBoardWorkspaceView: View {
                 }
             case ":prediction", ":predictions":
                 if let suggestion = model.boardPrediction(for: cell.buttonId) {
+                    isContentActivation = true
                     let insertion = predictionInsertion(sentence: boardSentenceText, suggestion: suggestion)
                     appendCellToSentenceIfNeeded(cell, textOverride: insertion, sourceCellId: sourceCellId)
                 }
             case ":spell":
+                isContentActivation = true
                 if let text = trimmed(cell.vocalization) ?? trimmed(cell.label) {
                     appendCellToSentenceIfNeeded(cell, textOverride: text, sourceCellId: sourceCellId)
                 }
             default:
                 if action.hasPrefix("+") {
+                    isContentActivation = true
                     appendCellToSentenceIfNeeded(cell, textOverride: String(action.dropFirst()), sourceCellId: sourceCellId)
                 }
             }
+        }
+        if isContentActivation {
+            Task { await model.activateBoardSelectionHighlight(buttonId: cell.buttonId) }
         }
     }
 

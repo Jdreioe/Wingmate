@@ -162,6 +162,9 @@ final class IosViewModel: ObservableObject {
     @Published var editingAccessEnabled: Bool = false
     @Published var editingAccessUnlocked: Bool = true
     @Published var editingAccessSupported: Bool = true
+    @Published var selectionHighlightMillis: Int64 = 0
+    @Published var highlightedButtonId: String? = nil
+    private var selectionHighlightGeneration: Int64 = 0
 
     private var isApplyingSentencePhraseInput: Bool = false
 
@@ -408,6 +411,7 @@ final class IosViewModel: ObservableObject {
                 self.dwellToSelectMillis = Double(settings.dwellToSelectMillis)
                 self.selectionSoundEnabled = settings.selectionSoundEnabled
                 self.auditoryFishingEnabled = settings.auditoryFishingEnabled
+                self.selectionHighlightMillis = settings.selectionHighlightMillis
                 self.usageLoggingEnabled = settings.usageLoggingEnabled
                 self.featureUsageReportingEnabled = settings.featureUsageReportingEnabled
                 self.historyVisible = settings.historyVisible
@@ -1597,6 +1601,25 @@ final class IosViewModel: ObservableObject {
         if let textToSpeak = normalizedOptionalText(cell.vocalization) ?? normalizedOptionalText(cell.label) {
             speak(textToSpeak)
         }
+    }
+
+    func activateBoardSelectionHighlight(buttonId: String) async {
+        guard selectionHighlightMillis > 0 else { return }
+        bridge.selectionHighlightActivate(buttonId: buttonId)
+        selectionHighlightGeneration += 1
+        let generation = selectionHighlightGeneration
+        highlightedButtonId = buttonId
+        let duration = selectionHighlightMillis
+        try? await Task.sleep(nanoseconds: UInt64(duration) * 1_000_000)
+        guard generation == selectionHighlightGeneration else { return }
+        let current = bridge.selectionHighlightButtonId(durationMillis: duration)
+        highlightedButtonId = current
+    }
+
+    func clearBoardSelectionHighlight() {
+        selectionHighlightGeneration += 1
+        bridge.selectionHighlightClear()
+        highlightedButtonId = nil
     }
 
     func refreshBoardPredictions(context: String) async {

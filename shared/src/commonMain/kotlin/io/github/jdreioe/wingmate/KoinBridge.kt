@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate
 
+import io.github.jdreioe.wingmate.application.SelectionHighlight
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
@@ -33,6 +34,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlin.time.Clock
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 
@@ -162,6 +164,28 @@ class KoinBridge : KoinComponent {
     suspend fun updateDwellToSelectMillis(millis: Long) = updateSettings { it.copy(dwellToSelectMillis = millis.coerceIn(0, 5_000)) }
     suspend fun updateSelectionSoundEnabled(enabled: Boolean) = updateSettings { it.copy(selectionSoundEnabled = enabled) }
     suspend fun updateAuditoryFishingEnabled(enabled: Boolean) = updateSettings { it.copy(auditoryFishingEnabled = enabled) }
+    suspend fun updateSelectionHighlightMillis(millis: Long) = updateSettings { it.copy(selectionHighlightMillis = millis.coerceIn(0, 5_000)) }
+
+    private val selectionHighlight = SelectionHighlight()
+
+    /** Record a selection for visual highlight; immediately ends the previous highlight. */
+    fun selectionHighlightActivate(buttonId: String) {
+        selectionHighlight.activate(buttonId, nowMillis())
+    }
+
+    /** Clear any active selection highlight. */
+    fun selectionHighlightClear() {
+        selectionHighlight.clear()
+    }
+
+    /**
+     * The currently highlighted button id for the given duration, or null when the
+     * highlight has expired or is disabled by a non-positive [durationMillis].
+     */
+    fun selectionHighlightButtonId(durationMillis: Long): String? =
+        selectionHighlight.highlightedTarget(nowMillis(), durationMillis)
+
+    private fun nowMillis(): Long = Clock.System.now().toEpochMilliseconds()
     suspend fun updateUsageLoggingEnabled(enabled: Boolean) {
         updateSettings { it.copy(usageLoggingEnabled = enabled) }
         runCatching { get<io.github.jdreioe.wingmate.domain.AacLogger>().setEnabled(enabled) }
