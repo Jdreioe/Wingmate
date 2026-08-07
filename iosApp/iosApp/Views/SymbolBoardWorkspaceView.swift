@@ -19,6 +19,24 @@ private enum CellSymbolSource: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+private enum GridFieldSpanSelection: Equatable {
+    case single
+    case custom(GridFieldSpanInfo)
+
+    static func == (lhs: GridFieldSpanSelection, rhs: GridFieldSpanSelection) -> Bool {
+        switch (lhs, rhs) {
+        case (.single, .single): return true
+        case (.custom(let a), .custom(let b)): return a.rows == b.rows && a.columns == b.columns
+        default: return false
+        }
+    }
+}
+
+private struct GridFieldSpanInfo: Hashable {
+    let rows: Int
+    let columns: Int
+}
+
 private enum BoardSetCreationKind: String, CaseIterable, Identifiable {
     case blank
     case qwerty
@@ -117,6 +135,9 @@ struct SymbolBoardWorkspaceView: View {
     @State private var showDeleteBoardConfirmation: Bool = false
     @State private var editingRow: Int = 0
     @State private var editingCol: Int = 0
+    @State private var editingSpan: GridFieldSpanSelection = .single
+    @State private var editingSpanOptions: [GridFieldSpanInfo] = []
+    @State private var editingCellHasButton: Bool = false
     @State private var editingLabel: String = ""
     @State private var editingVocalization: String = ""
     @State private var editingInsertedText: String = ""
@@ -630,26 +651,27 @@ struct SymbolBoardWorkspaceView: View {
                 let contentHeight = max(0, availableHeight * fraction)
                 let cellHeight = max(0, (contentHeight - (gridGap * CGFloat(rows - 1))) / CGFloat(rows))
                 let cellWidth = max(0, (availableWidth - (gridGap * CGFloat(cols - 1))) / CGFloat(cols))
+                let contentWidth = max(0, availableWidth)
 
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: gridGap) {
-                        ForEach(0..<rows, id: \.self) { row in
-                            HStack(spacing: gridGap) {
-                                ForEach(0..<cols, id: \.self) { col in
-                                    boardCellButton(
-                                        row: row,
-                                        col: col,
-                                        isEditMode: isEditMode,
-                                        width: cellWidth,
-                                        height: cellHeight
-                                    )
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    ZStack(alignment: .topLeading) {
+                        ForEach(model.boardFieldItems) { field in
+                            let x = CGFloat(field.column) * (cellWidth + gridGap)
+                            let y = CGFloat(field.row) * (cellHeight + gridGap)
+                            let spanWidth = (cellWidth * CGFloat(field.columnSpan)) + (gridGap * CGFloat(field.columnSpan - 1))
+                            let spanHeight = (cellHeight * CGFloat(field.rowSpan)) + (gridGap * CGFloat(field.rowSpan - 1))
+                            boardCellButton(
+                                row: field.row,
+                                col: field.column,
+                                isEditMode: isEditMode,
+                                width: max(0, spanWidth),
+                                height: max(0, spanHeight)
+                            )
+                            .offset(x: x, y: y)
                         }
                     }
+                    .frame(width: contentWidth, height: contentHeight, alignment: .topLeading)
                     .padding(gridInset)
-                    .frame(maxWidth: .infinity, alignment: .top)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(
@@ -1030,6 +1052,23 @@ struct SymbolBoardWorkspaceView: View {
                     TextField(NSLocalizedString("boardset.cell.vocalization", comment: ""), text: $editingVocalization)
                 }
 
+                if model.canEditSelectedBoardSet, !model.isKeyboardBoard {
+                    Section {
+                        Picker("boardset.cell.merge_size", selection: $editingSpan) {
+                            Text("boardset.cell.merge_1x1").tag(GridFieldSpanSelection.single)
+                            ForEach(editingSpanOptions, id: \.self) { span in
+                                Text("\(span.rows) × \(span.columns)")
+                                    .tag(GridFieldSpanSelection.custom(span))
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    } header: {
+                        Text("boardset.cell.merge")
+                    } footer: {
+                        Text("boardset.cell.merge_footer")
+                    }
+                }
+
                 if model.selectedBoardKeyboardLayout != nil {
                     Section("boardset.cell.keyboard_action") {
                         TextField("boardset.cell.insert_text", text: $editingInsertedText)
@@ -1208,6 +1247,14 @@ struct SymbolBoardWorkspaceView: View {
                                 clearImage: shouldClearEditingSymbol,
                                 actions: actions
                             )
+                            if case .custom(let span) = editingSpan, editingCellHasButton {
+                                await model.resizeSelectedBoardField(
+                                    row: editingRow,
+                                    col: editingCol,
+                                    rows: span.rows,
+                                    columns: span.columns
+                                )
+                            }
                             showEditCellSheet = false
                         }
                     }
@@ -1413,8 +1460,22 @@ struct SymbolBoardWorkspaceView: View {
     private func openCellEditor(row: Int, col: Int, existing: BoardCellInfo?) {
         editingRow = row
         editingCol = col
+        editingCellHasButton = existing != nil
         editingLabel = existing?.label ?? ""
         editingVocalization = existing?.vocalization ?? ""
+        editingSpan = .single
+        editingSpanOptions = []
+        Task {
+            let options = await model.availableFieldSpanOptions(row: row, col: col)
+            let currentField = model.boardFieldItems.first { $0.row == row && $0.column == col }
+            await MainActor.run {
+                editingSpanOptions = options
+                if let field = currentField, existing != nil,
+                   let match = options.first(where: { $0.rows == field.rowSpan && $0.columns == field.columnSpan }) {
+                    editingSpan = .custom(match)
+                }
+            }
+        }
         let directText = existing?.actions.first(where: { $0.hasPrefix("+") }).map { String($0.dropFirst()) } ?? ""
         editingInsertedText = directText
         editingInsertedTextFollowsLabel = !directText.isEmpty && directText == (trimmed(existing?.vocalization) ?? trimmed(existing?.label) ?? "")

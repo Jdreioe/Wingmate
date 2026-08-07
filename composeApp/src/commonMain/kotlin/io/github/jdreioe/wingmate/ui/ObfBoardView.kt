@@ -31,6 +31,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonType
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
+import io.github.jdreioe.wingmate.domain.obf.fieldItems
 import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import androidx.compose.foundation.combinedClickable
@@ -502,59 +503,14 @@ fun ObfBoardView(
 internal fun buildBoardGridItems(
     grid: io.github.jdreioe.wingmate.domain.obf.ObfGrid,
     buttonsById: Map<String, ObfButton>
-): List<BoardGridItem> {
-    val rows = grid.rows.coerceAtLeast(1)
-    val columns = grid.columns.coerceAtLeast(1)
-    val order = List(rows) { row ->
-        List(columns) { column -> grid.order.getOrNull(row)?.getOrNull(column) }
-    }
-    val visited = mutableSetOf<Pair<Int, Int>>()
-    return buildList {
-        for (row in 0 until rows) {
-            for (column in 0 until columns) {
-                if ((row to column) in visited) continue
-                val buttonId = order[row][column]
-                if (buttonId == null) {
-                    visited += row to column
-                    add(BoardGridItem(row, column, 1, 1, null))
-                    continue
-                }
-                val occurrences = buildList {
-                    for (candidateRow in 0 until rows) {
-                        for (candidateColumn in 0 until columns) {
-                            if (order[candidateRow][candidateColumn] == buttonId) {
-                                add(candidateRow to candidateColumn)
-                            }
-                        }
-                    }
-                }
-                val minRow = occurrences.minOf { it.first }
-                val maxRow = occurrences.maxOf { it.first }
-                val minColumn = occurrences.minOf { it.second }
-                val maxColumn = occurrences.maxOf { it.second }
-                val isRectangle = (minRow..maxRow).all { candidateRow ->
-                    (minColumn..maxColumn).all { candidateColumn ->
-                        order[candidateRow][candidateColumn] == buttonId
-                    }
-                }
-                if (isRectangle) {
-                    visited += occurrences
-                    add(
-                        BoardGridItem(
-                            row = minRow,
-                            column = minColumn,
-                            rowSpan = maxRow - minRow + 1,
-                            columnSpan = maxColumn - minColumn + 1,
-                            button = buttonsById[buttonId]
-                        )
-                    )
-                } else {
-                    visited += row to column
-                    add(BoardGridItem(row, column, 1, 1, buttonsById[buttonId]))
-                }
-            }
-        }
-    }
+): List<BoardGridItem> = grid.fieldItems().map { field ->
+    BoardGridItem(
+        row = field.row,
+        column = field.column,
+        rowSpan = field.rowSpan,
+        columnSpan = field.columnSpan,
+        button = field.buttonId?.let { buttonsById[it] }
+    )
 }
 
 @Composable

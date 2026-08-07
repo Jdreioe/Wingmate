@@ -35,6 +35,9 @@ import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
+import io.github.jdreioe.wingmate.domain.obf.fieldItems
+import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
+import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
@@ -413,6 +416,44 @@ class KoinBridge : KoinComponent {
         }
     }
 
+    // --- Grid span / merge operations (shared with Android via core/domain) ---
+    suspend fun listBoardFieldItems(boardId: String): List<IosBoardFieldItem> {
+        val board = get<BoardRepository>().getBoard(boardId) ?: return emptyList()
+        val grid = board.grid ?: return emptyList()
+        return grid.fieldItems().map { field ->
+            IosBoardFieldItem(
+                row = field.row,
+                column = field.column,
+                rowSpan = field.rowSpan,
+                columnSpan = field.columnSpan,
+                buttonId = field.buttonId
+            )
+        }
+    }
+
+    suspend fun availableFieldSpans(boardId: String, row: Int, col: Int): List<IosGridFieldSpan> {
+        val board = get<BoardRepository>().getBoard(boardId) ?: return emptyList()
+        val grid = board.grid ?: return emptyList()
+        return grid.availableFieldSpansAt(row, col).map { span ->
+            IosGridFieldSpan(rows = span.rows, columns = span.columns)
+        }
+    }
+
+    /**
+     * Grow/shrink the field at [row], [col] to [rowSpan] x [columnSpan]. Returns
+     * true on success (persisted via the repository).
+     */
+    suspend fun resizeBoardField(boardId: String, row: Int, col: Int, rowSpan: Int, columnSpan: Int): Boolean {
+        val repo = get<BoardRepository>()
+        val board = repo.getBoard(boardId) ?: return false
+        val grid = board.grid ?: return false
+        val buttonId = grid.order.getOrNull(row)?.getOrNull(col) ?: return false
+        val resized = grid.withFieldSpan(row, col, buttonId, rowSpan, columnSpan) ?: return false
+        if (resized == grid) return false
+        repo.saveBoard(board.copy(grid = resized))
+        return true
+    }
+
     suspend fun upsertBoardCellButton(
         boardId: String, row: Int, col: Int, label: String?, vocalization: String?,
         backgroundColor: String?, borderColor: String?, linkedBoardId: String?,
@@ -687,6 +728,19 @@ data class IosBoardCell(
 data class IosSettingsFlags(
     val usesSystemTts: Boolean,
     val startupUsesScreens: Boolean
+)
+
+data class IosBoardFieldItem(
+    val row: Int,
+    val column: Int,
+    val rowSpan: Int,
+    val columnSpan: Int,
+    val buttonId: String? = null
+)
+
+data class IosGridFieldSpan(
+    val rows: Int,
+    val columns: Int
 )
 
 data class IosResolvedBoardSettings(

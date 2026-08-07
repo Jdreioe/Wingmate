@@ -32,8 +32,17 @@ struct BoardCellInfo: Identifiable, Equatable {
     var id: String { "\(row):\(col)" }
 }
 
-struct SentencePhraseToken: Identifiable, Equatable {
-    var id: String = UUID().uuidString
+struct BoardFieldItem: Identifiable, Equatable {
+    var row: Int
+    var column: Int
+    var rowSpan: Int
+    var columnSpan: Int
+    var buttonId: String?
+
+    var id: String { "\(row):\(column)" }
+}
+
+struct SentencePhraseToken: Identifiable, Equatable {    var id: String = UUID().uuidString
     var phraseId: String
     var text: String
     var title: String
@@ -155,6 +164,7 @@ final class IosViewModel: ObservableObject {
     @Published var selectedBoardId: String? = nil
     @Published var selectedBoard: Shared.ObfBoard? = nil
     @Published var boardCells: [BoardCellInfo] = []
+    @Published var boardFieldItems: [BoardFieldItem] = []
     @Published var selectedBoardKeyboardLayout: String? = nil
     @Published var selectedBoardUsesSpellingMode: Bool = false
     @Published var boardPredictionsByButtonId: [String: String] = [:]
@@ -273,6 +283,34 @@ final class IosViewModel: ObservableObject {
 
     func cellAt(row: Int, col: Int) -> BoardCellInfo? {
         boardCells.first(where: { $0.row == row && $0.col == col })
+    }
+
+    var isKeyboardBoard: Bool {
+        selectedBoardKeyboardLayout != nil
+    }
+
+    func availableFieldSpanOptions(row: Int, col: Int) async -> [GridFieldSpanInfo] {
+        guard let boardId = selectedBoardId else { return [] }
+        let spans = (try? await bridge.availableFieldSpans(
+            boardId: boardId,
+            row: Int32(row),
+            col: Int32(col)
+        )) ?? []
+        return spans.map { GridFieldSpanInfo(rows: Int($0.rows), columns: Int($0.columns)) }
+    }
+
+    func resizeSelectedBoardField(row: Int, col: Int, rows: Int, columns: Int) async {
+        guard let boardId = selectedBoardId else { return }
+        let ok = (try? await bridge.resizeBoardField(
+            boardId: boardId,
+            row: Int32(row),
+            col: Int32(col),
+            rowSpan: Int32(rows),
+            columnSpan: Int32(columns)
+        )) ?? false
+        if ok {
+            await refreshBoardCells()
+        }
     }
 
     func effectiveLanguage(for v: Shared.Voice) -> String {
@@ -1362,6 +1400,7 @@ final class IosViewModel: ObservableObject {
             selectedBoardId = nil
             selectedBoard = nil
             boardCells = []
+            boardFieldItems = []
             boardNamesById = [:]
         }
     }
@@ -1515,6 +1554,7 @@ final class IosViewModel: ObservableObject {
         guard let id = selectedBoardId else {
             selectedBoard = nil
             boardCells = []
+            boardFieldItems = []
             selectedBoardKeyboardLayout = nil
             selectedBoardUsesSpellingMode = false
             boardPredictionsByButtonId = [:]
@@ -1544,6 +1584,7 @@ final class IosViewModel: ObservableObject {
         } catch {
             selectedBoard = nil
             boardCells = []
+            boardFieldItems = []
             selectedBoardKeyboardLayout = nil
             selectedBoardUsesSpellingMode = false
             boardPredictionsByButtonId = [:]
@@ -1572,11 +1613,13 @@ final class IosViewModel: ObservableObject {
     func refreshBoardCells() async {
         guard let boardId = selectedBoardId else {
             boardCells = []
+            boardFieldItems = []
             return
         }
 
         do {
             let cells = try await bridge.listBoardCells(boardId: boardId)
+            let fields = try await bridge.listBoardFieldItems(boardId: boardId)
             boardCells = cells.map { cell in
                 BoardCellInfo(
                     row: Int(cell.row),
@@ -1595,8 +1638,18 @@ final class IosViewModel: ObservableObject {
                     soundDataUrl: cell.soundDataUrl
                 )
             }
+            boardFieldItems = fields.map { field in
+                BoardFieldItem(
+                    row: Int(field.row),
+                    column: Int(field.column),
+                    rowSpan: Int(field.rowSpan),
+                    columnSpan: Int(field.columnSpan),
+                    buttonId: field.buttonId
+                )
+            }
         } catch {
             boardCells = []
+            boardFieldItems = []
         }
     }
 
@@ -1883,6 +1936,7 @@ final class IosViewModel: ObservableObject {
                     selectedBoardId = nil
                     selectedBoard = nil
                     boardCells = []
+                    boardFieldItems = []
                 }
             }
             boardStatusMessage = NSLocalizedString("boardset.status.deleted", comment: "")
