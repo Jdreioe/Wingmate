@@ -334,6 +334,13 @@ private struct AccessibilitySettingsView: View {
                     step: 250,
                     suffix: " ms"
                 )
+                SettingsSliderRow(
+                    title: "settings.accessibility.debounce",
+                    value: Binding(get: { model.selectionDebounceMillis }, set: { model.setSelectionDebounceMillis($0) }),
+                    range: 0...1_000,
+                    step: 50,
+                    suffix: " ms"
+                )
             }
 
             Section("settings.accessibility.feedback") {
