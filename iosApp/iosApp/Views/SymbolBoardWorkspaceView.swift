@@ -359,6 +359,9 @@ struct SymbolBoardWorkspaceView: View {
                                         }
                                     }
                                 },
+                                onExport: {
+                                    Task { await exportBoardSet(id: set.id) }
+                                },
                                 onDelete: {
                                     deleteTargetSet = set
                                 }
@@ -1544,6 +1547,20 @@ struct SymbolBoardWorkspaceView: View {
             showEditingAccessSheet = true
         }
     }
+
+    private func exportBoardSet(id: String) async {
+        let bridge = KoinBridge()
+        let result = try? await bridge.shareBoardSetAsObz(id: id)
+        let message: String
+        if let result, result.success {
+            message = result.message
+        } else {
+            message = result?.message ?? NSLocalizedString("boardset.export_obz_failed", comment: "")
+        }
+        await MainActor.run {
+            model.boardStatusMessage = message
+        }
+    }
 }
 
 // MARK: - BoardSet Library Card Component
@@ -1553,6 +1570,7 @@ struct BoardSetLibraryCard: View {
     let onEdit: () -> Void
     let onDuplicate: () -> Void
     let onToggleLock: () -> Void
+    let onExport: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -1608,6 +1626,12 @@ struct BoardSetLibraryCard: View {
 
                 Button(action: onToggleLock) {
                     Label(set.isLocked ? "boardset.unlock" : "boardset.lock", systemImage: set.isLocked ? "lock.open.fill" : "lock.fill")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+
+                Button(action: onExport) {
+                    Label("boardset.export_obz", systemImage: "square.and.arrow.up")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)

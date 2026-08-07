@@ -304,6 +304,8 @@
 "boardset.lock" = "Lock Screen";
 "boardset.unlock" = "Unlock Screen";
 "boardset.locked_banner" = "Screen is locked. Unlock to edit.";
+"boardset.export_obz" = "Export";
+"boardset.export_obz_failed" = "Export failed";
 "boardset.untitled_board" = "Untitled Page";
 "boardset.grid_summary" = "%d x %d grid, %d buttons";
 

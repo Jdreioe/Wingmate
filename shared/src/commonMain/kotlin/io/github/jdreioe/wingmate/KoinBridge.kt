@@ -278,6 +278,28 @@ class KoinBridge : KoinComponent {
         get<BoardSetUseCase>().deleteBoard(boardSetId, boardId)
     suspend fun exportBoardSetAsObz(id: String): ByteArray? = get<BoardSetUseCase>().exportBoardSetAsObz(id)
 
+    suspend fun shareBoardSetAsObz(id: String): IosBoardSetExportResult {
+        val useCase = get<BoardSetUseCase>()
+        val boardSet = useCase.getBoardSet(id)
+            ?: return IosBoardSetExportResult(success = false, fileName = null, message = "Board set not found")
+        return when (val export = useCase.exportBoardSetAsObzResult(id)) {
+            is io.github.jdreioe.wingmate.application.ObzExportResult.Success -> {
+                val fileName = "${boardSet.name}.obz"
+                val shared = runCatching { get<io.github.jdreioe.wingmate.platform.ShareService>().shareFile(fileName, export.bytes) }
+                    .getOrDefault(false)
+                if (shared) {
+                    IosBoardSetExportResult(success = true, fileName = fileName, message = "Exported $fileName")
+                } else {
+                    IosBoardSetExportResult(success = false, fileName = fileName, message = "Export cancelled")
+                }
+            }
+            is io.github.jdreioe.wingmate.application.ObzExportResult.Failure -> {
+                val resources = export.resources.takeIf { it.isNotEmpty() }?.joinToString(prefix = ": ")
+                IosBoardSetExportResult(success = false, fileName = null, message = "Export failed: ${export.context}$resources")
+            }
+        }
+    }
+
     // --- Swift-friendly board helpers ---
     suspend fun getBoard(id: String): ObfBoard? = get<BoardRepository>().getBoard(id)
 
@@ -565,6 +587,12 @@ data class IosOpenSymbol(
 data class IosOpenSymbolsResult(
     val symbols: List<IosOpenSymbol> = emptyList(),
     val errorCode: String = "",
+)
+
+data class IosBoardSetExportResult(
+    val success: Boolean,
+    val fileName: String? = null,
+    val message: String = "",
 )
 
 private val logger = KotlinLogging.logger {}
