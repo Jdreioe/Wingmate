@@ -606,31 +606,52 @@ struct SymbolBoardWorkspaceView: View {
         if let board = model.selectedBoard {
             let rows = max(1, Int(board.grid?.rows ?? 1))
             let cols = max(1, Int(board.grid?.columns ?? 1))
-            let previewCols = Array(repeating: GridItem(.flexible(), spacing: 8), count: cols)
+            let gridGap: CGFloat = 8
+            let gridInset: CGFloat = 8
 
             GeometryReader { geometry in
-                let gridPadding: CGFloat = 12
-                let rowSpacing: CGFloat = 8
-                let availableHeight = geometry.size.height
-                    - (gridPadding * 2)
-                    - (rowSpacing * CGFloat(max(0, rows - 1)))
-                let cellHeight = max(72, availableHeight / CGFloat(rows))
+                let availableHeight = max(0, geometry.size.height - (gridInset * 2))
+                let availableWidth = max(0, geometry.size.width - (gridInset * 2))
+                let isCompact = board.compactGrid
+
+                // Mirror Compose sizing: non-compact boards fill the full available
+                // height (fraction 1), compact/keyboard boards size to their content
+                // (fraction computed from a minimum cell height of 72pt).
+                let minCellHeight: CGFloat = 72
+                let minContentHeight = (minCellHeight * CGFloat(rows)) + (gridGap * CGFloat(rows - 1))
+                let defaultFraction: CGFloat = isCompact
+                    ? min(max(minContentHeight / max(minContentHeight, availableHeight), 0.15), 1)
+                    : 1
+                let gridHeightFraction: CGFloat = ((board.gridHeightFraction?.isFinite == true) && (board.gridHeightFraction ?? 0) > 0)
+                    ? CGFloat(board.gridHeightFraction ?? 1)
+                    : defaultFraction
+                let fraction = min(max(gridHeightFraction, 0.15), 1)
+
+                let contentHeight = max(0, availableHeight * fraction)
+                let cellHeight = max(0, (contentHeight - (gridGap * CGFloat(rows - 1))) / CGFloat(rows))
+                let cellWidth = max(0, (availableWidth - (gridGap * CGFloat(cols - 1))) / CGFloat(cols))
 
                 ScrollView(.vertical, showsIndicators: false) {
-                    LazyVGrid(columns: previewCols, spacing: rowSpacing) {
-                        ForEach(0..<(rows * cols), id: \.self) { idx in
-                            let row = idx / cols
-                            let col = idx % cols
-                            boardCellButton(
-                                row: row,
-                                col: col,
-                                isEditMode: isEditMode,
-                                height: cellHeight
-                            )
+                    VStack(spacing: gridGap) {
+                        ForEach(0..<rows, id: \.self) { row in
+                            HStack(spacing: gridGap) {
+                                ForEach(0..<cols, id: \.self) { col in
+                                    boardCellButton(
+                                        row: row,
+                                        col: col,
+                                        isEditMode: isEditMode,
+                                        width: cellWidth,
+                                        height: cellHeight
+                                    )
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
-                    .padding(gridPadding)
+                    .padding(gridInset)
+                    .frame(maxWidth: .infinity, alignment: .top)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(
                     model.highContrastMode
                         ? Color(.systemBackground)
@@ -646,7 +667,7 @@ struct SymbolBoardWorkspaceView: View {
         }
     }
 
-    private func boardCellButton(row: Int, col: Int, isEditMode: Bool, height: CGFloat) -> some View {
+    private func boardCellButton(row: Int, col: Int, isEditMode: Bool, width: CGFloat, height: CGFloat) -> some View {
         let cell = model.cellAt(row: row, col: col)
         let isLinked = trimmed(cell?.linkedBoardId) != nil
         let sourceCellId = "\(row):\(col)"
@@ -664,15 +685,16 @@ struct SymbolBoardWorkspaceView: View {
             } label: {
                 Group {
                     if let animation = activeSentenceAnimation, animation.sourceCellId == sourceCellId {
-                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, height: height)
+                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, width: width, height: height)
                             .matchedGeometryEffect(id: animation.tokenId, in: sentenceAnimationNamespace, isSource: true)
                             .zIndex(3)
                     } else {
-                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, height: height)
+                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, width: width, height: height)
                     }
                 }
             }
             .buttonStyle(.plain)
+            .frame(width: width, height: height)
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: max(0.01, model.holdToSelectMillis / 1_000))
                     .onEnded { _ in
@@ -715,7 +737,7 @@ struct SymbolBoardWorkspaceView: View {
         .accessibilityHidden(hiddenInRunMode || (model.scanningEnabled && !model.scanPhraseGridEnabled))
     }
 
-    private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, height: CGFloat) -> some View {
+    private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, width: CGFloat, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if model.labelAtTop && model.showButtonLabels {
                 boardCellLabel(cell)
@@ -728,7 +750,7 @@ struct SymbolBoardWorkspaceView: View {
                         image
                             .resizable()
                             .scaledToFit()
-                            .frame(maxWidth: .infinity, maxHeight: 56)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     case .failure(_):
                         EmptyView()
                     case .empty:
@@ -738,7 +760,7 @@ struct SymbolBoardWorkspaceView: View {
                         EmptyView()
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
             if !model.labelAtTop && model.showButtonLabels {
@@ -760,7 +782,7 @@ struct SymbolBoardWorkspaceView: View {
             }
         }
         .padding(8)
-        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .topLeading)
+        .frame(width: width, height: height, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(model.highContrastMode ? Color(.systemBackground) : colorFromHex(cell?.backgroundColor, fallback: Color(.tertiarySystemBackground)))
