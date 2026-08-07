@@ -25,6 +25,7 @@ import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
@@ -44,8 +45,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 
 /**
- * HTTP server that bridges QML UI with Kotlin business logic.
- * QML makes REST calls to this local server.
+ * HTTP server that bridges the native UI with Kotlin business logic.
+ * The native UI makes REST calls to this local server.
  */
 class KotlinBridge(private val port: Int = 8765) {
     private val scope = CoroutineScope(Dispatchers.Default + kotlinx.coroutines.SupervisorJob())
@@ -684,6 +685,20 @@ class KotlinBridge(private val port: Int = 8765) {
                     }
                 }
                 call.respond(HttpStatusCode.OK)
+            }
+
+            // Shared prediction-insertion logic (same as Android/iOS): completes the
+            // current word when the suggestion extends it, otherwise adds a new word.
+            post("/api/predict/insert") {
+                try {
+                    val body = call.receiveText()
+                    val jsonObj = json.parseToJsonElement(body).jsonObject
+                    val sentence = jsonObj["sentence"]?.jsonPrimitive?.contentOrNull ?: ""
+                    val suggestion = jsonObj["suggestion"]?.jsonPrimitive?.contentOrNull ?: ""
+                    call.respond(mapOf("insertion" to nGramPredictionInsertion(sentence, suggestion)))
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.OK, mapOf("insertion" to ""))
+                }
             }
 
             get("/api/predict/status") {

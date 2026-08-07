@@ -139,6 +139,12 @@ struct Predictions {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+struct InsertionResult {
+    #[serde(default)]
+    insertion: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct AzureConfig {
     endpoint: String,
     key: String,
@@ -266,6 +272,7 @@ struct Wingmate {
     editing_cell: Option<(usize, usize)>,
     cell_label: String,
     cell_vocalization: String,
+    pending_prediction_word: Option<String>,
     azure_endpoint: String,
     azure_key: String,
     status: String,
@@ -276,6 +283,7 @@ enum Message {
     Navigate(Page),
     DraftChanged(String),
     PredictionSelected(String),
+    PredictionInsertionLoaded(Result<InsertionResult, String>),
     LoadedPhrases(Result<Vec<Phrase>, String>),
     LoadedCategories(Result<Vec<Category>, String>),
     LoadedVoices(Result<Vec<Voice>, String>),
@@ -406,6 +414,7 @@ impl Wingmate {
             editing_cell: None,
             cell_label: String::new(),
             cell_vocalization: String::new(),
+            pending_prediction_word: None,
             azure_endpoint: String::new(),
             azure_key: String::new(),
             status: "Starting Wingmate services…".into(),
@@ -456,14 +465,28 @@ impl Wingmate {
                 return self.api.predict(value);
             }
             Message::PredictionSelected(word) => {
-                let prefix = self
-                    .draft
-                    .rsplit_once(' ')
-                    .map(|(p, _)| format!("{p} "))
-                    .unwrap_or_default();
-                self.draft = format!("{prefix}{word} ");
-                self.partner.update_text(self.draft.clone());
-                return self.api.learn(self.draft.clone());
+                self.pending_prediction_word = Some(word.clone());
+                let api = self.api.clone();
+                let draft = self.draft.clone();
+                return Task::perform(
+                    async move {
+                        api.request_json(
+                            Method::POST,
+                            "/api/predict/insert",
+                            Some(serde_json::json!({"sentence": draft, "suggestion": word})),
+                        )
+                        .await
+                    },
+                    Message::PredictionInsertionLoaded,
+                );
+            }
+            Message::PredictionInsertionLoaded(result) => {
+                if let Some(_word) = self.pending_prediction_word.take() {
+                    let insertion = result.map(|r| r.insertion).unwrap_or_default();
+                    self.draft = format!("{}{} ", self.draft, insertion);
+                    self.partner.update_text(self.draft.clone());
+                    return self.api.learn(self.draft.clone());
+                }
             }
             Message::LoadedPhrases(result) => match result {
                 Ok(v) => self.phrases = v,
