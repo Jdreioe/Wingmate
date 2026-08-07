@@ -31,7 +31,11 @@ import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
+import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
+import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.time.Clock
@@ -327,6 +331,39 @@ class KoinBridge : KoinComponent {
 
     // --- Swift-friendly board helpers ---
     suspend fun getBoard(id: String): ObfBoard? = get<BoardRepository>().getBoard(id)
+
+    /**
+     * Resolve the effective board settings for the given board id, applying app-level
+     * defaults, then screen overrides, then page overrides (shared with Android).
+     */
+    suspend fun resolveBoardSettings(boardId: String): IosResolvedBoardSettings {
+        val settings = get<SettingsUseCase>().get()
+        val repository = get<BoardRepository>()
+        val board = repository.getBoard(boardId)
+        val screenOverrides = getBoardSetForBoard(boardId)?.screenSettings ?: BoardSettingsOverrides()
+        val pageOverrides = board?.pageSettingsOverrides() ?: BoardSettingsOverrides()
+        val resolved = resolveBoardSettings(
+            appShowLabels = settings.showLabels,
+            appShowSymbols = settings.showSymbols,
+            appLabelAtTop = settings.labelAtTop,
+            appShowMessageBar = settings.boardShowMessageBar,
+            appActivationBehavior = settings.boardActivationBehavior,
+            appReturnBehavior = settings.boardReturnBehavior,
+            screen = screenOverrides,
+            page = pageOverrides
+        )
+        return IosResolvedBoardSettings(
+            showLabels = resolved.showLabels,
+            showSymbols = resolved.showSymbols,
+            labelAtTop = resolved.labelAtTop,
+            showMessageBar = resolved.showMessageBar,
+            activationBehavior = resolved.activationBehavior.name,
+            returnBehavior = resolved.returnBehavior.name
+        )
+    }
+
+    private suspend fun getBoardSetForBoard(boardId: String): ObfBoardSet? =
+        get<BoardSetRepository>().listBoardSets().firstOrNull { set -> set.boardIds.contains(boardId) }
 
     fun boardKeyboardLayout(board: ObfBoard): String? = board.keyboardLayout?.wireValue
 
@@ -640,4 +677,13 @@ data class IosBoardCell(
 data class IosSettingsFlags(
     val usesSystemTts: Boolean,
     val startupUsesScreens: Boolean
+)
+
+data class IosResolvedBoardSettings(
+    val showLabels: Boolean,
+    val showSymbols: Boolean,
+    val labelAtTop: Boolean,
+    val showMessageBar: Boolean,
+    val activationBehavior: String,
+    val returnBehavior: String
 )

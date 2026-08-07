@@ -567,7 +567,7 @@ struct SymbolBoardWorkspaceView: View {
                 }
 
                 // Sentence Box in Run mode
-                if mode == .run && model.boardShowMessageBar {
+                if mode == .run && model.boardMessageBarVisible {
                     SentenceBoxView(
                         phrases: boardSentenceTokens,
                         onDelete: { index in
@@ -767,11 +767,11 @@ struct SymbolBoardWorkspaceView: View {
         let isHighlighted = model.highlightedButtonId != nil && model.highlightedButtonId == cell?.buttonId
         return AnyView(
             VStack(alignment: .leading, spacing: 4) {
-            if model.labelAtTop && model.showButtonLabels {
+            if model.boardLabelAtTop && model.boardShowLabels {
                 boardCellLabel(cell)
             }
 
-            if model.showButtonSymbols, let imageUrl = trimmed(cell?.imageUrl), let url = URL(string: imageUrl) {
+            if model.boardShowSymbols, let imageUrl = trimmed(cell?.imageUrl), let url = URL(string: imageUrl) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -791,7 +791,7 @@ struct SymbolBoardWorkspaceView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            if !model.labelAtTop && model.showButtonLabels {
+            if !model.boardLabelAtTop && model.boardShowLabels {
                 boardCellLabel(cell)
             }
 
@@ -1243,13 +1243,23 @@ struct SymbolBoardWorkspaceView: View {
     private func activateBoardCell(_ cell: BoardCellInfo?, row: Int, col: Int, sourceCellId: String) {
         guard let cell else { return }
         if trimmed(cell.linkedBoardId) != nil {
+            if let current = model.selectedBoardId {
+                model.pushBoardNavigationStack(current)
+            }
             Task { await model.activateSelectedBoardCell(row: row, col: col) }
             return
         }
         if cell.actions.isEmpty {
-            appendCellToSentenceIfNeeded(cell, sourceCellId: sourceCellId)
+            let behavior = model.boardActivationBehavior
+            let shouldAdd = behavior != "SpeakOnly"
+            let shouldSpeak = behavior != "AddOnly"
+            if shouldAdd {
+                appendCellToSentenceIfNeeded(cell, sourceCellId: sourceCellId)
+            }
             Task {
-                await model.activateSelectedBoardCell(row: row, col: col)
+                if shouldSpeak {
+                    await model.activateSelectedBoardCell(row: row, col: col)
+                }
                 await model.activateBoardSelectionHighlight(buttonId: cell.buttonId)
             }
             return
@@ -1295,6 +1305,7 @@ struct SymbolBoardWorkspaceView: View {
         }
         if isContentActivation {
             Task { await model.activateBoardSelectionHighlight(buttonId: cell.buttonId) }
+            Task { await model.applyBoardReturnBehavior() }
         }
     }
 

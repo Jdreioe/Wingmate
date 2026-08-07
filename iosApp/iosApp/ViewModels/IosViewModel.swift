@@ -166,6 +166,20 @@ final class IosViewModel: ObservableObject {
     @Published var highlightedButtonId: String? = nil
     private var selectionHighlightGeneration: Int64 = 0
     @Published var boardShowMessageBar: Bool = true
+    @Published var resolvedBoardShowLabels: Bool? = nil
+    @Published var resolvedBoardShowSymbols: Bool? = nil
+    @Published var resolvedBoardLabelAtTop: Bool? = nil
+    @Published var resolvedBoardShowMessageBar: Bool? = nil
+    @Published var resolvedBoardActivationBehavior: String? = nil
+    @Published var resolvedBoardReturnBehavior: String? = nil
+    @Published private(set) var boardStack: [String] = []
+
+    var boardShowLabels: Bool { resolvedBoardShowLabels ?? showButtonLabels }
+    var boardShowSymbols: Bool { resolvedBoardShowSymbols ?? showButtonSymbols }
+    var boardLabelAtTop: Bool { resolvedBoardLabelAtTop ?? labelAtTop }
+    var boardMessageBarVisible: Bool { resolvedBoardShowMessageBar ?? boardShowMessageBar }
+    var boardActivationBehavior: String { resolvedBoardActivationBehavior ?? "SpeakAndAdd" }
+    var boardReturnBehavior: String { resolvedBoardReturnBehavior ?? "Stay" }
 
     private var isApplyingSentencePhraseInput: Bool = false
 
@@ -1426,6 +1440,7 @@ final class IosViewModel: ObservableObject {
     func selectBoardSet(id: String) async {
         guard boardSets.contains(where: { $0.id == id }) else { return }
         selectedBoardSetId = id
+        boardStack = []
         if let set = selectedBoardSet {
             if selectedBoardId == nil || !set.boardIds.contains(selectedBoardId ?? "") {
                 selectedBoardId = set.rootBoardId
@@ -1443,6 +1458,32 @@ final class IosViewModel: ObservableObject {
         await loadSelectedBoard()
     }
 
+    func pushBoardNavigationStack(_ boardId: String) {
+        guard !boardStack.contains(boardId) else { return }
+        boardStack.append(boardId)
+    }
+
+    func applyBoardReturnBehavior() async {
+        let behavior = boardReturnBehavior
+        let currentBoardId = selectedBoardId
+        switch behavior {
+        case "Stay":
+            return
+        case "StartPage":
+            if let rootId = selectedBoardSet?.rootBoardId {
+                boardStack = []
+                selectedBoardId = rootId
+                await loadSelectedBoard()
+            }
+        default:
+            if let previous = boardStack.last {
+                boardStack.removeLast()
+                selectedBoardId = previous
+                await loadSelectedBoard()
+            }
+        }
+    }
+
     func loadSelectedBoard() async {
         guard let id = selectedBoardId else {
             selectedBoard = nil
@@ -1450,11 +1491,24 @@ final class IosViewModel: ObservableObject {
             selectedBoardKeyboardLayout = nil
             selectedBoardUsesSpellingMode = false
             boardPredictionsByButtonId = [:]
+            resolvedBoardShowLabels = nil
+            resolvedBoardShowSymbols = nil
+            resolvedBoardLabelAtTop = nil
+            resolvedBoardShowMessageBar = nil
+            resolvedBoardActivationBehavior = nil
+            resolvedBoardReturnBehavior = nil
             return
         }
         do {
             selectedBoard = try await bridge.getBoard(id: id)
             await refreshSelectedBoardMetadata()
+            let resolved = try? await bridge.resolveBoardSettings(boardId: id)
+            resolvedBoardShowLabels = resolved?.showLabels
+            resolvedBoardShowSymbols = resolved?.showSymbols
+            resolvedBoardLabelAtTop = resolved?.labelAtTop
+            resolvedBoardShowMessageBar = resolved?.showMessageBar
+            resolvedBoardActivationBehavior = resolved?.activationBehavior
+            resolvedBoardReturnBehavior = resolved?.returnBehavior
             let boardName = selectedBoard?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !boardName.isEmpty {
                 boardNamesById[id] = boardName
@@ -1466,6 +1520,12 @@ final class IosViewModel: ObservableObject {
             selectedBoardKeyboardLayout = nil
             selectedBoardUsesSpellingMode = false
             boardPredictionsByButtonId = [:]
+            resolvedBoardShowLabels = nil
+            resolvedBoardShowSymbols = nil
+            resolvedBoardLabelAtTop = nil
+            resolvedBoardShowMessageBar = nil
+            resolvedBoardActivationBehavior = nil
+            resolvedBoardReturnBehavior = nil
         }
     }
 
