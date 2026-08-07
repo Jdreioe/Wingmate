@@ -165,13 +165,19 @@ fun PhraseGrid(
                     PhraseGridItem(
                         item = item,
                         onPlay = {
-                            if (tryActivate(item.id)) onPlay(item)
+                            if (tryActivate(item.id)) {
+                                onPlay(item)
+                                true
+                            } else false
                         },
                         onSpeakSecondary = { onPlaySecondary?.invoke(item) },
                         onLongPress = { onLongPress(item); onToggleWiggleMode?.invoke() },
                         isEditMode = isWiggleMode,
                         onTap = {
-                            if (tryActivate(item.id)) onInsert?.invoke(item)
+                            if (tryActivate(item.id)) {
+                                onInsert?.invoke(item)
+                                true
+                            } else false
                         },
                         onMove = { oldIndex, newIndex -> onMove?.invoke(oldIndex, newIndex) },
                         onDelete = { onDeletePhrase?.invoke(item) },

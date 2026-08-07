@@ -37,6 +37,8 @@ import io.github.jdreioe.wingmate.domain.obf.fieldFontScale
 import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.GridFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
+import io.github.jdreioe.wingmate.application.SelectionDebouncer
+import kotlin.time.Clock
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
@@ -1023,6 +1025,17 @@ fun ObfButtonItem(
     val voiceUseCase: VoiceUseCase = koinInject()
     val aacLogger: AacLogger = koinInject()
     val settings by rememberReactiveSettings()
+    // #118: per-target activation debounce. Each button instance maps to a single target,
+    // so a per-item guard enforces the per-target rules without shared state.
+    val selectionDebouncer = remember(button.id) { SelectionDebouncer() }
+    // #118: return true when this button's activation should proceed. Edit-mode taps are
+    // deliberate field/dialog operations and must never be debounced.
+    fun tryActivate(): Boolean =
+        !isEditMode && selectionDebouncer.tryActivate(
+            button.id,
+            Clock.System.now().toEpochMilliseconds(),
+            settings.selectionDebounceMillis
+        )
     val effectiveBoardSettings = boardSettings ?: resolveBoardSettings(
         appShowLabels = settings.showLabels,
         appShowSymbols = settings.showSymbols,
@@ -1094,9 +1107,12 @@ fun ObfButtonItem(
                 dwellProgress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
                 
                 if (elapsed >= duration) {
-                    if (animateSelection) isSelected = true
-                    onClick()
-                    aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
+                    // #118: only pulse, log, and dispatch when the activation is accepted.
+                    if (tryActivate()) {
+                        if (animateSelection) isSelected = true
+                        aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
+                        onClick()
+                    }
                     dwellProgress = 0f
                     break
                 }
@@ -1196,10 +1212,13 @@ fun ObfButtonItem(
                 }
             }
             .let { baseModifier ->
-                val primaryAction = { 
-                    if (animateSelection) isSelected = true
-                    onClick()
-                    aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
+                val primaryAction = {
+                    // #118: only pulse, log, and dispatch when the activation is accepted.
+                    if (tryActivate()) {
+                        if (animateSelection) isSelected = true
+                        aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
+                        onClick()
+                    }
                 }
                 
                 if (settings.holdToSelectMillis > 0 && !isEditMode) {

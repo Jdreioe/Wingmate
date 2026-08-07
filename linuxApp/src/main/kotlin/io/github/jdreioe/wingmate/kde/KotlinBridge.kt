@@ -215,6 +215,8 @@ class KotlinBridge(private val port: Int = 8765) {
                 jsonObj["highContrastMode"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(highContrastMode = it) }
                 jsonObj["holdToSelectMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(holdToSelectMillis = it.coerceAtLeast(0)) }
                 jsonObj["dwellToSelectMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(dwellToSelectMillis = it.coerceAtLeast(0)) }
+                jsonObj["selectionDebounceMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(selectionDebounceMillis = it.coerceAtLeast(0)) }
+                jsonObj["selectionHighlightMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(selectionHighlightMillis = it.coerceAtLeast(0)) }
                 jsonObj["selectionSoundEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(selectionSoundEnabled = it) }
                 jsonObj["auditoryFishingEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(auditoryFishingEnabled = it) }
                 jsonObj["usageLoggingEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(usageLoggingEnabled = it) }

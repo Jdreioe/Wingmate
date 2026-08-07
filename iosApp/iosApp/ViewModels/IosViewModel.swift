@@ -138,6 +138,7 @@ final class IosViewModel: ObservableObject {
     @Published var highContrastMode: Bool = false
     @Published var holdToSelectMillis: Double = 0
     @Published var dwellToSelectMillis: Double = 0
+    @Published var selectionDebounceMillis: Double = 0
     @Published var selectionSoundEnabled: Bool = false
     @Published var auditoryFishingEnabled: Bool = false
     @Published var usageLoggingEnabled: Bool = false
@@ -464,6 +465,7 @@ final class IosViewModel: ObservableObject {
                 self.highContrastMode = settings.highContrastMode
                 self.holdToSelectMillis = Double(settings.holdToSelectMillis)
                 self.dwellToSelectMillis = Double(settings.dwellToSelectMillis)
+                self.selectionDebounceMillis = Double(settings.selectionDebounceMillis)
                 self.selectionSoundEnabled = settings.selectionSoundEnabled
                 self.auditoryFishingEnabled = settings.auditoryFishingEnabled
                 self.selectionHighlightMillis = settings.selectionHighlightMillis
@@ -509,6 +511,8 @@ final class IosViewModel: ObservableObject {
     }
 
     func insertPhraseText(_ phrase: Shared.Phrase) {
+        // #118: ignore rapid repeated activations of the same target.
+        guard acceptActivation(targetId: phrase.id) else { return }
         let t = phrase.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
         let nsInput = input as NSString
@@ -928,6 +932,11 @@ final class IosViewModel: ObservableObject {
     func setDwellToSelectMillis(_ value: Double) {
         dwellToSelectMillis = min(max(value, 0), 5_000)
         Task { _ = try? await bridge.updateDwellToSelectMillis(millis: Int64(dwellToSelectMillis)) }
+    }
+
+    func setSelectionDebounceMillis(_ value: Double) {
+        selectionDebounceMillis = min(max(value, 0), 1_000)
+        Task { _ = try? await bridge.updateSelectionDebounceMillis(millis: Int64(selectionDebounceMillis)) }
     }
 
     func setSelectionSoundEnabled(_ enabled: Bool) {
@@ -1764,6 +1773,9 @@ final class IosViewModel: ObservableObject {
             return
         }
 
+        // #118: navigation is an explicit action; speech insertion is debounced per cell.
+        if !acceptActivation(targetId: cell.buttonId) { return }
+
         if let textToSpeak = normalizedOptionalText(cell.vocalization) ?? normalizedOptionalText(cell.label) {
             speak(textToSpeak)
         }
@@ -1786,6 +1798,22 @@ final class IosViewModel: ObservableObject {
         selectionHighlightGeneration += 1
         bridge.selectionHighlightClear()
         highlightedButtonId = nil
+    }
+
+    // #118: per-target activation debounce. A zero duration disables the guard entirely.
+    private var lastActivationAtMillis: [String: Int64] = [:]
+    private func acceptActivation(targetId: String) -> Bool {
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let window = Int64(selectionDebounceMillis)
+        if window <= 0 {
+            lastActivationAtMillis[targetId] = nil
+            return true
+        }
+        if let last = lastActivationAtMillis[targetId], now - last < window {
+            return false
+        }
+        lastActivationAtMillis[targetId] = now
+        return true
     }
 
     func refreshBoardPredictions(context: String) async {

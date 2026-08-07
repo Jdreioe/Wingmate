@@ -32,6 +32,9 @@ shared/src/commonMain/kotlin/io/github/jdreioe/wingmate/
   Compose-Multiplatform UI; Android owns its Compose UI in `androidApp`.
 - **No Swift/Rust re-implementation of shared logic** without a bridge call-through.
 
+## Commit Conventions
+- **Reference the issue ticket in the commit message** (e.g. `feat: … (issue #123)` or `Closes #123`) whenever a commit addresses a GitHub issue.
+
 ## Key Patterns
 
 ### Dependency Injection (Koin)

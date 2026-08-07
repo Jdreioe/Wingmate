@@ -21,6 +21,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
@@ -152,6 +154,16 @@ fun SettingsScreen(
 
     // Partner window device detection (desktop-only)
     val partnerDeviceConnected by PartnerWindowAvailability.deviceConnected.collectAsStateWithLifecycle()
+
+    // When the settings screen opens it is layered on top of the previous screen, which may
+    // still hold focus on a text field. Prevent the software keyboard from popping up by
+    // dropping focus and hiding the IME as soon as settings is shown.
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
 
     // Helper to update settings reactively
     fun updateSettings(update: (Settings) -> Settings) {

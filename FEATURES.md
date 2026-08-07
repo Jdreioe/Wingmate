@@ -156,7 +156,7 @@ The following list is taken from the OpenAAC [AAC App Development](https://www.o
         - [ ] 💡 **eyebrows**
 - [x] ✅ **adaptations**
   As users select buttons, there can be different accommodations based on the needs of the individual user that can make selection and access more meaningful. Below are some selection adaptations that people use or have requested.
-    - [ ] ✅ **debounce (prevent multiple hits)**
+    - [x] ✅ **debounce (prevent multiple hits)**
       Some people accidentally hit buttons multiple times in a row, often in quick succession. Having a debounce option can prevent unintentional repeats. This should be an optional setting though, as some people hit buttons quickly enough that a debounce feature may get in their way.
     - [ ] ✅ **option to speak each word on select**
       Some people use button selection as their main communication approach with AAC. They speak each word as it is selected, and may use the sentence box for additional emphasis. Especially with beginning AAC users, this option provides more immediate feedback and can help the person as well as those supporting them.

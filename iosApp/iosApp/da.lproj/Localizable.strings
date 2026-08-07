@@ -401,6 +401,7 @@
 "settings.accessibility.touch_timing" = "Berøring og timing";
 "settings.accessibility.hold" = "Hold for at vælge";
 "settings.accessibility.dwell" = "Dvæl for at vælge";
+"settings.accessibility.debounce" = "Markeringsde-bounce";
 "settings.accessibility.feedback" = "Feedback og logning";
 "settings.accessibility.selection_sound" = "Lyd ved valg";
 "settings.accessibility.auditory_fishing" = "Auditiv søgning";

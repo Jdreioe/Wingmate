@@ -337,6 +337,13 @@ private struct AccessibilitySettingsView: View {
                     step: 250,
                     suffix: " ms"
                 )
+                SettingsSliderRow(
+                    title: "settings.accessibility.debounce",
+                    value: Binding(get: { model.selectionDebounceMillis }, set: { model.setSelectionDebounceMillis($0) }),
+                    range: 0...1_000,
+                    step: 50,
+                    suffix: " ms"
+                )
             }
 
             Section("settings.accessibility.feedback") {
@@ -450,7 +457,7 @@ private struct EditingAccessSettingsView: View {
                 Button(model.editingAccessEnabled ? "editing_access.change" : "editing_access.enable") {
                     Task {
                         let valid = newCode.count >= 4 && newCode.count <= 8 && newCode == confirmation
-                        let unlocked = !model.editingAccessEnabled || await model.unlockEditingAccess(currentCode)
+                        let unlocked = !model.editingAccessEnabled ? true : await model.unlockEditingAccess(currentCode)
                         guard valid, unlocked else { error = true; return }
                         error = !(await model.configureEditingAccess(newCode))
                         if !error { currentCode = ""; newCode = ""; confirmation = "" }

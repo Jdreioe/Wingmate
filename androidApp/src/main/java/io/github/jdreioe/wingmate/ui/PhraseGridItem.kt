@@ -63,10 +63,12 @@ import com.hojmoseit.wingmate.R
 @Composable
 fun PhraseGridItem(
     item: Phrase,
-    onPlay: () -> Unit,
+    // #118: return true when the activation was accepted (not debounced), so the item only
+    // pulses and logs after a successful selection.
+    onPlay: () -> Boolean,
     onLongPress: () -> Unit,
     onSpeakSecondary: (() -> Unit)? = null,
-    onTap: (() -> Unit)? = null,
+    onTap: (() -> Boolean)? = null,
     isEditMode: Boolean = false,
     onDelete: (() -> Unit)? = null,
     onMove: ((oldIndex: Int, newIndex: Int) -> Unit)? = null,
@@ -157,9 +159,11 @@ fun PhraseGridItem(
                 dwellProgress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
                 
                 if (elapsed >= duration) {
-                    isSelected = true
-                    onPlay()
-                    aacLogger.logButtonClick(item.text, phraseId = item.id)
+                    // #118: only pulse and log when the activation is accepted.
+                    if (runCatching { onPlay() }.getOrDefault(false)) {
+                        isSelected = true
+                        aacLogger.logButtonClick(item.text, phraseId = item.id)
+                    }
                     dwellProgress = 0f
                     break
                 }
@@ -193,9 +197,11 @@ fun PhraseGridItem(
             .let { baseModifier ->
                 val primaryAction = {
                     showMenu = false
-                    isSelected = true
-                    aacLogger.logButtonClick(item.text, phraseId = item.id)
-                    try { onTap?.invoke() ?: onPlay() } catch (_: Throwable) {}
+                    // #118: pulse and log only after the activation is accepted.
+                    if (runCatching { onTap?.invoke() ?: onPlay() }.getOrDefault(false)) {
+                        isSelected = true
+                        aacLogger.logButtonClick(item.text, phraseId = item.id)
+                    }
                 }
                 
                 if (settings.holdToSelectMillis > 0 && !isEditMode) {

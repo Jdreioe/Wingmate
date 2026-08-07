@@ -210,6 +210,7 @@
 "settings.accessibility.touch_timing" = "Touch & Timing";
 "settings.accessibility.hold" = "Hold to Select";
 "settings.accessibility.dwell" = "Dwell to Select";
+"settings.accessibility.debounce" = "Selection Debounce";
 "settings.accessibility.feedback" = "Feedback & Logging";
 "settings.accessibility.selection_sound" = "Selection Sound";
 "settings.accessibility.auditory_fishing" = "Auditory Fishing";
