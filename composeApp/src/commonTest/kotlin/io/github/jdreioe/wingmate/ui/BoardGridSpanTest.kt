@@ -1,6 +1,13 @@
 package io.github.jdreioe.wingmate.ui
 
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
+import io.github.jdreioe.wingmate.domain.obf.GridFieldSpan
+import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
+import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
+import io.github.jdreioe.wingmate.domain.obf.fieldSpanAt
+import io.github.jdreioe.wingmate.domain.obf.fieldAnchorAt
+import io.github.jdreioe.wingmate.domain.obf.moveOrSwapField
+import io.github.jdreioe.wingmate.domain.obf.resized
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

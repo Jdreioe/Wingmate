@@ -1,7 +1,5 @@
-package io.github.jdreioe.wingmate.ui
+package io.github.jdreioe.wingmate.domain.obf
 
-import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
-import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

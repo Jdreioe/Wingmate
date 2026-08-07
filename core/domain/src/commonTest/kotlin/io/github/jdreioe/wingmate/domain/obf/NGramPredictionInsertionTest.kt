@@ -1,4 +1,4 @@
-package io.github.jdreioe.wingmate.ui
+package io.github.jdreioe.wingmate.domain.obf
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

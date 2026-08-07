@@ -32,12 +32,20 @@ import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
+import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.obf.fieldItems
 import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
 import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
+import io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion
+import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
+import io.github.jdreioe.wingmate.domain.obf.shouldSpeakBoardSelection
+import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
+import io.github.jdreioe.wingmate.domain.obf.buildResolvedSentence
+import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
@@ -454,6 +462,31 @@ class KoinBridge : KoinComponent {
         return true
     }
 
+    // --- Shared board-session logic (same behavior as Android/Linux) ---
+    fun nGramPredictionInsertion(sentence: String, suggestion: String): String =
+        io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion(sentence, suggestion)
+
+    fun boardShouldAddSelection(behavior: String): Boolean =
+        shouldAddBoardSelection(behavior.toBoardActivationBehavior())
+
+    fun boardShouldSpeakSelection(behavior: String): Boolean =
+        shouldSpeakBoardSelection(behavior.toBoardActivationBehavior())
+
+    fun boardReturnBehavior(
+        behavior: String,
+        currentBoardId: String?,
+        boardStack: List<String>,
+        rootBoardId: String
+    ): IosBoardReturnResult {
+        val (boardId, stack) = applyBoardReturnBehavior(
+            behavior.toBoardReturnBehavior(), currentBoardId, boardStack, rootBoardId
+        )
+        return IosBoardReturnResult(boardId = boardId, boardStack = stack)
+    }
+
+    fun boardBackspaceSentence(texts: List<String>): List<String> =
+        backspaceSentenceSelection(texts)
+
     suspend fun upsertBoardCellButton(
         boardId: String, row: Int, col: Int, label: String?, vocalization: String?,
         backgroundColor: String?, borderColor: String?, linkedBoardId: String?,
@@ -708,6 +741,20 @@ data class IosBoardSetExportResult(
 
 private val logger = KotlinLogging.logger {}
 
+private fun String.toBoardActivationBehavior(): BoardActivationBehavior =
+    when (this) {
+        "AddOnly" -> BoardActivationBehavior.AddOnly
+        "SpeakOnly" -> BoardActivationBehavior.SpeakOnly
+        else -> BoardActivationBehavior.SpeakAndAdd
+    }
+
+private fun String.toBoardReturnBehavior(): BoardReturnBehavior =
+    when (this) {
+        "Previous" -> BoardReturnBehavior.Previous
+        "StartPage" -> BoardReturnBehavior.StartPage
+        else -> BoardReturnBehavior.Stay
+    }
+
 data class IosBoardCell(
     val row: Int,
     val col: Int,
@@ -741,6 +788,11 @@ data class IosBoardFieldItem(
 data class IosGridFieldSpan(
     val rows: Int,
     val columns: Int
+)
+
+data class IosBoardReturnResult(
+    val boardId: String?,
+    val boardStack: List<String>
 )
 
 data class IosResolvedBoardSettings(

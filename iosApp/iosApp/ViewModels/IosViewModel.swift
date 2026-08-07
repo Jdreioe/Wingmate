@@ -1531,23 +1531,26 @@ final class IosViewModel: ObservableObject {
 
     func applyBoardReturnBehavior() async {
         let behavior = boardReturnBehavior
-        let currentBoardId = selectedBoardId
-        switch behavior {
-        case "Stay":
-            return
-        case "StartPage":
-            if let rootId = selectedBoardSet?.rootBoardId {
-                boardStack = []
-                selectedBoardId = rootId
-                await loadSelectedBoard()
-            }
-        default:
-            if let previous = boardStack.last {
-                boardStack.removeLast()
-                selectedBoardId = previous
-                await loadSelectedBoard()
-            }
-        }
+        let result = bridge.boardReturnBehavior(
+            behavior: behavior,
+            currentBoardId: selectedBoardId,
+            boardStack: boardStack,
+            rootBoardId: selectedBoardSet?.rootBoardId ?? ""
+        )
+        let nextBoardId = result.boardId
+        let nextStack = result.boardStack
+        boardStack = nextStack
+        guard let nextBoardId, nextBoardId != selectedBoardId else { return }
+        selectedBoardId = nextBoardId
+        await loadSelectedBoard()
+    }
+
+    func nGramPredictionInsertion(sentence: String, suggestion: String) -> String {
+        bridge.nGramPredictionInsertion(sentence: sentence, suggestion: suggestion)
+    }
+
+    func boardBackspaceSentence(texts: [String]) -> [String] {
+        bridge.boardBackspaceSentence(texts: texts)
     }
 
     func loadSelectedBoard() async {

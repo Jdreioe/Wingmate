@@ -33,6 +33,7 @@ import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.obf.fieldItems
 import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
+import io.github.jdreioe.wingmate.domain.obf.GridFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border

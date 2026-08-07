@@ -114,6 +114,31 @@ import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
+import io.github.jdreioe.wingmate.domain.obf.GridFieldSpan
+import io.github.jdreioe.wingmate.domain.obf.CellTapResult
+import io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion
+import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
+import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
+import io.github.jdreioe.wingmate.domain.obf.shouldSpeakBoardSelection
+import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
+import io.github.jdreioe.wingmate.domain.obf.buildResolvedSentence
+import io.github.jdreioe.wingmate.domain.obf.orderedPredictionButtonIds
+import io.github.jdreioe.wingmate.domain.obf.resolveCellTap
+import io.github.jdreioe.wingmate.domain.obf.renameDraftBoardSet
+import io.github.jdreioe.wingmate.domain.obf.renameDraftBoard
+import io.github.jdreioe.wingmate.domain.obf.resizeDraftBoard
+import io.github.jdreioe.wingmate.domain.obf.moveDraftField
+import io.github.jdreioe.wingmate.domain.obf.resizeDraftField
+import io.github.jdreioe.wingmate.domain.obf.withHomeFieldsBottomLeft
+import io.github.jdreioe.wingmate.domain.obf.updateDraftCell
+import io.github.jdreioe.wingmate.domain.obf.clearDraftCell
+import io.github.jdreioe.wingmate.domain.obf.normalizedOrder
+import io.github.jdreioe.wingmate.domain.obf.fieldSpanAt
+import io.github.jdreioe.wingmate.domain.obf.fieldAnchorAt
+import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
+import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
+import io.github.jdreioe.wingmate.domain.obf.resized
+import io.github.jdreioe.wingmate.domain.obf.moveOrSwapField
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -161,32 +186,6 @@ private data class WorkspaceCellTarget(
     val column: Int,
     val button: ObfButton?
 )
-
-internal sealed interface CellTapResult {
-    data class Select(val anchor: Pair<Int, Int>) : CellTapResult
-    data class OpenDialog(
-        val row: Int,
-        val column: Int,
-        val button: ObfButton?
-    ) : CellTapResult
-}
-
-internal fun resolveCellTap(
-    grid: io.github.jdreioe.wingmate.domain.obf.ObfGrid?,
-    selectedField: Pair<Int, Int>?,
-    row: Int,
-    column: Int,
-    button: ObfButton?
-): CellTapResult {
-    val anchor = button?.let { grid?.fieldAnchorAt(row, column) }
-    return when {
-        anchor != null && anchor == selectedField -> CellTapResult.OpenDialog(row, column, button)
-        anchor != null -> CellTapResult.Select(anchor)
-        else -> CellTapResult.OpenDialog(row, column, button)
-    }
-}
-
-data class GridFieldSpan(val rows: Int, val columns: Int)
 
 /**
  * Board-set entry point with a familiar library -> Run/Edit workspace flow.
@@ -749,8 +748,9 @@ private fun BoardSetWorkspaceScreen(
     }
     val sentenceText = remember(selectedButtons, activeBoard?.strings, settings.primaryLanguage) {
         buildResolvedSentence(
-            selected = selectedButtons,
-            board = activeBoard,
+            buttons = selectedButtons.map { it.first },
+            strings = activeBoard?.strings.orEmpty(),
+            spellingMode = activeBoard?.spellingMode == true,
             primaryLanguage = settings.primaryLanguage
         )
     }
@@ -1874,447 +1874,6 @@ private fun addDraftBoard(
     )
 }
 
-internal fun updateDraftCell(
-    graph: BoardSetGraph,
-    boardId: String,
-    row: Int,
-    column: Int,
-    label: String,
-    vocalization: String?,
-    imageUrl: String?,
-    recordingPath: String? = null,
-    backgroundColor: String?,
-    language: String?,
-    mathMode: Boolean = false,
-    hidden: Boolean = false,
-    linkedBoardId: String?,
-    action: String? = null,
-    actions: List<String> = emptyList(),
-    shape: ObfButtonShape = ObfButtonShape.Rounded
-): BoardSetGraph {
-    val board = graph.boardsById[boardId] ?: return graph
-    val grid = board.grid ?: return graph
-    val existingId = grid.order.getOrNull(row)?.getOrNull(column)
-    val existingButton = existingId?.let { id -> board.buttons.firstOrNull { it.id == id } }
-    val buttonId = existingButton?.id ?: workspaceId("btn")
-    var imageId = existingButton?.imageId
-    val normalizedUrl = imageUrl?.trim()?.ifBlank { null }
-    val images = when {
-        normalizedUrl == null -> {
-            imageId = null
-            board.images
-        }
-        imageId != null -> board.images.map {
-            if (it.id == imageId) it.copy(url = normalizedUrl, path = null, data = null) else it
-        }
-        else -> {
-            val createdImageId = workspaceId("img")
-            imageId = createdImageId
-            board.images + ObfImage(id = createdImageId, url = normalizedUrl)
-        }
-    }
-    var soundId = existingButton?.soundId
-    val normalizedRecordingPath = recordingPath?.trim()?.ifBlank { null }
-    val sounds = when {
-        normalizedRecordingPath == null -> {
-            soundId = null
-            board.sounds
-        }
-        soundId != null -> board.sounds.map {
-            if (it.id == soundId) it.copy(path = normalizedRecordingPath, url = null, data = null) else it
-        }
-        else -> {
-            val createdSoundId = workspaceId("sound")
-            soundId = createdSoundId
-            board.sounds + ObfSound(
-                id = createdSoundId,
-                contentType = "audio/wav",
-                path = normalizedRecordingPath
-            )
-        }
-    }
-    val button = (existingButton ?: ObfButton(id = buttonId)).copy(
-        label = label.trim(),
-        vocalization = vocalization?.trim()?.ifBlank { null },
-        backgroundColor = backgroundColor?.trim()?.ifBlank { null },
-        locale = language?.trim()?.ifBlank { null },
-        imageId = imageId,
-        soundId = soundId,
-        hidden = hidden,
-        loadBoard = linkedBoardId?.let { targetId ->
-            ObfLoadBoard(id = targetId, name = graph.boardsById[targetId]?.name)
-        },
-        action = action?.trim()?.ifBlank { null },
-        actions = actions
-    ).withMathMode(mathMode).withShape(shape)
-    val buttons = if (existingButton == null) board.buttons + button else board.buttons.map {
-        if (it.id == button.id) button else it
-    }
-    val existingSpan = grid.fieldSpanAt(row, column)
-    val updatedGrid = grid.withFieldSpan(
-        row = row,
-        column = column,
-        buttonId = buttonId,
-        rowSpan = existingSpan.rows,
-        columnSpan = existingSpan.columns
-    ) ?: return graph
-    val updatedBoard = board.copy(buttons = buttons, images = images, sounds = sounds, grid = updatedGrid)
-    return graph.copy(boards = graph.boards.map { if (it.id == boardId) updatedBoard else it })
-}
-
-internal fun clearDraftCell(
-    graph: BoardSetGraph,
-    boardId: String,
-    row: Int,
-    column: Int
-): BoardSetGraph {
-    val board = graph.boardsById[boardId] ?: return graph
-    val grid = board.grid ?: return graph
-    val removedButtonId = grid.order.getOrNull(row)?.getOrNull(column)
-    val order = grid.normalizedOrder().map { values ->
-        values.map { value -> if (value == removedButtonId) null else value }
-    }
-    val removedImageId = board.buttons.firstOrNull { it.id == removedButtonId }?.imageId
-    val removedSoundId = board.buttons.firstOrNull { it.id == removedButtonId }?.soundId
-    val buttons = board.buttons.filterNot { it.id == removedButtonId }
-    val images = if (removedImageId != null && buttons.none { it.imageId == removedImageId }) {
-        board.images.filterNot { it.id == removedImageId }
-    } else board.images
-    val sounds = if (removedSoundId != null && buttons.none { it.soundId == removedSoundId }) {
-        board.sounds.filterNot { it.id == removedSoundId }
-    } else board.sounds
-    val updatedBoard = board.copy(buttons = buttons, images = images, sounds = sounds, grid = grid.copy(order = order))
-    return graph.copy(boards = graph.boards.map { if (it.id == boardId) updatedBoard else it })
-}
-
-internal fun ObfGrid.fieldSpanAt(row: Int, column: Int): GridFieldSpan {
-    val buttonId = order.getOrNull(row)?.getOrNull(column)
-        ?: return GridFieldSpan(rows = 1, columns = 1)
-    val occupiedCells = normalizedOrder().flatMapIndexed { rowIndex, values ->
-        values.mapIndexedNotNull { columnIndex, value ->
-            if (value == buttonId) rowIndex to columnIndex else null
-        }
-    }
-    if (occupiedCells.isEmpty()) return GridFieldSpan(rows = 1, columns = 1)
-    val minRow = occupiedCells.minOf { it.first }
-    val maxRow = occupiedCells.maxOf { it.first }
-    val minColumn = occupiedCells.minOf { it.second }
-    val maxColumn = occupiedCells.maxOf { it.second }
-    return GridFieldSpan(
-        rows = maxRow - minRow + 1,
-        columns = maxColumn - minColumn + 1
-    )
-}
-
-internal fun ObfGrid.fieldAnchorAt(row: Int, column: Int): Pair<Int, Int>? {
-    val buttonId = order.getOrNull(row)?.getOrNull(column) ?: return null
-    return normalizedOrder().flatMapIndexed { rowIndex, values ->
-        values.mapIndexedNotNull { columnIndex, value ->
-            if (value == buttonId) rowIndex to columnIndex else null
-        }
-    }.minWithOrNull(compareBy({ it.first }, { it.second }))
-}
-
-internal fun ObfGrid.availableFieldSpansAt(row: Int, column: Int): List<GridFieldSpan> {
-    if (row !in 0 until rows || column !in 0 until columns) return emptyList()
-    val normalized = normalizedOrder()
-    val existingId = normalized[row][column]
-    return buildList {
-        for (rowSpan in 1..(rows - row)) {
-            for (columnSpan in 1..(columns - column)) {
-                val available = (row until row + rowSpan).all { rowIndex ->
-                    (column until column + columnSpan).all { columnIndex ->
-                        normalized[rowIndex][columnIndex] == null ||
-                            normalized[rowIndex][columnIndex] == existingId
-                    }
-                }
-                if (available) add(GridFieldSpan(rowSpan, columnSpan))
-            }
-        }
-    }.sortedWith(compareBy<GridFieldSpan> { it.rows * it.columns }.thenBy { it.rows }.thenBy { it.columns })
-}
-
-internal fun ObfGrid.withFieldSpan(
-    row: Int,
-    column: Int,
-    buttonId: String,
-    rowSpan: Int,
-    columnSpan: Int
-): ObfGrid? {
-    if (row !in 0 until rows || column !in 0 until columns) return null
-    val safeRowSpan = rowSpan.coerceAtLeast(1)
-    val safeColumnSpan = columnSpan.coerceAtLeast(1)
-    if (row + safeRowSpan > rows || column + safeColumnSpan > columns) return null
-    val normalized = normalizedOrder()
-    val existingId = normalized[row][column]
-    val targetIsAvailable = (row until row + safeRowSpan).all { rowIndex ->
-        (column until column + safeColumnSpan).all { columnIndex ->
-            normalized[rowIndex][columnIndex] == null || normalized[rowIndex][columnIndex] == existingId
-        }
-    }
-    if (!targetIsAvailable) return null
-    val cleared = normalized.map { values ->
-        values.map { value -> if (value == existingId && existingId != null) null else value }.toMutableList()
-    }
-    for (rowIndex in row until row + safeRowSpan) {
-        for (columnIndex in column until column + safeColumnSpan) {
-            cleared[rowIndex][columnIndex] = buttonId
-        }
-    }
-    return copy(order = cleared)
-}
-
-internal fun ObfGrid.resized(newRows: Int, newColumns: Int): ObfGrid? {
-    if (newRows !in 1..20 || newColumns !in 1..20) return null
-    val normalized = normalizedOrder()
-    val removesOccupiedCell = normalized.indices.any { rowIndex ->
-        normalized[rowIndex].indices.any { columnIndex ->
-            normalized[rowIndex][columnIndex] != null &&
-                (rowIndex >= newRows || columnIndex >= newColumns)
-        }
-    }
-    if (removesOccupiedCell) return null
-    return copy(
-        rows = newRows,
-        columns = newColumns,
-        order = List(newRows) { rowIndex ->
-            List(newColumns) { columnIndex ->
-                normalized.getOrNull(rowIndex)?.getOrNull(columnIndex)
-            }
-        }
-    )
-}
-
-internal fun ObfGrid.moveOrSwapField(
-    fromRow: Int,
-    fromColumn: Int,
-    toRow: Int,
-    toColumn: Int
-): ObfGrid? {
-    if (fromRow !in 0 until rows || fromColumn !in 0 until columns) return null
-    if (toRow !in 0 until rows || toColumn !in 0 until columns) return null
-    val normalized = normalizedOrder()
-    val sourceId = normalized[fromRow][fromColumn] ?: return null
-    val targetId = normalized[toRow][toColumn]
-    if (sourceId == targetId) return this
-
-    fun anchorAndSpan(buttonId: String): Pair<Pair<Int, Int>, GridFieldSpan>? {
-        val cells = normalized.flatMapIndexed { rowIndex, values ->
-            values.mapIndexedNotNull { columnIndex, value ->
-                if (value == buttonId) rowIndex to columnIndex else null
-            }
-        }
-        if (cells.isEmpty()) return null
-        val minRow = cells.minOf { it.first }
-        val maxRow = cells.maxOf { it.first }
-        val minColumn = cells.minOf { it.second }
-        val maxColumn = cells.maxOf { it.second }
-        val rectangular = (minRow..maxRow).all { rowIndex ->
-            (minColumn..maxColumn).all { columnIndex ->
-                normalized[rowIndex][columnIndex] == buttonId
-            }
-        }
-        if (!rectangular) return null
-        return (minRow to minColumn) to GridFieldSpan(
-            rows = maxRow - minRow + 1,
-            columns = maxColumn - minColumn + 1
-        )
-    }
-
-    val (sourceAnchor, sourceSpan) = anchorAndSpan(sourceId) ?: return null
-    val targetPlacement = targetId?.let(::anchorAndSpan)
-    val targetAnchor = targetPlacement?.first ?: (toRow to toColumn)
-    val targetSpan = targetPlacement?.second
-    val clearedIds = setOfNotNull(sourceId, targetId)
-    val updated = normalized.map { row ->
-        row.map { value -> if (value in clearedIds) null else value }.toMutableList()
-    }
-
-    fun canPlace(anchor: Pair<Int, Int>, span: GridFieldSpan): Boolean {
-        val (row, column) = anchor
-        if (row < 0 || column < 0 || row + span.rows > rows || column + span.columns > columns) {
-            return false
-        }
-        return (row until row + span.rows).all { rowIndex ->
-            (column until column + span.columns).all { columnIndex ->
-                updated[rowIndex][columnIndex] == null
-            }
-        }
-    }
-
-    if (!canPlace(targetAnchor, sourceSpan)) return null
-    if (targetSpan != null && !canPlace(sourceAnchor, targetSpan)) return null
-    if (targetSpan != null) {
-        val sourceDestinationRows = targetAnchor.first until targetAnchor.first + sourceSpan.rows
-        val sourceDestinationColumns = targetAnchor.second until targetAnchor.second + sourceSpan.columns
-        val targetDestinationRows = sourceAnchor.first until sourceAnchor.first + targetSpan.rows
-        val targetDestinationColumns = sourceAnchor.second until sourceAnchor.second + targetSpan.columns
-        val destinationsOverlap = sourceDestinationRows.any { it in targetDestinationRows } &&
-            sourceDestinationColumns.any { it in targetDestinationColumns }
-        if (destinationsOverlap) return null
-    }
-
-    fun place(buttonId: String, anchor: Pair<Int, Int>, span: GridFieldSpan) {
-        val (row, column) = anchor
-        for (rowIndex in row until row + span.rows) {
-            for (columnIndex in column until column + span.columns) {
-                updated[rowIndex][columnIndex] = buttonId
-            }
-        }
-    }
-
-    place(sourceId, targetAnchor, sourceSpan)
-    if (targetId != null && targetSpan != null) place(targetId, sourceAnchor, targetSpan)
-    return copy(order = updated)
-}
-
-private fun ObfGrid.normalizedOrder(): List<List<String?>> =
-    List(rows.coerceAtLeast(0)) { rowIndex ->
-        List(columns.coerceAtLeast(0)) { columnIndex ->
-            order.getOrNull(rowIndex)?.getOrNull(columnIndex)
-        }
-    }
-
-internal fun renameDraftBoard(graph: BoardSetGraph, boardId: String, name: String): BoardSetGraph {
-    return graph.copy(
-        boards = graph.boards.map { board ->
-            if (board.id == boardId) board.copy(name = name.trim()) else board
-        }
-    )
-}
-
-internal fun renameDraftBoardSet(graph: BoardSetGraph, name: String): BoardSetGraph {
-    val normalizedName = name.trim()
-    if (normalizedName.isEmpty() || normalizedName == graph.boardSet.name) return graph
-    return graph.copy(boardSet = graph.boardSet.copy(name = normalizedName))
-}
-
-internal fun resizeDraftBoard(
-    graph: BoardSetGraph,
-    boardId: String,
-    rows: Int,
-    columns: Int
-): BoardSetGraph {
-    val board = graph.boardsById[boardId] ?: return graph
-    val grid = board.grid ?: return graph
-    val homeButton = board.buttons.firstOrNull { button ->
-        button.resolvedActions().any { it.trim().equals(":home", ignoreCase = true) } ||
-            button.loadBoard?.id == graph.boardSet.rootBoardId
-    }
-    val resizedGrid = if (homeButton == null) {
-        grid.resized(rows, columns)
-    } else {
-        val homeCell = grid.normalizedOrder().flatMapIndexed { rowIndex, values ->
-            values.mapIndexedNotNull { columnIndex, value ->
-                if (value == homeButton.id) rowIndex to columnIndex else null
-            }
-        }.firstOrNull()
-        val homeSpan = homeCell?.let { grid.fieldSpanAt(it.first, it.second) }
-            ?: GridFieldSpan(rows = 1, columns = 1)
-        val withoutHome = grid.copy(
-            order = grid.normalizedOrder().map { values ->
-                values.map { value -> if (value == homeButton.id) null else value }
-            }
-        )
-        var resized = withoutHome.resized(rows, columns) ?: return graph
-        val targetRow = rows - homeSpan.rows
-        if (targetRow < 0 || homeSpan.columns > columns) return graph
-        val targetId = resized.order[targetRow][0]
-        if (targetId != null) {
-            val emptyCells = resized.order.flatMapIndexed { rowIndex, values ->
-                values.mapIndexedNotNull { columnIndex, value ->
-                    if (value == null && (rowIndex != targetRow || columnIndex != 0)) {
-                        rowIndex to columnIndex
-                    } else {
-                        null
-                    }
-                }
-            }
-            resized = emptyCells.firstNotNullOfOrNull { (emptyRow, emptyColumn) ->
-                resized.moveOrSwapField(targetRow, 0, emptyRow, emptyColumn)
-            } ?: return graph
-        }
-        resized.withFieldSpan(
-            row = targetRow,
-            column = 0,
-            buttonId = homeButton.id,
-            rowSpan = homeSpan.rows,
-            columnSpan = homeSpan.columns
-        )
-    } ?: return graph
-    if (resizedGrid == board.grid) return graph
-    return graph.copy(
-        boards = graph.boards.map { current ->
-            if (current.id == boardId) current.copy(grid = resizedGrid) else current
-        }
-    )
-}
-
-internal fun moveDraftField(
-    graph: BoardSetGraph,
-    boardId: String,
-    fromRow: Int,
-    fromColumn: Int,
-    toRow: Int,
-    toColumn: Int
-): BoardSetGraph {
-    val board = graph.boardsById[boardId] ?: return graph
-    val movedGrid = board.grid?.moveOrSwapField(fromRow, fromColumn, toRow, toColumn) ?: return graph
-    if (movedGrid == board.grid) return graph
-    return graph.copy(
-        boards = graph.boards.map { current ->
-            if (current.id == boardId) current.copy(grid = movedGrid) else current
-        }
-    )
-}
-
-internal fun resizeDraftField(
-    graph: BoardSetGraph,
-    boardId: String,
-    row: Int,
-    column: Int,
-    rowSpan: Int,
-    columnSpan: Int
-): BoardSetGraph {
-    val board = graph.boardsById[boardId] ?: return graph
-    val grid = board.grid ?: return graph
-    val buttonId = grid.order.getOrNull(row)?.getOrNull(column) ?: return graph
-    val resizedGrid = grid.withFieldSpan(row, column, buttonId, rowSpan, columnSpan) ?: return graph
-    if (resizedGrid == grid) return graph
-    return graph.copy(
-        boards = graph.boards.map { current ->
-            if (current.id == boardId) current.copy(grid = resizedGrid) else current
-        }
-    )
-}
-
-internal fun BoardSetGraph.withHomeFieldsBottomLeft(): BoardSetGraph {
-    val rootBoardId = boardSet.rootBoardId
-    val normalizedBoards = boards.map { board ->
-        val grid = board.grid ?: return@map board
-        val homeButton = board.buttons.firstOrNull { button ->
-            button.resolvedActions().any { it.trim().equals(":home", ignoreCase = true) } ||
-                button.loadBoard?.id == rootBoardId
-        } ?: return@map board
-        val homeCells = grid.normalizedOrder().flatMapIndexed { rowIndex, values ->
-            values.mapIndexedNotNull { columnIndex, value ->
-                if (value == homeButton.id) rowIndex to columnIndex else null
-            }
-        }
-        if (homeCells.isEmpty()) return@map board
-        val anchor = homeCells.minOf { it.first } to homeCells.minOf { it.second }
-        val span = grid.fieldSpanAt(anchor.first, anchor.second)
-        val bottomLeft = (grid.rows - span.rows).coerceAtLeast(0) to 0
-        val pinnedGrid = grid.moveOrSwapField(
-            fromRow = anchor.first,
-            fromColumn = anchor.second,
-            toRow = bottomLeft.first,
-            toColumn = bottomLeft.second
-        ) ?: grid
-        if (pinnedGrid == grid) board else board.copy(grid = pinnedGrid)
-    }
-    return if (normalizedBoards == boards) this else copy(boards = normalizedBoards)
-}
 
 private fun setDraftRoot(graph: BoardSetGraph, boardId: String): BoardSetGraph {
     if (boardId !in graph.boardSet.boardIds) return graph
@@ -2342,110 +1901,18 @@ private fun workspaceId(prefix: String): String {
     return "${prefix}_${Clock.System.now().toEpochMilliseconds()}_${Random.nextInt(1000, 9999)}"
 }
 
-/**
- * Removes one character from the composed sentence. When the last token is a multi-character
- * spelling fragment, trims one character; otherwise drops the last token entirely.
- */
-/**
- * Returns only the text that must be appended to accept an n-gram word suggestion.
- * A matching partially typed word is completed; otherwise the suggestion starts a new word.
- */
-/**
- * Prediction buttons in board display order. A button is a predictor if it
- * carries a `:prediction` action or uses the legacy n-gram button type.
- * Order follows the grid (falling back to insertion order for absolute/grid-less boards).
- */
-internal fun orderedPredictionButtonIds(
-    board: ObfBoard?,
-    showHiddenButtons: Boolean
-): List<String> {
-    val activeBoard = board ?: return emptyList()
-    fun isPredictor(button: ObfButton): Boolean =
-        button.type == ObfButtonType.NGramPrediction ||
-            parseObfButtonActions(button).any { it === ObfButtonActionEffect.Predictions }
-    val orderedIds = buildList {
-        activeBoard.grid?.order?.forEach { row ->
-            row.forEach { id ->
-                if (id != null && id !in this) add(id)
-            }
-        }
-        if (isEmpty()) {
-            addAll(activeBoard.buttons.map { it.id })
-        }
-    }
-    return orderedIds.filter { id ->
-        val button = activeBoard.buttons.firstOrNull { it.id == id }
-        button != null &&
-            (button.hidden && !showHiddenButtons).not() &&
-            isPredictor(button)
-    }
-}
-
-internal fun nGramPredictionInsertion(sentence: String, suggestion: String): String {
-    val word = suggestion.trim()
-    if (word.isEmpty()) return ""
-    val prefix = sentence.takeLastWhile { !it.isWhitespace() }
-    return when {
-        prefix.isEmpty() -> word
-        word.startsWith(prefix, ignoreCase = true) -> word.drop(prefix.length)
-        else -> " $word"
-    }
-}
-
 internal fun backspaceSentenceSelection(
     selected: List<Pair<ObfButton, ImageBitmap?>>
 ): List<Pair<ObfButton, ImageBitmap?>> {
     if (selected.isEmpty()) return selected
-    val (last, image) = selected.last()
-    val text = last.vocalization ?: last.label ?: ""
-    if (text.length <= 1) return selected.dropLast(1)
-    val trimmed = text.dropLast(1)
+    val texts = selected.map { (button, _) -> button.vocalization ?: button.label ?: "" }
+    val trimmed = backspaceSentenceSelection(texts)
+    if (trimmed.size < texts.size) return selected.dropLast(1)
+    val lastButton = selected.last().first
+    val lastText = trimmed.last()
     return selected.dropLast(1) + (
-        last.copy(label = trimmed, vocalization = trimmed) to image
+        lastButton.copy(label = lastText, vocalization = lastText) to selected.last().second
     )
-}
-
-internal fun shouldAddBoardSelection(behavior: BoardActivationBehavior): Boolean =
-    behavior != BoardActivationBehavior.SpeakOnly
-
-internal fun shouldSpeakBoardSelection(behavior: BoardActivationBehavior): Boolean =
-    behavior != BoardActivationBehavior.AddOnly
-
-internal fun applyBoardReturnBehavior(
-    behavior: BoardReturnBehavior,
-    currentBoardId: String?,
-    boardStack: List<String>,
-    rootBoardId: String
-): Pair<String?, List<String>> = when (behavior) {
-    BoardReturnBehavior.Stay -> currentBoardId to boardStack
-    BoardReturnBehavior.Previous -> {
-        if (boardStack.isEmpty()) {
-            currentBoardId to boardStack
-        } else {
-            boardStack.last() to boardStack.dropLast(1)
-        }
-    }
-    BoardReturnBehavior.StartPage -> rootBoardId to emptyList()
-}
-
-internal fun buildResolvedSentence(
-    selected: List<Pair<ObfButton, ImageBitmap?>>,
-    board: ObfBoard?,
-    primaryLanguage: String
-): String {
-    val tokens = selected.mapNotNull { (button, _) ->
-        resolveObfLocalizedString(
-            strings = board?.strings.orEmpty(),
-            locale = primaryLanguage,
-            rawValue = button.vocalization ?: button.label
-        )?.takeIf { it.isNotEmpty() }
-    }
-    return if (board?.spellingMode == true) {
-        tokens.joinToString("")
-    } else {
-        val separator = if (tokens.any { it.any(Char::isWhitespace) } || tokens.all { it.length <= 1 }) "" else " "
-        tokens.joinToString(separator)
-    }
 }
 
 private fun speakSelectedButtons(

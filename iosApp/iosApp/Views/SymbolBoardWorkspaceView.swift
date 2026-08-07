@@ -1395,24 +1395,19 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private func backspaceBoardSentence() {
-        guard let last = boardSentenceTokens.last else { return }
-        if last.text.count <= 1 {
+        guard !boardSentenceTokens.isEmpty else { return }
+        let texts = boardSentenceTokens.map { $0.text }
+        let trimmed = model.boardBackspaceSentence(texts: texts)
+        if trimmed.count < texts.count {
             boardSentenceTokens.removeLast()
-        } else {
-            boardSentenceTokens[boardSentenceTokens.count - 1].text.removeLast()
-            boardSentenceTokens[boardSentenceTokens.count - 1].title = boardSentenceTokens.last?.text ?? ""
+        } else if let lastText = trimmed.last {
+            boardSentenceTokens[boardSentenceTokens.count - 1].text = lastText
+            boardSentenceTokens[boardSentenceTokens.count - 1].title = lastText
         }
     }
 
     private func predictionInsertion(sentence: String, suggestion: String) -> String {
-        let word = suggestion.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !word.isEmpty else { return "" }
-        let prefix = String(sentence.reversed().prefix { !$0.isWhitespace }.reversed())
-        if prefix.isEmpty { return word }
-        if word.lowercased().hasPrefix(prefix.lowercased()) {
-            return String(word.dropFirst(prefix.count))
-        }
-        return " \(word)"
+        model.nGramPredictionInsertion(sentence: sentence, suggestion: suggestion)
     }
 
     private func boardCellDisplayLabel(_ cell: BoardCellInfo?) -> String {

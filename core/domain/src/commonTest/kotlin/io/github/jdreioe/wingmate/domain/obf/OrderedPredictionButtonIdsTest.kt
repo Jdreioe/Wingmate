@@ -1,9 +1,5 @@
-package io.github.jdreioe.wingmate.ui
+package io.github.jdreioe.wingmate.domain.obf
 
-import io.github.jdreioe.wingmate.domain.obf.ObfBoard
-import io.github.jdreioe.wingmate.domain.obf.ObfButton
-import io.github.jdreioe.wingmate.domain.obf.ObfButtonType
-import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

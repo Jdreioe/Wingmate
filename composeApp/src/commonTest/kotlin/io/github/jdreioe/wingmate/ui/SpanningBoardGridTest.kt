@@ -1,5 +1,8 @@
 package io.github.jdreioe.wingmate.ui
 
+import io.github.jdreioe.wingmate.domain.obf.GridFieldSpan
+import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
+import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
