@@ -731,6 +731,16 @@ struct SymbolBoardWorkspaceView: View {
                     .padding(6)
                     .accessibilityLabel(Text("board_workspace.temporarily_revealed"))
             }
+            if !isEditMode, isLinked, let linkedBoardId = trimmed(cell?.linkedBoardId) {
+                let isHomeLink = linkedBoardId == model.selectedBoardSet?.rootBoardId
+                Image(systemName: isHomeLink ? "house.fill" : "arrowshape.turn.up.right.fill")
+                    .font(.caption)
+                    .foregroundStyle(Color.primary.opacity(0.8))
+                    .padding(4)
+                    .background(.regularMaterial, in: Circle())
+                    .overlay(Circle().stroke(Color(.separator), lineWidth: 1))
+                    .accessibilityLabel(Text(isHomeLink ? "boardset.cell.action.home" : String(format: NSLocalizedString("board_cell_opens_board", comment: ""), model.boardDisplayName(id: linkedBoardId))))
+            }
         }
         .opacity(hiddenInRunMode ? 0 : (cell?.hidden == true && isEditMode ? 0.5 : 1))
         .allowsHitTesting(!hiddenInRunMode)
