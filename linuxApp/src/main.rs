@@ -928,6 +928,7 @@ impl cosmic::Application for Wingmate {
                 if let Some(path) = rfd::FileDialog::new()
                     .set_file_name("wingmate-backup.wingmate-backup")
                     .add_filter("Wingmate backup", &["wingmate-backup", "backup", "zip"])
+                    .add_filter("All files", &["*"])
                     .save_file()
                 {
                     let api = self.api.clone();
@@ -959,10 +960,10 @@ impl cosmic::Application for Wingmate {
                 }
             }
             Message::ImportBackup => {
-                if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("Wingmate backup", &["wingmate-backup", "backup", "zip"])
-                    .pick_file()
-                {
+                let dialog = rfd::FileDialog::new()
+                    .add_filter("Wingmate backup", &["wingmate-backup", "backup", "zip", "obz"])
+                    .add_filter("All files", &["*"]);
+                if let Some(path) = dialog.pick_file() {
                     let api = self.api.clone();
                     return Task::perform(
                         async move {
@@ -989,7 +990,15 @@ impl cosmic::Application for Wingmate {
             }
             Message::BackupImported(result) => {
                 match result {
-                    Ok(status) if status == "ok" => self.status = "Backup restored successfully".to_string(),
+                    Ok(status) if status == "ok" => {
+                        self.status = "Backup restored successfully".to_string();
+                        // Reload data so the restored boards/phrases appear immediately.
+                        let api = self.api.clone();
+                        return Task::batch([
+                            api.load_board_sets().map(cosmic::Action::App),
+                            api.load_phrases().map(cosmic::Action::App),
+                        ]);
+                    }
                     Ok(status) => self.status = format!("Backup import: {status}"),
                     Err(e) => self.status = format!("Backup import failed: {e}"),
                 }
@@ -2034,6 +2043,13 @@ impl Wingmate {
                     button("Import backup…").on_press(Message::ImportBackup),
                 ]
                 .spacing(8),
+                if !self.status.is_empty() {
+                    let el: Element<'_, Message> = text(&self.status).into();
+                    el
+                } else {
+                    let el: Element<'_, Message> = Space::new().into();
+                    el
+                },
             ]
             .spacing(14),
         )
