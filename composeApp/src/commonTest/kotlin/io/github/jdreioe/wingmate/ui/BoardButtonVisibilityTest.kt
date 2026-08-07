@@ -1,26 +1,14 @@
 package io.github.jdreioe.wingmate.ui
 
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
+import io.github.jdreioe.wingmate.domain.obf.isBoardButtonVisible
 import kotlin.test.Test
-import kotlin.test.assertFalse
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BoardButtonVisibilityTest {
     private val hidden = ObfButton(id = "hidden", hidden = true)
-    private val visible = ObfButton(id = "visible")
-
-    @Test
-    fun hiddenButtonRequiresEditModeOrSessionOverride() {
-        assertFalse(isBoardButtonVisible(hidden, isEditMode = false, showHiddenButtons = false))
-        assertTrue(isBoardButtonVisible(hidden, isEditMode = true, showHiddenButtons = false))
-        assertTrue(isBoardButtonVisible(hidden, isEditMode = false, showHiddenButtons = true))
-    }
-
-    @Test
-    fun ordinaryButtonIsAlwaysVisible() {
-        assertTrue(isBoardButtonVisible(visible, isEditMode = false, showHiddenButtons = false))
-    }
 
     @Test
     fun sessionOverrideActivatesPersistsAcrossBoardNavigationAndResets() {

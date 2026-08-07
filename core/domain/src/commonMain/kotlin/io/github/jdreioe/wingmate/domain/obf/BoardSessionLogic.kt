@@ -144,6 +144,22 @@ fun resolveCellTap(
     }
 }
 
+/** Whether a board button should be rendered, honoring edit mode and a temporary reveal session. */
+fun isBoardButtonVisible(
+    button: ObfButton,
+    isEditMode: Boolean,
+    showHiddenButtons: Boolean
+): Boolean = !button.hidden || isEditMode || showHiddenButtons
+
+/**
+ * Font-scale factor for a merged field's label/vocalization so larger fields
+ * keep readable text. Pure display rule shared by every client.
+ */
+fun fieldFontScale(rowSpan: Int, columnSpan: Int): Float {
+    val area = rowSpan.coerceAtLeast(1).toFloat() * columnSpan.coerceAtLeast(1)
+    return kotlin.math.sqrt(kotlin.math.sqrt(area)).coerceIn(1f, 2f)
+}
+
 // --- Draft graph editing (board-set editor session) ---
 
 fun renameDraftBoardSet(graph: BoardSetGraph, name: String): BoardSetGraph {

@@ -32,6 +32,8 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButtonType
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.obf.fieldItems
+import io.github.jdreioe.wingmate.domain.obf.isBoardButtonVisible
+import io.github.jdreioe.wingmate.domain.obf.fieldFontScale
 import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.GridFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
@@ -67,7 +69,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Home
@@ -128,12 +129,6 @@ internal data class BoardGridItem(
     val button: ObfButton?
 )
 
-internal fun isBoardButtonVisible(
-    button: ObfButton,
-    isEditMode: Boolean,
-    showHiddenButtons: Boolean
-): Boolean = !button.hidden || isEditMode || showHiddenButtons
-
 internal class HiddenButtonsSession {
     var revealed by mutableStateOf(false)
         private set
@@ -145,11 +140,6 @@ internal class HiddenButtonsSession {
     fun reset() {
         revealed = false
     }
-}
-
-internal fun fieldFontScale(rowSpan: Int, columnSpan: Int): Float {
-    val area = rowSpan.coerceAtLeast(1).toFloat() * columnSpan.coerceAtLeast(1)
-    return sqrt(sqrt(area)).coerceIn(1f, 2f)
 }
 
 enum class SymbolBarPresentation(val maxTextLines: Int, val maximumViewportFraction: Float) {

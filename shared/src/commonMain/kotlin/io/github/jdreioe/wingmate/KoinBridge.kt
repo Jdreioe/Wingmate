@@ -487,6 +487,12 @@ class KoinBridge : KoinComponent {
     fun boardBackspaceSentence(texts: List<String>): List<String> =
         backspaceSentenceSelection(texts)
 
+    fun boardButtonIsVisible(hidden: Boolean, isEditMode: Boolean, showHiddenButtons: Boolean): Boolean =
+        !hidden || isEditMode || showHiddenButtons
+
+    fun boardFieldFontScale(rowSpan: Int, columnSpan: Int): Float =
+        io.github.jdreioe.wingmate.domain.obf.fieldFontScale(rowSpan, columnSpan)
+
     suspend fun upsertBoardCellButton(
         boardId: String, row: Int, col: Int, label: String?, vocalization: String?,
         backgroundColor: String?, borderColor: String?, linkedBoardId: String?,

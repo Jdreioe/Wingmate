@@ -1553,6 +1553,14 @@ final class IosViewModel: ObservableObject {
         bridge.boardBackspaceSentence(texts: texts)
     }
 
+    func boardButtonIsVisible(hidden: Bool, isEditMode: Bool, showHiddenButtons: Bool) -> Bool {
+        bridge.boardButtonIsVisible(hidden: hidden, isEditMode: isEditMode, showHiddenButtons: showHiddenButtons)
+    }
+
+    func boardFieldFontScale(rowSpan: Int, columnSpan: Int) -> CGFloat {
+        CGFloat(bridge.boardFieldFontScale(rowSpan: Int32(rowSpan), columnSpan: Int32(columnSpan)))
+    }
+
     func loadSelectedBoard() async {
         guard let id = selectedBoardId else {
             selectedBoard = nil

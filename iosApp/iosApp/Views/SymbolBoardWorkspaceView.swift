@@ -665,7 +665,9 @@ struct SymbolBoardWorkspaceView: View {
                                 col: field.column,
                                 isEditMode: isEditMode,
                                 width: max(0, spanWidth),
-                                height: max(0, spanHeight)
+                                height: max(0, spanHeight),
+                                rowSpan: field.rowSpan,
+                                columnSpan: field.columnSpan
                             )
                             .offset(x: x, y: y)
                         }
@@ -689,11 +691,15 @@ struct SymbolBoardWorkspaceView: View {
         }
     }
 
-    private func boardCellButton(row: Int, col: Int, isEditMode: Bool, width: CGFloat, height: CGFloat) -> some View {
+    private func boardCellButton(row: Int, col: Int, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
         let cell = model.cellAt(row: row, col: col)
         let isLinked = trimmed(cell?.linkedBoardId) != nil
         let sourceCellId = "\(row):\(col)"
-        let hiddenInRunMode = cell?.hidden == true && !isEditMode && !showHiddenButtons
+        let hiddenInRunMode = !model.boardButtonIsVisible(
+            hidden: cell?.hidden == true,
+            isEditMode: isEditMode,
+            showHiddenButtons: showHiddenButtons
+        )
 
         return ZStack(alignment: .topTrailing) {
             Button {
@@ -707,11 +713,11 @@ struct SymbolBoardWorkspaceView: View {
             } label: {
                 Group {
                     if let animation = activeSentenceAnimation, animation.sourceCellId == sourceCellId {
-                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, width: width, height: height)
+                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, width: width, height: height, rowSpan: rowSpan, columnSpan: columnSpan)
                             .matchedGeometryEffect(id: animation.tokenId, in: sentenceAnimationNamespace, isSource: true)
                             .zIndex(3)
                     } else {
-                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, width: width, height: height)
+                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, width: width, height: height, rowSpan: rowSpan, columnSpan: columnSpan)
                     }
                 }
             }
@@ -769,7 +775,8 @@ struct SymbolBoardWorkspaceView: View {
         .accessibilityHidden(hiddenInRunMode || (model.scanningEnabled && !model.scanPhraseGridEnabled))
     }
 
-    private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, width: CGFloat, height: CGFloat) -> some View {
+    private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
+        let labelScale = model.boardFieldFontScale(rowSpan: rowSpan, columnSpan: columnSpan)
         if cell == nil && isEditMode {
             return AnyView(
                 ZStack {
@@ -790,7 +797,7 @@ struct SymbolBoardWorkspaceView: View {
         return AnyView(
             VStack(alignment: .leading, spacing: 4) {
             if model.boardLabelAtTop && model.boardShowLabels {
-                boardCellLabel(cell)
+                boardCellLabel(cell, fontScale: labelScale)
             }
 
             if model.boardShowSymbols, let imageUrl = trimmed(cell?.imageUrl), let url = URL(string: imageUrl) {
@@ -814,7 +821,7 @@ struct SymbolBoardWorkspaceView: View {
             }
 
             if !model.boardLabelAtTop && model.boardShowLabels {
-                boardCellLabel(cell)
+                boardCellLabel(cell, fontScale: labelScale)
             }
 
             if let linkedBoardId = trimmed(cell?.linkedBoardId) {
@@ -847,13 +854,14 @@ struct SymbolBoardWorkspaceView: View {
         )
     }
 
-    private func boardCellLabel(_ cell: BoardCellInfo?) -> some View {
+    private func boardCellLabel(_ cell: BoardCellInfo?, fontScale: CGFloat = 1) -> some View {
         Text(boardCellDisplayLabel(cell))
             .font(.subheadline)
             .fontWeight(cell == nil ? .regular : .semibold)
             .lineLimit(2)
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .scaleEffect(fontScale, anchor: .leading)
     }
 
     @ViewBuilder
