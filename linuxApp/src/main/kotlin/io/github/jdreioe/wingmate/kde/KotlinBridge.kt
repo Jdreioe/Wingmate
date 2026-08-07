@@ -204,6 +204,9 @@ class KotlinBridge(private val port: Int = 8765) {
                 jsonObj["startupMode"]?.jsonPrimitive?.contentOrNull?.let { value ->
                     newSettings = newSettings.copy(startupMode = runCatching { StartupMode.valueOf(value) }.getOrDefault(newSettings.startupMode))
                 }
+                jsonObj["startupBoardSetId"]?.jsonPrimitive?.contentOrNull?.let { value ->
+                    newSettings = newSettings.copy(startupBoardSetId = value.takeIf { it.isNotBlank() })
+                }
                 if (jsonObj.containsKey("forceDarkTheme")) {
                     newSettings = newSettings.copy(forceDarkTheme = jsonObj["forceDarkTheme"]?.jsonPrimitive?.booleanOrNull)
                 }
@@ -225,7 +228,18 @@ class KotlinBridge(private val port: Int = 8765) {
                 jsonObj["fontSizeScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(fontSizeScale = it.coerceIn(0.5f, 2f)) }
                 jsonObj["buttonScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(buttonScale = it.coerceIn(0.5f, 2f)) }
                 jsonObj["inputFieldScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(inputFieldScale = it.coerceIn(0.5f, 2f)) }
-                
+
+                // Switch scanning / switch-access configuration
+                jsonObj["scanningEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(scanningEnabled = it) }
+                jsonObj["scanPlaybackAreaEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(scanPlaybackAreaEnabled = it) }
+                jsonObj["scanInputFieldEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(scanInputFieldEnabled = it) }
+                jsonObj["scanPhraseGridEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(scanPhraseGridEnabled = it) }
+                jsonObj["scanCategoryItemsEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(scanCategoryItemsEnabled = it) }
+                jsonObj["scanTopBarEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(scanTopBarEnabled = it) }
+                jsonObj["scanPhraseGridOrder"]?.jsonPrimitive?.contentOrNull?.let { newSettings = newSettings.copy(scanPhraseGridOrder = it) }
+                jsonObj["scanDwellTimeSeconds"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(scanDwellTimeSeconds = it) }
+                jsonObj["scanAutoAdvanceSeconds"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(scanAutoAdvanceSeconds = it) }
+
                 println("[API] Updating settings to: $newSettings")
                 settingsManager.updateSettings(newSettings)
                 call.respond(HttpStatusCode.OK)

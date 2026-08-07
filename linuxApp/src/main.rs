@@ -86,6 +86,18 @@ struct Settings {
     dwell_to_select_millis: i64,
     selection_sound_enabled: bool,
     auditory_fishing_enabled: bool,
+    selection_highlight_millis: i64,
+    selection_debounce_millis: i64,
+    startup_board_set_id: Option<String>,
+    scanning_enabled: bool,
+    scan_playback_area_enabled: bool,
+    scan_input_field_enabled: bool,
+    scan_phrase_grid_enabled: bool,
+    scan_category_items_enabled: bool,
+    scan_top_bar_enabled: bool,
+    scan_phrase_grid_order: String,
+    scan_dwell_time_seconds: f32,
+    scan_auto_advance_seconds: f32,
     usage_logging_enabled: bool,
     history_visible: bool,
     board_show_message_bar: bool,
@@ -119,6 +131,18 @@ impl Default for Settings {
             dwell_to_select_millis: 0,
             selection_sound_enabled: false,
             auditory_fishing_enabled: false,
+            selection_highlight_millis: 0,
+            selection_debounce_millis: 0,
+            startup_board_set_id: None,
+            scanning_enabled: false,
+            scan_playback_area_enabled: true,
+            scan_input_field_enabled: true,
+            scan_phrase_grid_enabled: true,
+            scan_category_items_enabled: true,
+            scan_top_bar_enabled: true,
+            scan_phrase_grid_order: "row-major".into(),
+            scan_dwell_time_seconds: 1.0,
+            scan_auto_advance_seconds: 1.2,
             usage_logging_enabled: false,
             history_visible: true,
             board_show_message_bar: true,
@@ -330,6 +354,13 @@ enum Message {
     GridColumnsChanged(i32),
     HoldChanged(i64),
     DwellChanged(i64),
+    SelectionHighlightChanged(i64),
+    SelectionDebounceChanged(i64),
+    ScanDwellChanged(f32),
+    ScanAutoAdvanceChanged(f32),
+    ScanOrderChanged(String),
+    StartupBoardSetChanged(String),
+    StartupModeChanged(String),
     NewWordChanged(String),
     NewPhonemeChanged(String),
     AddPronunciation,
@@ -694,6 +725,12 @@ impl Wingmate {
                     "usageLoggingEnabled" => self.settings.usage_logging_enabled = enabled,
                     "historyVisible" => self.settings.history_visible = enabled,
                     "boardShowMessageBar" => self.settings.board_show_message_bar = enabled,
+                    "scanningEnabled" => self.settings.scanning_enabled = enabled,
+                    "scanPlaybackAreaEnabled" => self.settings.scan_playback_area_enabled = enabled,
+                    "scanInputFieldEnabled" => self.settings.scan_input_field_enabled = enabled,
+                    "scanPhraseGridEnabled" => self.settings.scan_phrase_grid_enabled = enabled,
+                    "scanCategoryItemsEnabled" => self.settings.scan_category_items_enabled = enabled,
+                    "scanTopBarEnabled" => self.settings.scan_top_bar_enabled = enabled,
                     _ => {}
                 }
                 return self
@@ -731,6 +768,48 @@ impl Wingmate {
                 return self
                     .api
                     .patch_setting("dwellToSelectMillis", serde_json::json!(v));
+            }
+            Message::SelectionHighlightChanged(v) => {
+                self.settings.selection_highlight_millis = v;
+                return self
+                    .api
+                    .patch_setting("selectionHighlightMillis", serde_json::json!(v));
+            }
+            Message::SelectionDebounceChanged(v) => {
+                self.settings.selection_debounce_millis = v;
+                return self
+                    .api
+                    .patch_setting("selectionDebounceMillis", serde_json::json!(v));
+            }
+            Message::ScanDwellChanged(v) => {
+                self.settings.scan_dwell_time_seconds = v;
+                return self
+                    .api
+                    .patch_setting("scanDwellTimeSeconds", serde_json::json!(v));
+            }
+            Message::ScanAutoAdvanceChanged(v) => {
+                self.settings.scan_auto_advance_seconds = v;
+                return self
+                    .api
+                    .patch_setting("scanAutoAdvanceSeconds", serde_json::json!(v));
+            }
+            Message::ScanOrderChanged(v) => {
+                self.settings.scan_phrase_grid_order = v.clone();
+                return self
+                    .api
+                    .patch_setting("scanPhraseGridOrder", serde_json::json!(v));
+            }
+            Message::StartupBoardSetChanged(v) => {
+                self.settings.startup_board_set_id = Some(v.clone());
+                return self
+                    .api
+                    .patch_setting("startupBoardSetId", serde_json::json!(v));
+            }
+            Message::StartupModeChanged(v) => {
+                self.settings.startup_mode = v.clone();
+                return self
+                    .api
+                    .patch_setting("startupMode", serde_json::json!(v));
             }
             Message::NewWordChanged(v) => self.new_word = v,
             Message::NewPhonemeChanged(v) => self.new_phoneme = v,
@@ -1442,214 +1521,257 @@ impl Wingmate {
             None => "System",
         }
         .to_string();
+        let selected_scan_order = match self.settings.scan_phrase_grid_order.as_str() {
+            "column-major" => "Column-major",
+            "linear" => "Linear",
+            _ => "Row-major",
+        }
+        .to_string();
+        let startup_board_set_id = self.settings.startup_board_set_id.clone().unwrap_or_default();
 
-        let settings = column![
-            text("Settings").size(30),
-            text("Speech").size(22),
-            row![
-                text("Voice").width(170),
-                pick_list(voice_names, selected_voice, Message::VoiceSelected).width(340)
-            ]
-            .align_y(iced::Alignment::Center),
-            row![
-                text("Engine").width(170),
+        let speech = vec![
+            settings_row("Voice", pick_list(voice_names, selected_voice, Message::VoiceSelected).into()),
+            settings_row(
+                "Engine",
                 pick_list(
                     vec!["SYSTEM".to_string(), "AZURE_USER_RESOURCE".to_string()],
                     Some(self.settings.tts_engine.clone()),
                     Message::EngineChanged
                 )
-                .width(340)
-            ]
-            .align_y(iced::Alignment::Center),
-            text_input("Azure Speech endpoint", &self.azure_endpoint)
-                .on_input(Message::AzureEndpointChanged),
-            text_input("Azure Speech key", &self.azure_key).on_input(Message::AzureKeyChanged),
-            button("Save Azure configuration and refresh voices")
-                .on_press(Message::SaveAzureConfig),
-            row![
-                text(format!("Speed  {:.1}×", self.settings.speech_rate)).width(170),
-                slider(0.5..=2.0, self.settings.speech_rate, Message::RateChanged)
-                    .step(0.1)
-                    .width(340)
-            ]
-            .align_y(iced::Alignment::Center),
-            row![
-                text("Primary language").width(170),
+                .into(),
+            ),
+            settings_row("Speed", slider(0.5..=2.0, self.settings.speech_rate, Message::RateChanged).step(0.1).into()),
+            settings_row(
+                "Primary language",
                 pick_list(
                     languages.clone(),
                     Some(self.settings.primary_language.clone()),
                     Message::PrimaryLanguageChanged
                 )
-                .width(340)
-            ]
-            .align_y(iced::Alignment::Center),
-            row![
-                text("Secondary language").width(170),
+                .into(),
+            ),
+            settings_row(
+                "Secondary language",
                 pick_list(
                     secondary_languages,
                     Some(selected_secondary),
                     Message::SecondaryLanguageChanged
                 )
-                .width(340)
+                .into(),
+            ),
+            column![
+                text("Azure Speech (endpoint + key)").size(15),
+                text_input("Azure Speech endpoint", &self.azure_endpoint).on_input(Message::AzureEndpointChanged),
+                text_input("Azure Speech key", &self.azure_key).on_input(Message::AzureKeyChanged),
+                button("Save Azure configuration and refresh voices").on_press(Message::SaveAzureConfig),
             ]
-            .align_y(iced::Alignment::Center),
-            Space::new().height(18),
-            text("Display").size(22),
-            row![
-                text("Theme").width(170),
+            .spacing(6)
+            .into(),
+        ];
+
+        let display = vec![
+            settings_row(
+                "Theme",
                 pick_list(
                     vec!["System".into(), "Light".into(), "Dark".into()],
                     Some(selected_theme),
                     Message::ThemeChanged
                 )
-                .width(340)
-            ]
-            .align_y(iced::Alignment::Center),
-            row![
-                text(format!("Text scale {:.1}", self.settings.font_size_scale)).width(170),
-                slider(
-                    0.5..=2.0,
-                    self.settings.font_size_scale,
-                    Message::FontScaleChanged
-                )
-                .step(0.1)
-                .width(340)
-            ]
-            .align_y(iced::Alignment::Center),
-            row![
-                text(format!("Button scale {:.1}", self.settings.button_scale)).width(170),
-                slider(
-                    0.5..=2.0,
-                    self.settings.button_scale,
-                    Message::ButtonScaleChanged
-                )
-                .step(0.1)
-                .width(340)
-            ]
-            .align_y(iced::Alignment::Center),
-            row![
-                text(format!(
-                    "Input scale {:.1}",
-                    self.settings.input_field_scale
-                ))
-                .width(170),
-                slider(
-                    0.5..=2.0,
-                    self.settings.input_field_scale,
-                    Message::InputScaleChanged
-                )
-                .step(0.1)
-                .width(340)
-            ]
-            .align_y(iced::Alignment::Center),
-            row![
-                text(format!("Grid columns {}", self.settings.grid_columns)).width(170),
-                slider(
-                    1..=12,
-                    self.settings.grid_columns,
-                    Message::GridColumnsChanged
-                )
-                .width(340)
-            ]
-            .align_y(iced::Alignment::Center),
+                .into(),
+            ),
+            settings_row("Text scale", slider(0.5..=2.0, self.settings.font_size_scale, Message::FontScaleChanged).step(0.1).into()),
+            settings_row("Button scale", slider(0.5..=2.0, self.settings.button_scale, Message::ButtonScaleChanged).step(0.1).into()),
+            settings_row("Input scale", slider(0.5..=2.0, self.settings.input_field_scale, Message::InputScaleChanged).step(0.1).into()),
+            settings_row(
+                "Grid columns",
+                slider(1..=12, self.settings.grid_columns, Message::GridColumnsChanged).into(),
+            ),
             checkbox(self.settings.show_labels)
                 .label("Show labels on symbol buttons")
-                .on_toggle(|v| Message::SettingBool("showLabels", v)),
+                .on_toggle(|v| Message::SettingBool("showLabels", v))
+                .into(),
             checkbox(self.settings.show_symbols)
                 .label("Show symbols on buttons")
-                .on_toggle(|v| Message::SettingBool("showSymbols", v)),
+                .on_toggle(|v| Message::SettingBool("showSymbols", v))
+                .into(),
             checkbox(self.settings.label_at_top)
                 .label("Place labels above symbols")
-                .on_toggle(|v| Message::SettingBool("labelAtTop", v)),
+                .on_toggle(|v| Message::SettingBool("labelAtTop", v))
+                .into(),
             checkbox(self.settings.high_contrast_mode)
                 .label("High contrast mode")
-                .on_toggle(|v| Message::SettingBool("highContrastMode", v)),
-            Space::new().height(18),
-            text("Partner window").size(22),
-            checkbox(self.settings.partner_window_enabled)
-                .label("Mirror speech on the external display")
-                .on_toggle(Message::PartnerEnabled),
-            row![
-                text(format!(
-                    "Font size  {}",
-                    self.settings.partner_window_font_size
-                ))
-                .width(170),
-                slider(
-                    16..=34,
-                    self.settings.partner_window_font_size,
-                    Message::PartnerFontChanged
-                )
-                .width(340)
-            ]
-            .align_y(iced::Alignment::Center),
-            checkbox(self.settings.partner_window_idle_enabled)
-                .label("Show idle face")
-                .on_toggle(Message::PartnerIdleChanged),
-            text(format!(
-                "Device: {} · Display: {}",
-                if connected {
-                    "connected"
-                } else {
-                    "not connected"
-                },
-                if active { "active" } else { "inactive" }
-            )),
-            Space::new().height(18),
-            text("Access").size(22),
-            row![
-                text(format!(
-                    "Hold to select {} ms",
-                    self.settings.hold_to_select_millis
-                ))
-                .width(220),
-                slider(
-                    0..=3000,
-                    self.settings.hold_to_select_millis as i32,
-                    |value| Message::HoldChanged(value as i64)
-                )
-                .step(100)
-                .width(340)
-            ]
-            .align_y(iced::Alignment::Center),
-            row![
-                text(format!(
-                    "Dwell to select {} ms",
-                    self.settings.dwell_to_select_millis
-                ))
-                .width(220),
-                slider(
-                    0..=5000,
-                    self.settings.dwell_to_select_millis as i32,
-                    |value| Message::DwellChanged(value as i64)
-                )
-                .step(100)
-                .width(340)
-            ]
-            .align_y(iced::Alignment::Center),
+                .on_toggle(|v| Message::SettingBool("highContrastMode", v))
+                .into(),
+            checkbox(self.settings.board_show_message_bar)
+                .label("Show the message bar on boards")
+                .on_toggle(|v| Message::SettingBool("boardShowMessageBar", v))
+                .into(),
+        ];
+
+        let access = vec![
+            settings_row(
+                "Hold to select",
+                slider(0..=3000, self.settings.hold_to_select_millis as i32, |v| Message::HoldChanged(v as i64)).step(100).into(),
+            ),
+            settings_row(
+                "Dwell to select",
+                slider(0..=5000, self.settings.dwell_to_select_millis as i32, |v| Message::DwellChanged(v as i64)).step(100).into(),
+            ),
+            settings_row(
+                "Selection highlight",
+                slider(0..=5000, self.settings.selection_highlight_millis as i32, |v| Message::SelectionHighlightChanged(v as i64)).step(100).into(),
+            ),
+            settings_row(
+                "Selection debounce",
+                slider(0..=1000, self.settings.selection_debounce_millis as i32, |v| Message::SelectionDebounceChanged(v as i64)).step(50).into(),
+            ),
             checkbox(self.settings.selection_sound_enabled)
                 .label("Play a selection sound")
-                .on_toggle(|v| Message::SettingBool("selectionSoundEnabled", v)),
+                .on_toggle(|v| Message::SettingBool("selectionSoundEnabled", v))
+                .into(),
             checkbox(self.settings.auditory_fishing_enabled)
                 .label("Auditory fishing")
-                .on_toggle(|v| Message::SettingBool("auditoryFishingEnabled", v)),
-            Space::new().height(18),
-            text("Privacy and data").size(22),
+                .on_toggle(|v| Message::SettingBool("auditoryFishingEnabled", v))
+                .into(),
+            Space::new().height(6).into(),
+            checkbox(self.settings.scanning_enabled)
+                .label("Enable switch scanning")
+                .on_toggle(|v| Message::SettingBool("scanningEnabled", v))
+                .into(),
+            checkbox(self.settings.scan_playback_area_enabled)
+                .label("Scan the playback area")
+                .on_toggle(|v| Message::SettingBool("scanPlaybackAreaEnabled", v))
+                .into(),
+            checkbox(self.settings.scan_input_field_enabled)
+                .label("Scan the input field")
+                .on_toggle(|v| Message::SettingBool("scanInputFieldEnabled", v))
+                .into(),
+            checkbox(self.settings.scan_phrase_grid_enabled)
+                .label("Scan the phrase grid")
+                .on_toggle(|v| Message::SettingBool("scanPhraseGridEnabled", v))
+                .into(),
+            checkbox(self.settings.scan_category_items_enabled)
+                .label("Scan category items")
+                .on_toggle(|v| Message::SettingBool("scanCategoryItemsEnabled", v))
+                .into(),
+            checkbox(self.settings.scan_top_bar_enabled)
+                .label("Scan the top bar")
+                .on_toggle(|v| Message::SettingBool("scanTopBarEnabled", v))
+                .into(),
+            settings_row(
+                "Scan order",
+                pick_list(
+                    vec!["Row-major".into(), "Column-major".into(), "Linear".into()],
+                    Some(selected_scan_order),
+                    |v: String| {
+                        let key = match v.as_str() {
+                            "Column-major" => "column-major",
+                            "Linear" => "linear",
+                            _ => "row-major",
+                        };
+                        Message::ScanOrderChanged(key.to_string())
+                    }
+                )
+                .into(),
+            ),
+            settings_row(
+                "Scan dwell",
+                slider(0.3..=2.0, self.settings.scan_dwell_time_seconds, Message::ScanDwellChanged).step(0.1).into(),
+            ),
+            settings_row(
+                "Auto-advance",
+                slider(0.5..=3.0, self.settings.scan_auto_advance_seconds, Message::ScanAutoAdvanceChanged).step(0.1).into(),
+            ),
+        ];
+
+        let startup = vec![
+            settings_row(
+                "Startup mode",
+                pick_list(
+                    vec!["Keyboard".to_string(), "Screens".to_string()],
+                    Some(self.settings.startup_mode.clone()),
+                    Message::StartupModeChanged
+                )
+                .into(),
+            ),
+            settings_row(
+                "Startup screen set",
+                pick_list(
+                    self.board_sets.iter().map(|set| set.name.clone()).collect::<Vec<_>>(),
+                    if startup_board_set_id.is_empty() {
+                        None
+                    } else {
+                        self.board_sets
+                            .iter()
+                            .find(|set| set.id == startup_board_set_id)
+                            .map(|set| set.name.clone())
+                    },
+                    |name| {
+                        let id = self
+                            .board_sets
+                            .iter()
+                            .find(|set| set.name == name)
+                            .map(|set| set.id.clone())
+                            .unwrap_or_default();
+                        Message::StartupBoardSetChanged(id)
+                    }
+                )
+                .into(),
+            ),
+        ];
+
+        let privacy = vec![
             checkbox(self.settings.history_visible)
                 .label("Show speech history")
-                .on_toggle(|v| Message::SettingBool("historyVisible", v)),
+                .on_toggle(|v| Message::SettingBool("historyVisible", v))
+                .into(),
             checkbox(self.settings.usage_logging_enabled)
                 .label("Keep local AAC usage logs")
-                .on_toggle(|v| Message::SettingBool("usageLoggingEnabled", v)),
+                .on_toggle(|v| Message::SettingBool("usageLoggingEnabled", v))
+                .into(),
             checkbox(self.settings.feature_usage_reporting_enabled)
                 .label("Share anonymous feature usage")
-                .on_toggle(|v| Message::SettingBool("featureUsageReportingEnabled", v)),
+                .on_toggle(|v| Message::SettingBool("featureUsageReportingEnabled", v))
+                .into(),
             row![
                 button("Export speech history…").on_press(Message::ExportHistory),
                 button("Import speech history…").on_press(Message::ImportHistory),
                 button("Clear speech history").on_press(Message::ClearHistory),
             ]
-            .spacing(8),
+            .spacing(8)
+            .into(),
+        ];
+
+        let partner = vec![
+            checkbox(self.settings.partner_window_enabled)
+                .label("Mirror speech on the external display")
+                .on_toggle(Message::PartnerEnabled)
+                .into(),
+            settings_row(
+                "Font size",
+                slider(16..=34, self.settings.partner_window_font_size, Message::PartnerFontChanged).into(),
+            ),
+            checkbox(self.settings.partner_window_idle_enabled)
+                .label("Show idle face")
+                .on_toggle(Message::PartnerIdleChanged)
+                .into(),
+            text(format!(
+                "Device: {} · Display: {}",
+                if connected { "connected" } else { "not connected" },
+                if active { "active" } else { "inactive" }
+            ))
+            .into(),
+        ];
+
+        let settings = column![
+            text("Settings").size(30),
+            settings_section("Speech", speech),
+            settings_section("Display", display),
+            settings_section("Access", access),
+            settings_section("Startup", startup),
+            settings_section("Privacy", privacy),
+            settings_section("Partner window", partner),
+            Space::new().height(12),
             button("Run welcome setup again").on_press(Message::Navigate(Page::Welcome)),
         ]
         .spacing(14);
@@ -1657,8 +1779,27 @@ impl Wingmate {
     }
 }
 
-fn nav_button<'a>(label: &'a str, selected: bool, message: Message) -> Element<'a, Message> {
-    let label = if selected {
+fn settings_row<'a>(label: &'a str, control: Element<'a, Message>) -> Element<'a, Message> {
+    row![
+        text(label).width(210),
+        container(control).width(360),
+    ]
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+fn settings_section<'a>(
+    title: &'a str,
+    children: Vec<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    let mut col = column![text(title).size(20)].spacing(10);
+    for child in children {
+        col = col.push(child);
+    }
+    col.spacing(10).padding(8).into()
+}
+
+fn nav_button<'a>(label: &'a str, selected: bool, message: Message) -> Element<'a, Message> {    let label = if selected {
         format!("●  {label}")
     } else {
         format!("   {label}")
