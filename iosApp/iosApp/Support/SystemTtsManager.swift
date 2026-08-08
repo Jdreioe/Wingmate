@@ -25,6 +25,29 @@ final class SystemTtsManager: NSObject, AVSpeechSynthesizerDelegate {
         )
         guard !utterances.isEmpty else { return }
 
+        speak(utterances)
+    }
+
+    /// Speak text split into segments (from shared SpeechTextProcessor), honoring
+    /// per-segment pause durations and language overrides.
+    func speak(segments: [Shared.SpeechSegment], language: String?) {
+        let utterances: [AVSpeechUtterance] = segments.compactMap { segment in
+            let text = segment.text
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+            let utterance = makeUtterance(
+                text: text,
+                language: segment.languageTag ?? language
+            )
+            if segment.pauseDurationMs > 0 {
+                utterance.preUtteranceDelay = TimeInterval(segment.pauseDurationMs) / 1_000.0
+            }
+            return utterance
+        }
+        guard !utterances.isEmpty else { return }
+        speak(utterances)
+    }
+
+    private func speak(_ utterances: [AVSpeechUtterance]) {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
         try? AVAudioSession.sharedInstance().setActive(true, options: [])
 

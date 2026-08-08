@@ -300,6 +300,9 @@ private struct DisplaySettingsView: View {
                 Toggle("settings.display.high_contrast", isOn: Binding(
                     get: { model.highContrastMode }, set: { model.setHighContrastMode($0) }
                 ))
+                Toggle("settings.display.message_bar", isOn: Binding(
+                    get: { model.boardShowMessageBar }, set: { model.setBoardShowMessageBar($0) }
+                ))
             }
 
             Section("settings.display.interface_size") {

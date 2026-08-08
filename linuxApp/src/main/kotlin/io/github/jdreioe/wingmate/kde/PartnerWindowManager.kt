@@ -27,7 +27,7 @@ class PartnerWindowManager(
     private val _active = MutableStateFlow(false)
     val active: StateFlow<Boolean> = _active.asStateFlow()
 
-    /** Current text to display, updated from the QML frontend. */
+    /** Current text to display, updated from the native UI. */
     private val _displayText = MutableStateFlow("")
 
     /**

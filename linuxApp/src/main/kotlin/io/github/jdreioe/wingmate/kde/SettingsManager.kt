@@ -1,70 +1,64 @@
 package io.github.jdreioe.wingmate.kde
 
+import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.domain.Settings
-import io.github.jdreioe.wingmate.domain.SettingsRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.koin.core.context.GlobalContext
 
 /**
- * Manages application settings.
+ * Thin read-model over the shared [SettingsUseCase] (single source of truth,
+ * same as iOS). Keeps a StateFlow facade for the HTTP bridge and Rust UI while
+ * routing every read/write through shared logic.
  */
 class SettingsManager {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    
-    private val settingsRepository: SettingsRepository by lazy {
+
+    private val settingsUseCase: SettingsUseCase by lazy {
         GlobalContext.get().get()
     }
-    
+
     private val _settings = MutableStateFlow<Settings?>(null)
     val settings: StateFlow<Settings?> = _settings.asStateFlow()
-    
+
     init {
         loadSettings()
     }
-    
+
     private fun loadSettings() {
         scope.launch {
-            println("[PERSISTENCE] SettingsManager: Starting to load settings...")
-            val loadedSettings = runCatching {
-                settingsRepository.get()
-            }.getOrNull() ?: Settings()
-            println("[PERSISTENCE] SettingsManager: Loaded settings: $loadedSettings")
-            _settings.value = loadedSettings
+            _settings.value = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
         }
     }
-    
+
     fun updateSettings(newSettings: Settings) {
+        // Publish first so the HTTP PUT response and any immediately-following
+        // board-settings resolution observe the same value. Persistence stays
+        // off the request thread.
+        _settings.value = newSettings
         scope.launch {
-            println("[PERSISTENCE] SettingsManager: Updating settings... voice=${newSettings.voice}")
-            println("[PERSISTENCE] SettingsManager: Call stack: ${Thread.currentThread().stackTrace.take(8).joinToString(" -> ") { "${it.className}.${it.methodName}:${it.lineNumber}" }}")
-            settingsRepository.update(newSettings)
-            _settings.value = newSettings
-            println("[PERSISTENCE] SettingsManager: Settings updated. voice=${newSettings.voice}")
+            runCatching { settingsUseCase.update(newSettings) }
         }
     }
-    
+
     fun updateLanguage(language: String) {
         _settings.value?.let { current ->
             updateSettings(current.copy(language = language))
         }
     }
-    
+
     fun updateVoice(voice: String) {
-        println("[PERSISTENCE] SettingsManager.updateVoice called with: '$voice'")
-        println("[PERSISTENCE] updateVoice call stack: ${Thread.currentThread().stackTrace.take(8).joinToString(" -> ") { "${it.className}.${it.methodName}:${it.lineNumber}" }}")
         _settings.value?.let { current ->
-            println("[PERSISTENCE] Current voice before update: '${current.voice}'")
             updateSettings(current.copy(voice = voice))
         }
     }
-    
+
     fun updateSpeechRate(rate: Float) {
         _settings.value?.let { current ->
             updateSettings(current.copy(speechRate = rate))
         }
     }
-    
+
     fun cleanup() {
         scope.cancel()
     }

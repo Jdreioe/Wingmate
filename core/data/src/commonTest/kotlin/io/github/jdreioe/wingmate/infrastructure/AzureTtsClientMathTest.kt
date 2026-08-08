@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -151,5 +152,23 @@ class AzureTtsClientMathTest {
 
         assertEquals(false, ssml.contains("domain=\"Math\""))
         assertEquals(false, ssml.contains("<math"))
+    }
+
+    @Test
+    fun regularModeAppliesSpeechRateAndPronunciationDictionary() {
+        val ssml = AzureTtsClient.generateSsml(
+            text = "Use AAC today",
+            voice = Voice(
+                name = "en-US-JennyNeural",
+                selectedLanguage = "en-US",
+                rate = 1.6,
+            ),
+            dictionary = listOf(
+                PronunciationEntry(word = "AAC", phoneme = "A A C", alphabet = "text")
+            ),
+        )
+
+        assertContains(ssml, "<prosody rate=\"x-fast\">")
+        assertContains(ssml, "<sub alias=\"A A C\">AAC</sub>")
     }
 }

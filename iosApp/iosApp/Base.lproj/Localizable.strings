@@ -305,6 +305,8 @@
 "boardset.lock" = "Lock Screen";
 "boardset.unlock" = "Unlock Screen";
 "boardset.locked_banner" = "Screen is locked. Unlock to edit.";
+"boardset.export_obz" = "Export";
+"boardset.export_obz_failed" = "Export failed";
 "boardset.untitled_board" = "Untitled Page";
 "boardset.grid_summary" = "%d x %d grid, %d buttons";
 
@@ -436,6 +438,12 @@
 "board_workspace.show_hidden" = "Show hidden buttons temporarily";
 "board_workspace.hide_hidden" = "Hide temporarily revealed buttons";
 "board_workspace.temporarily_revealed" = "Temporarily revealed hidden button";
+"board_cell_opens_board" = "Opens page: %1$s";
+"boardset.cell.merge" = "Size";
+"boardset.cell.merge_size" = "Merged size";
+"boardset.cell.merge_1x1" = "1 × 1";
+"boardset.cell.merge_footer" = "Grow a button to span multiple cells. Only free cells can be merged.";
+"settings.display.message_bar" = "Show message bar";
 "editing_access.title" = "Editing access";
 "editing_access.description" = "Optionally require a code for editing. Communication is always available.";
 "editing_access.unavailable" = "Secure storage is unavailable on this device.";

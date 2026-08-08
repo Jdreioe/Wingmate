@@ -3,7 +3,7 @@
 //! Run with:
 //!   cargo run --bin partner-window-test -- --help
 
-use wingmate_kde::partner_window;
+use wingmate::partner_window;
 
 use clap::{Parser, Subcommand};
 use std::process;

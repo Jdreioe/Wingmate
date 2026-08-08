@@ -279,12 +279,6 @@ android {
         buildConfig = true
     }
 
-    sourceSets {
-        getByName("main") {
-            assets.srcDir("$buildDir/generated/composeAppComposeResources")
-        }
-    }
-    
     composeOptions {
         // Compiler extension version must match the Compose compiler compatible with the project's Kotlin plugin.
         // If you use a different Compose compiler version in CI/IDE, adjust this value accordingly.
@@ -353,37 +347,10 @@ play {
     track.set("alpha")
 }
 
-val syncComposeAppComposeResources by tasks.registering(Sync::class) {
-    dependsOn(":composeApp:copyAndroidMainComposeResourcesToAndroidAssets")
-    from(
-        project(":composeApp").layout.buildDirectory.dir(
-            "generated/compose/resourceGenerator/androidAssets/copyAndroidMainComposeResourcesToAndroidAssets"
-        )
-    )
-    into(layout.buildDirectory.dir("generated/composeAppComposeResources"))
-}
-
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
-    dependsOn(syncComposeAppComposeResources)
-}
-
-tasks.matching { it.name.endsWith("LintReportModel") || it.name.endsWith("LintVitalReportModel") }.configureEach {
-    dependsOn(syncComposeAppComposeResources)
-}
-
-tasks.matching { it.name.startsWith("lintAnalyze") }.configureEach {
-    dependsOn(syncComposeAppComposeResources)
-}
-
-tasks.matching { it.name == "lintVitalAnalyzeRelease" }.configureEach {
-    dependsOn(syncComposeAppComposeResources)
-}
-
 dependencies {
     implementation(project(":shared"))
-    implementation(project(":composeApp"))
 
-    val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
+    val composeBom = platform("androidx.compose:compose-bom:2025.09.01")
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
@@ -400,14 +367,19 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-
+    // Image loading
+    implementation("io.coil-kt.coil3:coil-compose:3.5.0")
+    implementation("io.coil-kt.coil3:coil-svg:3.5.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.5.0")
 
     // DI
     implementation(libs.koin.core)
     implementation(libs.koin.android)
+    implementation(libs.koin.compose)
 
     // Ktor engine for ARM API calls
     implementation("io.ktor:ktor-client-okhttp:2.3.12")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 
     // Dual-screen / WindowManager (API 34+ rear display & window area APIs)
     implementation(libs.androidx.window)

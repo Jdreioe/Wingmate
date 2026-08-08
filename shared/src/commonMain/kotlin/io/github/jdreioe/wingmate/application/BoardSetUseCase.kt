@@ -10,6 +10,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
+import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_SETTINGS_EXTENSION
 import io.github.jdreioe.wingmate.domain.obf.encodeBoardSettings
 import kotlinx.serialization.encodeToString
@@ -364,7 +365,11 @@ class BoardSetUseCase(
         column: Int,
         label: String,
         vocalization: String?,
-        imageUrl: String?
+        imageUrl: String?,
+        backgroundColor: String? = null,
+        hidden: Boolean = false,
+        linkedBoardId: String? = null,
+        actions: List<String> = emptyList(),
     ): ObfBoard? {
         val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
         if (boardSet.isLocked) return null
@@ -412,7 +417,12 @@ class BoardSetUseCase(
         val updatedButton = (existingButton ?: ObfButton(id = targetButtonId)).copy(
             label = normalizedLabel,
             vocalization = vocalization?.trim()?.ifBlank { null },
-            imageId = targetImageId
+            imageId = targetImageId,
+            backgroundColor = backgroundColor?.trim()?.ifBlank { null },
+            hidden = hidden,
+            loadBoard = linkedBoardId?.takeIf { it in boardSet.boardIds }?.let { ObfLoadBoard(id = it) },
+            action = actions.singleOrNull(),
+            actions = if (actions.size > 1) actions else emptyList(),
         )
 
         val updatedButtons = if (existingButton == null) {

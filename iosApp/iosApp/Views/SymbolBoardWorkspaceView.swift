@@ -6,11 +6,7 @@ import UniformTypeIdentifiers
 import UIKit
 import AudioToolbox
 
-private struct CellOpenSymbolsTokenResponse: Decodable {
-    let access_token: String
-}
-
-private struct CellOpenSymbolsSymbolResult: Decodable {
+private struct CellOpenSymbolsSymbolResult {
     let id: Int64
     let name: String
     let image_url: String?
@@ -21,6 +17,24 @@ private enum CellSymbolSource: String, CaseIterable, Identifiable {
     case userPhotos
 
     var id: String { rawValue }
+}
+
+private enum GridFieldSpanSelection: Equatable {
+    case single
+    case custom(GridFieldSpanInfo)
+
+    static func == (lhs: GridFieldSpanSelection, rhs: GridFieldSpanSelection) -> Bool {
+        switch (lhs, rhs) {
+        case (.single, .single): return true
+        case (.custom(let a), .custom(let b)): return a.rows == b.rows && a.columns == b.columns
+        default: return false
+        }
+    }
+}
+
+private struct GridFieldSpanInfo: Hashable {
+    let rows: Int
+    let columns: Int
 }
 
 private enum BoardSetCreationKind: String, CaseIterable, Identifiable {
@@ -121,6 +135,9 @@ struct SymbolBoardWorkspaceView: View {
     @State private var showDeleteBoardConfirmation: Bool = false
     @State private var editingRow: Int = 0
     @State private var editingCol: Int = 0
+    @State private var editingSpan: GridFieldSpanSelection = .single
+    @State private var editingSpanOptions: [GridFieldSpanInfo] = []
+    @State private var editingCellHasButton: Bool = false
     @State private var editingLabel: String = ""
     @State private var editingVocalization: String = ""
     @State private var editingInsertedText: String = ""
@@ -363,6 +380,9 @@ struct SymbolBoardWorkspaceView: View {
                                         }
                                     }
                                 },
+                                onExport: {
+                                    Task { await exportBoardSet(id: set.id) }
+                                },
                                 onDelete: {
                                     deleteTargetSet = set
                                 }
@@ -568,7 +588,7 @@ struct SymbolBoardWorkspaceView: View {
                 }
 
                 // Sentence Box in Run mode
-                if mode == .run {
+                if mode == .run && model.boardMessageBarVisible {
                     SentenceBoxView(
                         phrases: boardSentenceTokens,
                         onDelete: { index in
@@ -607,31 +627,55 @@ struct SymbolBoardWorkspaceView: View {
         if let board = model.selectedBoard {
             let rows = max(1, Int(board.grid?.rows ?? 1))
             let cols = max(1, Int(board.grid?.columns ?? 1))
-            let previewCols = Array(repeating: GridItem(.flexible(), spacing: 8), count: cols)
+            let gridGap: CGFloat = 8
+            let gridInset: CGFloat = 8
 
             GeometryReader { geometry in
-                let gridPadding: CGFloat = 12
-                let rowSpacing: CGFloat = 8
-                let availableHeight = geometry.size.height
-                    - (gridPadding * 2)
-                    - (rowSpacing * CGFloat(max(0, rows - 1)))
-                let cellHeight = max(72, availableHeight / CGFloat(rows))
+                let availableHeight = max(0, geometry.size.height - (gridInset * 2))
+                let availableWidth = max(0, geometry.size.width - (gridInset * 2))
+                let isCompact = board.compactGrid
+
+                // Mirror Compose sizing: non-compact boards fill the full available
+                // height (fraction 1), compact/keyboard boards size to their content
+                // (fraction computed from a minimum cell height of 72pt).
+                let minCellHeight: CGFloat = 72
+                let minContentHeight = (minCellHeight * CGFloat(rows)) + (gridGap * CGFloat(rows - 1))
+                let defaultFraction: CGFloat = isCompact
+                    ? min(max(minContentHeight / max(minContentHeight, availableHeight), 0.15), 1)
+                    : 1
+                let gridHeightFraction: CGFloat = ((board.gridHeightFraction?.isFinite == true) && (board.gridHeightFraction ?? 0) > 0)
+                    ? CGFloat(board.gridHeightFraction ?? 1)
+                    : defaultFraction
+                let fraction = min(max(gridHeightFraction, 0.15), 1)
+
+                let contentHeight = max(0, availableHeight * fraction)
+                let cellHeight = max(0, (contentHeight - (gridGap * CGFloat(rows - 1))) / CGFloat(rows))
+                let cellWidth = max(0, (availableWidth - (gridGap * CGFloat(cols - 1))) / CGFloat(cols))
+                let contentWidth = max(0, availableWidth)
 
                 ScrollView(.vertical, showsIndicators: false) {
-                    LazyVGrid(columns: previewCols, spacing: rowSpacing) {
-                        ForEach(0..<(rows * cols), id: \.self) { idx in
-                            let row = idx / cols
-                            let col = idx % cols
+                    ZStack(alignment: .topLeading) {
+                        ForEach(model.boardFieldItems) { field in
+                            let x = CGFloat(field.column) * (cellWidth + gridGap)
+                            let y = CGFloat(field.row) * (cellHeight + gridGap)
+                            let spanWidth = (cellWidth * CGFloat(field.columnSpan)) + (gridGap * CGFloat(field.columnSpan - 1))
+                            let spanHeight = (cellHeight * CGFloat(field.rowSpan)) + (gridGap * CGFloat(field.rowSpan - 1))
                             boardCellButton(
-                                row: row,
-                                col: col,
+                                row: field.row,
+                                col: field.column,
                                 isEditMode: isEditMode,
-                                height: cellHeight
+                                width: max(0, spanWidth),
+                                height: max(0, spanHeight),
+                                rowSpan: field.rowSpan,
+                                columnSpan: field.columnSpan
                             )
+                            .offset(x: x, y: y)
                         }
                     }
-                    .padding(gridPadding)
+                    .frame(width: contentWidth, height: contentHeight, alignment: .topLeading)
+                    .padding(gridInset)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(
                     model.highContrastMode
                         ? Color(.systemBackground)
@@ -647,11 +691,15 @@ struct SymbolBoardWorkspaceView: View {
         }
     }
 
-    private func boardCellButton(row: Int, col: Int, isEditMode: Bool, height: CGFloat) -> some View {
+    private func boardCellButton(row: Int, col: Int, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
         let cell = model.cellAt(row: row, col: col)
         let isLinked = trimmed(cell?.linkedBoardId) != nil
         let sourceCellId = "\(row):\(col)"
-        let hiddenInRunMode = cell?.hidden == true && !isEditMode && !showHiddenButtons
+        let hiddenInRunMode = !model.boardButtonIsVisible(
+            hidden: cell?.hidden == true,
+            isEditMode: isEditMode,
+            showHiddenButtons: showHiddenButtons
+        )
 
         return ZStack(alignment: .topTrailing) {
             Button {
@@ -665,15 +713,16 @@ struct SymbolBoardWorkspaceView: View {
             } label: {
                 Group {
                     if let animation = activeSentenceAnimation, animation.sourceCellId == sourceCellId {
-                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, height: height)
+                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, width: width, height: height, rowSpan: rowSpan, columnSpan: columnSpan)
                             .matchedGeometryEffect(id: animation.tokenId, in: sentenceAnimationNamespace, isSource: true)
                             .zIndex(3)
                     } else {
-                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, height: height)
+                        boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, width: width, height: height, rowSpan: rowSpan, columnSpan: columnSpan)
                     }
                 }
             }
             .buttonStyle(.plain)
+            .frame(width: width, height: height)
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: max(0.01, model.holdToSelectMillis / 1_000))
                     .onEnded { _ in
@@ -710,26 +759,55 @@ struct SymbolBoardWorkspaceView: View {
                     .padding(6)
                     .accessibilityLabel(Text("board_workspace.temporarily_revealed"))
             }
+            if !isEditMode, isLinked, let linkedBoardId = trimmed(cell?.linkedBoardId) {
+                let isHomeLink = linkedBoardId == model.selectedBoardSet?.rootBoardId
+                Image(systemName: isHomeLink ? "house.fill" : "arrowshape.turn.up.right.fill")
+                    .font(.caption)
+                    .foregroundStyle(Color.primary.opacity(0.8))
+                    .padding(4)
+                    .background(.regularMaterial, in: Circle())
+                    .overlay(Circle().stroke(Color(.separator), lineWidth: 1))
+                    .accessibilityLabel(Text(isHomeLink ? "boardset.cell.action.home" : String(format: NSLocalizedString("board_cell_opens_board", comment: ""), model.boardDisplayName(id: linkedBoardId))))
+            }
         }
         .opacity(hiddenInRunMode ? 0 : (cell?.hidden == true && isEditMode ? 0.5 : 1))
         .allowsHitTesting(!hiddenInRunMode)
         .accessibilityHidden(hiddenInRunMode || (model.scanningEnabled && !model.scanPhraseGridEnabled))
     }
 
-    private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, height: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if model.labelAtTop && model.showButtonLabels {
-                boardCellLabel(cell)
+    private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
+        let labelScale = model.boardFieldFontScale(rowSpan: rowSpan, columnSpan: columnSpan)
+        if cell == nil && isEditMode {
+            return AnyView(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.clear)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(Color(.separator), style: StrokeStyle(lineWidth: 1, dash: [4]))
+                        )
+                    Image(systemName: "plus")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: width, height: height)
+            )
+        }
+        let isHighlighted = model.highlightedButtonId != nil && model.highlightedButtonId == cell?.buttonId
+        return AnyView(
+            VStack(alignment: .leading, spacing: 4) {
+            if model.boardLabelAtTop && model.boardShowLabels {
+                boardCellLabel(cell, fontScale: labelScale)
             }
 
-            if model.showButtonSymbols, let imageUrl = trimmed(cell?.imageUrl), let url = URL(string: imageUrl) {
+            if model.boardShowSymbols, let imageUrl = trimmed(cell?.imageUrl), let url = URL(string: imageUrl) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
                         image
                             .resizable()
                             .scaledToFit()
-                            .frame(maxWidth: .infinity, maxHeight: 56)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     case .failure(_):
                         EmptyView()
                     case .empty:
@@ -739,11 +817,11 @@ struct SymbolBoardWorkspaceView: View {
                         EmptyView()
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            if !model.labelAtTop && model.showButtonLabels {
-                boardCellLabel(cell)
+            if !model.boardLabelAtTop && model.boardShowLabels {
+                boardCellLabel(cell, fontScale: labelScale)
             }
 
             if let linkedBoardId = trimmed(cell?.linkedBoardId) {
@@ -761,24 +839,29 @@ struct SymbolBoardWorkspaceView: View {
             }
         }
         .padding(8)
-        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .topLeading)
+        .frame(width: width, height: height, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(model.highContrastMode ? Color(.systemBackground) : colorFromHex(cell?.backgroundColor, fallback: Color(.tertiarySystemBackground)))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(model.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator)), lineWidth: model.highContrastMode ? 2 : (isLinked ? 1.5 : 1))
+                .stroke(isHighlighted
+                    ? (model.highContrastMode ? Color.white : Color.accentColor)
+                    : (model.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator))),
+                    lineWidth: isHighlighted ? 4 : (model.highContrastMode ? 2 : (isLinked ? 1.5 : 1)))
+        )
         )
     }
 
-    private func boardCellLabel(_ cell: BoardCellInfo?) -> some View {
+    private func boardCellLabel(_ cell: BoardCellInfo?, fontScale: CGFloat = 1) -> some View {
         Text(boardCellDisplayLabel(cell))
             .font(.subheadline)
             .fontWeight(cell == nil ? .regular : .semibold)
             .lineLimit(2)
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .scaleEffect(fontScale, anchor: .leading)
     }
 
     @ViewBuilder
@@ -977,6 +1060,23 @@ struct SymbolBoardWorkspaceView: View {
                     TextField(NSLocalizedString("boardset.cell.vocalization", comment: ""), text: $editingVocalization)
                 }
 
+                if model.canEditSelectedBoardSet, !model.isKeyboardBoard {
+                    Section {
+                        Picker("boardset.cell.merge_size", selection: $editingSpan) {
+                            Text("boardset.cell.merge_1x1").tag(GridFieldSpanSelection.single)
+                            ForEach(editingSpanOptions, id: \.self) { span in
+                                Text("\(span.rows) × \(span.columns)")
+                                    .tag(GridFieldSpanSelection.custom(span))
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    } header: {
+                        Text("boardset.cell.merge")
+                    } footer: {
+                        Text("boardset.cell.merge_footer")
+                    }
+                }
+
                 if model.selectedBoardKeyboardLayout != nil {
                     Section("boardset.cell.keyboard_action") {
                         TextField("boardset.cell.insert_text", text: $editingInsertedText)
@@ -1155,6 +1255,14 @@ struct SymbolBoardWorkspaceView: View {
                                 clearImage: shouldClearEditingSymbol,
                                 actions: actions
                             )
+                            if case .custom(let span) = editingSpan, editingCellHasButton {
+                                await model.resizeSelectedBoardField(
+                                    row: editingRow,
+                                    col: editingCol,
+                                    rows: span.rows,
+                                    columns: span.columns
+                                )
+                            }
                             showEditCellSheet = false
                         }
                     }
@@ -1170,13 +1278,8 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private var boardSentenceText: String {
-        if model.selectedBoardUsesSpellingMode {
-            return boardSentenceTokens.map(\.text).joined()
-        }
-        return boardSentenceTokens
-            .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
+        let tokens = boardSentenceTokens.map(\.text)
+        return model.boardJoinSentenceText(tokens: tokens, spellingMode: model.selectedBoardUsesSpellingMode)
     }
 
     private var boardPredictionTaskId: String {
@@ -1190,19 +1293,37 @@ struct SymbolBoardWorkspaceView: View {
     private func activateBoardCell(_ cell: BoardCellInfo?, row: Int, col: Int, sourceCellId: String) {
         guard let cell else { return }
         if trimmed(cell.linkedBoardId) != nil {
+            if let current = model.selectedBoardId {
+                model.pushBoardNavigationStack(current)
+            }
             Task { await model.activateSelectedBoardCell(row: row, col: col) }
             return
         }
         if cell.actions.isEmpty {
-            appendCellToSentenceIfNeeded(cell, sourceCellId: sourceCellId)
-            Task { await model.activateSelectedBoardCell(row: row, col: col) }
+            let behavior = model.boardActivationBehavior
+            let shouldAdd = behavior != "SpeakOnly"
+            let shouldSpeak = behavior != "AddOnly"
+            if let sound = trimmed(cell.soundDataUrl) {
+                model.playBoardButtonSound(sound)
+            }
+            if shouldAdd {
+                appendCellToSentenceIfNeeded(cell, sourceCellId: sourceCellId)
+            }
+            Task {
+                if shouldSpeak {
+                    await model.activateSelectedBoardCell(row: row, col: col)
+                }
+                await model.activateBoardSelectionHighlight(buttonId: cell.buttonId)
+            }
             return
         }
 
+        var isContentActivation = false
         for rawAction in cell.actions {
             let action = rawAction.trimmingCharacters(in: .whitespacesAndNewlines)
             switch action.lowercased() {
             case ":space":
+                isContentActivation = true
                 appendCellToSentenceIfNeeded(cell, textOverride: " ", sourceCellId: sourceCellId)
             case ":backspace":
                 backspaceBoardSentence()
@@ -1219,18 +1340,28 @@ struct SymbolBoardWorkspaceView: View {
                 }
             case ":prediction", ":predictions":
                 if let suggestion = model.boardPrediction(for: cell.buttonId) {
+                    isContentActivation = true
                     let insertion = predictionInsertion(sentence: boardSentenceText, suggestion: suggestion)
                     appendCellToSentenceIfNeeded(cell, textOverride: insertion, sourceCellId: sourceCellId)
                 }
             case ":spell":
+                isContentActivation = true
                 if let text = trimmed(cell.vocalization) ?? trimmed(cell.label) {
                     appendCellToSentenceIfNeeded(cell, textOverride: text, sourceCellId: sourceCellId)
                 }
             default:
                 if action.hasPrefix("+") {
+                    isContentActivation = true
                     appendCellToSentenceIfNeeded(cell, textOverride: String(action.dropFirst()), sourceCellId: sourceCellId)
                 }
             }
+        }
+        if isContentActivation {
+            if let sound = trimmed(cell.soundDataUrl) {
+                model.playBoardButtonSound(sound)
+            }
+            Task { await model.activateBoardSelectionHighlight(buttonId: cell.buttonId) }
+            Task { await model.applyBoardReturnBehavior() }
         }
     }
 
@@ -1267,24 +1398,19 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private func backspaceBoardSentence() {
-        guard let last = boardSentenceTokens.last else { return }
-        if last.text.count <= 1 {
+        guard !boardSentenceTokens.isEmpty else { return }
+        let texts = boardSentenceTokens.map { $0.text }
+        let trimmed = model.boardBackspaceSentence(texts: texts)
+        if trimmed.count < texts.count {
             boardSentenceTokens.removeLast()
-        } else {
-            boardSentenceTokens[boardSentenceTokens.count - 1].text.removeLast()
-            boardSentenceTokens[boardSentenceTokens.count - 1].title = boardSentenceTokens.last?.text ?? ""
+        } else if let lastText = trimmed.last {
+            boardSentenceTokens[boardSentenceTokens.count - 1].text = lastText
+            boardSentenceTokens[boardSentenceTokens.count - 1].title = lastText
         }
     }
 
     private func predictionInsertion(sentence: String, suggestion: String) -> String {
-        let word = suggestion.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !word.isEmpty else { return "" }
-        let prefix = String(sentence.reversed().prefix { !$0.isWhitespace }.reversed())
-        if prefix.isEmpty { return word }
-        if word.lowercased().hasPrefix(prefix.lowercased()) {
-            return String(word.dropFirst(prefix.count))
-        }
-        return " \(word)"
+        model.nGramPredictionInsertion(sentence: sentence, suggestion: suggestion)
     }
 
     private func boardCellDisplayLabel(_ cell: BoardCellInfo?) -> String {
@@ -1332,8 +1458,22 @@ struct SymbolBoardWorkspaceView: View {
     private func openCellEditor(row: Int, col: Int, existing: BoardCellInfo?) {
         editingRow = row
         editingCol = col
+        editingCellHasButton = existing != nil
         editingLabel = existing?.label ?? ""
         editingVocalization = existing?.vocalization ?? ""
+        editingSpan = .single
+        editingSpanOptions = []
+        Task {
+            let options = await model.availableFieldSpanOptions(row: row, col: col)
+            let currentField = model.boardFieldItems.first { $0.row == row && $0.column == col }
+            await MainActor.run {
+                editingSpanOptions = options
+                if let field = currentField, existing != nil,
+                   let match = options.first(where: { $0.rows == field.rowSpan && $0.columns == field.columnSpan }) {
+                    editingSpan = .custom(match)
+                }
+            }
+        }
         let directText = existing?.actions.first(where: { $0.hasPrefix("+") }).map { String($0.dropFirst()) } ?? ""
         editingInsertedText = directText
         editingInsertedTextFollowsLabel = !directText.isEmpty && directText == (trimmed(existing?.vocalization) ?? trimmed(existing?.label) ?? "")
@@ -1426,12 +1566,8 @@ struct SymbolBoardWorkspaceView: View {
         let trimmed = editingSymbolQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        guard let openSymbolsSecret = resolveCellOpenSymbolsSecret() else {
-            await MainActor.run {
-                editingSymbolError = NSLocalizedString("phrase.symbol.error.missing_secret", comment: "")
-            }
-            return
-        }
+        let bridge = KoinBridge()
+        bridge.setOpenSymbolsSecret(secret: resolveCellOpenSymbolsSecret())
 
         await MainActor.run {
             isSearchingCellSymbols = true
@@ -1439,66 +1575,21 @@ struct SymbolBoardWorkspaceView: View {
             editingSymbolResults = []
         }
 
-        do {
-            guard let tokenUrl = URL(string: "https://www.opensymbols.org/api/v2/token") else {
-                await MainActor.run {
-                    isSearchingCellSymbols = false
-                    editingSymbolError = NSLocalizedString("phrase.symbol.error.token_url", comment: "")
-                }
-                return
-            }
-
-            var tokenRequest = URLRequest(url: tokenUrl)
-            tokenRequest.httpMethod = "POST"
-            tokenRequest.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-            tokenRequest.httpBody = "secret=\(openSymbolsSecret)".data(using: .utf8)
-
-            let (tokenData, tokenResponse) = try await URLSession.shared.data(for: tokenRequest)
-            guard let tokenHttp = tokenResponse as? HTTPURLResponse, tokenHttp.statusCode == 200 else {
-                await MainActor.run {
-                    isSearchingCellSymbols = false
-                    editingSymbolError = NSLocalizedString("phrase.symbol.error.auth_failed", comment: "")
-                }
-                return
-            }
-
-            let token = try JSONDecoder().decode(CellOpenSymbolsTokenResponse.self, from: tokenData).access_token
-
-            var components = URLComponents(string: "https://www.opensymbols.org/api/v2/symbols")
-            components?.queryItems = [
-                URLQueryItem(name: "q", value: trimmed),
-                URLQueryItem(name: "locale", value: "en"),
-                URLQueryItem(name: "access_token", value: token)
-            ]
-
-            guard let symbolsUrl = components?.url else {
-                await MainActor.run {
-                    isSearchingCellSymbols = false
-                    editingSymbolError = NSLocalizedString("phrase.symbol.error.search_url", comment: "")
-                }
-                return
-            }
-
-            let (symbolsData, symbolsResponse) = try await URLSession.shared.data(from: symbolsUrl)
-            guard let symbolsHttp = symbolsResponse as? HTTPURLResponse, symbolsHttp.statusCode == 200 else {
-                await MainActor.run {
-                    isSearchingCellSymbols = false
-                    editingSymbolError = NSLocalizedString("phrase.symbol.error.search_failed", comment: "")
-                }
-                return
-            }
-
-            let decoded = try JSONDecoder().decode([CellOpenSymbolsSymbolResult].self, from: symbolsData)
-
-            await MainActor.run {
-                editingSymbolResults = decoded
-                isSearchingCellSymbols = false
-            }
-        } catch {
+        guard let result = try? await bridge.openSymbolsSearch(query: trimmed, locale: "en") else {
             await MainActor.run {
                 isSearchingCellSymbols = false
-                editingSymbolError = error.localizedDescription
+                editingSymbolError = NSLocalizedString("phrase.symbol.error.search_failed", comment: "")
             }
+            return
+        }
+
+        await MainActor.run {
+            if result.errorCode.isEmpty {
+                editingSymbolResults = result.symbols.map { CellOpenSymbolsSymbolResult(id: $0.id, name: $0.name ?? "", image_url: $0.imageUrl) }
+            } else {
+                editingSymbolError = NSLocalizedString("phrase.symbol.error.\(result.errorCode)", comment: "")
+            }
+            isSearchingCellSymbols = false
         }
     }
 
@@ -1597,6 +1688,20 @@ struct SymbolBoardWorkspaceView: View {
             showEditingAccessSheet = true
         }
     }
+
+    private func exportBoardSet(id: String) async {
+        let bridge = KoinBridge()
+        let result = try? await bridge.shareBoardSetAsObz(id: id)
+        let message: String
+        if let result, result.success {
+            message = result.message
+        } else {
+            message = result?.message ?? NSLocalizedString("boardset.export_obz_failed", comment: "")
+        }
+        await MainActor.run {
+            model.boardStatusMessage = message
+        }
+    }
 }
 
 // MARK: - BoardSet Library Card Component
@@ -1606,6 +1711,7 @@ struct BoardSetLibraryCard: View {
     let onEdit: () -> Void
     let onDuplicate: () -> Void
     let onToggleLock: () -> Void
+    let onExport: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -1661,6 +1767,12 @@ struct BoardSetLibraryCard: View {
 
                 Button(action: onToggleLock) {
                     Label(set.isLocked ? "boardset.unlock" : "boardset.lock", systemImage: set.isLocked ? "lock.open.fill" : "lock.fill")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+
+                Button(action: onExport) {
+                    Label("boardset.export_obz", systemImage: "square.and.arrow.up")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)

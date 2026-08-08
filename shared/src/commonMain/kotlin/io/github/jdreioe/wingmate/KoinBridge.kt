@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate
 
+import io.github.jdreioe.wingmate.application.SelectionHighlight
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
@@ -15,6 +16,8 @@ import io.github.jdreioe.wingmate.initKoin
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
+import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
@@ -30,8 +33,28 @@ import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
+import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
+import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
+import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
+import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
+import io.github.jdreioe.wingmate.domain.obf.fieldItems
+import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
+import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
+import io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion
+import io.github.jdreioe.wingmate.domain.obf.joinSentenceText
+import io.github.jdreioe.wingmate.domain.obf.buttonSpeechPart
+import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
+import io.github.jdreioe.wingmate.domain.obf.shouldSpeakBoardSelection
+import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
+import io.github.jdreioe.wingmate.domain.obf.buildResolvedSentence
+import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
 import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.domain.BoardSetRepository
+import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlin.time.Clock
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 
@@ -74,6 +97,9 @@ class KoinBridge : KoinComponent {
     }
 
     // --- Simple bridging helpers for Swift UI ---
+    /** Split text into speech segments honoring shorthand SSML pauses and language tags. */
+    fun processSpeechText(text: String): List<SpeechSegment> = SpeechTextProcessor.processText(text)
+
     suspend fun speak(text: String) {
         try {
             get<SpeechService>().speak(text)
@@ -160,9 +186,31 @@ class KoinBridge : KoinComponent {
     suspend fun updateHoldToSelectMillis(millis: Long) = updateSettings { it.copy(holdToSelectMillis = millis.coerceIn(0, 2_000)) }
     suspend fun updateDwellToSelectMillis(millis: Long) = updateSettings { it.copy(dwellToSelectMillis = millis.coerceIn(0, 5_000)) }
     suspend fun updateSelectionDebounceMillis(millis: Long) = updateSettings { it.copy(selectionDebounceMillis = millis.coerceIn(0, 1_000)) }
-    suspend fun updateSelectionHighlightMillis(millis: Long) = updateSettings { it.copy(selectionHighlightMillis = millis.coerceIn(0, 2_000)) }
     suspend fun updateSelectionSoundEnabled(enabled: Boolean) = updateSettings { it.copy(selectionSoundEnabled = enabled) }
     suspend fun updateAuditoryFishingEnabled(enabled: Boolean) = updateSettings { it.copy(auditoryFishingEnabled = enabled) }
+    suspend fun updateSelectionHighlightMillis(millis: Long) = updateSettings { it.copy(selectionHighlightMillis = millis.coerceIn(0, 5_000)) }
+    suspend fun updateBoardShowMessageBar(enabled: Boolean) = updateSettings { it.copy(boardShowMessageBar = enabled) }
+
+    private val selectionHighlight = SelectionHighlight()
+
+    /** Record a selection for visual highlight; immediately ends the previous highlight. */
+    fun selectionHighlightActivate(buttonId: String) {
+        selectionHighlight.activate(buttonId, nowMillis())
+    }
+
+    /** Clear any active selection highlight. */
+    fun selectionHighlightClear() {
+        selectionHighlight.clear()
+    }
+
+    /**
+     * The currently highlighted button id for the given duration, or null when the
+     * highlight has expired or is disabled by a non-positive [durationMillis].
+     */
+    fun selectionHighlightButtonId(durationMillis: Long): String? =
+        selectionHighlight.highlightedTarget(nowMillis(), durationMillis)
+
+    private fun nowMillis(): Long = Clock.System.now().toEpochMilliseconds()
     suspend fun updateUsageLoggingEnabled(enabled: Boolean) {
         updateSettings { it.copy(usageLoggingEnabled = enabled) }
         runCatching { get<io.github.jdreioe.wingmate.domain.AacLogger>().setEnabled(enabled) }
@@ -279,8 +327,63 @@ class KoinBridge : KoinComponent {
         get<BoardSetUseCase>().deleteBoard(boardSetId, boardId)
     suspend fun exportBoardSetAsObz(id: String): ByteArray? = get<BoardSetUseCase>().exportBoardSetAsObz(id)
 
+    suspend fun shareBoardSetAsObz(id: String): IosBoardSetExportResult {
+        val useCase = get<BoardSetUseCase>()
+        val boardSet = useCase.getBoardSet(id)
+            ?: return IosBoardSetExportResult(success = false, fileName = null, message = "Board set not found")
+        return when (val export = useCase.exportBoardSetAsObzResult(id)) {
+            is io.github.jdreioe.wingmate.application.ObzExportResult.Success -> {
+                val fileName = "${boardSet.name}.obz"
+                val shared = runCatching { get<io.github.jdreioe.wingmate.platform.ShareService>().shareFile(fileName, export.bytes) }
+                    .getOrDefault(false)
+                if (shared) {
+                    IosBoardSetExportResult(success = true, fileName = fileName, message = "Exported $fileName")
+                } else {
+                    IosBoardSetExportResult(success = false, fileName = fileName, message = "Export cancelled")
+                }
+            }
+            is io.github.jdreioe.wingmate.application.ObzExportResult.Failure -> {
+                val resources = export.resources.takeIf { it.isNotEmpty() }?.joinToString(prefix = ": ")
+                IosBoardSetExportResult(success = false, fileName = null, message = "Export failed: ${export.context}$resources")
+            }
+        }
+    }
+
     // --- Swift-friendly board helpers ---
     suspend fun getBoard(id: String): ObfBoard? = get<BoardRepository>().getBoard(id)
+
+    /**
+     * Resolve the effective board settings for the given board id, applying app-level
+     * defaults, then screen overrides, then page overrides (shared with Android).
+     */
+    suspend fun resolveBoardSettings(boardId: String): IosResolvedBoardSettings {
+        val settings = get<SettingsUseCase>().get()
+        val repository = get<BoardRepository>()
+        val board = repository.getBoard(boardId)
+        val screenOverrides = getBoardSetForBoard(boardId)?.screenSettings ?: BoardSettingsOverrides()
+        val pageOverrides = board?.pageSettingsOverrides() ?: BoardSettingsOverrides()
+        val resolved = resolveBoardSettings(
+            appShowLabels = settings.showLabels,
+            appShowSymbols = settings.showSymbols,
+            appLabelAtTop = settings.labelAtTop,
+            appShowMessageBar = settings.boardShowMessageBar,
+            appActivationBehavior = settings.boardActivationBehavior,
+            appReturnBehavior = settings.boardReturnBehavior,
+            screen = screenOverrides,
+            page = pageOverrides
+        )
+        return IosResolvedBoardSettings(
+            showLabels = resolved.showLabels,
+            showSymbols = resolved.showSymbols,
+            labelAtTop = resolved.labelAtTop,
+            showMessageBar = resolved.showMessageBar,
+            activationBehavior = resolved.activationBehavior.name,
+            returnBehavior = resolved.returnBehavior.name
+        )
+    }
+
+    private suspend fun getBoardSetForBoard(boardId: String): ObfBoardSet? =
+        get<BoardSetRepository>().listBoardSets().firstOrNull { set -> set.boardIds.contains(boardId) }
 
     fun boardKeyboardLayout(board: ObfBoard): String? = board.keyboardLayout?.wireValue
 
@@ -308,18 +411,109 @@ class KoinBridge : KoinComponent {
         val grid = board.grid ?: return emptyList()
         val buttons = board.buttons.associateBy { it.id }
         val images = board.images.associateBy { it.id }
+        val locale = get<SettingsUseCase>().get().primaryLanguage
         return grid.order.flatMapIndexed { row, columns ->
             columns.mapIndexedNotNull { col, buttonId ->
                 val id = buttonId ?: return@mapIndexedNotNull null
                 val button = buttons[id] ?: return@mapIndexedNotNull null
                 IosBoardCell(
-                    row, col, id, button.label, button.vocalization,
+                    row, col, id,
+                    resolveObfLocalizedString(board.strings, locale, button.label),
+                    resolveObfLocalizedString(board.strings, locale, button.vocalization),
                     button.backgroundColor, button.borderColor, button.loadBoard?.id,
                     button.imageId, button.imageId?.let { images[it]?.url }, button.hidden,
-                    button.resolvedActions()
+                    button.resolvedActions(),
+                    button.soundId,
+                    board.sounds.firstOrNull { it.id == button.soundId }?.let { sound ->
+                        sound.dataUrl ?: sound.data?.let { "data:audio;base64,$it" } ?: sound.url
+                    }
                 )
             }
         }
+    }
+
+    // --- Grid span / merge operations (shared with Android via core/domain) ---
+    suspend fun listBoardFieldItems(boardId: String): List<IosBoardFieldItem> {
+        val board = get<BoardRepository>().getBoard(boardId) ?: return emptyList()
+        val grid = board.grid ?: return emptyList()
+        return grid.fieldItems().map { field ->
+            IosBoardFieldItem(
+                row = field.row,
+                column = field.column,
+                rowSpan = field.rowSpan,
+                columnSpan = field.columnSpan,
+                buttonId = field.buttonId
+            )
+        }
+    }
+
+    suspend fun availableFieldSpans(boardId: String, row: Int, col: Int): List<IosGridFieldSpan> {
+        val board = get<BoardRepository>().getBoard(boardId) ?: return emptyList()
+        val grid = board.grid ?: return emptyList()
+        return grid.availableFieldSpansAt(row, col).map { span ->
+            IosGridFieldSpan(rows = span.rows, columns = span.columns)
+        }
+    }
+
+    /**
+     * Grow/shrink the field at [row], [col] to [rowSpan] x [columnSpan]. Returns
+     * true on success (persisted via the repository).
+     */
+    suspend fun resizeBoardField(boardId: String, row: Int, col: Int, rowSpan: Int, columnSpan: Int): Boolean {
+        val repo = get<BoardRepository>()
+        val board = repo.getBoard(boardId) ?: return false
+        val grid = board.grid ?: return false
+        val buttonId = grid.order.getOrNull(row)?.getOrNull(col) ?: return false
+        val resized = grid.withFieldSpan(row, col, buttonId, rowSpan, columnSpan) ?: return false
+        if (resized == grid) return false
+        repo.saveBoard(board.copy(grid = resized))
+        return true
+    }
+
+    // --- Shared board-session logic (same behavior as Android/Linux) ---
+    fun nGramPredictionInsertion(sentence: String, suggestion: String): String =
+        io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion(sentence, suggestion)
+
+    fun boardShouldAddSelection(behavior: String): Boolean =
+        shouldAddBoardSelection(behavior.toBoardActivationBehavior())
+
+    fun boardShouldSpeakSelection(behavior: String): Boolean =
+        shouldSpeakBoardSelection(behavior.toBoardActivationBehavior())
+
+    fun boardReturnBehavior(
+        behavior: String,
+        currentBoardId: String?,
+        boardStack: List<String>,
+        rootBoardId: String
+    ): IosBoardReturnResult {
+        val (boardId, stack) = applyBoardReturnBehavior(
+            behavior.toBoardReturnBehavior(), currentBoardId, boardStack, rootBoardId
+        )
+        return IosBoardReturnResult(boardId = boardId, boardStack = stack)
+    }
+
+    fun boardBackspaceSentence(texts: List<String>): List<String> =
+        backspaceSentenceSelection(texts)
+
+    fun boardButtonIsVisible(hidden: Boolean, isEditMode: Boolean, showHiddenButtons: Boolean): Boolean =
+        !hidden || isEditMode || showHiddenButtons
+
+    fun boardFieldFontScale(rowSpan: Int, columnSpan: Int): Float =
+        io.github.jdreioe.wingmate.domain.obf.fieldFontScale(rowSpan, columnSpan)
+
+    fun boardJoinSentenceText(tokens: List<String>, spellingMode: Boolean): String =
+        joinSentenceText(tokens, spellingMode)
+
+    suspend fun boardButtonSpeechPart(boardId: String, buttonId: String, textOverride: String?): IosButtonSpeechPart? {
+        val board = get<BoardRepository>().getBoard(boardId) ?: return null
+        val button = board.buttons.firstOrNull { it.id == buttonId } ?: return null
+        val part = board.buttonSpeechPart(button, get<SettingsUseCase>().get().primaryLanguage) ?: return null
+        return IosButtonSpeechPart(
+            text = textOverride ?: part.text,
+            language = part.language,
+            recordingPath = part.recordingPath,
+            mathMode = part.mathMode
+        )
     }
 
     suspend fun upsertBoardCellButton(
@@ -524,9 +718,71 @@ class KoinBridge : KoinComponent {
             get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().delete(word)
         } catch (_: Throwable) {}
     }
+
+    // --- OpenSymbols helpers (route through shared client, not Swift) ---
+    fun setOpenSymbolsSecret(secret: String?) {
+        OpenSymbolsClient.setSharedSecret(secret)
+    }
+
+    suspend fun openSymbolsSearch(query: String, locale: String): IosOpenSymbolsResult {
+        return when (val result = OpenSymbolsClient.search(query, locale)) {
+            is OpenSymbolsClient.SearchResponse.Success -> IosOpenSymbolsResult(
+                symbols = result.symbols.map {
+                    IosOpenSymbol(id = it.id, name = it.name, imageUrl = it.image_url)
+                },
+                errorCode = ""
+            )
+            is OpenSymbolsClient.SearchResponse.Failure -> IosOpenSymbolsResult(
+                symbols = emptyList(),
+                errorCode = result.error.toIosErrorCode()
+            )
+        }
+    }
 }
 
+private fun OpenSymbolsClient.SearchError.toIosErrorCode(): String = when (this) {
+    OpenSymbolsClient.SearchError.NotConfigured -> "missing_secret"
+    OpenSymbolsClient.SearchError.Authentication,
+    OpenSymbolsClient.SearchError.TokenExpired,
+    -> "auth_failed"
+    OpenSymbolsClient.SearchError.Throttled,
+    OpenSymbolsClient.SearchError.Network,
+    OpenSymbolsClient.SearchError.Server,
+    -> "search_failed"
+}
+
+data class IosOpenSymbol(
+    val id: Long,
+    val name: String? = null,
+    val imageUrl: String? = null,
+)
+
+data class IosOpenSymbolsResult(
+    val symbols: List<IosOpenSymbol> = emptyList(),
+    val errorCode: String = "",
+)
+
+data class IosBoardSetExportResult(
+    val success: Boolean,
+    val fileName: String? = null,
+    val message: String = "",
+)
+
 private val logger = KotlinLogging.logger {}
+
+private fun String.toBoardActivationBehavior(): BoardActivationBehavior =
+    when (this) {
+        "AddOnly" -> BoardActivationBehavior.AddOnly
+        "SpeakOnly" -> BoardActivationBehavior.SpeakOnly
+        else -> BoardActivationBehavior.SpeakAndAdd
+    }
+
+private fun String.toBoardReturnBehavior(): BoardReturnBehavior =
+    when (this) {
+        "Previous" -> BoardReturnBehavior.Previous
+        "StartPage" -> BoardReturnBehavior.StartPage
+        else -> BoardReturnBehavior.Stay
+    }
 
 data class IosBoardCell(
     val row: Int,
@@ -540,10 +796,46 @@ data class IosBoardCell(
     val imageId: String?,
     val imageUrl: String?,
     val hidden: Boolean,
-    val actions: List<String>
+    val actions: List<String>,
+    val soundId: String? = null,
+    val soundDataUrl: String? = null,
 )
 
 data class IosSettingsFlags(
     val usesSystemTts: Boolean,
     val startupUsesScreens: Boolean
+)
+
+data class IosBoardFieldItem(
+    val row: Int,
+    val column: Int,
+    val rowSpan: Int,
+    val columnSpan: Int,
+    val buttonId: String? = null
+)
+
+data class IosGridFieldSpan(
+    val rows: Int,
+    val columns: Int
+)
+
+data class IosBoardReturnResult(
+    val boardId: String?,
+    val boardStack: List<String>
+)
+
+data class IosButtonSpeechPart(
+    val text: String,
+    val language: String?,
+    val recordingPath: String?,
+    val mathMode: Boolean
+)
+
+data class IosResolvedBoardSettings(
+    val showLabels: Boolean,
+    val showSymbols: Boolean,
+    val labelAtTop: Boolean,
+    val showMessageBar: Boolean,
+    val activationBehavior: String,
+    val returnBehavior: String
 )

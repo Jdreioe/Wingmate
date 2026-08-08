@@ -1,3 +1,5 @@
+pub mod i18n;
+
 #[cfg(feature = "partner-window")]
 pub mod partner_window;
 #[cfg(feature = "partner-window")]
@@ -23,6 +25,9 @@ pub mod partner_window_bridge {
         pub fn shutdown(&self) {}
         pub fn state(&self) -> (bool, bool) {
             (false, false)
+        }
+        pub fn is_available(&self) -> bool {
+            false
         }
     }
 

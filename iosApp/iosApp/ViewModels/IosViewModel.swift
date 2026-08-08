@@ -26,12 +26,23 @@ struct BoardCellInfo: Identifiable, Equatable {
     var imageUrl: String?
     var hidden: Bool
     var actions: [String]
+    var soundId: String? = nil
+    var soundDataUrl: String? = nil
 
     var id: String { "\(row):\(col)" }
 }
 
-struct SentencePhraseToken: Identifiable, Equatable {
-    var id: String = UUID().uuidString
+struct BoardFieldItem: Identifiable, Equatable {
+    var row: Int
+    var column: Int
+    var rowSpan: Int
+    var columnSpan: Int
+    var buttonId: String?
+
+    var id: String { "\(row):\(column)" }
+}
+
+struct SentencePhraseToken: Identifiable, Equatable {    var id: String = UUID().uuidString
     var phraseId: String
     var text: String
     var title: String
@@ -154,6 +165,7 @@ final class IosViewModel: ObservableObject {
     @Published var selectedBoardId: String? = nil
     @Published var selectedBoard: Shared.ObfBoard? = nil
     @Published var boardCells: [BoardCellInfo] = []
+    @Published var boardFieldItems: [BoardFieldItem] = []
     @Published var selectedBoardKeyboardLayout: String? = nil
     @Published var selectedBoardUsesSpellingMode: Bool = false
     @Published var boardPredictionsByButtonId: [String: String] = [:]
@@ -163,6 +175,24 @@ final class IosViewModel: ObservableObject {
     @Published var editingAccessEnabled: Bool = false
     @Published var editingAccessUnlocked: Bool = true
     @Published var editingAccessSupported: Bool = true
+    @Published var selectionHighlightMillis: Int64 = 0
+    @Published var highlightedButtonId: String? = nil
+    private var selectionHighlightGeneration: Int64 = 0
+    @Published var boardShowMessageBar: Bool = true
+    @Published var resolvedBoardShowLabels: Bool? = nil
+    @Published var resolvedBoardShowSymbols: Bool? = nil
+    @Published var resolvedBoardLabelAtTop: Bool? = nil
+    @Published var resolvedBoardShowMessageBar: Bool? = nil
+    @Published var resolvedBoardActivationBehavior: String? = nil
+    @Published var resolvedBoardReturnBehavior: String? = nil
+    @Published private(set) var boardStack: [String] = []
+
+    var boardShowLabels: Bool { resolvedBoardShowLabels ?? showButtonLabels }
+    var boardShowSymbols: Bool { resolvedBoardShowSymbols ?? showButtonSymbols }
+    var boardLabelAtTop: Bool { resolvedBoardLabelAtTop ?? labelAtTop }
+    var boardMessageBarVisible: Bool { resolvedBoardShowMessageBar ?? boardShowMessageBar }
+    var boardActivationBehavior: String { resolvedBoardActivationBehavior ?? "SpeakAndAdd" }
+    var boardReturnBehavior: String { resolvedBoardReturnBehavior ?? "Stay" }
 
     private var isApplyingSentencePhraseInput: Bool = false
 
@@ -254,6 +284,34 @@ final class IosViewModel: ObservableObject {
 
     func cellAt(row: Int, col: Int) -> BoardCellInfo? {
         boardCells.first(where: { $0.row == row && $0.col == col })
+    }
+
+    var isKeyboardBoard: Bool {
+        selectedBoardKeyboardLayout != nil
+    }
+
+    func availableFieldSpanOptions(row: Int, col: Int) async -> [GridFieldSpanInfo] {
+        guard let boardId = selectedBoardId else { return [] }
+        let spans = (try? await bridge.availableFieldSpans(
+            boardId: boardId,
+            row: Int32(row),
+            col: Int32(col)
+        )) ?? []
+        return spans.map { GridFieldSpanInfo(rows: Int($0.rows), columns: Int($0.columns)) }
+    }
+
+    func resizeSelectedBoardField(row: Int, col: Int, rows: Int, columns: Int) async {
+        guard let boardId = selectedBoardId else { return }
+        let ok = (try? await bridge.resizeBoardField(
+            boardId: boardId,
+            row: Int32(row),
+            col: Int32(col),
+            rowSpan: Int32(rows),
+            columnSpan: Int32(columns)
+        )) ?? false
+        if ok {
+            await refreshBoardCells()
+        }
     }
 
     func effectiveLanguage(for v: Shared.Voice) -> String {
@@ -410,6 +468,8 @@ final class IosViewModel: ObservableObject {
                 self.selectionDebounceMillis = Double(settings.selectionDebounceMillis)
                 self.selectionSoundEnabled = settings.selectionSoundEnabled
                 self.auditoryFishingEnabled = settings.auditoryFishingEnabled
+                self.selectionHighlightMillis = settings.selectionHighlightMillis
+                self.boardShowMessageBar = settings.boardShowMessageBar
                 self.usageLoggingEnabled = settings.usageLoggingEnabled
                 self.featureUsageReportingEnabled = settings.featureUsageReportingEnabled
                 self.historyVisible = settings.historyVisible
@@ -571,36 +631,37 @@ final class IosViewModel: ObservableObject {
 
         // If user prefers system TTS, use it directly
         if useSystemTts {
-            SystemTtsManager.shared.speak(
-                plain,
-                language: primaryLanguage,
-                secondaryLanguage: isInputText ? secondaryLanguage : nil,
-                secondaryLanguageRanges: isInputText ? secondaryLanguageRanges : []
-            )
+            speakSystemText(plain, isInputText: isInputText)
             return
         }
         
         // If Azure is not configured, always use on-device TTS to keep the app working
         if !azureConfigured {
-            SystemTtsManager.shared.speak(
-                plain,
-                language: primaryLanguage,
-                secondaryLanguage: isInputText ? secondaryLanguage : nil,
-                secondaryLanguageRanges: isInputText ? secondaryLanguageRanges : []
-            )
+            speakSystemText(plain, isInputText: isInputText)
             return
         }
         // Otherwise, allow offline fallback when enabled
         if !isOnline && useSystemTtsWhenOffline {
-            SystemTtsManager.shared.speak(
-                plain,
-                language: primaryLanguage,
-                secondaryLanguage: isInputText ? secondaryLanguage : nil,
-                secondaryLanguageRanges: isInputText ? secondaryLanguageRanges : []
-            )
+            speakSystemText(plain, isInputText: isInputText)
             return
         }
         Task { _ = try? await bridge.speak(text: t) }
+    }
+
+    /// Speak on-device, honoring shorthand SSML (pauses + language tags) via shared
+    /// SpeechTextProcessor when no secondary-language splitting is required.
+    private func speakSystemText(_ text: String, isInputText: Bool) {
+        if !isInputText || secondaryLanguageRanges.isEmpty {
+            let segments = bridge.processSpeechText(text: text)
+            SystemTtsManager.shared.speak(segments: segments, language: primaryLanguage)
+        } else {
+            SystemTtsManager.shared.speak(
+                text,
+                language: primaryLanguage,
+                secondaryLanguage: secondaryLanguage,
+                secondaryLanguageRanges: secondaryLanguageRanges
+            )
+        }
     }
 
     func speakBoardSentence(_ text: String, boardSetId: String) {
@@ -608,10 +669,36 @@ final class IosViewModel: ObservableObject {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         AudioSessionHelper.activatePlayback()
         if useSystemTts || !azureConfigured || (!isOnline && useSystemTtsWhenOffline) {
-            SystemTtsManager.shared.speak(text, language: primaryLanguage)
+            let segments = bridge.processSpeechText(text: text)
+            SystemTtsManager.shared.speak(segments: segments, language: primaryLanguage)
             return
         }
         Task { _ = try? await bridge.speakBoardSentence(text: text, cacheAudio: cacheAudio) }
+    }
+
+    func playBoardButtonSound(_ dataUrl: String) {
+        guard !dataUrl.isEmpty else { return }
+        AudioSessionHelper.activatePlayback()
+        if let url = playableURL(from: dataUrl) {
+            hybrid.play(segments: [.audio(url)], language: primaryLanguage)
+        }
+    }
+
+    private func playableURL(from dataUrl: String) -> URL? {
+        if let base64Range = dataUrl.range(of: "base64,") {
+            let encoded = String(dataUrl[base64Range.upperBound...])
+            guard let data = Data(base64Encoded: encoded) else { return nil }
+            let ext = dataUrl.hasPrefix("data:audio/mpeg") ? "mp3" : "caf"
+            let temp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("wingmate-button-sound-\(UUID().uuidString).\(ext)")
+            do {
+                try data.write(to: temp)
+                return temp
+            } catch {
+                return nil
+            }
+        }
+        return URL(string: dataUrl)
     }
 
     private func textWithSecondaryLanguageMarkup(from plainText: String) -> String {
@@ -860,6 +947,11 @@ final class IosViewModel: ObservableObject {
     func setAuditoryFishingEnabled(_ enabled: Bool) {
         auditoryFishingEnabled = enabled
         Task { _ = try? await bridge.updateAuditoryFishingEnabled(enabled: enabled) }
+    }
+
+    func setBoardShowMessageBar(_ enabled: Bool) {
+        boardShowMessageBar = enabled
+        Task { _ = try? await bridge.updateBoardShowMessageBar(enabled: enabled) }
     }
 
     func setUsageLoggingEnabled(_ enabled: Bool) {
@@ -1319,6 +1411,7 @@ final class IosViewModel: ObservableObject {
             selectedBoardId = nil
             selectedBoard = nil
             boardCells = []
+            boardFieldItems = []
             boardNamesById = [:]
         }
     }
@@ -1424,6 +1517,7 @@ final class IosViewModel: ObservableObject {
     func selectBoardSet(id: String) async {
         guard boardSets.contains(where: { $0.id == id }) else { return }
         selectedBoardSetId = id
+        boardStack = []
         if let set = selectedBoardSet {
             if selectedBoardId == nil || !set.boardIds.contains(selectedBoardId ?? "") {
                 selectedBoardId = set.rootBoardId
@@ -1441,18 +1535,73 @@ final class IosViewModel: ObservableObject {
         await loadSelectedBoard()
     }
 
+    func pushBoardNavigationStack(_ boardId: String) {
+        guard !boardStack.contains(boardId) else { return }
+        boardStack.append(boardId)
+    }
+
+    func applyBoardReturnBehavior() async {
+        let behavior = boardReturnBehavior
+        let result = bridge.boardReturnBehavior(
+            behavior: behavior,
+            currentBoardId: selectedBoardId,
+            boardStack: boardStack,
+            rootBoardId: selectedBoardSet?.rootBoardId ?? ""
+        )
+        let nextBoardId = result.boardId
+        let nextStack = result.boardStack
+        boardStack = nextStack
+        guard let nextBoardId, nextBoardId != selectedBoardId else { return }
+        selectedBoardId = nextBoardId
+        await loadSelectedBoard()
+    }
+
+    func nGramPredictionInsertion(sentence: String, suggestion: String) -> String {
+        bridge.nGramPredictionInsertion(sentence: sentence, suggestion: suggestion)
+    }
+
+    func boardBackspaceSentence(texts: [String]) -> [String] {
+        bridge.boardBackspaceSentence(texts: texts)
+    }
+
+    func boardButtonIsVisible(hidden: Bool, isEditMode: Bool, showHiddenButtons: Bool) -> Bool {
+        bridge.boardButtonIsVisible(hidden: hidden, isEditMode: isEditMode, showHiddenButtons: showHiddenButtons)
+    }
+
+    func boardFieldFontScale(rowSpan: Int, columnSpan: Int) -> CGFloat {
+        CGFloat(bridge.boardFieldFontScale(rowSpan: Int32(rowSpan), columnSpan: Int32(columnSpan)))
+    }
+
+    func boardJoinSentenceText(tokens: [String], spellingMode: Bool) -> String {
+        bridge.boardJoinSentenceText(tokens: tokens, spellingMode: spellingMode)
+    }
+
     func loadSelectedBoard() async {
         guard let id = selectedBoardId else {
             selectedBoard = nil
             boardCells = []
+            boardFieldItems = []
             selectedBoardKeyboardLayout = nil
             selectedBoardUsesSpellingMode = false
             boardPredictionsByButtonId = [:]
+            resolvedBoardShowLabels = nil
+            resolvedBoardShowSymbols = nil
+            resolvedBoardLabelAtTop = nil
+            resolvedBoardShowMessageBar = nil
+            resolvedBoardActivationBehavior = nil
+            resolvedBoardReturnBehavior = nil
             return
         }
         do {
             selectedBoard = try await bridge.getBoard(id: id)
             await refreshSelectedBoardMetadata()
+            let resolved = try? await bridge.resolveBoardSettings(boardId: id)
+            resolvedBoardShowLabels = resolved?.showLabels
+            resolvedBoardShowSymbols = resolved?.showSymbols
+            resolvedBoardLabelAtTop = resolved?.labelAtTop
+            resolvedBoardShowMessageBar = resolved?.showMessageBar
+            resolvedBoardActivationBehavior = resolved?.activationBehavior
+            resolvedBoardReturnBehavior = resolved?.returnBehavior
             let boardName = selectedBoard?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !boardName.isEmpty {
                 boardNamesById[id] = boardName
@@ -1461,9 +1610,16 @@ final class IosViewModel: ObservableObject {
         } catch {
             selectedBoard = nil
             boardCells = []
+            boardFieldItems = []
             selectedBoardKeyboardLayout = nil
             selectedBoardUsesSpellingMode = false
             boardPredictionsByButtonId = [:]
+            resolvedBoardShowLabels = nil
+            resolvedBoardShowSymbols = nil
+            resolvedBoardLabelAtTop = nil
+            resolvedBoardShowMessageBar = nil
+            resolvedBoardActivationBehavior = nil
+            resolvedBoardReturnBehavior = nil
         }
     }
 
@@ -1483,11 +1639,13 @@ final class IosViewModel: ObservableObject {
     func refreshBoardCells() async {
         guard let boardId = selectedBoardId else {
             boardCells = []
+            boardFieldItems = []
             return
         }
 
         do {
             let cells = try await bridge.listBoardCells(boardId: boardId)
+            let fields = try await bridge.listBoardFieldItems(boardId: boardId)
             boardCells = cells.map { cell in
                 BoardCellInfo(
                     row: Int(cell.row),
@@ -1501,11 +1659,23 @@ final class IosViewModel: ObservableObject {
                     imageId: cell.imageId,
                     imageUrl: cell.imageUrl,
                     hidden: cell.hidden,
-                    actions: cell.actions
+                    actions: cell.actions,
+                    soundId: cell.soundId,
+                    soundDataUrl: cell.soundDataUrl
+                )
+            }
+            boardFieldItems = fields.map { field in
+                BoardFieldItem(
+                    row: Int(field.row),
+                    column: Int(field.column),
+                    rowSpan: Int(field.rowSpan),
+                    columnSpan: Int(field.columnSpan),
+                    buttonId: field.buttonId
                 )
             }
         } catch {
             boardCells = []
+            boardFieldItems = []
         }
     }
 
@@ -1609,6 +1779,25 @@ final class IosViewModel: ObservableObject {
         if let textToSpeak = normalizedOptionalText(cell.vocalization) ?? normalizedOptionalText(cell.label) {
             speak(textToSpeak)
         }
+    }
+
+    func activateBoardSelectionHighlight(buttonId: String) async {
+        guard selectionHighlightMillis > 0 else { return }
+        bridge.selectionHighlightActivate(buttonId: buttonId)
+        selectionHighlightGeneration += 1
+        let generation = selectionHighlightGeneration
+        highlightedButtonId = buttonId
+        let duration = selectionHighlightMillis
+        try? await Task.sleep(nanoseconds: UInt64(duration) * 1_000_000)
+        guard generation == selectionHighlightGeneration else { return }
+        let current = bridge.selectionHighlightButtonId(durationMillis: duration)
+        highlightedButtonId = current
+    }
+
+    func clearBoardSelectionHighlight() {
+        selectionHighlightGeneration += 1
+        bridge.selectionHighlightClear()
+        highlightedButtonId = nil
     }
 
     // #118: per-target activation debounce. A zero duration disables the guard entirely.
@@ -1792,6 +1981,7 @@ final class IosViewModel: ObservableObject {
                     selectedBoardId = nil
                     selectedBoard = nil
                     boardCells = []
+                    boardFieldItems = []
                 }
             }
             boardStatusMessage = NSLocalizedString("boardset.status.deleted", comment: "")

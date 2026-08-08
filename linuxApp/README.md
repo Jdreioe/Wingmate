@@ -10,15 +10,25 @@ The application supports both Wayland and X11 and follows the user's light/dark 
 - saved phrase editing, category filtering, speech history, and "hold that thought"
 - local-system and Azure voice selection with speech-rate control
 - pronunciation dictionary
-- first-run onboarding with Keyboard/Screens startup selection and analytics consent
-- persistent Screen library with blank/calculator templates, run/edit modes, linked-page navigation, cell editing, duplication, locking, and deletion
+- first-run onboarding with Keyboard/Screens startup selection and a local-data privacy summary
+- persistent Screen library with blank/calculator templates, spanning OBF fields, shared OBF button actions, run/edit modes, linked-page navigation, cell editing, duplication, locking, and deletion
 - native OBF/OBZ import and OBZ export dialogs
-- configurable labels/symbols, grid size, UI scaling, high contrast, hold/dwell access, selection sounds, and auditory fishing
+- configurable phrase-grid columns; light/dark mode follows the desktop appearance portal with explicit Light/Dark fallbacks, while accessibility scaling follows COSMIC
 - history JSON import/export
-- external partner-window mirroring and display settings
+- external partner-window mirroring and display settings, shown only while supported FT232H hardware is connected
 - non-blocking communication with the shared Kotlin business-logic service
+- Android/iOS-style workspace navigation in the native COSMIC header: Keyboard,
+  Screens, and a Settings toggle that returns to the previous workspace
+- system symbolic icons, screen-reader names, and touch-sized primary controls
 
-The older `src/*.qml` files are retained temporarily as migration reference, but they are not loaded or packaged by the Rust executable.
+Linux currently hides custom theme/scaling, hold/dwell, selection feedback,
+auditory fishing, switch scanning, usage logging, and analytics controls because
+the native Iced client does not implement those behaviors yet. See
+`../docs/LINUX_ACCESSIBILITY_MATRIX.md` for the support matrix.
+
+On desktops that do not publish their active icon theme, set
+`WINGMATE_ICON_THEME=<theme-name>` when launching Wingmate. The app otherwise uses
+the desktop-published icon theme and portable symbolic-name aliases.
 
 ## Prerequisites
 
@@ -34,14 +44,14 @@ From the repository root:
 
 ```bash
 ./gradlew :linuxApp:fatJar
-cargo build --manifest-path linuxApp/Cargo.toml --release --bin wingmate-kde
-./linuxApp/target/release/wingmate-kde
+cargo build --manifest-path linuxApp/Cargo.toml --release --bin wingmate
+./linuxApp/target/release/wingmate
 ```
 
 For a machine connected to the FTDI/EVE partner display, install the `libftdi1` development package and build with:
 
 ```bash
-cargo build --manifest-path linuxApp/Cargo.toml --release --bin wingmate-kde --features partner-window
+cargo build --manifest-path linuxApp/Cargo.toml --release --bin wingmate --features partner-window
 ```
 
 When launched from either the repository root or `linuxApp/`, the executable discovers `linuxApp/build/libs/linuxApp-all.jar` automatically. Packagers can set `WINGMATE_LINUXAPP_JAR` to an absolute installed path. To use an already-running bridge, set `WINGMATE_API_URL`.
@@ -56,5 +66,5 @@ When launched from either the repository root or `linuxApp/`, the executable dis
 Check the native layer with:
 
 ```bash
-cargo check --manifest-path linuxApp/Cargo.toml --bin wingmate-kde
+cargo check --manifest-path linuxApp/Cargo.toml --bin wingmate
 ```

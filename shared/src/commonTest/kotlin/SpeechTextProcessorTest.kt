@@ -53,4 +53,34 @@ class SpeechTextProcessorTest {
 
         assertEquals("<zz>Hello</zz>", normalized)
     }
+
+    @Test
+    fun processText_extractsLanguageTagAndStripsWrapper() {
+        val segments = SpeechTextProcessor.processText("Start <en>hello</en> end")
+
+        assertEquals(1, segments.size)
+        assertEquals("en-US", segments[0].languageTag)
+        assertEquals("Start hello end", segments[0].text)
+    }
+
+    @Test
+    fun processText_splitsOnPauseAndKeepsLanguageTag() {
+        val segments = SpeechTextProcessor.processText("One <2s> <da>to</da>")
+
+        assertEquals(2, segments.size)
+        assertEquals("One", segments[0].text)
+        assertEquals(2000, segments[0].pauseDurationMs)
+        assertEquals("to", segments[1].text)
+        assertEquals("da-DK", segments[1].languageTag)
+    }
+
+    @Test
+    fun processText_noTagsReturnsSingleSegment() {
+        val segments = SpeechTextProcessor.processText("Just plain text")
+
+        assertEquals(1, segments.size)
+        assertEquals("Just plain text", segments[0].text)
+        assertEquals(null, segments[0].languageTag)
+        assertEquals(0, segments[0].pauseDurationMs)
+    }
 }

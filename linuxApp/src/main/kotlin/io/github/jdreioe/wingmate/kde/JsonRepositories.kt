@@ -6,6 +6,8 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -95,7 +97,9 @@ class JsonFileConfigRepository : ConfigRepository {
 
 class JsonFileVoiceRepository : VoiceRepository {
     private val file = File(configDir, "voices.json")
+    private val selectedFile = File(configDir, "selected-voice.json")
     private val voices = mutableListOf<Voice>()
+    private var selectedVoice: Voice? = null
 
     init {
         println("[PERSISTENCE] JsonFileVoiceRepository init. File: ${file.absolutePath}")
@@ -106,6 +110,15 @@ class JsonFileVoiceRepository : VoiceRepository {
                 println("[PERSISTENCE] Loaded ${voices.size} voices from disk.")
             } catch (e: Exception) {
                 println("[PERSISTENCE] Error loading voices: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+        if (selectedFile.exists()) {
+            try {
+                selectedVoice = json.decodeFromString<Voice>(selectedFile.readText())
+                println("[PERSISTENCE] Loaded selected voice: ${selectedVoice?.name}")
+            } catch (e: Exception) {
+                println("[PERSISTENCE] Error loading selected voice: ${e.message}")
                 e.printStackTrace()
             }
         }
@@ -128,19 +141,169 @@ class JsonFileVoiceRepository : VoiceRepository {
             e.printStackTrace()
         }
     }
-    
-    // We don't really persist "selected" voice in this repo, as it is in SettingsRepository
-    private var selectedVoice: Voice? = null
-    
-    override suspend fun saveSelected(voice: Voice) {
-        println("[PERSISTENCE] saveSelected voice (in-memory only for clean app session): ${voice.name}")
+
+    override suspend fun saveSelected(voice: Voice) = withContext(Dispatchers.IO) {
+        println("[PERSISTENCE] saveSelected voice: ${voice.name}")
         selectedVoice = voice
+        try {
+            selectedFile.writeText(json.encodeToString(voice))
+        } catch (e: Exception) {
+            println("[PERSISTENCE] Error saving selected voice: ${e.message}")
+        }
     }
-    
-    override suspend fun getSelected(): Voice? {
-        return selectedVoice
+
+    override suspend fun getSelected(): Voice? = withContext(Dispatchers.IO) {
+        selectedVoice
     }
 }
+
+class JsonFilePronunciationDictionaryRepository(
+    private val file: File = File(configDir, "pronunciations.json"),
+) : PronunciationDictionaryRepository {
+    private val mutex = Mutex()
+    private val entries = runCatching {
+        if (file.exists()) {
+            json.decodeFromString<List<PronunciationEntry>>(file.readText())
+                .associateBy { it.word.lowercase() }
+                .toMutableMap()
+        } else {
+            mutableMapOf()
+        }
+    }.getOrElse { error ->
+        System.err.println("[PERSISTENCE] Could not load pronunciation dictionary: ${error.message}")
+        mutableMapOf()
+    }
+
+    override suspend fun getAll(): List<PronunciationEntry> = mutex.withLock {
+        entries.values.sortedBy { it.word.lowercase() }
+    }
+
+    override suspend fun add(entry: PronunciationEntry) = mutex.withLock {
+        entries[entry.word.lowercase()] = entry
+        save()
+    }
+
+    override suspend fun delete(word: String) = mutex.withLock {
+        if (entries.remove(word.lowercase()) != null) save()
+    }
+
+    override suspend fun clear() = mutex.withLock {
+        entries.clear()
+        save()
+    }
+
+    private suspend fun save() = withContext(Dispatchers.IO) {
+        file.parentFile?.mkdirs()
+        val temporary = File(file.parentFile, "${file.name}.tmp")
+        temporary.writeText(json.encodeToString(entries.values.sortedBy { it.word.lowercase() }))
+        check(temporary.renameTo(file) || runCatching {
+            temporary.copyTo(file, overwrite = true)
+            temporary.delete()
+            true
+        }.getOrDefault(false)) {
+            "Could not save pronunciation dictionary"
+        }
+    }
+}
+
+class JsonFilePhraseRepository(
+    private val file: File = File(configDir, "phrases.json"),
+) : PhraseRepository {
+    private val mutex = Mutex()
+    private val phrases = runCatching {
+        if (file.exists()) json.decodeFromString<List<Phrase>>(file.readText()).toMutableList()
+        else mutableListOf()
+    }.getOrElse { error ->
+        System.err.println("[PERSISTENCE] Could not load phrases: ${error.message}")
+        mutableListOf()
+    }
+
+    override suspend fun getAll(): List<Phrase> = mutex.withLock { phrases.toList() }
+
+    override suspend fun add(phrase: Phrase): Phrase = mutex.withLock {
+        val stored = phrase.copy(
+            id = phrase.id.ifBlank { "phrase-${java.util.UUID.randomUUID()}" },
+            createdAt = phrase.createdAt.takeIf { it > 0 } ?: System.currentTimeMillis(),
+        )
+        phrases += stored
+        save()
+        stored
+    }
+
+    override suspend fun update(phrase: Phrase): Phrase = mutex.withLock {
+        val index = phrases.indexOfFirst { it.id == phrase.id }
+        if (index >= 0) phrases[index] = phrase else phrases += phrase
+        save()
+        phrase
+    }
+
+    override suspend fun delete(id: String) = mutex.withLock {
+        if (phrases.removeAll { it.id == id }) save()
+    }
+
+    override suspend fun move(fromIndex: Int, toIndex: Int) = mutex.withLock {
+        if (fromIndex !in phrases.indices) return@withLock
+        val item = phrases.removeAt(fromIndex)
+        phrases.add(toIndex.coerceIn(0, phrases.size), item)
+        save()
+    }
+
+    private suspend fun save() = writeJsonAtomically(file, phrases)
+}
+
+class JsonFileCategoryRepository(
+    private val file: File = File(configDir, "categories.json"),
+) : CategoryRepository {
+    private val mutex = Mutex()
+    private val categories = runCatching {
+        if (file.exists()) json.decodeFromString<List<CategoryItem>>(file.readText()).toMutableList()
+        else mutableListOf()
+    }.getOrElse { error ->
+        System.err.println("[PERSISTENCE] Could not load categories: ${error.message}")
+        mutableListOf()
+    }
+
+    override suspend fun getAll(): List<CategoryItem> = mutex.withLock { categories.toList() }
+
+    override suspend fun add(category: CategoryItem): CategoryItem = mutex.withLock {
+        val stored = category.copy(id = category.id.ifBlank { "category-${java.util.UUID.randomUUID()}" })
+        categories += stored
+        save()
+        stored
+    }
+
+    override suspend fun update(category: CategoryItem): CategoryItem = mutex.withLock {
+        val index = categories.indexOfFirst { it.id == category.id }
+        if (index >= 0) categories[index] = category else categories += category
+        save()
+        category
+    }
+
+    override suspend fun delete(id: String) = mutex.withLock {
+        if (categories.removeAll { it.id == id }) save()
+    }
+
+    override suspend fun move(fromIndex: Int, toIndex: Int) = mutex.withLock {
+        if (fromIndex !in categories.indices) return@withLock
+        val item = categories.removeAt(fromIndex)
+        categories.add(toIndex.coerceIn(0, categories.size), item)
+        save()
+    }
+
+    private suspend fun save() = writeJsonAtomically(file, categories)
+}
+
+private suspend inline fun <reified T> writeJsonAtomically(file: File, value: T) =
+    withContext(Dispatchers.IO) {
+        file.parentFile?.mkdirs()
+        val temporary = File(file.parentFile, "${file.name}.tmp")
+        temporary.writeText(json.encodeToString(value))
+        check(temporary.renameTo(file) || runCatching {
+            temporary.copyTo(file, overwrite = true)
+            temporary.delete()
+            true
+        }.getOrDefault(false)) { "Could not save ${file.name}" }
+    }
 
 class JsonFileBoardRepository : BoardRepository {
     private val file = File(configDir, "boards.json")
