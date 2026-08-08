@@ -24,23 +24,27 @@ class LinuxSpeechService : SpeechService {
             if (ttsCommand != null) {
                 val args = buildCommandArgs(ttsCommand, text, voice, pitch, rate)
                 println("[SPEECH] Executing TTS command: $args")
-                currentProcess = ProcessBuilder(args)
+                val process = ProcessBuilder(args)
                     .redirectErrorStream(true)
                     .start()
+                currentProcess = process
                 
                 // Read and print any output/errors from the process
-                val reader = currentProcess?.inputStream?.bufferedReader()
-                if (reader != null) {
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
-                        println("[SPEECH] TTS Output: $line")
-                    }
+                val reader = process.inputStream.bufferedReader()
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    println("[SPEECH] TTS Output: $line")
                 }
                 
-                currentProcess?.waitFor()
+                val exitCode = process.waitFor()
+                if (currentProcess === process) {
+                    currentProcess = null
+                    _isPaused = false
+                }
+                check(exitCode == 0) { "System TTS exited with code $exitCode" }
                 println("[SPEECH] TTS command finished.")
             } else {
-                println("[SPEECH] No TTS engine found. Install espeak-ng, festival, or piper.")
+                throw IllegalStateException("No Linux TTS engine found; install espeak-ng, festival, or Piper")
             }
         }
     }
@@ -59,12 +63,12 @@ class LinuxSpeechService : SpeechService {
     }
     
     override suspend fun pause() {
-        _isPaused = true
-        // espeak-ng doesn't support pause, so we just stop
-        currentProcess?.let {
-            if (it.isAlive) {
-                Runtime.getRuntime().exec(arrayOf("kill", "-STOP", it.pid().toString()))
-            }
+        val process = currentProcess
+        if (process?.isAlive == true) {
+            Runtime.getRuntime().exec(arrayOf("kill", "-STOP", process.pid().toString())).waitFor()
+            _isPaused = true
+        } else {
+            _isPaused = false
         }
     }
     
@@ -94,7 +98,7 @@ class LinuxSpeechService : SpeechService {
     }
     
     override fun isPaused(): Boolean {
-        return _isPaused
+        return currentProcess?.isAlive == true && _isPaused
     }
     
     private fun findTtsCommand(): String? {
@@ -142,7 +146,7 @@ class LinuxSpeechService : SpeechService {
         pitch: Double?,
         rate: Double?
     ): List<String> {
-        return when (engine) {
+        return when (File(engine).name) {
             "espeak-ng", "espeak" -> {
                 mutableListOf<String>().apply {
                     add(engine)
@@ -178,7 +182,8 @@ class LinuxSpeechService : SpeechService {
                     // Find available piper voice model
                     val voiceModel = findPiperVoiceModel(voice)
                     // Use the engine path (which might be a full path)
-                    listOf("bash", "-c", "echo '${text.replace("'", "'\"'\"'")}' | \"$engine\" --model $voiceModel --output_raw | aplay -r 22050 -f S16_LE -t raw -")
+                    val speed = rate?.takeIf { it > 0.0 }?.let { " --length_scale ${1.0 / it}" }.orEmpty()
+                    listOf("bash", "-c", "echo '${text.replace("'", "'\"'\"'")}' | \"$engine\" --model $voiceModel$speed --output_raw | aplay -r 22050 -f S16_LE -t raw -")
                 } else {
                     listOf(engine, text)
                 }

@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.kde
 
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.Voice
@@ -8,48 +9,48 @@ import io.github.jdreioe.wingmate.infrastructure.AzureTtsClient
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.concurrent.thread
 
 class AzureSpeechService(
-    private val configRepository: ConfigRepository
+    private val configRepository: ConfigRepository,
+    private val pronunciationRepository: PronunciationDictionaryRepository,
 ) : SpeechService {
     
     // Uses default engine (should be OkHttp from shared dependency)
     private val client = HttpClient()
+    @Volatile
     private var currentProcess: Process? = null
+    @Volatile
+    private var paused = false
 
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
         val config = configRepository.getSpeechConfig()
         
         if (config == null || config.subscriptionKey.isBlank() || config.endpoint.isBlank()) {
-            println("[SPEECH] Azure TTS config missing or incomplete. Endpoint: ${config?.endpoint}, Key present: ${!config?.subscriptionKey.isNullOrBlank()}")
-            return
+            throw IllegalStateException("Azure Speech configuration is missing or incomplete")
         }
 
-        try {
-            println("[SPEECH] Synthesizing with Azure TTS... Text: '$text', Voice: ${voice?.name}")
+        println("[SPEECH] Synthesizing with Azure TTS... Text: '$text', Voice: ${voice?.name}")
             
             // Create default voice if null
-            val voiceToUse = voice ?: Voice(name = "en-US-JennyNeural", selectedLanguage = "en-US")
+        val voiceToUse = (voice ?: Voice(name = "en-US-JennyNeural", selectedLanguage = "en-US")).copy(
+            pitch = pitch ?: voice?.pitch,
+            rate = rate ?: voice?.rate,
+        )
             
             // Generate SSML
-            val ssml = AzureTtsClient.generateSsml(text, voiceToUse)
-            println("[SPEECH] Generated SSML: $ssml")
+        val ssml = AzureTtsClient.generateSsml(text, voiceToUse, pronunciationRepository.getAll())
             
             // Use WAV format for easier playback with aplay
-            val audioData = AzureTtsClient.synthesize(
-                client, 
-                ssml, 
-                config, 
-                AzureTtsClient.AudioFormat.WAV_24KHZ_16BIT
-            )
+        val audioData = AzureTtsClient.synthesize(
+            client,
+            ssml,
+            config,
+            AzureTtsClient.AudioFormat.WAV_24KHZ_16BIT
+        )
             
-            println("[SPEECH] Received ${audioData.size} bytes audio. Playing...")
-            playAudio(audioData)
-            
-        } catch (e: Exception) {
-            println("[SPEECH] Azure TTS failed: ${e.message}")
-            e.printStackTrace()
-        }
+        println("[SPEECH] Received ${audioData.size} bytes audio. Playing...")
+        playAudio(audioData)
     }
 
     override suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
@@ -61,11 +62,10 @@ class AzureSpeechService(
     private suspend fun playAudio(data: ByteArray) = withContext(Dispatchers.IO) {
         stop() // Stop previous
         
-        try {
-            // Pipe to aplay
-            val process = ProcessBuilder("aplay")
-                .redirectErrorStream(true)
-                .start()
+        paused = false
+        val process = ProcessBuilder("aplay")
+            .redirectErrorStream(true)
+            .start()
             
             currentProcess = process
             
@@ -74,38 +74,57 @@ class AzureSpeechService(
                 it.flush()
             }
             
-            val reader = process.inputStream.bufferedReader()
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                // println("aplay: $line")
+            // Drain aplay's output on a daemon thread. The old blocking
+            // readLine() here threw "IOException: Stream closed" whenever
+            // stop() destroyed the process mid-playback.
+            val drainThread = thread(isDaemon = true, name = "aplay-drain") {
+                try {
+                    process.inputStream.readBytes()
+                } catch (e: Exception) {
+                    // Stream closed by stop()/new play - expected, ignore
+                }
             }
             
-            process.waitFor()
-            println("[SPEECH] Audio playback finished.")
-        } catch (e: Exception) {
-            println("[SPEECH] Audio playback failed: ${e.message}")
-            e.printStackTrace()
+        val exitCode = process.waitFor()
+        drainThread.join(2000)
+        if (currentProcess === process) {
+            currentProcess = null
+            paused = false
         }
+        check(exitCode == 0) { "aplay exited with code $exitCode" }
+        println("[SPEECH] Audio playback finished.")
     }
 
     override suspend fun pause() {
-        stop()
+        currentProcess?.takeIf { it.isAlive }?.let {
+            signal(it, "-STOP")
+            paused = true
+        }
     }
 
     override suspend fun stop() {
+        paused = false
         currentProcess?.destroy()
         currentProcess = null
     }
 
     override suspend fun resume() {
-        // Not supported
+        currentProcess?.takeIf { it.isAlive && paused }?.let {
+            signal(it, "-CONT")
+            paused = false
+        }
     }
 
     override fun isPlaying(): Boolean {
-        return currentProcess?.isAlive == true
+        return currentProcess?.isAlive == true && !paused
     }
 
-    override fun isPaused(): Boolean = false
+    override fun isPaused(): Boolean = currentProcess?.isAlive == true && paused
+
+    private fun signal(process: Process, signal: String) {
+        val result = ProcessBuilder("kill", signal, process.pid().toString()).start().waitFor()
+        check(result == 0) { "Could not send $signal to audio player" }
+    }
     
     override suspend fun guessPronunciation(text: String, language: String): String? = null
 }

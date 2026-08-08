@@ -155,7 +155,6 @@ fun orderedPredictionButtonIds(
 
 /** Outcome of an edit-mode tap on a grid cell. */
 sealed interface CellTapResult {
-    data class Select(val anchor: Pair<Int, Int>) : CellTapResult
     data class OpenDialog(
         val row: Int,
         val column: Int,
@@ -164,22 +163,19 @@ sealed interface CellTapResult {
 }
 
 /**
- * Resolve an edit-mode tap: selecting a spanned field's anchor again opens the
- * editor; selecting a different field selects it; an empty cell opens the editor.
+ * Resolve an edit-mode tap. Occupied fields open immediately at their top-left
+ * anchor, including taps on any cell covered by a span. The UI may keep that
+ * anchor selected after the dialog closes so resize controls remain available.
  */
 fun resolveCellTap(
     grid: ObfGrid?,
-    selectedField: Pair<Int, Int>?,
     row: Int,
     column: Int,
     button: ObfButton?
 ): CellTapResult {
     val anchor = button?.let { grid?.fieldAnchorAt(row, column) }
-    return when {
-        anchor != null && anchor == selectedField -> CellTapResult.OpenDialog(row, column, button)
-        anchor != null -> CellTapResult.Select(anchor)
-        else -> CellTapResult.OpenDialog(row, column, button)
-    }
+    return anchor?.let { CellTapResult.OpenDialog(it.first, it.second, button) }
+        ?: CellTapResult.OpenDialog(row, column, button)
 }
 
 /** Whether a board button should be rendered, honoring edit mode and a temporary reveal session. */

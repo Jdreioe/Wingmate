@@ -22,6 +22,7 @@ import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
+import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.VoiceRepository
@@ -29,10 +30,27 @@ import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
+import io.github.jdreioe.wingmate.domain.obf.fieldItems
+import io.github.jdreioe.wingmate.domain.obf.joinSentenceText
 import io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
+import io.github.jdreioe.wingmate.domain.obf.orderedPredictionButtonIds
+import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
+import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
+import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
+import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
+import io.github.jdreioe.wingmate.domain.obf.shouldSpeakBoardSelection
+import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
+import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
+import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import io.github.jdreioe.wingmate.domain.BoardRepository
@@ -43,11 +61,18 @@ import io.github.jdreioe.wingmate.infrastructure.DictionaryLoader
 import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
+import java.io.File
+import java.net.URI
+import java.security.MessageDigest
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * HTTP server that bridges the native UI with Kotlin business logic.
@@ -60,9 +85,9 @@ class KotlinBridge(private val port: Int = 8765) {
     private val configRepository: ConfigRepository by lazy { GlobalContext.get().get() }
     private val azureConfigManager = AzureConfigManager()
     private val speechService = LinuxSpeechService()
-    private val azureSpeechService = AzureSpeechService(configRepository)
     private val voiceRepository: VoiceRepository by lazy { GlobalContext.get().get() }
     private val pronunciationRepository: PronunciationDictionaryRepository by lazy { GlobalContext.get().get() }
+    private val azureSpeechService by lazy { AzureSpeechService(configRepository, pronunciationRepository) }
     private val predictionService: TextPredictionService by lazy { GlobalContext.get().get() }
     private val saidTextRepository: SaidTextRepository by lazy { GlobalContext.get().get() }
     private val dictionaryLoader: DictionaryLoader by lazy { GlobalContext.get().get() }
@@ -73,6 +98,9 @@ class KotlinBridge(private val port: Int = 8765) {
             GlobalContext.get().get<FeatureUsageReporter>()
         )
     }
+    private val boardRepository: BoardRepository by lazy { GlobalContext.get().get() }
+    private val boardSetRepository: BoardSetRepository by lazy { GlobalContext.get().get() }
+    private val editingAccessController: EditingAccessController by lazy { GlobalContext.get().get() }
     private val boardImportService: BoardImportService by lazy {
         BoardImportService(
             GlobalContext.get().get<ObfParser>(),
@@ -83,6 +111,11 @@ class KotlinBridge(private val port: Int = 8765) {
     }
     private val partnerWindowManager = PartnerWindowManager(settingsManager)
     private val userDataManager = UserDataManager(saidTextRepository)
+    private val speechGeneration = AtomicLong(0)
+    @Volatile
+    private var speechJob: Job? = null
+    @Volatile
+    private var speechState = SpeechStateResponse()
     
     private val json = Json { 
         ignoreUnknownKeys = true 
@@ -95,6 +128,7 @@ class KotlinBridge(private val port: Int = 8765) {
             json(Json {
                 ignoreUnknownKeys = true
                 isLenient = true
+                encodeDefaults = true
             })
         }
         
@@ -132,12 +166,23 @@ class KotlinBridge(private val port: Int = 8765) {
             put("/api/phrases/{id}") {
                 val id = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
                 val body = json.parseToJsonElement(call.receiveText()).jsonObject
-                phraseViewModel.updatePhrase(
+                val updated = phraseViewModel.updateDetails(
                     id = id,
                     text = body["text"]?.jsonPrimitive?.contentOrNull,
                     name = body["name"]?.jsonPrimitive?.contentOrNull,
-                    recordingPath = body["recordingPath"]?.jsonPrimitive?.contentOrNull
-                )
+                    imageUrl = body["imageUrl"]?.jsonPrimitive?.contentOrNull,
+                    parentId = body["parentId"]?.jsonPrimitive?.contentOrNull,
+                    linkedBoardId = body["linkedBoardId"]?.jsonPrimitive?.contentOrNull,
+                    recordingPath = body["recordingPath"]?.jsonPrimitive?.contentOrNull,
+                    isHidden = body["isHidden"]?.jsonPrimitive?.booleanOrNull,
+                ) ?: return@put call.respond(HttpStatusCode.NotFound)
+                call.respond(updated)
+            }
+
+            put("/api/phrases/{id}/move") {
+                val id = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val delta = json.parseToJsonElement(call.receiveText()).jsonObject["delta"]?.jsonPrimitive?.intOrNull ?: 0
+                if (!phraseViewModel.moveItem(id, delta)) return@put call.respond(HttpStatusCode.NotFound)
                 call.respond(HttpStatusCode.OK)
             }
             
@@ -166,6 +211,21 @@ class KotlinBridge(private val port: Int = 8765) {
             delete("/api/categories/{id}") {
                 val id = call.parameters["id"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
                 phraseViewModel.deleteCategory(id)
+                call.respond(HttpStatusCode.OK)
+            }
+
+            put("/api/categories/{id}") {
+                val id = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val name = json.parseToJsonElement(call.receiveText()).jsonObject["name"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val updated = phraseViewModel.renameCategory(id, name)
+                    ?: return@put call.respond(HttpStatusCode.BadRequest)
+                call.respond(updated)
+            }
+
+            put("/api/categories/{id}/move") {
+                val id = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val delta = json.parseToJsonElement(call.receiveText()).jsonObject["delta"]?.jsonPrimitive?.intOrNull ?: 0
+                if (!phraseViewModel.moveItem(id, delta)) return@put call.respond(HttpStatusCode.NotFound)
                 call.respond(HttpStatusCode.OK)
             }
             
@@ -270,6 +330,9 @@ class KotlinBridge(private val port: Int = 8765) {
                     val jsonObj = json.parseToJsonElement(body).jsonObject
                     val voice = jsonObj["voice"]?.jsonPrimitive?.contentOrNull ?: "default"
                     println("[API] PUT /api/settings/voice parsed voice: '$voice'")
+                    voiceRepository.getVoices().firstOrNull { it.name == voice }?.let {
+                        voiceRepository.saveSelected(it)
+                    }
                     settingsManager.updateVoice(voice)
                     call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
                 } catch (e: Exception) {
@@ -293,53 +356,68 @@ class KotlinBridge(private val port: Int = 8765) {
                 settingsManager.updateSettings(current.copy(ttsEngine = if (engineStr == "SYSTEM") TtsEngine.SYSTEM else TtsEngine.AZURE_USER_RESOURCE))
                 call.respond(HttpStatusCode.OK)
             }
+
+            // Editing access. Communication remains available while editing is locked.
+            get("/api/editing-access") {
+                val state = editingAccessController.refresh()
+                call.respond(
+                    EditingAccessResponse(
+                        enabled = state.enabled,
+                        unlocked = state.unlocked,
+                        supported = state.supported,
+                        failedAttempts = state.failedAttempts,
+                    )
+                )
+            }
+
+            put("/api/editing-access/code") {
+                val code = json.parseToJsonElement(call.receiveText()).jsonObject["code"]
+                    ?.jsonPrimitive?.contentOrNull.orEmpty()
+                runCatching { editingAccessController.configure(code) }
+                    .onSuccess { call.respond(editingAccessController.refresh().toResponse()) }
+                    .onFailure { call.respond(HttpStatusCode.BadRequest, mapOf("error" to (it.message ?: "Could not configure editing access"))) }
+            }
+
+            post("/api/editing-access/unlock") {
+                val code = json.parseToJsonElement(call.receiveText()).jsonObject["code"]
+                    ?.jsonPrimitive?.contentOrNull.orEmpty()
+                val unlocked = editingAccessController.unlock(code)
+                if (unlocked) call.respond(editingAccessController.refresh().toResponse())
+                else call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Incorrect access code"))
+            }
+
+            post("/api/editing-access/lock") {
+                editingAccessController.lock()
+                call.respond(editingAccessController.refresh().toResponse())
+            }
+
+            post("/api/editing-access/disable") {
+                val code = json.parseToJsonElement(call.receiveText()).jsonObject["code"]
+                    ?.jsonPrimitive?.contentOrNull.orEmpty()
+                if (editingAccessController.disable(code)) {
+                    call.respond(editingAccessController.refresh().toResponse())
+                } else {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Incorrect access code"))
+                }
+            }
             
             // Speech
             post("/api/speak") {
                 try {
                     val body = call.receiveText()
-                    println("[SPEECH] API /api/speak RAW body: '$body'")
-                    
                     val jsonObj = json.parseToJsonElement(body).jsonObject
                     val text = jsonObj["text"]?.jsonPrimitive?.contentOrNull ?: ""
-                    println("[SPEECH] API /api/speak parsed text: '$text'")
-                    
-                    scope.launch {
-                        try {
-                            val settings = settingsManager.settings.value
-                            
-                            // Resolve voice
-                            val currentVoiceName = settings?.voice ?: "default"
-                            val settingsLanguage = settings?.language ?: "en-US"
-                            println("[SPEECH] Resolving voice. Content: '$currentVoiceName', Settings language: '$settingsLanguage'")
-                            
-                            val voices = voiceRepository.getVoices()
-                            val foundVoice = voices.find { it.name == currentVoiceName } 
-                                ?: voices.firstOrNull() 
-                                ?: Voice(name="en-US-JennyNeural", selectedLanguage="en-US") // Default fallback
-                            
-                            // Set selectedLanguage to the user's settings language so SSML uses correct lang
-                            val voice = foundVoice.copy(selectedLanguage = settingsLanguage)
-                                
-                            println("[SPEECH] Selected voice: ${voice.name}, Language: ${voice.selectedLanguage}")
-
-                            // Logic: ttsEngine=SYSTEM -> Piper/Local. ttsEngine=AZURE_USER_RESOURCE -> Azure.
-                            // Default is SYSTEM.
-                            if (settings?.ttsEngine == io.github.jdreioe.wingmate.domain.TtsEngine.SYSTEM) {
-                                println("[SPEECH] Using System TTS (LinuxSpeechService)")
-                                // Split into segments so shorthand pauses/language tags are honored.
-                                speechService.speakSegments(SpeechTextProcessor.processText(text), voice)
-                            } else {
-                                println("[SPEECH] Using Azure TTS (AzureSpeechService)")
-                                // AzureTtsClient.generateSsml handles shorthand SSML itself.
-                                azureSpeechService.speak(text, voice)
-                            }
-                        } catch (e: Exception) {
-                            println("Speech error inside launch: ${e.message}")
-                            e.printStackTrace()
-                        }
+                    if (text.isBlank()) {
+                        return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "text is required"))
                     }
-                    call.respond(HttpStatusCode.OK, mapOf("status" to "speaking"))
+
+                    val generation = speechGeneration.incrementAndGet()
+                    speechJob?.cancel()
+                    speechState = SpeechStateResponse(state = "playing", playing = true)
+                    speechJob = scope.launch {
+                        performSpeech(generation, text)
+                    }
+                    call.respond(HttpStatusCode.Accepted, speechState)
                 } catch (e: Exception) {
                     println("[SPEECH] /api/speak error: ${e.message}")
                     e.printStackTrace()
@@ -382,33 +460,106 @@ class KotlinBridge(private val port: Int = 8765) {
                     call.respond(selected)
                 }
             }
-            post("/api/speak/stop") {
-                scope.launch {
-                    speechService.stop()
-                    azureSpeechService.stop()
+            post("/api/voices/preview") {
+                val body = json.parseToJsonElement(call.receiveText()).jsonObject
+                val voiceName = body["voice"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val text = body["text"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                if (voiceName.isBlank() || text.isBlank()) {
+                    return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "voice and text are required"))
                 }
+                if (voiceRepository.getVoices().none { it.name == voiceName }) {
+                    return@post call.respond(HttpStatusCode.NotFound, mapOf("error" to "Voice is unavailable"))
+                }
+                val generation = speechGeneration.incrementAndGet()
+                speechJob?.cancel()
+                speechState = SpeechStateResponse(state = "playing", playing = true)
+                speechJob = scope.launch {
+                    performSpeech(generation, text, voiceName, recordHistory = false)
+                }
+                call.respond(HttpStatusCode.Accepted, speechState)
+            }
+            post("/api/speak/stop") {
+                speechGeneration.incrementAndGet()
+                speechJob?.cancel()
+                speechJob = null
+                speechService.stop()
+                azureSpeechService.stop()
+                speechState = SpeechStateResponse(state = "cancelled")
                 call.respond(HttpStatusCode.OK)
             }
 
             post("/api/speak/pause") {
-                scope.launch {
-                    speechService.pause()
-                    azureSpeechService.pause()
+                speechService.pause()
+                azureSpeechService.pause()
+                val paused = speechService.isPaused() || azureSpeechService.isPaused()
+                if (!paused) {
+                    return@post call.respond(HttpStatusCode.Conflict, mapOf("error" to "Playback is not ready to pause"))
                 }
+                speechState = speechState.copy(state = "paused", playing = false, paused = true)
+                call.respond(HttpStatusCode.OK)
+            }
+
+            post("/api/speak/resume") {
+                speechService.resume()
+                azureSpeechService.resume()
+                val playing = speechService.isPlaying() || azureSpeechService.isPlaying()
+                if (!playing) {
+                    return@post call.respond(HttpStatusCode.Conflict, mapOf("error" to "Playback is not paused"))
+                }
+                speechState = speechState.copy(state = "playing", playing = true, paused = false)
                 call.respond(HttpStatusCode.OK)
             }
             
             get("/api/speak/status") {
-                call.respond(mapOf(
-                    "playing" to (speechService.isPlaying() || azureSpeechService.isPlaying()),
-                    "paused" to (speechService.isPaused() || azureSpeechService.isPaused())
-                ))
+                call.respond(speechState)
             }
             
             // Pronunciation Dictionary
             get("/api/pronunciation") {
                 val entries = pronunciationRepository.getAll()
                 call.respond(entries)
+            }
+
+            get("/api/pronunciation/export") {
+                val entries = pronunciationRepository.getAll()
+                if (call.request.queryParameters["format"] == "csv") {
+                    val csv = buildString {
+                        appendLine("word,phoneme,alphabet")
+                        entries.forEach { entry ->
+                            appendLine(listOf(entry.word, entry.phoneme, entry.alphabet).joinToString(",", transform = ::csvField))
+                        }
+                    }
+                    call.respondText(csv, ContentType.parse("text/csv"))
+                } else {
+                    call.respondText(json.encodeToString(entries), ContentType.Application.Json)
+                }
+            }
+
+            post("/api/pronunciation/import") {
+                try {
+                    val path = json.parseToJsonElement(call.receiveText()).jsonObject["path"]
+                        ?.jsonPrimitive?.contentOrNull.orEmpty()
+                    val file = File(path)
+                    require(file.isFile) { "Dictionary file does not exist" }
+                    require(file.length() <= 5L * 1024L * 1024L) { "Dictionary file is too large" }
+                    val entries = if (file.extension.equals("csv", ignoreCase = true)) {
+                        file.readLines().dropWhile { it.isBlank() }.drop(1).mapNotNull { line ->
+                            val fields = parseCsvLine(line)
+                            if (fields.size < 2) null else PronunciationEntry(
+                                word = fields[0].trim(),
+                                phoneme = fields[1].trim(),
+                                alphabet = fields.getOrNull(2)?.trim()?.ifBlank { "text" } ?: "text",
+                            )
+                        }
+                    } else {
+                        json.decodeFromString<List<PronunciationEntry>>(file.readText())
+                    }
+                    entries.filter { it.word.isNotBlank() && it.phoneme.isNotBlank() }
+                        .forEach { pronunciationRepository.add(it) }
+                    call.respond(HttpStatusCode.OK, mapOf("imported" to entries.size))
+                } catch (error: Throwable) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (error.message ?: "dictionary import failed")))
+                }
             }
 
             get("/api/history") {
@@ -426,6 +577,7 @@ class KotlinBridge(private val port: Int = 8765) {
 
             post("/api/history/import") {
                 userDataManager.importData(call.receiveText())
+                trainPredictionModel()
                 call.respond(HttpStatusCode.OK)
             }
 
@@ -450,7 +602,10 @@ class KotlinBridge(private val port: Int = 8765) {
                     if (path.isBlank()) return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing path"))
                     val result = GlobalContext.get().get<io.github.jdreioe.wingmate.application.CompleteBackupManager>().restoreBackup(path)
                     val message = when (result) {
-                        is io.github.jdreioe.wingmate.application.BackupRestoreResult.Success -> "ok"
+                        is io.github.jdreioe.wingmate.application.BackupRestoreResult.Success -> {
+                            trainPredictionModel()
+                            "ok"
+                        }
                         is io.github.jdreioe.wingmate.application.BackupRestoreResult.Failure -> result.message
                     }
                     call.respond(HttpStatusCode.OK, mapOf("status" to message))
@@ -486,20 +641,55 @@ class KotlinBridge(private val port: Int = 8765) {
                     val body = json.parseToJsonElement(call.receiveText()).jsonObject
                     val url = body["url"]?.jsonPrimitive?.contentOrNull.orEmpty()
                     if (url.isBlank()) return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing url"))
-                    val client = io.ktor.client.HttpClient {
-                        install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) {
-                            json(Json { ignoreUnknownKeys = true })
+                    val localFile = localImageFile(url)
+                    val cacheFile = File(imageCacheDirectory(), sha256(url))
+                    val bytes: ByteArray
+                    val contentType: String
+                    if (localFile != null) {
+                        require(localFile.isFile) { "Image file does not exist" }
+                        require(localFile.length() <= MAX_IMAGE_BYTES) { "Image is too large" }
+                        bytes = localFile.readBytes()
+                        contentType = Files.probeContentType(localFile.toPath()) ?: "image/png"
+                    } else if (cacheFile.isFile) {
+                        bytes = cacheFile.readBytes()
+                        contentType = "image/png"
+                    } else {
+                        val client = io.ktor.client.HttpClient()
+                        try {
+                            val response = client.get(url)
+                            bytes = response.bodyAsChannel().readRemaining(MAX_IMAGE_BYTES + 1).readBytes()
+                            require(bytes.size <= MAX_IMAGE_BYTES) { "Image is too large" }
+                            contentType = response.contentType()?.toString() ?: "image/png"
+                            cacheFile.parentFile.mkdirs()
+                            cacheFile.writeBytes(bytes)
+                        } finally {
+                            client.close()
                         }
                     }
-                    try {
-                        val response = client.get(url)
-                        val bytes = response.bodyAsChannel().readRemaining(Long.MAX_VALUE).readBytes()
-                        call.respond(mapOf("data" to java.util.Base64.getEncoder().encodeToString(bytes), "contentType" to (response.contentType()?.toString() ?: "image/png")))
-                    } finally {
-                        client.close()
-                    }
+                    call.respond(mapOf(
+                        "data" to java.util.Base64.getEncoder().encodeToString(bytes),
+                        "contentType" to contentType,
+                    ))
                 } catch (error: Throwable) {
-                    call.respond(HttpStatusCode.OK, mapOf("data" to "", "contentType" to "image/png"))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (error.message ?: "image fetch failed")))
+                }
+            }
+
+            post("/api/images/import") {
+                try {
+                    val sourcePath = json.parseToJsonElement(call.receiveText()).jsonObject["path"]
+                        ?.jsonPrimitive?.contentOrNull.orEmpty()
+                    val source = File(sourcePath)
+                    require(source.isFile) { "Image file does not exist" }
+                    require(source.length() <= MAX_IMAGE_BYTES) { "Image is too large" }
+                    val extension = source.extension.lowercase().takeIf { it in setOf("png", "jpg", "jpeg", "svg") }
+                        ?: "img"
+                    val destination = File(imageDataDirectory(), "${java.util.UUID.randomUUID()}.$extension")
+                    destination.parentFile.mkdirs()
+                    Files.copy(source.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    call.respond(HttpStatusCode.Created, mapOf("url" to destination.toURI().toString()))
+                } catch (error: Throwable) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (error.message ?: "image import failed")))
                 }
             }
 
@@ -538,8 +728,34 @@ class KotlinBridge(private val port: Int = 8765) {
                     val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest)
                     val graph = boardSetUseCase.loadBoardSetGraph(id)
                         ?: return@get call.respond(HttpStatusCode.NotFound)
+                    val appSettings = settingsManager.settings.value ?: Settings()
+                    val resolvedSettings = graph.boards.associate { board ->
+                        board.id to resolvedBoardSettingsResponse(
+                            appSettings,
+                            graph.boardSet,
+                            board,
+                        )
+                    }
+                    val fieldItems = graph.boards.associate { board ->
+                        board.id to board.grid?.fieldItems().orEmpty().map { field ->
+                            BoardFieldResponse(
+                                row = field.row,
+                                column = field.column,
+                                rowSpan = field.rowSpan,
+                                columnSpan = field.columnSpan,
+                                buttonId = field.buttonId,
+                            )
+                        }
+                    }
                     call.respondText(
-                        json.encodeToString(BoardSetGraphResponse(graph.boardSet, graph.boards)),
+                        json.encodeToString(
+                            BoardSetGraphResponse(
+                                graph.boardSet,
+                                graph.boards,
+                                resolvedSettings,
+                                fieldItems,
+                            )
+                        ),
                         ContentType.Application.Json,
                         HttpStatusCode.OK
                     )
@@ -617,6 +833,25 @@ class KotlinBridge(private val port: Int = 8765) {
                 call.respond(board)
             }
 
+            put("/api/boardsets/{setId}/boards/{boardId}/settings") {
+                val setId = call.parameters["setId"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val boardId = call.parameters["boardId"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+                val boardSet = boardSetRepository.getBoardSet(setId) ?: return@put call.respond(HttpStatusCode.NotFound)
+                if (boardSet.isLocked || boardId !in boardSet.boardIds) return@put call.respond(HttpStatusCode.Conflict)
+                val board = boardRepository.getBoard(boardId) ?: return@put call.respond(HttpStatusCode.NotFound)
+                val body = json.parseToJsonElement(call.receiveText()).jsonObject
+                val current = board.pageSettingsOverrides()
+                val settings = current.copy(
+                    activationBehavior = body["activationBehavior"]?.jsonPrimitive?.contentOrNull
+                        ?.let(::parseActivationBehavior) ?: current.activationBehavior,
+                    returnBehavior = body["returnBehavior"]?.jsonPrimitive?.contentOrNull
+                        ?.let(::parseReturnBehavior) ?: current.returnBehavior,
+                )
+                val updated = board.withPageSettingsOverrides(settings)
+                boardRepository.saveBoard(updated)
+                call.respond(updated)
+            }
+
             delete("/api/boardsets/{setId}/boards/{boardId}") {
                 val setId = call.parameters["setId"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
                 val boardId = call.parameters["boardId"] ?: return@delete call.respond(HttpStatusCode.BadRequest)
@@ -639,11 +874,19 @@ class KotlinBridge(private val port: Int = 8765) {
                 val row = call.parameters["row"]?.toIntOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest)
                 val column = call.parameters["column"]?.toIntOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest)
                 val body = json.parseToJsonElement(call.receiveText()).jsonObject
+                val existingBoard = boardRepository.getBoard(boardId)
+                val existingId = existingBoard?.grid?.order?.getOrNull(row)?.getOrNull(column)
+                val existing = existingBoard?.buttons?.firstOrNull { it.id == existingId }
                 val board = boardSetUseCase.upsertBoardCellButton(
                     setId, boardId, row, column,
                     body["label"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                     body["vocalization"]?.jsonPrimitive?.contentOrNull,
-                    body["imageUrl"]?.jsonPrimitive?.contentOrNull
+                    body["imageUrl"]?.jsonPrimitive?.contentOrNull,
+                    body["backgroundColor"]?.jsonPrimitive?.contentOrNull ?: existing?.backgroundColor,
+                    body["hidden"]?.jsonPrimitive?.booleanOrNull ?: existing?.hidden ?: false,
+                    body["linkedBoardId"]?.jsonPrimitive?.contentOrNull ?: existing?.loadBoard?.id,
+                    body["actions"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull }
+                        ?: existing?.let { it.actions.ifEmpty { listOfNotNull(it.action) } }.orEmpty(),
                 ) ?: return@put call.respond(HttpStatusCode.BadRequest)
                 call.respond(board)
             }
@@ -657,12 +900,135 @@ class KotlinBridge(private val port: Int = 8765) {
                     ?: return@delete call.respond(HttpStatusCode.BadRequest)
                 call.respond(board)
             }
+
+            post("/api/board-session") {
+                val body = json.parseToJsonElement(call.receiveText()).jsonObject
+                val boardId = body["boardId"]?.jsonPrimitive?.contentOrNull
+                    ?: return@post call.respond(HttpStatusCode.BadRequest)
+                val operation = body["operation"]?.jsonPrimitive?.contentOrNull ?: "resolve"
+                val board = boardRepository.getBoard(boardId)
+                    ?: return@post call.respond(HttpStatusCode.NotFound)
+                val boardSet = boardSetRepository.listBoardSets()
+                    .firstOrNull { boardId in it.boardIds }
+                val appSettings = settingsManager.settings.value ?: Settings()
+                val resolved = resolveBoardSettings(
+                    appShowLabels = appSettings.showLabels,
+                    appShowSymbols = appSettings.showSymbols,
+                    appLabelAtTop = appSettings.labelAtTop,
+                    appShowMessageBar = appSettings.boardShowMessageBar,
+                    appActivationBehavior = appSettings.boardActivationBehavior,
+                    appReturnBehavior = appSettings.boardReturnBehavior,
+                    screen = boardSet?.screenSettings
+                        ?: io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides(),
+                    page = board.pageSettingsOverrides(),
+                )
+                var tokens = body["tokens"]?.jsonArray
+                    ?.mapNotNull { it.jsonPrimitive.contentOrNull }
+                    .orEmpty()
+                var speakText: String? = null
+                var navigateHome = false
+                var navigateBoardId: String? = null
+                val unsupportedActions = mutableListOf<String>()
+
+                when (operation) {
+                    "activate" -> {
+                        val buttonId = body["buttonId"]?.jsonPrimitive?.contentOrNull
+                        val button = board.buttons.firstOrNull { it.id == buttonId }
+                            ?: return@post call.respond(HttpStatusCode.NotFound)
+                        val actions = parseObfButtonActions(button)
+                        if (actions.isNotEmpty()) {
+                            for (effect in actions) {
+                                when (effect) {
+                                    is ObfButtonActionEffect.AppendText -> {
+                                        if (effect.text.isNotEmpty()) tokens = tokens + effect.text
+                                    }
+                                    ObfButtonActionEffect.Backspace -> {
+                                        tokens = backspaceSentenceSelection(tokens)
+                                    }
+                                    ObfButtonActionEffect.Clear -> tokens = emptyList()
+                                    ObfButtonActionEffect.Speak -> {
+                                        speakText = joinSentenceText(tokens, board.spellingMode)
+                                            .takeIf { it.isNotBlank() }
+                                    }
+                                    ObfButtonActionEffect.Home -> navigateHome = true
+                                    ObfButtonActionEffect.Predictions -> {
+                                        val predictionIds = orderedPredictionButtonIds(board, false)
+                                        val predictionIndex = predictionIds.indexOf(button.id)
+                                        val sentence = joinSentenceText(tokens, board.spellingMode)
+                                        val prediction = predictionIndex
+                                            .takeIf { it >= 0 && predictionService.isTrained() }
+                                            ?.let { index ->
+                                                predictionService.predict(
+                                                    sentence,
+                                                    maxWords = predictionIds.size,
+                                                    maxLetters = 0,
+                                                ).words.getOrNull(index)
+                                            }
+                                        val insertion = prediction?.let {
+                                            nGramPredictionInsertion(sentence, it)
+                                        }
+                                        if (!insertion.isNullOrEmpty()) tokens = tokens + insertion
+                                    }
+                                    is ObfButtonActionEffect.Unsupported -> {
+                                        unsupportedActions += effect.action
+                                    }
+                                }
+                            }
+                        } else if (button.loadBoard != null && boardSet != null) {
+                            navigateBoardId = boardSetUseCase
+                                .loadBoardSetGraph(boardSet.id)
+                                ?.resolveLinkedBoard(button.loadBoard)
+                                ?.id
+                        } else {
+                            val text = resolveObfLocalizedString(
+                                strings = board.strings,
+                                locale = appSettings.primaryLanguage,
+                                rawValue = button.vocalization ?: button.label,
+                            )?.trim().orEmpty()
+                            if (
+                                text.isNotEmpty() &&
+                                shouldAddBoardSelection(resolved.activationBehavior)
+                            ) {
+                                tokens = tokens + text
+                            }
+                            if (
+                                text.isNotEmpty() &&
+                                shouldSpeakBoardSelection(resolved.activationBehavior)
+                            ) {
+                                speakText = text
+                            }
+                        }
+                    }
+                    "backspace" -> tokens = backspaceSentenceSelection(tokens)
+                    "clear" -> tokens = emptyList()
+                }
+
+                call.respond(
+                    BoardSessionResponse(
+                        tokens = tokens,
+                        sentence = joinSentenceText(tokens, board.spellingMode),
+                        speakText = speakText,
+                        navigateHome = navigateHome,
+                        navigateBoardId = navigateBoardId,
+                        unsupportedActions = unsupportedActions,
+                        settings = ResolvedBoardSettingsResponse(
+                            showLabels = resolved.showLabels,
+                            showSymbols = resolved.showSymbols,
+                            labelAtTop = resolved.labelAtTop,
+                            showMessageBar = resolved.showMessageBar,
+                            activationBehavior = resolved.activationBehavior.name,
+                            returnBehavior = resolved.returnBehavior.name,
+                        ),
+                    )
+                )
+            }
             
             post("/api/pronunciation") {
                 val params = call.receive<Map<String, String>>()
                 val word = params["word"] ?: return@post call.respond(HttpStatusCode.BadRequest)
                 val phoneme = params["phoneme"] ?: return@post call.respond(HttpStatusCode.BadRequest)
-                pronunciationRepository.add(PronunciationEntry(word = word, phoneme = phoneme))
+                val alphabet = params["alphabet"] ?: "text"
+                pronunciationRepository.add(PronunciationEntry(word = word, phoneme = phoneme, alphabet = alphabet))
                 call.respond(HttpStatusCode.Created, mapOf("status" to "ok"))
             }
             
@@ -756,23 +1122,7 @@ class KotlinBridge(private val port: Int = 8765) {
             post("/api/predict/train") {
                 scope.launch {
                     try {
-                        val history = saidTextRepository.list()
-                        predictionService.train(history)
-                        println("[PREDICT] Trained on ${history.size} entries")
-
-                        // Also load base language dictionary
-                        val settings = settingsManager.settings.value
-                        val lang = settings?.language ?: settings?.primaryLanguage ?: "en-US"
-                        try {
-                            val words = dictionaryLoader.loadDictionary(lang)
-                            if (words.isNotEmpty() && predictionService is SimpleNGramPredictionService) {
-                                (predictionService as SimpleNGramPredictionService).setBaseLanguage(words)
-                                // Re-train user history on top
-                                (predictionService as SimpleNGramPredictionService).train(history, false)
-                            }
-                        } catch (e: Exception) {
-                            println("[PREDICT] Dictionary load failed (non-fatal): ${e.message}")
-                        }
+                        trainPredictionModel()
                     } catch (e: Exception) {
                         println("[PREDICT] Training error: ${e.message}")
                     }
@@ -814,6 +1164,10 @@ class KotlinBridge(private val port: Int = 8765) {
     
     fun start(skipPartnerWindow: Boolean = false) {
         server.start(wait = false)
+        scope.launch {
+            runCatching { trainPredictionModel() }
+                .onFailure { println("[PREDICT] Bootstrap training failed: ${it.message}") }
+        }
         if (!skipPartnerWindow) {
             partnerWindowManager.start()
         }
@@ -825,6 +1179,87 @@ class KotlinBridge(private val port: Int = 8765) {
         settingsManager.cleanup()
         partnerWindowManager.stop()
         server.stop(1000, 2000)
+    }
+
+    private suspend fun performSpeech(
+        generation: Long,
+        text: String,
+        voiceOverride: String? = null,
+        recordHistory: Boolean = true,
+    ) {
+        try {
+            speechService.stop()
+            azureSpeechService.stop()
+
+            val settings = settingsManager.settings.value ?: Settings()
+            val voices = voiceRepository.getVoices()
+            val selectedName = voiceOverride?.takeIf { it.isNotBlank() }
+                ?: voiceRepository.getSelected()?.name?.takeIf { it.isNotBlank() }
+                ?: settings.voice.takeIf { it.isNotBlank() }
+            val language = settings.primaryLanguage.takeIf { it.isNotBlank() }
+                ?: settings.language.takeIf { it.isNotBlank() }
+                ?: "en-US"
+            val selected = voices.firstOrNull { it.name == selectedName }
+                ?: voices.firstOrNull()
+                ?: Voice(name = "en-US-JennyNeural", selectedLanguage = language)
+            val rate = settings.speechRate.toDouble()
+            val voice = selected.copy(selectedLanguage = language, rate = rate)
+
+            if (settings.ttsEngine == TtsEngine.SYSTEM) {
+                speechService.speakSegments(SpeechTextProcessor.processText(text), voice, rate = rate)
+            } else {
+                azureSpeechService.speak(text, voice, rate = rate)
+            }
+
+            if (speechGeneration.get() != generation) return
+
+            if (recordHistory) {
+                val now = System.currentTimeMillis()
+                saidTextRepository.add(
+                    SaidText(
+                        date = now,
+                        createdAt = now,
+                        saidText = text,
+                        voiceName = voice.name,
+                        speed = rate,
+                        primaryLanguage = language,
+                        visibleInHistory = true,
+                    )
+                )
+                if (predictionService is SimpleNGramPredictionService) {
+                    (predictionService as SimpleNGramPredictionService).learnPhrase(text)
+                }
+            }
+            speechState = SpeechStateResponse(state = "completed")
+            speechJob = null
+        } catch (error: Throwable) {
+            if (speechGeneration.get() == generation) {
+                val message = error.message ?: "Speech failed"
+                println("[SPEECH] $message")
+                error.printStackTrace()
+                speechState = SpeechStateResponse(state = "error", error = message)
+                speechJob = null
+            }
+        }
+    }
+
+    private suspend fun trainPredictionModel() {
+        val history = saidTextRepository.list()
+        predictionService.train(history)
+        val settings = settingsManager.settings.value
+        val language = settings?.primaryLanguage?.takeIf { it.isNotBlank() }
+            ?: settings?.language?.takeIf { it.isNotBlank() }
+            ?: "en-US"
+        try {
+            val words = dictionaryLoader.loadDictionary(language)
+            if (words.isNotEmpty() && predictionService is SimpleNGramPredictionService) {
+                (predictionService as SimpleNGramPredictionService).setBaseLanguage(words)
+                (predictionService as SimpleNGramPredictionService).train(history, false)
+            }
+        } catch (error: Exception) {
+            println("[PREDICT] Dictionary load failed (non-fatal): ${error.message}")
+        }
+        println("[PREDICT] Trained on ${history.size} history entries")
     }
 }
 
@@ -847,10 +1282,147 @@ data class UpdateVoiceRequest(val voice: String)
 data class SpeakRequest(val text: String)
 
 @Serializable
+data class SpeechStateResponse(
+    val state: String = "idle",
+    val playing: Boolean = false,
+    val paused: Boolean = false,
+    val error: String? = null,
+)
+
+@Serializable
+data class EditingAccessResponse(
+    val enabled: Boolean = false,
+    val unlocked: Boolean = true,
+    val supported: Boolean = false,
+    val failedAttempts: Int = 0,
+)
+
+private fun io.github.jdreioe.wingmate.application.EditingAccessState.toResponse() =
+    EditingAccessResponse(enabled, unlocked, supported, failedAttempts)
+
+private fun resolvedBoardSettingsResponse(
+    appSettings: Settings,
+    boardSet: ObfBoardSet,
+    board: ObfBoard,
+): ResolvedBoardSettingsResponse {
+    val resolved = resolveBoardSettings(
+        appShowLabels = appSettings.showLabels,
+        appShowSymbols = appSettings.showSymbols,
+        appLabelAtTop = appSettings.labelAtTop,
+        appShowMessageBar = appSettings.boardShowMessageBar,
+        appActivationBehavior = appSettings.boardActivationBehavior,
+        appReturnBehavior = appSettings.boardReturnBehavior,
+        screen = boardSet.screenSettings,
+        page = board.pageSettingsOverrides(),
+    )
+    return ResolvedBoardSettingsResponse(
+        showLabels = resolved.showLabels,
+        showSymbols = resolved.showSymbols,
+        labelAtTop = resolved.labelAtTop,
+        showMessageBar = resolved.showMessageBar,
+        activationBehavior = resolved.activationBehavior.name,
+        returnBehavior = resolved.returnBehavior.name,
+    )
+}
+
+@Serializable
 data class BoardSetGraphResponse(
     val boardSet: ObfBoardSet,
-    val boards: List<ObfBoard>
+    val boards: List<ObfBoard>,
+    val resolvedSettings: Map<String, ResolvedBoardSettingsResponse> = emptyMap(),
+    val fieldItems: Map<String, List<BoardFieldResponse>> = emptyMap(),
 )
+
+@Serializable
+data class BoardFieldResponse(
+    val row: Int,
+    val column: Int,
+    val rowSpan: Int,
+    val columnSpan: Int,
+    val buttonId: String? = null,
+)
+
+@Serializable
+data class ResolvedBoardSettingsResponse(
+    val showLabels: Boolean,
+    val showSymbols: Boolean,
+    val labelAtTop: Boolean,
+    val showMessageBar: Boolean,
+    val activationBehavior: String,
+    val returnBehavior: String,
+)
+
+@Serializable
+data class BoardSessionResponse(
+    val tokens: List<String>,
+    val sentence: String,
+    val speakText: String? = null,
+    val navigateHome: Boolean = false,
+    val navigateBoardId: String? = null,
+    val unsupportedActions: List<String> = emptyList(),
+    val settings: ResolvedBoardSettingsResponse,
+)
+
+private const val MAX_IMAGE_BYTES = 20L * 1024L * 1024L
+
+private fun imageCacheDirectory(): File =
+    File(System.getenv("XDG_CACHE_HOME")?.takeIf { it.isNotBlank() }
+        ?: File(System.getProperty("user.home"), ".cache").path, "wingmate/images")
+
+private fun imageDataDirectory(): File =
+    File(System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() }
+        ?: File(System.getProperty("user.home"), ".local/share").path, "wingmate/images")
+
+private fun localImageFile(source: String): File? = when {
+    source.startsWith("file:") -> runCatching { File(URI(source)) }.getOrNull()
+    source.startsWith('/') -> File(source)
+    else -> null
+}
+
+private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
+    .digest(value.encodeToByteArray())
+    .joinToString("") { "%02x".format(it) }
+
+private fun parseActivationBehavior(value: String): BoardActivationBehavior? = when (value.lowercase()) {
+    "speak_and_add", "speakandadd" -> BoardActivationBehavior.SpeakAndAdd
+    "add_only", "addonly" -> BoardActivationBehavior.AddOnly
+    "speak_only", "speakonly" -> BoardActivationBehavior.SpeakOnly
+    else -> null
+}
+
+private fun parseReturnBehavior(value: String): BoardReturnBehavior? = when (value.lowercase()) {
+    "stay" -> BoardReturnBehavior.Stay
+    "previous" -> BoardReturnBehavior.Previous
+    "start_page", "startpage" -> BoardReturnBehavior.StartPage
+    else -> null
+}
+
+private fun csvField(value: String): String = "\"${value.replace("\"", "\"\"")}\""
+
+private fun parseCsvLine(line: String): List<String> {
+    val fields = mutableListOf<String>()
+    val current = StringBuilder()
+    var quoted = false
+    var index = 0
+    while (index < line.length) {
+        val char = line[index]
+        when {
+            char == '"' && quoted && line.getOrNull(index + 1) == '"' -> {
+                current.append('"')
+                index += 1
+            }
+            char == '"' -> quoted = !quoted
+            char == ',' && !quoted -> {
+                fields += current.toString()
+                current.clear()
+            }
+            else -> current.append(char)
+        }
+        index += 1
+    }
+    fields += current.toString()
+    return fields
+}
 
 
 
@@ -869,11 +1441,17 @@ fun main(args: Array<String>) {
         single<io.github.jdreioe.wingmate.domain.SettingsRepository> { JsonFileSettingsRepository() }
         single<io.github.jdreioe.wingmate.domain.ConfigRepository> { JsonFileConfigRepository() }
         single<io.github.jdreioe.wingmate.domain.VoiceRepository> { JsonFileVoiceRepository() }
+        single<io.github.jdreioe.wingmate.domain.PhraseRepository> { JsonFilePhraseRepository() }
+        single<io.github.jdreioe.wingmate.domain.CategoryRepository> { JsonFileCategoryRepository() }
+        single<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository> {
+            JsonFilePronunciationDictionaryRepository()
+        }
         single<io.github.jdreioe.wingmate.domain.BoardRepository> { JsonFileBoardRepository() }
         single<io.github.jdreioe.wingmate.domain.BoardSetRepository> { JsonFileBoardSetRepository() }
         single<io.github.jdreioe.wingmate.domain.TextPredictionService> { SimpleNGramPredictionService() }
         single<io.github.jdreioe.wingmate.platform.FilePicker> { LinuxFilePicker() }
         single<io.github.jdreioe.wingmate.application.BackupMediaAccess> { LinuxBackupMediaAccess() }
+        single<SecureEditingCredentialStorage> { LinuxSecureEditingCredentialStorage() }
     }
 
     // Initialize Koin DI with overrides

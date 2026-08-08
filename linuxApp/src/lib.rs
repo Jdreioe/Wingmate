@@ -26,6 +26,9 @@ pub mod partner_window_bridge {
         pub fn state(&self) -> (bool, bool) {
             (false, false)
         }
+        pub fn is_available(&self) -> bool {
+            false
+        }
     }
 
     pub fn send_global_shutdown() {}

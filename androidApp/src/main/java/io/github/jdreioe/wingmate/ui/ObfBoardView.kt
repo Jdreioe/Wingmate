@@ -1028,10 +1028,10 @@ fun ObfButtonItem(
     // #118: per-target activation debounce. Each button instance maps to a single target,
     // so a per-item guard enforces the per-target rules without shared state.
     val selectionDebouncer = remember(button.id) { SelectionDebouncer() }
-    // #118: return true when this button's activation should proceed. Edit-mode taps are
-    // deliberate field/dialog operations and must never be debounced.
+    // #118: Edit-mode taps are deliberate field/dialog operations and must never be
+    // blocked by the run-mode selection debounce.
     fun tryActivate(): Boolean =
-        !isEditMode && selectionDebouncer.tryActivate(
+        isEditMode || selectionDebouncer.tryActivate(
             button.id,
             Clock.System.now().toEpochMilliseconds(),
             settings.selectionDebounceMillis

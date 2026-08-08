@@ -32,9 +32,12 @@ class SettingsManager {
     }
 
     fun updateSettings(newSettings: Settings) {
+        // Publish first so the HTTP PUT response and any immediately-following
+        // board-settings resolution observe the same value. Persistence stays
+        // off the request thread.
+        _settings.value = newSettings
         scope.launch {
             runCatching { settingsUseCase.update(newSettings) }
-            _settings.value = newSettings
         }
     }
 

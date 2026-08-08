@@ -3,9 +3,9 @@
 //! Provides localization support for this crate.
 
 use i18n_embed::{
-    DefaultLocalizer, LanguageLoader, Localizer,
-    fluent::{FluentLanguageLoader, fluent_language_loader},
+    fluent::{fluent_language_loader, FluentLanguageLoader},
     unic_langid::LanguageIdentifier,
+    DefaultLocalizer, LanguageLoader, Localizer,
 };
 use rust_embed::RustEmbed;
 use std::sync::LazyLock;

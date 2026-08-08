@@ -74,6 +74,10 @@ Compose as a required client. This roadmap overrides that for the new direction:
   access to the Iced client using the **Kotlin bridge** (`linuxApp/.../KotlinBridge.kt`)
   rather than reimplementing.
 - Add Iced views mirroring the Android/iOS board workspace semantics.
+- **Status: completed** for the workspace/library/import-export/backup surface
+  (see git log for issues #135/#137). Remaining UX gaps are tracked in
+  `docs/LINUX_UX_AUDIT.md` (P0: setting-real behavior + symbol image rendering,
+  P1: scanning, prediction training, editor expansion, P2: polish).
 
 ### Phase 5 — Build/release parity
 - Single canonical shared framework target consumed by Xcode; unify CI
@@ -88,22 +92,22 @@ Compose as a required client. This roadmap overrides that for the new direction:
 | --- | --- | --- | --- | --- |
 | Phrase grid (`PhraseScreen`) | x | x | x | x |
 | Categories CRUD / reorder | x | x | x | x |
-| Board workspace | x | x | x (SymbolBoardWorkspaceView) | [ ] → planned |
-| OBF/OBZ import | x | x | x (Files) | [ ] planned |
-| OBF/OBZ export | x (`exportBoardSetAsObz`) | x | [ ] verify | [ ] planned |
-| Symbol search (OpenSymbols) | x | x | [ ] duplicate Swift | [ ] planned |
-| Custom symbol / photo import | x | x | x (PhotosUI) | [ ] planned |
-| Rate/modify `Symbol source: openSymbols` sheets | x | x | x | [ ] |
-| Backup/restore | x | x | x | [ ] planned |
-| Editing access code | x | x | x (LocalAuth) | [ ] planned |
+| Board workspace | x | x | x (SymbolBoardWorkspaceView) | x (run/edit/grid) |
+| OBF/OBZ import | x | x | x (Files) | x |
+| OBF/OBZ export | x (`exportBoardSetAsObz`) | x | [ ] verify | x |
+| Symbol search (OpenSymbols) | x | x | x (shared client now) | x (locale-aware rendering + cache) |
+| Custom symbol / photo import | x | x | x (PhotosUI) | x |
+| Symbol - source rate/modify sheets | x | x | x | [ ] |
+| Backup/restore | x | x | x | x |
+| Editing access (lock / code) | x | x | x (LocalAuth) | x (Secret Service/KWallet) |
 | Word prediction | x | x | x | x |
 | Pronunciation dictionary | x | x | x | x |
-| F0 setup | x | x | x (F0SetupView) | [ ] planned |
-| System/Azure TTS | x | x | x | x |
-| Voice selection | x | x | x | [ ] planned |
-| Settings | x | x | x | x |
+| F0 setup | x | x | x (F0SetupView) | x (partner window driver) |
+| System/Azure TTS | x | x | x | x (Az-Added) |
+| Voice selection | x | x | x | x |
+| Settings | x | x | x | x (several save-only settings: see LINUX_UX_AUDIT §2) |
 | Secondary / full-screen display | x (Android) | x | [ ] planned | partner window (Rust) |
-| Custom keyboards / board set templates | x | x | x | [ ] planned |
+| Custom keyboards / board set templates | x | x | x | x (blank + calculator) |
 
 ### Note on `[ ]` cells
 `[ ]` in the Linux column does **not** mean the feature is absent from logic — the

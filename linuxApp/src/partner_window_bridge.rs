@@ -148,6 +148,11 @@ impl PartnerWindowController {
             .and_then(|state| state.lock().ok().map(|s| (s.device_connected, s.active)))
             .unwrap_or((false, false))
     }
+
+    /// Whether supported Partner Window hardware is currently connected.
+    pub fn is_available(&self) -> bool {
+        self.state().0
+    }
 }
 
 /// Ensure the FTDI device is released and the EVE display is powered off

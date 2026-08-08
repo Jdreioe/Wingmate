@@ -1441,15 +1441,15 @@ private fun BoardSetWorkspaceScreen(
                                 when (
                                     val result = resolveCellTap(
                                         grid = activeBoard.grid,
-                                        selectedField = selectedField,
                                         row = row,
                                         column = column,
                                         button = button
                                     )
                                 ) {
-                                    is CellTapResult.Select -> selectedField = result.anchor
                                     is CellTapResult.OpenDialog -> {
-                                        selectedField = null
+                                        selectedField = result.button?.let {
+                                            activeBoard.grid?.fieldAnchorAt(result.row, result.column)
+                                        }
                                         editingCell = WorkspaceCellTarget(result.row, result.column, result.button)
                                     }
                                 }

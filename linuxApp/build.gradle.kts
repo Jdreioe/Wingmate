@@ -28,6 +28,13 @@ dependencies {
     
     // USB4Java for Partner Window (FTDI FT232H / EVE display)
     implementation("org.usb4java:usb4java:1.3.0")
+
+    testImplementation(kotlin("test-junit5"))
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
