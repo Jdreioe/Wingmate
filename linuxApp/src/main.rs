@@ -473,6 +473,7 @@ impl BoardImage {
 
     fn resolve_payload(&self) -> serde_json::Value {
         serde_json::json!({
+            "id": self.id,
             "data": self.data,
             "dataUrl": self.data_url,
             "path": self.path,
@@ -3430,8 +3431,7 @@ impl Wingmate {
                 editor = editor.push(text(fl!("status-searching")).size(15));
             }
             if !self.symbols.is_empty() {
-                let results =
-                    row(self
+                let results = row(self
                         .symbols
                         .iter()
                         .enumerate()
@@ -3440,7 +3440,7 @@ impl Wingmate {
                             let mut content = column![]
                                 .spacing(3)
                                 .align_x(cosmic::iced::alignment::Alignment::Center);
-                            if let Some(preview) = self.image_for(symbol.image_url.as_deref(), 52.0)
+                            if let Some(preview) = self.image_for(symbol.image_url.as_deref(), 44.0)
                             {
                                 content = content.push(preview);
                             }
@@ -3452,13 +3452,20 @@ impl Wingmate {
                             ));
                             button(content)
                                 .on_press(Message::CellSymbolPicked(index))
-                                .height(88)
-                                .padding([10, 14])
+                                .width(124)
+                                .height(80)
+                                .padding([6, 10])
                                 .into()
                         }))
-                    .spacing(6)
-                    .wrap();
-                editor = editor.push(results);
+                    .spacing(6);
+                editor = editor.push(
+                    scrollable(results)
+                        .direction(scrollable::Direction::Horizontal(
+                            scrollable::Scrollbar::default(),
+                        ))
+                        .width(Fill)
+                        .height(92),
+                );
             }
             if let Some(image_url) = &self.cell_image_url {
                 if let Some(preview) = self.image_for(Some(image_url), 120.0) {
@@ -5955,6 +5962,21 @@ fn start_bridge_server() -> Option<Child> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn board_image_resolve_payload_includes_required_obf_id() {
+        let image = BoardImage {
+            id: "image-1".into(),
+            data: None,
+            data_url: None,
+            path: None,
+            url: Some("https://example.com/symbol.png".into()),
+            content_type: None,
+            symbol: None,
+        };
+
+        assert_eq!(image.resolve_payload()["id"], "image-1");
+    }
 
     #[test]
     fn bridge_token_header_matches_the_kotlin_bridge_contract() {

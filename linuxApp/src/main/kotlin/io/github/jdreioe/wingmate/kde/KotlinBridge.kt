@@ -647,16 +647,28 @@ class KotlinBridge(private val port: Int = 8765) {
                     val body = json.parseToJsonElement(call.receiveText()).jsonObject
                     val query = body["query"]?.jsonPrimitive?.contentOrNull ?: ""
                     val locale = body["locale"]?.jsonPrimitive?.contentOrNull ?: "en"
-                    val result = OpenSymbolsClient.search(query, locale)
-                    val symbols = when (result) {
-                        is OpenSymbolsClient.SearchResponse.Success -> result.symbols.map {
-                            mapOf("id" to it.id, "name" to it.name, "imageUrl" to it.image_url)
-                        }
-                        is OpenSymbolsClient.SearchResponse.Failure -> emptyList<Map<String, Any?>>()
+                    when (val result = OpenSymbolsClient.search(query, locale)) {
+                        is OpenSymbolsClient.SearchResponse.Success -> call.respond(
+                            LinuxSymbolSearchResponse(
+                                result.symbols.map {
+                                    LinuxSymbolResult(
+                                        id = it.id,
+                                        name = it.name,
+                                        imageUrl = it.image_url,
+                                    )
+                                }
+                            )
+                        )
+                        is OpenSymbolsClient.SearchResponse.Failure -> call.respond(
+                            HttpStatusCode.ServiceUnavailable,
+                            mapOf("error" to "Symbol search failed: ${result.error}"),
+                        )
                     }
-                    call.respond(mapOf("symbols" to symbols))
                 } catch (error: Throwable) {
-                    call.respond(HttpStatusCode.OK, mapOf("symbols" to emptyList<Map<String, Any?>>()))
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        mapOf("error" to (error.message ?: "Symbol search failed")),
+                    )
                 }
             }
 
@@ -1331,6 +1343,16 @@ data class SpeechStateResponse(
     val playing: Boolean = false,
     val paused: Boolean = false,
     val error: String? = null,
+)
+
+@Serializable
+data class LinuxSymbolSearchResponse(val symbols: List<LinuxSymbolResult>)
+
+@Serializable
+data class LinuxSymbolResult(
+    val id: Long,
+    val name: String,
+    val imageUrl: String? = null,
 )
 
 @Serializable
