@@ -65,6 +65,21 @@ All data access goes through interfaces in `core/domain/.../domain/repository.kt
 - NEVER store in plain DataStore/SharedPreferences
 - NEVER hardcode developer keys in the app
 
+### Speech & History Logging Privacy
+AAC phrases are sensitive (health, care, identity, location). Never log speech text,
+SSML, phrase/history contents, pronunciation words, recording paths, or request/response
+bodies that echo them.
+
+- Log structured metadata only: operation, result, status, duration, byte/char count,
+  and a correlation ID. Never interpolate `text`, `ssml`, `phrase`, `history`, `args`,
+  `body`, `path`, `line`, `output`, or `message` into a log statement.
+- Do not pass a throwable to a logger when its message could echo user text; prefer a
+  content-free message or only the exception class name (e.g. `${t::class.simpleName}`).
+- Review exception messages before logging; network/server exceptions may echo request data.
+- Build-type debug guards are not sufficient protection — treat these rules as unconditional.
+- `SpeechLogPrivacyTest` (`core/data/src/jvmTest`) statically scans the speech infrastructure
+  for these patterns; keep new speech/history code in compliance so the test stays green.
+
 ## Platform Entry Points
 
 | Platform | Entry | DI Setup |
