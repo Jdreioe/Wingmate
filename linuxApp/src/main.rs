@@ -3698,7 +3698,7 @@ impl Wingmate {
                 cell_content =
                     cell_content.push(text(label.clone()).size(self.settings.font_px(18.0)));
             }
-if show_symbol {
+            if show_symbol {
                 cell_content = cell_content.push(
                     self.image_for(
                         symbol_image.map(|image| image.id.as_str()),
