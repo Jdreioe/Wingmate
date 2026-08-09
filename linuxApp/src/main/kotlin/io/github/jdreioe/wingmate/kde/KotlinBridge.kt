@@ -1481,7 +1481,13 @@ fun resolveObfImageBytes(image: ObfImage): Pair<ByteArray, String>? {
             decoded.first to (declaredType ?: contentTypeForBytes(decoded.first))
         }
         is ObfImageSource.Path -> bytesForImagePath(source.path, declaredType)
-        is ObfImageSource.Url -> runCatching { fetchRemoteImageBytes(source.url) }.getOrNull()
+        is ObfImageSource.Url -> {
+            if (trustedLocalImageFile(source.url) != null) {
+                bytesForImagePath(source.url, declaredType)
+            } else {
+                runCatching { fetchRemoteImageBytes(source.url) }.getOrNull()
+            }
+        }
         is ObfImageSource.Symbol -> resolveImageSymbolBytes(source.symbol)
         ObfImageSource.None -> null
     }
