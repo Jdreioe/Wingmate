@@ -147,6 +147,31 @@ private fun File.forEachLogLine(block: (Int, String) -> Unit) {
     }
 }
 
+private val sensitiveVariableNames = setOf(
+    "ssml",
+    "text",
+    "phrase",
+    "history",
+    "args",
+    "body",
+    "errorbody",
+    "path",
+    "line",
+    "output",
+    "message",
+    "audiofilepath",
+    "recordingpath",
+    "audiopath",
+    "e",
+    "t",
+    "error",
+    "exception",
+    "throwable",
+)
+
+private val bareInterpolation = Regex("""\$([A-Za-z_][A-Za-z0-9_]*)""")
+private val bracketedInterpolation = Regex("""\$\{([A-Za-z0-9_.?]+)\}""")
+
 private fun String.isSensitiveLogLine(): Boolean {
     if (!contains("println(") &&
         !contains("logger.") &&
@@ -155,38 +180,26 @@ private fun String.isSensitiveLogLine(): Boolean {
     ) {
         return false
     }
-    val sensitiveInterpolations = listOf(
-        "\$ssml",
-        "\$text",
-        "\$phrase",
-        "\$history",
-        "\$args",
-        "\$body",
-        "\$errorBody",
-        "\$path",
-        "\$line",
-        "\$output",
-        "\$message",
-        "\$e",
-        "\$t",
-        "\$audioFilePath",
-        "\$recordingPath",
-        "{t.message}",
-        "{e.message}",
-        "{error.message}",
-        "{it.message}",
-        "{err.message}",
-        "{audioFilePath}",
-        "{recordingPath}",
-        "{audioPath}",
+    val literalMarkers = listOf(
         "preview=",
-        "take(500)",
         "body.take(",
+        "take(500)",
         "history for:",
         "for: \$",
         "for '\$",
         "TTS Output:",
         "Text: '",
     )
-    return sensitiveInterpolations.any { contains(it) }
+    if (literalMarkers.any { contains(it) }) return true
+
+    if (bareInterpolation.findAll(this).any {
+            it.groupValues[1].lowercase() in sensitiveVariableNames
+        }
+    ) {
+        return true
+    }
+
+    return bracketedInterpolation.findAll(this).any { match ->
+        match.groupValues[1].substringAfterLast('.').trimEnd('?').lowercase() in sensitiveVariableNames
+    }
 }
