@@ -14,6 +14,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use wingmate::partner_window_bridge::{self, PartnerWindowController};
 
@@ -4674,6 +4675,7 @@ fn symbolic_icon(name: &str) -> icon::Named {
 struct Api {
     base: String,
     client: Client,
+    token: String,
 }
 
 impl Api {
@@ -4681,6 +4683,7 @@ impl Api {
         Self {
             base: env::var("WINGMATE_API_URL").unwrap_or_else(|_| DEFAULT_API_URL.into()),
             client: Client::new(),
+            token: current_bridge_token(),
         }
     }
 
@@ -5224,6 +5227,7 @@ impl Api {
                 let response = api
                     .client
                     .post(url)
+                    .header(TOKEN_HEADER, api.token)
                     .header("Content-Type", "application/json")
                     .body(body)
                     .send()
@@ -5554,7 +5558,10 @@ impl Api {
         let url = format!("{}{}", self.base, path);
         let mut last_error = String::new();
         for attempt in 0..8 {
-            let mut request = self.client.request(method.clone(), &url);
+            let mut request = self
+                .client
+                .request(method.clone(), &url)
+                .header(TOKEN_HEADER, &self.token);
             if let Some(value) = body.clone() {
                 request = request.json(&value);
             }
@@ -5745,6 +5752,75 @@ fn find_fat_jar() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("build/libs/linuxApp-all.jar"))
 }
 
+const TOKEN_HEADER: &str = "x-wingate-token";
+
+fn state_home() -> PathBuf {
+    if let Ok(state) = env::var("XDG_STATE_HOME") {
+        if !state.trim().is_empty() {
+            return PathBuf::from(state);
+        }
+    }
+    PathBuf::from(
+        env::var("HOME").unwrap_or_else(|_| ".".into()),
+    )
+    .join(".local/state")
+}
+
+fn bridge_token_file() -> PathBuf {
+    state_home().join("wingmate").join("bridge-token")
+}
+
+/// Per-process bridge capability token, shared between the Rust client and the
+/// Kotlin bridge it spawns. Preference order matches the Kotlin side:
+/// 1. token injected into the child environment when we spawn the bridge,
+/// 2. token the already-running bridge persisted for the reuse case,
+/// 3. a freshly generated random token (also persisted and passed on spawn).
+fn current_bridge_token() -> String {
+    static TOKEN: OnceLock<String> = OnceLock::new();
+    TOKEN.get_or_init(|| {
+        if let Some(token) = env::var("WINGMATE_BRIDGE_TOKEN").ok() {
+            let trimmed = token.trim().to_string();
+            if trimmed.len() >= 16 {
+                return trimmed;
+            }
+        }
+        if let Ok(token) = std::fs::read_to_string(bridge_token_file()) {
+            let trimmed = token.trim().to_string();
+            if trimmed.len() >= 16 {
+                return trimmed;
+            }
+        }
+        let token = generate_bridge_token();
+        persist_bridge_token(&token);
+        token
+    })
+    .clone()
+}
+
+fn generate_bridge_token() -> String {
+    use std::io::Read;
+    let mut bytes = [0u8; 32];
+    if let Ok(mut from) = std::fs::File::open("/dev/urandom") {
+        let _ = from.read_exact(&mut bytes);
+    } else {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0) as u64;
+        bytes[..8].copy_from_slice(&now.to_le_bytes());
+        bytes[8..16].copy_from_slice(&(std::process::id().to_le_bytes()));
+    }
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn persist_bridge_token(token: &str) {
+    let path = bridge_token_file();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&path, format!("{token}\n"));
+}
+
 fn bridge_already_running() -> bool {
     let addr = "127.0.0.1:8765";
     std::net::TcpStream::connect_timeout(
@@ -5769,6 +5845,7 @@ fn start_bridge_server() -> Option<Child> {
         .arg("-jar")
         .arg(&jar)
         .arg("--no-partner-window")
+        .env("WINGMATE_BRIDGE_TOKEN", current_bridge_token())
         .spawn()
     {
         Ok(child) => Some(child),
