@@ -132,7 +132,7 @@ The following list is taken from the OpenAAC [AAC App Development](https://www.o
       As an alternative to "click", the person may find it easier to steer the cursor to the location of a button and then keep it there inside the button. This would be considered a "dwell" selection.
     - [ ] 💡 **double/right click for special action**
       Some mouse interfaces use double-click or right-click to trigger specialty actions, such as popping up a sub-menu or extra options.
-    - [ ] 💜 **custom cursor**
+    - [x] 💜 **custom cursor**
       Some people may not be able to see the standard mouse cursor very well, and can benefit from alternative cursor icons like a larger pointer, colored dot, etc.
 - [x] 💡 **eye gaze/head control/joystick**
   These control methods may operate similar to a mouse control, showing an on-screen cursor and using a button to select, but they may also rely on dwelling on a target as a selection technique, or they may not show an on-screen cursor. For example, many eye gaze-tracking interfaces do not show a custor where the user is looking because it can feel confusing as the cursor follows the person's gaze around the screen. This only works because eye gaze isn't adjustable like other cursor control interfaces, so if it's not calibrated correctly you can't easily compensate by just looking slightly to the left/right, which comes more naturally for something like a head-tracking interface. Note that iOS and Android both have head tracking libraries to make this more automated. You can see examples of using these libraries in the cordova_face library.
@@ -140,11 +140,11 @@ The following list is taken from the OpenAAC [AAC App Development](https://www.o
   *Supported via the OS:* Wingmate uses standard touch/click/pointer input, and the iOS UI is built on standard SwiftUI accessibility elements (labels, hints, custom actions, explicit accessibility sort order for scanning), so OS-provided access methods work with the app — e.g. iOS Eye Tracking / Head Tracking (iOS 18+), Switch Control, Voice Control, Windows Eye Control. There is no in-app gaze calibration UI.
     - [x] 💡 **dwell to select**
       Dwell-to-select is the more-common option for eye tracking interfaces, and for some head-tracking interfaces, since it takes enough focus to select the target that then hitting something else may be too big an ask. Also, dwelling on a target feels natural for eye tracking interfaces. The amount of time required for a dwell action to trigger should be user-configurable, and is often but not always less than one second. *(App-level dwell-to-select also applies to OS-driven cursors.)*
-    - [ ] 💡 **keyboard/button press to select**
+    - [x] 💡 **keyboard/button press to select**
       With tracking interfaces, some people prefer hitting a button, screen or key for selection rather than waiting for a dwell timeout.
     - [ ] 💡 **head as joystick vs head as pointer**
       For head tracking (and potentially for joystick tracking) there are two common ways of controlling the cursor. The first, "head as pointer" would be like taping a laser pointer to your head and having that control the cursor. The cursor position would map directly to where the head is pointing at the screen. The second option, "head as joystick", means that the cursor is controller by the head position, but they aren't locked together. So if the user tilts their head a little to the right, the cursor will start sliding to the right. If they tilt far up, the cursor will move quickly up. If they center their head, the cursor will stop moving.
-    - [ ] 💡 **pause tracking**
+    - [x] 💡 **pause tracking**
       Because these interfaces often rely on head or eye gaze position, they can become tiring and will misfire if the person's attention is on something else. It can be vaulable to have a "pause" button or region the person can use to temporarily disable tracking.
     - [ ] 💡 **expression to select**
       Because some eye- and head-tracking users may not be in a position to use other interfaces like a button, the most obvious selection technique is dwell, but this can take a long time, so another option is to track facial expressions as a way to select the current target.

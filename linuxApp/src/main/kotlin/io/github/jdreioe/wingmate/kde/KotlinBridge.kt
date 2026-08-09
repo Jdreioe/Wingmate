@@ -48,6 +48,8 @@ import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.AccessInputController
+import io.github.jdreioe.wingmate.application.AccessInputEffect
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
@@ -86,11 +88,23 @@ import java.util.concurrent.atomic.AtomicLong
  * HTTP server that bridges the native UI with Kotlin business logic.
  * The native UI makes REST calls to this local server.
  */
+@Serializable
+data class AccessInputRequest(val event: String, val targetId: String? = null, val key: String? = null)
+
+@Serializable
+data class AccessInputResponse(
+    val activationTargetId: String? = null,
+    val isPaused: Boolean = false,
+    val currentTargetId: String? = null,
+    val dwellProgress: Float = 0f,
+)
+
 class KotlinBridge(private val port: Int = 8765) {
     private val scope = CoroutineScope(Dispatchers.Default + kotlinx.coroutines.SupervisorJob())
     private val authToken: String = resolveBridgeToken()
     private val phraseViewModel = PhraseViewModel()
     private val settingsManager = SettingsManager()
+    private val accessInput = AccessInputController()
     private val configRepository: ConfigRepository by lazy { GlobalContext.get().get() }
     private val azureConfigManager = AzureConfigManager()
     private val speechService = LinuxSpeechService()
@@ -296,6 +310,14 @@ class KotlinBridge(private val port: Int = 8765) {
                 jsonObj["highContrastMode"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(highContrastMode = it) }
                 jsonObj["holdToSelectMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(holdToSelectMillis = it.coerceAtLeast(0)) }
                 jsonObj["dwellToSelectMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(dwellToSelectMillis = it.coerceAtLeast(0)) }
+                jsonObj["selectKeyBinding"]?.jsonPrimitive?.contentOrNull?.let { newSettings = newSettings.copy(selectKeyBinding = it) }
+                jsonObj["restModeKeyBinding"]?.jsonPrimitive?.contentOrNull?.let { newSettings = newSettings.copy(restModeKeyBinding = it) }
+                jsonObj["pointerEmphasisStyle"]?.jsonPrimitive?.contentOrNull?.let { value ->
+                    newSettings = newSettings.copy(pointerEmphasisStyle = runCatching {
+                        io.github.jdreioe.wingmate.domain.PointerEmphasisStyle.valueOf(value)
+                    }.getOrDefault(newSettings.pointerEmphasisStyle))
+                }
+                jsonObj["pointerEmphasisScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(pointerEmphasisScale = it.coerceIn(1f, 3f)) }
                 jsonObj["selectionDebounceMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(selectionDebounceMillis = it.coerceAtLeast(0)) }
                 jsonObj["selectionHighlightMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(selectionHighlightMillis = it.coerceAtLeast(0)) }
                 jsonObj["selectionSoundEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(selectionSoundEnabled = it) }
@@ -327,6 +349,38 @@ class KotlinBridge(private val port: Int = 8765) {
                 val updated = json.decodeFromString<Settings>(call.receiveText())
                 settingsManager.updateSettings(updated)
                 call.respond(HttpStatusCode.OK)
+            }
+
+            post("/api/access-input") {
+                val request = call.receive<AccessInputRequest>()
+                val now = System.currentTimeMillis()
+                val response = synchronized(accessInput) {
+                    val effect = when (request.event) {
+                        "enter" -> request.targetId?.let { accessInput.targetEntered(it, now) }
+                        "exit" -> request.targetId?.let { accessInput.targetExited(it, now) }
+                        "focus" -> request.targetId?.let { accessInput.targetFocused(it, now) }
+                        "blur" -> request.targetId?.let { accessInput.targetBlurred(it, now) }
+                        "keydown" -> accessInput.keyDown(
+                            request.key.orEmpty(),
+                            settingsManager.settings.value?.selectKeyBinding.orEmpty(),
+                            settingsManager.settings.value?.restModeKeyBinding.orEmpty(),
+                            now,
+                        )
+                        "keyup" -> { accessInput.keyUp(request.key.orEmpty()); null }
+                        "tick" -> accessInput.tick(now, settingsManager.settings.value?.dwellToSelectMillis ?: 0)
+                        "togglePause" -> accessInput.togglePaused(now)
+                        "clear" -> { accessInput.clearTransientInput(now); null }
+                        else -> null
+                    }
+                    val state = accessInput.state
+                    AccessInputResponse(
+                        activationTargetId = (effect as? AccessInputEffect.Activate)?.targetId,
+                        isPaused = state.isPaused,
+                        currentTargetId = state.currentTargetId,
+                        dwellProgress = state.dwellProgress,
+                    )
+                }
+                call.respond(response)
             }
             
             put("/api/settings/language") {

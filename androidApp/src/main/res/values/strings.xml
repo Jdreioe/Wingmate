@@ -512,6 +512,19 @@
     <string name="speech_math_mode">Math</string>
     <string name="speech_math_mode_description">Read plain-text mathematical expressions using Azure Math pronunciation</string>
     <string name="ui_settings_accessibility_title">Accessibility</string>
+    <string name="ui_settings_interaction">Interaction</string>
+    <string name="interaction_rest_mode">Rest mode</string>
+    <string name="interaction_resume">Resume input</string>
+    <string name="interaction_paused_status">Rest mode — hover selection and the Select key are paused</string>
+    <string name="ui_settings_select_key">Select key</string>
+    <string name="ui_settings_select_key_desc">Press this key once to use the communication target under the pointer or keyboard focus.</string>
+    <string name="ui_settings_rest_key">Rest mode key</string>
+    <string name="ui_settings_rest_key_desc">Pause or resume hover selection and the Select key without precise pointing.</string>
+    <string name="ui_settings_pointer_emphasis">Pointer emphasis</string>
+    <string name="ui_settings_pointer_style">Pointer style</string>
+    <string name="ui_settings_pointer_style_desc">Keep the system pointer or add a high-contrast target marker.</string>
+    <string name="ui_settings_pointer_size">Pointer size</string>
+    <string name="ui_settings_pointer_size_desc">Choose how prominent the target marker should be.</string>
     <string name="ui_settings_show_labels_title">Show button labels</string>
     <string name="ui_settings_show_symbols_title">Show button symbols</string>
     <string name="ui_settings_label_at_top_title">Put label at top of button</string>
@@ -535,6 +548,7 @@
     <string name="board_symbol_unavailable">Symbol set unavailable</string>
     <string name="board_symbol_unavailable_set">Symbol set “%1$s” unavailable</string>
     <string name="common_selected">Selected</string>
+    <string name="common_off">Off</string>
     <string name="common_current">Current</string>
     <string name="common_unknown">Unknown</string>
     <string name="category_all">All</string>

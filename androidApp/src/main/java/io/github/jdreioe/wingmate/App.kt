@@ -12,6 +12,8 @@ import io.github.jdreioe.wingmate.ui.PhraseScreen
 import io.github.jdreioe.wingmate.ui.BoardSetManagerScreen
 import io.github.jdreioe.wingmate.ui.AppTheme
 import io.github.jdreioe.wingmate.ui.PlatformBackHandler
+import io.github.jdreioe.wingmate.ui.InteractionInputRoot
+import io.github.jdreioe.wingmate.ui.rememberReactiveSettings
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
@@ -32,6 +34,7 @@ fun App() {
     val voiceUseCase = koinInject<VoiceUseCase>()
     val backupManager = koinInject<CompleteBackupManager>()
     val restoreRevision by backupManager.restoreRevision.collectAsState()
+    val reactiveSettings by rememberReactiveSettings()
 
     AppTheme {
         Surface(
@@ -142,41 +145,46 @@ fun App() {
 
             // Draw the Surface behind the system UI, while keeping all routed
             // screen content and controls clear of bars, gestures, and cutouts.
-            Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-                key(restoreRevision) {
-                    when (currentScreen) {
-                        Screen.Welcome -> {
-                            WelcomeScreen(
-                                onComplete = ::completeWelcomeAndNavigate,
-                                onBackupRestored = ::navigateAfterBackupRestore
-                            )
-                        }
-                        Screen.Phrases -> {
-                            PhraseScreen(
-                                onBackToWelcome = ::showWelcomeFlow,
-                                onOpenBoardSetManager = {
-                                    createBoardSetOnLaunch = false
-                                    startupBoardSetId = null
-                                    currentScreen = Screen.BoardSets
-                                }
-                            )
-                        }
-                        Screen.BoardSets -> {
-                            BoardSetManagerScreen(
-                                onBackToWelcome = ::showWelcomeFlow,
-                                onBack = {
-                                    createBoardSetOnLaunch = false
-                                    currentScreen = Screen.Phrases
-                                },
-                                createOnLaunch = createBoardSetOnLaunch,
-                                initialBoardSetId = startupBoardSetId
-                            )
-                        }
-                        null -> {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
+            InteractionInputRoot(
+                settings = reactiveSettings,
+                enabled = currentScreen == Screen.Phrases || currentScreen == Screen.BoardSets,
+            ) {
+                Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+                    key(restoreRevision) {
+                        when (currentScreen) {
+                            Screen.Welcome -> {
+                                WelcomeScreen(
+                                    onComplete = ::completeWelcomeAndNavigate,
+                                    onBackupRestored = ::navigateAfterBackupRestore
                                 )
+                            }
+                            Screen.Phrases -> {
+                                PhraseScreen(
+                                    onBackToWelcome = ::showWelcomeFlow,
+                                    onOpenBoardSetManager = {
+                                        createBoardSetOnLaunch = false
+                                        startupBoardSetId = null
+                                        currentScreen = Screen.BoardSets
+                                    }
+                                )
+                            }
+                            Screen.BoardSets -> {
+                                BoardSetManagerScreen(
+                                    onBackToWelcome = ::showWelcomeFlow,
+                                    onBack = {
+                                        createBoardSetOnLaunch = false
+                                        currentScreen = Screen.Phrases
+                                    },
+                                    createOnLaunch = createBoardSetOnLaunch,
+                                    initialBoardSetId = startupBoardSetId
+                                )
+                            }
+                            null -> {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
+                                    )
+                                }
                             }
                         }
                     }

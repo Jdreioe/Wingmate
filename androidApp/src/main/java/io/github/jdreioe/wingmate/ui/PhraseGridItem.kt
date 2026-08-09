@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -129,48 +130,30 @@ fun PhraseGridItem(
         finishedListener = { isSelected = false }
     )
 
-    // Dwell logic state
+    val accessHost = LocalAccessInputHost.current
+    val accessTargetId = "phrase:${item.id}"
+    // Pointer press temporarily removes the hover target so a deliberate click/hold
+    // cannot race the shared dwell timer.
     var isHovered by remember { mutableStateOf(false) }
     var isPointerDown by remember { mutableStateOf(false) }
-    var dwellProgress by remember { mutableStateOf(0f) }
     var showMenu by remember { mutableStateOf(false) }
     
     // Stable scope for fire-and-forget speech (survives hover changes)
     val fishingScope = rememberCoroutineScope()
 
-    // Dwell-to-select must not fire while the pointer is pressed: pressing (a long-press
-    // that opens the context menu) is an explicit action, not a dwell. Gating on the
-    // pointer-up state keeps a long-press from selecting the phrase first.
-    androidx.compose.runtime.LaunchedEffect(isHovered, isPointerDown, settings.dwellToSelectMillis, showMenu) {
-        if (isHovered && !isPointerDown && settings.dwellToSelectMillis > 0 && !isEditMode && !showMenu) {
-            val startTime = System.currentTimeMillis()
-            val duration = settings.dwellToSelectMillis
-            
-            // Auditory Fishing: Whisper label on hover start (fire-and-forget)
-            if (settings.auditoryFishingEnabled) {
-                if (item.text.isNotBlank()) {
-                    fishingScope.launch { runCatching { speechService.speak(item.text, rate = 0.8) } }
-                }
-            }
-            
-            while (isHovered && !isPointerDown && !showMenu) {
-                val now = System.currentTimeMillis()
-                val elapsed = now - startTime
-                dwellProgress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
-                
-                if (elapsed >= duration) {
-                    // #118: only pulse and log when the activation is accepted.
-                    if (runCatching { onPlay() }.getOrDefault(false)) {
-                        isSelected = true
-                        aacLogger.logButtonClick(item.text, phraseId = item.id)
-                    }
-                    dwellProgress = 0f
-                    break
-                }
-                delay(16)
-            }
-        } else {
-            dwellProgress = 0f
+    val primaryAction = {
+        showMenu = false
+        if (runCatching { onTap?.invoke() ?: onPlay() }.getOrDefault(false)) {
+            isSelected = true
+            aacLogger.logButtonClick(item.text, phraseId = item.id)
+        }
+    }
+    if (!isEditMode) RegisterAccessTarget(accessTargetId, primaryAction)
+    val dwellProgress = if (accessHost?.state?.currentTargetId == accessTargetId) accessHost.state.dwellProgress else 0f
+
+    LaunchedEffect(isHovered, settings.auditoryFishingEnabled) {
+        if (isHovered && accessHost?.state?.isPaused != true && settings.auditoryFishingEnabled && item.text.isNotBlank()) {
+            fishingScope.launch { runCatching { speechService.speak(item.text, rate = 0.8) } }
         }
     }
 
@@ -186,24 +169,15 @@ fun PhraseGridItem(
                     while (true) {
                         val event = awaitPointerEvent()
                         when (event.type) {
-                            PointerEventType.Enter -> isHovered = true
-                            PointerEventType.Exit -> isHovered = false
-                            PointerEventType.Press -> isPointerDown = true
-                            PointerEventType.Release -> isPointerDown = false
+                            PointerEventType.Enter -> { isHovered = true; if (!isEditMode && !showMenu) accessHost?.enter(accessTargetId) }
+                            PointerEventType.Exit -> { isHovered = false; accessHost?.exit(accessTargetId) }
+                            PointerEventType.Press -> { isPointerDown = true; accessHost?.exit(accessTargetId) }
+                            PointerEventType.Release -> { isPointerDown = false; if (isHovered && !isEditMode && !showMenu) accessHost?.enter(accessTargetId) }
                         }
                     }
                 }
             }
             .let { baseModifier ->
-                val primaryAction = {
-                    showMenu = false
-                    // #118: pulse and log only after the activation is accepted.
-                    if (runCatching { onTap?.invoke() ?: onPlay() }.getOrDefault(false)) {
-                        isSelected = true
-                        aacLogger.logButtonClick(item.text, phraseId = item.id)
-                    }
-                }
-                
                 if (settings.holdToSelectMillis > 0 && !isEditMode) {
                     baseModifier.pointerInput(settings.holdToSelectMillis) {
                         detectTapGestures(
@@ -232,7 +206,8 @@ fun PhraseGridItem(
                         onLongClick = { showMenu = true }
                     )
                 }
-            },
+            }
+            .accessTargetFocus(accessTargetId, if (isEditMode) null else accessHost),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(
             containerColor = bgColor,
@@ -392,6 +367,20 @@ fun PhraseGridItem(
                     modifier = Modifier
                         .matchParentSize()
                         .border(4.dp, selectionHighlightColor, RoundedCornerShape(8.dp))
+                )
+            }
+            if (accessHost?.state?.currentTargetId == accessTargetId &&
+                settings.pointerEmphasisStyle != io.github.jdreioe.wingmate.domain.PointerEmphasisStyle.System
+            ) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .padding((6.dp / settings.pointerEmphasisScale.coerceIn(1f, 3f)))
+                        .border(
+                            (3.dp * settings.pointerEmphasisScale.coerceIn(1f, 3f)),
+                            MaterialTheme.colorScheme.primary,
+                            RoundedCornerShape(if (settings.pointerEmphasisStyle == io.github.jdreioe.wingmate.domain.PointerEmphasisStyle.Ring) 24.dp else 2.dp)
+                        )
                 )
             }
         }
