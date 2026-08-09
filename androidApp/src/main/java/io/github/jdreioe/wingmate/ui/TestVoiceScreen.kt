@@ -39,7 +39,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                 voiceUseCase.selected()
             }
         } catch (e: Exception) {
-            println("Failed to load selected voice: $e")
+            println("Failed to load selected voice (${e::class.simpleName})")
         } finally {
             loading = false
         }
@@ -116,7 +116,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                             try {
                                     speechService.stop()
                             } catch (e: Exception) {
-                                println("Failed to stop speech: $e")
+                                println("Failed to stop speech (${e::class.simpleName})")
                             } finally {
                                 isPlaying = false
                             }
@@ -135,7 +135,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                                     )
                                 }
                             } catch (e: Exception) {
-                                println("Failed to speak: $e")
+                                println("Failed to speak (${e::class.simpleName})")
                             } finally {
                                 isPlaying = false
                             }
@@ -190,7 +190,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                             try {
                                     speechService.stop()
                             } catch (e: Exception) {
-                                println("Failed to stop speech: $e")
+                                println("Failed to stop speech (${e::class.simpleName})")
                             }
                             onBack()
                         }
@@ -207,7 +207,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                             try {
                                     speechService.stop()
                             } catch (e: Exception) {
-                                println("Failed to stop speech: $e")
+                                println("Failed to stop speech (${e::class.simpleName})")
                             }
                             onNext()
                         }

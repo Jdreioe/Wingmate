@@ -29,7 +29,7 @@ class IosSaidTextRepository : SaidTextRepository {
         )
         existing.add(enriched)
         saveAll(existing)
-        saidLogger.debug { "Saved SaidText item id=${enriched.id} voice=${enriched.voiceName} lang=${enriched.primaryLanguage} path=${enriched.audioFilePath}" }
+        saidLogger.debug { "Saved SaidText item id=${enriched.id} voice=${enriched.voiceName} lang=${enriched.primaryLanguage}" }
         enriched
     }
 

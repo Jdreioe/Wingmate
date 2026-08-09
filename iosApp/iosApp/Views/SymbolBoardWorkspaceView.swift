@@ -517,6 +517,12 @@ struct SymbolBoardWorkspaceView: View {
                         }
                     }
                 } else {
+                    Button(action: { isFullscreen = true }) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.title3)
+                            .foregroundColor(.blue)
+                    }
+                    .accessibilityLabel(Text("playback.fullscreen"))
                     Button(action: { showHiddenButtons.toggle() }) {
                         Image(systemName: showHiddenButtons ? "eye.slash" : "eye")
                             .font(.title3)
@@ -619,6 +625,31 @@ struct SymbolBoardWorkspaceView: View {
         }
         .task(id: boardPredictionTaskId) {
             await model.refreshBoardPredictions(context: boardSentenceText)
+        }
+        .fullScreenCover(isPresented: $isFullscreen) {
+            VStack(spacing: 12) {
+                HStack {
+                    if model.boardMessageBarVisible {
+                        SentenceBoxView(
+                            phrases: boardSentenceTokens,
+                            onDelete: { index in
+                                guard boardSentenceTokens.indices.contains(index) else { return }
+                                boardSentenceTokens.remove(at: index)
+                            },
+                            onSpeak: {
+                                let sentence = boardSentenceText
+                                guard !sentence.isEmpty else { return }
+                                model.speakBoardSentence(sentence, boardSetId: boardSetId)
+                            }
+                        )
+                    }
+                    Button("common.done") { isFullscreen = false }
+                        .font(.headline)
+                }
+                boardPreview(isEditMode: false)
+            }
+            .padding(16)
+            .background(Color(.systemBackground))
         }
     }
 

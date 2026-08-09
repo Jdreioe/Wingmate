@@ -243,7 +243,7 @@ class SecureAzureSpeechService(
             }
             lookup(langCode, requireLanguageTag = false) ?: if (langCode != "en") lookup("en", requireLanguageTag = true) else null
         } catch (e: Exception) {
-            logger.warn(e) { "Failed to guess pronunciation for '$text'" }
+            logger.warn { "Failed to guess pronunciation" }
             null
         }
     }

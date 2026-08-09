@@ -77,8 +77,7 @@ class TokenExchangeClient(
                     TokenResult.RateLimited
                 }
                 else -> {
-                    val errorBody = response.bodyAsText()
-                    logger.error { "Token exchange failed: ${response.status} - $errorBody" }
+                    logger.error { "Token exchange failed: ${response.status}" }
                     TokenResult.Error("Token exchange failed: ${response.status}")
                 }
             }

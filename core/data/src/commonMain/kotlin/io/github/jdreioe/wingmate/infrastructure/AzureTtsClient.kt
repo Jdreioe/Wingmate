@@ -50,7 +50,7 @@ object AzureTtsClient {
 
         // Enhanced logging with request details
         logger.info { "Azure TTS request -> url=$url (endpoint=${config.endpoint}, format=${audioFormat.value})" }
-        logger.debug { "SSML length=${ssml.length} chars, preview=${ssml.take(200).replace(Regex("[\r\n]+"), " ")}" }
+        logger.debug { "SSML length=${ssml.length} chars" }
 
         try {
             val response: HttpResponse = client.post(url) {
@@ -79,29 +79,24 @@ object AzureTtsClient {
                     return bytes
                 }
                 response.status.value == 401 -> {
-                    val body = response.bodyAsText()
                     logger.error { "Azure TTS authentication failed: ${response.status}" }
                     throw RuntimeException("Azure TTS authentication failed. Please check your subscription key.")
                 }
                 response.status.value == 429 -> {
-                    val body = response.bodyAsText()
                     logger.error { "Azure TTS rate limit exceeded: ${response.status}" }
                     throw RuntimeException("Azure TTS rate limit exceeded. Please try again later.")
                 }
                 response.status.value in 400..499 -> {
-                    val body = response.bodyAsText()
-                    logger.error { "Azure TTS client error: ${response.status} - ${body.take(500)}" }
+                    logger.error { "Azure TTS client error: ${response.status}" }
                     throw RuntimeException("Azure TTS request error: ${response.status.description}")
                 }
                 response.status.value in 500..599 -> {
-                    val body = response.bodyAsText()
-                    logger.error { "Azure TTS server error: ${response.status} - ${body.take(500)}" }
+                    logger.error { "Azure TTS server error: ${response.status}" }
                     throw RuntimeException("Azure TTS server error: ${response.status.description}")
                 }
                 else -> {
-                    val body = response.bodyAsText()
-                    logger.error { "Azure TTS failed: ${response.status} - ${body.take(500)}" }
-                    throw RuntimeException("Azure TTS failed: ${response.status} - ${response.status.description}")
+                    logger.error { "Azure TTS failed: ${response.status}" }
+                    throw RuntimeException("Azure TTS failed: ${response.status.description}")
                 }
             }
         } catch (e: Exception) {
@@ -610,8 +605,7 @@ object AzureTtsClient {
                     throw RuntimeException("Azure TTS rate limit exceeded. Please try again later.")
                 }
                 else -> {
-                    val body = response.bodyAsText()
-                    logger.error { "Azure TTS failed: ${response.status} - ${body.take(500)}" }
+                    logger.error { "Azure TTS failed: ${response.status}" }
                     throw RuntimeException("Azure TTS failed: ${response.status}")
                 }
             }
@@ -621,7 +615,7 @@ object AzureTtsClient {
             throw e
         } catch (e: Exception) {
             logger.error(e) { "Azure TTS network error" }
-            throw RuntimeException("Azure TTS network error: ${e.message}", e)
+            throw RuntimeException("Azure TTS network error", e)
         }
     }
 
@@ -656,8 +650,7 @@ object AzureTtsClient {
                 logger.info { "Fetched ${azureVoices.size} voices from Azure" }
                 return azureVoices.map { it.toDomain() }
             } else {
-                val body = response.bodyAsText()
-                logger.error { "Failed to fetch voices: ${response.status} - $body" }
+                logger.error { "Failed to fetch voices: ${response.status}" }
                 throw RuntimeException("Failed to fetch voices: ${response.status}")
             }
         } catch (e: Exception) {

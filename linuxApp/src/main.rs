@@ -244,6 +244,25 @@ impl Default for Settings {
     }
 }
 
+impl Settings {
+    fn font_px(&self, base: f32) -> f32 {
+        scaled_px(base, self.font_size_scale, 10.0, 96.0)
+    }
+
+    fn button_px(&self, base: f32) -> f32 {
+        scaled_px(base, self.button_scale, 36.0, 240.0)
+    }
+
+    fn input_px(&self, base: f32) -> f32 {
+        scaled_px(base, self.input_field_scale, 40.0, 240.0)
+    }
+}
+
+fn scaled_px(base: f32, scale: f32, minimum: f32, maximum: f32) -> f32 {
+    let safe_scale = if scale.is_finite() { scale } else { 1.0 };
+    (base * safe_scale.clamp(0.5, 2.0)).clamp(minimum, maximum)
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct Pronunciation {
     word: String,
@@ -1890,6 +1909,9 @@ impl cosmic::Application for Wingmate {
             }
             Message::SettingFloat(key, value) => {
                 match key {
+                    "fontSizeScale" => self.settings.font_size_scale = value,
+                    "buttonScale" => self.settings.button_scale = value,
+                    "inputFieldScale" => self.settings.input_field_scale = value,
                     "scanDwellTimeSeconds" => self.settings.scan_dwell_time_seconds = value,
                     "scanAutoAdvanceSeconds" => self.settings.scan_auto_advance_seconds = value,
                     _ => {}
@@ -2887,24 +2909,28 @@ impl Wingmate {
             .spacing(16)
             .into();
         }
-        let input = text_input(&fl!("communicate-input-placeholder"), &self.draft)
-            .on_input(Message::DraftChanged)
-            .on_submit(Message::Speak(self.draft.clone()))
-            .padding(16)
-            .size(22);
+        let input: Element<'_, Message> = container(
+            text_input(&fl!("communicate-input-placeholder"), &self.draft)
+                .on_input(Message::DraftChanged)
+                .on_submit(Message::Speak(self.draft.clone()))
+                .padding(16)
+                .size(self.settings.font_px(22.0)),
+        )
+        .height(self.settings.input_px(56.0))
+        .into();
 
         let predictions = row(self.predictions.iter().take(6).map(|word| {
-            button(text(word).size(15))
+            button(text(word).size(self.settings.font_px(15.0)))
                 .on_press(Message::PredictionSelected(word.clone()))
-                .height(48)
+                .height(self.settings.button_px(48.0))
                 .padding([10, 14])
                 .into()
         }))
         .spacing(8);
 
         let all_target = AccessTarget::Category(None);
-        let mut all_button = button(text(fl!("communicate-all")))
-            .height(48)
+        let mut all_button = button(text(fl!("communicate-all")).size(self.settings.font_px(16.0)))
+            .height(self.settings.button_px(48.0))
             .padding([10, 16]);
         if self.settings.hold_to_select_millis == 0 {
             all_button = all_button.on_press(Message::AccessActivate(all_target.clone()));
@@ -2915,9 +2941,12 @@ impl Wingmate {
         let mut categories = row![self.access_widget(all_button.into(), all_target)].spacing(8);
         for category in &self.categories {
             let target = AccessTarget::Category(Some(category.id.clone()));
-            let mut category_button = button(category.name.as_deref().unwrap_or("Unnamed"))
-                .height(48)
-                .padding([10, 16]);
+            let mut category_button = button(
+                text(category.name.as_deref().unwrap_or("Unnamed"))
+                    .size(self.settings.font_px(16.0)),
+            )
+            .height(self.settings.button_px(48.0))
+            .padding([10, 16]);
             if self.settings.hold_to_select_millis == 0 {
                 category_button = category_button.on_press(Message::AccessActivate(target.clone()));
             }
@@ -2960,7 +2989,7 @@ impl Wingmate {
             categories = categories.push(
                 button(text(fl!("communicate-history")))
                     .on_press(Message::SelectCategory(Some("__history__".into())))
-                    .height(48)
+                    .height(self.settings.button_px(48.0))
                     .padding([10, 16]),
             );
         }
@@ -3010,7 +3039,8 @@ impl Wingmate {
                     .spacing(4)
                     .align_x(cosmic::iced::alignment::Alignment::Center);
                 if self.settings.label_at_top && show_label {
-                    phrase_content = phrase_content.push(text(label.clone()).size(18));
+                    phrase_content =
+                        phrase_content.push(text(label.clone()).size(self.settings.font_px(18.0)));
                 }
                 if show_symbol {
                     phrase_content = phrase_content.push(
@@ -3024,9 +3054,12 @@ impl Wingmate {
                     );
                 }
                 if !self.settings.label_at_top && show_label {
-                    phrase_content = phrase_content.push(text(label).size(18));
+                    phrase_content =
+                        phrase_content.push(text(label).size(self.settings.font_px(18.0)));
                 }
-                let mut phrase_button = button(phrase_content).width(Fill).height(72);
+                let mut phrase_button = button(phrase_content)
+                    .width(Fill)
+                    .height(self.settings.button_px(72.0));
                 if self.settings.hold_to_select_millis == 0 {
                     phrase_button =
                         phrase_button.on_press(Message::AccessActivate(access_target.clone()));
@@ -3184,7 +3217,7 @@ impl Wingmate {
         .wrap();
 
         column![
-            text(fl!("communicate-title")).size(30),
+            text(fl!("communicate-title")).size(self.settings.font_px(30.0)),
             input,
             predictions,
             ssml,
@@ -3192,7 +3225,7 @@ impl Wingmate {
                 .direction(scrollable::Direction::Horizontal(
                     scrollable::Scrollbar::default()
                 ))
-                .height(48),
+                .height(self.settings.button_px(48.0)),
             scrollable(grid).height(Fill),
             if self.selected_category.as_deref() == Some("__history__") {
                 row![labeled_icon_button(
@@ -3258,7 +3291,9 @@ impl Wingmate {
     fn fullscreen_view(&self) -> Element<'_, Message> {
         container(
             column![
-                text(&self.draft).size(52).width(Fill),
+                text(&self.draft)
+                    .size(self.settings.font_px(52.0))
+                    .width(Fill),
                 row![
                     touch_icon_button(
                         "media-playback-start-symbolic",
@@ -3293,13 +3328,13 @@ impl Wingmate {
                     container(
                         row![
                             column![
-                                text(&set.name).size(20),
+                                text(&set.name).size(self.settings.font_px(20.0)),
                                 text(format!(
                                     "{} pages{}",
                                     set.board_ids.len(),
                                     if set.is_locked { " · locked" } else { "" }
                                 ))
-                                .size(13),
+                                .size(self.settings.font_px(13.0)),
                             ]
                             .width(Fill),
                             compact_icon_button(
@@ -3350,7 +3385,7 @@ impl Wingmate {
             });
 
         column![
-            text(fl!("nav-screens")).size(30),
+            text(fl!("nav-screens")).size(self.settings.font_px(30.0)),
             text(fl!("screens-description")),
             labeled_icon_button(
                 "document-open-symbolic",
@@ -3660,9 +3695,10 @@ impl Wingmate {
                 .spacing(4)
                 .align_x(cosmic::iced::alignment::Alignment::Center);
             if label_at_top && show_label {
-                cell_content = cell_content.push(text(label.clone()).size(18));
+                cell_content =
+                    cell_content.push(text(label.clone()).size(self.settings.font_px(18.0)));
             }
-if show_symbol {
+            if show_symbol {
                 cell_content = cell_content.push(
                     self.image_for(
                         symbol_image.map(|image| image.id.as_str()),
@@ -3677,7 +3713,7 @@ if show_symbol {
                 );
             }
             if !label_at_top && show_label {
-                cell_content = cell_content.push(text(label).size(18));
+                cell_content = cell_content.push(text(label).size(self.settings.font_px(18.0)));
             }
             let row_span = field.row_span.max(1);
             let column_span = field.column_span.max(1);
@@ -4279,13 +4315,36 @@ if show_symbol {
                     )
                     .into(),
                 ),
+                settings_row(
+                    fl!("display-font-scale"),
+                    slider(0.75..=1.5, self.settings.font_size_scale, |value| {
+                        Message::SettingFloat("fontSizeScale", value)
+                    })
+                    .step(0.05)
+                    .into(),
+                ),
+                settings_row(
+                    fl!("display-button-scale"),
+                    slider(0.75..=1.5, self.settings.button_scale, |value| {
+                        Message::SettingFloat("buttonScale", value)
+                    })
+                    .step(0.05)
+                    .into(),
+                ),
+                settings_row(
+                    fl!("display-input-scale"),
+                    slider(0.75..=1.5, self.settings.input_field_scale, |value| {
+                        Message::SettingFloat("inputFieldScale", value)
+                    })
+                    .step(0.05)
+                    .into(),
+                ),
                 checkbox(self.settings.high_contrast_mode)
                     .label(fl!("display-high-contrast"))
                     .on_toggle(|enabled| Message::SettingBool("highContrastMode", enabled)),
                 checkbox(self.settings.board_show_message_bar)
                     .label(fl!("display-message-bar"))
                     .on_toggle(|enabled| Message::SettingBool("boardShowMessageBar", enabled)),
-                text(fl!("display-deferred-help")),
             ]
             .spacing(14),
         )
@@ -6004,5 +6063,13 @@ mod tests {
         assert_eq!(fl!("nav-keyboard"), "Keyboard");
         assert_eq!(fl!("voice-preview"), "Preview voice");
         assert_eq!(fl!("editing-access-title"), "Editing access code");
+    }
+
+    #[test]
+    fn interface_scaling_is_bounded_and_handles_invalid_preferences() {
+        assert_eq!(scaled_px(20.0, 1.25, 10.0, 96.0), 25.0);
+        assert_eq!(scaled_px(20.0, 10.0, 10.0, 96.0), 40.0);
+        assert_eq!(scaled_px(20.0, f32::NAN, 10.0, 96.0), 20.0);
+        assert_eq!(scaled_px(8.0, 0.5, 10.0, 96.0), 10.0);
     }
 }

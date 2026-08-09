@@ -485,3 +485,4 @@
 "boardset.cell.action.home" = "Go to home page";
 "boardset.cell.action.speak" = "Speak sentence";
 "boardset.cell.action.prediction" = "Word prediction";
+"playback.fullscreen" = "Show full screen";

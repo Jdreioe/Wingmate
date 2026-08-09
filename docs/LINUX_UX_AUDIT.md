@@ -22,17 +22,13 @@ feature/UX work on top of the shared Kotlin logic.
   OBF/OBZ import + OBZ export, delete; board workspace (page tabs, grid, cell
   editor with OpenSymbols search, cell label/vocalization, navigation links).
 
-## 2. Remaining phantom settings
+## 2. Settings behavior
 
-These rows in Settings write through `PUT /api/settings` (and match the shared
-`Settings` model) but never influence a widget:
-
-| Setting | Where it saves | UI that ignores it |
-| --- | --- | --- |
-| `fontSizeScale` / `buttonScale` / `inputFieldScale` | `main.rs:832-847` | all text sizes and button heights are hard-coded (`size(18)`, `height(72)`…) |
-Hold, dwell, selection highlighting, debounce, selection sound, auditory exploration,
-and single-switch scanning are now implemented through one Linux activation path.
-The remaining save-only settings are the per-control scaling values above.
+Display scaling (`fontSizeScale`, `buttonScale`, and `inputFieldScale`) is exposed
+in the native Display settings and applied to the communication workspace, phrase
+grid, board grid, screen library, message input, and fullscreen message. Hold,
+dwell, selection highlighting, debounce, selection sound, auditory exploration,
+and single-switch scanning are implemented through one Linux activation path.
 
 ## 3. Missing features / UX (vs. Android + iOS parity)
 
@@ -78,9 +74,8 @@ The remaining save-only settings are the per-control scaling values above.
     stores only its salted verifier in Secret Service or KWallet, honors the
     session timeout, and gates vocabulary, category, screen/page, and field edits
     without blocking communication.
-15. **Onboarding** — functional but has no OpenBoardSet/screens preview, and
-    `startupBoardSetId` is not honored when launching into Screens mode (Mode
-    only key is `startupMode`).
+15. **Onboarding** — functional but has no OpenBoardSet/screens preview. The
+    configured `startupBoardSetId` is honored when launching into Screens mode.
 16. **`oscKeyboardScale`/`virtualMicEnabled`** — shared settings exist but are
     not exposed on Linux (accept as Linux-office posture only if documented).
 

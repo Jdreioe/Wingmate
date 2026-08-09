@@ -94,3 +94,4 @@ iosApp/iosApp 20*/
 
 ## Node tooling
 **/node_modules/
+**/.wrangler/
