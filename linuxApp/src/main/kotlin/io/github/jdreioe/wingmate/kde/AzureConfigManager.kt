@@ -44,11 +44,7 @@ class AzureConfigManager {
             val voices = AzureTtsClient.getVoices(client, config)
             if (voices.isNotEmpty()) {
                 voiceRepository.saveVoices(voices)
-                // Filter logic could go here (e.g. only selected language)
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            throw e
         } finally {
             client.close()
         }
