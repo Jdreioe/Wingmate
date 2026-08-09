@@ -5845,7 +5845,7 @@ fn find_fat_jar() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("build/libs/linuxApp-all.jar"))
 }
 
-const TOKEN_HEADER: &str = "x-wingate-token";
+const TOKEN_HEADER: &str = "x-wingmate-token";
 
 fn state_home() -> PathBuf {
     if let Ok(state) = env::var("XDG_STATE_HOME") {
@@ -5955,6 +5955,11 @@ fn start_bridge_server() -> Option<Child> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bridge_token_header_matches_the_kotlin_bridge_contract() {
+        assert_eq!(TOKEN_HEADER, "x-wingmate-token");
+    }
 
     #[test]
     fn editing_access_gate_covers_content_mutations_but_not_communication() {

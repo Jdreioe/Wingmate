@@ -20,7 +20,7 @@ Details:
 ## Linux Azure credentials
 
 The Linux client stores Azure Speech configuration in Secret Service/libsecret
-(`secret-tool`) or KWallet (`kwallet-query`). There is no plaintext file fallback:
+(`secret-tool`) or KWallet (through its session D-Bus API). There is no plaintext file fallback:
 when neither secure backend is installed or unlocked, saving fails and the UI must
 ask the user to make a keyring available. Legacy `~/.config/wingmate/config.json`
 is deleted only after a verified secure write.
