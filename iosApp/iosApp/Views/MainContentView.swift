@@ -34,6 +34,7 @@ struct MainContentView: View {
         return isHistorySelected && model.historyVisible
     }
     @State private var isHistorySelected: Bool = false
+    @State private var isMessageFullscreen: Bool = false
     
     @ViewBuilder
     private func phraseCell(for p: Shared.Phrase) -> some View {
@@ -278,11 +279,44 @@ struct MainContentView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("common.clear"))
                 .accessibilityHint(Text("accessibility.playback.clear_hint"))
+                Button(action: { isMessageFullscreen = true }) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right.circle")
+                        .font(.system(size: CGFloat(uiPlayIconSize)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("playback.fullscreen"))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .accessibilityElement(children: .contain)
             .accessibilityHidden(hidePlaybackFromScanning)
+        }
+        .fullScreenCover(isPresented: $isMessageFullscreen) {
+            VStack(spacing: 24) {
+                HStack {
+                    Spacer()
+                    Button("common.done") { isMessageFullscreen = false }
+                        .font(.headline)
+                }
+                ScrollView {
+                    Text(model.input.isEmpty ? NSLocalizedString("tts.placeholder", comment: "") : model.input)
+                        .font(.system(size: max(36, CGFloat(uiInputFontSize) * 2.4)))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                HStack(spacing: 32) {
+                    Button(action: { model.speak(model.input) }) {
+                        Label("playback.play", systemImage: "play.circle.fill")
+                    }
+                    .disabled(model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button(action: { model.stopTts() }) {
+                        Label("playback.stop", systemImage: "stop.circle")
+                    }
+                }
+                .font(.title2)
+            }
+            .padding(24)
+            .background(Color(.systemBackground))
         }
     }
 }
