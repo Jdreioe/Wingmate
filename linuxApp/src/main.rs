@@ -619,6 +619,8 @@ enum Message {
     ActivateBoardButton(String, String),
     BoardSentenceBackspace,
     BoardSentenceClear,
+    BoardNavigateHome,
+    BoardNavigateBack,
     BoardSessionUpdated(Result<BoardSessionResponse, String>),
     SelectCategory(Option<String>),
     CategorySelected(Result<(), String>),
@@ -1206,6 +1208,23 @@ impl cosmic::Application for Wingmate {
                         .api
                         .update_board_session(board_id, "clear", None, Vec::new())
                         .map(cosmic::Action::App);
+                }
+            }
+            Message::BoardNavigateHome => {
+                self.board_stack.clear();
+                self.active_board_id = self
+                    .board_graph
+                    .as_ref()
+                    .map(|graph| graph.board_set.root_board_id.clone());
+            }
+            Message::BoardNavigateBack => {
+                if let Some(previous) = self.board_stack.pop() {
+                    self.active_board_id = Some(previous);
+                } else {
+                    self.active_board_id = self
+                        .board_graph
+                        .as_ref()
+                        .map(|graph| graph.board_set.root_board_id.clone());
                 }
             }
             Message::BoardSessionUpdated(result) => match result {
@@ -2241,6 +2260,18 @@ impl cosmic::Application for Wingmate {
                 if self.board_edit_mode {
                     self.board_sentence_tokens.clear();
                     self.board_sentence.clear();
+                    if let Some(board) = self.board_graph.as_ref().and_then(|graph| {
+                        graph.boards.iter().find(|board| {
+                            Some(board.id.as_str()) == self.active_board_id.as_deref()
+                        })
+                    }) {
+                        self.current_page_name = board.name.clone().unwrap_or_default();
+                        if let Some(grid) = &board.grid {
+                            self.board_rows = grid.order.len() as i32;
+                            self.board_columns =
+                                grid.order.iter().map(Vec::len).max().unwrap_or(1) as i32;
+                        }
+                    }
                 }
             }
             Message::SelectBoardCell(row, column) => {
@@ -2460,8 +2491,17 @@ impl cosmic::Application for Wingmate {
             Page::Fullscreen => unreachable!(),
         };
 
+        let content_padding = if self.page == Page::Screens && self.board_graph.is_some() {
+            10
+        } else {
+            24
+        };
+
         column![
-            container(content).padding(24).width(Fill).height(Fill),
+            container(content)
+                .padding(content_padding)
+                .width(Fill)
+                .height(Fill),
             self.status_view(),
         ]
         .height(Fill)
@@ -3211,98 +3251,159 @@ impl Wingmate {
             return self.board_workspace_view(graph);
         }
 
-        let library = self
+        let board_cards = self
             .board_sets
             .iter()
-            .fold(column![].spacing(10), |list, set| {
-                list.push(
-                    container(
-                        row![
-                            column![
-                                text(&set.name).size(20),
-                                text(format!(
-                                    "{} pages{}",
-                                    set.board_ids.len(),
-                                    if set.is_locked { " · locked" } else { "" }
-                                ))
-                                .size(13),
-                            ]
-                            .width(Fill),
-                            compact_icon_button(
-                                "media-playback-start-symbolic",
-                                "Run screen set",
-                                Message::OpenBoardSet(set.id.clone(), false)
-                            ),
-                            compact_icon_button(
-                                "document-edit-symbolic",
-                                "Edit screen set",
-                                Message::OpenBoardSet(set.id.clone(), true)
-                            ),
-                            compact_icon_button(
-                                "edit-copy-symbolic",
-                                "Duplicate screen set",
-                                Message::DuplicateBoardSet(set.id.clone())
-                            ),
-                            compact_icon_button(
-                                if set.is_locked {
-                                    "changes-allow-symbolic"
-                                } else {
-                                    "changes-prevent-symbolic"
-                                },
-                                if set.is_locked {
-                                    "Unlock screen set"
-                                } else {
-                                    "Lock screen set"
-                                },
-                                Message::ToggleBoardSetLock(set.id.clone())
-                            ),
-                            compact_icon_button(
-                                "document-save-symbolic",
-                                "Export screen set",
-                                Message::ExportBoardSet(set.id.clone(), set.name.clone())
-                            ),
-                            compact_icon_button(
-                                "edit-delete-symbolic",
-                                "Delete screen set",
-                                Message::DeleteBoardSet(set.id.clone())
-                            ),
-                        ]
-                        .spacing(8)
-                        .align_y(cosmic::iced::alignment::Alignment::Center)
-                        .wrap(),
-                    )
-                    .padding(10),
+            .fold(row![].spacing(16), |cards, set| {
+                let run_card = button(
+                    column![
+                        symbolic_icon("view-grid-symbolic").size(42).icon(),
+                        text(&set.name).size(24),
+                        text(fl!(
+                            "screens-page-count",
+                            count = (set.board_ids.len() as i64),
+                            locked = if set.is_locked {
+                                fl!("screens-locked-suffix")
+                            } else {
+                                String::new()
+                            }
+                        ))
+                        .size(14),
+                    ]
+                    .spacing(10)
+                    .align_x(cosmic::iced::alignment::Alignment::Center),
                 )
-            });
+                .on_press(Message::OpenBoardSet(set.id.clone(), false))
+                .width(Fill)
+                .height(150)
+                .padding(18);
+
+                cards.push(
+                    container(
+                        column![
+                            run_card,
+                            row![
+                                compact_icon_button(
+                                    "document-edit-symbolic",
+                                    fl!("screens-edit-set"),
+                                    Message::OpenBoardSet(set.id.clone(), true)
+                                ),
+                                compact_icon_button(
+                                    "edit-copy-symbolic",
+                                    fl!("screens-duplicate-set"),
+                                    Message::DuplicateBoardSet(set.id.clone())
+                                ),
+                                compact_icon_button(
+                                    if set.is_locked {
+                                        "changes-allow-symbolic"
+                                    } else {
+                                        "changes-prevent-symbolic"
+                                    },
+                                    if set.is_locked {
+                                        fl!("screens-unlock-set")
+                                    } else {
+                                        fl!("screens-lock-set")
+                                    },
+                                    Message::ToggleBoardSetLock(set.id.clone())
+                                ),
+                                compact_icon_button(
+                                    "document-save-symbolic",
+                                    fl!("screens-export-set"),
+                                    Message::ExportBoardSet(set.id.clone(), set.name.clone())
+                                ),
+                                compact_icon_button(
+                                    "edit-delete-symbolic",
+                                    fl!("screens-delete-set"),
+                                    Message::DeleteBoardSet(set.id.clone())
+                                ),
+                            ]
+                            .spacing(6)
+                            .align_y(cosmic::iced::alignment::Alignment::Center),
+                        ]
+                        .spacing(8),
+                    )
+                    .class(cosmic::theme::iced::Container::Card)
+                    .padding(10)
+                    .width(310),
+                )
+            })
+            .wrap();
+
+        let library: Element<'_, Message> = if self.board_sets.is_empty() {
+            container(
+                column![
+                    symbolic_icon("view-grid-symbolic").size(56).icon(),
+                    text(fl!("screens-empty-title")).size(24),
+                    text(fl!("screens-empty-description")),
+                ]
+                .spacing(10)
+                .align_x(cosmic::iced::alignment::Alignment::Center),
+            )
+            .center(Fill)
+            .into()
+        } else {
+            scrollable(container(board_cards).padding([8, 2]))
+                .height(Fill)
+                .into()
+        };
+
+        let create_panel = container(
+            column![
+                text(fl!("screens-create-title")).size(20),
+                row![
+                    text_input(&fl!("screens-new-set"), &self.new_board_set)
+                        .on_input(Message::BoardSetNameChanged)
+                        .on_submit(Message::CreateBoardSet)
+                        .padding(12)
+                        .width(Fill),
+                    column![
+                        text(fl!("screens-rows", count = self.board_rows)).size(14),
+                        slider(1..=12, self.board_rows, Message::BoardRowsChanged).width(150),
+                    ]
+                    .spacing(4),
+                    column![
+                        text(fl!("screens-columns", count = self.board_columns)).size(14),
+                        slider(1..=12, self.board_columns, Message::BoardColumnsChanged).width(150),
+                    ]
+                    .spacing(4),
+                    checkbox(self.calculator_template)
+                        .label(fl!("screens-calculator-template"))
+                        .on_toggle(Message::CalculatorTemplate),
+                    labeled_icon_button(
+                        "list-add-symbolic",
+                        fl!("screens-create"),
+                        Message::CreateBoardSet
+                    ),
+                ]
+                .spacing(14)
+                .align_y(cosmic::iced::alignment::Alignment::Center)
+                .wrap(),
+            ]
+            .spacing(10),
+        )
+        .class(cosmic::theme::iced::Container::Card)
+        .padding(16);
 
         column![
-            text(fl!("nav-screens")).size(30),
-            text(fl!("screens-description")),
-            labeled_icon_button(
-                "document-open-symbolic",
-                "Import OBF/OBZ…",
-                Message::ImportBoardSet
-            ),
-            scrollable(library).height(Fill),
             row![
-                text_input(&fl!("screens-new-set"), &self.new_board_set)
-                    .on_input(Message::BoardSetNameChanged)
-                    .on_submit(Message::CreateBoardSet)
-                    .padding(12),
-                text(format!("Rows {}", self.board_rows)),
-                slider(1..=12, self.board_rows, Message::BoardRowsChanged).width(120),
-                text(format!("Columns {}", self.board_columns)),
-                slider(1..=12, self.board_columns, Message::BoardColumnsChanged).width(120),
-                checkbox(self.calculator_template)
-                    .label(fl!("screens-calculator-template"))
-                    .on_toggle(Message::CalculatorTemplate),
-                labeled_icon_button("list-add-symbolic", "Create", Message::CreateBoardSet),
+                column![
+                    text(fl!("screens-library-title")).size(30),
+                    text(fl!("screens-description")),
+                ]
+                .spacing(4)
+                .width(Fill),
+                labeled_icon_button(
+                    "document-open-symbolic",
+                    fl!("screens-import"),
+                    Message::ImportBoardSet
+                ),
             ]
-            .spacing(8)
-            .align_y(cosmic::iced::alignment::Alignment::Center)
-            .wrap(),
+            .spacing(16)
+            .align_y(cosmic::iced::alignment::Alignment::Center),
+            library,
+            create_panel,
         ]
-        .spacing(14)
+        .spacing(16)
         .into()
     }
 
@@ -3573,27 +3674,6 @@ impl Wingmate {
                 .and_then(|button| button.image_id.as_ref())
                 .and_then(|image_id| board.images.iter().find(|image| &image.id == image_id))
                 .and_then(|item| item.url.as_deref().or(item.path.as_deref()));
-            let has_symbol = symbol_source.is_some();
-            let show_symbol = has_symbol && show_symbols;
-            let show_label = show_labels || !show_symbol;
-            let mut cell_content = column![]
-                .spacing(4)
-                .align_x(cosmic::iced::alignment::Alignment::Center);
-            if label_at_top && show_label {
-                cell_content = cell_content.push(text(label.clone()).size(18));
-            }
-            if show_symbol {
-                cell_content =
-                    cell_content.push(self.image_for(symbol_source, 52.0).unwrap_or_else(|| {
-                        symbolic_icon("image-x-generic-symbolic")
-                            .size(32)
-                            .icon()
-                            .into()
-                    }));
-            }
-            if !label_at_top && show_label {
-                cell_content = cell_content.push(text(label).size(18));
-            }
             let row_span = field.row_span.max(1);
             let column_span = field.column_span.max(1);
             let field_width =
@@ -3602,6 +3682,31 @@ impl Wingmate {
                 cell_height * row_span as f32 + cell_gap * row_span.saturating_sub(1) as f32;
             let field_x = field.column as f32 * (cell_width + cell_gap);
             let field_y = field.row as f32 * (cell_height + cell_gap);
+            let symbol_height = (field_height * 0.58).clamp(40.0, 160.0);
+            let label_size = (18.0 * self.settings.font_size_scale).clamp(16.0, 30.0);
+            let has_symbol = symbol_source.is_some();
+            let show_symbol = has_symbol && show_symbols;
+            let show_label = show_labels || !show_symbol;
+            let mut cell_content = column![]
+                .spacing(4)
+                .align_x(cosmic::iced::alignment::Alignment::Center);
+            if label_at_top && show_label {
+                cell_content = cell_content.push(text(label.clone()).size(label_size));
+            }
+            if show_symbol {
+                cell_content = cell_content.push(
+                    self.image_for(symbol_source, symbol_height)
+                        .unwrap_or_else(|| {
+                            symbolic_icon("image-x-generic-symbolic")
+                                .size(32)
+                                .icon()
+                                .into()
+                        }),
+                );
+            }
+            if !label_at_top && show_label {
+                cell_content = cell_content.push(text(label).size(label_size));
+            }
             let centered_content = container(cell_content)
                 .width(Fill)
                 .height(Fill)
@@ -3662,14 +3767,30 @@ impl Wingmate {
             .height(cosmic::iced::Length::Fixed(board_grid_height))
             .clip(true);
 
-        let pages = row(graph.boards.iter().map(|item| {
-            button(item.name.as_deref().unwrap_or("Untitled page"))
-                .on_press(Message::SelectBoard(item.id.clone()))
-                .height(48)
-                .padding([10, 16])
-                .into()
-        }))
-        .spacing(6);
+        let pages: Element<'_, Message> = if self.board_edit_mode {
+            scrollable(
+                row(graph.boards.iter().map(|item| {
+                    button(item.name.as_deref().unwrap_or("Untitled page"))
+                        .on_press(Message::SelectBoard(item.id.clone()))
+                        .height(48)
+                        .padding([10, 16])
+                        .class(if item.id == active_id {
+                            cosmic::theme::iced::Button::Primary
+                        } else {
+                            cosmic::theme::iced::Button::Secondary
+                        })
+                        .into()
+                }))
+                .spacing(6),
+            )
+            .direction(scrollable::Direction::Horizontal(
+                scrollable::Scrollbar::default(),
+            ))
+            .height(48)
+            .into()
+        } else {
+            Space::new().height(1).into()
+        };
 
         let page_editor: Element<'_, Message> = if self.board_edit_mode {
             let resolved = graph.resolved_settings.get(&board.id);
@@ -3756,72 +3877,140 @@ impl Wingmate {
         let message_bar: Element<'_, Message> = if !self.board_edit_mode && show_message_bar {
             container(
                 row![
-                    text(if self.board_sentence.is_empty() {
-                        "Select words to build a message"
-                    } else {
-                        self.board_sentence.as_str()
-                    })
-                    .size(20)
-                    .width(Fill),
-                    compact_icon_button(
+                    aac_toolbar_button(
+                        "go-home-symbolic",
+                        fl!("board-home"),
+                        Message::BoardNavigateHome,
+                    ),
+                    aac_toolbar_button(
+                        "go-previous-symbolic",
+                        fl!("board-back"),
+                        Message::BoardNavigateBack,
+                    ),
+                    button(
+                        container(
+                            text(if self.board_sentence.is_empty() {
+                                fl!("board-message-placeholder")
+                            } else {
+                                self.board_sentence.clone()
+                            })
+                            .size(22),
+                        )
+                        .width(Fill)
+                        .align_y(cosmic::iced::alignment::Vertical::Center),
+                    )
+                    .on_press(Message::Speak(self.board_sentence.clone()))
+                    .class(cosmic::theme::iced::Button::Secondary)
+                    .height(68)
+                    .width(Fill)
+                    .padding([10, 16]),
+                    aac_toolbar_button(
                         "media-playback-start-symbolic",
-                        "Speak message",
+                        fl!("board-speak-message"),
                         Message::Speak(self.board_sentence.clone()),
                     ),
-                    compact_icon_button(
+                    aac_toolbar_button(
                         "edit-undo-symbolic",
-                        "Backspace message",
+                        fl!("board-backspace-message"),
                         Message::BoardSentenceBackspace,
                     ),
-                    compact_icon_button(
+                    aac_toolbar_button(
                         "edit-clear-symbolic",
-                        "Clear message",
+                        fl!("board-clear-message"),
                         Message::BoardSentenceClear,
+                    ),
+                ]
+                .spacing(10)
+                .align_y(cosmic::iced::alignment::Alignment::Center),
+            )
+            .class(cosmic::theme::iced::Container::Card)
+            .padding(8)
+            .width(Fill)
+            .into()
+        } else {
+            container(
+                row![
+                    aac_toolbar_button(
+                        "go-home-symbolic",
+                        fl!("board-home"),
+                        Message::BoardNavigateHome,
+                    ),
+                    aac_toolbar_button(
+                        "go-previous-symbolic",
+                        fl!("board-back"),
+                        Message::BoardNavigateBack,
+                    ),
+                    text(board.name.as_deref().unwrap_or("Page"))
+                        .size(22)
+                        .width(Fill),
+                ]
+                .spacing(10)
+                .align_y(cosmic::iced::alignment::Alignment::Center),
+            )
+            .class(cosmic::theme::iced::Container::Card)
+            .padding(8)
+            .width(Fill)
+            .into()
+        };
+
+        if self.board_edit_mode {
+            column![
+                row![
+                    labeled_icon_button(
+                        "go-previous-symbolic",
+                        fl!("board-library"),
+                        Message::ExitBoardSet
+                    ),
+                    text(format!(
+                        "{} · {}",
+                        graph.board_set.name,
+                        board.name.as_deref().unwrap_or("Page")
+                    ))
+                    .size(26)
+                    .width(Fill),
+                    labeled_icon_button(
+                        "media-playback-start-symbolic",
+                        fl!("board-run"),
+                        Message::ToggleBoardEdit
+                    ),
+                ]
+                .spacing(10)
+                .align_y(cosmic::iced::alignment::Alignment::Center),
+                pages,
+                container(cells).width(Fill).height(Fill),
+                page_editor,
+            ]
+            .spacing(12)
+            .into()
+        } else {
+            column![
+                message_bar,
+                container(cells).width(Fill).height(Fill),
+                row![
+                    text(format!(
+                        "{} · {}",
+                        graph.board_set.name,
+                        board.name.as_deref().unwrap_or("Page")
+                    ))
+                    .size(16)
+                    .width(Fill),
+                    compact_icon_button(
+                        "document-edit-symbolic",
+                        fl!("board-edit"),
+                        Message::ToggleBoardEdit
+                    ),
+                    compact_icon_button(
+                        "view-grid-symbolic",
+                        fl!("board-library"),
+                        Message::ExitBoardSet
                     ),
                 ]
                 .spacing(8)
                 .align_y(cosmic::iced::alignment::Alignment::Center),
-            )
-            .padding(10)
-            .width(Fill)
-            .into()
-        } else {
-            Space::new().height(1).into()
-        };
-
-        column![
-            row![
-                labeled_icon_button("go-previous-symbolic", "Library", Message::ExitBoardSet),
-                text(format!(
-                    "{} · {}",
-                    graph.board_set.name,
-                    board.name.as_deref().unwrap_or("Page")
-                ))
-                .size(26)
-                .width(Fill),
-                labeled_icon_button(
-                    if self.board_edit_mode {
-                        "media-playback-start-symbolic"
-                    } else {
-                        "document-edit-symbolic"
-                    },
-                    if self.board_edit_mode { "Run" } else { "Edit" },
-                    Message::ToggleBoardEdit
-                ),
             ]
             .spacing(10)
-            .align_y(cosmic::iced::alignment::Alignment::Center),
-            scrollable(pages)
-                .direction(scrollable::Direction::Horizontal(
-                    scrollable::Scrollbar::default()
-                ))
-                .height(48),
-            message_bar,
-            container(cells).width(Fill).height(Fill),
-            page_editor
-        ]
-        .spacing(12)
-        .into()
+            .into()
+        }
     }
 
     fn board_cell(&self, row: usize, column: usize) -> Option<&BoardButton> {
@@ -4604,6 +4793,23 @@ fn compact_icon_button<'a>(
         .icon_size(20)
         .width(cosmic::iced::Length::Fixed(48.0))
         .height(cosmic::iced::Length::Fixed(48.0))
+        .on_press(message)
+        .into()
+}
+
+fn aac_toolbar_button<'a>(
+    icon_name: &'a str,
+    label: impl Into<Cow<'a, str>>,
+    message: Message,
+) -> Element<'a, Message> {
+    let label = label.into();
+    cosmic_button::icon(symbolic_icon(icon_name))
+        .name(label.clone())
+        .description(label.clone())
+        .tooltip(label)
+        .icon_size(28)
+        .width(cosmic::iced::Length::Fixed(68.0))
+        .height(cosmic::iced::Length::Fixed(68.0))
         .on_press(message)
         .into()
 }
@@ -5792,6 +5998,8 @@ mod tests {
         assert!(Message::AddPhrase.requires_editing_access());
         assert!(Message::DeleteBoardSet("set".into()).requires_editing_access());
         assert!(!Message::Speak("hello".into()).requires_editing_access());
+        assert!(!Message::BoardNavigateHome.requires_editing_access());
+        assert!(!Message::BoardNavigateBack.requires_editing_access());
         assert!(!Message::UnlockEditingAccess.requires_editing_access());
     }
 
@@ -5807,5 +6015,7 @@ mod tests {
         assert_eq!(fl!("nav-keyboard"), "Keyboard");
         assert_eq!(fl!("voice-preview"), "Preview voice");
         assert_eq!(fl!("editing-access-title"), "Editing access code");
+        assert_eq!(fl!("screens-library-title"), "Communication boards");
+        assert_eq!(fl!("board-home"), "Home board");
     }
 }

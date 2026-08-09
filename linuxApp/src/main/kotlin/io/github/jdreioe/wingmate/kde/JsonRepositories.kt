@@ -121,8 +121,7 @@ private class LinuxAzureConfigStore {
     fun read(): String? = when (backend) {
         Backend.SecretService -> run(listOf("secret-tool", "lookup", "application", APP_ID, "purpose", PURPOSE))
             .takeIf { it.exitCode == 0 }?.output?.trim()?.takeIf(String::isNotEmpty)
-        Backend.KWallet -> run(listOf("kwallet-query", "-r", ENTRY, "-f", FOLDER, walletName()))
-            .takeIf { it.exitCode == 0 }?.output?.trim()?.takeIf(String::isNotEmpty)
+        Backend.KWallet -> readKWallet()
         null -> null
     }
 
@@ -142,11 +141,29 @@ private class LinuxAzureConfigStore {
         if (read() == null) return
         val result = when (backend) {
             Backend.SecretService -> run(listOf("secret-tool", "clear", "application", APP_ID, "purpose", PURPOSE))
-            Backend.KWallet -> run(listOf("kwallet-query", "-w", ENTRY, "-f", FOLDER, walletName()), "")
+            Backend.KWallet -> clearKWallet()
             null -> return
         }
         check(result.exitCode == 0) { result.output.ifBlank { "Could not clear Azure configuration" } }
         check(read() == null) { "Secure Azure configuration deletion could not be verified" }
+    }
+
+    private fun readKWallet(): String? = KWalletEntryNames.firstNotNullOfOrNull { entry ->
+        run(listOf("kwallet-query", "-r", entry, "-f", FOLDER, walletName()))
+            .takeIf { it.exitCode == 0 }
+            ?.output
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+    }
+
+    private fun clearKWallet(): Result {
+        for (entry in KWalletEntryNames) {
+            val existing = run(listOf("kwallet-query", "-r", entry, "-f", FOLDER, walletName()))
+            if (existing.exitCode != 0 || existing.output.isBlank()) continue
+            val result = run(listOf("kwallet-query", "-w", entry, "-f", FOLDER, walletName()), "")
+            if (result.exitCode != 0) return result
+        }
+        return Result(0, "")
     }
 
     private fun walletName() = System.getenv("WINGMATE_KWALLET")?.takeIf(String::isNotBlank) ?: "kdewallet"
@@ -165,7 +182,11 @@ private class LinuxAzureConfigStore {
         const val APP_ID = "io.github.jdreioe.wingmate"
         const val PURPOSE = "azure-speech"
         const val FOLDER = "Wingmate"
-        const val ENTRY = "azure-speech-config"
+        // The D-Bus-backed secure-store implementation writes v2. Keep reading
+        // the original CLI entry so upgrades work in both directions.
+        const val ENTRY = "azure-speech-config-v2"
+        const val LEGACY_ENTRY = "azure-speech-config"
+        val KWalletEntryNames = listOf(ENTRY, LEGACY_ENTRY)
     }
 }
 

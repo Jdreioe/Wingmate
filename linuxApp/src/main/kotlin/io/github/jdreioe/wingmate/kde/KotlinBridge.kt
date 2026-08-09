@@ -428,12 +428,7 @@ class KotlinBridge(private val port: Int = 8765) {
             // Azure Config
             get("/api/azure-config") {
                 val status = configRepository.getSpeechConfigStatus()
-                call.respond(
-                    mapOf(
-                        "endpoint" to status.endpoint,
-                        "credentialConfigured" to status.credentialConfigured
-                    )
-                )
+                call.respond(AzureConfigResponse(status.endpoint, status.credentialConfigured))
             }
             
             post("/api/azure-config") {
@@ -1371,6 +1366,12 @@ data class BoardSessionResponse(
     val navigateBoardId: String? = null,
     val unsupportedActions: List<String> = emptyList(),
     val settings: ResolvedBoardSettingsResponse,
+)
+
+@Serializable
+data class AzureConfigResponse(
+    val endpoint: String,
+    val credentialConfigured: Boolean,
 )
 
 private const val MAX_IMAGE_BYTES = 20L * 1024L * 1024L
