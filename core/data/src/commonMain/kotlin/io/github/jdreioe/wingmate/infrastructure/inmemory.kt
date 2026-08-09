@@ -103,6 +103,10 @@ class InMemoryConfigRepository : ConfigRepository {
         delay(10)
         cfg = config
     }
+    override suspend fun clearSpeechConfig() {
+        delay(10)
+        cfg = null
+    }
 }
 
 class NoopSpeechService : SpeechService {

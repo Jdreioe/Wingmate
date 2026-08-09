@@ -16,6 +16,7 @@ import io.github.jdreioe.wingmate.initKoin
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.SpeechServiceConfigStatus
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.Settings
@@ -259,10 +260,15 @@ class KoinBridge : KoinComponent {
 
     suspend fun refreshVoicesFromAzure(): List<Voice> = get<VoiceUseCase>().refreshFromAzure()
 
-    suspend fun getSpeechConfig(): SpeechServiceConfig? = get<ConfigRepository>().getSpeechConfig()
+    /** Safe for native UI: deliberately never returns the saved subscription key. */
+    suspend fun getSpeechConfig(): SpeechServiceConfigStatus = get<ConfigRepository>().getSpeechConfigStatus()
 
     suspend fun saveSpeechConfig(config: SpeechServiceConfig) {
         get<ConfigRepository>().saveSpeechConfig(config)
+    }
+
+    suspend fun clearSpeechConfig() {
+        get<ConfigRepository>().clearSpeechConfig()
     }
 
     suspend fun saveAzureSpeechConfig(endpoint: String, subscriptionKey: String) {

@@ -30,15 +30,18 @@ fun AzureSettingsFullScreen(
     
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
+    var credentialConfigured by remember { mutableStateOf(false) }
+    var replacingCredentials by remember { mutableStateOf(false) }
     var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var loading by remember { mutableStateOf(true) }
     var virtualMic by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(configRepo, settingsUseCase) {
-        val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfig() }
-        println("Loaded config: $cfg")
-        cfg?.let { endpoint = it.endpoint; subscriptionKey = it.subscriptionKey }
+        val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfigStatus() }
+        println("Loaded Azure config; credentialConfigured=${cfg.credentialConfigured}")
+        endpoint = cfg.endpoint
+        credentialConfigured = cfg.credentialConfigured
 
         val settings = withContext(Dispatchers.Default) { 
             runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
@@ -242,21 +245,17 @@ fun AzureSettingsFullScreen(
                 Text(stringResource(R.string.azure_config_title), style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                val showKeyboard = rememberShowKeyboardOnFocus()
-                OutlinedTextField(
-                    value = endpoint,
-                    onValueChange = { endpoint = it },
-                    label = { Text(stringResource(R.string.ui_settings_region_endpoint)) },
-                    placeholder = { Text(stringResource(R.string.ui_settings_region_example)) },
-                    modifier = Modifier.fillMaxWidth().then(showKeyboard)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = subscriptionKey,
-                    onValueChange = { subscriptionKey = it },
-                    label = { Text(stringResource(R.string.ui_settings_subscription_key)) },
-                    placeholder = { Text(stringResource(R.string.azure_config_key_placeholder)) },
-                    modifier = Modifier.fillMaxWidth().then(showKeyboard)
+                AzureCredentialEditor(
+                    credentialConfigured = credentialConfigured,
+                    replacingCredentials = replacingCredentials,
+                    endpoint = endpoint,
+                    onEndpointChange = { endpoint = it },
+                    subscriptionKey = subscriptionKey,
+                    onSubscriptionKeyChange = { subscriptionKey = it },
+                    onReplaceCredentials = {
+                        replacingCredentials = true
+                        subscriptionKey = ""
+                    }
                 )
             }
         }
@@ -276,7 +275,10 @@ fun AzureSettingsFullScreen(
                     }
 
                     // Save Azure config only if Azure TTS is selected and fields are filled
-                    if (ttsEngine != TtsEngine.SYSTEM && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
+                    if (ttsEngine != TtsEngine.SYSTEM &&
+                        (!credentialConfigured || replacingCredentials) &&
+                        endpoint.isNotBlank() && subscriptionKey.isNotBlank()
+                    ) {
                         withContext(Dispatchers.Default) {
                             configRepo.saveSpeechConfig(SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey))
                         }

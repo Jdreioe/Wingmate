@@ -100,6 +100,8 @@ fun SettingsScreen(
     // --- Speech section state ---
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
+    var credentialConfigured by remember { mutableStateOf(false) }
+    var replacingAzureCredentials by remember { mutableStateOf(false) }
     var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var virtualMic by remember { mutableStateOf(false) }
 
@@ -185,10 +187,10 @@ fun SettingsScreen(
 
     // Load all settings on first composition
     LaunchedEffect(Unit) {
-        val cfg = withContext(Dispatchers.Default) { configRepo?.getSpeechConfig() }
+        val cfg = withContext(Dispatchers.Default) { configRepo?.getSpeechConfigStatus() }
         cfg?.let {
             endpoint = it.endpoint
-            subscriptionKey = it.subscriptionKey
+            credentialConfigured = it.credentialConfigured
         }
 
         val s = withContext(Dispatchers.Default) {
@@ -239,13 +241,21 @@ fun SettingsScreen(
     }
 
     // Persist text input after the user pauses typing instead of waiting for a Save button.
-    LaunchedEffect(endpoint, subscriptionKey, loading) {
-        if (!loading) {
+    LaunchedEffect(endpoint, subscriptionKey, loading, replacingAzureCredentials) {
+        if (!loading && (!credentialConfigured || replacingAzureCredentials) &&
+            endpoint.isNotBlank() && subscriptionKey.isNotBlank()
+        ) {
             delay(400)
-            runCatching {
-                configRepo?.saveSpeechConfig(
+            val repository = configRepo ?: return@LaunchedEffect
+            val saved = runCatching {
+                repository.saveSpeechConfig(
                     SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey)
                 )
+            }.isSuccess
+            if (saved) {
+                credentialConfigured = true
+                replacingAzureCredentials = false
+                subscriptionKey = ""
             }
         }
     }
@@ -390,6 +400,14 @@ fun SettingsScreen(
                                             onDone = {
                                                 ttsEngine = TtsEngine.AZURE_USER_RESOURCE
                                                 updateSettings { it.copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE) }
+                                                scope.launch {
+                                                    configRepo?.getSpeechConfigStatus()?.let {
+                                                        endpoint = it.endpoint
+                                                        credentialConfigured = it.credentialConfigured
+                                                        replacingAzureCredentials = false
+                                                        subscriptionKey = ""
+                                                    }
+                                                }
                                                 speechSubPage = null
                                             },
                                             onBack = { speechSubPage = null }
@@ -414,6 +432,12 @@ fun SettingsScreen(
                                 onEndpointChange = { endpoint = it },
                                 subscriptionKey = subscriptionKey,
                                 onSubscriptionKeyChange = { subscriptionKey = it },
+                                credentialConfigured = credentialConfigured,
+                                replacingCredentials = replacingAzureCredentials,
+                                onReplaceCredentials = {
+                                    replacingAzureCredentials = true
+                                    subscriptionKey = ""
+                                },
                                 virtualMic = virtualMic,
                                 onVirtualMicChange = { checked ->
                                     virtualMic = checked
@@ -1150,14 +1174,15 @@ private fun SpeechSection(
     onEndpointChange: (String) -> Unit,
     subscriptionKey: String,
     onSubscriptionKeyChange: (String) -> Unit,
+    credentialConfigured: Boolean,
+    replacingCredentials: Boolean,
+    onReplaceCredentials: () -> Unit,
     virtualMic: Boolean,
     onVirtualMicChange: (Boolean) -> Unit,
     onOpenVoiceSelection: () -> Unit = {},
     onOpenLanguageSelection: () -> Unit = {},
     onOpenF0Setup: () -> Unit = {}
 ) {
-    val showKeyboard = rememberShowKeyboardOnFocus()
-
     SettingsGroup(title = stringResource(R.string.ui_settings_tts_engine_group)) {
         SettingsPreferenceRow(
             title = stringResource(R.string.ui_settings_speech_engine),
@@ -1178,24 +1203,16 @@ private fun SpeechSection(
         }
         if (ttsEngine != TtsEngine.SYSTEM) {
             SettingsGroupDivider()
-            Column(modifier = Modifier.padding(vertical = 12.dp)) {
-                OutlinedTextField(
-                    value = endpoint,
-                    onValueChange = onEndpointChange,
-                    label = { Text(stringResource(R.string.ui_settings_region_endpoint)) },
-                    placeholder = { Text(stringResource(R.string.ui_settings_region_example)) },
-                    modifier = Modifier.fillMaxWidth().then(showKeyboard),
-                    shape = MaterialTheme.shapes.large
-                )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = subscriptionKey,
-                    onValueChange = onSubscriptionKeyChange,
-                    label = { Text(stringResource(R.string.ui_settings_subscription_key)) },
-                    modifier = Modifier.fillMaxWidth().then(showKeyboard),
-                    shape = MaterialTheme.shapes.large
-                )
-            }
+            AzureCredentialEditor(
+                credentialConfigured = credentialConfigured,
+                replacingCredentials = replacingCredentials,
+                endpoint = endpoint,
+                onEndpointChange = onEndpointChange,
+                subscriptionKey = subscriptionKey,
+                onSubscriptionKeyChange = onSubscriptionKeyChange,
+                onReplaceCredentials = onReplaceCredentials,
+                modifier = Modifier.padding(vertical = 12.dp)
+            )
         }
 
         Spacer(Modifier.height(12.dp))

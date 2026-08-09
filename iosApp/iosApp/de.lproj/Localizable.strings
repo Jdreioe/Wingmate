@@ -80,6 +80,8 @@
 "azure.settings.title" = "Azure-Einstellungen";
 "azure.endpoint.placeholder" = "Endpunkt (https://<region>.tts.speech.microsoft.com)";
 "azure.key.placeholder" = "Abonnementschlüssel";
+"azure.credentials.configured" = "Die Azure Speech-Anmeldedaten sind auf diesem Gerät sicher konfiguriert.";
+"azure.credentials.replace" = "Azure-Anmeldedaten ersetzen";
 "common.error" = "Fehler";
 "common.ok" = "OK";
 "common.saving" = "Speichern…";

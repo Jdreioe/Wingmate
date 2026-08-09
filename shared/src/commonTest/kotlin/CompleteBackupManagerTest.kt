@@ -67,8 +67,7 @@ class CompleteBackupManagerTest {
         assertContains(archiveText, "My private board")
         assertContains(archiveText, "Need water")
         assertContains(archiveText, "audio-content")
-        assertContains(archiveText, "northeurope")
-        assertContains(archiveText, "azure-secret")
+        assertFalse(archiveText.contains("azure-secret"))
         assertFalse(archiveText.contains("editingAccessCredential"))
     }
 
@@ -108,10 +107,7 @@ class CompleteBackupManagerTest {
         assertEquals(listOf("AAC"), target.dictionary.getAll().map { it.word })
         assertEquals("audio-content", restoringMedia.restored.single().second.decodeToString())
         assertContains(target.phrases.getAll().single().recordingPath.orEmpty(), "restored/")
-        assertEquals(
-            SpeechServiceConfig("westeurope", "restored-key"),
-            target.config.getSpeechConfig()
-        )
+        assertEquals(null, target.config.getSpeechConfig())
     }
 
     @Test

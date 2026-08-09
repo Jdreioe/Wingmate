@@ -5,7 +5,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
@@ -22,15 +21,15 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
     
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
+    var credentialConfigured by remember { mutableStateOf(false) }
+    var replacingCredentials by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(configRepo) {
-        val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfig() }
-        cfg?.let {
-            endpoint = it.endpoint
-            subscriptionKey = it.subscriptionKey
-        }
+        val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfigStatus() }
+        endpoint = cfg.endpoint
+        credentialConfigured = cfg.credentialConfigured
         loading = false
     }
 
@@ -62,28 +61,17 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
         if (loading) {
             CircularProgressIndicator()
         } else {
-            // Endpoint Input
-            val showKeyboard = rememberShowKeyboardOnFocus()
-            OutlinedTextField(
-                value = endpoint,
-                onValueChange = { endpoint = it },
-                label = { Text(stringResource(R.string.azure_config_endpoint)) },
-                placeholder = { Text(stringResource(R.string.azure_setup_endpoint_placeholder)) },
-                modifier = Modifier.fillMaxWidth().then(showKeyboard),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Subscription Key Input
-            OutlinedTextField(
-                value = subscriptionKey,
-                onValueChange = { subscriptionKey = it },
-                label = { Text(stringResource(R.string.ui_settings_subscription_key)) },
-                placeholder = { Text(stringResource(R.string.azure_config_key_placeholder)) },
-                modifier = Modifier.fillMaxWidth().then(showKeyboard),
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true
+            AzureCredentialEditor(
+                credentialConfigured = credentialConfigured,
+                replacingCredentials = replacingCredentials,
+                endpoint = endpoint,
+                onEndpointChange = { endpoint = it },
+                subscriptionKey = subscriptionKey,
+                onSubscriptionKeyChange = { subscriptionKey = it },
+                onReplaceCredentials = {
+                    replacingCredentials = true
+                    subscriptionKey = ""
+                }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -125,18 +113,21 @@ fun AzureConfigScreen(onNext: () -> Unit, onBack: () -> Unit) {
                 Button(
                     onClick = {
                         scope.launch {
-                            val config = SpeechServiceConfig(
-                                endpoint = endpoint,
-                                subscriptionKey = subscriptionKey
-                            )
-                            withContext(Dispatchers.Default) {
-                                runCatching { configRepo.saveSpeechConfig(config) }
+                            if (!credentialConfigured || replacingCredentials) {
+                                val config = SpeechServiceConfig(
+                                    endpoint = endpoint,
+                                    subscriptionKey = subscriptionKey
+                                )
+                                withContext(Dispatchers.Default) {
+                                    runCatching { configRepo.saveSpeechConfig(config) }
+                                }
                             }
                             onNext()
                         }
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = endpoint.isNotBlank() && subscriptionKey.isNotBlank()
+                    enabled = (credentialConfigured && !replacingCredentials) ||
+                        (endpoint.isNotBlank() && subscriptionKey.isNotBlank())
                 ) {
                     Text(stringResource(R.string.common_continue))
                 }

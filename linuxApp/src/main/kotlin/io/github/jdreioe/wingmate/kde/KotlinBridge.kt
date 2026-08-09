@@ -427,8 +427,13 @@ class KotlinBridge(private val port: Int = 8765) {
             
             // Azure Config
             get("/api/azure-config") {
-                val config = azureConfigManager.getConfig()
-                call.respond(mapOf("endpoint" to config.endpoint, "key" to config.subscriptionKey))
+                val status = configRepository.getSpeechConfigStatus()
+                call.respond(
+                    mapOf(
+                        "endpoint" to status.endpoint,
+                        "credentialConfigured" to status.credentialConfigured
+                    )
+                )
             }
             
             post("/api/azure-config") {
@@ -444,6 +449,11 @@ class KotlinBridge(private val port: Int = 8765) {
                     println("Failed to fetch voices: ${e.message}")
                 }
                 
+                call.respond(HttpStatusCode.OK)
+            }
+
+            delete("/api/azure-config") {
+                configRepository.clearSpeechConfig()
                 call.respond(HttpStatusCode.OK)
             }
             
