@@ -1091,6 +1091,8 @@ struct EditPhraseSheet: View {
 struct AzureSettingsSheet: View {
     @State private var endpoint: String = ""
     @State private var key: String = ""
+    @State private var credentialConfigured = false
+    @State private var replacingCredentials = false
     @State private var loading = true
     @State private var saving = false
     @State private var error: String? = nil
@@ -1101,30 +1103,45 @@ struct AzureSettingsSheet: View {
         NavigationStack {
             Form {
                 Section("azure.settings.title") {
-                    TextField(NSLocalizedString("azure.endpoint.placeholder", comment: ""), text: $endpoint)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
-                    SecureField(NSLocalizedString("azure.key.placeholder", comment: ""), text: $key)
-                }
-                Section {
-                    Button(saving ? "common.saving" : "common.save") {
-                        Task {
-                            saving = true
-                            defer { saving = false }
-                            
-                            do {
-                                let cfg = Shared.SpeechServiceConfig(endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                                     subscriptionKey: key.trimmingCharacters(in: .whitespacesAndNewlines))
-                                try await bridge.saveSpeechConfig(config: cfg)
-                                _ = try? await bridge.listVoices()
-                            } catch {
-                                self.error = error.localizedDescription
-                                return
-                            }
-                            onClose()
+                    if credentialConfigured && !replacingCredentials {
+                        Text("azure.credentials.configured")
+                        Button("azure.credentials.replace") {
+                            endpoint = ""
+                            key = ""
+                            replacingCredentials = true
                         }
+                    } else {
+                        TextField(NSLocalizedString("azure.endpoint.placeholder", comment: ""), text: $endpoint)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+                        SecureField(NSLocalizedString("azure.key.placeholder", comment: ""), text: $key)
                     }
-                    .disabled(loading || saving || (endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                }
+                if !credentialConfigured || replacingCredentials {
+                    Section {
+                        Button(saving ? "common.saving" : "common.save") {
+                            Task {
+                                saving = true
+                                defer { saving = false }
+
+                                do {
+                                    let cfg = Shared.SpeechServiceConfig(endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                                         subscriptionKey: key.trimmingCharacters(in: .whitespacesAndNewlines))
+                                    try await bridge.saveSpeechConfig(config: cfg)
+                                    _ = try? await bridge.listVoices()
+                                    credentialConfigured = true
+                                    replacingCredentials = false
+                                    endpoint = ""
+                                    key = ""
+                                } catch {
+                                    self.error = error.localizedDescription
+                                    return
+                                }
+                                onClose()
+                            }
+                        }
+                        .disabled(loading || saving || (endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                    }
                 }
             }
             .navigationTitle(Text("azure.settings.title"))
@@ -1137,6 +1154,8 @@ struct AzureSettingsSheet: View {
                         let cfg = try await bridge.getSpeechConfig()
                         endpoint = cfg.endpoint
                         key = ""
+                        credentialConfigured = cfg.credentialConfigured
+                        replacingCredentials = false
                     } catch { self.error = error.localizedDescription }
                 }
             }

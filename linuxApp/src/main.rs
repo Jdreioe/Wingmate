@@ -577,6 +577,8 @@ struct Wingmate {
     pending_prediction_word: Option<String>,
     azure_endpoint: String,
     azure_key: String,
+    azure_credential_configured: bool,
+    replacing_azure_credentials: bool,
     status: String,
     speech_state: String,
     board_sentence_tokens: Vec<String>,
@@ -668,7 +670,9 @@ enum Message {
     EngineChanged(String),
     AzureEndpointChanged(String),
     AzureKeyChanged(String),
+    ReplaceAzureCredentials,
     SaveAzureConfig,
+    AzureConfigSaved(Result<(), String>),
     PrimaryLanguageChanged(String),
     SecondaryLanguageChanged(String),
     AppearanceChanged(String),
@@ -907,6 +911,8 @@ impl cosmic::Application for Wingmate {
             pending_prediction_word: None,
             azure_endpoint: String::new(),
             azure_key: String::new(),
+            azure_credential_configured: false,
+            replacing_azure_credentials: false,
             status: fl!("status-starting"),
             speech_state: "idle".into(),
             board_sentence_tokens: Vec::new(),
@@ -1116,7 +1122,8 @@ impl cosmic::Application for Wingmate {
                 Ok(config) => {
                     self.azure_endpoint = config.endpoint;
                     self.azure_key.clear();
-                    let _ = config.credential_configured;
+                    self.azure_credential_configured = config.credential_configured;
+                    self.replacing_azure_credentials = false;
                 }
                 Err(e) => self.status = e,
             },
@@ -1617,12 +1624,27 @@ impl cosmic::Application for Wingmate {
             }
             Message::AzureEndpointChanged(value) => self.azure_endpoint = value,
             Message::AzureKeyChanged(value) => self.azure_key = value,
+            Message::ReplaceAzureCredentials => {
+                self.azure_endpoint.clear();
+                self.azure_key.clear();
+                self.replacing_azure_credentials = true;
+            }
             Message::SaveAzureConfig => {
                 return self
                     .api
                     .save_azure_config(self.azure_endpoint.clone(), self.azure_key.clone())
                     .map(cosmic::Action::App);
             }
+            Message::AzureConfigSaved(result) => match result {
+                Ok(()) => {
+                    self.azure_credential_configured = true;
+                    self.replacing_azure_credentials = false;
+                    self.azure_endpoint.clear();
+                    self.azure_key.clear();
+                    self.status = fl!("status-ready");
+                }
+                Err(error) => self.status = error,
+            },
             Message::PrimaryLanguageChanged(language) => {
                 self.settings.primary_language = language.clone();
                 self.settings.language = language.clone();
@@ -4030,6 +4052,36 @@ impl Wingmate {
         } else {
             self.settings.secondary_language.clone()
         };
+        let azure_credentials: Element<'_, Message> =
+            if self.azure_credential_configured && !self.replacing_azure_credentials {
+                column![
+                    text(fl!("speech-azure-configured")),
+                    labeled_icon_button(
+                        "document-edit-symbolic",
+                        fl!("speech-azure-replace"),
+                        Message::ReplaceAzureCredentials
+                    ),
+                ]
+                .spacing(6)
+                .into()
+            } else {
+                column![
+                    text_input(&fl!("speech-azure-endpoint"), &self.azure_endpoint)
+                        .on_input(Message::AzureEndpointChanged)
+                        .padding(12),
+                    text_input(&fl!("speech-azure-key"), &self.azure_key)
+                        .on_input(Message::AzureKeyChanged)
+                        .secure(true)
+                        .padding(12),
+                    labeled_icon_button(
+                        "document-save-symbolic",
+                        fl!("speech-azure-save"),
+                        Message::SaveAzureConfig
+                    ),
+                ]
+                .spacing(6)
+                .into()
+            };
 
         scrollable(
             column![
@@ -4085,21 +4137,7 @@ impl Wingmate {
                     )
                     .into(),
                 ),
-                column![
-                    text(fl!("speech-azure-title")).size(15),
-                    text_input(&fl!("speech-azure-endpoint"), &self.azure_endpoint)
-                        .on_input(Message::AzureEndpointChanged)
-                        .padding(12),
-                    text_input(&fl!("speech-azure-key"), &self.azure_key)
-                        .on_input(Message::AzureKeyChanged)
-                        .padding(12),
-                    labeled_icon_button(
-                        "document-save-symbolic",
-                        fl!("speech-azure-save"),
-                        Message::SaveAzureConfig
-                    ),
-                ]
-                .spacing(6),
+                column![text(fl!("speech-azure-title")).size(15), azure_credentials,].spacing(6),
             ]
             .spacing(14),
         )
@@ -5030,7 +5068,7 @@ impl Api {
                 )
                 .await
             },
-            Message::ActionFinished,
+            Message::AzureConfigSaved,
         )
     }
 

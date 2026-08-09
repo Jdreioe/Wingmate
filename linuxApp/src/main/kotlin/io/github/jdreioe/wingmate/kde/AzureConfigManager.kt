@@ -2,12 +2,6 @@ package io.github.jdreioe.wingmate.kde
 
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext
 
 import io.github.jdreioe.wingmate.domain.VoiceRepository
@@ -18,8 +12,6 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 class AzureConfigManager {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    
     private val configRepository: ConfigRepository by lazy {
         GlobalContext.get().get()
     }
@@ -32,14 +24,12 @@ class AzureConfigManager {
         return configRepository.getSpeechConfig() ?: SpeechServiceConfig()
     }
     
-    fun updateConfig(endpoint: String, key: String) {
-        scope.launch {
-            val newConfig = SpeechServiceConfig(
-                endpoint = endpoint,
-                subscriptionKey = key
-            )
-            configRepository.saveSpeechConfig(newConfig)
-        }
+    suspend fun updateConfig(endpoint: String, key: String) {
+        val newConfig = SpeechServiceConfig(
+            endpoint = endpoint,
+            subscriptionKey = key
+        )
+        configRepository.saveSpeechConfig(newConfig)
     }
     
     suspend fun fetchAndSaveVoices(config: SpeechServiceConfig) {

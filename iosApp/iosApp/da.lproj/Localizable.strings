@@ -81,6 +81,8 @@
 "azure.settings.title" = "Azure Indstillinger";
 "azure.endpoint.placeholder" = "Region";
 "azure.key.placeholder" = "Abonnomentsnøgle";
+"azure.credentials.configured" = "Azure Speech-legitimationsoplysninger er sikkert konfigureret på denne enhed.";
+"azure.credentials.replace" = "Erstat Azure-legitimationsoplysninger";
 
 "common.error" = "FEJL";
 "common.ok" = "OK";

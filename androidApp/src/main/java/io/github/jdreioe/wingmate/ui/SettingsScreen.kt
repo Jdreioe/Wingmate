@@ -246,8 +246,9 @@ fun SettingsScreen(
             endpoint.isNotBlank() && subscriptionKey.isNotBlank()
         ) {
             delay(400)
+            val repository = configRepo ?: return@LaunchedEffect
             val saved = runCatching {
-                configRepo?.saveSpeechConfig(
+                repository.saveSpeechConfig(
                     SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey)
                 )
             }.isSuccess
@@ -399,6 +400,14 @@ fun SettingsScreen(
                                             onDone = {
                                                 ttsEngine = TtsEngine.AZURE_USER_RESOURCE
                                                 updateSettings { it.copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE) }
+                                                scope.launch {
+                                                    configRepo?.getSpeechConfigStatus()?.let {
+                                                        endpoint = it.endpoint
+                                                        credentialConfigured = it.credentialConfigured
+                                                        replacingAzureCredentials = false
+                                                        subscriptionKey = ""
+                                                    }
+                                                }
                                                 speechSubPage = null
                                             },
                                             onBack = { speechSubPage = null }
