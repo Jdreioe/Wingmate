@@ -133,7 +133,7 @@
 "phrase.symbol.error.auth_failed" = "OpenSymbols godkendelse mislykkedes";
 "phrase.symbol.error.search_url" = "Kunne ikke oprette OpenSymbols søge-URL";
 "phrase.symbol.error.search_failed" = "OpenSymbols søgning mislykkedes";
-"phrase.symbol.error.missing_secret" = "OpenSymbols er ikke konfigureret til denne build";
+"phrase.symbol.error.missing_proxy" = "OpenSymbols er ikke konfigureret til denne build";
 "phrase.symbol.pick_photo" = "Vælg foto";
 "phrase.symbol.import_file" = "Importer billede";
 "phrase.symbol.error.photo_load_failed" = "Kunne ikke indlæse det valgte foto";

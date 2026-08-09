@@ -27,14 +27,12 @@ class WingmateApplication : Application() {
             single { AzureArmClient(HttpClient(OkHttp)) }
         })
 
-        // OpenSymbols is configured in DesktopMain; wire it for Android app startup as well.
-        val openSymbolsSecret = sequenceOf(
-            BuildConfig.OPENSYMBOLS_SECRET,
-            System.getenv("WINGMATE_OPENSYMBOLS_SECRET"),
-            System.getenv("OPENSYMBOLS_SECRET"),
-            System.getenv("openSymbols")
+        val openSymbolsProxyUrl = sequenceOf(
+            BuildConfig.OPENSYMBOLS_PROXY_URL,
+            System.getenv("WINGMATE_OPENSYMBOLS_PROXY_URL"),
+            System.getenv("OPENSYMBOLS_PROXY_URL"),
         ).firstOrNull { !it.isNullOrBlank() }
 
-        OpenSymbolsClient.setSharedSecret(openSymbolsSecret)
+        OpenSymbolsClient.setProxyBaseUrl(openSymbolsProxyUrl)
     }
 }

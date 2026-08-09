@@ -91,3 +91,6 @@ iosApp/iosApp 20*/
 **/.cxx/
 **/*.properties
 *.hprof
+
+## Node tooling
+**/node_modules/

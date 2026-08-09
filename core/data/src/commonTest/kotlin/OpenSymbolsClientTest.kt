@@ -14,4 +14,12 @@ class OpenSymbolsClientTest {
         assertEquals("en", OpenSymbolsClient.normalizeLocale(""))
         assertEquals("en", OpenSymbolsClient.normalizeLocale("english"))
     }
+
+    @Test
+    fun acceptsOnlyHttpsOrLocalDevelopmentProxyUrls() {
+        assertEquals("https://symbols.example", OpenSymbolsClient.normalizeProxyBaseUrl("https://symbols.example/"))
+        assertEquals("http://localhost:8787", OpenSymbolsClient.normalizeProxyBaseUrl("http://localhost:8787"))
+        assertEquals(null, OpenSymbolsClient.normalizeProxyBaseUrl("http://symbols.example"))
+        assertEquals(null, OpenSymbolsClient.normalizeProxyBaseUrl("https://symbols.example?secret=nope"))
+    }
 }

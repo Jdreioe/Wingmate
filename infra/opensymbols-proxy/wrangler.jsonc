@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "wingmate-opensymbols-proxy",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-09",
+  "workers_dev": true,
+  "ratelimits": [
+    {
+      "name": "SEARCH_RATE_LIMITER",
+      "namespace_id": "14501",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    }
+  ]
+}

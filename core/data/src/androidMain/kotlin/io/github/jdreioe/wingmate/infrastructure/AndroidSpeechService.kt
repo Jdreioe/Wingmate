@@ -1104,13 +1104,6 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             return storedConfig
         }
 
-        // Fallback to environment variables if present (rare on Android runtime).
-        val endpoint = System.getenv("WINGMATE_AZURE_REGION") ?: ""
-        val key = System.getenv("WINGMATE_AZURE_KEY") ?: ""
-        if (endpoint.isNotBlank() && key.isNotBlank()) {
-            return SpeechServiceConfig(endpoint = endpoint, subscriptionKey = key)
-        }
-
         // Return any partially saved config so settings screens can still show persisted values.
         if (storedConfig != null) {
             return storedConfig

@@ -1467,17 +1467,17 @@ fun main(args: Array<String>) {
     // Initialize Koin DI with overrides
     initKoin(persistenceModule)
 
-    // Configure OpenSymbols secret for symbol search (env or local.properties).
-    val openSymbolsSecret = sequenceOf(
-        System.getenv("WINGMATE_OPENSYMBOLS_SECRET"),
-        System.getenv("OPENSYMBOLS_SECRET"),
-        System.getenv("openSymbols"),
+    // Configure the public OpenSymbols proxy endpoint. No API secret enters the client.
+    val openSymbolsProxyUrl = sequenceOf(
+        System.getenv("WINGMATE_OPENSYMBOLS_PROXY_URL"),
+        System.getenv("OPENSYMBOLS_PROXY_URL"),
+        "https://wingmate-opensymbols-proxy.patient-mouse-467e.workers.dev",
     ).firstOrNull { !it.isNullOrBlank() }
-    OpenSymbolsClient.setSharedSecret(openSymbolsSecret)
-    if (openSymbolsSecret.isNullOrBlank()) {
-        println("[SYMBOLS] OpenSymbols secret not configured; symbol search disabled")
+    OpenSymbolsClient.setProxyBaseUrl(openSymbolsProxyUrl)
+    if (openSymbolsProxyUrl.isNullOrBlank()) {
+        println("[SYMBOLS] OpenSymbols proxy not configured; symbol search disabled")
     } else {
-        println("[SYMBOLS] OpenSymbols secret configured")
+        println("[SYMBOLS] OpenSymbols proxy configured")
     }
     
     val bridge = KotlinBridge()

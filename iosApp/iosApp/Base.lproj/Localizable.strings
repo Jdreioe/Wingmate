@@ -136,7 +136,7 @@
 "phrase.symbol.error.auth_failed" = "OpenSymbols authentication failed";
 "phrase.symbol.error.search_url" = "Failed to build OpenSymbols search URL";
 "phrase.symbol.error.search_failed" = "OpenSymbols search failed";
-"phrase.symbol.error.missing_secret" = "OpenSymbols is not configured for this build";
+"phrase.symbol.error.missing_proxy" = "OpenSymbols is not configured for this build";
 "phrase.symbol.pick_photo" = "Pick Photo";
 "phrase.symbol.import_file" = "Import Image";
 "phrase.symbol.error.photo_load_failed" = "Failed to load selected photo";

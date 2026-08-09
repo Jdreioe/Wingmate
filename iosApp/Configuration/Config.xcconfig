@@ -6,4 +6,5 @@ PRODUCT_BUNDLE_IDENTIFIER=com.hojmoseit.wingmate
 CURRENT_PROJECT_VERSION=106
 MARKETING_VERSION=0.7
 
-
+// Public endpoint only. The OpenSymbols secret is stored in the Worker.
+OPEN_SYMBOLS_PROXY_URL = https:/$()/wingmate-opensymbols-proxy.patient-mouse-467e.workers.dev

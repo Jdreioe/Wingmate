@@ -71,12 +71,12 @@ private enum BoardKeyAction: String, CaseIterable, Identifiable {
     }
 }
 
-private func resolveCellOpenSymbolsSecret() -> String? {
-    let fromInfoRaw = Bundle.main.object(forInfoDictionaryKey: "OPEN_SYMBOLS_SECRET") as? String
+private func resolveCellOpenSymbolsProxyUrl() -> String? {
+    let fromInfoRaw = Bundle.main.object(forInfoDictionaryKey: "OPEN_SYMBOLS_PROXY_URL") as? String
     let fromInfo = fromInfoRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
     if let fromInfo, !fromInfo.isEmpty { return fromInfo }
 
-    let fromEnvRaw = ProcessInfo.processInfo.environment["OPEN_SYMBOLS_SECRET"]
+    let fromEnvRaw = ProcessInfo.processInfo.environment["OPENSYMBOLS_PROXY_URL"]
     let fromEnv = fromEnvRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
     if let fromEnv, !fromEnv.isEmpty { return fromEnv }
 
@@ -1567,7 +1567,7 @@ struct SymbolBoardWorkspaceView: View {
         guard !trimmed.isEmpty else { return }
 
         let bridge = KoinBridge()
-        bridge.setOpenSymbolsSecret(secret: resolveCellOpenSymbolsSecret())
+        bridge.setOpenSymbolsProxyUrl(url: resolveCellOpenSymbolsProxyUrl())
 
         await MainActor.run {
             isSearchingCellSymbols = true
