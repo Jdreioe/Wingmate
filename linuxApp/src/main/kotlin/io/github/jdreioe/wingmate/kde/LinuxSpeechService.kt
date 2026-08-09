@@ -23,18 +23,15 @@ class LinuxSpeechService : SpeechService {
             val ttsCommand = findTtsCommand()
             if (ttsCommand != null) {
                 val args = buildCommandArgs(ttsCommand, text, voice, pitch, rate)
-                println("[SPEECH] Executing TTS command: $args")
+                println("[SPEECH] Executing TTS engine: ${File(ttsCommand).name}")
                 val process = ProcessBuilder(args)
                     .redirectErrorStream(true)
                     .start()
                 currentProcess = process
                 
-                // Read and print any output/errors from the process
+                // Drain process output without logging it; engines may echo the spoken text.
                 val reader = process.inputStream.bufferedReader()
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    println("[SPEECH] TTS Output: $line")
-                }
+                while (reader.readLine() != null) {}
                 
                 val exitCode = process.waitFor()
                 if (currentProcess === process) {

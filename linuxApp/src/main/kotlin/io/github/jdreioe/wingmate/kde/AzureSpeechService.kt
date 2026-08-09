@@ -30,7 +30,7 @@ class AzureSpeechService(
             throw IllegalStateException("Azure Speech configuration is missing or incomplete")
         }
 
-        println("[SPEECH] Synthesizing with Azure TTS... Text: '$text', Voice: ${voice?.name}")
+        println("[SPEECH] Synthesizing with Azure TTS... Voice: ${voice?.name}")
             
             // Create default voice if null
         val voiceToUse = (voice ?: Voice(name = "en-US-JennyNeural", selectedLanguage = "en-US")).copy(

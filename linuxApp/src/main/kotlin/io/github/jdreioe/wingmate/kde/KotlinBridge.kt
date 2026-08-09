@@ -419,7 +419,7 @@ class KotlinBridge(private val port: Int = 8765) {
                     }
                     call.respond(HttpStatusCode.Accepted, speechState)
                 } catch (e: Exception) {
-                    println("[SPEECH] /api/speak error: ${e.message}")
+                    println("[SPEECH] /api/speak error (${e::class.simpleName})")
                     e.printStackTrace()
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
                 }
@@ -1245,7 +1245,7 @@ class KotlinBridge(private val port: Int = 8765) {
         } catch (error: Throwable) {
             if (speechGeneration.get() == generation) {
                 val message = error.message ?: "Speech failed"
-                println("[SPEECH] $message")
+                println("[SPEECH] Speech failed (${error::class.simpleName})")
                 error.printStackTrace()
                 speechState = SpeechStateResponse(state = "error", error = message)
                 speechJob = null

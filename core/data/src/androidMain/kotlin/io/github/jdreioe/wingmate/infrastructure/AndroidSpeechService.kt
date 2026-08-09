@@ -369,17 +369,16 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             val root = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
             val directory = File(root, "wingmate/audio").apply { mkdirs() }
             val file = File(directory, "tts_$cacheKey.mp3")
-            if (!file.exists() || file.length() == 0L) {
-                val segments = SpeechTextProcessor.processText(normalizedText)
-                val ssml = if (segments.any { !it.languageTag.isNullOrBlank() || it.pauseDurationMs > 0 }) {
-                    AzureTtsClient.generateSsml(segments, voiceForSsml, dictionary)
-                } else {
-                    AzureTtsClient.generateSsml(normalizedText, voiceForSsml, dictionary)
+                if (!file.exists() || file.length() == 0L) {
+                    val segments = SpeechTextProcessor.processText(normalizedText)
+                    val ssml = if (segments.any { !it.languageTag.isNullOrBlank() || it.pauseDurationMs > 0 }) {
+                        AzureTtsClient.generateSsml(segments, voiceForSsml, dictionary)
+                    } else {
+                        AzureTtsClient.generateSsml(normalizedText, voiceForSsml, dictionary)
+                    }
+                    val bytes = AzureTtsClient.synthesize(client, ssml, config)
+                    file.outputStream().use { it.write(bytes) }
                 }
-                println("Android Azure TTS SSML:\n$ssml")
-                val bytes = AzureTtsClient.synthesize(client, ssml, config)
-                file.outputStream().use { it.write(bytes) }
-            }
             true
         }.getOrDefault(false)
 
@@ -499,7 +498,6 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 } else {
                     AzureTtsClient.generateSsml(combinedText, vForSsml, dict)
                 }
-                println("Android Azure TTS SSML:\n$ssml")
                 val bytes = AzureTtsClient.synthesize(client, ssml, cfg)
 
                 // Persist to an app-private Music directory so history can reference it later
@@ -515,7 +513,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 recordHistory(combinedText, vForSsml, outFile.absolutePath.takeIf { cacheAudio })
                 startPlayback(outFile, vForSsml, deleteAfterPlayback = !cacheAudio)
             } catch (t: Throwable) {
-                println("Azure TTS failed, falling back to platform TTS: $t")
+                println("Azure TTS failed (${t::class.simpleName}), falling back to platform TTS")
                 // Fallback to platform TTS on error
                 recordHistory(combinedText, voice)
                 speakWithPlatformTts(combinedText, voice, pitch, rate)
@@ -825,9 +823,8 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                         visibleInHistory = visibleInHistory
                     )
                 )
-                println("DEBUG: Recorded history for: $text")
             }.onFailure { t ->
-                println("DEBUG: Failed to record history: ${t.message}")
+                println("DEBUG: Failed to record history (${t::class.simpleName})")
             }
         }
     }

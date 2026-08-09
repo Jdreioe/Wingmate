@@ -127,8 +127,8 @@ class IosSpeechService(
                 trySaveHistory(spokenText, selectedVoice, selectedVoice.pitch, selectedVoice.rate, audioFilePath)
             }
             true
-        }.getOrElse { t ->
-            logger.warn(t) { "Failed to play recorded audio file" }
+        }.onFailure { t ->
+            logger.warn { "Failed to play recorded audio file" }
             false
         }
     }
@@ -181,7 +181,7 @@ class IosSpeechService(
             }
             lookup(langCode, requireLanguageTag = false) ?: if (langCode != "en") lookup("en", requireLanguageTag = true) else null
         } catch (e: Exception) {
-            logger.warn(e) { "Failed to guess pronunciation for '$text'" }
+            logger.warn { "Failed to guess pronunciation" }
             null
         }
     }
@@ -209,7 +209,7 @@ class IosSpeechService(
             audioPlayer.prepareToPlay()
             audioPlayer.play()
         }.onFailure { t ->
-            logger.warn(t) { "Failed to play recorded audio: $path" }
+            logger.warn { "Failed to play recorded audio" }
         }
     }
 

@@ -33,7 +33,7 @@ shared/src/commonMain/kotlin/io/github/jdreioe/wingmate/
 - **No Swift/Rust re-implementation of shared logic** without a bridge call-through.
 
 ## Commit Conventions
-- **Reference the issue ticket in the commit message** (e.g. `feat: … (issue #123)` or `Closes #123`) whenever a commit addresses a GitHub issue.
+- **Start the commit message with the issue number**, followed by a concise description, using the format `#{issue number} blablabla` (for example, `#123 Add symbol search`).
 
 ## Key Patterns
 
