@@ -94,7 +94,7 @@ Compose as a required client. This roadmap overrides that for the new direction:
 | Categories CRUD / reorder | x | x | x | x |
 | Board workspace | x | x | x (SymbolBoardWorkspaceView) | x (run/edit/grid) |
 | OBF/OBZ import | x | x | x (Files) | x |
-| OBF/OBZ export | x (`exportBoardSetAsObz`) | x | [ ] verify | x |
+| OBF/OBZ export | x (`exportBoardSetAsObz`) | x | x | x |
 | Symbol search (OpenSymbols) | x | x | x (shared client now) | x (locale-aware rendering + cache) |
 | Custom symbol / photo import | x | x | x (PhotosUI) | x |
 | Symbol - source rate/modify sheets | x | x | x | [ ] |
@@ -105,8 +105,9 @@ Compose as a required client. This roadmap overrides that for the new direction:
 | F0 setup | x | x | x (F0SetupView) | x (partner window driver) |
 | System/Azure TTS | x | x | x | x (Az-Added) |
 | Voice selection | x | x | x | x |
-| Settings | x | x | x | x (several save-only settings: see LINUX_UX_AUDIT §2) |
-| Secondary / full-screen display | x (Android) | x | [ ] planned | partner window (Rust) |
+| Settings | x | x | x | x |
+| Full-screen display | x | x | x | x |
+| Hardware secondary display | platform adapter | x | not exposed (documented exception) | partner window (Rust) |
 | Custom keyboards / board set templates | x | x | x | x (blank + calculator) |
 
 ### Note on `[ ]` cells
