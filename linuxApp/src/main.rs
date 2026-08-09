@@ -344,7 +344,8 @@ struct InsertionResult {
 #[derive(Debug, Clone, Deserialize)]
 struct AzureConfig {
     endpoint: String,
-    key: String,
+    #[serde(rename = "credentialConfigured")]
+    credential_configured: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1114,7 +1115,8 @@ impl cosmic::Application for Wingmate {
             Message::LoadedAzureConfig(result) => match result {
                 Ok(config) => {
                     self.azure_endpoint = config.endpoint;
-                    self.azure_key = config.key;
+                    self.azure_key.clear();
+                    let _ = config.credential_configured;
                 }
                 Err(e) => self.status = e,
             },

@@ -55,6 +55,7 @@ data class WingmateBackupPayload(
     val selectedVoice: Voice?,
     val history: List<SaidText>,
     val dictionary: List<PronunciationEntry>,
+    /** Read-only compatibility with legacy backups. Credentials are never exported or restored. */
     val azureSpeechConfig: SpeechServiceConfig? = null
 )
 
@@ -163,6 +164,8 @@ class CompleteBackupManager(
             val payloadBytes = archive.readEntryBytes(manifest.payload.path, MAX_JSON_BYTES)
             require(payloadBytes.matches(manifest.payload)) { "Backup data checksum does not match" }
             var payload = json.decodeFromString<WingmateBackupPayload>(payloadBytes.decodeToString())
+                // Legacy backups may contain a plaintext key. Never return or import it.
+                .copy(azureSpeechConfig = null)
 
             val restoredPaths = mutableMapOf<String, String>()
             manifest.media.forEach { file ->
@@ -216,7 +219,7 @@ class CompleteBackupManager(
         selectedVoice = voiceRepository.getSelected(),
         history = saidTextRepository.list(),
         dictionary = dictionaryRepository.getAll(),
-        azureSpeechConfig = configRepository.getSpeechConfig()
+        azureSpeechConfig = null
     )
 
     private suspend fun replaceAll(payload: WingmateBackupPayload) {
@@ -236,7 +239,6 @@ class CompleteBackupManager(
         payload.selectedVoice?.let { voiceRepository.saveSelected(it) }
         saidTextRepository.addAll(payload.history)
         payload.dictionary.forEach { dictionaryRepository.add(it) }
-        payload.azureSpeechConfig?.let { configRepository.saveSpeechConfig(it) }
     }
 
     private fun validatePayload(payload: WingmateBackupPayload) {

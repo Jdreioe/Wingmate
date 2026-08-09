@@ -61,37 +61,111 @@ class JsonFileSettingsRepository : SettingsRepository {
 
 class JsonFileConfigRepository : ConfigRepository {
     private val file = File(configDir, "config.json")
-    private var cached: SpeechServiceConfig? = null
+    private val secureStore = LinuxAzureConfigStore()
+    private val mutex = Mutex()
 
-    init {
-        println("[PERSISTENCE] JsonFileConfigRepository init. File: ${file.absolutePath}")
-        if (file.exists()) {
-            try {
-                val text = file.readText()
-                cached = json.decodeFromString<SpeechServiceConfig>(text)
-                println("[PERSISTENCE] Loaded config from disk.")
-            } catch (e: Exception) {
-                println("[PERSISTENCE] Error loading config: ${e.message}")
-                e.printStackTrace()
+    override suspend fun getSpeechConfig(): SpeechServiceConfig? = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            secureStore.read()?.let(::decode)?.also {
+                check(file.delete() || !file.exists()) { "Could not delete legacy plaintext Azure configuration" }
+                return@withContext it
             }
+            if (!file.exists()) return@withContext null
+            val legacy = decode(file.readText())
+            secureStore.write(json.encodeToString(legacy))
+            check(secureStore.read()?.let(::decode) == legacy) {
+                "Secure Azure credential migration could not be verified"
+            }
+            check(file.delete() || !file.exists()) { "Could not delete legacy plaintext Azure configuration" }
+            println("[PERSISTENCE] Migrated Azure speech configuration to the desktop keyring.")
+            legacy
         }
     }
 
-    override suspend fun getSpeechConfig(): SpeechServiceConfig? = withContext(Dispatchers.IO) {
-        println("[PERSISTENCE] getSpeechConfig called. Result found: ${cached != null}")
-        cached
+    override suspend fun saveSpeechConfig(config: SpeechServiceConfig) = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            require(config.subscriptionKey.isNotBlank()) { "Azure subscription key must not be blank" }
+            secureStore.write(json.encodeToString(config))
+            check(secureStore.read()?.let(::decode) == config) { "Secure Azure credential write could not be verified" }
+            check(file.delete() || !file.exists()) { "Could not delete legacy plaintext Azure configuration" }
+            println("[PERSISTENCE] Saved Azure speech configuration securely; credentialConfigured=true")
+        }
     }
 
-    override suspend fun saveSpeechConfig(config: SpeechServiceConfig) = withContext(Dispatchers.IO) {
-        println("[PERSISTENCE] saveSpeechConfig called.")
-        cached = config
-        try {
-            file.writeText(json.encodeToString(config))
-            println("[PERSISTENCE] Saved config to disk.")
-        } catch (e: Exception) {
-            println("[PERSISTENCE] Error saving config: ${e.message}")
-            e.printStackTrace()
+    override suspend fun clearSpeechConfig() = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            secureStore.delete()
+            check(file.delete() || !file.exists()) { "Could not delete legacy plaintext Azure configuration" }
+            println("[PERSISTENCE] Cleared Azure speech configuration; credentialConfigured=false")
         }
+    }
+
+    private fun decode(value: String): SpeechServiceConfig =
+        json.decodeFromString<SpeechServiceConfig>(value)
+}
+
+/**
+ * Uses Secret Service when available, otherwise KWallet. There is intentionally
+ * no file fallback: callers receive an error and can keep the key in memory.
+ */
+private class LinuxAzureConfigStore {
+    private enum class Backend { SecretService, KWallet }
+    private val backend: Backend? by lazy {
+        when {
+            commandExists("secret-tool") -> Backend.SecretService
+            commandExists("kwallet-query") -> Backend.KWallet
+            else -> null
+        }
+    }
+
+    fun read(): String? = when (backend) {
+        Backend.SecretService -> run(listOf("secret-tool", "lookup", "application", APP_ID, "purpose", PURPOSE))
+            .takeIf { it.exitCode == 0 }?.output?.trim()?.takeIf(String::isNotEmpty)
+        Backend.KWallet -> run(listOf("kwallet-query", "-r", ENTRY, "-f", FOLDER, walletName()))
+            .takeIf { it.exitCode == 0 }?.output?.trim()?.takeIf(String::isNotEmpty)
+        null -> null
+    }
+
+    fun write(value: String) {
+        val result = when (backend) {
+            Backend.SecretService -> run(
+                listOf("secret-tool", "store", "--label=Wingmate Azure Speech configuration", "application", APP_ID, "purpose", PURPOSE),
+                value
+            )
+            Backend.KWallet -> run(listOf("kwallet-query", "-w", ENTRY, "-f", FOLDER, walletName()), value)
+            null -> error("Secure credential storage is unavailable; install Secret Service/libsecret or KWallet")
+        }
+        check(result.exitCode == 0) { result.output.ifBlank { "Could not save Azure configuration securely" } }
+    }
+
+    fun delete() {
+        if (read() == null) return
+        val result = when (backend) {
+            Backend.SecretService -> run(listOf("secret-tool", "clear", "application", APP_ID, "purpose", PURPOSE))
+            Backend.KWallet -> run(listOf("kwallet-query", "-w", ENTRY, "-f", FOLDER, walletName()), "")
+            null -> return
+        }
+        check(result.exitCode == 0) { result.output.ifBlank { "Could not clear Azure configuration" } }
+        check(read() == null) { "Secure Azure configuration deletion could not be verified" }
+    }
+
+    private fun walletName() = System.getenv("WINGMATE_KWALLET")?.takeIf(String::isNotBlank) ?: "kdewallet"
+    private data class Result(val exitCode: Int, val output: String)
+    private fun run(command: List<String>, input: String? = null): Result = runCatching {
+        val process = ProcessBuilder(command).start()
+        if (input != null) process.outputStream.bufferedWriter().use { it.write(input) } else process.outputStream.close()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        val error = process.errorStream.bufferedReader().use { it.readText() }
+        val exitCode = process.waitFor()
+        Result(exitCode, if (exitCode == 0) output else error.ifBlank { output })
+    }.getOrElse { Result(-1, it.message.orEmpty()) }
+    private fun commandExists(command: String) = run(listOf("which", command)).exitCode == 0
+
+    private companion object {
+        const val APP_ID = "io.github.jdreioe.wingmate"
+        const val PURPOSE = "azure-speech"
+        const val FOLDER = "Wingmate"
+        const val ENTRY = "azure-speech-config"
     }
 }
 

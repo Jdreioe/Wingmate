@@ -30,6 +30,16 @@ fun Voice?.withLanguageOverride(languageTag: String?): Voice? {
 data class SpeechServiceConfig(
     val endpoint: String = "",
     val subscriptionKey: String = "",
+) {
+    override fun toString(): String =
+        "SpeechServiceConfig(endpoint=$endpoint, subscriptionKey=<redacted>)"
+}
+
+/** Safe representation for settings screens and platform bridges. */
+@Serializable
+data class SpeechServiceConfigStatus(
+    val endpoint: String = "",
+    val credentialConfigured: Boolean = false,
 )
 
 @Serializable

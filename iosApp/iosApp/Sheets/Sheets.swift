@@ -1134,10 +1134,9 @@ struct AzureSettingsSheet: View {
                     loading = true
                     defer { loading = false }
                     do {
-                        if let cfg = try await bridge.getSpeechConfig() {
-                            endpoint = cfg.endpoint
-                            key = cfg.subscriptionKey
-                        }
+                        let cfg = try await bridge.getSpeechConfig()
+                        endpoint = cfg.endpoint
+                        key = ""
                     } catch { self.error = error.localizedDescription }
                 }
             }

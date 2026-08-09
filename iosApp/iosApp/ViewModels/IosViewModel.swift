@@ -399,13 +399,9 @@ final class IosViewModel: ObservableObject {
 
     func refreshAzureConfiguration() async {
         do {
-            if let cfg = try await bridge.getSpeechConfig() {
-                let ep = cfg.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-                let key = cfg.subscriptionKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                azureConfigured = !ep.isEmpty && !key.isEmpty
-            } else {
-                azureConfigured = false
-            }
+            let cfg = try await bridge.getSpeechConfig()
+            let ep = cfg.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+            azureConfigured = !ep.isEmpty && cfg.credentialConfigured
         } catch {
             azureConfigured = false
         }

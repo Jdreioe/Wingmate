@@ -51,6 +51,8 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
 
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
+    var credentialConfigured by remember { mutableStateOf(false) }
+    var replacingCredentials by remember { mutableStateOf(false) }
     var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var virtualMic by remember { mutableStateOf(false) }
     var featureUsageReportingEnabled by remember { mutableStateOf(false) }
@@ -72,12 +74,10 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
 
     LaunchedEffect(Unit) {
         // load existing config
-        val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfig() }
-        println("Loaded config: $cfg")
-        cfg?.let {
-            endpoint = it.endpoint
-            subscriptionKey = it.subscriptionKey
-        }
+        val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfigStatus() }
+        println("Loaded Azure config; credentialConfigured=${cfg.credentialConfigured}")
+        endpoint = cfg.endpoint
+        credentialConfigured = cfg.credentialConfigured
         
         // load TTS preference and UI scaling settings
         if (settingsUseCase != null) {
@@ -148,20 +148,17 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                     // Azure Configuration (only show when Azure TTS is selected)
                     if (ttsEngine != TtsEngine.SYSTEM) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        val showKeyboard = rememberShowKeyboardOnFocus()
-                        OutlinedTextField(
-                            value = endpoint,
-                            onValueChange = { endpoint = it },
-                            label = { Text(stringResource(R.string.ui_settings_region_endpoint)) },
-                            placeholder = { Text(stringResource(R.string.ui_settings_region_example)) },
-                            modifier = Modifier.then(showKeyboard)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = subscriptionKey,
-                            onValueChange = { subscriptionKey = it },
-                            label = { Text(stringResource(R.string.ui_settings_subscription_key)) },
-                            modifier = Modifier.then(showKeyboard)
+                        AzureCredentialEditor(
+                            credentialConfigured = credentialConfigured,
+                            replacingCredentials = replacingCredentials,
+                            endpoint = endpoint,
+                            onEndpointChange = { endpoint = it },
+                            subscriptionKey = subscriptionKey,
+                            onSubscriptionKeyChange = { subscriptionKey = it },
+                            onReplaceCredentials = {
+                                replacingCredentials = true
+                                subscriptionKey = ""
+                            }
                         )
                     }
 
@@ -369,7 +366,10 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                         }
 
                         // Save Azure config only if Azure TTS is selected
-                        if (ttsEngine != TtsEngine.SYSTEM && endpoint.isNotBlank() && subscriptionKey.isNotBlank()) {
+                        if (ttsEngine != TtsEngine.SYSTEM &&
+                            (!credentialConfigured || replacingCredentials) &&
+                            endpoint.isNotBlank() && subscriptionKey.isNotBlank()
+                        ) {
                             println("Saving speech config: endpoint='$endpoint'")
                             try {
                                 configRepo.saveSpeechConfig(SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey))

@@ -264,6 +264,8 @@
     <string name="azure_setup_save_continue">Save and continue</string>
     <string name="azure_setup_complete_title">All set!</string>
     <string name="azure_setup_complete_description">Your Azure Speech credentials are saved securely on this device.</string>
+    <string name="azure_credentials_configured">Azure Speech credentials are securely configured on this device.</string>
+    <string name="azure_credentials_replace">Replace Azure credentials</string>
     <string name="azure_setup_error_endpoint">Enter the Speech endpoint or region.</string>
     <string name="azure_setup_error_key">Enter a Speech subscription key.</string>
     <string name="azure_setup_error_save">Could not save the Azure credentials: %1$s</string>

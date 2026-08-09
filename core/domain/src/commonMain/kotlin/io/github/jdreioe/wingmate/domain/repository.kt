@@ -54,8 +54,17 @@ interface SaidTextRepository {
 }
 
 interface ConfigRepository {
+    /** Internal credential-bearing API. Never expose its result to a UI or platform API. */
     suspend fun getSpeechConfig(): SpeechServiceConfig?
     suspend fun saveSpeechConfig(config: SpeechServiceConfig)
+    suspend fun clearSpeechConfig()
+    suspend fun getSpeechConfigStatus(): SpeechServiceConfigStatus {
+        val config = getSpeechConfig()
+        return SpeechServiceConfigStatus(
+            endpoint = config?.endpoint.orEmpty(),
+            credentialConfigured = !config?.subscriptionKey.isNullOrBlank()
+        )
+    }
 }
 
 interface SpeechService {
