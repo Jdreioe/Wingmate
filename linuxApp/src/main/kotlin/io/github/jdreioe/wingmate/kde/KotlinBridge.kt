@@ -3,15 +3,11 @@ package io.github.jdreioe.wingmate.kde
 import io.github.jdreioe.wingmate.initKoin
 import org.koin.dsl.module
 import io.ktor.http.*
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsChannel
-import io.ktor.utils.io.core.readBytes
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.contentnegotiation.*
-import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -30,11 +26,15 @@ import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
+import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.ObfImageSource
+import io.github.jdreioe.wingmate.domain.obf.ObfSymbol
+import io.github.jdreioe.wingmate.domain.obf.resolveObfImageSource
 import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
 import io.github.jdreioe.wingmate.domain.obf.fieldItems
 import io.github.jdreioe.wingmate.domain.obf.joinSentenceText
 import io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion
-import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import io.github.jdreioe.wingmate.domain.obf.orderedPredictionButtonIds
 import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
@@ -68,8 +68,16 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import java.io.File
+import java.net.Inet4Address
+import java.net.Inet6Address
+import java.net.InetAddress
 import java.net.URI
+import java.net.UnknownHostException
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.security.MessageDigest
+import java.security.SecureRandom
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.atomic.AtomicLong
@@ -80,6 +88,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class KotlinBridge(private val port: Int = 8765) {
     private val scope = CoroutineScope(Dispatchers.Default + kotlinx.coroutines.SupervisorJob())
+    private val authToken: String = resolveBridgeToken()
     private val phraseViewModel = PhraseViewModel()
     private val settingsManager = SettingsManager()
     private val configRepository: ConfigRepository by lazy { GlobalContext.get().get() }
@@ -123,7 +132,7 @@ class KotlinBridge(private val port: Int = 8765) {
         encodeDefaults = true
     }
     
-    private val server = embeddedServer(Netty, port = port) {
+    private val server = embeddedServer(Netty, port = port, host = "127.0.0.1") {
         install(ContentNegotiation) {
             json(Json {
                 ignoreUnknownKeys = true
@@ -131,17 +140,22 @@ class KotlinBridge(private val port: Int = 8765) {
                 encodeDefaults = true
             })
         }
-        
-        install(CORS) {
-            allowMethod(HttpMethod.Get)
-            allowMethod(HttpMethod.Post)
-            allowMethod(HttpMethod.Put)
-            allowMethod(HttpMethod.Delete)
-            allowHeader(HttpHeaders.ContentType)
-            anyHost()
-        }
-        
+
         routing {
+            // Capability-token gate: every request must carry the per-process
+            // token shared with the Rust client (env when spawned, or the
+            // runtime file when an earlier bridge is being reused).
+            intercept(ApplicationCallPipeline.Call) {
+                val presented = call.request.headers[TOKEN_HEADER_NAME]
+                if (presented.isNullOrBlank() || presented != authToken) {
+                    call.respond(
+                        HttpStatusCode.Unauthorized,
+                        mapOf("error" to "invalid bridge token"),
+                    )
+                    return@intercept
+                }
+            }
+
             // Phrases
             get("/api/phrases") {
                 val phrases = phraseViewModel.phrases.firstOrNull() ?: emptyList()
@@ -547,10 +561,10 @@ class KotlinBridge(private val port: Int = 8765) {
 
             post("/api/pronunciation/import") {
                 try {
-                    val path = json.parseToJsonElement(call.receiveText()).jsonObject["path"]
-                        ?.jsonPrimitive?.contentOrNull.orEmpty()
-                    val file = File(path)
-                    require(file.isFile) { "Dictionary file does not exist" }
+                    val file = requireSelectedPath(
+                        json.parseToJsonElement(call.receiveText()).jsonObject["path"]
+                            ?.jsonPrimitive?.contentOrNull.orEmpty()
+                    )
                     require(file.length() <= 5L * 1024L * 1024L) { "Dictionary file is too large" }
                     val entries = if (file.extension.equals("csv", ignoreCase = true)) {
                         file.readLines().dropWhile { it.isBlank() }.drop(1).mapNotNull { line ->
@@ -609,8 +623,10 @@ class KotlinBridge(private val port: Int = 8765) {
                 try {
                     val body = json.parseToJsonElement(call.receiveText()).jsonObject
                     val path = body["path"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                    if (path.isBlank()) return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing path"))
-                    val result = GlobalContext.get().get<io.github.jdreioe.wingmate.application.CompleteBackupManager>().restoreBackup(path)
+                    val file = requireSelectedPath(path)
+                    val result = GlobalContext.get()
+                        .get<io.github.jdreioe.wingmate.application.CompleteBackupManager>()
+                        .restoreBackup(file.path)
                     val message = when (result) {
                         is io.github.jdreioe.wingmate.application.BackupRestoreResult.Success -> {
                             trainPredictionModel()
@@ -631,27 +647,39 @@ class KotlinBridge(private val port: Int = 8765) {
                     val body = json.parseToJsonElement(call.receiveText()).jsonObject
                     val query = body["query"]?.jsonPrimitive?.contentOrNull ?: ""
                     val locale = body["locale"]?.jsonPrimitive?.contentOrNull ?: "en"
-                    val result = OpenSymbolsClient.search(query, locale)
-                    val symbols = when (result) {
-                        is OpenSymbolsClient.SearchResponse.Success -> result.symbols.map {
-                            mapOf("id" to it.id, "name" to it.name, "imageUrl" to it.image_url)
-                        }
-                        is OpenSymbolsClient.SearchResponse.Failure -> emptyList<Map<String, Any?>>()
+                    when (val result = OpenSymbolsClient.search(query, locale)) {
+                        is OpenSymbolsClient.SearchResponse.Success -> call.respond(
+                            LinuxSymbolSearchResponse(
+                                result.symbols.map {
+                                    LinuxSymbolResult(
+                                        id = it.id,
+                                        name = it.name,
+                                        imageUrl = it.image_url,
+                                    )
+                                }
+                            )
+                        )
+                        is OpenSymbolsClient.SearchResponse.Failure -> call.respond(
+                            HttpStatusCode.ServiceUnavailable,
+                            mapOf("error" to "Symbol search failed: ${result.error}"),
+                        )
                     }
-                    call.respond(mapOf("symbols" to symbols))
                 } catch (error: Throwable) {
-                    call.respond(HttpStatusCode.OK, mapOf("symbols" to emptyList<Map<String, Any?>>()))
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        mapOf("error" to (error.message ?: "Symbol search failed")),
+                    )
                 }
             }
 
-            // Proxy-fetch an image URL through the shared HTTP client, returning base64 bytes.
+            // Proxy-fetch an image URL through a hardened HTTP client, returning base64 bytes.
             // Lets the Rust UI render remote symbol images without its own HTTP/network stack.
             post("/api/images/fetch") {
                 try {
                     val body = json.parseToJsonElement(call.receiveText()).jsonObject
                     val url = body["url"]?.jsonPrimitive?.contentOrNull.orEmpty()
                     if (url.isBlank()) return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing url"))
-                    val localFile = localImageFile(url)
+                    val localFile = trustedLocalImageFile(url)
                     val cacheFile = File(imageCacheDirectory(), sha256(url))
                     val bytes: ByteArray
                     val contentType: String
@@ -659,22 +687,16 @@ class KotlinBridge(private val port: Int = 8765) {
                         require(localFile.isFile) { "Image file does not exist" }
                         require(localFile.length() <= MAX_IMAGE_BYTES) { "Image is too large" }
                         bytes = localFile.readBytes()
-                        contentType = Files.probeContentType(localFile.toPath()) ?: "image/png"
+                        contentType = Files.probeContentType(localFile.toPath()) ?: contentTypeForBytes(bytes)
                     } else if (cacheFile.isFile) {
                         bytes = cacheFile.readBytes()
-                        contentType = "image/png"
+                        contentType = contentTypeForBytes(bytes)
                     } else {
-                        val client = io.ktor.client.HttpClient()
-                        try {
-                            val response = client.get(url)
-                            bytes = response.bodyAsChannel().readRemaining(MAX_IMAGE_BYTES + 1).readBytes()
-                            require(bytes.size <= MAX_IMAGE_BYTES) { "Image is too large" }
-                            contentType = response.contentType()?.toString() ?: "image/png"
-                            cacheFile.parentFile.mkdirs()
-                            cacheFile.writeBytes(bytes)
-                        } finally {
-                            client.close()
-                        }
+                        val fetched = fetchRemoteImageBytes(url)
+                        bytes = fetched.first
+                        contentType = fetched.second
+                        cacheFile.parentFile.mkdirs()
+                        cacheFile.writeBytes(bytes)
                     }
                     call.respond(mapOf(
                         "data" to java.util.Base64.getEncoder().encodeToString(bytes),
@@ -687,10 +709,10 @@ class KotlinBridge(private val port: Int = 8765) {
 
             post("/api/images/import") {
                 try {
-                    val sourcePath = json.parseToJsonElement(call.receiveText()).jsonObject["path"]
-                        ?.jsonPrimitive?.contentOrNull.orEmpty()
-                    val source = File(sourcePath)
-                    require(source.isFile) { "Image file does not exist" }
+                    val source = requireSelectedPath(
+                        json.parseToJsonElement(call.receiveText()).jsonObject["path"]
+                            ?.jsonPrimitive?.contentOrNull.orEmpty()
+                    )
                     require(source.length() <= MAX_IMAGE_BYTES) { "Image is too large" }
                     val extension = source.extension.lowercase().takeIf { it in setOf("png", "jpg", "jpeg", "svg") }
                         ?: "img"
@@ -700,6 +722,28 @@ class KotlinBridge(private val port: Int = 8765) {
                     call.respond(HttpStatusCode.Created, mapOf("url" to destination.toURI().toString()))
                 } catch (error: Throwable) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to (error.message ?: "image import failed")))
+                }
+            }
+
+            // Resolve a board image's best source into bytes, following the
+            // shared OBF priority order (data → dataUrl → path → url → symbol).
+            post("/api/images/resolve") {
+                try {
+                    val imageElement = json.parseToJsonElement(call.receiveText())
+                        .jsonObject["image"] ?: return@post call.respond(
+                        HttpStatusCode.BadRequest, mapOf("error" to "missing image")
+                    )
+                    val image = json.decodeFromJsonElement<ObfImage>(imageElement)
+                    val resolved = resolveObfImageBytes(image)
+                        ?: return@post call.respond(
+                            HttpStatusCode.NotFound, mapOf("error" to "image has no resolvable source")
+                        )
+                    call.respond(mapOf(
+                        "data" to java.util.Base64.getEncoder().encodeToString(resolved.first),
+                        "contentType" to resolved.second,
+                    ))
+                } catch (error: Throwable) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (error.message ?: "image resolve failed")))
                 }
             }
 
@@ -726,8 +770,10 @@ class KotlinBridge(private val port: Int = 8765) {
             }
 
             post("/api/boardsets/import") {
-                val path = json.parseToJsonElement(call.receiveText()).jsonObject["path"]?.jsonPrimitive?.contentOrNull
-                    ?: return@post call.respond(HttpStatusCode.BadRequest)
+                val path = requireSelectedPath(
+                    json.parseToJsonElement(call.receiveText()).jsonObject["path"]
+                        ?.jsonPrimitive?.contentOrNull.orEmpty()
+                ).path
                 val imported = boardImportService.importBoardSetFromPath(path)
                     ?: return@post call.respond(HttpStatusCode.BadRequest)
                 call.respond(HttpStatusCode.Created, imported)
@@ -1300,6 +1346,16 @@ data class SpeechStateResponse(
 )
 
 @Serializable
+data class LinuxSymbolSearchResponse(val symbols: List<LinuxSymbolResult>)
+
+@Serializable
+data class LinuxSymbolResult(
+    val id: Long,
+    val name: String,
+    val imageUrl: String? = null,
+)
+
+@Serializable
 data class EditingAccessResponse(
     val enabled: Boolean = false,
     val unlocked: Boolean = true,
@@ -1374,6 +1430,10 @@ data class BoardSessionResponse(
 )
 
 private const val MAX_IMAGE_BYTES = 20L * 1024L * 1024L
+private const val MAX_REDIRECT_HOPS = 5
+private val IMAGE_TIMEOUT: java.time.Duration = java.time.Duration.ofSeconds(30)
+
+private const val TOKEN_HEADER_NAME = "X-Wingmate-Token"
 
 private fun imageCacheDirectory(): File =
     File(System.getenv("XDG_CACHE_HOME")?.takeIf { it.isNotBlank() }
@@ -1383,10 +1443,350 @@ private fun imageDataDirectory(): File =
     File(System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() }
         ?: File(System.getProperty("user.home"), ".local/share").path, "wingmate/images")
 
-private fun localImageFile(source: String): File? = when {
-    source.startsWith("file:") -> runCatching { File(URI(source)) }.getOrNull()
-    source.startsWith('/') -> File(source)
-    else -> null
+/**
+ * Files imported by the app itself (board-set media in the shared
+ * JvmFileStorage root, or images imported through the editor) are the only
+ * local-image targets the fetch endpoint will serve. Everything else
+ * (schema-less strings, arbitrary absolute paths, symlinked files) is
+ * rejected.
+ */
+fun trustedLocalImageFile(source: String): File? {
+    val file = when {
+        source.startsWith("file:") -> runCatching { File(java.net.URI(source)) }.getOrNull()
+        source.startsWith('/') -> File(source)
+        else -> null
+    } ?: return null
+    if (!file.isAbsolute) return null
+    val canonical = runCatching { file.canonicalFile }.getOrNull() ?: return null
+    val roots = listOf(imageDataDirectory(), fileStorageRoot()).map { runCatching { it.canonicalFile }.getOrNull() ?: it }
+    return roots
+        .firstOrNull { root -> canonical.path == root.path || canonical.path.startsWith(root.path + File.separator) }
+        ?.let { canonical }
+}
+
+private fun fileStorageRoot(): File =
+    File(System.getProperty("user.home"), ".wingmate/files")
+
+/**
+ * Materialize an OBF image's bytes, walking the shared priority order
+ * (data → dataUrl → path → url → symbol) and stopping at the first source that
+ * can produce valid pixels. Returns null when no source resolves.
+ */
+fun resolveObfImageBytes(image: ObfImage): Pair<ByteArray, String>? {
+    val declaredType = image.contentType?.takeIf { it.isNotBlank() }
+    return when (val source = resolveObfImageSource(image)) {
+        is ObfImageSource.DataUri -> {
+            val decoded = decodeInlineImage(source.data) ?: return null
+            validateImageContent(decoded.first, declaredType.orEmpty())
+            decoded.first to (declaredType ?: contentTypeForBytes(decoded.first))
+        }
+        is ObfImageSource.Path -> bytesForImagePath(source.path, declaredType)
+        is ObfImageSource.Url -> runCatching { fetchRemoteImageBytes(source.url) }.getOrNull()
+        is ObfImageSource.Symbol -> resolveImageSymbolBytes(source.symbol)
+        ObfImageSource.None -> null
+    }
+}
+
+/** Decodes either a `data:` URI or a raw base64 payload into (bytes, media-type). */
+fun decodeInlineImage(raw: String): Pair<ByteArray, String?>? {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return null
+    val (payload, mediaType) = runCatching {
+        if (trimmed.startsWith("data:", ignoreCase = true)) {
+            val comma = trimmed.indexOf(',')
+            if (comma < 0) return null
+            val header = trimmed.substring(5, comma)
+            val body = trimmed.substring(comma + 1)
+            val isBase64 = header.lowercase().split(';').any { it == "base64" }
+            val bytes = if (isBase64) {
+                java.util.Base64.getDecoder().decode(body)
+            } else {
+                java.net.URLDecoder.decode(body, Charsets.UTF_8).encodeToByteArray()
+            }
+            bytes to header.substringBefore(';').lowercase().takeIf { it.isNotBlank() }
+        } else {
+            java.util.Base64.getDecoder().decode(trimmed) to null
+        }
+    }.getOrNull() ?: return null
+    if (payload.isEmpty()) return null
+    return payload to mediaType
+}
+
+fun bytesForImagePath(rawPath: String, declaredType: String?): Pair<ByteArray, String>? {
+    val file = trustedLocalImageFile(rawPath) ?: resolveRelativeImagePath(rawPath) ?: return null
+    if (!file.isFile || file.length() > MAX_IMAGE_BYTES) return null
+    val bytes = file.readBytes()
+    return bytes to (declaredType ?: contentTypeForBytes(bytes))
+}
+
+/** Relative OBF media paths ("images/x.png") resolve from the app's trusted data roots. */
+fun resolveRelativeImagePath(rawPath: String): File? {
+    val safe = rawPath.replace('\\', '/')
+    val relative = if (safe.startsWith('/')) safe.trimStart('/') else safe
+    return listOf(imageDataDirectory(), fileStorageRoot()).firstNotNullOfOrNull { root ->
+        val canonicalRoot = runCatching { root.canonicalFile }.getOrNull() ?: return@firstNotNullOfOrNull null
+        val candidate = runCatching { File(canonicalRoot, relative).canonicalFile }.getOrNull()
+            ?: return@firstNotNullOfOrNull null
+        if (candidate.path == canonicalRoot.path || candidate.path.startsWith(canonicalRoot.path + File.separator)) {
+            candidate
+        } else {
+            null
+        }
+    }
+}
+
+/**
+ * Symbol-only boards resolve through a configured OpenSymbols image URL
+ * template so no provider-specific host is hardcoded in the client. The
+ * template receives {library_key}, {set}, and {filename} placeholders.
+ */
+private fun resolveImageSymbolBytes(symbol: ObfSymbol): Pair<ByteArray, String>? {
+    val filename = symbol.filename?.takeIf { it.isNotBlank() } ?: return null
+    val template = System.getenv("WINGMATE_OPENSYMBOLS_IMAGE_URL_TEMPLATE")
+        ?.takeIf { it.isNotBlank() } ?: return null
+    val url = template
+        .replace("{library_key}", symbol.libraryKey?.let(::urlEncodePathSegment).orEmpty())
+        .replace("{set}", symbol.set?.let(::urlEncodePathSegment) ?: "opensymbols")
+        .replace("{filename}", urlEncodePathSegment(filename))
+    return runCatching { fetchRemoteImageBytes(url) }.getOrNull()
+}
+
+private fun urlEncodePathSegment(value: String): String =
+    java.net.URLEncoder.encode(value.replace('/', '_'), Charsets.UTF_8).replace("+", "%20")
+
+fun requireSelectedPath(value: String): File {
+    require(value.isNotBlank()) { "Missing file path" }
+    val file = File(value)
+    require(file.isAbsolute) { "File path must be absolute" }
+    require(file.exists()) { "Selected file does not exist" }
+    require(file.isFile) { "Selected path is not a file" }
+    return file
+}
+
+private val bridgeHttpClient: HttpClient = HttpClient.newBuilder()
+    .connectTimeout(java.time.Duration.ofSeconds(10))
+    .followRedirects(HttpClient.Redirect.NEVER)
+    .build()
+
+/**
+ * Fetch remote image bytes with SSRF-safe target validation, a manually
+ * re-validated redirect loop, timeouts, a hard byte limit, and content-type
+ * / magic-byte validation. Returns (bytes, content-type).
+ */
+private fun fetchRemoteImageBytes(source: String): Pair<ByteArray, String> {
+    var current: URI = validatedImageUri(source)
+        ?: throw IllegalArgumentException("Image target is not allowed to be fetched")
+    var hops = 0
+    while (true) {
+        require(hops <= MAX_REDIRECT_HOPS) { "Image target redirect limit exceeded" }
+        val request = HttpRequest.newBuilder(current)
+            .timeout(IMAGE_TIMEOUT)
+            .header("User-Agent", "Wingmate/1.0 (Linux)")
+            .GET()
+            .build()
+        val response = bridgeHttpClient.send(request, HttpResponse.BodyHandlers.ofInputStream())
+        val status = response.statusCode()
+        if (status in 300..399) {
+            val location = response.headers().firstValue("Location").orElse(null)
+            response.body().close()
+            if (location.isNullOrBlank()) {
+                throw IllegalArgumentException("Image target redirected without a Location")
+            }
+            hops += 1
+            val redirected = validatedRedirectUri(current, location)
+                ?: throw IllegalArgumentException("Image redirect target is not allowed: $location")
+            current = redirected
+            continue
+        }
+        if (status !in 200..299) {
+            response.body().close()
+            throw IllegalArgumentException("Image target returned HTTP $status")
+        }
+        val body = response.body().readNBytes(MAX_IMAGE_BYTES.toInt() + 1)
+        if (body.size > MAX_IMAGE_BYTES) throw IllegalArgumentException("Image is too large")
+        val declaredType = response.headers().firstValue("Content-Type").orElse("")
+            .substringBefore(';').trim().lowercase()
+        validateImageContent(body, declaredType)
+        return body to (declaredType.takeIf { it.isNotBlank() } ?: contentTypeForBytes(body))
+    }
+}
+
+/**
+ * Rejects anything that could target the local machine or a private network:
+ * non-http(s) schemes, unresolved hosts, loopback, link-local, private,
+ * multicast/reserved IPv4, and loopback/ULA/link-local/mapped IPv6.
+ */
+fun validatedImageUri(source: String): URI? {
+    val uri = runCatching { URI(source.trim()) }.getOrNull() ?: return null
+    return if (isAllowedRemoteTarget(uri)) uri else null
+}
+
+fun validatedRedirectUri(base: URI, location: String): URI? {
+    val resolved = runCatching { base.resolve(location) }.getOrNull() ?: return null
+    return if (isAllowedRemoteTarget(resolved)) resolved else null
+}
+
+fun isAllowedRemoteTarget(uri: URI): Boolean {
+    val scheme = uri.scheme?.lowercase() ?: return false
+    if (scheme != "http" && scheme != "https") return false
+    val host = uri.host?.lowercase() ?: return false
+    if (host.isBlank()) return false
+    if (uri.rawUserInfo != null) return false
+    val addresses = try {
+        if (host == "localhost") listOf(InetAddress.getByName("127.0.0.1"))
+        else InetAddress.getAllByName(host).toList()
+    } catch (error: UnknownHostException) {
+        return false
+    } catch (error: SecurityException) {
+        return false
+    }
+    return addresses.isNotEmpty() && addresses.all { !isDangerousAddress(it) }
+}
+
+fun isDangerousAddress(address: InetAddress): Boolean =
+    when (address) {
+        is Inet4Address -> {
+            val octets = address.address.map { it.toInt() and 0xFF }
+            val (a, b, c, d) = octets
+            a == 0 || d == 0 || d == 255 ||                       // unspecified, network, broadcast
+                a == 127 ||                                        // loopback
+                a == 10 ||                                         // private-10/8
+                (a == 172 && b in 16..31) ||                       // private-172.16/12
+                (a == 192 && b == 168) ||                          // private-192.168/16
+                (a == 169 && b == 254) ||                          // link-local
+                (a == 192 && b == 0 && c == 0) ||                  // IETF protocol assignment
+                (a == 198 && b == 18) ||                           // benchmarking-198.18/15
+                a >= 224                                           // multicast + reserved
+        }
+is Inet6Address -> {
+            val bytes = address.address
+            val first = bytes[0].toInt() and 0xFF
+            val isMappedIpv4 = bytes.take(10).all { it == 0.toByte() } &&
+                bytes[10] == 0xFF.toByte() && bytes[11] == 0xFF.toByte()
+            val isLoopback = bytes.last() == 1.toByte() && bytes.dropLast(1).all { it == 0.toByte() }
+            if (isMappedIpv4) {
+                return true // reject IPv4-mapped IPv6 outright
+            }
+            first == 0xFC || first == 0xFD ||             // ULA fc00::/7
+                (first and 0xC0) == 0x80 ||               // link-local fe80::/10
+                first == 0xFF ||                           // multicast ff00::/8
+                bytes.all { it == 0.toByte() } ||         // unspecified ::
+                isLoopback
+        }
+        else -> false
+    }
+
+fun validateImageContent(bytes: ByteArray, declaredType: String) {
+    require(bytes.isNotEmpty()) { "Image is empty" }
+    val typeDeclaredOk = declaredType.isBlank() ||
+        declaredType == "application/octet-stream" ||
+        declaredType.startsWith("image/")
+    require(typeDeclaredOk) { "Image target did not return image content (content-type: $declaredType)" }
+    if (declaredType.isBlank()) {
+        require(sniffsSupportedImage(bytes)) { "Image target did not return a supported image format" }
+    }
+}
+
+fun sniffsSupportedImage(bytes: ByteArray): Boolean {
+    if (bytes.size < 4) return false
+    return when {
+        bytes[0] == 0x89.toByte() && bytes[1] == 'P'.code.toByte() &&
+            bytes[2] == 'N'.code.toByte() && bytes[3] == 'G'.code.toByte() -> true
+        bytes[0] == (-1).toByte() && bytes[1] == (-8).toByte() && bytes[2] == (-1).toByte() -> true // FFD8FF
+        bytes[0] == 'G'.code.toByte() && bytes[1] == 'I'.code.toByte() &&
+            bytes[2] == 'F'.code.toByte() && bytes[3] == '8'.code.toByte() -> true
+        bytes[0] == 'R'.code.toByte() && bytes[1] == 'I'.code.toByte() &&
+            bytes[2] == 'F'.code.toByte() && bytes[3] == 'F'.code.toByte() &&
+            bytes.size > 11 && bytes[8] == 'W'.code.toByte() && bytes[9] == 'E'.code.toByte() &&
+            bytes[10] == 'B'.code.toByte() && bytes[11] == 'P'.code.toByte() -> true
+        bytes[0] == 'B'.code.toByte() && bytes[1] == 'M'.code.toByte() -> true
+        bytes[0] == 0x00.toByte() && bytes[1] == 0x00.toByte() &&
+            (bytes[2] == 1.toByte() || bytes[2] == 2.toByte()) -> true // ICO/CUR
+        else -> prefersSvg(bytes)
+    }
+}
+
+private fun prefersSvg(bytes: ByteArray): Boolean {
+    val prefix = bytes.take(1024).dropWhile { it == ' '.code.toByte() || it == '\t'.code.toByte() ||
+        it == '\n'.code.toByte() || it == '\r'.code.toByte() || it == 0xEF.toByte() }
+    val ascii = prefix.map { it.toInt() and 0xFF }
+    val svgIndex = indexOfIgnoreCase(ascii, listOf('<'.code, 's'.code, 'v'.code, 'g'.code))
+    if (svgIndex < 0) return false
+    // Verify it is the opening `<svg` (allows for an optional XML declaration
+    // and attributes), rather than an unrelated angle bracket comparison.
+    return ascii.drop(svgIndex).take(4) == listOf('<'.code, 's'.code, 'v'.code, 'g'.code)
+}
+
+private fun indexOfIgnoreCase(haystack: List<Int>, needle: List<Int>): Int {
+    if (needle.isEmpty() || haystack.size < needle.size) return -1
+    for (index in 0..haystack.size - needle.size) {
+        if (haystack
+                .subList(index, index + needle.size)
+                .zip(needle)
+                .all { (a, b) -> a == b || (a in 65..90 && a + 32 == b) || (a in 97..122 && a - 32 == b) }
+        ) {
+            return index
+        }
+    }
+    return -1
+}
+
+fun contentTypeForBytes(bytes: ByteArray): String = when {
+    bytes.size >= 4 && bytes[0] == 0x89.toByte() && bytes[1] == 'P'.code.toByte() -> "image/png"
+    bytes.size >= 3 && bytes[0] == (-1).toByte() && bytes[1] == (-8).toByte() -> "image/jpeg"
+    bytes.size >= 4 && bytes[0] == 'G'.code.toByte() && bytes[1] == 'I'.code.toByte() -> "image/gif"
+    bytes.size >= 12 && bytes[0] == 'R'.code.toByte() && bytes[1] == 'I'.code.toByte() -> "image/webp"
+    bytes.size >= 2 && bytes[0] == 'B'.code.toByte() && bytes[1] == 'M'.code.toByte() -> "image/bmp"
+    looksLikeSvg(bytes) -> "image/svg+xml"
+    else -> "image/png"
+}
+
+private fun looksLikeSvg(bytes: ByteArray): Boolean {
+    val needle = listOf('<'.code, 's'.code, 'v'.code, 'g'.code)
+    return indexOfIgnoreCase(bytes.take(1024).map { it.toInt() and 0xFF }, needle) >= 0
+}
+
+private fun bridgeTokenFile(): File {
+    val stateHome = System.getenv("XDG_STATE_HOME")?.takeIf { it.isNotBlank() }
+        ?: File(System.getProperty("user.home"), ".local/state").path
+    return File(File(stateHome, "wingmate"), "bridge-token")
+}
+
+/**
+ * Per-process bridge capability token: prefer the token the Rust driver
+ * injected into the child environment, then reuse the token persisted by the
+ * already-running backend (reuse case), otherwise generate a fresh one.
+ * The resolved token is persisted owner-only for reuse by later processes.
+ */
+private fun resolveBridgeToken(): String {
+    val file = bridgeTokenFile()
+    val envToken = System.getenv("WINGMATE_BRIDGE_TOKEN")?.trim()?.takeIf { it.length >= 16 }
+    val persisted = runCatching { file.readText().trim() }.getOrNull()?.takeIf { it.length >= 16 }
+    if (envToken != null) {
+        if (persisted != envToken) writeBridgeTokenFile(file, envToken)
+        return envToken
+    }
+    if (persisted != null) return persisted
+    val generated = secureRandomToken()
+    writeBridgeTokenFile(file, generated)
+    return generated
+}
+
+private fun writeBridgeTokenFile(file: File, token: String) {
+    runCatching {
+        file.parentFile.mkdirs()
+        val temporary = File(file.parentFile, "${file.name}.tmp")
+        temporary.writeText(token)
+        temporary.setReadable(true, true)
+        temporary.setWritable(true, true)
+        Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+    }.onFailure { println("[TOKEN] Could not persist bridge token: ${it.message}") }
+}
+
+fun secureRandomToken(): String {
+    val bytes = ByteArray(32)
+    SecureRandom().nextBytes(bytes)
+    return bytes.joinToString("") { "%02x".format(it) }
 }
 
 private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")

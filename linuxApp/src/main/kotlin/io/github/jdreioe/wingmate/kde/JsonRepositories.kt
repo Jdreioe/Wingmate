@@ -9,6 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.freedesktop.dbus.annotations.DBusInterfaceName
+import org.freedesktop.dbus.connections.impl.DBusConnectionBuilder
+import org.freedesktop.dbus.interfaces.DBusInterface
 import java.io.File
 
 private val configDir = File(System.getProperty("user.home"), ".config/wingmate").apply { mkdirs() }
@@ -66,19 +69,24 @@ class JsonFileConfigRepository : ConfigRepository {
 
     override suspend fun getSpeechConfig(): SpeechServiceConfig? = mutex.withLock {
         withContext(Dispatchers.IO) {
-            secureStore.read()?.let(::decode)?.also {
+            // A legacy file is authoritative until it has been verified in
+            // secure storage. This avoids silently selecting an older keyring
+            // value if an earlier migration was interrupted or mismatched.
+            if (file.exists()) {
+                val legacy = decode(file.readText())
+                secureStore.write(json.encodeToString(legacy))
+                val stored = secureStore.readAfterWrite()?.let(::decode)
+                check(stored == legacy) {
+                    "Secure Azure credential migration could not be verified " +
+                        "(stored=${stored != null}, endpointMatches=${stored?.endpoint == legacy.endpoint}, " +
+                        "credentialMatches=${stored?.subscriptionKey == legacy.subscriptionKey}, " +
+                        "secureStore=${secureStore.lastReadDiagnostic})"
+                }
                 check(file.delete() || !file.exists()) { "Could not delete legacy plaintext Azure configuration" }
-                return@withContext it
+                println("[PERSISTENCE] Migrated Azure speech configuration to the desktop keyring.")
+                return@withContext legacy
             }
-            if (!file.exists()) return@withContext null
-            val legacy = decode(file.readText())
-            secureStore.write(json.encodeToString(legacy))
-            check(secureStore.read()?.let(::decode) == legacy) {
-                "Secure Azure credential migration could not be verified"
-            }
-            check(file.delete() || !file.exists()) { "Could not delete legacy plaintext Azure configuration" }
-            println("[PERSISTENCE] Migrated Azure speech configuration to the desktop keyring.")
-            legacy
+            secureStore.read()?.let(::decode)
         }
     }
 
@@ -86,7 +94,12 @@ class JsonFileConfigRepository : ConfigRepository {
         withContext(Dispatchers.IO) {
             require(config.subscriptionKey.isNotBlank()) { "Azure subscription key must not be blank" }
             secureStore.write(json.encodeToString(config))
-            check(secureStore.read()?.let(::decode) == config) { "Secure Azure credential write could not be verified" }
+            val stored = secureStore.readAfterWrite()?.let(::decode)
+            check(stored == config) {
+                "Secure Azure credential write could not be verified " +
+                    "(stored=${stored != null}, endpointMatches=${stored?.endpoint == config.endpoint}, " +
+                    "credentialMatches=${stored?.subscriptionKey == config.subscriptionKey})"
+            }
             check(file.delete() || !file.exists()) { "Could not delete legacy plaintext Azure configuration" }
             println("[PERSISTENCE] Saved Azure speech configuration securely; credentialConfigured=true")
         }
@@ -118,21 +131,36 @@ private class LinuxAzureConfigStore {
         }
     }
 
+    @Volatile var lastReadDiagnostic: String = "not attempted"
+        private set
+
     fun read(): String? = when (backend) {
         Backend.SecretService -> run(listOf("secret-tool", "lookup", "application", APP_ID, "purpose", PURPOSE))
+            .also { lastReadDiagnostic = "Secret Service lookup exit=${it.exitCode}" }
             .takeIf { it.exitCode == 0 }?.output?.trim()?.takeIf(String::isNotEmpty)
-        Backend.KWallet -> run(listOf("kwallet-query", "-r", ENTRY, "-f", FOLDER, walletName()))
-            .takeIf { it.exitCode == 0 }?.output?.trim()?.takeIf(String::isNotEmpty)
-        null -> null
+        Backend.KWallet -> readKWallet()
+        null -> null.also { lastReadDiagnostic = "no secure-store command found" }
     }
+
+    fun readAfterWrite(): String? = read()
 
     fun write(value: String) {
         val result = when (backend) {
-            Backend.SecretService -> run(
-                listOf("secret-tool", "store", "--label=Wingmate Azure Speech configuration", "application", APP_ID, "purpose", PURPOSE),
-                value
-            )
-            Backend.KWallet -> run(listOf("kwallet-query", "-w", ENTRY, "-f", FOLDER, walletName()), value)
+            // `secret-tool store` can leave multiple items with the same
+            // attributes behind. A later lookup is then allowed to return an
+            // older value, making a successful migration look unverified.
+            // Clear matching entries first so the value we verify is the one
+            // just written. The legacy plaintext file is retained until that
+            // verification succeeds.
+            Backend.SecretService -> {
+                val clear = run(listOf("secret-tool", "clear", "application", APP_ID, "purpose", PURPOSE))
+                check(clear.exitCode == 0) { clear.output.ifBlank { "Could not replace Azure configuration securely" } }
+                run(
+                    listOf("secret-tool", "store", "--label=Wingmate Azure Speech configuration", "application", APP_ID, "purpose", PURPOSE),
+                    value
+                )
+            }
+            Backend.KWallet -> writeKWallet(value)
             null -> error("Secure credential storage is unavailable; install Secret Service/libsecret or KWallet")
         }
         check(result.exitCode == 0) { result.output.ifBlank { "Could not save Azure configuration securely" } }
@@ -142,14 +170,72 @@ private class LinuxAzureConfigStore {
         if (read() == null) return
         val result = when (backend) {
             Backend.SecretService -> run(listOf("secret-tool", "clear", "application", APP_ID, "purpose", PURPOSE))
-            Backend.KWallet -> run(listOf("kwallet-query", "-w", ENTRY, "-f", FOLDER, walletName()), "")
+            Backend.KWallet -> removeKWalletEntry()
             null -> return
         }
         check(result.exitCode == 0) { result.output.ifBlank { "Could not clear Azure configuration" } }
         check(read() == null) { "Secure Azure configuration deletion could not be verified" }
     }
 
+    private fun readKWallet(): String? =
+        runCatching { withKWallet { wallet, handle -> wallet.readPassword(handle, FOLDER, ENTRY, APP_ID) } }
+            .getOrNull()
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: readLegacyKWalletEntry()
+
+    private fun readLegacyKWalletEntry(): String? {
+        val result = run(listOf("kwallet-query", "-r", LEGACY_ENTRY, "-f", FOLDER, walletName()))
+        lastReadDiagnostic = if (result.exitCode == 0) {
+            "KWallet legacy entry read successfully"
+        } else {
+            "KWallet legacy entry read exit=${result.exitCode}: ${result.output.take(160)}"
+        }
+        return result.takeIf { it.exitCode == 0 }?.output?.trim()?.takeIf(String::isNotEmpty)
+    }
+
+    private fun writeKWallet(value: String): Result = runCatching {
+        withKWallet { wallet, handle ->
+            if (!wallet.hasFolder(handle, FOLDER, APP_ID)) {
+                check(wallet.createFolder(handle, FOLDER, APP_ID)) { "Could not create the KWallet folder" }
+            }
+            val result = wallet.writePassword(handle, FOLDER, ENTRY, value, APP_ID)
+            check(result == 0) { "KWallet write failed with code $result" }
+        }
+        Result(0, "")
+    }.getOrElse { Result(-1, it.message.orEmpty()) }
+
+    private fun removeKWalletEntry(): Result = runCatching {
+        withKWallet { wallet, handle ->
+            for (entry in listOf(ENTRY, LEGACY_ENTRY)) {
+                if (wallet.hasEntry(handle, FOLDER, entry, APP_ID)) {
+                    val result = wallet.removeEntry(handle, FOLDER, entry, APP_ID)
+                    check(result == 0) { "KWallet removal failed with code $result" }
+                }
+            }
+        }
+        Result(0, "")
+    }.getOrElse { Result(-1, it.message.orEmpty()) }
+
+    private fun <T> withKWallet(block: (KWalletDbus, Int) -> T): T {
+        DBusConnectionBuilder.forSessionBus().withShared(false).build().use { connection ->
+            var failure: Throwable? = null
+            for ((service, path) in KWALLET_ENDPOINTS) {
+                try {
+                    val wallet = connection.getRemoteObject(service, path, KWalletDbus::class.java)
+                    val handle = wallet.open(walletName(), 0L, APP_ID)
+                    check(handle >= 0) { "Could not open wallet ${walletName()}" }
+                    return block(wallet, handle)
+                } catch (error: Throwable) {
+                    failure = error
+                }
+            }
+            throw IllegalStateException("Could not connect to the KWallet secure store", failure)
+        }
+    }
+
     private fun walletName() = System.getenv("WINGMATE_KWALLET")?.takeIf(String::isNotBlank) ?: "kdewallet"
+
     private data class Result(val exitCode: Int, val output: String)
     private fun run(command: List<String>, input: String? = null): Result = runCatching {
         val process = ProcessBuilder(command).start()
@@ -165,8 +251,25 @@ private class LinuxAzureConfigStore {
         const val APP_ID = "io.github.jdreioe.wingmate"
         const val PURPOSE = "azure-speech"
         const val FOLDER = "Wingmate"
-        const val ENTRY = "azure-speech-config"
+        const val ENTRY = "azure-speech-config-v2"
+        const val LEGACY_ENTRY = "azure-speech-config"
+        val KWALLET_ENDPOINTS = listOf(
+            "org.kde.kwalletd6" to "/modules/kwalletd6",
+            "org.kde.kwalletd5" to "/modules/kwalletd5",
+            "org.kde.kwalletd" to "/modules/kwalletd",
+        )
     }
+}
+
+@DBusInterfaceName("org.kde.KWallet")
+interface KWalletDbus : DBusInterface {
+    fun open(wallet: String, windowId: Long, appId: String): Int
+    fun hasFolder(handle: Int, folder: String, appId: String): Boolean
+    fun createFolder(handle: Int, folder: String, appId: String): Boolean
+    fun hasEntry(handle: Int, folder: String, entry: String, appId: String): Boolean
+    fun readPassword(handle: Int, folder: String, entry: String, appId: String): String
+    fun writePassword(handle: Int, folder: String, entry: String, value: String, appId: String): Int
+    fun removeEntry(handle: Int, folder: String, entry: String, appId: String): Int
 }
 
 class JsonFileVoiceRepository : VoiceRepository {

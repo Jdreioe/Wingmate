@@ -6,20 +6,22 @@ use cosmic::iced::{event, keyboard, window, Fill, Padding, Subscription, Task};
 use cosmic::prelude::*;
 use cosmic::widget::{button as cosmic_button, icon};
 use reqwest::{Client, Method};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use wingmate::partner_window_bridge::{self, PartnerWindowController};
 
 mod i18n;
 
 const DEFAULT_API_URL: &str = "http://127.0.0.1:8765";
+const MAX_IMAGE_CACHE_ENTRIES: usize = 256;
 
 fn as_system_managed(theme: cosmic::theme::Theme) -> cosmic::theme::Theme {
     if matches!(&theme.theme_type, cosmic::theme::ThemeType::System { .. }) {
@@ -456,9 +458,49 @@ struct Board {
 struct BoardImage {
     id: String,
     #[serde(default)]
-    url: Option<String>,
+    data: Option<String>,
+    #[serde(default, rename = "dataUrl")]
+    data_url: Option<String>,
     #[serde(default)]
     path: Option<String>,
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default, rename = "contentType")]
+    content_type: Option<String>,
+    #[serde(default)]
+    symbol: Option<BoardSymbol>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct BoardSymbol {
+    #[serde(default)]
+    set: Option<String>,
+    #[serde(default)]
+    filename: Option<String>,
+    #[serde(default, rename = "libraryKey")]
+    library_key: Option<String>,
+}
+
+impl BoardImage {
+    fn has_source(&self) -> bool {
+        !self.data.as_deref().unwrap_or_default().trim().is_empty()
+            || !self.data_url.as_deref().unwrap_or_default().trim().is_empty()
+            || !self.path.as_deref().unwrap_or_default().trim().is_empty()
+            || !self.url.as_deref().unwrap_or_default().trim().is_empty()
+            || self.symbol.is_some()
+    }
+
+    fn resolve_payload(&self) -> serde_json::Value {
+        serde_json::json!({
+            "id": self.id,
+            "data": self.data,
+            "dataUrl": self.data_url,
+            "path": self.path,
+            "url": self.url,
+            "content_type": self.content_type,
+            "symbol": self.symbol,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -604,6 +646,7 @@ struct Wingmate {
     board_sentence: String,
     board_stack: Vec<String>,
     image_cache: HashMap<String, CachedVisual>,
+    image_cache_order: VecDeque<String>,
     pending_images: HashSet<String>,
     access_hover: Option<(AccessTarget, Instant)>,
     access_press: Option<(AccessTarget, Instant)>,
@@ -938,6 +981,7 @@ impl cosmic::Application for Wingmate {
             board_sentence: String::new(),
             board_stack: Vec::new(),
             image_cache: HashMap::new(),
+            image_cache_order: VecDeque::new(),
             pending_images: HashSet::new(),
             access_hover: None,
             access_press: None,
@@ -1121,7 +1165,13 @@ impl cosmic::Application for Wingmate {
                                 } else {
                                     CachedVisual::Raster(image::Handle::from_bytes(bytes))
                                 };
+                                self.image_cache_order.push_back(source.clone());
                                 self.image_cache.insert(source, visual);
+                                while self.image_cache_order.len() > MAX_IMAGE_CACHE_ENTRIES {
+                                    if let Some(oldest) = self.image_cache_order.pop_front() {
+                                        self.image_cache.remove(&oldest);
+                                    }
+                                }
                             }
                             Ok(_) => self.status = fl!("error-image-empty"),
                             Err(error) => {
@@ -1156,11 +1206,12 @@ impl cosmic::Application for Wingmate {
             },
             Message::LoadedBoardGraph(result) => match result {
                 Ok(graph) => {
+                    self.clear_board_image_cache();
                     let image_sources = graph
                         .boards
                         .iter()
                         .flat_map(|board| board.images.iter())
-                        .filter_map(|item| item.url.clone().or_else(|| item.path.clone()))
+                        .map(|item| (item.id.clone(), item.clone()))
                         .collect();
                     let same_set = self
                         .board_graph
@@ -1191,7 +1242,7 @@ impl cosmic::Application for Wingmate {
                     self.active_board_id = Some(active_board_id);
                     self.board_graph = Some(graph);
                     self.status = fl!("status-ready");
-                    return self.queue_images(image_sources);
+                    return self.queue_board_images(image_sources);
                 }
                 Err(e) => self.status = e,
             },
@@ -2544,6 +2595,29 @@ impl Wingmate {
         Task::batch(tasks)
     }
 
+    fn queue_board_images(
+        &mut self,
+        images: Vec<(String, BoardImage)>,
+    ) -> Task<cosmic::Action<Message>> {
+        let tasks = images
+            .into_iter()
+            .filter(|(id, image)| {
+                image.has_source()
+                    && !self.image_cache.contains_key(id)
+                    && self.pending_images.insert(id.clone())
+            })
+            .map(|(id, image)| {
+                self.api.fetch_board_image(id, image).map(cosmic::Action::App)
+            })
+            .collect::<Vec<_>>();
+        Task::batch(tasks)
+    }
+
+    fn clear_board_image_cache(&mut self) {
+        self.image_cache_order.clear();
+        self.image_cache.clear();
+    }
+
     fn image_for(&self, source: Option<&str>, height: f32) -> Option<Element<'_, Message>> {
         match self.image_cache.get(source?)?.clone() {
             CachedVisual::Raster(handle) => Some(
@@ -3392,8 +3466,7 @@ impl Wingmate {
                 editor = editor.push(text(fl!("status-searching")).size(15));
             }
             if !self.symbols.is_empty() {
-                let results =
-                    row(self
+                let results = row(self
                         .symbols
                         .iter()
                         .enumerate()
@@ -3402,7 +3475,7 @@ impl Wingmate {
                             let mut content = column![]
                                 .spacing(3)
                                 .align_x(cosmic::iced::alignment::Alignment::Center);
-                            if let Some(preview) = self.image_for(symbol.image_url.as_deref(), 52.0)
+                            if let Some(preview) = self.image_for(symbol.image_url.as_deref(), 44.0)
                             {
                                 content = content.push(preview);
                             }
@@ -3414,13 +3487,20 @@ impl Wingmate {
                             ));
                             button(content)
                                 .on_press(Message::CellSymbolPicked(index))
-                                .height(88)
-                                .padding([10, 14])
+                                .width(124)
+                                .height(80)
+                                .padding([6, 10])
                                 .into()
                         }))
-                    .spacing(6)
-                    .wrap();
-                editor = editor.push(results);
+                    .spacing(6);
+                editor = editor.push(
+                    scrollable(results)
+                        .direction(scrollable::Direction::Horizontal(
+                            scrollable::Scrollbar::default(),
+                        ))
+                        .width(Fill)
+                        .height(92),
+                );
             }
             if let Some(image_url) = &self.cell_image_url {
                 if let Some(preview) = self.image_for(Some(image_url), 120.0) {
@@ -3604,11 +3684,11 @@ impl Wingmate {
             } else {
                 Message::Speak(String::new())
             };
-            let symbol_source = button_data
+            let symbol_image = button_data
                 .and_then(|button| button.image_id.as_ref())
                 .and_then(|image_id| board.images.iter().find(|image| &image.id == image_id))
-                .and_then(|item| item.url.as_deref().or(item.path.as_deref()));
-            let has_symbol = symbol_source.is_some();
+                .filter(|image| image.has_source());
+            let has_symbol = symbol_image.is_some();
             let show_symbol = has_symbol && show_symbols;
             let show_label = show_labels || !show_symbol;
             let mut cell_content = column![]
@@ -3618,14 +3698,19 @@ impl Wingmate {
                 cell_content =
                     cell_content.push(text(label.clone()).size(self.settings.font_px(18.0)));
             }
-            if show_symbol {
-                cell_content =
-                    cell_content.push(self.image_for(symbol_source, 52.0).unwrap_or_else(|| {
+if show_symbol {
+                cell_content = cell_content.push(
+                    self.image_for(
+                        symbol_image.map(|image| image.id.as_str()),
+                        52.0,
+                    )
+                    .unwrap_or_else(|| {
                         symbolic_icon("image-x-generic-symbolic")
                             .size(32)
                             .icon()
                             .into()
-                    }));
+                    }),
+                );
             }
             if !label_at_top && show_label {
                 cell_content = cell_content.push(text(label).size(self.settings.font_px(18.0)));
@@ -4733,6 +4818,7 @@ fn symbolic_icon(name: &str) -> icon::Named {
 struct Api {
     base: String,
     client: Client,
+    token: String,
 }
 
 impl Api {
@@ -4740,6 +4826,7 @@ impl Api {
         Self {
             base: env::var("WINGMATE_API_URL").unwrap_or_else(|_| DEFAULT_API_URL.into()),
             client: Client::new(),
+            token: current_bridge_token(),
         }
     }
 
@@ -5215,6 +5302,22 @@ impl Api {
         )
     }
 
+    fn fetch_board_image(&self, id: String, image: BoardImage) -> Task<Message> {
+        let api = self.clone();
+        let result_source = id.clone();
+        Task::perform(
+            async move {
+                api.request_json(
+                    Method::POST,
+                    "/api/images/resolve",
+                    Some(serde_json::json!({"image": image.resolve_payload()})),
+                )
+                .await
+            },
+            move |result| Message::LoadedImage(result_source.clone(), result),
+        )
+    }
+
     fn import_image(&self, path: PathBuf) -> Task<Message> {
         let api = self.clone();
         Task::perform(
@@ -5283,6 +5386,7 @@ impl Api {
                 let response = api
                     .client
                     .post(url)
+                    .header(TOKEN_HEADER, api.token)
                     .header("Content-Type", "application/json")
                     .body(body)
                     .send()
@@ -5613,7 +5717,10 @@ impl Api {
         let url = format!("{}{}", self.base, path);
         let mut last_error = String::new();
         for attempt in 0..8 {
-            let mut request = self.client.request(method.clone(), &url);
+            let mut request = self
+                .client
+                .request(method.clone(), &url)
+                .header(TOKEN_HEADER, &self.token);
             if let Some(value) = body.clone() {
                 request = request.json(&value);
             }
@@ -5804,6 +5911,75 @@ fn find_fat_jar() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("build/libs/linuxApp-all.jar"))
 }
 
+const TOKEN_HEADER: &str = "x-wingmate-token";
+
+fn state_home() -> PathBuf {
+    if let Ok(state) = env::var("XDG_STATE_HOME") {
+        if !state.trim().is_empty() {
+            return PathBuf::from(state);
+        }
+    }
+    PathBuf::from(
+        env::var("HOME").unwrap_or_else(|_| ".".into()),
+    )
+    .join(".local/state")
+}
+
+fn bridge_token_file() -> PathBuf {
+    state_home().join("wingmate").join("bridge-token")
+}
+
+/// Per-process bridge capability token, shared between the Rust client and the
+/// Kotlin bridge it spawns. Preference order matches the Kotlin side:
+/// 1. token injected into the child environment when we spawn the bridge,
+/// 2. token the already-running bridge persisted for the reuse case,
+/// 3. a freshly generated random token (also persisted and passed on spawn).
+fn current_bridge_token() -> String {
+    static TOKEN: OnceLock<String> = OnceLock::new();
+    TOKEN.get_or_init(|| {
+        if let Some(token) = env::var("WINGMATE_BRIDGE_TOKEN").ok() {
+            let trimmed = token.trim().to_string();
+            if trimmed.len() >= 16 {
+                return trimmed;
+            }
+        }
+        if let Ok(token) = std::fs::read_to_string(bridge_token_file()) {
+            let trimmed = token.trim().to_string();
+            if trimmed.len() >= 16 {
+                return trimmed;
+            }
+        }
+        let token = generate_bridge_token();
+        persist_bridge_token(&token);
+        token
+    })
+    .clone()
+}
+
+fn generate_bridge_token() -> String {
+    use std::io::Read;
+    let mut bytes = [0u8; 32];
+    if let Ok(mut from) = std::fs::File::open("/dev/urandom") {
+        let _ = from.read_exact(&mut bytes);
+    } else {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0) as u64;
+        bytes[..8].copy_from_slice(&now.to_le_bytes());
+        bytes[8..16].copy_from_slice(&(std::process::id().to_le_bytes()));
+    }
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn persist_bridge_token(token: &str) {
+    let path = bridge_token_file();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&path, format!("{token}\n"));
+}
+
 fn bridge_already_running() -> bool {
     let addr = "127.0.0.1:8765";
     std::net::TcpStream::connect_timeout(
@@ -5828,6 +6004,7 @@ fn start_bridge_server() -> Option<Child> {
         .arg("-jar")
         .arg(&jar)
         .arg("--no-partner-window")
+        .env("WINGMATE_BRIDGE_TOKEN", current_bridge_token())
         .spawn()
     {
         Ok(child) => Some(child),
@@ -5844,6 +6021,26 @@ fn start_bridge_server() -> Option<Child> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn board_image_resolve_payload_includes_required_obf_id() {
+        let image = BoardImage {
+            id: "image-1".into(),
+            data: None,
+            data_url: None,
+            path: None,
+            url: Some("https://example.com/symbol.png".into()),
+            content_type: None,
+            symbol: None,
+        };
+
+        assert_eq!(image.resolve_payload()["id"], "image-1");
+    }
+
+    #[test]
+    fn bridge_token_header_matches_the_kotlin_bridge_contract() {
+        assert_eq!(TOKEN_HEADER, "x-wingmate-token");
+    }
 
     #[test]
     fn editing_access_gate_covers_content_mutations_but_not_communication() {
