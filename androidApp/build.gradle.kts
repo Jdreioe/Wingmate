@@ -1,9 +1,3 @@
-import java.net.URI
-import java.net.URLEncoder
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.time.Duration
 import java.util.Base64
 import java.util.Properties
 import org.gradle.api.DefaultTask
@@ -36,152 +30,6 @@ fun toBuildConfigStringLiteral(value: String): String {
         .replace("\"", "\\\"")
     return "\"$escaped\""
 }
-
-fun resolveOpenSymbolsSecretFromInfisical(): String? {
-    val enabled = readConfigValue(
-        listOf("WINGMATE_INFISICAL_ENABLED", "INFISICAL_ENABLED"),
-        listOf("wingmate.infisical.enabled", "infisical.enabled"),
-        listOf("WINGMATE_INFISICAL_ENABLED", "INFISICAL_ENABLED")
-    )?.equals("false", ignoreCase = true) != true
-    if (!enabled) return null
-
-    val baseUrl = (readConfigValue(
-        listOf("WINGMATE_INFISICAL_URL", "INFISICAL_URL"),
-        listOf("wingmate.infisical.url", "infisical.url"),
-        listOf("WINGMATE_INFISICAL_URL", "INFISICAL_URL")
-    ) ?: "https://app.infisical.eu").trimEnd('/')
-
-    val environment = readConfigValue(
-        listOf("WINGMATE_INFISICAL_ENV", "INFISICAL_ENV"),
-        listOf("wingmate.infisical.env", "infisical.env"),
-        listOf("WINGMATE_INFISICAL_ENV", "INFISICAL_ENV")
-    ) ?: "system_env"
-
-    val secretName = readConfigValue(
-        listOf("WINGMATE_INFISICAL_SECRET_NAME", "INFISICAL_SECRET_NAME"),
-        listOf("wingmate.infisical.secret.name", "infisical.secret.name"),
-        listOf("WINGMATE_INFISICAL_SECRET_NAME", "INFISICAL_SECRET_NAME")
-    ) ?: "openSymbols"
-
-    val secretPath = readConfigValue(
-        listOf("WINGMATE_INFISICAL_SECRET_PATH", "INFISICAL_SECRET_PATH"),
-        listOf("wingmate.infisical.secret.path", "infisical.secret.path"),
-        listOf("WINGMATE_INFISICAL_SECRET_PATH", "INFISICAL_SECRET_PATH")
-    ) ?: "/"
-
-    val projectId = readConfigValue(
-        listOf("WINGMATE_INFISICAL_PROJECT_ID", "INFISICAL_PROJECT_ID"),
-        listOf("wingmate.infisical.project.id", "infisical.project.id"),
-        listOf("WINGMATE_INFISICAL_PROJECT_ID", "INFISICAL_PROJECT_ID")
-    )
-    val projectSlug = readConfigValue(
-        listOf("WINGMATE_INFISICAL_PROJECT_SLUG", "INFISICAL_PROJECT_SLUG"),
-        listOf("wingmate.infisical.project.slug", "infisical.project.slug"),
-        listOf("WINGMATE_INFISICAL_PROJECT_SLUG", "INFISICAL_PROJECT_SLUG")
-    )
-    if (projectId.isNullOrBlank() && projectSlug.isNullOrBlank()) return null
-
-    val accessToken = readConfigValue(
-        listOf("WINGMATE_INFISICAL_ACCESS_TOKEN", "INFISICAL_ACCESS_TOKEN"),
-        listOf("wingmate.infisical.access.token", "infisical.access.token"),
-        listOf("WINGMATE_INFISICAL_ACCESS_TOKEN", "INFISICAL_ACCESS_TOKEN")
-    )
-    val clientId = readConfigValue(
-        listOf("WINGMATE_INFISICAL_CLIENT_ID", "INFISICAL_CLIENT_ID"),
-        listOf("wingmate.infisical.client.id", "infisical.client.id"),
-        listOf("WINGMATE_INFISICAL_CLIENT_ID", "INFISICAL_CLIENT_ID")
-    )
-    val clientSecret = readConfigValue(
-        listOf("WINGMATE_INFISICAL_CLIENT_SECRET", "INFISICAL_CLIENT_SECRET"),
-        listOf("wingmate.infisical.client.secret", "infisical.client.secret"),
-        listOf("WINGMATE_INFISICAL_CLIENT_SECRET", "INFISICAL_CLIENT_SECRET")
-    )
-
-    val token = when {
-        !accessToken.isNullOrBlank() -> accessToken
-        !clientId.isNullOrBlank() && !clientSecret.isNullOrBlank() -> {
-            loginToInfisical(baseUrl, clientId, clientSecret, readConfigValue(
-                listOf("WINGMATE_INFISICAL_ORGANIZATION_SLUG", "INFISICAL_ORGANIZATION_SLUG"),
-                listOf("wingmate.infisical.organization.slug", "infisical.organization.slug"),
-                listOf("WINGMATE_INFISICAL_ORGANIZATION_SLUG", "INFISICAL_ORGANIZATION_SLUG")
-            ))
-        }
-        else -> null
-    }
-    if (token.isNullOrBlank()) return null
-
-    return fetchSecretFromInfisical(baseUrl, projectId, projectSlug, environment, secretName, secretPath, token)
-}
-
-private fun loginToInfisical(baseUrl: String, clientId: String, clientSecret: String, organizationSlug: String?): String? {
-    val body = buildString {
-        append("{\"clientId\":\"${escaped(clientId)}\",\"clientSecret\":\"${escaped(clientSecret)}\"")
-        if (!organizationSlug.isNullOrBlank()) {
-            append(",\"organizationSlug\":\"${escaped(organizationSlug)}\"")
-        }
-        append("}")
-    }
-    val request = HttpRequest.newBuilder()
-        .uri(URI.create("$baseUrl/api/v1/auth/universal-auth/login"))
-        .header("Content-Type", "application/json")
-        .timeout(Duration.ofSeconds(8))
-        .POST(HttpRequest.BodyPublishers.ofString(body))
-        .build()
-    val response = runCatching {
-        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
-            .send(request, HttpResponse.BodyHandlers.ofString())
-    }.getOrNull() ?: return null
-    if (response.statusCode() !in 200..299) return null
-    return extractJsonValue(response.body(), "accessToken")
-}
-
-private fun fetchSecretFromInfisical(
-    baseUrl: String, projectId: String?, projectSlug: String?,
-    environment: String, secretName: String, secretPath: String, accessToken: String
-): String? {
-    val params = mutableListOf("environment=$environment", "secretPath=$secretPath", "type=shared", "viewSecretValue=true")
-    if (!projectId.isNullOrBlank()) params.add("workspaceId=$projectId")
-    if (projectId.isNullOrBlank() && !projectSlug.isNullOrBlank()) params.add("workspaceSlug=$projectSlug")
-    val request = HttpRequest.newBuilder()
-        .uri(URI.create("$baseUrl/api/v3/secrets/raw/${urlEncoded(secretName)}?${params.joinToString("&")}"))
-        .header("Authorization", "Bearer $accessToken")
-        .timeout(Duration.ofSeconds(8))
-        .GET()
-        .build()
-    val response = runCatching {
-        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
-            .send(request, HttpResponse.BodyHandlers.ofString())
-    }.getOrNull() ?: return null
-    if (response.statusCode() !in 200..299) return null
-    return extractJsonValue(response.body(), "secretValue")
-}
-
-private fun readConfigValue(envKeys: List<String>, systemPropertyKeys: List<String>, localPropertyKeys: List<String>): String? {
-    val localProperties = Properties().apply {
-        val f = rootProject.file("local.properties")
-        if (f.exists()) f.inputStream().use { load(it) }
-    }
-    for (key in envKeys) { System.getenv(key)?.takeIf { it.isNotBlank() }?.let { return it.trim() } }
-    for (key in systemPropertyKeys) { System.getProperty(key)?.takeIf { it.isNotBlank() }?.let { return it.trim() } }
-    for (key in localPropertyKeys) { localProperties.getProperty(key)?.takeIf { it.isNotBlank() }?.let { return it.trim() } }
-    return null
-}
-
-private fun extractJsonValue(json: String, key: String): String? {
-    val search = "\"$key\":\""
-    val start = json.indexOf(search)
-    if (start < 0) return null
-    val valueStart = start + search.length
-    val valueEnd = json.indexOf('"', valueStart)
-    if (valueEnd < 0) return null
-    return json.substring(valueStart, valueEnd)
-}
-
-private fun escaped(value: String): String =
-    value.replace("\\", "\\\\").replace("\"", "\\\"")
-
-private fun urlEncoded(value: String): String =
-    URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
 plugins {
     id("com.android.application")
@@ -219,24 +67,6 @@ android {
     val vName = System.getenv("WINGMATE_VERSION_NAME")
         ?: (versionProps.getProperty("versionName") ?: "1.0")
 
-    val openSymbolsSecret = providers.provider { resolveOpenSymbolsSecretFromInfisical() }
-        .orElse(providers.environmentVariable("WINGMATE_OPENSYMBOLS_SECRET"))
-        .orElse(providers.environmentVariable("OPENSYMBOLS_SECRET"))
-        .orElse(providers.environmentVariable("openSymbols"))
-        .orElse(providers.provider {
-            val localProperties = Properties()
-            val localPropertiesFile = rootProject.file("local.properties")
-            if (localPropertiesFile.exists()) {
-                localPropertiesFile.inputStream().use(localProperties::load)
-            }
-            sequenceOf(
-                localProperties.getProperty("WINGMATE_OPENSYMBOLS_SECRET"),
-                localProperties.getProperty("OPENSYMBOLS_SECRET"),
-                localProperties.getProperty("openSymbols")
-            ).firstOrNull { !it.isNullOrBlank() }.orEmpty()
-        })
-        .orElse("")
-
     fun resolveConfigValue(key: String): String {
         val localProperties = Properties()
         val localPropertiesFile = rootProject.file("local.properties")
@@ -251,6 +81,8 @@ android {
     }
 
     val aptabaseAppKey = resolveConfigValue("APTABASE_APP_KEY")
+    val openSymbolsProxyUrl = resolveConfigValue("OPENSYMBOLS_PROXY_URL")
+        .ifBlank { "https://wingmate-opensymbols-proxy.patient-mouse-467e.workers.dev" }
 
     defaultConfig {
         applicationId = "com.hojmoseit.wingmate"
@@ -260,8 +92,8 @@ android {
         versionName = vName
         buildConfigField(
             "String",
-            "OPENSYMBOLS_SECRET",
-            toBuildConfigStringLiteral(openSymbolsSecret.get())
+            "OPENSYMBOLS_PROXY_URL",
+            toBuildConfigStringLiteral(openSymbolsProxyUrl)
         )
         buildConfigField(
             "String",

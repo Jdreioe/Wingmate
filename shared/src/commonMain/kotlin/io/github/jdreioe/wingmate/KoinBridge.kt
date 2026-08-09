@@ -726,8 +726,8 @@ class KoinBridge : KoinComponent {
     }
 
     // --- OpenSymbols helpers (route through shared client, not Swift) ---
-    fun setOpenSymbolsSecret(secret: String?) {
-        OpenSymbolsClient.setSharedSecret(secret)
+    fun setOpenSymbolsProxyUrl(url: String?) {
+        OpenSymbolsClient.setProxyBaseUrl(url)
     }
 
     suspend fun openSymbolsSearch(query: String, locale: String): IosOpenSymbolsResult {
@@ -747,10 +747,7 @@ class KoinBridge : KoinComponent {
 }
 
 private fun OpenSymbolsClient.SearchError.toIosErrorCode(): String = when (this) {
-    OpenSymbolsClient.SearchError.NotConfigured -> "missing_secret"
-    OpenSymbolsClient.SearchError.Authentication,
-    OpenSymbolsClient.SearchError.TokenExpired,
-    -> "auth_failed"
+    OpenSymbolsClient.SearchError.NotConfigured -> "missing_proxy"
     OpenSymbolsClient.SearchError.Throttled,
     OpenSymbolsClient.SearchError.Network,
     OpenSymbolsClient.SearchError.Server,

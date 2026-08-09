@@ -342,9 +342,8 @@
     <string name="opensymbols_search_title">Søg OpenSymbols</string>
     <string name="opensymbols_search_label">Søg efter piktogram...</string>
     <string name="opensymbols_search_cd">Søg</string>
-    <string name="opensymbols_not_configured">OpenSymbols er ikke konfigureret i denne build.\nSæt WINGMATE_OPENSYMBOLS_SECRET eller OPENSYMBOLS_SECRET i local.properties før build.</string>
+    <string name="opensymbols_not_configured">OpenSymbols er ikke konfigureret i denne build.\nSæt WINGMATE_OPENSYMBOLS_PROXY_URL i local.properties før build.</string>
     <string name="opensymbols_no_results">Ingen resultater fundet</string>
-    <string name="opensymbols_auth_failed">Godkendelse hos OpenSymbols mislykkedes. Kontrollér den konfigurerede nøgle.</string>
     <string name="opensymbols_throttled">OpenSymbols har modtaget for mange søgninger. Vent et øjeblik, og prøv igen.</string>
     <string name="opensymbols_search_failed">Der kunne ikke oprettes forbindelse til OpenSymbols.</string>
     <string name="opensymbols_retry">Prøv igen</string>

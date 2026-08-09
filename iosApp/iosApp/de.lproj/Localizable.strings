@@ -130,7 +130,7 @@
 "phrase.symbol.error.auth_failed" = "OpenSymbols-Authentifizierung fehlgeschlagen";
 "phrase.symbol.error.search_url" = "OpenSymbols-Such-URL konnte nicht erstellt werden";
 "phrase.symbol.error.search_failed" = "OpenSymbols-Suche fehlgeschlagen";
-"phrase.symbol.error.missing_secret" = "OpenSymbols ist für diesen Build nicht konfiguriert";
+"phrase.symbol.error.missing_proxy" = "OpenSymbols ist für diesen Build nicht konfiguriert";
 "phrase.symbol.pick_photo" = "Foto wählen";
 "phrase.symbol.import_file" = "Bild importieren";
 "phrase.symbol.error.photo_load_failed" = "Ausgewähltes Foto konnte nicht geladen werden";

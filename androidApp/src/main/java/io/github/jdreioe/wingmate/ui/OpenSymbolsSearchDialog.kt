@@ -103,9 +103,6 @@ fun OpenSymbolsSearchDialog(
                     ) {
                         Text(
                             when (searchError) {
-                                OpenSymbolsClient.SearchError.Authentication,
-                                OpenSymbolsClient.SearchError.TokenExpired ->
-                                    stringResource(R.string.opensymbols_auth_failed)
                                 OpenSymbolsClient.SearchError.Throttled ->
                                     stringResource(R.string.opensymbols_throttled)
                                 else -> stringResource(R.string.opensymbols_search_failed)

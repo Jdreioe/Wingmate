@@ -15,7 +15,14 @@ See [Supported platforms](docs/PLATFORM_SUPPORT.md) for the client support and
 feature-parity policy used when planning and accepting new work.
 
 
-## OpenSymbols Secret (Secure Config)
+## OpenSymbols proxy
+
+OpenSymbols search is routed through the Cloudflare Worker in
+[`infra/opensymbols-proxy`](infra/opensymbols-proxy). Infisical syncs the
+OpenSymbols shared secret directly to the Worker; the Android, iOS, and Linux
+apps receive only its public URL. See the proxy README for deployment and
+client configuration. The handling rules for other credentials are documented
+in [`docs/SECRET_BOUNDARIES.md`](docs/SECRET_BOUNDARIES.md).
 
 License: GPL 3.0
 
