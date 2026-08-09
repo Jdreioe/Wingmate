@@ -33,9 +33,12 @@ import androidx.window.core.ExperimentalWindowApi
 import org.koin.core.context.GlobalContext
 import io.github.jdreioe.wingmate.App
 import io.github.jdreioe.wingmate.ui.AppTheme
+import io.github.jdreioe.wingmate.ui.AndroidAccessInputBus
 import io.github.jdreioe.wingmate.ui.FullScreenDisplay
 @OptIn(ExperimentalWindowApi::class)
 class MainActivity : ComponentActivity() {
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
+        AndroidAccessInputBus.dispatch(event) || super.dispatchKeyEvent(event)
     private var presentation: ExternalDisplayPresentation? = null
     private var isFoldableUnfolded = false
     

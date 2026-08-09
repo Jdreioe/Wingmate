@@ -183,6 +183,44 @@ struct ContentView: View {
                 }
                 #endif
             }
+            .onKeyPress(phases: [.down, .up]) { press in
+                guard !shouldShowWelcomeFlow else { return .ignored }
+                model.accessKey(press.characters, isDown: press.phase == .down) ? .handled : .ignored
+            }
+            .task {
+                while !Task.isCancelled {
+                    if model.dwellToSelectMillis > 0 {
+                        model.tickAccessInput()
+                        try? await Task.sleep(nanoseconds: 16_000_000)
+                    } else {
+                        try? await Task.sleep(nanoseconds: 200_000_000)
+                    }
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                if !shouldShowWelcomeFlow && (model.dwellToSelectMillis > 0 || !model.selectKeyBinding.isEmpty) {
+                    Button(action: model.toggleInputPause) {
+                        Label(model.inputIsPaused ? "interaction.resume" : "interaction.rest_mode",
+                              systemImage: model.inputIsPaused ? "play.fill" : "pause.fill")
+                            .frame(minWidth: 56, minHeight: 56)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding(8)
+                    .accessibilityAddTraits(.isButton)
+                }
+            }
+            .overlay(alignment: .top) {
+                if model.inputIsPaused {
+                    Text("interaction.paused_status")
+                        .font(.headline)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.regularMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(Color.accentColor, lineWidth: 2))
+                        .padding(.top, 72)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+            }
         }
     }
 
