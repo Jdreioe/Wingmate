@@ -6,9 +6,9 @@ use cosmic::iced::{event, keyboard, window, Fill, Padding, Subscription, Task};
 use cosmic::prelude::*;
 use cosmic::widget::{button as cosmic_button, icon};
 use reqwest::{Client, Method};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
 use std::io::Write;
 use std::path::PathBuf;
@@ -21,6 +21,7 @@ use wingmate::partner_window_bridge::{self, PartnerWindowController};
 mod i18n;
 
 const DEFAULT_API_URL: &str = "http://127.0.0.1:8765";
+const MAX_IMAGE_CACHE_ENTRIES: usize = 256;
 
 fn as_system_managed(theme: cosmic::theme::Theme) -> cosmic::theme::Theme {
     if matches!(&theme.theme_type, cosmic::theme::ThemeType::System { .. }) {
@@ -438,9 +439,48 @@ struct Board {
 struct BoardImage {
     id: String,
     #[serde(default)]
-    url: Option<String>,
+    data: Option<String>,
+    #[serde(default, rename = "dataUrl")]
+    data_url: Option<String>,
     #[serde(default)]
     path: Option<String>,
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default, rename = "contentType")]
+    content_type: Option<String>,
+    #[serde(default)]
+    symbol: Option<BoardSymbol>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct BoardSymbol {
+    #[serde(default)]
+    set: Option<String>,
+    #[serde(default)]
+    filename: Option<String>,
+    #[serde(default, rename = "libraryKey")]
+    library_key: Option<String>,
+}
+
+impl BoardImage {
+    fn has_source(&self) -> bool {
+        !self.data.as_deref().unwrap_or_default().trim().is_empty()
+            || !self.data_url.as_deref().unwrap_or_default().trim().is_empty()
+            || !self.path.as_deref().unwrap_or_default().trim().is_empty()
+            || !self.url.as_deref().unwrap_or_default().trim().is_empty()
+            || self.symbol.is_some()
+    }
+
+    fn resolve_payload(&self) -> serde_json::Value {
+        serde_json::json!({
+            "data": self.data,
+            "dataUrl": self.data_url,
+            "path": self.path,
+            "url": self.url,
+            "content_type": self.content_type,
+            "symbol": self.symbol,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -586,6 +626,7 @@ struct Wingmate {
     board_sentence: String,
     board_stack: Vec<String>,
     image_cache: HashMap<String, CachedVisual>,
+    image_cache_order: VecDeque<String>,
     pending_images: HashSet<String>,
     access_hover: Option<(AccessTarget, Instant)>,
     access_press: Option<(AccessTarget, Instant)>,
@@ -920,6 +961,7 @@ impl cosmic::Application for Wingmate {
             board_sentence: String::new(),
             board_stack: Vec::new(),
             image_cache: HashMap::new(),
+            image_cache_order: VecDeque::new(),
             pending_images: HashSet::new(),
             access_hover: None,
             access_press: None,
@@ -1103,7 +1145,13 @@ impl cosmic::Application for Wingmate {
                                 } else {
                                     CachedVisual::Raster(image::Handle::from_bytes(bytes))
                                 };
+                                self.image_cache_order.push_back(source.clone());
                                 self.image_cache.insert(source, visual);
+                                while self.image_cache_order.len() > MAX_IMAGE_CACHE_ENTRIES {
+                                    if let Some(oldest) = self.image_cache_order.pop_front() {
+                                        self.image_cache.remove(&oldest);
+                                    }
+                                }
                             }
                             Ok(_) => self.status = fl!("error-image-empty"),
                             Err(error) => {
@@ -1138,11 +1186,12 @@ impl cosmic::Application for Wingmate {
             },
             Message::LoadedBoardGraph(result) => match result {
                 Ok(graph) => {
+                    self.clear_board_image_cache();
                     let image_sources = graph
                         .boards
                         .iter()
                         .flat_map(|board| board.images.iter())
-                        .filter_map(|item| item.url.clone().or_else(|| item.path.clone()))
+                        .map(|item| (item.id.clone(), item.clone()))
                         .collect();
                     let same_set = self
                         .board_graph
@@ -1173,7 +1222,7 @@ impl cosmic::Application for Wingmate {
                     self.active_board_id = Some(active_board_id);
                     self.board_graph = Some(graph);
                     self.status = fl!("status-ready");
-                    return self.queue_images(image_sources);
+                    return self.queue_board_images(image_sources);
                 }
                 Err(e) => self.status = e,
             },
@@ -2523,6 +2572,29 @@ impl Wingmate {
         Task::batch(tasks)
     }
 
+    fn queue_board_images(
+        &mut self,
+        images: Vec<(String, BoardImage)>,
+    ) -> Task<cosmic::Action<Message>> {
+        let tasks = images
+            .into_iter()
+            .filter(|(id, image)| {
+                image.has_source()
+                    && !self.image_cache.contains_key(id)
+                    && self.pending_images.insert(id.clone())
+            })
+            .map(|(id, image)| {
+                self.api.fetch_board_image(id, image).map(cosmic::Action::App)
+            })
+            .collect::<Vec<_>>();
+        Task::batch(tasks)
+    }
+
+    fn clear_board_image_cache(&mut self) {
+        self.image_cache_order.clear();
+        self.image_cache.clear();
+    }
+
     fn image_for(&self, source: Option<&str>, height: f32) -> Option<Element<'_, Message>> {
         match self.image_cache.get(source?)?.clone() {
             CachedVisual::Raster(handle) => Some(
@@ -3570,11 +3642,11 @@ impl Wingmate {
             } else {
                 Message::Speak(String::new())
             };
-            let symbol_source = button_data
+            let symbol_image = button_data
                 .and_then(|button| button.image_id.as_ref())
                 .and_then(|image_id| board.images.iter().find(|image| &image.id == image_id))
-                .and_then(|item| item.url.as_deref().or(item.path.as_deref()));
-            let has_symbol = symbol_source.is_some();
+                .filter(|image| image.has_source());
+            let has_symbol = symbol_image.is_some();
             let show_symbol = has_symbol && show_symbols;
             let show_label = show_labels || !show_symbol;
             let mut cell_content = column![]
@@ -3583,14 +3655,19 @@ impl Wingmate {
             if label_at_top && show_label {
                 cell_content = cell_content.push(text(label.clone()).size(18));
             }
-            if show_symbol {
-                cell_content =
-                    cell_content.push(self.image_for(symbol_source, 52.0).unwrap_or_else(|| {
+if show_symbol {
+                cell_content = cell_content.push(
+                    self.image_for(
+                        symbol_image.map(|image| image.id.as_str()),
+                        52.0,
+                    )
+                    .unwrap_or_else(|| {
                         symbolic_icon("image-x-generic-symbolic")
                             .size(32)
                             .icon()
                             .into()
-                    }));
+                    }),
+                );
             }
             if !label_at_top && show_label {
                 cell_content = cell_content.push(text(label).size(18));
@@ -5152,6 +5229,22 @@ impl Api {
                     Method::POST,
                     "/api/images/fetch",
                     Some(serde_json::json!({"url": source})),
+                )
+                .await
+            },
+            move |result| Message::LoadedImage(result_source.clone(), result),
+        )
+    }
+
+    fn fetch_board_image(&self, id: String, image: BoardImage) -> Task<Message> {
+        let api = self.clone();
+        let result_source = id.clone();
+        Task::perform(
+            async move {
+                api.request_json(
+                    Method::POST,
+                    "/api/images/resolve",
+                    Some(serde_json::json!({"image": image.resolve_payload()})),
                 )
                 .await
             },

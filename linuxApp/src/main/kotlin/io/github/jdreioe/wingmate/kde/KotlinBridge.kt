@@ -26,11 +26,15 @@ import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
+import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.ObfImageSource
+import io.github.jdreioe.wingmate.domain.obf.ObfSymbol
+import io.github.jdreioe.wingmate.domain.obf.resolveObfImageSource
 import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
 import io.github.jdreioe.wingmate.domain.obf.fieldItems
 import io.github.jdreioe.wingmate.domain.obf.joinSentenceText
 import io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion
-import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import io.github.jdreioe.wingmate.domain.obf.orderedPredictionButtonIds
 import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
@@ -706,6 +710,28 @@ class KotlinBridge(private val port: Int = 8765) {
                     call.respond(HttpStatusCode.Created, mapOf("url" to destination.toURI().toString()))
                 } catch (error: Throwable) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to (error.message ?: "image import failed")))
+                }
+            }
+
+            // Resolve a board image's best source into bytes, following the
+            // shared OBF priority order (data → dataUrl → path → url → symbol).
+            post("/api/images/resolve") {
+                try {
+                    val imageElement = json.parseToJsonElement(call.receiveText())
+                        .jsonObject["image"] ?: return@post call.respond(
+                        HttpStatusCode.BadRequest, mapOf("error" to "missing image")
+                    )
+                    val image = json.decodeFromJsonElement<ObfImage>(imageElement)
+                    val resolved = resolveObfImageBytes(image)
+                        ?: return@post call.respond(
+                            HttpStatusCode.NotFound, mapOf("error" to "image has no resolvable source")
+                        )
+                    call.respond(mapOf(
+                        "data" to java.util.Base64.getEncoder().encodeToString(resolved.first),
+                        "contentType" to resolved.second,
+                    ))
+                } catch (error: Throwable) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (error.message ?: "image resolve failed")))
                 }
             }
 
@@ -1418,6 +1444,93 @@ fun trustedLocalImageFile(source: String): File? {
 
 private fun fileStorageRoot(): File =
     File(System.getProperty("user.home"), ".wingmate/files")
+
+/**
+ * Materialize an OBF image's bytes, walking the shared priority order
+ * (data → dataUrl → path → url → symbol) and stopping at the first source that
+ * can produce valid pixels. Returns null when no source resolves.
+ */
+fun resolveObfImageBytes(image: ObfImage): Pair<ByteArray, String>? {
+    val declaredType = image.contentType?.takeIf { it.isNotBlank() }
+    return when (val source = resolveObfImageSource(image)) {
+        is ObfImageSource.DataUri -> {
+            val decoded = decodeInlineImage(source.data) ?: return null
+            validateImageContent(decoded.first, declaredType.orEmpty())
+            decoded.first to (declaredType ?: contentTypeForBytes(decoded.first))
+        }
+        is ObfImageSource.Path -> bytesForImagePath(source.path, declaredType)
+        is ObfImageSource.Url -> runCatching { fetchRemoteImageBytes(source.url) }.getOrNull()
+        is ObfImageSource.Symbol -> resolveImageSymbolBytes(source.symbol)
+        ObfImageSource.None -> null
+    }
+}
+
+/** Decodes either a `data:` URI or a raw base64 payload into (bytes, media-type). */
+fun decodeInlineImage(raw: String): Pair<ByteArray, String?>? {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return null
+    val (payload, mediaType) = runCatching {
+        if (trimmed.startsWith("data:", ignoreCase = true)) {
+            val comma = trimmed.indexOf(',')
+            if (comma < 0) return null
+            val header = trimmed.substring(5, comma)
+            val body = trimmed.substring(comma + 1)
+            val isBase64 = header.lowercase().split(';').any { it == "base64" }
+            val bytes = if (isBase64) {
+                java.util.Base64.getDecoder().decode(body)
+            } else {
+                java.net.URLDecoder.decode(body, Charsets.UTF_8).encodeToByteArray()
+            }
+            bytes to header.substringBefore(';').lowercase().takeIf { it.isNotBlank() }
+        } else {
+            java.util.Base64.getDecoder().decode(trimmed) to null
+        }
+    }.getOrNull() ?: return null
+    if (payload.isEmpty()) return null
+    return payload to mediaType
+}
+
+fun bytesForImagePath(rawPath: String, declaredType: String?): Pair<ByteArray, String>? {
+    val file = trustedLocalImageFile(rawPath) ?: resolveRelativeImagePath(rawPath) ?: return null
+    if (!file.isFile || file.length() > MAX_IMAGE_BYTES) return null
+    val bytes = file.readBytes()
+    return bytes to (declaredType ?: contentTypeForBytes(bytes))
+}
+
+/** Relative OBF media paths ("images/x.png") resolve from the app's trusted data roots. */
+fun resolveRelativeImagePath(rawPath: String): File? {
+    val safe = rawPath.replace('\\', '/')
+    val relative = if (safe.startsWith('/')) safe.trimStart('/') else safe
+    return listOf(imageDataDirectory(), fileStorageRoot()).firstNotNullOfOrNull { root ->
+        val canonicalRoot = runCatching { root.canonicalFile }.getOrNull() ?: return@firstNotNullOfOrNull null
+        val candidate = runCatching { File(canonicalRoot, relative).canonicalFile }.getOrNull()
+            ?: return@firstNotNullOfOrNull null
+        if (candidate.path == canonicalRoot.path || candidate.path.startsWith(canonicalRoot.path + File.separator)) {
+            candidate
+        } else {
+            null
+        }
+    }
+}
+
+/**
+ * Symbol-only boards resolve through a configured OpenSymbols image URL
+ * template so no provider-specific host is hardcoded in the client. The
+ * template receives {library_key}, {set}, and {filename} placeholders.
+ */
+private fun resolveImageSymbolBytes(symbol: ObfSymbol): Pair<ByteArray, String>? {
+    val filename = symbol.filename?.takeIf { it.isNotBlank() } ?: return null
+    val template = System.getenv("WINGMATE_OPENSYMBOLS_IMAGE_URL_TEMPLATE")
+        ?.takeIf { it.isNotBlank() } ?: return null
+    val url = template
+        .replace("{library_key}", symbol.libraryKey?.let(::urlEncodePathSegment).orEmpty())
+        .replace("{set}", symbol.set?.let(::urlEncodePathSegment) ?: "opensymbols")
+        .replace("{filename}", urlEncodePathSegment(filename))
+    return runCatching { fetchRemoteImageBytes(url) }.getOrNull()
+}
+
+private fun urlEncodePathSegment(value: String): String =
+    java.net.URLEncoder.encode(value.replace('/', '_'), Charsets.UTF_8).replace("+", "%20")
 
 fun requireSelectedPath(value: String): File {
     require(value.isNotBlank()) { "Missing file path" }
