@@ -141,6 +141,14 @@ final class IosViewModel: ObservableObject {
     @Published var selectionDebounceMillis: Double = 0
     @Published var selectionSoundEnabled: Bool = false
     @Published var auditoryFishingEnabled: Bool = false
+    @Published var selectKeyBinding: String = ""
+    @Published var restModeKeyBinding: String = ""
+    @Published var pointerEmphasisStyle: String = "System"
+    @Published var pointerEmphasisScale: Double = 1.5
+    @Published private(set) var inputIsPaused: Bool = false
+    @Published private(set) var accessTargetId: String? = nil
+    @Published private(set) var accessDwellProgress: Double = 0
+    private var accessActions: [String: () -> Void] = [:]
     @Published var usageLoggingEnabled: Bool = false
     @Published var featureUsageReportingEnabled: Bool = false
     @Published var historyVisible: Bool = true
@@ -466,6 +474,10 @@ final class IosViewModel: ObservableObject {
                 self.selectionDebounceMillis = Double(settings.selectionDebounceMillis)
                 self.selectionSoundEnabled = settings.selectionSoundEnabled
                 self.auditoryFishingEnabled = settings.auditoryFishingEnabled
+                self.selectKeyBinding = settings.selectKeyBinding
+                self.restModeKeyBinding = settings.restModeKeyBinding
+                self.pointerEmphasisStyle = settings.pointerEmphasisStyle.name
+                self.pointerEmphasisScale = Double(settings.pointerEmphasisScale)
                 self.selectionHighlightMillis = settings.selectionHighlightMillis
                 self.boardShowMessageBar = settings.boardShowMessageBar
                 self.usageLoggingEnabled = settings.usageLoggingEnabled
@@ -930,6 +942,59 @@ final class IosViewModel: ObservableObject {
     func setDwellToSelectMillis(_ value: Double) {
         dwellToSelectMillis = min(max(value, 0), 5_000)
         Task { _ = try? await bridge.updateDwellToSelectMillis(millis: Int64(dwellToSelectMillis)) }
+    }
+
+    func setSelectKeyBinding(_ value: String) {
+        selectKeyBinding = value
+        Task { _ = try? await bridge.updateSelectKeyBinding(binding: value) }
+    }
+
+    func setRestModeKeyBinding(_ value: String) {
+        restModeKeyBinding = value
+        Task { _ = try? await bridge.updateRestModeKeyBinding(binding: value) }
+    }
+
+    func setPointerEmphasis(style: String? = nil, scale: Double? = nil) {
+        if let style { pointerEmphasisStyle = style }
+        if let scale { pointerEmphasisScale = min(max(scale, 1), 3) }
+        Task { _ = try? await bridge.updatePointerEmphasis(style: pointerEmphasisStyle, scale: Float(pointerEmphasisScale)) }
+    }
+
+    func registerAccessTarget(_ targetId: String, action: @escaping () -> Void) {
+        accessActions[targetId] = action
+    }
+
+    func unregisterAccessTarget(_ targetId: String) {
+        accessActions.removeValue(forKey: targetId)
+        applyAccessResult(bridge.accessInputExit(targetId: targetId))
+        applyAccessResult(bridge.accessInputBlur(targetId: targetId))
+    }
+
+    func accessEnter(_ targetId: String) { applyAccessResult(bridge.accessInputEnter(targetId: targetId)) }
+    func accessExit(_ targetId: String) { applyAccessResult(bridge.accessInputExit(targetId: targetId)) }
+    func accessFocus(_ targetId: String) { applyAccessResult(bridge.accessInputFocus(targetId: targetId)) }
+    func accessBlur(_ targetId: String) { applyAccessResult(bridge.accessInputBlur(targetId: targetId)) }
+
+    func accessKey(_ key: String, isDown: Bool) -> Bool {
+        let normalized = key == " " ? "Space" : key
+        guard normalized.caseInsensitiveCompare(selectKeyBinding) == .orderedSame ||
+                normalized.caseInsensitiveCompare(restModeKeyBinding) == .orderedSame else { return false }
+        let result = isDown
+            ? bridge.accessInputKeyDown(key: normalized, selectBinding: selectKeyBinding, restBinding: restModeKeyBinding)
+            : bridge.accessInputKeyUp(key: normalized)
+        applyAccessResult(result)
+        return true
+    }
+
+    func tickAccessInput() { applyAccessResult(bridge.accessInputTick(dwellMillis: Int64(dwellToSelectMillis))) }
+    func toggleInputPause() { applyAccessResult(bridge.accessInputTogglePause()) }
+
+    private func applyAccessResult(_ result: IosAccessInputResult) {
+        if inputIsPaused != result.isPaused { inputIsPaused = result.isPaused }
+        if accessTargetId != result.currentTargetId { accessTargetId = result.currentTargetId }
+        let newProgress = Double(result.dwellProgress)
+        if abs(accessDwellProgress - newProgress) > 0.001 { accessDwellProgress = newProgress }
+        if let target = result.activationTargetId { accessActions[target]?() }
     }
 
     func setSelectionDebounceMillis(_ value: Double) {

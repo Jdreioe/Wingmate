@@ -1,6 +1,8 @@
 package io.github.jdreioe.wingmate
 
 import io.github.jdreioe.wingmate.application.SelectionHighlight
+import io.github.jdreioe.wingmate.application.AccessInputController
+import io.github.jdreioe.wingmate.application.AccessInputEffect
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
@@ -21,6 +23,7 @@ import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
@@ -61,7 +64,15 @@ import kotlin.time.Clock
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 
+data class IosAccessInputResult(
+    val activationTargetId: String?,
+    val isPaused: Boolean,
+    val currentTargetId: String?,
+    val dwellProgress: Float,
+)
+
 class KoinBridge : KoinComponent {
+    private val accessInput = AccessInputController()
     fun phraseListStore(): PhraseListStore = get()
     // Safe variant to avoid throwing across Swift bridge
     fun phraseListStoreOrNull(): PhraseListStore? = try { get<PhraseListStore>() } catch (_: Throwable) { null }
@@ -188,10 +199,58 @@ class KoinBridge : KoinComponent {
     suspend fun updateHighContrastMode(enabled: Boolean) = updateSettings { it.copy(highContrastMode = enabled) }
     suspend fun updateHoldToSelectMillis(millis: Long) = updateSettings { it.copy(holdToSelectMillis = millis.coerceIn(0, 2_000)) }
     suspend fun updateDwellToSelectMillis(millis: Long) = updateSettings { it.copy(dwellToSelectMillis = millis.coerceIn(0, 5_000)) }
+    suspend fun updateSelectKeyBinding(binding: String) = updateSettings { it.copy(selectKeyBinding = binding) }
+    suspend fun updateRestModeKeyBinding(binding: String) = updateSettings { it.copy(restModeKeyBinding = binding) }
+    suspend fun updatePointerEmphasis(style: String, scale: Float) = updateSettings {
+        it.copy(
+            pointerEmphasisStyle = runCatching { PointerEmphasisStyle.valueOf(style) }.getOrDefault(PointerEmphasisStyle.System),
+            pointerEmphasisScale = scale.coerceIn(1f, 3f),
+        )
+    }
     suspend fun updateSelectionDebounceMillis(millis: Long) = updateSettings { it.copy(selectionDebounceMillis = millis.coerceIn(0, 1_000)) }
     suspend fun updateSelectionSoundEnabled(enabled: Boolean) = updateSettings { it.copy(selectionSoundEnabled = enabled) }
     suspend fun updateAuditoryFishingEnabled(enabled: Boolean) = updateSettings { it.copy(auditoryFishingEnabled = enabled) }
     suspend fun updateSelectionHighlightMillis(millis: Long) = updateSettings { it.copy(selectionHighlightMillis = millis.coerceIn(0, 5_000)) }
+
+    fun accessInputEnter(targetId: String): IosAccessInputResult {
+        accessInput.targetEntered(targetId, nowMillis())
+        return accessResult(null)
+    }
+
+    fun accessInputExit(targetId: String): IosAccessInputResult {
+        accessInput.targetExited(targetId, nowMillis())
+        return accessResult(null)
+    }
+
+    fun accessInputFocus(targetId: String): IosAccessInputResult {
+        accessInput.targetFocused(targetId, nowMillis())
+        return accessResult(null)
+    }
+
+    fun accessInputBlur(targetId: String): IosAccessInputResult {
+        accessInput.targetBlurred(targetId, nowMillis())
+        return accessResult(null)
+    }
+
+    fun accessInputKeyDown(key: String, selectBinding: String, restBinding: String): IosAccessInputResult =
+        accessResult(accessInput.keyDown(key, selectBinding, restBinding, nowMillis()))
+
+    fun accessInputKeyUp(key: String): IosAccessInputResult {
+        accessInput.keyUp(key)
+        return accessResult(null)
+    }
+
+    fun accessInputTick(dwellMillis: Long): IosAccessInputResult =
+        accessResult(accessInput.tick(nowMillis(), dwellMillis))
+
+    fun accessInputTogglePause(): IosAccessInputResult = accessResult(accessInput.togglePaused(nowMillis()))
+
+    private fun accessResult(effect: AccessInputEffect?): IosAccessInputResult = IosAccessInputResult(
+        activationTargetId = (effect as? AccessInputEffect.Activate)?.targetId,
+        isPaused = accessInput.state.isPaused,
+        currentTargetId = accessInput.state.currentTargetId,
+        dwellProgress = accessInput.state.dwellProgress,
+    )
     suspend fun updateBoardShowMessageBar(enabled: Boolean) = updateSettings { it.copy(boardShowMessageBar = enabled) }
 
     private val selectionHighlight = SelectionHighlight()

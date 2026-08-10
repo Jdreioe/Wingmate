@@ -133,6 +133,31 @@ struct RightSettingsPanel: View {
 
             Divider().padding(.vertical, 4)
 
+            VStack(alignment: .leading, spacing: 10) {
+                Text("settings.interaction.title").font(.headline)
+                Picker("settings.interaction.select_key", selection: Binding(
+                    get: { model.selectKeyBinding }, set: { model.setSelectKeyBinding($0) }
+                )) {
+                    Text("common.off").tag("")
+                    ForEach(["Space", "Enter", "F8", "F9"], id: \.self) { Text($0).tag($0) }
+                }.pickerStyle(.menu)
+                Picker("settings.interaction.rest_key", selection: Binding(
+                    get: { model.restModeKeyBinding }, set: { model.setRestModeKeyBinding($0) }
+                )) {
+                    Text("common.off").tag("")
+                    ForEach(["Space", "Enter", "F8", "F9"], id: \.self) { Text($0).tag($0) }
+                }.pickerStyle(.menu)
+                Picker("settings.pointer_emphasis.style", selection: Binding(
+                    get: { model.pointerEmphasisStyle }, set: { model.setPointerEmphasis(style: $0) }
+                )) {
+                    Text("settings.pointer_emphasis.system").tag("System")
+                    Text("settings.pointer_emphasis.ring").tag("Ring")
+                    Text("settings.pointer_emphasis.outline").tag("Outline")
+                }.pickerStyle(.menu)
+            }
+
+            Divider().padding(.vertical, 4)
+
             // Scanning
             VStack(alignment: .leading, spacing: 10) {
                 Text("settings.scanning.title").font(.headline)

@@ -184,6 +184,22 @@ private struct SpeechSettingsView: View {
 
     var body: some View {
         Form {
+            Section("settings.interaction.title") {
+                Picker("settings.interaction.select_key", selection: Binding(
+                    get: { model.selectKeyBinding }, set: { model.setSelectKeyBinding($0) }
+                )) {
+                    Text("common.off").tag("")
+                    ForEach(["Space", "Enter", "F8", "F9"], id: \.self) { Text($0).tag($0) }
+                }
+                Picker("settings.interaction.rest_key", selection: Binding(
+                    get: { model.restModeKeyBinding }, set: { model.setRestModeKeyBinding($0) }
+                )) {
+                    Text("common.off").tag("")
+                    ForEach(["Space", "Enter", "F8", "F9"], id: \.self) { Text($0).tag($0) }
+                }
+                Text("settings.interaction.description").font(.footnote).foregroundStyle(.secondary)
+            }
+
             Section("settings.tts.title") {
                 Picker("settings.speech.engine", selection: Binding(
                     get: { model.useSystemTts },
@@ -353,6 +369,24 @@ private struct AccessibilitySettingsView: View {
                 Toggle("settings.accessibility.auditory_fishing", isOn: Binding(
                     get: { model.auditoryFishingEnabled }, set: { model.setAuditoryFishingEnabled($0) }
                 ))
+            }
+
+            Section("settings.pointer_emphasis.title") {
+                Picker("settings.pointer_emphasis.style", selection: Binding(
+                    get: { model.pointerEmphasisStyle }, set: { model.setPointerEmphasis(style: $0) }
+                )) {
+                    Text("settings.pointer_emphasis.system").tag("System")
+                    Text("settings.pointer_emphasis.ring").tag("Ring")
+                    Text("settings.pointer_emphasis.outline").tag("Outline")
+                }
+                SettingsSliderRow(
+                    title: "settings.pointer_emphasis.size",
+                    value: Binding(get: { model.pointerEmphasisScale }, set: { model.setPointerEmphasis(scale: $0) }),
+                    range: 1...3,
+                    step: 0.25,
+                    decimals: 2
+                )
+                Text("settings.pointer_emphasis.ios_note").font(.footnote).foregroundStyle(.secondary)
             }
 
             Section("settings.scanning.title") {

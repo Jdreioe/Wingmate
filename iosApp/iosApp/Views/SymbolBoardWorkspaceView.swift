@@ -562,6 +562,12 @@ struct SymbolBoardWorkspaceView: View {
                         }
                     }
                 } else {
+                    Button(action: { isFullscreen = true }) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.title3)
+                            .foregroundColor(.blue)
+                    }
+                    .accessibilityLabel(Text("playback.fullscreen"))
                     Button(action: { showHiddenButtons.toggle() }) {
                         Image(systemName: showHiddenButtons ? "eye.slash" : "eye")
                             .font(.title3)
@@ -664,6 +670,31 @@ struct SymbolBoardWorkspaceView: View {
         }
         .task(id: boardPredictionTaskId) {
             await model.refreshBoardPredictions(context: boardSentenceText)
+        }
+        .fullScreenCover(isPresented: $isFullscreen) {
+            VStack(spacing: 12) {
+                HStack {
+                    if model.boardMessageBarVisible {
+                        SentenceBoxView(
+                            phrases: boardSentenceTokens,
+                            onDelete: { index in
+                                guard boardSentenceTokens.indices.contains(index) else { return }
+                                boardSentenceTokens.remove(at: index)
+                            },
+                            onSpeak: {
+                                let sentence = boardSentenceText
+                                guard !sentence.isEmpty else { return }
+                                model.speakBoardSentence(sentence, boardSetId: boardSetId)
+                            }
+                        )
+                    }
+                    Button("common.done") { isFullscreen = false }
+                        .font(.headline)
+                }
+                boardPreview(isEditMode: false)
+            }
+            .padding(16)
+            .background(Color(.systemBackground))
         }
     }
 
@@ -777,9 +808,41 @@ struct SymbolBoardWorkspaceView: View {
                     }
             )
             .onHover { hovering in
-                if hovering && model.auditoryFishingEnabled,
-                   let preview = trimmed(cell?.vocalization) ?? trimmed(cell?.label) {
-                    model.speak(preview)
+                let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
+                if hovering {
+                    model.accessEnter(targetId)
+                    if model.auditoryFishingEnabled, !model.inputIsPaused,
+                       let preview = trimmed(cell?.vocalization) ?? trimmed(cell?.label) {
+                        model.speak(preview)
+                    }
+                } else {
+                    model.accessExit(targetId)
+                }
+            }
+            .onAppear {
+                guard !isEditMode, cell != nil else { return }
+                let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
+                model.registerAccessTarget(targetId) {
+                    activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
+                }
+            }
+            .onDisappear { model.unregisterAccessTarget("board:\(cell?.buttonId ?? sourceCellId)") }
+            .accessTargetFocus(model: model, targetId: "board:\(cell?.buttonId ?? sourceCellId)")
+            .overlay {
+                let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
+                if !isEditMode && model.accessTargetId == targetId && model.pointerEmphasisStyle != "System" {
+                    RoundedRectangle(cornerRadius: model.pointerEmphasisStyle == "Ring" ? 20 : 2)
+                        .stroke(Color.accentColor, lineWidth: 3 * model.pointerEmphasisScale)
+                        .padding(6 / model.pointerEmphasisScale)
+                        .accessibilityHidden(true)
+                        .allowsHitTesting(false)
+                }
+                if !isEditMode && model.accessTargetId == targetId && model.accessDwellProgress > 0 {
+                    RoundedRectangle(cornerRadius: 10)
+                        .trim(from: 0, to: model.accessDwellProgress)
+                        .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                        .accessibilityHidden(true)
+                        .allowsHitTesting(false)
                 }
             }
             .accessibilityLabel(Text(boardCellDisplayLabel(cell)))

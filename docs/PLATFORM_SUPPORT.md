@@ -7,24 +7,22 @@ acceptance testing.
 
 | Client | UI stack | Communication and settings | Board sets and OBF/OBZ | Feature-parity expectation |
 | --- | --- | --- | --- | --- |
-| Android | Compose Multiplatform | Supported | Supported | Required for shared and Compose features |
-| Desktop | Compose Multiplatform on JVM | Supported | Supported | Required for shared and Compose features |
+| Android | Jetpack Compose | Supported | Supported | Required for shared features and native Android UX |
 | iOS | SwiftUI with the shared Kotlin bridge | Supported | Supported | Required for shared features; native UI and accessibility work must be included |
-| Linux standalone | Rust (Iced) | Supported for its existing phrase and partner-window workflows | Not currently exposed | Maintain existing behavior; board-feature parity is out of scope until the board workspace is added |
+| Linux standalone | Rust (Iced) with the shared Kotlin HTTP bridge | Supported | Supported | Required for shared features and native Linux UX |
 
 ## Feature acceptance policy
 
 - Domain models, persistence, import/export, and application rules must live in
   shared Kotlin where platform APIs do not require otherwise.
 - Board, symbol, layout, and customization issues are complete only when their
-  shared behavior works in Android, Desktop Compose, and iOS SwiftUI.
-- Compose UI behavior must be verified on both Android and Desktop when input,
-  windowing, file access, or accessibility behavior differs.
+  shared behavior works in Android, iOS SwiftUI, and Linux Iced.
+- Compose UI behavior is verified on Android; there is no shared or desktop
+  Compose client.
 - iOS features must expose the required data and operations through the shared
   bridge and provide equivalent SwiftUI and VoiceOver behavior.
-- The standalone Linux Rust (Iced) client must continue to build and retain its
-  existing workflows, but new board features do not require a second native UI
-  implementation unless an issue explicitly adds that scope.
+- The standalone Linux Rust (Iced) client must continue to build and receive a
+  native attribution for shared features, including board features.
 - Platform-specific limitations must be recorded in the implementing issue and
   release notes; they must not be silently treated as feature parity.
 

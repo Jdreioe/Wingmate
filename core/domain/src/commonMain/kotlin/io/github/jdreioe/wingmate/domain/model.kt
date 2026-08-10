@@ -45,6 +45,13 @@ enum class TtsEngine {
 }
 
 @Serializable
+enum class PointerEmphasisStyle {
+    System,
+    Ring,
+    Outline
+}
+
+@Serializable
 data class Settings(
     val language: String = "en-US",
     val voice: String = "default",
@@ -100,6 +107,12 @@ data class Settings(
     val gridColumns: Int = 3,
     val highContrastMode: Boolean = false,
     val dwellToSelectMillis: Long = 0,
+    // Interaction shortcuts use portable tokens such as "Space", "Enter", or "F8".
+    // Empty disables the shortcut so ordinary typing is never intercepted by default.
+    val selectKeyBinding: String = "",
+    val restModeKeyBinding: String = "",
+    val pointerEmphasisStyle: PointerEmphasisStyle = PointerEmphasisStyle.System,
+    val pointerEmphasisScale: Float = 1.5f,
     val selectionSoundEnabled: Boolean = false,
     val auditoryFishingEnabled: Boolean = false,
     // #118: ignore repeated activations of the same target inside this window (ms). 0 disables.

@@ -45,6 +45,7 @@ import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
@@ -129,6 +130,10 @@ fun SettingsScreen(
     var auditoryFishingEnabled by remember { mutableStateOf(false) }
     var selectionDebounceMillis by remember { mutableStateOf(0L) }
     var selectionHighlightMillis by remember { mutableStateOf(0L) }
+    var selectKeyBinding by remember { mutableStateOf("") }
+    var restModeKeyBinding by remember { mutableStateOf("") }
+    var pointerEmphasisStyle by remember { mutableStateOf(PointerEmphasisStyle.System) }
+    var pointerEmphasisScale by remember { mutableStateOf(1.5f) }
     var usageLoggingEnabled by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -220,6 +225,10 @@ fun SettingsScreen(
         auditoryFishingEnabled = s.auditoryFishingEnabled
         selectionDebounceMillis = s.selectionDebounceMillis
         selectionHighlightMillis = s.selectionHighlightMillis
+        selectKeyBinding = s.selectKeyBinding
+        restModeKeyBinding = s.restModeKeyBinding
+        pointerEmphasisStyle = s.pointerEmphasisStyle
+        pointerEmphasisScale = s.pointerEmphasisScale
         usageLoggingEnabled = s.usageLoggingEnabled
         fontSizeScale = s.fontSizeScale
         playbackIconScale = s.playbackIconScale
@@ -520,7 +529,16 @@ fun SettingsScreen(
                                         onSelectionDebounceChangeFinished = { updateSettings { it.copy(selectionDebounceMillis = selectionDebounceMillis) } },
                                         selectionHighlightMillis = selectionHighlightMillis,
                                         onSelectionHighlightChange = { selectionHighlightMillis = it },
-                                        onSelectionHighlightChangeFinished = { updateSettings { it.copy(selectionHighlightMillis = selectionHighlightMillis) } }
+                                        onSelectionHighlightChangeFinished = { updateSettings { it.copy(selectionHighlightMillis = selectionHighlightMillis) } },
+                                        selectKeyBinding = selectKeyBinding,
+                                        onSelectKeyBindingChange = { value -> selectKeyBinding = value; updateSettings { it.copy(selectKeyBinding = value) } },
+                                        restModeKeyBinding = restModeKeyBinding,
+                                        onRestModeKeyBindingChange = { value -> restModeKeyBinding = value; updateSettings { it.copy(restModeKeyBinding = value) } },
+                                        pointerEmphasisStyle = pointerEmphasisStyle,
+                                        onPointerEmphasisStyleChange = { value -> pointerEmphasisStyle = value; updateSettings { it.copy(pointerEmphasisStyle = value) } },
+                                        pointerEmphasisScale = pointerEmphasisScale,
+                                        onPointerEmphasisScaleChange = { pointerEmphasisScale = it },
+                                        onPointerEmphasisScaleChangeFinished = { updateSettings { it.copy(pointerEmphasisScale = pointerEmphasisScale) } }
                                     )
                                     SettingsTab.Privacy -> PrivacySection(
                                         historyVisible = historyVisible,
@@ -1428,8 +1446,37 @@ private fun AccessibilitySection(
     onSelectionDebounceChangeFinished: () -> Unit,
     selectionHighlightMillis: Long,
     onSelectionHighlightChange: (Long) -> Unit,
-    onSelectionHighlightChangeFinished: () -> Unit
+    onSelectionHighlightChangeFinished: () -> Unit,
+    selectKeyBinding: String,
+    onSelectKeyBindingChange: (String) -> Unit,
+    restModeKeyBinding: String,
+    onRestModeKeyBindingChange: (String) -> Unit,
+    pointerEmphasisStyle: PointerEmphasisStyle,
+    onPointerEmphasisStyleChange: (PointerEmphasisStyle) -> Unit,
+    pointerEmphasisScale: Float,
+    onPointerEmphasisScaleChange: (Float) -> Unit,
+    onPointerEmphasisScaleChangeFinished: () -> Unit,
 ) {
+    SettingsGroup(title = stringResource(R.string.ui_settings_interaction)) {
+        SettingsChoiceChips(
+            title = stringResource(R.string.ui_settings_select_key),
+            description = stringResource(R.string.ui_settings_select_key_desc),
+            selected = selectKeyBinding,
+            options = listOf("", "Space", "Enter", "F8", "F9"),
+            label = { it.ifBlank { stringResource(R.string.common_off) } },
+            onSelect = onSelectKeyBindingChange,
+        )
+        SettingsGroupDivider()
+        SettingsChoiceChips(
+            title = stringResource(R.string.ui_settings_rest_key),
+            description = stringResource(R.string.ui_settings_rest_key_desc),
+            selected = restModeKeyBinding,
+            options = listOf("", "Space", "Enter", "F8", "F9"),
+            label = { it.ifBlank { stringResource(R.string.common_off) } },
+            onSelect = onRestModeKeyBindingChange,
+        )
+    }
+
     SettingsGroup(title = stringResource(R.string.ui_settings_touch_timing)) {
         SettingsSlider(
             title = stringResource(R.string.ui_settings_hold_to_select_title),
@@ -1488,6 +1535,28 @@ private fun AccessibilitySection(
             valueRange = 0f..2000f,
             steps = 19,
             valueLabel = "${selectionHighlightMillis.toInt()} ms"
+        )
+    }
+
+    SettingsGroup(title = stringResource(R.string.ui_settings_pointer_emphasis)) {
+        SettingsChoiceChips(
+            title = stringResource(R.string.ui_settings_pointer_style),
+            description = stringResource(R.string.ui_settings_pointer_style_desc),
+            selected = pointerEmphasisStyle,
+            options = PointerEmphasisStyle.entries,
+            label = { it.name },
+            onSelect = onPointerEmphasisStyleChange,
+        )
+        SettingsGroupDivider()
+        SettingsSlider(
+            title = stringResource(R.string.ui_settings_pointer_size),
+            description = stringResource(R.string.ui_settings_pointer_size_desc),
+            value = pointerEmphasisScale,
+            onValueChange = onPointerEmphasisScaleChange,
+            onValueChangeFinished = onPointerEmphasisScaleChangeFinished,
+            valueRange = 1f..3f,
+            steps = 7,
+            valueLabel = "%.1f×".format(pointerEmphasisScale),
         )
     }
 }

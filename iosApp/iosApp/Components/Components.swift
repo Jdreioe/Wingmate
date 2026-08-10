@@ -4,6 +4,27 @@ import UIKit
 import Foundation
 import AudioToolbox
 
+private struct AccessTargetFocusModifier: ViewModifier {
+    @ObservedObject var model: IosViewModel
+    let targetId: String
+    @FocusState private var focused: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .focusable()
+            .focused($focused)
+            .onChange(of: focused) { _, value in
+                if value { model.accessFocus(targetId) } else { model.accessBlur(targetId) }
+            }
+    }
+}
+
+extension View {
+    func accessTargetFocus(model: IosViewModel, targetId: String) -> some View {
+        modifier(AccessTargetFocusModifier(model: model, targetId: targetId))
+    }
+}
+
 struct CategoryChip: View {
     let title: String
     let selected: Bool
@@ -504,6 +525,7 @@ struct PhraseItemView: View {
         let title = phrase.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         let accessibleName = ((title?.isEmpty == false ? title : phrase.text) ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let accessTargetId = "phrase:\(phrase.id)"
 
         Button(action: {
             guard model.holdToSelectMillis <= 0 else { return }
@@ -563,8 +585,28 @@ struct PhraseItemView: View {
         )
         .allowsHitTesting(!wiggle)
         .onHover { hovering in
-            if hovering && model.auditoryFishingEnabled {
-                model.speak(accessibleName)
+            if hovering {
+                model.accessEnter(accessTargetId)
+                if model.auditoryFishingEnabled && !model.inputIsPaused { model.speak(accessibleName) }
+            } else {
+                model.accessExit(accessTargetId)
+            }
+        }
+        .onAppear { model.registerAccessTarget(accessTargetId) { model.insertPhraseText(phrase) } }
+        .onDisappear { model.unregisterAccessTarget(accessTargetId) }
+        .accessTargetFocus(model: model, targetId: accessTargetId)
+        .overlay {
+            if model.accessTargetId == accessTargetId && model.pointerEmphasisStyle != "System" {
+                tileShape.stroke(Color.accentColor, lineWidth: 3 * model.pointerEmphasisScale)
+                    .padding(6 / model.pointerEmphasisScale)
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
+            }
+            if model.accessTargetId == accessTargetId && model.accessDwellProgress > 0 {
+                tileShape.trim(from: 0, to: model.accessDwellProgress)
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
             }
         }
         .accessibilityLabel(Text(accessibleName.isEmpty ? NSLocalizedString("common.no_name", comment: "") : accessibleName))

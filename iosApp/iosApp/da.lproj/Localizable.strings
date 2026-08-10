@@ -480,3 +480,4 @@
 "boardset.cell.action.home" = "Gå til startsiden";
 "boardset.cell.action.speak" = "Læs sætningen op";
 "boardset.cell.action.prediction" = "Ordforslag";
+"playback.fullscreen" = "Vis på fuld skærm";

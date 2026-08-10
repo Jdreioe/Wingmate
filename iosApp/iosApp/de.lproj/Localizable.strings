@@ -449,3 +449,4 @@
 "boardset.cell.action.home" = "Zur Startseite";
 "boardset.cell.action.speak" = "Satz sprechen";
 "boardset.cell.action.prediction" = "Wortvorhersage";
+"playback.fullscreen" = "Im Vollbild anzeigen";

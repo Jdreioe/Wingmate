@@ -1,5 +1,6 @@
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import kotlinx.serialization.json.Json
@@ -70,6 +71,23 @@ class SettingsModelTest {
         val encoded = json.encodeToString(Settings(historyVisible = false))
         val decoded = json.decodeFromString<Settings>(encoded)
         assertEquals(false, decoded.historyVisible)
+    }
+
+    @Test
+    fun interactionSettingsRoundTripAndOldSettingsRemainSafe() {
+        val original = Settings(
+            selectKeyBinding = "Space",
+            restModeKeyBinding = "F8",
+            pointerEmphasisStyle = PointerEmphasisStyle.Ring,
+            pointerEmphasisScale = 2.25f,
+        )
+        val decoded = json.decodeFromString<Settings>(json.encodeToString(original))
+        assertEquals(original, decoded)
+
+        val old = json.decodeFromString<Settings>("{}")
+        assertEquals("", old.selectKeyBinding)
+        assertEquals("", old.restModeKeyBinding)
+        assertEquals(PointerEmphasisStyle.System, old.pointerEmphasisStyle)
     }
 
     @Test

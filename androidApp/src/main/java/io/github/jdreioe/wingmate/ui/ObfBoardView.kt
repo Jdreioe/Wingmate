@@ -1072,54 +1072,33 @@ fun ObfButtonItem(
         finishedListener = { isSelected = false }
     )
 
-    // Dwell logic state
+    val accessHost = LocalAccessInputHost.current
+    val accessTargetId = "board:${button.id}"
     var isHovered by remember { mutableStateOf(false) }
     var isPointerDown by remember { mutableStateOf(false) }
-    var dwellProgress by remember { mutableStateOf(0f) }
     
     // Stable scope for fire-and-forget speech (survives hover changes)
     val fishingScope = rememberCoroutineScope()
 
-    // Dwell-to-select must not fire while the pointer is pressed: pressing is an explicit
-    // action, not a dwell, so hover-dwell activation is suspended for the press duration.
-    LaunchedEffect(isHovered, isPointerDown, settings.dwellToSelectMillis) {
-        if (isHovered && !isPointerDown && settings.dwellToSelectMillis > 0 && !isEditMode) {
-            val startTime = System.currentTimeMillis()
-            val duration = settings.dwellToSelectMillis
-            
-            // Auditory Fishing: Whisper label on hover start (fire-and-forget)
-            if (settings.auditoryFishingEnabled) {
-                val label = displayLabel ?: displayVocalization ?: ""
-                if (label.isNotBlank()) {
-                    fishingScope.launch {
-                        runCatching {
-                            val voice = voiceUseCase.selected()
-                                .withLanguageOverride(button.locale)
-                            speechService.speak(label, voice, voice?.pitch, rate = 0.8)
-                        }
-                    }
+    val primaryAction = {
+        if (tryActivate()) {
+            if (animateSelection) isSelected = true
+            aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
+            onClick()
+        }
+    }
+    if (!isEditMode) RegisterAccessTarget(accessTargetId, primaryAction)
+    val dwellProgress = if (accessHost?.state?.currentTargetId == accessTargetId) accessHost.state.dwellProgress else 0f
+
+    LaunchedEffect(isHovered, settings.auditoryFishingEnabled) {
+        val label = displayLabel ?: displayVocalization ?: ""
+        if (isHovered && accessHost?.state?.isPaused != true && settings.auditoryFishingEnabled && label.isNotBlank()) {
+            fishingScope.launch {
+                runCatching {
+                    val voice = voiceUseCase.selected().withLanguageOverride(button.locale)
+                    speechService.speak(label, voice, voice?.pitch, rate = 0.8)
                 }
             }
-            
-            while (isHovered && !isPointerDown) {
-                val now = System.currentTimeMillis()
-                val elapsed = now - startTime
-                dwellProgress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
-                
-                if (elapsed >= duration) {
-                    // #118: only pulse, log, and dispatch when the activation is accepted.
-                    if (tryActivate()) {
-                        if (animateSelection) isSelected = true
-                        aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
-                        onClick()
-                    }
-                    dwellProgress = 0f
-                    break
-                }
-                delay(16)
-            }
-        } else {
-            dwellProgress = 0f
         }
     }
 
@@ -1203,24 +1182,15 @@ fun ObfButtonItem(
                     while (true) {
                         val event = awaitPointerEvent()
                         when (event.type) {
-                            PointerEventType.Enter -> isHovered = true
-                            PointerEventType.Exit -> isHovered = false
-                            PointerEventType.Press -> isPointerDown = true
-                            PointerEventType.Release -> isPointerDown = false
+                            PointerEventType.Enter -> { isHovered = true; if (!isEditMode) accessHost?.enter(accessTargetId) }
+                            PointerEventType.Exit -> { isHovered = false; accessHost?.exit(accessTargetId) }
+                            PointerEventType.Press -> { isPointerDown = true; accessHost?.exit(accessTargetId) }
+                            PointerEventType.Release -> { isPointerDown = false; if (isHovered && !isEditMode) accessHost?.enter(accessTargetId) }
                         }
                     }
                 }
             }
             .let { baseModifier ->
-                val primaryAction = {
-                    // #118: only pulse, log, and dispatch when the activation is accepted.
-                    if (tryActivate()) {
-                        if (animateSelection) isSelected = true
-                        aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
-                        onClick()
-                    }
-                }
-                
                 if (settings.holdToSelectMillis > 0 && !isEditMode) {
                     baseModifier.pointerInput(settings.holdToSelectMillis) {
                         detectTapGestures(
@@ -1241,7 +1211,8 @@ fun ObfButtonItem(
                         onClick = { primaryAction() }
                     )
                 }
-            },
+            }
+            .accessTargetFocus(accessTargetId, if (isEditMode) null else accessHost),
         shape = buttonShape,
         colors = CardDefaults.elevatedCardColors(containerColor = bgColor),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
@@ -1372,6 +1343,20 @@ fun ObfButtonItem(
                     modifier = Modifier
                         .matchParentSize()
                         .border(4.dp, selectionHighlightColor, RoundedCornerShape(12.dp))
+                )
+            }
+            if (accessHost?.state?.currentTargetId == accessTargetId &&
+                settings.pointerEmphasisStyle != io.github.jdreioe.wingmate.domain.PointerEmphasisStyle.System
+            ) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .padding((6.dp / settings.pointerEmphasisScale.coerceIn(1f, 3f)))
+                        .border(
+                            (3.dp * settings.pointerEmphasisScale.coerceIn(1f, 3f)),
+                            MaterialTheme.colorScheme.primary,
+                            RoundedCornerShape(if (settings.pointerEmphasisStyle == io.github.jdreioe.wingmate.domain.PointerEmphasisStyle.Ring) 24.dp else 2.dp)
+                        )
                 )
             }
         }
