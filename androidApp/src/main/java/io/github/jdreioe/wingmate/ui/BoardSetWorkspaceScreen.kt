@@ -58,6 +58,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -78,6 +79,7 @@ import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
+import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -202,6 +204,9 @@ fun BoardSetManagerScreen(
     val useCase = koinInject<BoardSetUseCase>()
     val boardSetSpeechCache = koinInject<BoardSetSpeechCacheUseCase>()
     val boardImportService = remember(koin) { koin.getOrNull<BoardImportService>() }
+    val quickCorePresetService = remember(koin) { koin.getOrNull<QuickCorePresetService>() }
+    val quickCoreProgress by quickCorePresetService?.progress?.collectAsState()
+        ?: remember { mutableStateOf(null) }
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
     val featureUsageReporter = koinInject<io.github.jdreioe.wingmate.application.FeatureUsageReporter>()
@@ -212,6 +217,7 @@ fun BoardSetManagerScreen(
     var boardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var showCreateDialog by remember { mutableStateOf(false) }
+    var isQuickCoreImporting by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showImportExport by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ObfBoardSet?>(null) }
@@ -328,15 +334,38 @@ fun BoardSetManagerScreen(
         CreateBoardSetDialog(
             onDismiss = { showCreateDialog = false },
             onCreate = { name, rows, columns, template, keyboardPreset ->
-                if (template != BoardSetTemplate.Blank) {
+                if (template != BoardSetTemplate.Blank && template.quickCoreSlug == null) {
                     showCreateDialog = false
                 }
                 scope.launch {
+                    val quickCoreSlug = template.quickCoreSlug
+                    if (quickCoreSlug != null) {
+                        val service = quickCorePresetService
+                        if (service == null) {
+                            statusMessage = createError
+                            return@launch
+                        }
+                        isQuickCoreImporting = true
+                        when (val result = service.importPreset(quickCoreSlug)) {
+                            is BoardImportResult.Success -> {
+                                val created = useCase.renameBoardSet(result.boardSet.id, name.trim())
+                                    ?: result.boardSet
+                                showCreateDialog = false
+                                refreshBoardSets()
+                                route = BoardSetRoute.Workspace(created.id, BoardWorkspaceMode.Run)
+                            }
+                            is BoardImportResult.Failure -> statusMessage = result.context
+                            BoardImportResult.Cancelled -> Unit
+                        }
+                        isQuickCoreImporting = false
+                        return@launch
+                    }
                     runCatching {
                         when (template) {
                             BoardSetTemplate.Blank -> useCase.createBoardSet(name.trim(), rows, columns, defaultBoardName)
                             BoardSetTemplate.Calculator -> useCase.createCalculatorBoardSet(name.trim())
                             BoardSetTemplate.Keyboard -> useCase.createKeyboardBoardSet(name.trim(), keyboardPreset)
+                            else -> error("Quick Core presets are imported separately")
                         }
                     }
                         .onSuccess { created ->
@@ -356,11 +385,14 @@ fun BoardSetManagerScreen(
                                         .distinctBy { it.id }
                                         .sortedByDescending { it.updatedAt }
                                 }
+                                else -> Unit
                             }
                         }
                         .onFailure { statusMessage = it.message ?: createError }
                 }
-            }
+            },
+            quickCoreProgress = quickCoreProgress?.fraction?.toFloat(),
+            isQuickCoreImporting = isQuickCoreImporting,
         )
     }
 
@@ -607,6 +639,7 @@ private fun BoardSetWorkspaceScreen(
     var highlightGeneration by remember(boardSetId) { mutableLongStateOf(0L) }
     var isLoading by remember(boardSetId) { mutableStateOf(true) }
     var statusMessage by remember(boardSetId) { mutableStateOf<String?>(null) }
+    var nativeKeyboardDraft by remember(boardSetId) { mutableStateOf<String?>(null) }
     var showAddBoardDialog by remember { mutableStateOf(false) }
     var editingCell by remember { mutableStateOf<WorkspaceCellTarget?>(null) }
     var selectedField by remember(boardSetId) { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -871,6 +904,44 @@ private fun BoardSetWorkspaceScreen(
                 isExporting = false
             }
         }
+    }
+
+    nativeKeyboardDraft?.let { currentDraft ->
+        AlertDialog(
+            onDismissRequest = { nativeKeyboardDraft = null },
+            title = { Text(stringResource(R.string.board_native_keyboard_title)) },
+            text = {
+                OutlinedTextField(
+                    value = currentDraft,
+                    onValueChange = { nativeKeyboardDraft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(R.string.board_native_keyboard_hint)) },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedButtons = currentDraft.takeIf { it.isNotEmpty() }
+                        ?.let { text ->
+                            listOf(
+                                ObfButton(
+                                    id = workspaceId("native-keyboard"),
+                                    label = text,
+                                    vocalization = text,
+                                ) to null
+                            )
+                        }
+                        .orEmpty()
+                    nativeKeyboardDraft = null
+                }) {
+                    Text(stringResource(R.string.board_native_keyboard_return))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { nativeKeyboardDraft = null }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
     }
 
     val openSettingsTarget = settingsTarget
@@ -1322,7 +1393,10 @@ private fun BoardSetWorkspaceScreen(
                                             }
                                         }
                                         ObfButtonActionEffect.Backspace -> {
-                                            nextSelection = backspaceSentenceSelection(nextSelection)
+                                            nextSelection = backspaceSentenceSelection(
+                                                nextSelection,
+                                                spellingMode = activeBoard.spellingMode
+                                            )
                                         }
                                         ObfButtonActionEffect.Clear -> {
                                             nextSelection = emptyList()
@@ -1333,6 +1407,9 @@ private fun BoardSetWorkspaceScreen(
                                         }
                                         ObfButtonActionEffect.Home -> {
                                             navigateHome = true
+                                        }
+                                        ObfButtonActionEffect.NativeKeyboard -> {
+                                            nativeKeyboardDraft = sentenceText
                                         }
                                         ObfButtonActionEffect.Predictions -> {
                                             val insertion = predictionButtonIds
@@ -1895,11 +1972,12 @@ private fun workspaceId(prefix: String): String {
 }
 
 internal fun backspaceSentenceSelection(
-    selected: List<Pair<ObfButton, ImageBitmap?>>
+    selected: List<Pair<ObfButton, ImageBitmap?>>,
+    spellingMode: Boolean = false
 ): List<Pair<ObfButton, ImageBitmap?>> {
     if (selected.isEmpty()) return selected
     val texts = selected.map { (button, _) -> button.vocalization ?: button.label ?: "" }
-    val trimmed = backspaceSentenceSelection(texts)
+    val trimmed = backspaceSentenceSelection(texts, spellingMode)
     if (trimmed.size < texts.size) return selected.dropLast(1)
     val lastButton = selected.last().first
     val lastText = trimmed.last()

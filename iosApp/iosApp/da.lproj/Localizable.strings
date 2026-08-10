@@ -466,6 +466,10 @@
 "boardset.keyboard_layout" = "Tastaturlag";
 "boardset.keyboard_symbols" = "Symboler";
 "boardset.cell.keyboard_action" = "Tastaturfunktion";
+"boardset.native_keyboard.title" = "Tastatur";
+"boardset.native_keyboard.hint" = "Skriv et ord eller en sætning";
+"boardset.native_keyboard.return" = "Tilbage til tavlen";
+"boardset.quick_core.downloading" = "Downloader og klargør Quick Core…";
 "boardset.cell.insert_text" = "Tekst, som denne tast indsætter";
 "boardset.cell.key_action" = "Særlig handling";
 "boardset.cell.action.none" = "Ingen særlig handling";

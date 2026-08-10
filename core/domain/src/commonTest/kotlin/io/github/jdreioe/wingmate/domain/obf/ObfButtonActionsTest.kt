@@ -30,6 +30,7 @@ class ObfButtonActionsTest {
         assertEquals(ObfButtonActionEffect.Clear, parseObfButtonAction(":clear"))
         assertEquals(ObfButtonActionEffect.Speak, parseObfButtonAction(":speak"))
         assertEquals(ObfButtonActionEffect.Home, parseObfButtonAction(":home"))
+        assertEquals(ObfButtonActionEffect.NativeKeyboard, parseObfButtonAction(":native-keyboard"))
         assertEquals(ObfButtonActionEffect.Predictions, parseObfButtonAction(":prediction"))
     }
 

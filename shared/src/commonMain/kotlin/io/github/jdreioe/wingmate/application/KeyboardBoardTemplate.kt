@@ -19,7 +19,9 @@ enum class KeyboardPreset { Qwerty, Alphabetical }
  *
  * Every page starts with a prediction row above the keys: four n-gram prediction
  * buttons (each two cells wide), a "delete sentence" button, and a "say" button.
- * The boards are marked as spelling boards so word buttons do not auto-insert spaces.
+ * The boards are marked as spelling boards so that, unlike word screens (which
+ * auto-insert a space after every word), keys spell out letter by letter without
+ * auto-spacing unless a space key is pressed explicitly.
  */
 object KeyboardBoardTemplate {
     private const val LOWERCASE = "keyboard-lowercase"

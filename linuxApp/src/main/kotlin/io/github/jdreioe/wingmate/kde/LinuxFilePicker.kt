@@ -18,4 +18,24 @@ class LinuxFilePicker : FilePicker {
     override suspend fun openArchive(path: String): ArchiveReader? = withContext(Dispatchers.IO) {
         runCatching { JvmZipArchiveReader(File(path)) }.getOrNull()
     }
+
+    override suspend fun openArchiveBytes(content: ByteArray): ArchiveReader? = withContext(Dispatchers.IO) {
+        val temporary = kotlin.io.path.createTempFile("wingmate-preset-", ".obz").toFile()
+        try {
+            temporary.writeBytes(content)
+            val delegate = JvmZipArchiveReader(temporary)
+            object : ArchiveReader by delegate {
+                override suspend fun close() {
+                    try {
+                        delegate.close()
+                    } finally {
+                        temporary.delete()
+                    }
+                }
+            }
+        } catch (error: Throwable) {
+            temporary.delete()
+            throw error
+        }
+    }
 }

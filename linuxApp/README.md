@@ -56,6 +56,11 @@ cargo build --manifest-path linuxApp/Cargo.toml --release --bin wingmate --featu
 
 When launched from either the repository root or `linuxApp/`, the executable discovers `linuxApp/build/libs/linuxApp-all.jar` automatically. Packagers can set `WINGMATE_LINUXAPP_JAR` to an absolute installed path. To use an already-running bridge, set `WINGMATE_API_URL`.
 
+The desktop entry uses the Android Wingmate launcher artwork. Install
+`icons/hicolor/192x192/apps/com.hojmoseit.wingmate.png` into the matching
+`hicolor` icon directory alongside `com.hojmoseit.wingmate.desktop` so Wayland desktops can
+resolve the window's `com.hojmoseit.wingmate` application ID to that icon.
+
 ## Architecture
 
 - `src/main.rs` contains the complete Iced application, onboarding, Keyboard and Screens workspaces, native state/update/view loop, file dialogs, and typed HTTP client.

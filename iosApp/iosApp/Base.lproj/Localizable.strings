@@ -475,6 +475,10 @@
 "boardset.keyboard_layout" = "Keyboard layer";
 "boardset.keyboard_symbols" = "Symbols";
 "boardset.cell.keyboard_action" = "Keyboard behavior";
+"boardset.native_keyboard.title" = "Keyboard";
+"boardset.native_keyboard.hint" = "Type a word or sentence";
+"boardset.native_keyboard.return" = "Return to screen";
+"boardset.quick_core.downloading" = "Downloading and preparing Quick Core…";
 "boardset.cell.insert_text" = "Text inserted by this key";
 "boardset.cell.key_action" = "Special action";
 "boardset.cell.action.none" = "No special action";

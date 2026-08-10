@@ -1,6 +1,6 @@
 use cosmic::iced::widget::{
-    button, checkbox, column, container, image, mouse_area, pick_list, row, scrollable, slider,
-    stack, svg, text, text_input, Space,
+    button, checkbox, column, container, image, mouse_area, pick_list, progress_bar, row,
+    scrollable, slider, stack, svg, text, text_input, Space,
 };
 use cosmic::iced::{event, keyboard, window, Fill, Padding, Subscription, Task};
 use cosmic::prelude::*;
@@ -10,6 +10,7 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::env;
+use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -20,6 +21,79 @@ use wingmate::partner_window_bridge::{self, PartnerWindowController};
 mod i18n;
 
 const DEFAULT_API_URL: &str = "http://127.0.0.1:8765";
+const WINGMATE_APP_ID: &str = "com.hojmoseit.wingmate";
+const APP_ICON_PNG: &[u8] =
+    include_bytes!("../icons/hicolor/192x192/apps/com.hojmoseit.wingmate.png");
+const DESKTOP_ENTRY: &str = include_str!("../com.hojmoseit.wingmate.desktop");
+
+fn wingmate_window_icon() -> Option<window::Icon> {
+    let pixels = ::image::load_from_memory(APP_ICON_PNG).ok()?.into_rgba8();
+    let (width, height) = pixels.dimensions();
+    window::icon::from_rgba(pixels.into_raw(), width, height).ok()
+}
+
+/// `cargo run` has no install phase, but Plasma resolves Wayland taskbar icons
+/// by matching the window application ID to an installed desktop entry. Keep
+/// this strictly scoped to executables launched from Cargo's target directory.
+fn ensure_cargo_run_desktop_integration() {
+    let Ok(executable) = env::current_exe() else {
+        return;
+    };
+    let launched_from_cargo = executable
+        .parent()
+        .and_then(|path| path.parent())
+        .and_then(|path| path.file_name())
+        .is_some_and(|name| name == "target");
+    if !launched_from_cargo {
+        return;
+    }
+
+    let data_home = env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")));
+    let Some(data_home) = data_home else {
+        return;
+    };
+    let desktop_path = data_home
+        .join("applications")
+        .join(format!("{WINGMATE_APP_ID}.desktop"));
+    let icon_path = data_home
+        .join("icons/hicolor/192x192/apps")
+        .join(format!("{WINGMATE_APP_ID}.png"));
+    let desktop = DESKTOP_ENTRY.replace(
+        "Exec=wingmate-kde",
+        &format!("Exec={}", executable.display()),
+    );
+
+    let desktop_changed = fs::read_to_string(&desktop_path).ok().as_deref() != Some(&desktop);
+    let icon_changed = fs::read(&icon_path).ok().as_deref() != Some(APP_ICON_PNG);
+    if desktop_changed {
+        if let Some(parent) = desktop_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let _ = fs::write(&desktop_path, desktop);
+    }
+    if icon_changed {
+        if let Some(parent) = icon_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let _ = fs::write(&icon_path, APP_ICON_PNG);
+    }
+
+    if desktop_changed || icon_changed {
+        for cache_builder in ["kbuildsycoca6", "kbuildsycoca5"] {
+            if Command::new(cache_builder)
+                .arg("--noincremental")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|status| status.success())
+            {
+                break;
+            }
+        }
+    }
+}
 
 fn as_system_managed(theme: cosmic::theme::Theme) -> cosmic::theme::Theme {
     if matches!(&theme.theme_type, cosmic::theme::ThemeType::System { .. }) {
@@ -90,6 +164,7 @@ fn desktop_icon_theme() -> Option<String> {
 }
 
 fn main() -> cosmic::iced::Result {
+    ensure_cargo_run_desktop_integration();
     ctrlc::set_handler(|| {
         partner_window_bridge::send_global_shutdown();
         std::process::exit(0);
@@ -279,6 +354,12 @@ struct ImagePayload {
 }
 
 #[derive(Debug, Clone)]
+struct LoadedImageData {
+    bytes: Vec<u8>,
+    content_type: String,
+}
+
+#[derive(Debug, Clone)]
 enum CachedVisual {
     Raster(image::Handle),
     Svg(svg::Handle),
@@ -416,8 +497,18 @@ struct BoardSessionResponse {
     #[serde(default)]
     navigate_board_id: Option<String>,
     #[serde(default)]
+    open_native_keyboard: bool,
+    #[serde(default)]
     unsupported_actions: Vec<String>,
     settings: ResolvedBoardSettings,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PresetDownloadProgress {
+    stage: String,
+    downloaded_bytes: i64,
+    total_bytes: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -529,6 +620,7 @@ struct Wingmate {
     board_sets: Vec<BoardSet>,
     board_graph: Option<BoardGraph>,
     active_board_id: Option<String>,
+    native_keyboard_return_pending: bool,
     board_edit_mode: bool,
     onboarding_step: u8,
     onboarding_screens: bool,
@@ -562,7 +654,9 @@ struct Wingmate {
     current_page_name: String,
     board_rows: i32,
     board_columns: i32,
-    calculator_template: bool,
+    board_template: String,
+    preset_importing: bool,
+    preset_progress: Option<f32>,
     editing_cell: Option<(usize, usize)>,
     cell_label: String,
     cell_vocalization: String,
@@ -610,17 +704,19 @@ enum Message {
     LoadedEditingAccess(Result<EditingAccessState, String>),
     LoadedSettings(Result<Settings, String>),
     LoadedDictionary(Result<Vec<Pronunciation>, String>),
-    LoadedImage(String, Result<ImagePayload, String>),
+    LoadedImages(Vec<(String, Result<LoadedImageData, String>)>),
     LoadedPredictions(Result<Predictions, String>),
     LoadedAzureConfig(Result<AzureConfig, String>),
     LoadedHistory(Result<Vec<HistoryEntry>, String>),
     LoadedBoardSets(Result<Vec<BoardSet>, String>),
     LoadedBoardGraph(Result<BoardGraph, String>),
-    ActivateBoardButton(String, String),
+    LoadedBoardPage(Result<BoardGraph, String>),
+    LoadedPresetProgress(Result<PresetDownloadProgress, String>),
     BoardSentenceBackspace,
     BoardSentenceClear,
     BoardNavigateHome,
     BoardNavigateBack,
+    ReturnToBoardFromKeyboard,
     BoardSessionUpdated(Result<BoardSessionResponse, String>),
     SelectCategory(Option<String>),
     CategorySelected(Result<(), String>),
@@ -628,6 +724,7 @@ enum Message {
     SpeechAction(&'static str),
     ClearDraft,
     PollSpeech,
+    PollPresetProgress,
     PollEditingAccess,
     InputEvent(cosmic::iced::Event),
     AccessEnter(AccessTarget),
@@ -722,7 +819,7 @@ enum Message {
     PageNameChanged(String),
     BoardRowsChanged(i32),
     BoardColumnsChanged(i32),
-    CalculatorTemplate(bool),
+    BoardTemplateChanged(String),
     CreateBoardSet,
     ImportBoardSet,
     ExportBoardSet(String, String),
@@ -794,7 +891,7 @@ impl cosmic::Application for Wingmate {
     type Executor = cosmic::executor::Default;
     type Flags = ();
     type Message = Message;
-    const APP_ID: &'static str = "com.hojmoseit.wingmate";
+    const APP_ID: &'static str = WINGMATE_APP_ID;
 
     fn core(&self) -> &cosmic::Core {
         &self.core
@@ -843,6 +940,10 @@ impl cosmic::Application for Wingmate {
     }
 
     fn init(core: cosmic::Core, _flags: Self::Flags) -> (Self, Task<cosmic::Action<Message>>) {
+        let window_icon_task = core
+            .main_window_id()
+            .and_then(|id| wingmate_window_icon().map(|icon| window::set_icon(id, icon)))
+            .unwrap_or_else(Task::none);
         let api = Api::new();
         let backend = BackendProcess(start_bridge_server());
         let mut partner = PartnerWindowController::default();
@@ -865,6 +966,7 @@ impl cosmic::Application for Wingmate {
             board_sets: vec![],
             board_graph: None,
             active_board_id: None,
+            native_keyboard_return_pending: false,
             board_edit_mode: false,
             onboarding_step: 0,
             onboarding_screens: false,
@@ -898,7 +1000,9 @@ impl cosmic::Application for Wingmate {
             current_page_name: String::new(),
             board_rows: 4,
             board_columns: 4,
-            calculator_template: false,
+            board_template: "Quick Core 24".into(),
+            preset_importing: false,
+            preset_progress: None,
             editing_cell: None,
             cell_label: String::new(),
             cell_vocalization: String::new(),
@@ -932,23 +1036,50 @@ impl cosmic::Application for Wingmate {
             window_height: 768.0,
         };
 
-        (state, api.bootstrap().map(cosmic::Action::App))
+        (
+            state,
+            Task::batch(vec![
+                api.bootstrap().map(cosmic::Action::App),
+                window_icon_task,
+            ]),
+        )
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        // Settings contains several pick lists. Rebuilding those at the normal
-        // speech playback cadence is unnecessary and noticeably expensive on
-        // systems with hundreds of Azure voices.
-        let poll_interval = if self.page == Page::Settings {
-            Duration::from_millis(500)
-        } else {
-            Duration::from_millis(100)
-        };
-        Subscription::batch(vec![
-            cosmic::iced::time::every(poll_interval).map(|_| Message::PollSpeech),
-            cosmic::iced::time::every(Duration::from_secs(30)).map(|_| Message::PollEditingAccess),
-            event::listen().map(Message::InputEvent),
-        ])
+        // Timer messages rebuild the current widget tree. On a large symbol
+        // board even an idle one-second timer can keep software rendering busy,
+        // so only run this timer while speech or access timing needs it.
+        let speech_active = matches!(
+            self.speech_state.as_str(),
+            "starting" | "playing" | "paused"
+        );
+        let access_timer_active = self.settings.scanning_enabled
+            || (self.settings.dwell_to_select_millis > 0 && self.access_hover.is_some())
+            || self.highlighted_access.is_some();
+        let mut subscriptions = vec![event::listen().map(Message::InputEvent)];
+        if self.editing_access.enabled && self.editing_access.unlocked {
+            subscriptions.push(
+                cosmic::iced::time::every(Duration::from_secs(30))
+                    .map(|_| Message::PollEditingAccess),
+            );
+        }
+        if speech_active || access_timer_active {
+            subscriptions.push(
+                cosmic::iced::time::every(if speech_active {
+                    Duration::from_millis(200)
+                } else {
+                    Duration::from_millis(100)
+                })
+                .map(|_| Message::PollSpeech),
+            );
+        }
+        if self.preset_importing {
+            subscriptions.push(
+                cosmic::iced::time::every(Duration::from_millis(200))
+                    .map(|_| Message::PollPresetProgress),
+            );
+        }
+        Subscription::batch(subscriptions)
     }
 
     fn update(&mut self, message: Message) -> Task<cosmic::Action<Message>> {
@@ -964,6 +1095,9 @@ impl cosmic::Application for Wingmate {
         }
         match message {
             Message::Navigate(page) => {
+                if page == Page::Screens && self.native_keyboard_return_pending {
+                    return self.return_native_keyboard_to_board();
+                }
                 return self.navigate(page);
             }
             Message::ToggleSettings => {
@@ -1077,7 +1211,9 @@ impl cosmic::Application for Wingmate {
                         self.status = fl!("status-opening-startup-screen");
                         return Task::batch(vec![
                             theme_task,
-                            self.api.load_board_graph(id).map(cosmic::Action::App),
+                            self.api
+                                .load_board_graph(id, false)
+                                .map(cosmic::Action::App),
                         ]);
                     }
                     return theme_task;
@@ -1088,31 +1224,9 @@ impl cosmic::Application for Wingmate {
                 Ok(v) => self.pronunciations = v,
                 Err(e) => self.status = e,
             },
-            Message::LoadedImage(source, result) => {
-                self.pending_images.remove(&source);
-                match result {
-                    Ok(payload) => {
-                        use base64::Engine as _;
-                        match base64::engine::general_purpose::STANDARD.decode(payload.data) {
-                            Ok(bytes) if !bytes.is_empty() => {
-                                let is_svg = payload.content_type.contains("svg")
-                                    || bytes
-                                        .windows(4)
-                                        .any(|window| window.eq_ignore_ascii_case(b"<svg"));
-                                let visual = if is_svg {
-                                    CachedVisual::Svg(svg::Handle::from_memory(bytes))
-                                } else {
-                                    CachedVisual::Raster(image::Handle::from_bytes(bytes))
-                                };
-                                self.image_cache.insert(source, visual);
-                            }
-                            Ok(_) => self.status = fl!("error-image-empty"),
-                            Err(error) => {
-                                self.status = fl!("error-image-decode", error = error.to_string());
-                            }
-                        }
-                    }
-                    Err(error) => self.status = fl!("error-image-load", error = error),
+            Message::LoadedImages(results) => {
+                for (source, result) in results {
+                    self.cache_loaded_image(source, result);
                 }
             }
             Message::LoadedPredictions(result) => {
@@ -1134,17 +1248,33 @@ impl cosmic::Application for Wingmate {
                 Err(e) => self.status = e,
             },
             Message::LoadedBoardSets(result) => match result {
-                Ok(v) => self.board_sets = v,
-                Err(e) => self.status = e,
+                Ok(v) => {
+                    self.board_sets = v;
+                    self.preset_importing = false;
+                    self.preset_progress = None;
+                }
+                Err(e) => {
+                    self.preset_importing = false;
+                    self.preset_progress = None;
+                    self.status = e;
+                }
             },
+            Message::LoadedPresetProgress(result) => {
+                if let Ok(progress) = result {
+                    self.preset_progress =
+                        progress
+                            .total_bytes
+                            .filter(|total| *total > 0)
+                            .map(|total| {
+                                (progress.downloaded_bytes as f32 / total as f32).clamp(0.0, 1.0)
+                            });
+                    if progress.stage == "importing" {
+                        self.status = fl!("status-importing-quick-core");
+                    }
+                }
+            }
             Message::LoadedBoardGraph(result) => match result {
                 Ok(graph) => {
-                    let image_sources = graph
-                        .boards
-                        .iter()
-                        .flat_map(|board| board.images.iter())
-                        .filter_map(|item| item.url.clone().or_else(|| item.path.clone()))
-                        .collect();
                     let same_set = self
                         .board_graph
                         .as_ref()
@@ -1174,21 +1304,32 @@ impl cosmic::Application for Wingmate {
                     self.active_board_id = Some(active_board_id);
                     self.board_graph = Some(graph);
                     self.status = fl!("status-ready");
-                    return self.queue_images(image_sources);
+                    return self.queue_active_board_images();
                 }
                 Err(e) => self.status = e,
             },
-            Message::ActivateBoardButton(board_id, button_id) => {
-                return self
-                    .api
-                    .update_board_session(
-                        board_id,
-                        "activate",
-                        Some(button_id),
-                        self.board_sentence_tokens.clone(),
-                    )
-                    .map(cosmic::Action::App);
-            }
+            Message::LoadedBoardPage(result) => match result {
+                Ok(mut page) => {
+                    if let Some(graph) = &mut self.board_graph {
+                        if graph.board_set.id == page.board_set.id {
+                            for board in page.boards.drain(..) {
+                                if let Some(existing) =
+                                    graph.boards.iter_mut().find(|item| item.id == board.id)
+                                {
+                                    *existing = board;
+                                } else {
+                                    graph.boards.push(board);
+                                }
+                            }
+                            graph.resolved_settings.extend(page.resolved_settings);
+                            graph.field_items.extend(page.field_items);
+                        }
+                    }
+                    self.status = fl!("status-ready");
+                    return self.queue_active_board_images();
+                }
+                Err(error) => self.status = error,
+            },
             Message::BoardSentenceBackspace => {
                 if let Some(board_id) = self.active_board_id.clone() {
                     return self
@@ -1216,6 +1357,7 @@ impl cosmic::Application for Wingmate {
                     .board_graph
                     .as_ref()
                     .map(|graph| graph.board_set.root_board_id.clone());
+                return self.queue_active_board_images();
             }
             Message::BoardNavigateBack => {
                 if let Some(previous) = self.board_stack.pop() {
@@ -1226,6 +1368,7 @@ impl cosmic::Application for Wingmate {
                         .as_ref()
                         .map(|graph| graph.board_set.root_board_id.clone());
                 }
+                return self.queue_active_board_images();
             }
             Message::BoardSessionUpdated(result) => match result {
                 Ok(session) => {
@@ -1235,6 +1378,7 @@ impl cosmic::Application for Wingmate {
                         speak_text,
                         navigate_home,
                         navigate_board_id,
+                        open_native_keyboard,
                         unsupported_actions,
                         settings,
                     } = session;
@@ -1275,13 +1419,45 @@ impl cosmic::Application for Wingmate {
                             action = unsupported_actions.join(", ")
                         );
                     }
+                    if open_native_keyboard {
+                        self.draft = self.board_sentence.clone();
+                        self.native_keyboard_return_pending = true;
+                        return Task::batch(vec![
+                            self.navigate(Page::Communicate),
+                            self.api
+                                .predict(self.draft.clone())
+                                .map(cosmic::Action::App),
+                        ]);
+                    }
+                    let missing_page = self.active_board_id.as_ref().and_then(|board_id| {
+                        self.board_graph.as_ref().and_then(|graph| {
+                            (!graph.boards.iter().any(|board| &board.id == board_id))
+                                .then(|| (graph.board_set.id.clone(), board_id.clone()))
+                        })
+                    });
+                    let image_task = if let Some((set_id, board_id)) = missing_page {
+                        self.status = fl!("status-loading-board");
+                        self.api
+                            .load_board_page(set_id, board_id)
+                            .map(cosmic::Action::App)
+                    } else {
+                        self.queue_active_board_images()
+                    };
                     if let Some(text) = speak_text.filter(|text| !text.trim().is_empty()) {
                         self.status = fl!("status-speaking");
-                        return self.api.speak(text).map(cosmic::Action::App);
+                        self.speech_state = "starting".into();
+                        return Task::batch(vec![
+                            image_task,
+                            self.api.speak(text).map(cosmic::Action::App),
+                        ]);
                     }
+                    return image_task;
                 }
                 Err(error) => self.status = error,
             },
+            Message::ReturnToBoardFromKeyboard => {
+                return self.return_native_keyboard_to_board();
+            }
             Message::SelectCategory(id) => {
                 self.selected_category = id.clone();
                 return self.api.select_category(id).map(cosmic::Action::App);
@@ -1298,6 +1474,7 @@ impl cosmic::Application for Wingmate {
                 }
                 self.partner.update_text(text.clone());
                 self.status = fl!("status-speaking");
+                self.speech_state = "starting".into();
                 return self.api.speak(text).map(cosmic::Action::App);
             }
             Message::SpeechAction(action) => {
@@ -1453,6 +1630,9 @@ impl cosmic::Application for Wingmate {
                 }
                 return speech_status;
             }
+            Message::PollPresetProgress => {
+                return self.api.load_preset_progress().map(cosmic::Action::App);
+            }
             Message::PollEditingAccess => {
                 return self.api.load_editing_access().map(cosmic::Action::App);
             }
@@ -1479,11 +1659,13 @@ impl cosmic::Application for Wingmate {
                 Err(error) if !error.contains("Cannot reach") => self.status = error,
                 Err(_) => {}
             },
-            Message::SpeechStarted(result) => {
-                if let Err(error) = result {
+            Message::SpeechStarted(result) => match result {
+                Ok(()) => self.speech_state = "playing".into(),
+                Err(error) => {
+                    self.speech_state = "error".into();
                     self.status = error;
                 }
-            }
+            },
             Message::SpeechControlFinished(result) => {
                 if let Err(error) = result {
                     self.status = error;
@@ -2093,11 +2275,13 @@ impl cosmic::Application for Wingmate {
             }
             Message::OpenBoardSet(id, edit) => {
                 self.board_edit_mode = edit;
-                return self.api.load_board_graph(id).map(cosmic::Action::App);
+                self.status = fl!("status-loading-board");
+                return self.api.load_board_graph(id, edit).map(cosmic::Action::App);
             }
             Message::ExitBoardSet => {
                 self.board_graph = None;
                 self.active_board_id = None;
+                self.native_keyboard_return_pending = false;
                 self.board_sentence_tokens.clear();
                 self.board_sentence.clear();
                 return self.api.load_board_sets().map(cosmic::Action::App);
@@ -2106,17 +2290,27 @@ impl cosmic::Application for Wingmate {
             Message::PageNameChanged(v) => self.new_page = v,
             Message::BoardRowsChanged(v) => self.board_rows = v,
             Message::BoardColumnsChanged(v) => self.board_columns = v,
-            Message::CalculatorTemplate(v) => self.calculator_template = v,
+            Message::BoardTemplateChanged(value) => {
+                if self.new_board_set.trim().is_empty() && value.starts_with("Quick Core ") {
+                    self.new_board_set = value.clone();
+                }
+                self.board_template = value;
+            }
             Message::CreateBoardSet => {
                 let name = std::mem::take(&mut self.new_board_set);
                 if !name.trim().is_empty() {
+                    if self.board_template.starts_with("Quick Core ") {
+                        self.status = fl!("status-loading-quick-core");
+                        self.preset_importing = true;
+                        self.preset_progress = Some(0.0);
+                    }
                     return self
                         .api
                         .create_board_set(
                             name,
                             self.board_rows,
                             self.board_columns,
-                            self.calculator_template,
+                            self.board_template.clone(),
                         )
                         .map(cosmic::Action::App);
                 }
@@ -2254,6 +2448,7 @@ impl cosmic::Application for Wingmate {
                             grid.order.iter().map(Vec::len).max().unwrap_or(1) as i32;
                     }
                 }
+                return self.queue_active_board_images();
             }
             Message::ToggleBoardEdit => {
                 self.board_edit_mode = !self.board_edit_mode;
@@ -2550,16 +2745,88 @@ impl Wingmate {
     }
 
     fn queue_images(&mut self, sources: Vec<String>) -> Task<cosmic::Action<Message>> {
-        let tasks = sources
+        let sources = sources
             .into_iter()
             .filter(|source| {
                 !source.trim().is_empty()
                     && !self.image_cache.contains_key(source)
                     && self.pending_images.insert(source.clone())
             })
-            .map(|source| self.api.fetch_image(source).map(cosmic::Action::App))
+            .collect::<Vec<_>>();
+        let tasks = sources
+            .chunks(16)
+            .map(|chunk| {
+                self.api
+                    .fetch_images(chunk.to_vec())
+                    .map(cosmic::Action::App)
+            })
             .collect::<Vec<_>>();
         Task::batch(tasks)
+    }
+
+    fn cache_loaded_image(&mut self, source: String, result: Result<LoadedImageData, String>) {
+        self.pending_images.remove(&source);
+        match result {
+            Ok(payload) => {
+                if payload.bytes.is_empty() {
+                    self.status = fl!("error-image-empty");
+                    return;
+                }
+                let is_svg = payload.content_type.contains("svg")
+                    || payload
+                        .bytes
+                        .windows(4)
+                        .any(|window| window.eq_ignore_ascii_case(b"<svg"));
+                let visual = if is_svg {
+                    CachedVisual::Svg(svg::Handle::from_memory(payload.bytes))
+                } else {
+                    CachedVisual::Raster(image::Handle::from_bytes(payload.bytes))
+                };
+                self.image_cache.insert(source, visual);
+            }
+            Err(error) => self.status = fl!("error-image-load", error = error),
+        }
+    }
+
+    fn queue_active_board_images(&mut self) -> Task<cosmic::Action<Message>> {
+        let sources: Vec<String> = self
+            .board_graph
+            .as_ref()
+            .and_then(|graph| {
+                let active_id = self
+                    .active_board_id
+                    .as_deref()
+                    .unwrap_or(&graph.board_set.root_board_id);
+                graph.boards.iter().find(|board| board.id == active_id)
+            })
+            .map(|board| {
+                board
+                    .images
+                    .iter()
+                    .filter_map(|item| item.url.clone().or_else(|| item.path.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        // OBZ media is already local. Cache its handles in the same update that
+        // opens the page so the first rendered frame includes the symbols.
+        let mut deferred = Vec::new();
+        for source in sources {
+            if source.starts_with('/') {
+                if self.image_cache.contains_key(&source) {
+                    continue;
+                }
+                let result = std::fs::read(&source)
+                    .map(|bytes| LoadedImageData {
+                        content_type: local_image_content_type(&source).into(),
+                        bytes,
+                    })
+                    .map_err(|error| format!("Could not read local symbol: {error}"));
+                self.cache_loaded_image(source, result);
+            } else {
+                deferred.push(source);
+            }
+        }
+        self.queue_images(deferred)
     }
 
     fn image_for(&self, source: Option<&str>, height: f32) -> Option<Element<'_, Message>> {
@@ -2598,6 +2865,7 @@ impl Wingmate {
             AccessTarget::Speak(text) => {
                 self.partner.update_text(text.clone());
                 self.status = fl!("status-speaking");
+                self.speech_state = "starting".into();
                 self.api.speak(text).map(cosmic::Action::App)
             }
             AccessTarget::Recording(path) => {
@@ -2725,6 +2993,21 @@ impl Wingmate {
             }
             _ => Task::none(),
         }
+    }
+
+    fn return_native_keyboard_to_board(&mut self) -> Task<cosmic::Action<Message>> {
+        self.board_sentence = self.draft.clone();
+        self.board_sentence_tokens = if self.draft.is_empty() {
+            Vec::new()
+        } else {
+            vec![self.draft.clone()]
+        };
+        self.partner.update_text(self.board_sentence.clone());
+        self.native_keyboard_return_pending = false;
+        self.page = Page::Screens;
+        self.last_workspace = Page::Screens;
+        self.status = fl!("status-ready");
+        self.queue_active_board_images()
     }
 
     fn communicate_view(&self) -> Element<'_, Message> {
@@ -3149,8 +3432,30 @@ impl Wingmate {
         .spacing(8)
         .wrap();
 
+        let return_to_board: Element<'_, Message> = if self.native_keyboard_return_pending {
+            container(
+                row![
+                    text(fl!("communicate-native-keyboard-hint")).width(Fill),
+                    labeled_icon_button(
+                        "go-previous-symbolic",
+                        fl!("communicate-return-to-board"),
+                        Message::ReturnToBoardFromKeyboard,
+                    ),
+                ]
+                .spacing(12)
+                .align_y(cosmic::iced::alignment::Alignment::Center),
+            )
+            .class(cosmic::theme::iced::Container::Secondary)
+            .padding(12)
+            .width(Fill)
+            .into()
+        } else {
+            Space::new().into()
+        };
+
         column![
             text(fl!("communicate-title")).size(30),
+            return_to_board,
             input,
             predictions,
             ssml,
@@ -3347,6 +3652,11 @@ impl Wingmate {
                 .into()
         };
 
+        let preset_progress: Element<'_, Message> = if self.preset_importing {
+            progress_bar::<cosmic::Theme>(0.0..=1.0, self.preset_progress.unwrap_or(0.0)).into()
+        } else {
+            Space::new().into()
+        };
         let create_panel = container(
             column![
                 text(fl!("screens-create-title")).size(20),
@@ -3366,9 +3676,16 @@ impl Wingmate {
                         slider(1..=12, self.board_columns, Message::BoardColumnsChanged).width(150),
                     ]
                     .spacing(4),
-                    checkbox(self.calculator_template)
-                        .label(fl!("screens-calculator-template"))
-                        .on_toggle(Message::CalculatorTemplate),
+                    column![
+                        text(fl!("screens-template")).size(14),
+                        pick_list(
+                            board_template_options(),
+                            Some(self.board_template.clone()),
+                            Message::BoardTemplateChanged,
+                        )
+                        .width(190),
+                    ]
+                    .spacing(4),
                     labeled_icon_button(
                         "list-add-symbolic",
                         fl!("screens-create"),
@@ -3378,6 +3695,8 @@ impl Wingmate {
                 .spacing(14)
                 .align_y(cosmic::iced::alignment::Alignment::Center)
                 .wrap(),
+                text(fl!("screens-quick-core-attribution")).size(13),
+                preset_progress,
             ]
             .spacing(10),
         )
@@ -3596,7 +3915,7 @@ impl Wingmate {
         // Position fields explicitly because libcosmic's implicit grid tracks
         // currently mis-measure Fill children: columns are positioned correctly
         // but each button can repaint across the rest of its row.
-        let board_grid_width = (self.window_width - 36.0).max(320.0);
+        let available_grid_width = (self.window_width - 36.0).max(320.0);
         let grid_columns = board
             .grid
             .as_ref()
@@ -3642,16 +3961,25 @@ impl Wingmate {
         let cell_height = ((available_grid_height - cell_gap * grid_rows.saturating_sub(1) as f32)
             / grid_rows as f32)
             .max(48.0);
-        let cell_width = ((board_grid_width - cell_gap * (grid_columns - 1) as f32)
+        let cell_width = ((available_grid_width - cell_gap * (grid_columns - 1) as f32)
             / grid_columns as f32)
-            .max(1.0);
+            .max(48.0);
+        let board_grid_width =
+            cell_width * grid_columns as f32 + cell_gap * (grid_columns - 1) as f32;
         let board_grid_height =
             cell_height * grid_rows as f32 + cell_gap * grid_rows.saturating_sub(1) as f32;
+        let board_fields = graph
+            .field_items
+            .get(&board.id)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        let use_regular_grid = uses_regular_board_grid(board_fields, grid_rows, grid_columns);
+        let mut regular_cells: HashMap<(usize, usize), Element<'_, Message>> = HashMap::new();
         let mut cell_layers: Vec<Element<'_, Message>> = vec![Space::new()
             .width(cosmic::iced::Length::Fixed(board_grid_width))
             .height(cosmic::iced::Length::Fixed(board_grid_height))
             .into()];
-        for field in graph.field_items.get(&board.id).into_iter().flatten() {
+        for field in board_fields {
             let button_data = field
                 .button_id
                 .as_ref()
@@ -3663,13 +3991,7 @@ impl Wingmate {
                 .and_then(|button| button.label.as_deref())
                 .unwrap_or(if self.board_edit_mode { "+" } else { "" });
             let label = raw_label.to_string();
-            let action = if self.board_edit_mode {
-                Message::SelectBoardCell(field.row, field.column)
-            } else if let Some(button) = button_data {
-                Message::ActivateBoardButton(board.id.clone(), button.id.clone())
-            } else {
-                Message::Speak(String::new())
-            };
+            let action = Message::SelectBoardCell(field.row, field.column);
             let symbol_source = button_data
                 .and_then(|button| button.image_id.as_ref())
                 .and_then(|image_id| board.images.iter().find(|image| &image.id == image_id))
@@ -3683,7 +4005,13 @@ impl Wingmate {
             let field_x = field.column as f32 * (cell_width + cell_gap);
             let field_y = field.row as f32 * (cell_height + cell_gap);
             let symbol_height = (field_height * 0.58).clamp(40.0, 160.0);
-            let label_size = (18.0 * self.settings.font_size_scale).clamp(16.0, 30.0);
+            let label_size = ((field_height * 0.18).clamp(22.0, 38.0)
+                * self.settings.font_size_scale)
+                .clamp(18.0, 48.0);
+            let field_color = button_data
+                .and_then(|button| button.background_color.as_deref())
+                .and_then(parse_hex_color);
+            let label_color = field_color.map(contrasting_foreground);
             let has_symbol = symbol_source.is_some();
             let show_symbol = has_symbol && show_symbols;
             let show_label = show_labels || !show_symbol;
@@ -3691,7 +4019,12 @@ impl Wingmate {
                 .spacing(4)
                 .align_x(cosmic::iced::alignment::Alignment::Center);
             if label_at_top && show_label {
-                cell_content = cell_content.push(text(label.clone()).size(label_size));
+                let label_text = text(label.clone()).size(label_size);
+                cell_content = cell_content.push(if let Some(color) = label_color {
+                    label_text.class(cosmic::theme::iced::Text::Color(color))
+                } else {
+                    label_text
+                });
             }
             if show_symbol {
                 cell_content = cell_content.push(
@@ -3705,28 +4038,34 @@ impl Wingmate {
                 );
             }
             if !label_at_top && show_label {
-                cell_content = cell_content.push(text(label).size(label_size));
+                let label_text = text(label).size(label_size);
+                cell_content = cell_content.push(if let Some(color) = label_color {
+                    label_text.class(cosmic::theme::iced::Text::Color(color))
+                } else {
+                    label_text
+                });
             }
             let centered_content = container(cell_content)
                 .width(Fill)
                 .height(Fill)
                 .align_x(cosmic::iced::alignment::Horizontal::Center)
                 .align_y(cosmic::iced::alignment::Vertical::Center);
-            let field_widget: Element<'_, Message> = if self.board_edit_mode
-                || button_data.is_none()
-            {
+            let field_widget: Element<'_, Message> = if self.board_edit_mode {
                 let mut field_button = button(centered_content)
                     .on_press(action)
                     .width(cosmic::iced::Length::Fixed(field_width))
                     .height(field_height)
                     .class(cosmic::theme::iced::Button::Secondary);
-                if let Some(color) = button_data
-                    .and_then(|button| button.background_color.as_deref())
-                    .and_then(parse_hex_color)
-                {
+                if let Some(color) = field_color {
                     field_button = field_button.class(colored_button_class(color));
                 }
                 field_button.into()
+            } else if button_data.is_none() {
+                button(centered_content)
+                    .width(cosmic::iced::Length::Fixed(field_width))
+                    .height(field_height)
+                    .class(cosmic::theme::iced::Button::Secondary)
+                    .into()
             } else {
                 let button_data = button_data.expect("checked above");
                 let target = AccessTarget::BoardButton(board.id.clone(), button_data.id.clone());
@@ -3734,11 +4073,7 @@ impl Wingmate {
                     .width(cosmic::iced::Length::Fixed(field_width))
                     .height(field_height)
                     .class(cosmic::theme::iced::Button::Secondary);
-                if let Some(color) = button_data
-                    .background_color
-                    .as_deref()
-                    .and_then(parse_hex_color)
-                {
+                if let Some(color) = field_color {
                     field_button = field_button.class(colored_button_class(color));
                 }
                 if self.settings.hold_to_select_millis == 0 {
@@ -3749,23 +4084,51 @@ impl Wingmate {
                 }
                 self.access_widget(field_button.into(), target)
             };
-            cell_layers.push(
-                container(field_widget)
-                    .width(cosmic::iced::Length::Fixed(board_grid_width))
-                    .height(cosmic::iced::Length::Fixed(board_grid_height))
-                    .padding(Padding {
-                        top: field_y,
-                        right: (board_grid_width - field_x - field_width).max(0.0),
-                        bottom: (board_grid_height - field_y - field_height).max(0.0),
-                        left: field_x,
-                    })
-                    .into(),
-            );
+            if use_regular_grid {
+                regular_cells.insert((field.row, field.column), field_widget);
+            } else {
+                cell_layers.push(
+                    container(field_widget)
+                        .width(cosmic::iced::Length::Fixed(board_grid_width))
+                        .height(cosmic::iced::Length::Fixed(board_grid_height))
+                        .padding(Padding {
+                            top: field_y,
+                            right: (board_grid_width - field_x - field_width).max(0.0),
+                            bottom: (board_grid_height - field_y - field_height).max(0.0),
+                            left: field_x,
+                        })
+                        .into(),
+                );
+            }
         }
-        let cells = stack(cell_layers)
-            .width(cosmic::iced::Length::Fixed(board_grid_width))
-            .height(cosmic::iced::Length::Fixed(board_grid_height))
-            .clip(true);
+        let cells: Element<'_, Message> = if use_regular_grid {
+            let mut grid = column![].spacing(cell_gap);
+            for row_index in 0..grid_rows {
+                let mut grid_row = row![].spacing(cell_gap);
+                for column_index in 0..grid_columns {
+                    let cell = regular_cells
+                        .remove(&(row_index, column_index))
+                        .unwrap_or_else(|| {
+                            Space::new()
+                                .width(cosmic::iced::Length::Fixed(cell_width))
+                                .height(cosmic::iced::Length::Fixed(cell_height))
+                                .into()
+                        });
+                    grid_row = grid_row.push(cell);
+                }
+                grid = grid.push(grid_row);
+            }
+            container(grid)
+                .width(cosmic::iced::Length::Fixed(board_grid_width))
+                .height(cosmic::iced::Length::Fixed(board_grid_height))
+                .into()
+        } else {
+            stack(cell_layers)
+                .width(cosmic::iced::Length::Fixed(board_grid_width))
+                .height(cosmic::iced::Length::Fixed(board_grid_height))
+                .clip(true)
+                .into()
+        };
 
         let pages: Element<'_, Message> = if self.board_edit_mode {
             scrollable(
@@ -3888,16 +4251,20 @@ impl Wingmate {
                         Message::BoardNavigateBack,
                     ),
                     button(
-                        container(
+                        scrollable(
                             text(if self.board_sentence.is_empty() {
                                 fl!("board-message-placeholder")
                             } else {
                                 self.board_sentence.clone()
                             })
-                            .size(22),
+                            .size(22)
+                            .wrapping(cosmic::iced::widget::text::Wrapping::None),
                         )
+                        .direction(scrollable::Direction::Horizontal(
+                            scrollable::Scrollbar::default(),
+                        ))
+                        .height(Fill)
                         .width(Fill)
-                        .align_y(cosmic::iced::alignment::Vertical::Center),
                     )
                     .on_press(Message::Speak(self.board_sentence.clone()))
                     .class(cosmic::theme::iced::Button::Secondary)
@@ -3977,7 +4344,13 @@ impl Wingmate {
                 .spacing(10)
                 .align_y(cosmic::iced::alignment::Alignment::Center),
                 pages,
-                container(cells).width(Fill).height(Fill),
+                scrollable(cells)
+                    .direction(scrollable::Direction::Both {
+                        vertical: scrollable::Scrollbar::default(),
+                        horizontal: scrollable::Scrollbar::default(),
+                    })
+                    .width(Fill)
+                    .height(Fill),
                 page_editor,
             ]
             .spacing(12)
@@ -3985,7 +4358,13 @@ impl Wingmate {
         } else {
             column![
                 message_bar,
-                container(cells).width(Fill).height(Fill),
+                scrollable(cells)
+                    .direction(scrollable::Direction::Both {
+                        vertical: scrollable::Scrollbar::default(),
+                        horizontal: scrollable::Scrollbar::default(),
+                    })
+                    .width(Fill)
+                    .height(Fill),
                 row![
                     text(format!(
                         "{} · {}",
@@ -3994,11 +4373,6 @@ impl Wingmate {
                     ))
                     .size(16)
                     .width(Fill),
-                    compact_icon_button(
-                        "document-edit-symbolic",
-                        fl!("board-edit"),
-                        Message::ToggleBoardEdit
-                    ),
                     compact_icon_button(
                         "view-grid-symbolic",
                         fl!("board-library"),
@@ -4305,7 +4679,7 @@ impl Wingmate {
                 settings_row(
                     fl!("speech-speed"),
                     slider(0.5..=2.0, self.settings.speech_rate, Message::RateChanged)
-                        .step(0.1)
+                        .step(0.1_f32)
                         .into()
                 ),
                 settings_row(
@@ -4577,7 +4951,7 @@ impl Wingmate {
                         self.settings.scan_auto_advance_seconds,
                         |value| Message::SettingFloat("scanAutoAdvanceSeconds", value)
                     )
-                    .step(0.1)
+                    .step(0.1_f32)
                     .width(240)
                 ]
                 .spacing(10),
@@ -4745,6 +5119,40 @@ fn settings_row<'a>(
     row![text(label.into()).width(210), container(control).width(360),]
         .align_y(cosmic::iced::alignment::Alignment::Center)
         .into()
+}
+
+fn board_template_options() -> Vec<String> {
+    [
+        "Quick Core 24",
+        "Quick Core 40",
+        "Quick Core 60",
+        "Quick Core 84",
+        "Quick Core 112",
+        "Blank",
+        "Calculator",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect()
+}
+
+fn uses_regular_board_grid(fields: &[BoardField], rows: usize, columns: usize) -> bool {
+    fields.len() == rows * columns
+        && fields
+            .iter()
+            .all(|field| field.row_span.max(1) == 1 && field.column_span.max(1) == 1)
+}
+
+fn board_template_key(template: &str) -> &'static str {
+    match template {
+        "Quick Core 24" => "quick-core-24",
+        "Quick Core 40" => "quick-core-40",
+        "Quick Core 60" => "quick-core-60",
+        "Quick Core 84" => "quick-core-84",
+        "Quick Core 112" => "quick-core-112",
+        "Calculator" => "calculator",
+        _ => "blank",
+    }
 }
 
 fn header_navigation_button<'a>(
@@ -4936,6 +5344,12 @@ impl Api {
     }
     fn load_board_sets(&self) -> Task<Message> {
         self.get("/api/boardsets", Message::LoadedBoardSets)
+    }
+    fn load_preset_progress(&self) -> Task<Message> {
+        self.get(
+            "/api/boardsets/preset-progress",
+            Message::LoadedPresetProgress,
+        )
     }
 
     fn get<T, F>(&self, path: &'static str, map: F) -> Task<Message>
@@ -5346,19 +5760,33 @@ impl Api {
         )
     }
 
-    fn fetch_image(&self, source: String) -> Task<Message> {
+    fn fetch_images(&self, sources: Vec<String>) -> Task<Message> {
         let api = self.clone();
-        let result_source = source.clone();
         Task::perform(
             async move {
-                api.request_json(
-                    Method::POST,
-                    "/api/images/fetch",
-                    Some(serde_json::json!({"url": source})),
-                )
-                .await
+                let mut results = Vec::with_capacity(sources.len());
+                for source in sources {
+                    let result = if source.starts_with('/') {
+                        std::fs::read(&source)
+                            .map(|bytes| LoadedImageData {
+                                content_type: local_image_content_type(&source).into(),
+                                bytes,
+                            })
+                            .map_err(|error| format!("Could not read local symbol: {error}"))
+                    } else {
+                        api.request_json::<ImagePayload>(
+                            Method::POST,
+                            "/api/images/fetch",
+                            Some(serde_json::json!({"url": source})),
+                        )
+                        .await
+                        .and_then(decode_image_payload)
+                    };
+                    results.push((source, result));
+                }
+                results
             },
-            move |result| Message::LoadedImage(result_source.clone(), result),
+            Message::LoadedImages,
         )
     }
 
@@ -5445,14 +5873,33 @@ impl Api {
         )
     }
 
-    fn load_board_graph(&self, id: String) -> Task<Message> {
+    fn load_board_graph(&self, id: String, include_all: bool) -> Task<Message> {
         let api = self.clone();
         Task::perform(
             async move {
-                let path = format!("/api/boardsets/{}", encode_segment(&id));
+                let path = format!(
+                    "/api/boardsets/{}{}",
+                    encode_segment(&id),
+                    if include_all { "?all=true" } else { "" },
+                );
                 api.request_json(Method::GET, &path, None).await
             },
             Message::LoadedBoardGraph,
+        )
+    }
+
+    fn load_board_page(&self, set_id: String, board_id: String) -> Task<Message> {
+        let api = self.clone();
+        Task::perform(
+            async move {
+                let path = format!(
+                    "/api/boardsets/{}?boardId={}",
+                    encode_segment(&set_id),
+                    encode_segment(&board_id),
+                );
+                api.request_json(Method::GET, &path, None).await
+            },
+            Message::LoadedBoardPage,
         )
     }
 
@@ -5461,7 +5908,7 @@ impl Api {
         name: String,
         rows: i32,
         columns: i32,
-        calculator: bool,
+        template: String,
     ) -> Task<Message> {
         let api = self.clone();
         Task::perform(
@@ -5471,7 +5918,7 @@ impl Api {
                     "/api/boardsets",
                     Some(serde_json::json!({
                         "name": name, "rows": rows, "columns": columns,
-                        "template": if calculator { "calculator" } else { "blank" },
+                        "template": board_template_key(&template),
                     })),
                 )
                 .await?;
@@ -5840,23 +6287,48 @@ fn status_is_error(status: &str) -> bool {
 
 fn colored_button_class(color: cosmic::iced::Color) -> cosmic::theme::iced::Button {
     cosmic::theme::iced::Button::Custom(Box::new(move |_theme, _status| {
-        let luminance = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+        let foreground = contrasting_foreground(color);
         cosmic::iced::widget::button::Style {
             background: Some(color.into()),
-            text_color: if luminance > 0.5 {
-                cosmic::iced::Color::BLACK
-            } else {
-                cosmic::iced::Color::WHITE
-            },
-            icon_color: Some(if luminance > 0.5 {
-                cosmic::iced::Color::BLACK
-            } else {
-                cosmic::iced::Color::WHITE
-            }),
+            text_color: foreground,
+            icon_color: Some(foreground),
             border_radius: 12.0.into(),
             ..Default::default()
         }
     }))
+}
+
+fn contrasting_foreground(color: cosmic::iced::Color) -> cosmic::iced::Color {
+    let luminance = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+    if luminance > 0.5 {
+        cosmic::iced::Color::BLACK
+    } else {
+        cosmic::iced::Color::WHITE
+    }
+}
+
+fn decode_image_payload(payload: ImagePayload) -> Result<LoadedImageData, String> {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD
+        .decode(payload.data)
+        .map(|bytes| LoadedImageData {
+            bytes,
+            content_type: payload.content_type,
+        })
+        .map_err(|error| format!("Could not decode image: {error}"))
+}
+
+fn local_image_content_type(path: &str) -> &'static str {
+    let lowercase = path.to_ascii_lowercase();
+    if lowercase.ends_with(".svg") {
+        "image/svg+xml"
+    } else if lowercase.ends_with(".jpg") || lowercase.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if lowercase.ends_with(".webp") {
+        "image/webp"
+    } else {
+        "image/png"
+    }
 }
 
 fn play_audio_file(path: String) -> Task<Message> {
@@ -6017,5 +6489,34 @@ mod tests {
         assert_eq!(fl!("editing-access-title"), "Editing access code");
         assert_eq!(fl!("screens-library-title"), "Communication boards");
         assert_eq!(fl!("board-home"), "Home board");
+    }
+
+    #[test]
+    fn quick_core_presets_use_stable_bridge_keys() {
+        assert_eq!(board_template_options().len(), 7);
+        assert_eq!(board_template_key("Quick Core 24"), "quick-core-24");
+        assert_eq!(board_template_key("Quick Core 112"), "quick-core-112");
+        assert_eq!(board_template_key("Calculator"), "calculator");
+        assert_eq!(board_template_key("unexpected"), "blank");
+    }
+
+    #[test]
+    fn regular_boards_avoid_the_layered_span_renderer() {
+        let fields = (0..8)
+            .flat_map(|row| {
+                (0..14).map(move |column| BoardField {
+                    row,
+                    column,
+                    row_span: 1,
+                    column_span: 1,
+                    button_id: Some(format!("{row}-{column}")),
+                })
+            })
+            .collect::<Vec<_>>();
+        assert!(uses_regular_board_grid(&fields, 8, 14));
+
+        let mut spanning = fields;
+        spanning[0].column_span = 2;
+        assert!(!uses_regular_board_grid(&spanning, 8, 14));
     }
 }

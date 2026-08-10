@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 
 /**
@@ -146,6 +148,26 @@ class AndroidFilePicker(private val context: Context) : FilePicker {
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+
+    override suspend fun openArchiveBytes(content: ByteArray): ArchiveReader? = withContext(Dispatchers.IO) {
+        val temporary = java.io.File.createTempFile("wingmate-preset-", ".obz", context.cacheDir)
+        try {
+            temporary.writeBytes(content)
+            val delegate = AndroidZipArchiveReader(temporary)
+            object : ArchiveReader by delegate {
+                override suspend fun close() {
+                    try {
+                        delegate.close()
+                    } finally {
+                        temporary.delete()
+                    }
+                }
+            }
+        } catch (error: Throwable) {
+            temporary.delete()
+            throw error
         }
     }
 }

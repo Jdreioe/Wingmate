@@ -435,6 +435,10 @@
 "boardset.keyboard_layout" = "Tastaturebene";
 "boardset.keyboard_symbols" = "Symbole";
 "boardset.cell.keyboard_action" = "Tastaturfunktion";
+"boardset.native_keyboard.title" = "Tastatur";
+"boardset.native_keyboard.hint" = "Ein Wort oder einen Satz eingeben";
+"boardset.native_keyboard.return" = "Zurück zur Tafel";
+"boardset.quick_core.downloading" = "Quick Core wird heruntergeladen und vorbereitet…";
 "boardset.cell.insert_text" = "Von dieser Taste eingefügter Text";
 "boardset.cell.key_action" = "Sonderaktion";
 "boardset.cell.action.none" = "Keine Sonderaktion";

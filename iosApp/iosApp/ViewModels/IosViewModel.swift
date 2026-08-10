@@ -160,6 +160,8 @@ final class IosViewModel: ObservableObject {
 
     // Symbol-first boardset mode
     @Published var boardModeEnabled: Bool = false
+    @Published var quickCoreDownloadProgress: Double? = nil
+    @Published var isImportingQuickCore: Bool = false
     @Published var boardSets: [BoardSetInfo] = []
     @Published var selectedBoardSetId: String? = nil
     @Published var selectedBoardId: String? = nil
@@ -1449,6 +1451,37 @@ final class IosViewModel: ObservableObject {
         }
     }
 
+    func importQuickCorePreset(name: String, slug: String) async {
+        isImportingQuickCore = true
+        quickCoreDownloadProgress = 0
+        let monitor = Task { @MainActor in
+            while !Task.isCancelled {
+                let progress = bridge.quickCoreProgress()
+                quickCoreDownloadProgress = progress.fraction?.doubleValue
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+        }
+        defer {
+            monitor.cancel()
+            isImportingQuickCore = false
+        }
+        do {
+            guard let sharedSet = try await bridge.importQuickCorePreset(slug: slug, name: normalizedBoardsetName(name)) else {
+                boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+                return
+            }
+            let set = boardSetInfo(from: sharedSet)
+            await loadBoardSets()
+            selectedBoardSetId = set.id
+            selectedBoardId = set.rootBoardId
+            await loadSelectedBoard()
+            quickCoreDownloadProgress = 1
+            boardStatusMessage = NSLocalizedString("boardset.status.created", comment: "")
+        } catch {
+            boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+        }
+    }
+
     func addBoardToSelectedSet(name: String, rows: Int, columns: Int) async {
         guard let set = selectedBoardSet else { return }
         guard !set.isLocked else {
@@ -1556,8 +1589,8 @@ final class IosViewModel: ObservableObject {
         bridge.nGramPredictionInsertion(sentence: sentence, suggestion: suggestion)
     }
 
-    func boardBackspaceSentence(texts: [String]) -> [String] {
-        bridge.boardBackspaceSentence(texts: texts)
+    func boardBackspaceSentence(texts: [String], spellingMode: Bool) -> [String] {
+        bridge.boardBackspaceSentence(texts: texts, spellingMode: spellingMode)
     }
 
     func boardButtonIsVisible(hidden: Bool, isEditMode: Bool, showHiddenButtons: Bool) -> Bool {

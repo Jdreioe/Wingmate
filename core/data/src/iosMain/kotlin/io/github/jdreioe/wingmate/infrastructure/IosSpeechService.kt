@@ -127,10 +127,9 @@ class IosSpeechService(
                 trySaveHistory(spokenText, selectedVoice, selectedVoice.pitch, selectedVoice.rate, audioFilePath)
             }
             true
-        }.onFailure { t ->
+        }.onFailure {
             logger.warn { "Failed to play recorded audio file" }
-            false
-        }
+        }.getOrDefault(false)
     }
 
     override suspend fun pause() = withContext(Dispatchers.Main) {
