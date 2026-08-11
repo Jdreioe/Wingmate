@@ -9,6 +9,7 @@ use cosmic::widget::rectangle_tracker::{self, RectangleTracker, RectangleUpdate}
 use reqwest::{Client, Method};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::{hash_map::DefaultHasher, HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::env;
@@ -695,6 +696,47 @@ fn access_target_id(target: &AccessTarget) -> String {
     format!("target:{:016x}", hasher.finish())
 }
 
+#[derive(Clone)]
+struct GazeTarget {
+    id: u64,
+    action: Box<Message>,
+}
+
+impl GazeTarget {
+    fn new(action: Message) -> Self {
+        let mut hasher = DefaultHasher::new();
+        format!("{action:?}").hash(&mut hasher);
+        Self {
+            id: hasher.finish(),
+            action: Box::new(action),
+        }
+    }
+
+    fn controller_id(&self) -> String {
+        format!("gaze:{:016x}", self.id)
+    }
+}
+
+impl std::fmt::Debug for GazeTarget {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_tuple("GazeTarget").field(&self.id).finish()
+    }
+}
+
+impl PartialEq for GazeTarget {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for GazeTarget {}
+
+impl Hash for GazeTarget {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
 fn access_key_token(key: &keyboard::Key) -> Option<String> {
     match key {
         keyboard::Key::Named(keyboard::key::Named::Enter) => Some("Enter".into()),
@@ -843,9 +885,11 @@ struct Wingmate {
     current_access_target_id: Option<String>,
     access_dwell_progress: f32,
     known_access_targets: HashMap<String, AccessTarget>,
-    access_rectangle_tracker: Option<RectangleTracker<String>>,
-    access_target_bounds: HashMap<String, Rectangle>,
-    gaze_target_id: Option<String>,
+    access_rectangle_tracker: Option<RectangleTracker<GazeTarget>>,
+    access_target_bounds: HashMap<u64, (GazeTarget, Rectangle)>,
+    visible_gaze_targets: RefCell<HashSet<u64>>,
+    known_gaze_actions: HashMap<String, Message>,
+    gaze_target_id: Option<u64>,
     native_gaze_status: NativeGazeStatus,
     native_gaze_fullscreen: bool,
     window_width: f32,
@@ -895,8 +939,9 @@ enum Message {
     AccessRelease(AccessTarget),
     AccessActivate(AccessTarget),
     AccessInputUpdated(Result<AccessInputResponse, String>),
-    AccessRectangle(RectangleUpdate<String>),
+    AccessRectangle(RectangleUpdate<GazeTarget>),
     NativeGaze(TobiifreeEvent),
+    FocusWidget(String),
     LoadedSpeechState(Result<SpeechState, String>),
     SpeechStarted(Result<(), String>),
     SpeechControlFinished(Result<(), String>),
@@ -1076,13 +1121,13 @@ impl cosmic::Application for Wingmate {
         }
 
         vec![
-            header_navigation_button(
+            self.gaze_header_navigation_button(
                 "input-keyboard-symbolic",
                 fl!("nav-keyboard"),
                 self.page == Page::Communicate,
                 Message::Navigate(Page::Communicate),
             ),
-            header_navigation_button(
+            self.gaze_header_navigation_button(
                 "view-grid-symbolic",
                 fl!("nav-screens"),
                 self.page == Page::Screens,
@@ -1096,7 +1141,7 @@ impl cosmic::Application for Wingmate {
             return Vec::new();
         }
 
-        vec![header_navigation_button(
+        vec![self.gaze_header_navigation_button(
             "preferences-system-symbolic",
             if self.page == Page::Settings {
                 fl!("nav-close-settings")
@@ -1113,8 +1158,9 @@ impl cosmic::Application for Wingmate {
             .main_window_id()
             .and_then(|id| wingmate_window_icon().map(|icon| window::set_icon(id, icon)))
             .unwrap_or_else(Task::none);
-        let api = Api::new();
-        let backend = BackendProcess(start_bridge_server());
+        let (backend_child, backend_start_error) = start_bridge_server();
+        let api = Api::new(backend_start_error);
+        let backend = BackendProcess(backend_child);
         let mut partner = PartnerWindowController::default();
         partner.start();
 
@@ -1209,6 +1255,8 @@ impl cosmic::Application for Wingmate {
             known_access_targets: HashMap::new(),
             access_rectangle_tracker: None,
             access_target_bounds: HashMap::new(),
+            visible_gaze_targets: RefCell::new(HashSet::new()),
+            known_gaze_actions: HashMap::new(),
             gaze_target_id: None,
             native_gaze_status: NativeGazeStatus::Disabled,
             native_gaze_fullscreen: false,
@@ -1238,7 +1286,7 @@ impl cosmic::Application for Wingmate {
             || self.highlighted_access.is_some();
         let mut subscriptions = vec![event::listen().map(Message::InputEvent)];
         subscriptions.push(
-            rectangle_tracker::subscription::<_, String>("wingmate-access-targets")
+            rectangle_tracker::subscription::<_, GazeTarget>("wingmate-access-targets")
                 .map(|(_, update)| Message::AccessRectangle(update)),
         );
         if self.settings.native_gaze_enabled {
@@ -1744,6 +1792,9 @@ impl cosmic::Application for Wingmate {
                     self.current_access_target_id = state.current_target_id;
                     self.access_dwell_progress = state.dwell_progress;
                     if let Some(id) = state.activation_target_id {
+                        if let Some(action) = self.known_gaze_actions.get(&id).cloned() {
+                            return Task::done(cosmic::Action::App(action));
+                        }
                         let target = self.known_access_targets.get(&id).cloned().or_else(|| {
                             self.current_access_targets()
                                 .into_iter()
@@ -1760,8 +1811,8 @@ impl cosmic::Application for Wingmate {
             }
             Message::AccessRectangle(update) => match update {
                 RectangleUpdate::Init(tracker) => self.access_rectangle_tracker = Some(tracker),
-                RectangleUpdate::Rectangle((target_id, bounds)) => {
-                    self.access_target_bounds.insert(target_id, bounds);
+                RectangleUpdate::Rectangle((target, bounds)) => {
+                    self.access_target_bounds.insert(target.id, (target, bounds));
                 }
             },
             Message::NativeGaze(event) => match event {
@@ -1793,6 +1844,9 @@ impl cosmic::Application for Wingmate {
                     return self.leave_gaze_target();
                 }
             },
+            Message::FocusWidget(id) => {
+                return cosmic::iced::widget::operation::focus(id);
+            }
             Message::InputEvent(event) => {
                 if let cosmic::iced::Event::Window(window::Event::Resized(size)) = &event {
                     self.window_width = size.width;
@@ -3021,6 +3075,9 @@ impl cosmic::Application for Wingmate {
     }
 
     fn view(&self) -> Element<'_, Message> {
+        // `view_main` builds content before the header, so this starts a complete
+        // inventory of the gaze targets visible in the current frame.
+        self.visible_gaze_targets.borrow_mut().clear();
         if self.page == Page::Welcome {
             return column![
                 container(self.welcome_view()).padding(40).center(Fill),
@@ -3069,7 +3126,7 @@ impl cosmic::Application for Wingmate {
         } else {
             "Rest mode"
         };
-        let fab = aac_toolbar_button(
+        let fab = self.gaze_aac_toolbar_button(
             if self.input_is_paused {
                 "media-playback-start-symbolic"
             } else {
@@ -3382,12 +3439,7 @@ impl Wingmate {
     }
 
     fn native_gaze_can_target(&self) -> bool {
-        self.settings.native_gaze_enabled
-            && self.native_gaze_fullscreen
-            && !self.input_is_paused
-            && matches!(self.page, Page::Communicate | Page::Screens)
-            && !self.manage_phrases
-            && !self.board_edit_mode
+        self.settings.native_gaze_enabled && self.native_gaze_fullscreen
     }
 
     fn update_gaze_target(
@@ -3406,37 +3458,39 @@ impl Wingmate {
         let target = wingmate::tobiifree::resolve_target(
             point.x,
             point.y,
-            self.current_access_targets()
-                .into_iter()
-                .filter_map(|target| {
-                    let target_id = access_target_id(&target);
-                    self.access_target_bounds.get(&target_id).map(|bounds| {
-                        (
-                            (target, target_id),
-                            TargetBounds {
-                                x: bounds.x,
-                                y: bounds.y,
-                                width: bounds.width,
-                                height: bounds.height,
-                            },
-                        )
-                    })
-                }),
+            self.access_target_bounds.values().filter_map(|(target, bounds)| {
+                let is_visible = self.visible_gaze_targets.borrow().contains(&target.id);
+                let is_allowed_while_paused =
+                    matches!(target.action.as_ref(), Message::ToggleInputPause);
+                (is_visible && (!self.input_is_paused || is_allowed_while_paused)).then(|| {
+                    (
+                        target.clone(),
+                        TargetBounds {
+                            x: bounds.x,
+                            y: bounds.y,
+                            width: bounds.width,
+                            height: bounds.height,
+                        },
+                    )
+                })
+            }),
         );
 
-        let Some((target, target_id)) = target else {
+        let Some(target) = target else {
             return self.leave_gaze_target();
         };
-        if self.gaze_target_id.as_deref() == Some(target_id.as_str()) {
+        if self.gaze_target_id == Some(target.id) {
             return Task::none();
         }
 
         // Entering a different target replaces the controller's single hover target;
         // a separate exit would only introduce an avoidable request-ordering race.
-        self.gaze_target_id = Some(target_id.clone());
-        self.known_access_targets.insert(target_id.clone(), target);
+        let controller_id = target.controller_id();
+        self.gaze_target_id = Some(target.id);
+        self.known_gaze_actions
+            .insert(controller_id.clone(), *target.action);
         self.api
-            .access_input("enter", Some(target_id), None)
+            .access_input("enter", Some(controller_id), None)
             .map(cosmic::Action::App)
     }
 
@@ -3445,8 +3499,202 @@ impl Wingmate {
             return Task::none();
         };
         self.api
-            .access_input("exit", Some(target_id), None)
+            .access_input("exit", Some(format!("gaze:{target_id:016x}")), None)
             .map(cosmic::Action::App)
+    }
+
+    fn gaze_action_widget<'a>(
+        &self,
+        content: Element<'a, Message>,
+        action: Message,
+    ) -> Element<'a, Message> {
+        if !self.settings.native_gaze_enabled {
+            return content;
+        }
+        let target = GazeTarget::new(action);
+        self.visible_gaze_targets.borrow_mut().insert(target.id);
+        let selected = self.current_access_target_id.as_deref()
+            == Some(target.controller_id().as_str());
+        let content: Element<'a, Message> = if selected {
+            container(content)
+                .class(cosmic::theme::iced::Container::Custom(Box::new(|theme| {
+                    cosmic::iced::widget::container::Style {
+                        border: cosmic::iced::Border {
+                            color: theme.cosmic().accent.base.into(),
+                            width: 4.0,
+                            radius: 8.0.into(),
+                        },
+                        ..Default::default()
+                    }
+                })))
+                .into()
+        } else {
+            content
+        };
+        if let Some(tracker) = &self.access_rectangle_tracker {
+            tracker.container(target, content).into()
+        } else {
+            content
+        }
+    }
+
+    fn gaze_header_navigation_button<'a>(
+        &self,
+        icon_name: &'a str,
+        label: String,
+        selected: bool,
+        action: Message,
+    ) -> Element<'a, Message> {
+        self.gaze_action_widget(
+            header_navigation_button(icon_name, label, selected, action.clone()),
+            action,
+        )
+    }
+
+    fn gaze_touch_icon_button<'a>(
+        &self,
+        icon_name: &'a str,
+        label: impl Into<Cow<'a, str>>,
+        action: Message,
+    ) -> Element<'a, Message> {
+        self.gaze_action_widget(touch_icon_button(icon_name, label, action.clone()), action)
+    }
+
+    fn gaze_compact_icon_button<'a>(
+        &self,
+        icon_name: &'a str,
+        label: impl Into<Cow<'a, str>>,
+        action: Message,
+    ) -> Element<'a, Message> {
+        self.gaze_action_widget(compact_icon_button(icon_name, label, action.clone()), action)
+    }
+
+    fn gaze_aac_toolbar_button<'a>(
+        &self,
+        icon_name: &'a str,
+        label: impl Into<Cow<'a, str>>,
+        action: Message,
+    ) -> Element<'a, Message> {
+        self.gaze_action_widget(aac_toolbar_button(icon_name, label, action.clone()), action)
+    }
+
+    fn gaze_labeled_icon_button<'a>(
+        &self,
+        icon_name: &'a str,
+        label: impl Into<Cow<'a, str>>,
+        action: Message,
+    ) -> Element<'a, Message> {
+        self.gaze_action_widget(labeled_icon_button(icon_name, label, action.clone()), action)
+    }
+
+    fn gaze_touch_text_button<'a>(
+        &self,
+        label: impl Into<Cow<'a, str>>,
+        action: Message,
+    ) -> Element<'a, Message> {
+        self.gaze_action_widget(touch_text_button(label, action.clone()), action)
+    }
+
+    fn gaze_nav_button<'a>(
+        &self,
+        icon_name: &'a str,
+        label: String,
+        selected: bool,
+        action: Message,
+    ) -> Element<'a, Message> {
+        self.gaze_action_widget(nav_button(icon_name, label, selected, action.clone()), action)
+    }
+
+    fn gaze_checkbox<'a, F>(
+        &self,
+        checked: bool,
+        label: impl Into<Cow<'a, str>>,
+        on_toggle: F,
+    ) -> Element<'a, Message>
+    where
+        F: Fn(bool) -> Message + Clone + 'a,
+    {
+        let gaze_action = on_toggle(!checked);
+        self.gaze_action_widget(
+            checkbox(checked).label(label.into()).on_toggle(on_toggle).into(),
+            gaze_action,
+        )
+    }
+
+    fn gaze_pick_list<'a, F>(
+        &self,
+        options: Vec<String>,
+        selected: Option<String>,
+        on_select: F,
+    ) -> Element<'a, Message>
+    where
+        F: Fn(String) -> Message + Clone + 'a,
+    {
+        let next = (!options.is_empty()).then(|| {
+            let current = selected
+                .as_ref()
+                .and_then(|value| options.iter().position(|option| option == value));
+            options[(current.map_or(0, |index| index + 1)) % options.len()].clone()
+        });
+        let content = pick_list(options, selected, on_select.clone()).into();
+        match next {
+            Some(value) => self.gaze_action_widget(content, on_select(value)),
+            None => content,
+        }
+    }
+
+    fn gaze_i32_slider<'a, F>(
+        &self,
+        range: std::ops::RangeInclusive<i32>,
+        value: i32,
+        step: i32,
+        width: cosmic::iced::Length,
+        on_change: F,
+    ) -> Element<'a, Message>
+    where
+        F: Fn(i32) -> Message + Clone + 'a,
+    {
+        let next = if value.saturating_add(step) > *range.end() {
+            *range.start()
+        } else {
+            value + step
+        };
+        let content = slider(range, value, on_change.clone())
+            .step(step)
+            .width(width)
+            .into();
+        self.gaze_action_widget(content, on_change(next))
+    }
+
+    fn gaze_f32_slider<'a, F>(
+        &self,
+        range: std::ops::RangeInclusive<f32>,
+        value: f32,
+        step: f32,
+        width: cosmic::iced::Length,
+        on_change: F,
+    ) -> Element<'a, Message>
+    where
+        F: Fn(f32) -> Message + Clone + 'a,
+    {
+        let next = if value + step > *range.end() + f32::EPSILON {
+            *range.start()
+        } else {
+            value + step
+        };
+        let content = slider(range, value, on_change.clone())
+            .step(step)
+            .width(width)
+            .into();
+        self.gaze_action_widget(content, on_change(next))
+    }
+
+    fn gaze_focus_widget<'a>(
+        &self,
+        content: Element<'a, Message>,
+        id: &'static str,
+    ) -> Element<'a, Message> {
+        self.gaze_action_widget(content, Message::FocusWidget(id.to_string()))
     }
 
     fn access_widget<'a>(
@@ -3454,7 +3702,7 @@ impl Wingmate {
         content: Element<'a, Message>,
         target: AccessTarget,
     ) -> Element<'a, Message> {
-        let target_id = access_target_id(&target);
+        let gaze_action = Message::AccessActivate(target.clone());
         let area = mouse_area(content)
             .on_enter(Message::AccessEnter(target.clone()))
             .on_exit(Message::AccessExit(target.clone()));
@@ -3465,11 +3713,7 @@ impl Wingmate {
         } else {
             area.into()
         };
-        if let Some(tracker) = &self.access_rectangle_tracker {
-            tracker.container(target_id, area).into()
-        } else {
-            area
-        }
+        self.gaze_action_widget(area, gaze_action)
     }
 
     fn access_highlighted(&self, target: &AccessTarget) -> bool {
@@ -3522,17 +3766,22 @@ impl Wingmate {
         if self.editing_category_id.is_some() {
             return column![
                 text(fl!("category-rename-title")).size(30),
-                text_input(&fl!("category-name"), &self.category_editor_name)
-                    .on_input(Message::CategoryEditorChanged)
-                    .on_submit(Message::SaveCategoryEdit)
-                    .padding(12),
+                self.gaze_focus_widget(
+                    text_input(&fl!("category-name"), &self.category_editor_name)
+                        .id("category-editor-name")
+                        .on_input(Message::CategoryEditorChanged)
+                        .on_submit(Message::SaveCategoryEdit)
+                        .padding(12)
+                        .into(),
+                    "category-editor-name"
+                ),
                 row![
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "document-save-symbolic",
                         "Save",
                         Message::SaveCategoryEdit
                     ),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "window-close-symbolic",
                         "Cancel",
                         Message::CancelCategoryEdit
@@ -3562,35 +3811,47 @@ impl Wingmate {
                 .or_else(|| Some("No category".into()));
             return column![
                 text(fl!("phrase-edit-title")).size(30),
-                text_input(&fl!("phrase-button-label"), &self.phrase_editor_text)
-                    .on_input(Message::PhraseEditorChanged)
-                    .padding(12),
-                text_input(
-                    "Speak something different (optional)",
-                    &self.phrase_editor_voice
-                )
-                .on_input(Message::PhraseEditorVoiceChanged)
-                .padding(12),
+                self.gaze_focus_widget(
+                    text_input(&fl!("phrase-button-label"), &self.phrase_editor_text)
+                        .id("phrase-editor-label")
+                        .on_input(Message::PhraseEditorChanged)
+                        .padding(12)
+                        .into(),
+                    "phrase-editor-label"
+                ),
+                self.gaze_focus_widget(
+                    text_input(
+                        "Speak something different (optional)",
+                        &self.phrase_editor_voice
+                    )
+                    .id("phrase-editor-voice")
+                    .on_input(Message::PhraseEditorVoiceChanged)
+                    .padding(12)
+                    .into(),
+                    "phrase-editor-voice"
+                ),
                 row![
-                    pick_list(
+                    self.gaze_pick_list(
                         category_options,
                         selected_category,
                         Message::PhraseEditorCategoryChanged
                     ),
-                    checkbox(self.phrase_editor_hidden)
-                        .label(fl!("phrase-hide"))
-                        .on_toggle(Message::PhraseEditorHiddenChanged),
+                    self.gaze_checkbox(
+                        self.phrase_editor_hidden,
+                        fl!("phrase-hide"),
+                        Message::PhraseEditorHiddenChanged
+                    ),
                 ]
                 .spacing(10)
                 .wrap(),
                 row![
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "document-open-symbolic",
                         "Choose image…",
                         Message::ChoosePhraseImage
                     ),
                     if self.phrase_editor_image_url.is_some() {
-                        labeled_icon_button(
+                        self.gaze_labeled_icon_button(
                             "edit-delete-symbolic",
                             "Remove image",
                             Message::ClearPhraseImage,
@@ -3598,13 +3859,13 @@ impl Wingmate {
                     } else {
                         Space::new().into()
                     },
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "audio-x-generic-symbolic",
                         "Choose recording…",
                         Message::ChoosePhraseRecording
                     ),
                     if let Some(path) = &self.phrase_editor_recording_path {
-                        compact_icon_button(
+                        self.gaze_compact_icon_button(
                             "media-playback-start-symbolic",
                             "Play recording",
                             Message::PlayRecording(path.clone()),
@@ -3613,7 +3874,7 @@ impl Wingmate {
                         Space::new().into()
                     },
                     if self.phrase_editor_recording_path.is_some() {
-                        compact_icon_button(
+                        self.gaze_compact_icon_button(
                             "edit-delete-symbolic",
                             "Remove recording",
                             Message::ClearPhraseRecording,
@@ -3632,8 +3893,8 @@ impl Wingmate {
                     Space::new().into()
                 },
                 row![
-                    labeled_icon_button("document-save-symbolic", "Save", Message::SavePhraseEdit),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button("document-save-symbolic", "Save", Message::SavePhraseEdit),
+                    self.gaze_labeled_icon_button(
                         "window-close-symbolic",
                         "Cancel",
                         Message::CancelPhraseEdit
@@ -3645,21 +3906,30 @@ impl Wingmate {
             .into();
         }
         let input: Element<'_, Message> = container(
-            text_input(&fl!("communicate-input-placeholder"), &self.draft)
-                .on_input(Message::DraftChanged)
-                .on_submit(Message::Speak(self.draft.clone()))
-                .padding(16)
-                .size(self.settings.font_px(22.0)),
+            self.gaze_focus_widget(
+                text_input(&fl!("communicate-input-placeholder"), &self.draft)
+                    .id("communicate-draft")
+                    .on_input(Message::DraftChanged)
+                    .on_submit(Message::Speak(self.draft.clone()))
+                    .padding(16)
+                    .size(self.settings.font_px(22.0))
+                    .into(),
+                "communicate-draft"
+            ),
         )
         .height(self.settings.input_px(56.0))
         .into();
 
         let predictions = row(self.predictions.iter().take(6).map(|word| {
-            button(text(word).size(self.settings.font_px(15.0)))
-                .on_press(Message::PredictionSelected(word.clone()))
-                .height(self.settings.button_px(48.0))
-                .padding([10, 14])
-                .into()
+            let action = Message::PredictionSelected(word.clone());
+            self.gaze_action_widget(
+                button(text(word).size(self.settings.font_px(15.0)))
+                    .on_press(action.clone())
+                    .height(self.settings.button_px(48.0))
+                    .padding([10, 14])
+                    .into(),
+                action,
+            )
         }))
         .spacing(8);
 
@@ -3692,22 +3962,22 @@ impl Wingmate {
             let category_content: Element<'_, Message> = if self.manage_phrases {
                 row![
                     category_activation,
-                    compact_icon_button(
+                    self.gaze_compact_icon_button(
                         "go-up-symbolic",
                         "Move category left",
                         Message::MoveCategory(category.id.clone(), -1)
                     ),
-                    compact_icon_button(
+                    self.gaze_compact_icon_button(
                         "go-down-symbolic",
                         "Move category right",
                         Message::MoveCategory(category.id.clone(), 1)
                     ),
-                    compact_icon_button(
+                    self.gaze_compact_icon_button(
                         "document-edit-symbolic",
                         "Rename category",
                         Message::EditCategory(category.id.clone())
                     ),
-                    compact_icon_button(
+                    self.gaze_compact_icon_button(
                         "edit-delete-symbolic",
                         "Delete category",
                         Message::DeleteCategory(category.id.clone()),
@@ -3721,11 +3991,16 @@ impl Wingmate {
             categories = categories.push(category_content);
         }
         if self.settings.history_visible && !self.history.is_empty() {
+            let action = Message::SelectCategory(Some("__history__".into()));
             categories = categories.push(
-                button(text(fl!("communicate-history")))
-                    .on_press(Message::SelectCategory(Some("__history__".into())))
-                    .height(self.settings.button_px(48.0))
-                    .padding([10, 16]),
+                self.gaze_action_widget(
+                    button(text(fl!("communicate-history")))
+                        .on_press(action.clone())
+                        .height(self.settings.button_px(48.0))
+                        .padding([10, 16])
+                        .into(),
+                    action,
+                ),
             );
         }
 
@@ -3801,18 +4076,18 @@ impl Wingmate {
                 if self.manage_phrases && self.selected_category.as_deref() != Some("__history__") {
                     card = card.push(
                         row![
-                            compact_icon_button(
+                            self.gaze_compact_icon_button(
                                 "go-up-symbolic",
                                 "Move phrase earlier",
                                 Message::MovePhrase(phrase.id.clone(), -1)
                             ),
-                            compact_icon_button(
+                            self.gaze_compact_icon_button(
                                 "go-down-symbolic",
                                 "Move phrase later",
                                 Message::MovePhrase(phrase.id.clone(), 1)
                             ),
                             if let Some(path) = &phrase.recording_path {
-                                compact_icon_button(
+                                self.gaze_compact_icon_button(
                                     "media-playback-start-symbolic",
                                     "Play recording",
                                     Message::PlayRecording(path.clone()),
@@ -3820,12 +4095,12 @@ impl Wingmate {
                             } else {
                                 Space::new().into()
                             },
-                            labeled_icon_button(
+                            self.gaze_labeled_icon_button(
                                 "document-edit-symbolic",
                                 "Edit",
                                 Message::EditPhrase(phrase.id.clone())
                             ),
-                            labeled_icon_button(
+                            self.gaze_labeled_icon_button(
                                 "edit-delete-symbolic",
                                 "Remove",
                                 Message::DeletePhrase(phrase.id.clone())
@@ -3841,25 +4116,35 @@ impl Wingmate {
 
         let adders: Element<'_, Message> = if self.manage_phrases {
             row![
-                text_input(&fl!("communicate-new-phrase"), &self.new_phrase)
-                    .on_input(Message::NewPhraseChanged)
-                    .on_submit(Message::AddPhrase)
-                    .padding(12),
-                labeled_icon_button(
+                self.gaze_focus_widget(
+                    text_input(&fl!("communicate-new-phrase"), &self.new_phrase)
+                        .id("new-phrase")
+                        .on_input(Message::NewPhraseChanged)
+                        .on_submit(Message::AddPhrase)
+                        .padding(12)
+                        .into(),
+                    "new-phrase"
+                ),
+                self.gaze_labeled_icon_button(
                     "list-add-symbolic",
                     fl!("communicate-add-phrase"),
                     Message::AddPhrase
                 ),
-                text_input(&fl!("communicate-new-category"), &self.new_category)
-                    .on_input(Message::NewCategoryChanged)
-                    .on_submit(Message::AddCategory)
-                    .padding(12),
-                labeled_icon_button(
+                self.gaze_focus_widget(
+                    text_input(&fl!("communicate-new-category"), &self.new_category)
+                        .id("new-category")
+                        .on_input(Message::NewCategoryChanged)
+                        .on_submit(Message::AddCategory)
+                        .padding(12)
+                        .into(),
+                    "new-category"
+                ),
+                self.gaze_labeled_icon_button(
                     "list-add-symbolic",
                     fl!("communicate-add-category"),
                     Message::AddCategory
                 ),
-                labeled_icon_button(
+                self.gaze_labeled_icon_button(
                     "object-select-symbolic",
                     fl!("action-done"),
                     Message::ToggleManagePhrases
@@ -3869,7 +4154,7 @@ impl Wingmate {
             .wrap()
             .into()
         } else {
-            row![labeled_icon_button(
+            row![self.gaze_labeled_icon_button(
                 "document-edit-symbolic",
                 fl!("action-manage"),
                 Message::ToggleManagePhrases
@@ -3878,7 +4163,7 @@ impl Wingmate {
         };
 
         let controls = row![
-            touch_icon_button(
+            self.gaze_touch_icon_button(
                 if self.thought_draft.is_some() {
                     "edit-undo-symbolic"
                 } else {
@@ -3891,32 +4176,32 @@ impl Wingmate {
                 },
                 Message::ToggleThought,
             ),
-            touch_icon_button(
+            self.gaze_touch_icon_button(
                 "media-playback-start-symbolic",
                 fl!("action-speak"),
                 Message::Speak(self.draft.clone())
             ),
-            touch_icon_button(
+            self.gaze_touch_icon_button(
                 "media-playback-pause-symbolic",
                 fl!("action-pause"),
                 Message::SpeechAction("/api/speak/pause")
             ),
-            touch_icon_button(
+            self.gaze_touch_icon_button(
                 "media-playback-start-symbolic",
                 fl!("action-resume"),
                 Message::SpeechAction("/api/speak/resume")
             ),
-            touch_icon_button(
+            self.gaze_touch_icon_button(
                 "media-playback-stop-symbolic",
                 fl!("action-stop"),
                 Message::SpeechAction("/api/speak/stop")
             ),
-            touch_icon_button(
+            self.gaze_touch_icon_button(
                 "edit-clear-symbolic",
                 fl!("action-clear-message"),
                 Message::ClearDraft
             ),
-            touch_icon_button(
+            self.gaze_touch_icon_button(
                 "view-fullscreen-symbolic",
                 fl!("action-fullscreen"),
                 Message::Navigate(Page::Fullscreen)
@@ -3929,15 +4214,15 @@ impl Wingmate {
 
         let ssml = row![
             text(fl!("communicate-speech-markup")),
-            touch_text_button(
+            self.gaze_touch_text_button(
                 fl!("communicate-pause-markup"),
                 Message::AppendMarkup(" [0.5s] ")
             ),
-            touch_text_button(
+            self.gaze_touch_text_button(
                 fl!("communicate-emphasis"),
                 Message::AppendMarkup(" [strong] ")
             ),
-            touch_text_button(
+            self.gaze_touch_text_button(
                 fl!("communicate-secondary-language"),
                 Message::AppendMarkup(" <en></en> ")
             ),
@@ -3949,7 +4234,7 @@ impl Wingmate {
             container(
                 row![
                     text(fl!("communicate-native-keyboard-hint")).width(Fill),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "go-previous-symbolic",
                         fl!("communicate-return-to-board"),
                         Message::ReturnToBoardFromKeyboard,
@@ -3979,7 +4264,7 @@ impl Wingmate {
                 .height(self.settings.button_px(48.0)),
             scrollable(grid).height(Fill),
             if self.selected_category.as_deref() == Some("__history__") {
-                row![labeled_icon_button(
+                row![self.gaze_labeled_icon_button(
                     "edit-delete-symbolic",
                     fl!("action-clear-history"),
                     Message::ClearHistory
@@ -4000,21 +4285,25 @@ impl Wingmate {
                 text(fl!("onboarding-welcome-title")).size(40),
                 text(fl!("onboarding-welcome-description")),
                 text(fl!("onboarding-workspaces-description")),
-                touch_text_button("Get started", Message::OnboardingNext),
+                self.gaze_touch_text_button("Get started", Message::OnboardingNext),
             ]
             .spacing(18)
             .into(),
             1 => column![
                 text(fl!("onboarding-workspace-title")).size(32),
-                checkbox(!self.onboarding_screens)
-                    .label(fl!("onboarding-keyboard"))
-                    .on_toggle(|selected| Message::OnboardingMode(!selected)),
-                checkbox(self.onboarding_screens)
-                    .label(fl!("onboarding-screens"))
-                    .on_toggle(Message::OnboardingMode),
+                self.gaze_checkbox(
+                    !self.onboarding_screens,
+                    fl!("onboarding-keyboard"),
+                    |selected| Message::OnboardingMode(!selected)
+                ),
+                self.gaze_checkbox(
+                    self.onboarding_screens,
+                    fl!("onboarding-screens"),
+                    Message::OnboardingMode
+                ),
                 row![
-                    labeled_icon_button("go-previous-symbolic", "Back", Message::OnboardingBack),
-                    labeled_icon_button("go-next-symbolic", "Next", Message::OnboardingNext)
+                    self.gaze_labeled_icon_button("go-previous-symbolic", "Back", Message::OnboardingBack),
+                    self.gaze_labeled_icon_button("go-next-symbolic", "Next", Message::OnboardingNext)
                 ]
                 .spacing(10),
             ]
@@ -4024,8 +4313,8 @@ impl Wingmate {
                 text(fl!("settings-privacy")).size(32),
                 text(fl!("onboarding-privacy-description")),
                 row![
-                    labeled_icon_button("go-previous-symbolic", "Back", Message::OnboardingBack),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button("go-previous-symbolic", "Back", Message::OnboardingBack),
+                    self.gaze_labeled_icon_button(
                         "object-select-symbolic",
                         "Finish setup",
                         Message::CompleteOnboarding
@@ -4046,12 +4335,12 @@ impl Wingmate {
                     .size(self.settings.font_px(52.0))
                     .width(Fill),
                 row![
-                    touch_icon_button(
+                    self.gaze_touch_icon_button(
                         "media-playback-start-symbolic",
                         "Speak",
                         Message::Speak(self.draft.clone())
                     ),
-                    touch_icon_button(
+                    self.gaze_touch_icon_button(
                         "window-close-symbolic",
                         "Close fullscreen",
                         Message::Navigate(self.last_workspace)
@@ -4088,6 +4377,7 @@ impl Wingmate {
             .board_sets
             .iter()
             .fold(row![].spacing(16), |cards, set| {
+                let run_action = Message::OpenBoardSet(set.id.clone(), false);
                 let run_card = button(
                     column![
                         symbolic_icon("view-grid-symbolic").size(42).icon(),
@@ -4106,27 +4396,28 @@ impl Wingmate {
                     .spacing(10)
                     .align_x(cosmic::iced::alignment::Alignment::Center),
                 )
-                .on_press(Message::OpenBoardSet(set.id.clone(), false))
+                .on_press(run_action.clone())
                 .width(Fill)
                 .height(150)
                 .padding(18);
+                let run_card = self.gaze_action_widget(run_card.into(), run_action);
 
                 cards.push(
                     container(
                         column![
                             run_card,
                             row![
-                                compact_icon_button(
+                                self.gaze_compact_icon_button(
                                     "document-edit-symbolic",
                                     fl!("screens-edit-set"),
                                     Message::OpenBoardSet(set.id.clone(), true)
                                 ),
-                                compact_icon_button(
+                                self.gaze_compact_icon_button(
                                     "edit-copy-symbolic",
                                     fl!("screens-duplicate-set"),
                                     Message::DuplicateBoardSet(set.id.clone())
                                 ),
-                                compact_icon_button(
+                                self.gaze_compact_icon_button(
                                     if set.is_locked {
                                         "changes-allow-symbolic"
                                     } else {
@@ -4139,12 +4430,12 @@ impl Wingmate {
                                     },
                                     Message::ToggleBoardSetLock(set.id.clone())
                                 ),
-                                compact_icon_button(
+                                self.gaze_compact_icon_button(
                                     "document-save-symbolic",
                                     fl!("screens-export-set"),
                                     Message::ExportBoardSet(set.id.clone(), set.name.clone())
                                 ),
-                                compact_icon_button(
+                                self.gaze_compact_icon_button(
                                     "edit-delete-symbolic",
                                     fl!("screens-delete-set"),
                                     Message::DeleteBoardSet(set.id.clone())
@@ -4189,32 +4480,49 @@ impl Wingmate {
             column![
                 text(fl!("screens-create-title")).size(20),
                 row![
-                    text_input(&fl!("screens-new-set"), &self.new_board_set)
-                        .on_input(Message::BoardSetNameChanged)
-                        .on_submit(Message::CreateBoardSet)
-                        .padding(12)
-                        .width(Fill),
+                    self.gaze_focus_widget(
+                        text_input(&fl!("screens-new-set"), &self.new_board_set)
+                            .id("new-board-set")
+                            .on_input(Message::BoardSetNameChanged)
+                            .on_submit(Message::CreateBoardSet)
+                            .padding(12)
+                            .width(Fill)
+                            .into(),
+                        "new-board-set"
+                    ),
                     column![
                         text(fl!("screens-rows", count = self.board_rows)).size(14),
-                        slider(1..=12, self.board_rows, Message::BoardRowsChanged).width(150),
+                        self.gaze_i32_slider(
+                            1..=12,
+                            self.board_rows,
+                            1,
+                            cosmic::iced::Length::Fixed(150.0),
+                            Message::BoardRowsChanged
+                        ),
                     ]
                     .spacing(4),
                     column![
                         text(fl!("screens-columns", count = self.board_columns)).size(14),
-                        slider(1..=12, self.board_columns, Message::BoardColumnsChanged).width(150),
+                        self.gaze_i32_slider(
+                            1..=12,
+                            self.board_columns,
+                            1,
+                            cosmic::iced::Length::Fixed(150.0),
+                            Message::BoardColumnsChanged
+                        ),
                     ]
                     .spacing(4),
                     column![
                         text(fl!("screens-template")).size(14),
-                        pick_list(
+                        container(self.gaze_pick_list(
                             board_template_options(),
                             Some(self.board_template.clone()),
                             Message::BoardTemplateChanged,
-                        )
+                        ))
                         .width(190),
                     ]
                     .spacing(4),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "list-add-symbolic",
                         fl!("screens-create"),
                         Message::CreateBoardSet
@@ -4238,7 +4546,7 @@ impl Wingmate {
                 ]
                 .spacing(4)
                 .width(Fill),
-                labeled_icon_button(
+                self.gaze_labeled_icon_button(
                     "document-open-symbolic",
                     fl!("screens-import"),
                     Message::ImportBoardSet
@@ -4267,42 +4575,59 @@ impl Wingmate {
                 } else {
                     label
                 };
-                button(text(label))
-                    .on_press(Message::CellSymbolPackageChanged(value.to_string()))
-                    .into()
+                let action = Message::CellSymbolPackageChanged(value.to_string());
+                self.gaze_action_widget(
+                    button(text(label)).on_press(action.clone()).into(),
+                    action,
+                )
             }))
             .spacing(8);
             let mut editor = column![
                 text(fl!("board-field-edit-title")).size(30),
-                text_input(&fl!("board-field-label"), &self.cell_label)
-                    .on_input(Message::CellLabelChanged)
-                    .padding(12),
-                text_input(
-                    "Speak something different (optional)",
-                    &self.cell_vocalization
-                )
-                .on_input(Message::CellVoiceChanged)
-                .padding(12),
+                self.gaze_focus_widget(
+                    text_input(&fl!("board-field-label"), &self.cell_label)
+                        .id("board-cell-label")
+                        .on_input(Message::CellLabelChanged)
+                        .padding(12)
+                        .into(),
+                    "board-cell-label"
+                ),
+                self.gaze_focus_widget(
+                    text_input(
+                        "Speak something different (optional)",
+                        &self.cell_vocalization
+                    )
+                    .id("board-cell-voice")
+                    .on_input(Message::CellVoiceChanged)
+                    .padding(12)
+                    .into(),
+                    "board-cell-voice"
+                ),
                 package_row,
                 row![
-                    text_input(&fl!("board-symbol-search"), &self.symbol_query)
-                        .on_input(Message::CellSymbolQueryChanged)
-                        .on_submit(Message::CellSymbolSearch)
-                        .padding(12)
-                        .width(360),
-                    labeled_icon_button(
+                    self.gaze_focus_widget(
+                        text_input(&fl!("board-symbol-search"), &self.symbol_query)
+                            .id("board-symbol-search")
+                            .on_input(Message::CellSymbolQueryChanged)
+                            .on_submit(Message::CellSymbolSearch)
+                            .padding(12)
+                            .width(360)
+                            .into(),
+                        "board-symbol-search"
+                    ),
+                    self.gaze_labeled_icon_button(
                         "system-search-symbolic",
                         "Search",
                         Message::CellSymbolSearch
                     ),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "document-open-symbolic",
                         "Choose image…",
                         Message::CellLocalImage
                     ),
                     {
                         let el: Element<'_, Message> = if self.cell_image_url.is_some() {
-                            labeled_icon_button(
+                            self.gaze_labeled_icon_button(
                                 "edit-delete-symbolic",
                                 "Remove image",
                                 Message::CellSymbolCleared,
@@ -4346,12 +4671,16 @@ impl Wingmate {
                                 "arasaac" => "ARASAAC",
                                 _ => "OpenSymbols",
                             }).size(11));
-                            button(content)
-                                .on_press(Message::CellSymbolPicked(index))
-                                .width(124)
-                                .height(96)
-                                .padding([6, 10])
-                                .into()
+                            let action = Message::CellSymbolPicked(index);
+                            self.gaze_action_widget(
+                                button(content)
+                                    .on_press(action.clone())
+                                    .width(124)
+                                    .height(96)
+                                    .padding([6, 10])
+                                    .into(),
+                                action,
+                            )
                         }))
                     .spacing(6);
                 editor = editor.push(
@@ -4390,10 +4719,15 @@ impl Wingmate {
             editor = editor
                 .push(
                     row![
-                        text_input(&fl!("board-background-color"), &self.cell_background_color)
-                            .on_input(Message::CellBackgroundChanged)
-                            .padding(12),
-                        pick_list(
+                        self.gaze_focus_widget(
+                            text_input(&fl!("board-background-color"), &self.cell_background_color)
+                                .id("board-background-color")
+                                .on_input(Message::CellBackgroundChanged)
+                                .padding(12)
+                                .into(),
+                            "board-background-color"
+                        ),
+                        self.gaze_pick_list(
                             vec![
                                 "Automatic",
                                 "pronoun",
@@ -4409,37 +4743,44 @@ impl Wingmate {
                             Some(self.cell_word_type.clone()),
                             Message::CellWordTypeChanged,
                         ),
-                        pick_list(page_options, selected_page, Message::CellLinkedBoardChanged),
-                        checkbox(self.cell_hidden)
-                            .label(fl!("board-hidden-run"))
-                            .on_toggle(Message::CellHiddenChanged),
+                        self.gaze_pick_list(page_options, selected_page, Message::CellLinkedBoardChanged),
+                        self.gaze_checkbox(
+                            self.cell_hidden,
+                            fl!("board-hidden-run"),
+                            Message::CellHiddenChanged
+                        ),
                     ]
                     .spacing(10)
                     .wrap(),
                 )
                 .push(
-                    text_input(
-                        "OBF actions, comma separated (optional)",
-                        &self.cell_actions,
-                    )
-                    .on_input(Message::CellActionsChanged)
-                    .padding(12),
+                    self.gaze_focus_widget(
+                        text_input(
+                            "OBF actions, comma separated (optional)",
+                            &self.cell_actions,
+                        )
+                        .id("board-cell-actions")
+                        .on_input(Message::CellActionsChanged)
+                        .padding(12)
+                        .into(),
+                        "board-cell-actions"
+                    ),
                 );
 
             return editor
                 .push(
                     row![
-                        labeled_icon_button(
+                        self.gaze_labeled_icon_button(
                             "document-save-symbolic",
                             "Save",
                             Message::SaveBoardCell
                         ),
-                        labeled_icon_button(
+                        self.gaze_labeled_icon_button(
                             "edit-clear-symbolic",
                             "Clear field",
                             Message::ClearBoardCell
                         ),
-                        labeled_icon_button(
+                        self.gaze_labeled_icon_button(
                             "window-close-symbolic",
                             "Cancel",
                             Message::CancelBoardCell
@@ -4628,14 +4969,14 @@ impl Wingmate {
                 .align_y(cosmic::iced::alignment::Vertical::Center);
             let field_widget: Element<'_, Message> = if self.board_edit_mode {
                 let mut field_button = button(centered_content)
-                    .on_press(action)
+                    .on_press(action.clone())
                     .width(cosmic::iced::Length::Fixed(field_width))
                     .height(field_height)
                     .class(cosmic::theme::iced::Button::Secondary);
                 if let Some(color) = field_color {
                     field_button = field_button.class(colored_button_class(color));
                 }
-                field_button.into()
+                self.gaze_action_widget(field_button.into(), action)
             } else if button_data.is_none() {
                 button(centered_content)
                     .width(cosmic::iced::Length::Fixed(field_width))
@@ -4709,16 +5050,20 @@ impl Wingmate {
         let pages: Element<'_, Message> = if self.board_edit_mode {
             scrollable(
                 row(graph.boards.iter().map(|item| {
-                    button(item.name.as_deref().unwrap_or("Untitled page"))
-                        .on_press(Message::SelectBoard(item.id.clone()))
-                        .height(48)
-                        .padding([10, 16])
-                        .class(if item.id == active_id {
-                            cosmic::theme::iced::Button::Primary
-                        } else {
-                            cosmic::theme::iced::Button::Secondary
-                        })
-                        .into()
+                    let action = Message::SelectBoard(item.id.clone());
+                    self.gaze_action_widget(
+                        button(item.name.as_deref().unwrap_or("Untitled page"))
+                            .on_press(action.clone())
+                            .height(48)
+                            .padding([10, 16])
+                            .class(if item.id == active_id {
+                                cosmic::theme::iced::Button::Primary
+                            } else {
+                                cosmic::theme::iced::Button::Secondary
+                            })
+                            .into(),
+                        action,
+                    )
                 }))
                 .spacing(6),
             )
@@ -4743,21 +5088,26 @@ impl Wingmate {
                 .unwrap_or_else(|| "Stay".into());
             column![
                 row![
-                    text_input(&fl!("board-current-page-name"), &self.current_page_name)
-                        .on_input(Message::CurrentPageNameChanged)
-                        .on_submit(Message::RenameCurrentPage)
-                        .padding(12),
-                    labeled_icon_button(
+                    self.gaze_focus_widget(
+                        text_input(&fl!("board-current-page-name"), &self.current_page_name)
+                            .id("board-current-page-name")
+                            .on_input(Message::CurrentPageNameChanged)
+                            .on_submit(Message::RenameCurrentPage)
+                            .padding(12)
+                            .into(),
+                        "board-current-page-name"
+                    ),
+                    self.gaze_labeled_icon_button(
                         "document-save-symbolic",
                         "Rename page",
                         Message::RenameCurrentPage
                     ),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "go-home-symbolic",
                         "Set as home page",
                         Message::SetCurrentPageAsHome
                     ),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "edit-delete-symbolic",
                         "Delete page",
                         Message::DeleteCurrentPage
@@ -4767,16 +5117,28 @@ impl Wingmate {
                 .wrap(),
                 row![
                     text(format!("Rows {}", self.board_rows)),
-                    slider(1..=12, self.board_rows, Message::BoardRowsChanged).width(120),
+                    self.gaze_i32_slider(
+                        1..=12,
+                        self.board_rows,
+                        1,
+                        cosmic::iced::Length::Fixed(120.0),
+                        Message::BoardRowsChanged
+                    ),
                     text(format!("Columns {}", self.board_columns)),
-                    slider(1..=12, self.board_columns, Message::BoardColumnsChanged).width(120),
-                    labeled_icon_button(
+                    self.gaze_i32_slider(
+                        1..=12,
+                        self.board_columns,
+                        1,
+                        cosmic::iced::Length::Fixed(120.0),
+                        Message::BoardColumnsChanged
+                    ),
+                    self.gaze_labeled_icon_button(
                         "view-refresh-symbolic",
                         "Resize page",
                         Message::ResizeCurrentPage
                     ),
                     text(fl!("board-activation")),
-                    pick_list(
+                    self.gaze_pick_list(
                         vec![
                             "SpeakAndAdd".to_string(),
                             "AddOnly".to_string(),
@@ -4786,7 +5148,7 @@ impl Wingmate {
                         Message::PageActivationChanged
                     ),
                     text(fl!("board-after-selection")),
-                    pick_list(
+                    self.gaze_pick_list(
                         vec![
                             "Stay".to_string(),
                             "Previous".to_string(),
@@ -4799,11 +5161,16 @@ impl Wingmate {
                 .spacing(8)
                 .wrap(),
                 row![
-                    text_input(&fl!("board-new-page-name"), &self.new_page)
-                        .on_input(Message::PageNameChanged)
-                        .on_submit(Message::CreatePage)
-                        .padding(12),
-                    labeled_icon_button("list-add-symbolic", "Add page", Message::CreatePage),
+                    self.gaze_focus_widget(
+                        text_input(&fl!("board-new-page-name"), &self.new_page)
+                            .id("board-new-page-name")
+                            .on_input(Message::PageNameChanged)
+                            .on_submit(Message::CreatePage)
+                            .padding(12)
+                            .into(),
+                        "board-new-page-name"
+                    ),
+                    self.gaze_labeled_icon_button("list-add-symbolic", "Add page", Message::CreatePage),
                 ]
                 .spacing(8),
             ]
@@ -4814,50 +5181,55 @@ impl Wingmate {
         };
 
         let message_bar: Element<'_, Message> = if !self.board_edit_mode && show_message_bar {
+            let sentence_action = Message::Speak(self.board_sentence.clone());
             container(
                 row![
-                    aac_toolbar_button(
+                    self.gaze_aac_toolbar_button(
                         "go-home-symbolic",
                         fl!("board-home"),
                         Message::BoardNavigateHome,
                     ),
-                    aac_toolbar_button(
+                    self.gaze_aac_toolbar_button(
                         "go-previous-symbolic",
                         fl!("board-back"),
                         Message::BoardNavigateBack,
                     ),
-                    button(
-                        scrollable(
-                            text(if self.board_sentence.is_empty() {
-                                fl!("board-message-placeholder")
-                            } else {
-                                self.board_sentence.clone()
-                            })
-                            .size(22)
-                            .wrapping(cosmic::iced::widget::text::Wrapping::None),
+                    self.gaze_action_widget(
+                        button(
+                            scrollable(
+                                text(if self.board_sentence.is_empty() {
+                                    fl!("board-message-placeholder")
+                                } else {
+                                    self.board_sentence.clone()
+                                })
+                                .size(22)
+                                .wrapping(cosmic::iced::widget::text::Wrapping::None),
+                            )
+                            .direction(scrollable::Direction::Horizontal(
+                                scrollable::Scrollbar::default(),
+                            ))
+                            .height(Fill)
+                            .width(Fill)
                         )
-                        .direction(scrollable::Direction::Horizontal(
-                            scrollable::Scrollbar::default(),
-                        ))
-                        .height(Fill)
+                        .on_press(sentence_action.clone())
+                        .class(cosmic::theme::iced::Button::Secondary)
+                        .height(68)
                         .width(Fill)
-                    )
-                    .on_press(Message::Speak(self.board_sentence.clone()))
-                    .class(cosmic::theme::iced::Button::Secondary)
-                    .height(68)
-                    .width(Fill)
-                    .padding([10, 16]),
-                    aac_toolbar_button(
+                        .padding([10, 16])
+                        .into(),
+                        sentence_action,
+                    ),
+                    self.gaze_aac_toolbar_button(
                         "media-playback-start-symbolic",
                         fl!("board-speak-message"),
                         Message::Speak(self.board_sentence.clone()),
                     ),
-                    aac_toolbar_button(
+                    self.gaze_aac_toolbar_button(
                         "edit-undo-symbolic",
                         fl!("board-backspace-message"),
                         Message::BoardSentenceBackspace,
                     ),
-                    aac_toolbar_button(
+                    self.gaze_aac_toolbar_button(
                         "edit-clear-symbolic",
                         fl!("board-clear-message"),
                         Message::BoardSentenceClear,
@@ -4873,12 +5245,12 @@ impl Wingmate {
         } else {
             container(
                 row![
-                    aac_toolbar_button(
+                    self.gaze_aac_toolbar_button(
                         "go-home-symbolic",
                         fl!("board-home"),
                         Message::BoardNavigateHome,
                     ),
-                    aac_toolbar_button(
+                    self.gaze_aac_toolbar_button(
                         "go-previous-symbolic",
                         fl!("board-back"),
                         Message::BoardNavigateBack,
@@ -4899,7 +5271,7 @@ impl Wingmate {
         if self.board_edit_mode {
             column![
                 row![
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "go-previous-symbolic",
                         fl!("board-library"),
                         Message::ExitBoardSet
@@ -4911,7 +5283,7 @@ impl Wingmate {
                     ))
                     .size(26)
                     .width(Fill),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "media-playback-start-symbolic",
                         fl!("board-run"),
                         Message::ToggleBoardEdit
@@ -4949,7 +5321,7 @@ impl Wingmate {
                     ))
                     .size(16)
                     .width(Fill),
-                    compact_icon_button(
+                    self.gaze_compact_icon_button(
                         "view-grid-symbolic",
                         fl!("board-library"),
                         Message::ExitBoardSet
@@ -4983,12 +5355,12 @@ impl Wingmate {
                         text(&entry.word).width(180),
                         text(&entry.phoneme).width(Fill),
                         text(entry.alphabet.to_uppercase()).width(90),
-                        compact_icon_button(
+                        self.gaze_compact_icon_button(
                             "media-playback-start-symbolic",
                             "Test pronunciation",
                             Message::TestPronunciation(entry.word.clone())
                         ),
-                        compact_icon_button(
+                        self.gaze_compact_icon_button(
                             "edit-delete-symbolic",
                             "Remove pronunciation",
                             Message::DeletePronunciation(entry.word.clone())
@@ -5002,14 +5374,24 @@ impl Wingmate {
             text(fl!("pronunciation-title")).size(30),
             text(fl!("pronunciation-description")),
             row![
-                text_input(&fl!("pronunciation-word"), &self.new_word)
-                    .on_input(Message::NewWordChanged)
-                    .padding(12),
-                text_input(&fl!("pronunciation-phoneme"), &self.new_phoneme)
-                    .on_input(Message::NewPhonemeChanged)
-                    .on_submit(Message::AddPronunciation)
-                    .padding(12),
-                pick_list(
+                self.gaze_focus_widget(
+                    text_input(&fl!("pronunciation-word"), &self.new_word)
+                        .id("pronunciation-word")
+                        .on_input(Message::NewWordChanged)
+                        .padding(12)
+                        .into(),
+                    "pronunciation-word"
+                ),
+                self.gaze_focus_widget(
+                    text_input(&fl!("pronunciation-phoneme"), &self.new_phoneme)
+                        .id("pronunciation-phoneme")
+                        .on_input(Message::NewPhonemeChanged)
+                        .on_submit(Message::AddPronunciation)
+                        .padding(12)
+                        .into(),
+                    "pronunciation-phoneme"
+                ),
+                self.gaze_pick_list(
                     vec![
                         "text".to_string(),
                         "ipa".to_string(),
@@ -5020,18 +5402,18 @@ impl Wingmate {
                     Some(self.pronunciation_alphabet.clone()),
                     Message::PronunciationAlphabetChanged,
                 ),
-                labeled_icon_button("list-add-symbolic", "Add", Message::AddPronunciation),
+                self.gaze_labeled_icon_button("list-add-symbolic", "Add", Message::AddPronunciation),
             ]
             .spacing(10)
             .wrap(),
             scrollable(entries).height(Fill),
             row![
-                labeled_icon_button(
+                self.gaze_labeled_icon_button(
                     "document-open-symbolic",
                     "Import JSON/CSV…",
                     Message::ImportPronunciations
                 ),
-                labeled_icon_button(
+                self.gaze_labeled_icon_button(
                     "document-save-symbolic",
                     "Export CSV…",
                     Message::ExportPronunciations
@@ -5091,7 +5473,7 @@ impl Wingmate {
             categories
                 .iter()
                 .map(|(category, label, icon_name)| {
-                    nav_button(
+                    self.gaze_nav_button(
                         icon_name,
                         label.clone(),
                         self.settings_category == *category,
@@ -5195,7 +5577,7 @@ impl Wingmate {
             if self.azure_credential_configured && !self.replacing_azure_credentials {
                 column![
                     text(fl!("speech-azure-configured")),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "document-edit-symbolic",
                         fl!("speech-azure-replace"),
                         Message::ReplaceAzureCredentials
@@ -5205,14 +5587,24 @@ impl Wingmate {
                 .into()
             } else {
                 column![
-                    text_input(&fl!("speech-azure-endpoint"), &self.azure_endpoint)
-                        .on_input(Message::AzureEndpointChanged)
-                        .padding(12),
-                    text_input(&fl!("speech-azure-key"), &self.azure_key)
-                        .on_input(Message::AzureKeyChanged)
-                        .secure(true)
-                        .padding(12),
-                    labeled_icon_button(
+                    self.gaze_focus_widget(
+                        text_input(&fl!("speech-azure-endpoint"), &self.azure_endpoint)
+                            .id("azure-endpoint")
+                            .on_input(Message::AzureEndpointChanged)
+                            .padding(12)
+                            .into(),
+                        "azure-endpoint"
+                    ),
+                    self.gaze_focus_widget(
+                        text_input(&fl!("speech-azure-key"), &self.azure_key)
+                            .id("azure-key")
+                            .on_input(Message::AzureKeyChanged)
+                            .secure(true)
+                            .padding(12)
+                            .into(),
+                        "azure-key"
+                    ),
+                    self.gaze_labeled_icon_button(
                         "document-save-symbolic",
                         fl!("speech-azure-save"),
                         Message::SaveAzureConfig
@@ -5227,14 +5619,18 @@ impl Wingmate {
                 settings_row(
                     fl!("speech-voice"),
                     row![
-                        pick_list(voice_names, selected_voice, Message::VoicePreviewSelected)
-                            .width(Fill),
-                        compact_icon_button(
+                        container(self.gaze_pick_list(
+                            voice_names,
+                            selected_voice,
+                            Message::VoicePreviewSelected
+                        ))
+                        .width(Fill),
+                        self.gaze_compact_icon_button(
                             "media-playback-start-symbolic",
                             fl!("voice-preview"),
                             Message::PreviewVoice
                         ),
-                        compact_icon_button(
+                        self.gaze_compact_icon_button(
                             "object-select-symbolic",
                             fl!("voice-use"),
                             Message::ApplyPreviewVoice
@@ -5245,7 +5641,7 @@ impl Wingmate {
                 ),
                 settings_row(
                     fl!("speech-engine"),
-                    pick_list(
+                    self.gaze_pick_list(
                         vec!["SYSTEM".to_string(), "AZURE_USER_RESOURCE".to_string()],
                         Some(self.settings.tts_engine.clone()),
                         Message::EngineChanged
@@ -5254,13 +5650,17 @@ impl Wingmate {
                 ),
                 settings_row(
                     fl!("speech-speed"),
-                    slider(0.5..=2.0, self.settings.speech_rate, Message::RateChanged)
-                        .step(0.1_f32)
-                        .into()
+                    self.gaze_f32_slider(
+                        0.5..=2.0,
+                        self.settings.speech_rate,
+                        0.1,
+                        Fill,
+                        Message::RateChanged
+                    )
                 ),
                 settings_row(
                     fl!("speech-primary-language"),
-                    pick_list(
+                    self.gaze_pick_list(
                         languages.clone(),
                         Some(self.settings.primary_language.clone()),
                         Message::PrimaryLanguageChanged
@@ -5269,7 +5669,7 @@ impl Wingmate {
                 ),
                 settings_row(
                     fl!("speech-secondary-language"),
-                    pick_list(
+                    self.gaze_pick_list(
                         secondary_languages,
                         Some(selected_secondary),
                         Message::SecondaryLanguageChanged
@@ -5293,10 +5693,11 @@ impl Wingmate {
         .to_string();
         let label_position: Element<'_, Message> =
             if self.settings.show_labels && self.settings.show_symbols {
-                checkbox(self.settings.label_at_top)
-                    .label(fl!("display-labels-above"))
-                    .on_toggle(|enabled| Message::SettingBool("labelAtTop", enabled))
-                    .into()
+                self.gaze_checkbox(
+                    self.settings.label_at_top,
+                    fl!("display-labels-above"),
+                    |enabled| Message::SettingBool("labelAtTop", enabled)
+                )
             } else {
                 Space::new().height(1).into()
             };
@@ -5306,7 +5707,7 @@ impl Wingmate {
                 text(fl!("display-appearance-help")),
                 settings_row(
                     "Appearance",
-                    pick_list(
+                    self.gaze_pick_list(
                         vec![
                             "System".to_string(),
                             "Light".to_string(),
@@ -5317,55 +5718,73 @@ impl Wingmate {
                     )
                     .into(),
                 ),
-                checkbox(self.settings.show_labels)
-                    .label(fl!("display-show-labels"))
-                    .on_toggle(|enabled| Message::SettingBool("showLabels", enabled)),
-                checkbox(self.settings.show_symbols)
-                    .label(fl!("display-show-symbols"))
-                    .on_toggle(|enabled| Message::SettingBool("showSymbols", enabled)),
+                self.gaze_checkbox(
+                    self.settings.show_labels,
+                    fl!("display-show-labels"),
+                    |enabled| Message::SettingBool("showLabels", enabled)
+                ),
+                self.gaze_checkbox(
+                    self.settings.show_symbols,
+                    fl!("display-show-symbols"),
+                    |enabled| Message::SettingBool("showSymbols", enabled)
+                ),
                 label_position,
                 settings_row(
                     "Grid columns",
-                    slider(
+                    self.gaze_i32_slider(
                         1..=12,
                         self.settings.grid_columns,
+                        1,
+                        Fill,
                         Message::GridColumnsChanged
                     )
-                    .into(),
+                    ,
                 ),
                 settings_row(
                     fl!("display-font-scale"),
-                    slider(0.75..=1.5, self.settings.font_size_scale, |value| {
-                        Message::SettingFloat("fontSizeScale", value)
-                    })
-                    .step(0.05)
-                    .into(),
+                    self.gaze_f32_slider(
+                        0.75..=1.5,
+                        self.settings.font_size_scale,
+                        0.05,
+                        Fill,
+                        |value| Message::SettingFloat("fontSizeScale", value)
+                    ),
                 ),
                 settings_row(
                     fl!("display-button-scale"),
-                    slider(0.75..=1.5, self.settings.button_scale, |value| {
-                        Message::SettingFloat("buttonScale", value)
-                    })
-                    .step(0.05)
-                    .into(),
+                    self.gaze_f32_slider(
+                        0.75..=1.5,
+                        self.settings.button_scale,
+                        0.05,
+                        Fill,
+                        |value| Message::SettingFloat("buttonScale", value)
+                    ),
                 ),
                 settings_row(
                     fl!("display-input-scale"),
-                    slider(0.75..=1.5, self.settings.input_field_scale, |value| {
-                        Message::SettingFloat("inputFieldScale", value)
-                    })
-                    .step(0.05)
-                    .into(),
+                    self.gaze_f32_slider(
+                        0.75..=1.5,
+                        self.settings.input_field_scale,
+                        0.05,
+                        Fill,
+                        |value| Message::SettingFloat("inputFieldScale", value)
+                    ),
                 ),
-                checkbox(self.settings.high_contrast_mode)
-                    .label(fl!("display-high-contrast"))
-                    .on_toggle(|enabled| Message::SettingBool("highContrastMode", enabled)),
-                checkbox(self.settings.word_type_color_scheme == "Fitzgerald")
-                    .label(fl!("display-word-type-colors"))
-                    .on_toggle(|enabled| Message::SettingBool("wordTypeColorScheme", enabled)),
-                checkbox(self.settings.board_show_message_bar)
-                    .label(fl!("display-message-bar"))
-                    .on_toggle(|enabled| Message::SettingBool("boardShowMessageBar", enabled)),
+                self.gaze_checkbox(
+                    self.settings.high_contrast_mode,
+                    fl!("display-high-contrast"),
+                    |enabled| Message::SettingBool("highContrastMode", enabled)
+                ),
+                self.gaze_checkbox(
+                    self.settings.word_type_color_scheme == "Fitzgerald",
+                    fl!("display-word-type-colors"),
+                    |enabled| Message::SettingBool("wordTypeColorScheme", enabled)
+                ),
+                self.gaze_checkbox(
+                    self.settings.board_show_message_bar,
+                    fl!("display-message-bar"),
+                    |enabled| Message::SettingBool("boardShowMessageBar", enabled)
+                ),
             ]
             .spacing(14),
         )
@@ -5385,12 +5804,17 @@ impl Wingmate {
             column![
                 text(fl!("editing-access-title")).size(24),
                 text(fl!("editing-access-locked-help")),
-                text_input(&fl!("editing-access-code"), &self.editing_access_code)
-                    .on_input(Message::EditingAccessCodeChanged)
-                    .on_submit(Message::UnlockEditingAccess)
-                    .secure(true)
-                    .padding(12),
-                labeled_icon_button(
+                self.gaze_focus_widget(
+                    text_input(&fl!("editing-access-code"), &self.editing_access_code)
+                        .id("editing-access-code")
+                        .on_input(Message::EditingAccessCodeChanged)
+                        .on_submit(Message::UnlockEditingAccess)
+                        .secure(true)
+                        .padding(12)
+                        .into(),
+                    "editing-access-code"
+                ),
+                self.gaze_labeled_icon_button(
                     "changes-allow-symbolic",
                     fl!("editing-access-unlock"),
                     Message::UnlockEditingAccess
@@ -5411,22 +5835,32 @@ impl Wingmate {
             let mut controls = column![
                 text(heading).size(24),
                 text(fl!("editing-access-help")),
-                text_input(
-                    &fl!("editing-access-new-code"),
-                    &self.editing_access_new_code
-                )
-                .on_input(Message::EditingAccessNewCodeChanged)
-                .secure(true)
-                .padding(12),
-                text_input(
-                    &fl!("editing-access-confirm-code"),
-                    &self.editing_access_confirmation
-                )
-                .on_input(Message::EditingAccessConfirmationChanged)
-                .on_submit(Message::ConfigureEditingAccess)
-                .secure(true)
-                .padding(12),
-                labeled_icon_button(
+                self.gaze_focus_widget(
+                    text_input(
+                        &fl!("editing-access-new-code"),
+                        &self.editing_access_new_code
+                    )
+                    .id("editing-access-new-code")
+                    .on_input(Message::EditingAccessNewCodeChanged)
+                    .secure(true)
+                    .padding(12)
+                    .into(),
+                    "editing-access-new-code"
+                ),
+                self.gaze_focus_widget(
+                    text_input(
+                        &fl!("editing-access-confirm-code"),
+                        &self.editing_access_confirmation
+                    )
+                    .id("editing-access-confirm-code")
+                    .on_input(Message::EditingAccessConfirmationChanged)
+                    .on_submit(Message::ConfigureEditingAccess)
+                    .secure(true)
+                    .padding(12)
+                    .into(),
+                    "editing-access-confirm-code"
+                ),
+                self.gaze_labeled_icon_button(
                     "document-save-symbolic",
                     if self.editing_access.enabled {
                         fl!("editing-access-change")
@@ -5439,21 +5873,26 @@ impl Wingmate {
             .spacing(10);
             if self.editing_access.enabled {
                 controls = controls
-                    .push(labeled_icon_button(
+                    .push(self.gaze_labeled_icon_button(
                         "changes-prevent-symbolic",
                         fl!("editing-access-lock-now"),
                         Message::LockEditingAccess,
                     ))
                     .push(
-                        text_input(
-                            &fl!("editing-access-current-code-disable"),
-                            &self.editing_access_code,
-                        )
-                        .on_input(Message::EditingAccessCodeChanged)
-                        .secure(true)
-                        .padding(12),
+                        self.gaze_focus_widget(
+                            text_input(
+                                &fl!("editing-access-current-code-disable"),
+                                &self.editing_access_code,
+                            )
+                            .id("editing-access-disable-code")
+                            .on_input(Message::EditingAccessCodeChanged)
+                            .secure(true)
+                            .padding(12)
+                            .into(),
+                            "editing-access-disable-code"
+                        ),
                     )
-                    .push(labeled_icon_button(
+                    .push(self.gaze_labeled_icon_button(
                         "edit-delete-symbolic",
                         fl!("editing-access-disable"),
                         Message::DisableEditingAccess,
@@ -5466,16 +5905,18 @@ impl Wingmate {
             column![
                 text("Interaction").size(24),
                 text("Choose how you point, select, and take a break."),
-                checkbox(self.settings.native_gaze_enabled)
-                    .label("Native TD-I13 eye gaze (tobiifreed)")
-                    .on_toggle(|enabled| Message::SettingBool("nativeGazeEnabled", enabled)),
+                self.gaze_checkbox(
+                    self.settings.native_gaze_enabled,
+                    "Native TD-I13 eye gaze (tobiifreed)",
+                    |enabled| Message::SettingBool("nativeGazeEnabled", enabled)
+                ),
                 text(format!(
                     "Eye-gaze status: {}. Native gaze uses fullscreen mode.",
                     self.native_gaze_status.label()
                 )),
                 settings_row(
                     "Select key",
-                    pick_list(
+                    self.gaze_pick_list(
                         vec!["Off".to_string(), "Space".to_string(), "Enter".to_string(), "F8".to_string(), "F9".to_string()],
                         Some(if self.settings.select_key_binding.is_empty() { "Off".to_string() } else { self.settings.select_key_binding.clone() }),
                         |value| Message::SettingString("selectKeyBinding", if value == "Off" { String::new() } else { value })
@@ -5483,7 +5924,7 @@ impl Wingmate {
                 ),
                 settings_row(
                     "Rest mode key",
-                    pick_list(
+                    self.gaze_pick_list(
                         vec!["Off".to_string(), "Space".to_string(), "Enter".to_string(), "F8".to_string(), "F9".to_string()],
                         Some(if self.settings.rest_mode_key_binding.is_empty() { "Off".to_string() } else { self.settings.rest_mode_key_binding.clone() }),
                         |value| Message::SettingString("restModeKeyBinding", if value == "Off" { String::new() } else { value })
@@ -5491,7 +5932,7 @@ impl Wingmate {
                 ),
                 settings_row(
                     "Pointer emphasis",
-                    pick_list(
+                    self.gaze_pick_list(
                         vec!["System".to_string(), "Ring".to_string(), "Outline".to_string()],
                         Some(self.settings.pointer_emphasis_style.clone()),
                         |value| Message::SettingString("pointerEmphasisStyle", value)
@@ -5499,7 +5940,13 @@ impl Wingmate {
                 ),
                 row![
                     text(format!("Marker size: {:.1}×", self.settings.pointer_emphasis_scale)).width(Fill),
-                    slider(1.0..=3.0, self.settings.pointer_emphasis_scale, |value| Message::SettingFloat("pointerEmphasisScale", value)).step(0.25).width(240)
+                    self.gaze_f32_slider(
+                        1.0..=3.0,
+                        self.settings.pointer_emphasis_scale,
+                        0.25,
+                        cosmic::iced::Length::Fixed(240.0),
+                        |value| Message::SettingFloat("pointerEmphasisScale", value)
+                    )
                 ].spacing(10),
                 Space::new().height(8),
                 text(fl!("access-selection-timing")).size(24),
@@ -5509,13 +5956,13 @@ impl Wingmate {
                         self.settings.hold_to_select_millis
                     ))
                     .width(Fill),
-                    slider(
+                    self.gaze_i32_slider(
                         0..=3000,
                         self.settings.hold_to_select_millis as i32,
+                        100,
+                        cosmic::iced::Length::Fixed(240.0),
                         |value| Message::SettingMillis("holdToSelectMillis", value as i64)
                     )
-                    .step(100)
-                    .width(240)
                 ]
                 .spacing(10),
                 row![
@@ -5524,13 +5971,13 @@ impl Wingmate {
                         self.settings.dwell_to_select_millis
                     ))
                     .width(Fill),
-                    slider(
+                    self.gaze_i32_slider(
                         0..=5000,
                         self.settings.dwell_to_select_millis as i32,
+                        100,
+                        cosmic::iced::Length::Fixed(240.0),
                         |value| Message::SettingMillis("dwellToSelectMillis", value as i64)
                     )
-                    .step(100)
-                    .width(240)
                 ]
                 .spacing(10),
                 row![
@@ -5539,13 +5986,13 @@ impl Wingmate {
                         self.settings.selection_debounce_millis
                     ))
                     .width(Fill),
-                    slider(
+                    self.gaze_i32_slider(
                         0..=2000,
                         self.settings.selection_debounce_millis as i32,
+                        50,
+                        cosmic::iced::Length::Fixed(240.0),
                         |value| Message::SettingMillis("selectionDebounceMillis", value as i64)
                     )
-                    .step(50)
-                    .width(240)
                 ]
                 .spacing(10),
                 row![
@@ -5554,55 +6001,65 @@ impl Wingmate {
                         self.settings.selection_highlight_millis
                     ))
                     .width(Fill),
-                    slider(
+                    self.gaze_i32_slider(
                         0..=3000,
                         self.settings.selection_highlight_millis as i32,
+                        100,
+                        cosmic::iced::Length::Fixed(240.0),
                         |value| Message::SettingMillis("selectionHighlightMillis", value as i64)
                     )
-                    .step(100)
-                    .width(240)
                 ]
                 .spacing(10),
                 row![
                     text(fl!("access-speech-policy")).width(Fill),
-                    pick_list(
+                    container(self.gaze_pick_list(
                         vec!["Immediate".to_string(), "SentenceOnly".to_string()],
                         Some(self.settings.speech_policy.clone()),
                         |value| Message::SettingString("speechPolicy", value),
-                    )
+                    ))
                     .width(180),
                 ]
                 .spacing(10),
-                checkbox(self.settings.selection_sound_enabled)
-                    .label(fl!("access-selection-sound"))
-                    .on_toggle(|value| Message::SettingBool("selectionSoundEnabled", value)),
-                checkbox(self.settings.auditory_fishing_enabled)
-                    .label(fl!("access-auditory-cue"))
-                    .on_toggle(|value| Message::SettingBool("auditoryFishingEnabled", value)),
+                self.gaze_checkbox(
+                    self.settings.selection_sound_enabled,
+                    fl!("access-selection-sound"),
+                    |value| Message::SettingBool("selectionSoundEnabled", value)
+                ),
+                self.gaze_checkbox(
+                    self.settings.auditory_fishing_enabled,
+                    fl!("access-auditory-cue"),
+                    |value| Message::SettingBool("auditoryFishingEnabled", value)
+                ),
                 Space::new().height(8),
                 text(fl!("access-switch-scanning")).size(24),
-                checkbox(self.settings.scanning_enabled)
-                    .label(fl!("access-enable-scanning"))
-                    .on_toggle(|value| Message::SettingBool("scanningEnabled", value)),
-                checkbox(self.settings.scan_phrase_grid_enabled)
-                    .label(fl!("access-scan-grid"))
-                    .on_toggle(|value| Message::SettingBool("scanPhraseGridEnabled", value)),
-                checkbox(self.settings.scan_category_items_enabled)
-                    .label(fl!("access-scan-categories"))
-                    .on_toggle(|value| Message::SettingBool("scanCategoryItemsEnabled", value)),
+                self.gaze_checkbox(
+                    self.settings.scanning_enabled,
+                    fl!("access-enable-scanning"),
+                    |value| Message::SettingBool("scanningEnabled", value)
+                ),
+                self.gaze_checkbox(
+                    self.settings.scan_phrase_grid_enabled,
+                    fl!("access-scan-grid"),
+                    |value| Message::SettingBool("scanPhraseGridEnabled", value)
+                ),
+                self.gaze_checkbox(
+                    self.settings.scan_category_items_enabled,
+                    fl!("access-scan-categories"),
+                    |value| Message::SettingBool("scanCategoryItemsEnabled", value)
+                ),
                 row![
                     text(format!(
                         "Automatic advance: {:.1} seconds",
                         self.settings.scan_auto_advance_seconds
                     ))
                     .width(Fill),
-                    slider(
+                    self.gaze_f32_slider(
                         0.2..=5.0,
                         self.settings.scan_auto_advance_seconds,
+                        0.1,
+                        cosmic::iced::Length::Fixed(240.0),
                         |value| Message::SettingFloat("scanAutoAdvanceSeconds", value)
                     )
-                    .step(0.1_f32)
-                    .width(240)
                 ]
                 .spacing(10),
                 text(fl!("access-input-help")),
@@ -5626,7 +6083,7 @@ impl Wingmate {
             column![
                 settings_row(
                     "Startup mode",
-                    pick_list(
+                    self.gaze_pick_list(
                         vec!["Keyboard".to_string(), "Screens".to_string()],
                         Some(self.settings.startup_mode.clone()),
                         Message::StartupModeChanged
@@ -5635,7 +6092,7 @@ impl Wingmate {
                 ),
                 settings_row(
                     "Startup screen set",
-                    pick_list(
+                    self.gaze_pick_list(
                         self.board_sets
                             .iter()
                             .map(|set| set.name.clone())
@@ -5670,23 +6127,25 @@ impl Wingmate {
     fn privacy_settings_view(&self) -> Element<'_, Message> {
         scrollable(
             column![
-                checkbox(self.settings.history_visible)
-                    .label(fl!("privacy-show-history"))
-                    .on_toggle(|v| Message::SettingBool("historyVisible", v)),
+                self.gaze_checkbox(
+                    self.settings.history_visible,
+                    fl!("privacy-show-history"),
+                    |value| Message::SettingBool("historyVisible", value)
+                ),
                 text(fl!("privacy-analytics-help")),
                 Space::new().height(6),
                 row![
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "document-save-symbolic",
                         "Export speech history…",
                         Message::ExportHistory
                     ),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "document-open-symbolic",
                         "Import speech history…",
                         Message::ImportHistory
                     ),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "edit-delete-symbolic",
                         "Clear speech history",
                         Message::ClearHistory
@@ -5697,12 +6156,12 @@ impl Wingmate {
                 Space::new().height(6),
                 text(fl!("privacy-backup-title")).size(16),
                 row![
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "document-save-symbolic",
                         "Export backup…",
                         Message::ExportBackup
                     ),
-                    labeled_icon_button(
+                    self.gaze_labeled_icon_button(
                         "document-open-symbolic",
                         "Import backup…",
                         Message::ImportBackup
@@ -5729,21 +6188,26 @@ impl Wingmate {
 
         scrollable(
             column![
-                checkbox(self.settings.partner_window_enabled)
-                    .label(fl!("partner-mirror"))
-                    .on_toggle(Message::PartnerEnabled),
+                self.gaze_checkbox(
+                    self.settings.partner_window_enabled,
+                    fl!("partner-mirror"),
+                    Message::PartnerEnabled
+                ),
                 settings_row(
                     "Font size",
-                    slider(
+                    self.gaze_i32_slider(
                         16..=34,
                         self.settings.partner_window_font_size,
+                        1,
+                        Fill,
                         Message::PartnerFontChanged
-                    )
-                    .into(),
+                    ),
                 ),
-                checkbox(self.settings.partner_window_idle_enabled)
-                    .label(fl!("partner-idle-face"))
-                    .on_toggle(Message::PartnerIdleChanged),
+                self.gaze_checkbox(
+                    self.settings.partner_window_idle_enabled,
+                    fl!("partner-idle-face"),
+                    Message::PartnerIdleChanged
+                ),
                 Space::new().height(6),
                 text(format!(
                     "Device: {} · Display: {}",
@@ -5931,14 +6395,16 @@ struct Api {
     base: String,
     client: Client,
     token: String,
+    backend_start_error: Option<String>,
 }
 
 impl Api {
-    fn new() -> Self {
+    fn new(backend_start_error: Option<String>) -> Self {
         Self {
             base: env::var("WINGMATE_API_URL").unwrap_or_else(|_| DEFAULT_API_URL.into()),
             client: Client::new(),
             token: current_bridge_token(),
+            backend_start_error,
         }
     }
 
@@ -6867,7 +7333,10 @@ impl Api {
     ) -> Result<reqwest::Response, String> {
         let url = format!("{}{}", self.base, path);
         let mut last_error = String::new();
-        for attempt in 0..8 {
+        // A cold JVM start on mobile-class hardware can take several seconds.
+        // Keep retrying the loopback bridge without weakening its network scope.
+        const STARTUP_ATTEMPTS: usize = 20;
+        for attempt in 0..STARTUP_ATTEMPTS {
             let mut request = self
                 .client
                 .request(method.clone(), &url)
@@ -6891,11 +7360,13 @@ impl Api {
                 }
                 Err(error) => last_error = format!("Cannot reach Wingmate service: {error}"),
             }
-            if attempt < 7 {
-                tokio::time::sleep(Duration::from_millis(300)).await;
+            if attempt + 1 < STARTUP_ATTEMPTS {
+                tokio::time::sleep(Duration::from_millis(500)).await;
             }
         }
-        Err(last_error)
+        Err(self.backend_start_error.as_ref().map_or(last_error.clone(), |reason| {
+            format!("{last_error}. Backend startup failed: {reason}")
+        }))
     }
 }
 
@@ -7076,11 +7547,23 @@ fn find_fat_jar() -> PathBuf {
     if let Ok(path) = env::var("WINGMATE_LINUXAPP_JAR") {
         return PathBuf::from(path);
     }
-    let candidates = [
+    let mut candidates = Vec::new();
+    if let Ok(executable) = env::current_exe() {
+        if let Some(directory) = executable.parent() {
+            // Support a self-contained directory and conventional /usr installs.
+            candidates.push(directory.join("linuxApp-all.jar"));
+            candidates.push(directory.join("../lib/wingmate/linuxApp-all.jar"));
+            candidates.push(directory.join("../share/wingmate/linuxApp-all.jar"));
+            // `target/{debug,release}/wingmate` launched outside the repository.
+            candidates.push(directory.join("../../build/libs/linuxApp-all.jar"));
+        }
+    }
+    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("build/libs/linuxApp-all.jar"));
+    candidates.extend([
         PathBuf::from("build/libs/linuxApp-all.jar"),
         PathBuf::from("linuxApp/build/libs/linuxApp-all.jar"),
         PathBuf::from("../linuxApp/build/libs/linuxApp-all.jar"),
-    ];
+    ]);
     candidates
         .into_iter()
         .find(|p| p.exists())
@@ -7165,17 +7648,25 @@ fn bridge_already_running() -> bool {
     .is_ok()
 }
 
-fn start_bridge_server() -> Option<Child> {
+fn start_bridge_server() -> (Option<Child>, Option<String>) {
     if env::var_os("WINGMATE_API_URL").is_some() {
-        return None;
+        return (None, None);
     }
     if bridge_already_running() {
         eprintln!(
             "Wingmate backend already running on {DEFAULT_API_URL}; reusing existing backend"
         );
-        return None;
+        return (None, None);
     }
     let jar = find_fat_jar();
+    if !jar.is_file() {
+        let error = format!(
+            "Kotlin bridge JAR was not found at {}. Build :linuxApp:fatJar or set WINGMATE_LINUXAPP_JAR",
+            jar.display()
+        );
+        eprintln!("Wingmate backend could not start: {error}");
+        return (None, Some(error));
+    }
     match Command::new("java")
         .arg("-jar")
         .arg(&jar)
@@ -7183,13 +7674,11 @@ fn start_bridge_server() -> Option<Child> {
         .env("WINGMATE_BRIDGE_TOKEN", current_bridge_token())
         .spawn()
     {
-        Ok(child) => Some(child),
+        Ok(child) => (Some(child), None),
         Err(error) => {
-            eprintln!(
-                "Wingmate backend could not start from {}: {error}",
-                jar.display()
-            );
-            None
+            let error = format!("could not run Java for {}: {error}", jar.display());
+            eprintln!("Wingmate backend could not start: {error}");
+            (None, Some(error))
         }
     }
 }
@@ -7216,6 +7705,17 @@ mod tests {
     #[test]
     fn bridge_token_header_matches_the_kotlin_bridge_contract() {
         assert_eq!(TOKEN_HEADER, "x-wingmate-token");
+    }
+
+    #[test]
+    fn gaze_targets_are_stable_per_action_and_distinguish_controls() {
+        let keyboard = GazeTarget::new(Message::Navigate(Page::Communicate));
+        let keyboard_again = GazeTarget::new(Message::Navigate(Page::Communicate));
+        let screens = GazeTarget::new(Message::Navigate(Page::Screens));
+
+        assert_eq!(keyboard.id, keyboard_again.id);
+        assert_ne!(keyboard.id, screens.id);
+        assert!(keyboard.controller_id().starts_with("gaze:"));
     }
 
     #[test]

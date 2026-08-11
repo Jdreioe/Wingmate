@@ -52,17 +52,20 @@ Wingmate must pin a known-compatible protocol layout, validate every frame's
 length and required fields, reconnect safely, and fail closed when the stream is
 unknown. Gaze samples stay in memory and their coordinates are never logged.
 
-Direct display-to-widget mapping is initially supported in fullscreen
-communication mode. Wayland does not reliably expose an ordinary window's
-global position, so windowed native gaze requires a different coordinate source
-or falls back to OS pointer access.
+Direct display-to-widget mapping is supported across the fullscreen Linux app,
+including navigation, communication and board buttons, editing actions,
+checkboxes, lists, sliders, and text-field focus. A gaze dwell advances lists
+and sliders by one value; text entry continues through the focused field's
+on-screen or physical keyboard. Wayland does not reliably expose an ordinary
+window's global position, so windowed native gaze requires a different
+coordinate source or falls back to OS pointer access.
 
 ## Roadmap
 
 | Phase | Issue | Outcome |
 | --- | --- | --- |
 | **P0 — shipped** | [#124](https://github.com/jdreioe/Wingmate/issues/124) | Pointer dwell, select key, Rest mode, pointer emphasis, and setup documentation |
-| **P1 — next** | [#129](https://github.com/jdreioe/Wingmate/issues/129) | TD-I13/`tobiifreed` Linux vertical slice: connection, fullscreen hit-testing, existing dwell, and safe recovery |
+| **P1 — implemented** | [#129](https://github.com/jdreioe/Wingmate/issues/129) | TD-I13/`tobiifreed` Linux vertical slice: connection, fullscreen whole-app hit-testing, existing dwell, and safe recovery |
 | **P2** | [#158](https://github.com/jdreioe/Wingmate/issues/158) | Gaze-quality engine: hysteresis, target magnetism, gaze-loss behavior, calibration validation, and diagnostics |
 | **P3** | [#126](https://github.com/jdreioe/Wingmate/issues/126) | Stable provider boundary and additional external gaze sources where real hardware justifies them |
 | **P4** | [#125](https://github.com/jdreioe/Wingmate/issues/125) | Head tracking as a separate provider, including pointer and joystick modes |

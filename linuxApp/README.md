@@ -54,7 +54,23 @@ For a machine connected to the FTDI/EVE partner display, install the `libftdi1` 
 cargo build --manifest-path linuxApp/Cargo.toml --release --bin wingmate --features partner-window
 ```
 
-When launched from either the repository root or `linuxApp/`, the executable discovers `linuxApp/build/libs/linuxApp-all.jar` automatically. Packagers can set `WINGMATE_LINUXAPP_JAR` to an absolute installed path. To use an already-running bridge, set `WINGMATE_API_URL`.
+The executable discovers `linuxApp/build/libs/linuxApp-all.jar` from development
+builds even when launched by a desktop shell with a different working directory.
+Installed builds may place the JAR beside the executable or at
+`/usr/lib/wingmate/linuxApp-all.jar` or `/usr/share/wingmate/linuxApp-all.jar`.
+Packagers can override discovery with an absolute `WINGMATE_LINUXAPP_JAR` path.
+To use an already-running bridge, set `WINGMATE_API_URL`.
+
+For a manual system install, keep the native executable and Kotlin bridge
+together as an install unit:
+
+```bash
+sudo install -Dm755 linuxApp/target/release/wingmate /usr/local/bin/wingmate-kde
+sudo install -Dm644 linuxApp/build/libs/linuxApp-all.jar \
+  /usr/local/share/wingmate/linuxApp-all.jar
+sudo install -Dm644 linuxApp/com.hojmoseit.wingmate.desktop \
+  /usr/local/share/applications/com.hojmoseit.wingmate.desktop
+```
 
 The desktop entry uses the Android Wingmate launcher artwork. Install
 `icons/hicolor/192x192/apps/com.hojmoseit.wingmate.png` into the matching
