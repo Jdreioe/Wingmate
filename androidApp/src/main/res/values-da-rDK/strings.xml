@@ -175,6 +175,10 @@
     <string name="board_dialog_template_calculator">Lommeregner</string>
     <string name="calculator_default_name">Lommeregner</string>
     <string name="board_dialog_template_keyboard">Tastatur</string>
+    <string name="board_dialog_quick_core_downloading">Downloader og klargør Quick Core…</string>
+    <string name="board_native_keyboard_title">Tastatur</string>
+    <string name="board_native_keyboard_hint">Skriv et ord eller en sætning</string>
+    <string name="board_native_keyboard_return">Tilbage til tavlen</string>
     <string name="keyboard_default_name">Tastatur</string>
     <string name="board_dialog_keyboard_preset">Layout</string>
     <string name="board_dialog_keyboard_preset_qwerty">QWERTY</string>

@@ -25,9 +25,6 @@ class ObfValidator {
             issues += ObfValidationIssue("root", "Root board '$rootBoardId' does not exist")
         }
 
-        val globalButtonIds = mutableSetOf<String>()
-        val globalImageIds = mutableSetOf<String>()
-        val globalSoundIds = mutableSetOf<String>()
         boards.forEach { parsed ->
             val board = parsed.board
             val prefix = "board[${board.id}]"
@@ -35,9 +32,9 @@ class ObfValidator {
             if (!isSupportedFormat(board.format)) {
                 issues += ObfValidationIssue("$prefix.format", "Unsupported format '${board.format}'")
             }
-            reportDuplicates(board.buttons.map { it.id }, globalButtonIds, "$prefix.buttons", issues)
-            reportDuplicates(board.images.map { it.id }, globalImageIds, "$prefix.images", issues)
-            reportDuplicates(board.sounds.map { it.id }, globalSoundIds, "$prefix.sounds", issues)
+            reportDuplicates(board.buttons.map { it.id }, "$prefix.buttons", issues)
+            reportDuplicates(board.images.map { it.id }, "$prefix.images", issues)
+            reportDuplicates(board.sounds.map { it.id }, "$prefix.sounds", issues)
 
             val buttonIds = board.buttons.map { it.id }.toSet()
             val imageIds = board.images.map { it.id }.toSet()
@@ -51,7 +48,10 @@ class ObfValidator {
                     issues += ObfValidationIssue("$prefix.button[${button.id}].sound_id", "Referenced sound does not exist")
                 }
                 val target = button.loadBoard?.id
-                if (target != null && target !in boardIds) {
+                val hasExternalTarget = button.loadBoard?.let {
+                    !it.url.isNullOrBlank() || !it.dataUrl.isNullOrBlank()
+                } == true
+                if (target != null && target !in boardIds && !hasExternalTarget) {
                     issues += ObfValidationIssue("$prefix.button[${button.id}].load_board.id", "Linked board '$target' does not exist")
                 }
                 val localPath = button.loadBoard?.path
@@ -123,13 +123,13 @@ class ObfValidator {
 
     private fun reportDuplicates(
         ids: List<String>,
-        global: MutableSet<String>,
         field: String,
         issues: MutableList<ObfValidationIssue>
     ) {
+        val local = mutableSetOf<String>()
         ids.forEach { id ->
             if (id.isBlank()) issues += ObfValidationIssue("$field.id", "ID is required")
-            if (!global.add(id)) issues += ObfValidationIssue("$field[$id].id", "Duplicate package-wide ID")
+            if (!local.add(id)) issues += ObfValidationIssue("$field[$id].id", "Duplicate board-local ID")
         }
     }
 }

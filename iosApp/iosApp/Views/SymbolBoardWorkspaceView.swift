@@ -41,8 +41,24 @@ private enum BoardSetCreationKind: String, CaseIterable, Identifiable {
     case blank
     case qwerty
     case alphabetical
+    case quickCore24 = "quick-core-24"
+    case quickCore40 = "quick-core-40"
+    case quickCore60 = "quick-core-60"
+    case quickCore84 = "quick-core-84"
+    case quickCore112 = "quick-core-112"
 
     var id: String { rawValue }
+
+    var quickCoreTitle: String? {
+        switch self {
+        case .quickCore24: NSLocalizedString("boardset.create_quick_core_24", comment: "")
+        case .quickCore40: NSLocalizedString("boardset.create_quick_core_40", comment: "")
+        case .quickCore60: NSLocalizedString("boardset.create_quick_core_60", comment: "")
+        case .quickCore84: NSLocalizedString("boardset.create_quick_core_84", comment: "")
+        case .quickCore112: NSLocalizedString("boardset.create_quick_core_112", comment: "")
+        default: nil
+        }
+    }
 }
 
 private enum BoardKeyAction: String, CaseIterable, Identifiable {
@@ -158,6 +174,8 @@ struct SymbolBoardWorkspaceView: View {
     @State private var editingSymbolError: String? = nil
     @State private var shouldClearEditingSymbol: Bool = false
     @State private var boardSentenceTokens: [SentencePhraseToken] = []
+    @State private var showNativeKeyboardSheet = false
+    @State private var nativeKeyboardDraft = ""
     @State private var activeSentenceAnimation: ActiveSentenceAnimation? = nil
     @State private var showHiddenButtons = false
     @State private var showEditingAccessSheet = false
@@ -199,6 +217,33 @@ struct SymbolBoardWorkspaceView: View {
         }
         .sheet(isPresented: $showEditCellSheet) {
             editCellSheet
+        }
+        .sheet(isPresented: $showNativeKeyboardSheet) {
+            NavigationStack {
+                Form {
+                    TextField("boardset.native_keyboard.hint", text: $nativeKeyboardDraft, axis: .vertical)
+                        .lineLimit(3...8)
+                }
+                .navigationTitle(Text("boardset.native_keyboard.title"))
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("common.cancel") { showNativeKeyboardSheet = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("boardset.native_keyboard.return") {
+                            boardSentenceTokens = nativeKeyboardDraft.isEmpty ? [] : [
+                                SentencePhraseToken(
+                                    phraseId: "native-keyboard",
+                                    text: nativeKeyboardDraft,
+                                    title: nativeKeyboardDraft,
+                                    imageUrl: nil
+                                )
+                            ]
+                            showNativeKeyboardSheet = false
+                        }
+                    }
+                }
+            }
         }
         .sheet(item: $managementSheet) { sheet in
             boardManagementSheet(sheet)
@@ -1017,6 +1062,11 @@ struct SymbolBoardWorkspaceView: View {
                         Text("boardset.create_blank").tag(BoardSetCreationKind.blank)
                         Text("boardset.create_keyboard_qwerty").tag(BoardSetCreationKind.qwerty)
                         Text("boardset.create_keyboard_alphabetical").tag(BoardSetCreationKind.alphabetical)
+                        Text("boardset.create_quick_core_24").tag(BoardSetCreationKind.quickCore24)
+                        Text("boardset.create_quick_core_40").tag(BoardSetCreationKind.quickCore40)
+                        Text("boardset.create_quick_core_60").tag(BoardSetCreationKind.quickCore60)
+                        Text("boardset.create_quick_core_84").tag(BoardSetCreationKind.quickCore84)
+                        Text("boardset.create_quick_core_112").tag(BoardSetCreationKind.quickCore112)
                     }
                 }
                 if createBoardsetKind == .blank {
@@ -1026,6 +1076,15 @@ struct SymbolBoardWorkspaceView: View {
                         }
                         Stepper(value: $createBoardsetColumns, in: 1...12) {
                             Text(String(format: NSLocalizedString("boardset.columns", comment: ""), createBoardsetColumns))
+                        }
+                    }
+                }
+                if model.isImportingQuickCore {
+                    Section("boardset.quick_core.downloading") {
+                        if let progress = model.quickCoreDownloadProgress {
+                            ProgressView(value: progress)
+                        } else {
+                            ProgressView()
                         }
                     }
                 }
@@ -1040,7 +1099,12 @@ struct SymbolBoardWorkspaceView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("common.save") {
                         Task {
-                            if createBoardsetKind == .blank {
+                            if let quickCoreTitle = createBoardsetKind.quickCoreTitle {
+                                await model.importQuickCorePreset(
+                                    name: createBoardsetName.isEmpty ? quickCoreTitle : createBoardsetName,
+                                    slug: createBoardsetKind.rawValue
+                                )
+                            } else if createBoardsetKind == .blank {
                                 await model.createBoardSet(name: createBoardsetName, rows: createBoardsetRows, columns: createBoardsetColumns)
                             } else {
                                 await model.createKeyboardBoardSet(name: createBoardsetName, preset: createBoardsetKind.rawValue)
@@ -1052,6 +1116,7 @@ struct SymbolBoardWorkspaceView: View {
                             showCreateBoardsetSheet = false
                         }
                     }
+                    .disabled(model.isImportingQuickCore)
                 }
             }
         }
@@ -1402,6 +1467,9 @@ struct SymbolBoardWorkspaceView: View {
                 if let rootId = model.selectedBoardSet?.rootBoardId {
                     Task { await model.selectBoard(id: rootId) }
                 }
+            case ":native-keyboard":
+                nativeKeyboardDraft = boardSentenceText
+                showNativeKeyboardSheet = true
             case ":prediction", ":predictions":
                 if let suggestion = model.boardPrediction(for: cell.buttonId) {
                     isContentActivation = true
@@ -1464,7 +1532,10 @@ struct SymbolBoardWorkspaceView: View {
     private func backspaceBoardSentence() {
         guard !boardSentenceTokens.isEmpty else { return }
         let texts = boardSentenceTokens.map { $0.text }
-        let trimmed = model.boardBackspaceSentence(texts: texts)
+        let trimmed = model.boardBackspaceSentence(
+            texts: texts,
+            spellingMode: model.selectedBoardUsesSpellingMode
+        )
         if trimmed.count < texts.count {
             boardSentenceTokens.removeLast()
         } else if let lastText = trimmed.last {

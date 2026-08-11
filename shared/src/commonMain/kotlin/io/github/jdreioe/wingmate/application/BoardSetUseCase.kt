@@ -66,11 +66,11 @@ class BoardSetUseCase(
         val removedBoardIds = previousSet?.boardIds.orEmpty().filterNot { it in newBoardIds }
 
         try {
-            canonicalGraph.boards.forEach { boardRepository.saveBoard(it) }
+            boardRepository.saveBoards(canonicalGraph.boards)
             boardSetRepository.saveBoardSet(updatedSet)
             removedBoardIds.forEach { boardRepository.deleteBoard(it) }
         } catch (error: Throwable) {
-            previousBoards.forEach { boardRepository.saveBoard(it) }
+            boardRepository.saveBoards(previousBoards)
             previousSet?.let { boardSetRepository.saveBoardSet(it) }
             newBoardIds.filterNot { id -> previousBoards.any { it.id == id } }
                 .forEach { boardRepository.deleteBoard(it) }

@@ -4,13 +4,51 @@ set -euo pipefail
 # Xcode Cloud post-clone script for KMP (Kotlin Multiplatform)
 # Builds shared iOS framework before Xcode build
 
-# CI_WORKSPACE is repo root in Xcode Cloud
-if [ -z "${CI_WORKSPACE:-}" ]; then
-  echo "warning: CI_WORKSPACE not set — assuming repo root is parent of ci_scripts"
+# CI_WORKSPACE_PATH is the repo root provided by Xcode Cloud. Keep the older
+# CI_WORKSPACE fallback for existing workflow configurations.
+CI_WORKSPACE="${CI_WORKSPACE_PATH:-${CI_WORKSPACE:-}}"
+if [ -z "$CI_WORKSPACE" ]; then
+  echo "warning: Xcode Cloud workspace path not set — assuming repo root is parent of ci_scripts"
   CI_WORKSPACE="$(cd "$(dirname "$0")/.." && pwd)"
 fi
 
 cd "$CI_WORKSPACE"
+
+# === Tag-driven release version ===
+# Xcode Cloud supplies CI_TAG when a Git Tag Change start condition triggered
+# the build. The workflow should use prod/* or staging/* as its tag pattern.
+if [ "${CI_XCODE_CLOUD:-}" = "TRUE" ] && [ "${REQUIRE_RELEASE_TAG:-}" = "TRUE" ]; then
+  if [ -z "${CI_TAG:-}" ]; then
+    echo "error: Release builds must be started by a prod/1.x.y or staging/1.x.y tag"
+    exit 1
+  fi
+
+  RELEASE_CHANNEL="${CI_TAG%%/*}"
+  RELEASE_VERSION="${CI_TAG#*/}"
+
+  case "$RELEASE_CHANNEL" in
+    prod|staging) ;;
+    *)
+      echo "error: Unknown release channel: $RELEASE_CHANNEL"
+      exit 1
+      ;;
+  esac
+
+  if ! [[ "$RELEASE_VERSION" =~ ^1\.[0-9]+\.[0-9]+$ ]]; then
+    echo "error: Release tags must be prod/1.x.y or staging/1.x.y"
+    exit 1
+  fi
+
+  if ! [[ "${CI_BUILD_NUMBER:-}" =~ ^[0-9]+$ ]]; then
+    echo "error: Xcode Cloud did not provide a numeric CI_BUILD_NUMBER"
+    exit 1
+  fi
+
+  XCCONFIG="iosApp/Configuration/Config.xcconfig"
+  perl -pi -e "s/^MARKETING_VERSION=.*/MARKETING_VERSION=$RELEASE_VERSION/" "$XCCONFIG"
+  perl -pi -e "s/^CURRENT_PROJECT_VERSION=.*/CURRENT_PROJECT_VERSION=$CI_BUILD_NUMBER/" "$XCCONFIG"
+  echo "Configured $RELEASE_CHANNEL release version $RELEASE_VERSION (build $CI_BUILD_NUMBER)"
+fi
 
 # === JDK Setup ===
 # Xcode Cloud requires JDK 21 for Kotlin Multiplatform (jvmToolchain 21)
@@ -33,7 +71,8 @@ install_jdk() {
       fi
     done
     if /usr/libexec/java_home -v 21 &>/dev/null; then
-      export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+      JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+      export JAVA_HOME
       return 0
     fi
   fi
@@ -64,7 +103,8 @@ install_jdk() {
 unset JAVA_HOME
 
 if /usr/libexec/java_home -v 21 &>/dev/null; then
-  export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+  JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+  export JAVA_HOME
 else
   install_jdk
 fi

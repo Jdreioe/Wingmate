@@ -22,6 +22,12 @@ class AndroidBoardRepository(context: Context) : BoardRepository {
         boards.filterNot { it.id == board.id } + board
     }
 
+    override suspend fun saveBoards(boards: List<ObfBoard>) = updateBoards { existing ->
+        if (boards.isEmpty()) return@updateBoards existing
+        val savedIds = boards.map { it.id }.toSet()
+        existing.filterNot { it.id in savedIds } + boards
+    }
+
     override suspend fun listBoards(): List<ObfBoard> = readBoards()
 
     override suspend fun deleteBoard(id: String) = updateBoards { boards ->

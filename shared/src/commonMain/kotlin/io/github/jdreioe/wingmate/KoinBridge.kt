@@ -57,6 +57,8 @@ import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
+import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
+import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.time.Clock
 import org.koin.core.component.KoinComponent
@@ -365,6 +367,15 @@ class KoinBridge : KoinComponent {
             name,
             if (preset.equals("alphabetical", ignoreCase = true)) KeyboardPreset.Alphabetical else KeyboardPreset.Qwerty
         )
+    suspend fun importQuickCorePreset(slug: String, name: String): ObfBoardSet? {
+        val imported = get<QuickCorePresetService>().importPreset(slug) as? BoardImportResult.Success
+            ?: return null
+        return get<BoardSetUseCase>().renameBoardSet(imported.boardSet.id, name.trim()) ?: imported.boardSet
+    }
+    fun quickCoreProgress(): IosQuickCoreProgress {
+        val progress = get<QuickCorePresetService>().progress.value
+        return IosQuickCoreProgress(progress.stage, progress.downloadedBytes, progress.totalBytes, progress.fraction)
+    }
     suspend fun createBoard(boardSetId: String, name: String, rows: Int, columns: Int): ObfBoard? =
         get<BoardSetUseCase>().createBoard(boardSetId, name, rows, columns)
     suspend fun createKeyboardBoard(
@@ -557,8 +568,8 @@ class KoinBridge : KoinComponent {
         return IosBoardReturnResult(boardId = boardId, boardStack = stack)
     }
 
-    fun boardBackspaceSentence(texts: List<String>): List<String> =
-        backspaceSentenceSelection(texts)
+    fun boardBackspaceSentence(texts: List<String>, spellingMode: Boolean): List<String> =
+        backspaceSentenceSelection(texts, spellingMode)
 
     fun boardButtonIsVisible(hidden: Boolean, isEditMode: Boolean, showHiddenButtons: Boolean): Boolean =
         !hidden || isEditMode || showHiddenButtons
@@ -900,4 +911,11 @@ data class IosResolvedBoardSettings(
     val showMessageBar: Boolean,
     val activationBehavior: String,
     val returnBehavior: String
+)
+
+data class IosQuickCoreProgress(
+    val stage: String,
+    val downloadedBytes: Long,
+    val totalBytes: Long?,
+    val fraction: Double?,
 )

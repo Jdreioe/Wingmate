@@ -7,6 +7,16 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 interface BoardRepository {
     suspend fun getBoard(id: String): ObfBoard?
     suspend fun saveBoard(board: ObfBoard)
+
+    /**
+     * Persists many boards as a single batch. Repositories with bulk write
+     * costs (e.g. full-store serialization) should override this to avoid
+     * re-writing the whole store once per board on imports.
+     */
+    suspend fun saveBoards(boards: List<ObfBoard>) {
+        boards.forEach { saveBoard(it) }
+    }
+
     suspend fun listBoards(): List<ObfBoard>
     suspend fun deleteBoard(id: String)
 }

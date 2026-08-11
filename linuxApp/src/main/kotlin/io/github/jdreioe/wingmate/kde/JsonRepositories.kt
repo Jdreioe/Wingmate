@@ -177,7 +177,7 @@ private class LinuxAzureConfigStore {
         check(read() == null) { "Secure Azure configuration deletion could not be verified" }
     }
 
-    private fun readKWallet(): String? =
+private fun readKWallet(): String? =
         runCatching { withKWallet { wallet, handle -> wallet.readPassword(handle, FOLDER, ENTRY, APP_ID) } }
             .getOrNull()
             ?.trim()
@@ -251,7 +251,7 @@ private class LinuxAzureConfigStore {
         const val APP_ID = "io.github.jdreioe.wingmate"
         const val PURPOSE = "azure-speech"
         const val FOLDER = "Wingmate"
-        const val ENTRY = "azure-speech-config-v2"
+const val ENTRY = "azure-speech-config-v2"
         const val LEGACY_ENTRY = "azure-speech-config"
         val KWALLET_ENDPOINTS = listOf(
             "org.kde.kwalletd6" to "/modules/kwalletd6",

@@ -53,11 +53,15 @@ fun applyBoardReturnBehavior(
 }
 
 /**
- * Remove the last character from the composed sentence: drops the trailing token
- * when it is a single character, otherwise trims the last token's text.
+ * Undo the last AAC selection. Word-based boards remove the complete trailing
+ * token, while spelling boards remove one character from their composed text.
  */
-fun backspaceSentenceSelection(texts: List<String>): List<String> {
+fun backspaceSentenceSelection(
+    texts: List<String>,
+    spellingMode: Boolean = false
+): List<String> {
     if (texts.isEmpty()) return texts
+    if (!spellingMode) return texts.dropLast(1)
     val last = texts.last()
     if (last.length <= 1) return texts.dropLast(1)
     return texts.dropLast(1) + last.dropLast(1)
@@ -85,16 +89,34 @@ fun buildResolvedSentence(
 
 /**
  * Join composed sentence tokens, honoring spelling mode (no separators) versus
- * normal mode (spaces, omitting separators between single characters or around
- * tokens that already carry whitespace). Shared by every client's sentence bar.
+ * normal mode. Word screens auto-insert a space after every word. The separator
+ * is only omitted when a token already carries its own whitespace at the join
+ * boundary, i.e. the board specified the spacing itself. Spelling boards (the
+ * keyboard preset) opt out entirely so characters join without spaces. Shared
+ * by every client's sentence bar.
  */
 fun joinSentenceText(tokens: List<String>, spellingMode: Boolean): String =
     if (spellingMode) {
         tokens.joinToString("")
     } else {
-        val separator = if (tokens.any { it.any(Char::isWhitespace) } || tokens.all { it.length <= 1 }) "" else " "
-        tokens.joinToString(separator)
+        buildString {
+            tokens.forEachIndexed { index, token ->
+                if (index > 0 &&
+                    !tokens[index - 1].hasTrailingWhitespace() &&
+                    !token.hasLeadingWhitespace()
+                ) {
+                    append(' ')
+                }
+                append(token)
+            }
+        }
     }
+
+/** Whether the token already ends in whitespace (it carries its own trailing space). */
+private fun String.hasTrailingWhitespace(): Boolean = isNotEmpty() && this[lastIndex].isWhitespace()
+
+/** Whether the token already begins in whitespace (it carries its own leading space). */
+private fun String.hasLeadingWhitespace(): Boolean = isNotEmpty() && this[0].isWhitespace()
 
 /**
  * A resolved speech fragment for one board button: the localized text to speak,

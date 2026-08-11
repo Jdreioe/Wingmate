@@ -17,6 +17,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -76,12 +77,25 @@ private fun ButtonShapePreview(shape: ObfButtonShape, selected: Boolean) {
             .border(1.dp, outline, resolvedShape)
     )
 }
-internal enum class BoardSetTemplate { Blank, Calculator, Keyboard }
+internal enum class BoardSetTemplate(val quickCoreSlug: String? = null) {
+    Blank,
+    Calculator,
+    Keyboard,
+    QuickCore24("quick-core-24"),
+    QuickCore40("quick-core-40"),
+    QuickCore60("quick-core-60"),
+    QuickCore84("quick-core-84"),
+    QuickCore112("quick-core-112"),
+}
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CreateBoardSetDialog(
     onDismiss: () -> Unit,
-    onCreate: (name: String, rows: Int, columns: Int, template: BoardSetTemplate, keyboardPreset: KeyboardPreset) -> Unit
+    onCreate: (name: String, rows: Int, columns: Int, template: BoardSetTemplate, keyboardPreset: KeyboardPreset) -> Unit,
+    quickCoreProgress: Float? = null,
+    quickCoreStage: String? = null,
+    isQuickCoreImporting: Boolean = false,
 ) {
     var name by remember { mutableStateOf("") }
     var rowsText by remember { mutableStateOf("4") }
@@ -103,7 +117,7 @@ internal fun CreateBoardSetDialog(
                     singleLine = true
                 )
                 Text(stringResource(R.string.board_dialog_template), style = MaterialTheme.typography.labelLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = template == BoardSetTemplate.Blank,
                         onClick = { template = BoardSetTemplate.Blank },
@@ -125,6 +139,22 @@ internal fun CreateBoardSetDialog(
                         },
                         label = { Text(stringResource(R.string.board_dialog_template_keyboard)) }
                     )
+                    listOf(
+                        BoardSetTemplate.QuickCore24 to "Quick Core 24",
+                        BoardSetTemplate.QuickCore40 to "Quick Core 40",
+                        BoardSetTemplate.QuickCore60 to "Quick Core 60",
+                        BoardSetTemplate.QuickCore84 to "Quick Core 84",
+                        BoardSetTemplate.QuickCore112 to "Quick Core 112",
+                    ).forEach { (choice, label) ->
+                        FilterChip(
+                            selected = template == choice,
+                            onClick = {
+                                template = choice
+                                if (name.isBlank()) name = label
+                            },
+                            label = { Text(label) },
+                        )
+                    }
                 }
                 if (template == BoardSetTemplate.Keyboard) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -159,12 +189,25 @@ internal fun CreateBoardSetDialog(
                         singleLine = true
                     )
                 }
+                if (isQuickCoreImporting) {
+                    Text(stringResource(R.string.board_dialog_quick_core_downloading))
+                    if (quickCoreStage == "importing") {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    } else if (quickCoreProgress != null) {
+                        LinearProgressIndicator(
+                            progress = { quickCoreProgress },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = { onCreate(name, rowsText.toIntOrNull() ?: 4, columnsText.toIntOrNull() ?: 8, template, keyboardPreset) },
-                enabled = name.isNotBlank()
+                enabled = name.isNotBlank() && !isQuickCoreImporting
             ) { Text(stringResource(R.string.board_dialog_create)) }
         },
         dismissButton = {

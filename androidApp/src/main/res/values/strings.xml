@@ -175,6 +175,10 @@
     <string name="board_dialog_template_calculator">Calculator</string>
     <string name="calculator_default_name">Calculator</string>
     <string name="board_dialog_template_keyboard">Keyboard</string>
+    <string name="board_dialog_quick_core_downloading">Downloading and preparing Quick Core…</string>
+    <string name="board_native_keyboard_title">Keyboard</string>
+    <string name="board_native_keyboard_hint">Type a word or sentence</string>
+    <string name="board_native_keyboard_return">Return to screen</string>
     <string name="keyboard_default_name">Keyboard</string>
     <string name="board_dialog_keyboard_preset">Layout</string>
     <string name="board_dialog_keyboard_preset_qwerty">QWERTY</string>

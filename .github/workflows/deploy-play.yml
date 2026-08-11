@@ -2,12 +2,22 @@ name: Deploy to Google Play
 
 on:
   push:
-    branches: [staging]
-  workflow_dispatch:
+    tags:
+      - "prod/*"
+      - "staging/*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: google-play-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    name: Deploy ${{ github.ref_name }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -16,11 +26,33 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Set Android version code
-        run: echo "WINGMATE_VERSION_CODE=$((10000 + GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))" >> "$GITHUB_ENV"
+      - name: Configure release from tag
+        id: release
+        shell: bash
+        run: |
+          channel="${GITHUB_REF_NAME%%/*}"
+          version="${GITHUB_REF_NAME#*/}"
 
-      - name: Set Android version name
-        run: echo "WINGMATE_VERSION_NAME=0.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          if [[ ! "$version" =~ ^1\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tags must be prod/1.x.y or staging/1.x.y"
+            exit 1
+          fi
+
+          case "$channel" in
+            prod) track="production" ;;
+            staging) track="alpha" ;;
+            *)
+              echo "::error::Unknown release channel: $channel"
+              exit 1
+              ;;
+          esac
+
+          version_code=$((10000 + GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          echo "WINGMATE_VERSION_NAME=$version" >> "$GITHUB_ENV"
+          echo "WINGMATE_VERSION_CODE=$version_code" >> "$GITHUB_ENV"
+          echo "PLAY_TRACK=$track" >> "$GITHUB_ENV"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Install Infisical CLI
         run: |
@@ -31,7 +63,7 @@ jobs:
           infisical --version
 
       - name: Publish to Google Play
-        run: infisical run --projectId="$INFISICAL_PROJECT_ID" --env=prod -- ./gradlew publishReleaseBundle --track alpha
+        run: infisical run --projectId="$INFISICAL_PROJECT_ID" --env=prod -- ./gradlew publishReleaseBundle --track "$PLAY_TRACK"
         env:
           INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
           INFISICAL_PROJECT_ID: ad96050f-9132-4f4e-ae16-e46e4c5734fc
@@ -42,5 +74,5 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: app-release
+          name: android-${{ steps.release.outputs.channel }}-${{ steps.release.outputs.version }}
           path: androidApp/build/outputs/bundle/release/app-release.aab

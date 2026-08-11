@@ -21,6 +21,9 @@ interface FilePicker {
     
     /** Opens a bounded, streaming archive reader. The caller must close it. */
     suspend fun openArchive(path: String): ArchiveReader?
+
+    /** Opens an archive already obtained from a trusted in-app source. */
+    suspend fun openArchiveBytes(content: ByteArray): ArchiveReader? = null
 }
 
 data class ArchiveEntry(

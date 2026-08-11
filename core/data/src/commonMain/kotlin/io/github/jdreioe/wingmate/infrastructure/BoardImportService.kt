@@ -71,10 +71,43 @@ class BoardImportService(
                 importSingleObfGraph(filePath, warnings, storedPaths)
             }.canonicalizeBoardLinks()
 
-            graph.boards.forEach { board ->
-                savedBoardIds += board.id
-                boardRepository.saveBoard(board)
+            savedBoardIds += graph.boards.map { it.id }
+            boardRepository.saveBoards(graph.boards)
+            savedSetId = graph.boardSet.id
+            boardSetRepository.saveBoardSet(graph.boardSet)
+            BoardImportResult.Success(graph.boardSet, warnings)
+        } catch (_: CancellationException) {
+            rollback(savedSetId, savedBoardIds, storedPaths)
+            BoardImportResult.Cancelled
+        } catch (error: ImportFailure) {
+            rollback(savedSetId, savedBoardIds, storedPaths)
+            failure(error.code, error.message ?: error.code.name, warnings)
+        } catch (error: ArchiveReadException) {
+            rollback(savedSetId, savedBoardIds, storedPaths)
+            val code = if (error.error == ArchiveReadError.ENTRY_TOO_LARGE) {
+                BoardImportErrorCode.MEDIA_ENTRY_TOO_LARGE
+            } else {
+                BoardImportErrorCode.MALFORMED_ARCHIVE
             }
+            failure(code, error.message ?: code.name, warnings)
+        } catch (error: Throwable) {
+            rollback(savedSetId, savedBoardIds, storedPaths)
+            failure(BoardImportErrorCode.PERSISTENCE_FAILED, error.message ?: "Import could not be saved", warnings)
+        }
+    }
+
+    /** Imports an OBZ downloaded by an in-app preset provider. */
+    suspend fun importBoardSetFromBytesResult(content: ByteArray): BoardImportResult {
+        val warnings = mutableListOf<BoardImportWarning>()
+        val storedPaths = mutableListOf<String>()
+        val savedBoardIds = mutableListOf<String>()
+        var savedSetId: String? = null
+        return try {
+            val archive = filePicker.openArchiveBytes(content)
+                ?: throw ImportFailure(BoardImportErrorCode.FILE_UNREADABLE, "Could not open downloaded board archive")
+            val graph = importObzGraph(archive, warnings, storedPaths).canonicalizeBoardLinks()
+            savedBoardIds += graph.boards.map { it.id }
+            boardRepository.saveBoards(graph.boards)
             savedSetId = graph.boardSet.id
             boardSetRepository.saveBoardSet(graph.boardSet)
             BoardImportResult.Success(graph.boardSet, warnings)
@@ -135,6 +168,14 @@ class BoardImportService(
     ): BoardSetGraph {
         val archive = filePicker.openArchive(filePath)
             ?: throw ImportFailure(BoardImportErrorCode.FILE_UNREADABLE, "Could not open '$filePath'")
+        return importObzGraph(archive, warnings, storedPaths)
+    }
+
+    private suspend fun importObzGraph(
+        archive: ArchiveReader,
+        warnings: MutableList<BoardImportWarning>,
+        storedPaths: MutableList<String>
+    ): BoardSetGraph {
         try {
             val entries = archive.entries()
             validateArchive(entries)
@@ -155,7 +196,7 @@ class BoardImportService(
                     throw ImportFailure(BoardImportErrorCode.MALFORMED_JSON, "Invalid board '$path': ${it.message}")
                 }
                 ParsedObfBoard(path, board)
-            }
+            }.map { parsed -> normalizeDuplicateMedia(parsed, warnings) }
             val rootId = parsedBoards.firstOrNull { it.path == manifest.root }?.board?.id
                 ?: throw ImportFailure(BoardImportErrorCode.INVALID_MANIFEST, "Manifest root is not a board")
             validate(parsedBoards, rootId, manifest, names)
@@ -172,6 +213,33 @@ class BoardImportService(
         } finally {
             archive.close()
         }
+    }
+
+    /**
+     * Some established exporters repeat an image entry when multiple buttons use
+     * the same symbol. OBF button references are ID-based, so retaining the first
+     * occurrence is deterministic and avoids rejecting otherwise valid board sets.
+     */
+    private fun normalizeDuplicateMedia(
+        parsed: ParsedObfBoard,
+        warnings: MutableList<BoardImportWarning>
+    ): ParsedObfBoard {
+        val board = parsed.board
+        val images = board.images.distinctBy { it.id }
+        val sounds = board.sounds.distinctBy { it.id }
+        if (images.size != board.images.size) {
+            warnings += BoardImportWarning(
+                "duplicate_image_id",
+                "Board '${board.id}' contained repeated image IDs; first entries were retained"
+            )
+        }
+        if (sounds.size != board.sounds.size) {
+            warnings += BoardImportWarning(
+                "duplicate_sound_id",
+                "Board '${board.id}' contained repeated sound IDs; first entries were retained"
+            )
+        }
+        return parsed.copy(board = board.copy(images = images, sounds = sounds))
     }
 
     private suspend fun readJsonEntry(archive: ArchiveReader, path: String): ByteArray = try {
@@ -359,7 +427,7 @@ class BoardImportService(
         return sound.copy(path = storedPath, data = null, dataUrl = null, url = null)
     }
 
-    /** Resolves data → path → URL, warning and continuing after each unavailable source. */
+    /** Resolves data → local path → data URL → URL, warning and continuing after each unavailable source. */
     private suspend fun persistResolvedMedia(
         id: String,
         data: String?,
@@ -382,14 +450,10 @@ class BoardImportService(
             }
             warnings += BoardImportWarning("malformed_data", "Media '$id' has malformed inline data")
         }
-        if (!dataUrl.isNullOrBlank()) {
-            runCatching { urlLoader.load(dataUrl) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let {
-                if (destination !in storedPaths) storedPaths += destination
-                storage.saveBytes(destination, it)
-                return true
-            }
-            warnings += BoardImportWarning("unavailable_data_url", "Media '$id' data URL was unavailable")
-        }
+        // Prefer the archive's local copy over remote references: Quick Core and other
+        // exported board sets ship every image as a `path` inside the OBZ alongside a remote
+        // `data_url`, and fetching those one-by-one makes imports needlessly slow and
+        // network-dependent. The remote sources remain the fallback when no local copy exists.
         if (!path.isNullOrBlank()) {
             if (archive != null && path in archiveNames) {
                 try {
@@ -412,6 +476,14 @@ class BoardImportService(
                     return true
                 }
             }
+        }
+        if (!dataUrl.isNullOrBlank()) {
+            runCatching { urlLoader.load(dataUrl) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let {
+                if (destination !in storedPaths) storedPaths += destination
+                storage.saveBytes(destination, it)
+                return true
+            }
+            warnings += BoardImportWarning("unavailable_data_url", "Media '$id' data URL was unavailable")
         }
         if (!url.isNullOrBlank()) {
             runCatching { urlLoader.load(url) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let {

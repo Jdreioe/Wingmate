@@ -26,13 +26,23 @@ class BoardSentenceTest {
     }
 
     @Test
-    fun singleCharacterTokensAreJoinedForSpelling() {
+    fun singleCharacterWordsOnWordScreensAreSpaced() {
         val selected = listOf(
             button(label = "H"),
             button(label = "i")
         )
 
-        assertEquals("Hi", buildResolvedSentence(selected, emptyMap(), false, "en"))
+        assertEquals("H i", buildResolvedSentence(selected, emptyMap(), false, "en"))
+    }
+
+    @Test
+    fun singleCharacterWordsOnSpellingBoardsJoin() {
+        val selected = listOf(
+            button(label = "H"),
+            button(label = "i")
+        )
+
+        assertEquals("Hi", buildResolvedSentence(selected, emptyMap(), true, "en"))
     }
 
     @Test
@@ -105,6 +115,39 @@ class BoardSentenceTest {
         assertEquals("hello world", joinSentenceText(listOf("hello", "world"), false))
         assertEquals("hello", joinSentenceText(listOf("hello"), false))
         assertEquals("", joinSentenceText(emptyList(), false))
+    }
+
+    @Test
+    fun joinSentenceTextAutoSpacesEveryWordIncludingSingleCharacters() {
+        assertEquals("I want to go", joinSentenceText(listOf("I", "want", "to", "go"), false))
+        assertEquals("I a", joinSentenceText(listOf("I", "a"), false))
+    }
+
+    @Test
+    fun joinSentenceTextDoesNotDoubleSpaceTokensThatAlreadyCarryWhitespace() {
+        assertEquals("I want to go", joinSentenceText(listOf("I", "want to", "go"), false))
+        assertEquals("I want to", joinSentenceText(listOf("I", "want ", "to"), false))
+        assertEquals("I want to go", joinSentenceText(listOf("I", " want", "to", "go"), false))
+    }
+
+    @Test
+    fun backspaceUndoesTheLastWordSelectionOnCommunicationBoards() {
+        assertEquals(
+            listOf("I", "need"),
+            backspaceSentenceSelection(listOf("I", "need", "help"))
+        )
+    }
+
+    @Test
+    fun backspaceRemovesOneCharacterOnSpellingBoards() {
+        assertEquals(
+            listOf("hel"),
+            backspaceSentenceSelection(listOf("hell"), spellingMode = true)
+        )
+        assertEquals(
+            emptyList(),
+            backspaceSentenceSelection(listOf("h"), spellingMode = true)
+        )
     }
 
     private fun button(

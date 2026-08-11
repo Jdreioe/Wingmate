@@ -3,6 +3,10 @@ package io.github.jdreioe.wingmate.kde
 import io.github.jdreioe.wingmate.initKoin
 import org.koin.dsl.module
 import io.ktor.http.*
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.utils.io.readAvailable
+import io.ktor.utils.io.core.readBytes
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -54,12 +58,15 @@ import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
+import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
+import io.github.jdreioe.wingmate.infrastructure.QuickCorePreset
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.UserDataManager
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.DictionaryLoader
+import io.github.jdreioe.wingmate.infrastructure.JvmFileStorage
 import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -100,6 +107,9 @@ data class AccessInputResponse(
 )
 
 class KotlinBridge(private val port: Int = 8765) {
+    @Volatile private var presetDownloadStage: String = "idle"
+    @Volatile private var presetDownloadedBytes: Long = 0
+    @Volatile private var presetTotalBytes: Long? = null
     private val scope = CoroutineScope(Dispatchers.Default + kotlinx.coroutines.SupervisorJob())
     private val authToken: String = resolveBridgeToken()
     private val phraseViewModel = PhraseViewModel()
@@ -114,11 +124,13 @@ class KotlinBridge(private val port: Int = 8765) {
     private val predictionService: TextPredictionService by lazy { GlobalContext.get().get() }
     private val saidTextRepository: SaidTextRepository by lazy { GlobalContext.get().get() }
     private val dictionaryLoader: DictionaryLoader by lazy { GlobalContext.get().get() }
+    private val boardFileStorage by lazy { JvmFileStorage(boardMediaDataDirectory()) }
     private val boardSetUseCase: BoardSetUseCase by lazy {
         BoardSetUseCase(
             GlobalContext.get().get<BoardSetRepository>(),
             GlobalContext.get().get<BoardRepository>(),
-            GlobalContext.get().get<FeatureUsageReporter>()
+            GlobalContext.get().get<FeatureUsageReporter>(),
+            fileStorage = boardFileStorage,
         )
     }
     private val boardRepository: BoardRepository by lazy { GlobalContext.get().get() }
@@ -129,7 +141,8 @@ class KotlinBridge(private val port: Int = 8765) {
             GlobalContext.get().get<ObfParser>(),
             GlobalContext.get().get<BoardRepository>(),
             GlobalContext.get().get<BoardSetRepository>(),
-            LinuxFilePicker()
+            LinuxFilePicker(),
+            fileStorage = boardFileStorage,
         )
     }
     private val partnerWindowManager = PartnerWindowManager(settingsManager)
@@ -488,7 +501,6 @@ class KotlinBridge(private val port: Int = 8765) {
                     call.respond(HttpStatusCode.Accepted, speechState)
                 } catch (e: Exception) {
                     println("[SPEECH] /api/speak error (${e::class.simpleName})")
-                    e.printStackTrace()
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
                 }
             }
@@ -496,12 +508,7 @@ class KotlinBridge(private val port: Int = 8765) {
             // Azure Config
             get("/api/azure-config") {
                 val status = configRepository.getSpeechConfigStatus()
-                call.respond(
-                    mapOf(
-                        "endpoint" to status.endpoint,
-                        "credentialConfigured" to status.credentialConfigured
-                    )
-                )
+                call.respond(AzureConfigResponse(status.endpoint, status.credentialConfigured))
             }
             
             post("/api/azure-config") {
@@ -806,19 +813,63 @@ class KotlinBridge(private val port: Int = 8765) {
                 call.respond(boardSetUseCase.listBoardSets())
             }
 
+            get("/api/boardsets/preset-progress") {
+                call.respond(PresetDownloadProgressResponse(presetDownloadStage, presetDownloadedBytes, presetTotalBytes))
+            }
+
             post("/api/boardsets") {
                 val body = json.parseToJsonElement(call.receiveText()).jsonObject
                 val name = body["name"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
                 if (name.isBlank()) return@post call.respond(HttpStatusCode.BadRequest)
                 val template = body["template"]?.jsonPrimitive?.contentOrNull ?: "blank"
-                val created = if (template.equals("calculator", ignoreCase = true)) {
-                    boardSetUseCase.createCalculatorBoardSet(name)
-                } else {
-                    boardSetUseCase.createBoardSet(
-                        name,
-                        body["rows"]?.jsonPrimitive?.intOrNull ?: 4,
-                        body["columns"]?.jsonPrimitive?.intOrNull ?: 4
-                    )
+                val created = quickCorePresetUrl(template)?.let {
+                    presetDownloadStage = "downloading"
+                    presetDownloadedBytes = 0
+                    presetTotalBytes = null
+                    val archive = try {
+                        downloadQuickCorePreset(template) { downloaded, total ->
+                            presetDownloadedBytes = downloaded
+                            presetTotalBytes = total
+                        }
+                    } catch (_: Throwable) {
+                        presetDownloadStage = "failed"
+                        return@post call.respond(
+                            HttpStatusCode.BadGateway,
+                            mapOf("error" to "Could not download the Quick Core preset")
+                        )
+                    }
+                    presetDownloadStage = "importing"
+                    when (val result = boardImportService.importBoardSetFromPathResult(archive.path)) {
+                        is BoardImportResult.Success -> {
+                            presetDownloadStage = "complete"
+                            boardSetUseCase.renameBoardSet(result.boardSet.id, name) ?: result.boardSet
+                        }
+                        is BoardImportResult.Failure -> {
+                            presetDownloadStage = "failed"
+                            return@post call.respond(
+                                HttpStatusCode.UnprocessableEntity,
+                                mapOf(
+                                    "error" to "The Quick Core preset could not be imported (${result.code})",
+                                    "context" to result.context,
+                                )
+                            )
+                        }
+                        BoardImportResult.Cancelled -> {
+                            presetDownloadStage = "failed"
+                            return@post call.respond(
+                                HttpStatusCode.UnprocessableEntity,
+                                mapOf("error" to "The Quick Core preset import was cancelled")
+                            )
+                        }
+                    }
+                } ?: when {
+                    template.equals("calculator", ignoreCase = true) ->
+                        boardSetUseCase.createCalculatorBoardSet(name)
+                    else -> boardSetUseCase.createBoardSet(
+                            name,
+                            body["rows"]?.jsonPrimitive?.intOrNull ?: 4,
+                            body["columns"]?.jsonPrimitive?.intOrNull ?: 4
+                        )
                 }
                 call.respond(HttpStatusCode.Created, created)
             }
@@ -838,15 +889,24 @@ class KotlinBridge(private val port: Int = 8765) {
                     val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest)
                     val graph = boardSetUseCase.loadBoardSetGraph(id)
                         ?: return@get call.respond(HttpStatusCode.NotFound)
+                    val includeAll = call.request.queryParameters["all"]?.toBooleanStrictOrNull() == true
+                    val requestedBoardId = call.request.queryParameters["boardId"]
+                    val responseBoards = if (includeAll) {
+                        graph.boards
+                    } else {
+                        val targetId = requestedBoardId ?: graph.boardSet.rootBoardId
+                        listOfNotNull(graph.boards.firstOrNull { it.id == targetId })
+                    }
+                    if (responseBoards.isEmpty()) return@get call.respond(HttpStatusCode.NotFound)
                     val appSettings = settingsManager.settings.value ?: Settings()
-                    val resolvedSettings = graph.boards.associate { board ->
+                    val resolvedSettings = responseBoards.associate { board ->
                         board.id to resolvedBoardSettingsResponse(
                             appSettings,
                             graph.boardSet,
                             board,
                         )
                     }
-                    val fieldItems = graph.boards.associate { board ->
+                    val fieldItems = responseBoards.associate { board ->
                         board.id to board.grid?.fieldItems().orEmpty().map { field ->
                             BoardFieldResponse(
                                 row = field.row,
@@ -857,11 +917,21 @@ class KotlinBridge(private val port: Int = 8765) {
                             )
                         }
                     }
+                    // Rust can read imported app-private media directly. Returning
+                    // absolute paths avoids one HTTP request plus base64 encode/decode
+                    // for every symbol when a large page opens.
+                    val renderBoards = responseBoards.map { board ->
+                        board.copy(images = board.images.map { image ->
+                            val path = image.path
+                            if (path.isNullOrBlank() || path.startsWith('/')) image
+                            else image.copy(path = localImageFile(path)?.absolutePath ?: path)
+                        })
+                    }
                     call.respondText(
                         json.encodeToString(
                             BoardSetGraphResponse(
                                 graph.boardSet,
-                                graph.boards,
+                                renderBoards,
                                 resolvedSettings,
                                 fieldItems,
                             )
@@ -1038,6 +1108,7 @@ class KotlinBridge(private val port: Int = 8765) {
                 var speakText: String? = null
                 var navigateHome = false
                 var navigateBoardId: String? = null
+                var openNativeKeyboard = false
                 val unsupportedActions = mutableListOf<String>()
 
                 when (operation) {
@@ -1053,7 +1124,7 @@ class KotlinBridge(private val port: Int = 8765) {
                                         if (effect.text.isNotEmpty()) tokens = tokens + effect.text
                                     }
                                     ObfButtonActionEffect.Backspace -> {
-                                        tokens = backspaceSentenceSelection(tokens)
+                                        tokens = backspaceSentenceSelection(tokens, board.spellingMode)
                                     }
                                     ObfButtonActionEffect.Clear -> tokens = emptyList()
                                     ObfButtonActionEffect.Speak -> {
@@ -1061,6 +1132,7 @@ class KotlinBridge(private val port: Int = 8765) {
                                             .takeIf { it.isNotBlank() }
                                     }
                                     ObfButtonActionEffect.Home -> navigateHome = true
+                                    ObfButtonActionEffect.NativeKeyboard -> openNativeKeyboard = true
                                     ObfButtonActionEffect.Predictions -> {
                                         val predictionIds = orderedPredictionButtonIds(board, false)
                                         val predictionIndex = predictionIds.indexOf(button.id)
@@ -1109,7 +1181,7 @@ class KotlinBridge(private val port: Int = 8765) {
                             }
                         }
                     }
-                    "backspace" -> tokens = backspaceSentenceSelection(tokens)
+                    "backspace" -> tokens = backspaceSentenceSelection(tokens, board.spellingMode)
                     "clear" -> tokens = emptyList()
                 }
 
@@ -1120,6 +1192,7 @@ class KotlinBridge(private val port: Int = 8765) {
                         speakText = speakText,
                         navigateHome = navigateHome,
                         navigateBoardId = navigateBoardId,
+                        openNativeKeyboard = openNativeKeyboard,
                         unsupportedActions = unsupportedActions,
                         settings = ResolvedBoardSettingsResponse(
                             showLabels = resolved.showLabels,
@@ -1315,7 +1388,14 @@ class KotlinBridge(private val port: Int = 8765) {
             val rate = settings.speechRate.toDouble()
             val voice = selected.copy(selectedLanguage = language, rate = rate)
 
-            if (settings.ttsEngine == TtsEngine.SYSTEM) {
+            val azureStatus = if (settings.ttsEngine == TtsEngine.SYSTEM) {
+                null
+            } else {
+                configRepository.getSpeechConfigStatus()
+            }
+            val azureReady = azureStatus?.credentialConfigured == true &&
+                azureStatus.endpoint.isNotBlank()
+            if (!azureReady) {
                 speechService.speakSegments(SpeechTextProcessor.processText(text), voice, rate = rate)
             } else {
                 azureSpeechService.speak(text, voice, rate = rate)
@@ -1346,7 +1426,6 @@ class KotlinBridge(private val port: Int = 8765) {
             if (speechGeneration.get() == generation) {
                 val message = error.message ?: "Speech failed"
                 println("[SPEECH] Speech failed (${error::class.simpleName})")
-                error.printStackTrace()
                 speechState = SpeechStateResponse(state = "error", error = message)
                 speechJob = null
             }
@@ -1479,11 +1558,76 @@ data class BoardSessionResponse(
     val speakText: String? = null,
     val navigateHome: Boolean = false,
     val navigateBoardId: String? = null,
+    val openNativeKeyboard: Boolean = false,
     val unsupportedActions: List<String> = emptyList(),
     val settings: ResolvedBoardSettingsResponse,
 )
 
+@Serializable
+data class PresetDownloadProgressResponse(
+    val stage: String,
+    val downloadedBytes: Long,
+    val totalBytes: Long? = null,
+)
+
+@Serializable
+data class AzureConfigResponse(
+    val endpoint: String,
+    val credentialConfigured: Boolean,
+)
+
 private const val MAX_IMAGE_BYTES = 20L * 1024L * 1024L
+private const val MAX_QUICK_CORE_ARCHIVE_BYTES = 100L * 1024L * 1024L
+
+internal fun quickCorePresetUrl(template: String): String? =
+    QuickCorePreset.fromSlug(template)?.url
+
+private suspend fun downloadQuickCorePreset(
+    template: String,
+    onProgress: (downloaded: Long, total: Long?) -> Unit = { _, _ -> },
+): File {
+    val url = requireNotNull(quickCorePresetUrl(template))
+    val cacheDirectory = File(boardPresetCacheDirectory(), "quick-core")
+    val archive = File(cacheDirectory, "${template.lowercase()}.obz")
+    if (archive.isFile && archive.length() > 0L) {
+        onProgress(archive.length(), archive.length())
+        return archive
+    }
+
+    cacheDirectory.mkdirs()
+    val partial = File(cacheDirectory, ".${template.lowercase()}.part")
+    val client = io.ktor.client.HttpClient()
+    try {
+        val response = client.get(url)
+        require(response.status.isSuccess()) { "Preset download failed" }
+        response.headers[HttpHeaders.ContentLength]?.toLongOrNull()?.let { length ->
+            require(length in 1..MAX_QUICK_CORE_ARCHIVE_BYTES) { "Preset archive is too large" }
+        }
+        val expectedLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+            ?: QuickCorePreset.fromSlug(template)?.archiveBytes
+        var total = 0L
+        val channel = response.bodyAsChannel()
+        partial.outputStream().buffered().use { output ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = channel.readAvailable(buffer)
+                if (count == -1) break
+                if (count == 0) continue
+                total += count
+                require(total <= MAX_QUICK_CORE_ARCHIVE_BYTES) { "Preset archive is too large" }
+                output.write(buffer, 0, count)
+                onProgress(total, expectedLength)
+            }
+        }
+        require(total > 0L) { "Preset archive is empty" }
+        Files.move(partial.toPath(), archive.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        return archive
+    } finally {
+        client.close()
+        if (partial.exists()) partial.delete()
+    }
+}
+
 private const val MAX_REDIRECT_HOPS = 5
 private val IMAGE_TIMEOUT: java.time.Duration = java.time.Duration.ofSeconds(30)
 
@@ -1493,9 +1637,24 @@ private fun imageCacheDirectory(): File =
     File(System.getenv("XDG_CACHE_HOME")?.takeIf { it.isNotBlank() }
         ?: File(System.getProperty("user.home"), ".cache").path, "wingmate/images")
 
+private fun boardPresetCacheDirectory(): File =
+    File(System.getenv("XDG_CACHE_HOME")?.takeIf { it.isNotBlank() }
+        ?: File(System.getProperty("user.home"), ".cache").path, "wingmate/board-presets")
+
+private fun boardMediaDataDirectory(): File =
+    File(System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() }
+        ?: File(System.getProperty("user.home"), ".local/share").path, "wingmate/board-media")
+
 private fun imageDataDirectory(): File =
     File(System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() }
         ?: File(System.getProperty("user.home"), ".local/share").path, "wingmate/images")
+
+private fun localImageFile(source: String): File? = when {
+    source.startsWith("file:") -> runCatching { File(URI(source)) }.getOrNull()
+    source.startsWith('/') -> File(source)
+    "://" !in source -> File(boardMediaDataDirectory(), source)
+    else -> null
+}
 
 /**
  * Files imported by the app itself (board-set media in the shared
@@ -1940,7 +2099,11 @@ fun main(args: Array<String>) {
         println("[SYMBOLS] OpenSymbols proxy configured")
     }
     
-    val bridge = KotlinBridge()
+    val bridgePort = System.getenv("WINGMATE_BRIDGE_PORT")
+        ?.toIntOrNull()
+        ?.takeIf { it in 1..65535 }
+        ?: 8765
+    val bridge = KotlinBridge(bridgePort)
     bridge.start(skipPartnerWindow = noPartnerWindow)
     
     // Keep running

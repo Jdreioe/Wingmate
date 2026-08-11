@@ -49,6 +49,14 @@ class IosBoardRepository : BoardRepository {
         updateAll { boards -> boards.filterNot { it.id == board.id } + board }
     }
 
+    override suspend fun saveBoards(boards: List<ObfBoard>) {
+        if (boards.isEmpty()) return
+        updateAll { existing ->
+            val savedIds = boards.map { it.id }.toSet()
+            existing.filterNot { it.id in savedIds } + boards
+        }
+    }
+
     override suspend fun listBoards(): List<ObfBoard> {
         return loadAll()
     }

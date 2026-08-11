@@ -6574,6 +6574,7 @@ dependencies = [
  "ftdi-embedded-hal",
  "i18n-embed",
  "i18n-embed-fl",
+ "image",
  "libcosmic",
  "miniz_oxide",
  "reqwest",
