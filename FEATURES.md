@@ -79,7 +79,7 @@ The following list is taken from the OpenAAC [AAC App Development](https://www.o
 - [x] 💜 **customizable keyboards**
   Some AAC apps user the built-in keyboard for spelling purposes, but depending on the user these keyboards may not be accessible. Additionally, some users may need larger buttons and a full keyboard doesn't fit on a single screen, or QWERTY may not be the most intuitive layout, so custom keyboards can provide value for different users.
 - [x] 💜 **options for different-shaped buttons**
-  Android authors can choose the rounded default, square, pill, speech bubble, or thought bubble per button. Shapes preserve the full rectangular touch target and round-trip with shared OBF/OBZ vocabulary data.
+  Android authors can choose the square default, rounded, pill, speech bubble, or thought bubble per button. Shapes preserve the full rectangular touch target and round-trip with shared OBF/OBZ vocabulary data.
 
 </details>
 

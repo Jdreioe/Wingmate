@@ -536,7 +536,8 @@ class KoinBridge : KoinComponent {
                     button.soundId,
                     board.sounds.firstOrNull { it.id == button.soundId }?.let { sound ->
                         sound.dataUrl ?: sound.data?.let { "data:audio;base64,$it" } ?: sound.url
-                    }
+                    },
+                    button.shape.wireValue
                 )
             }
         }
@@ -926,6 +927,7 @@ data class IosBoardCell(
     val actions: List<String>,
     val soundId: String? = null,
     val soundDataUrl: String? = null,
+    val shape: String = "square",
 )
 
 data class IosSettingsFlags(
