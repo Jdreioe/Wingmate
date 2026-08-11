@@ -695,6 +695,9 @@ struct AccessInputResponse {
     activation_target_id: Option<String>,
     is_paused: bool,
     current_target_id: Option<String>,
+    // Kept on the response; the transient rest-mode notice intentionally no
+    // longer renders a dwell percentage.
+    #[allow(dead_code)]
     dwell_progress: f32,
 }
 
@@ -794,8 +797,8 @@ struct Wingmate {
     scan_index: usize,
     last_scan_advance: Instant,
     input_is_paused: bool,
+    rest_notice_visible: bool,
     current_access_target_id: Option<String>,
-    access_dwell_progress: f32,
     known_access_targets: HashMap<String, AccessTarget>,
     window_width: f32,
     window_height: f32,
@@ -903,6 +906,7 @@ enum Message {
     SettingFloat(&'static str, f32),
     SettingString(&'static str, String),
     ToggleInputPause,
+    HideRestNotice,
     GridColumnsChanged(i32),
     StartupBoardSetChanged(String),
     StartupModeChanged(String),
@@ -1149,8 +1153,8 @@ impl cosmic::Application for Wingmate {
             scan_index: 0,
             last_scan_advance: Instant::now(),
             input_is_paused: false,
+            rest_notice_visible: false,
             current_access_target_id: None,
-            access_dwell_progress: 0.0,
             known_access_targets: HashMap::new(),
             window_width: 1024.0,
             window_height: 768.0,
@@ -1197,6 +1201,11 @@ impl cosmic::Application for Wingmate {
             subscriptions.push(
                 cosmic::iced::time::every(Duration::from_millis(200))
                     .map(|_| Message::PollPresetProgress),
+            );
+        }
+        if self.rest_notice_visible {
+            subscriptions.push(
+                cosmic::iced::time::every(Duration::from_secs(10)).map(|_| Message::HideRestNotice),
             );
         }
         Subscription::batch(subscriptions)
@@ -1647,9 +1656,14 @@ impl cosmic::Application for Wingmate {
             Message::AccessActivate(target) => return self.activate_access(target),
             Message::AccessInputUpdated(result) => {
                 if let Ok(state) = result {
+                    let was_paused = self.input_is_paused;
                     self.input_is_paused = state.is_paused;
                     self.current_access_target_id = state.current_target_id;
-                    self.access_dwell_progress = state.dwell_progress;
+                    if state.is_paused && !was_paused {
+                        self.rest_notice_visible = true;
+                    } else if !state.is_paused {
+                        self.rest_notice_visible = false;
+                    }
                     if let Some(id) = state.activation_target_id {
                         if let Some(target) = self.known_access_targets.get(&id).cloned() {
                             return self.activate_access(target);
@@ -2206,6 +2220,10 @@ impl cosmic::Application for Wingmate {
             }
             Message::ToggleInputPause => {
                 return self.api.access_input("togglePause", None, None).map(cosmic::Action::App);
+            }
+            Message::HideRestNotice => {
+                self.rest_notice_visible = false;
+                return Task::none();
             }
             Message::GridColumnsChanged(v) => {
                 self.settings.grid_columns = v;
@@ -2863,11 +2881,11 @@ impl cosmic::Application for Wingmate {
         };
 
         column![
-            self.interaction_status_view(),
             container(content)
                 .padding(content_padding)
                 .width(Fill)
                 .height(Fill),
+            self.interaction_bottom_control(),
             self.status_view(),
         ]
         .height(Fill)
@@ -2876,27 +2894,41 @@ impl cosmic::Application for Wingmate {
 }
 
 impl Wingmate {
-    fn interaction_status_view(&self) -> Element<'_, Message> {
+    fn interaction_bottom_control(&self) -> Element<'_, Message> {
         let enabled = matches!(self.page, Page::Communicate | Page::Screens)
             && (self.settings.dwell_to_select_millis > 0 || !self.settings.select_key_binding.is_empty());
         if !enabled {
             return Space::new().height(0).into();
         }
-        let action = button(text(if self.input_is_paused { "Resume input" } else { "Rest mode" }).size(18))
+        let toggle = button(text(if self.input_is_paused { "Resume input" } else { "Rest mode" }).size(14))
             .on_press(Message::ToggleInputPause)
-            .padding([14, 20]);
-        let status = if self.input_is_paused {
-            "Rest mode — hover selection and the Select key are paused".to_string()
-        } else if self.access_dwell_progress > 0.0 {
-            format!("Pointer input active · Hover selection {}%", (self.access_dwell_progress * 100.0).round() as i32)
-        } else {
-            "Pointer input active".to_string()
-        };
-        container(row![action, text(status).size(16).width(Fill)].spacing(14).align_y(cosmic::iced::alignment::Alignment::Center))
-            .padding([8, 24])
-            .width(Fill)
-            .class(if self.input_is_paused { cosmic::theme::iced::Container::Primary } else { cosmic::theme::iced::Container::Secondary })
+            .padding([8, 14]);
+        let notice: Element<'_, Message> = if self.rest_notice_visible && self.input_is_paused {
+            container(
+                row![
+                    text("Rest mode — hover selection and the Select key are paused").size(15),
+                    button(text("Resume input").size(14))
+                        .on_press(Message::ToggleInputPause)
+                        .padding([6, 12]),
+                ]
+                .spacing(12)
+                .align_y(cosmic::iced::alignment::Alignment::Center),
+            )
+            .padding([10, 12])
+            .class(cosmic::theme::iced::Container::Primary)
             .into()
+        } else {
+            Space::new().height(0).into()
+        };
+        column![
+            container(notice).align_x(cosmic::iced::alignment::Alignment::Center),
+            container(toggle)
+                .align_x(cosmic::iced::alignment::Alignment::Start)
+                .padding([0, 0, 0, 8]),
+        ]
+        .spacing(6)
+        .width(Fill)
+        .into()
     }
 
     fn status_view(&self) -> Element<'_, Message> {

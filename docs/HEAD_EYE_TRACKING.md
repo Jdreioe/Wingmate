@@ -16,8 +16,10 @@ settings tabs) to configure:
 - **Pointer emphasis**: keep the system pointer or emphasize the current target
   with a larger high-contrast ring or outline.
 
-The Rest mode control remains at the edge of the workspace. While resting,
+The Rest mode control stays at the bottom edge of the workspace. While resting,
 ordinary taps and clicks continue to work, and resuming starts a fresh hover timer.
+The paused status appears as a notification next to the control and goes away on
+its own after a few seconds; the control itself remains available to resume.
 
 ## iPhone and iPad Eye Tracking
 
