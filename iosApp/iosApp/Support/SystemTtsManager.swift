@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Shared
 
 final class SystemTtsManager: NSObject, AVSpeechSynthesizerDelegate {
     static let shared = SystemTtsManager()

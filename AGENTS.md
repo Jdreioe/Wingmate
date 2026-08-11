@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 # Wingmate - Agent Instructions
 
 > **Project**: AAC (Augmentative and Alternative Communication) app for KMP (Kotlin Multiplatform)
@@ -120,3 +121,40 @@ Note: Swift changes cannot be compiled on Linux; they must be verified in Xcode.
 | Implementation | `infrastructure/*Impl.kt` or platform prefix | `IosSpeechService.kt` |
 | iOS impl | `Ios*.kt` | `IosSpeechService.kt` |
 | Swift types | `Ios*` bridge DTOs | `IosBoardCell` |
+=======
+# AGENTS.md
+
+## Front-end parity rule (MANDATORY)
+
+This project ships the same user interface across three parallel native
+front-ends:
+
+- **SwiftUI** — `iosApp/iosApp/`
+- **Compose App (Android/Compose Multiplatform)** — `composeApp/src/`, `feature/`
+- **QML (Linux)** — `linuxApp/`, `shared/` (`KotlinBridge.kt`, `PhraseViewModel.kt`)
+
+Native UI is a MUST. Do NOT use webviews, HTML, or cross-platform wrapper
+frameworks (React Native, Flutter, etc.) for any user-facing screen. Build with
+the platform-native toolkit: SwiftUI on iOS, Jetpack Compose on Android, QML on
+Linux.
+
+Every front-end change MUST be mirrored in **all** UIs. No exceptions.
+
+- A visual, interaction, or behavioral change to any one platform screen (SwiftUI
+  iOS, Compose App, or QML Linux) requires the equivalent change in the others.
+- Behavior that lives in shared code (`shared/`, `core/`, `feature/`) counts as
+  the source of truth and does not need duplication, but each UI that consumes it
+  must render it consistently.
+- If a change intentionally targets only one platform (debug-only, platform
+  capability, design direction), call it out explicitly in the commit/PR and
+  explain why parity is not required.
+
+Parity checklist for any front-end task (all platforms):
+
+1. `iosApp/iosApp/` (SwiftUI views + `IosViewModel.swift`)
+2. `composeApp/src/` (Compose `ui/` screens) + update any shared state/logic
+3. `linuxApp/` (QML views) + `shared/` KMP bridge as needed
+
+Before marking a UI task done, confirm every applicable front-end changed or the
+deliberate exception is documented.
+>>>>>>> Stashed changes

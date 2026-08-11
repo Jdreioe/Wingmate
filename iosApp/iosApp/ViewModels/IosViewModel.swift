@@ -319,7 +319,7 @@ final class IosViewModel: ObservableObject {
             rowSpan: Int32(rows),
             columnSpan: Int32(columns)
         )) ?? false
-        if ok {
+        if ok.boolValue {
             await refreshBoardCells()
         }
     }
@@ -1267,7 +1267,21 @@ final class IosViewModel: ObservableObject {
             // relatively expensive, so only query after the user pauses typing.
             try? await Task.sleep(nanoseconds: 250_000_000)
             if Task.isCancelled { return }
-            let res = (try? await bridge.predict(context: newValue, maxWords: 5, maxLetters: 5)) ?? Shared.PredictionResult(words: [], letters: [])
+
+            // Skip inference on short/blank tokens to avoid clearing or churning
+            // the bar while typing.
+            let lastTokenLength = (newValue.split(separator: " ").last?.count) ?? 0
+            let shouldPredict = !newValue.isEmpty &&
+                (newValue.last == " " || lastTokenLength >= 2)
+            let res: Shared.PredictionResult
+            if newValue.isEmpty {
+                res = Shared.PredictionResult(words: [], letters: [])
+            } else if shouldPredict,
+                      let bridgePrediction = (try? await bridge.predict(context: newValue, maxWords: 5, maxLetters: 5)) {
+                res = bridgePrediction
+            } else {
+                res = self.predictions
+            }
             await MainActor.run { self.predictions = res }
         }
         #endif

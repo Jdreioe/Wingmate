@@ -19,7 +19,7 @@ private enum CellSymbolSource: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-private enum GridFieldSpanSelection: Equatable {
+private enum GridFieldSpanSelection: Hashable {
     case single
     case custom(GridFieldSpanInfo)
 
@@ -32,7 +32,7 @@ private enum GridFieldSpanSelection: Equatable {
     }
 }
 
-private struct GridFieldSpanInfo: Hashable {
+struct GridFieldSpanInfo: Hashable {
     let rows: Int
     let columns: Int
 }
@@ -719,8 +719,9 @@ struct SymbolBoardWorkspaceView: View {
                 let defaultFraction: CGFloat = isCompact
                     ? min(max(minContentHeight / max(minContentHeight, availableHeight), 0.15), 1)
                     : 1
-                let gridHeightFraction: CGFloat = ((board.gridHeightFraction?.isFinite == true) && (board.gridHeightFraction ?? 0) > 0)
-                    ? CGFloat(board.gridHeightFraction ?? 1)
+                let rawGridHeightFraction = board.gridHeightFraction?.floatValue
+                let gridHeightFraction: CGFloat = (rawGridHeightFraction?.isFinite == true) && (rawGridHeightFraction ?? 0) > 0
+                    ? CGFloat(rawGridHeightFraction ?? 1)
                     : defaultFraction
                 let fraction = min(max(gridHeightFraction, 0.15), 1)
 
