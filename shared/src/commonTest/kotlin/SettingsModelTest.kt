@@ -100,6 +100,7 @@ class SettingsModelTest {
         assertEquals("", old.selectKeyBinding)
         assertEquals("", old.restModeKeyBinding)
         assertEquals(PointerEmphasisStyle.System, old.pointerEmphasisStyle)
+        assertEquals(false, old.nativeGazeEnabled)
     }
 
     @Test

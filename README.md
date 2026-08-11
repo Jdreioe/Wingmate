@@ -14,8 +14,8 @@ OBF/OBZ is still work in progress
 See [Supported platforms](docs/PLATFORM_SUPPORT.md) for the client support and
 feature-parity policy used when planning and accepting new work.
 
-For pointer, switch, head-tracking, and eye-tracking setup, see
-[Pointer input and Rest mode](docs/HEAD_EYE_TRACKING.md).
+For pointer, switch, head-tracking, and eye-tracking setup and planning, see
+[Head and eye tracking](docs/HEAD_EYE_TRACKING.md).
 
 
 ## OpenSymbols proxy

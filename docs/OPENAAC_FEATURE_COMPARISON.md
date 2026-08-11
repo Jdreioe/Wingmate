@@ -68,9 +68,9 @@ OpenAAC ranks features by expectation of availability: 🟢 Standard, ✅ Most A
 | Double/triple tap or hold for extra action | 💜 | ❌ |
 | Mouse control / click to select | 💡 | ✅ desktop mouse input |
 | Dwell to select | 💡 | ✅ dwell-to-select with progress ring + hover dwell |
-| Double/right click special action, custom cursor | 💡/💜 | ❌ |
-| Eye gaze / head control / joystick | 💡 | 🟡 via OS support (iOS Eye Tracking / Head Tracking 18+, Switch Control, Voice Control; Windows Eye Control) — accessibility-element-based iOS UI + standard pointer input; no in-app gaze code/calibration |
-| Debounce (prevent multiple hits) | ✅ | ❌ |
+| Double/right click special action, custom cursor | 💡/💜 | 🟡 pointer/target emphasis styles supported; specialty click actions not implemented |
+| Eye gaze / head control / joystick | 💡 | 🟡 OS pointer access is supported today; native Linux `tobiifreed` gaze input and gaze-specific target selection are planned in #129 and the head/eye tracking roadmap |
+| Debounce (prevent multiple hits) | ✅ | ✅ configurable selection debounce |
 | Speak each word on select | ✅ | 🟡 per-word feedback options (iOS feedback setting); not fully verified |
 | Option to only speak when sentence complete | ✅ | ❌ |
 | Click sound on select | ⭐ | ✅ selection sound setting |

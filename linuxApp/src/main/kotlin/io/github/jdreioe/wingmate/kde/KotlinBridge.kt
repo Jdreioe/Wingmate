@@ -341,6 +341,7 @@ class KotlinBridge(private val port: Int = 8765) {
                     }.getOrDefault(newSettings.pointerEmphasisStyle))
                 }
                 jsonObj["pointerEmphasisScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(pointerEmphasisScale = it.coerceIn(1f, 3f)) }
+                jsonObj["nativeGazeEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(nativeGazeEnabled = it) }
                 jsonObj["selectionDebounceMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(selectionDebounceMillis = it.coerceAtLeast(0)) }
                 jsonObj["selectionHighlightMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(selectionHighlightMillis = it.coerceAtLeast(0)) }
                 jsonObj["selectionSoundEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(selectionSoundEnabled = it) }

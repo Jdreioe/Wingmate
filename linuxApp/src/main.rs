@@ -2,9 +2,10 @@ use cosmic::iced::widget::{
     button, checkbox, column, container, image, mouse_area, pick_list, progress_bar, row,
     scrollable, slider, stack, svg, text, text_input, Space,
 };
-use cosmic::iced::{event, keyboard, window, Fill, Padding, Subscription, Task};
+use cosmic::iced::{event, keyboard, window, Fill, Padding, Point, Rectangle, Subscription, Task};
 use cosmic::prelude::*;
 use cosmic::widget::{button as cosmic_button, icon};
+use cosmic::widget::rectangle_tracker::{self, RectangleTracker, RectangleUpdate};
 use reqwest::{Client, Method};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -19,6 +20,9 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use wingmate::partner_window_bridge::{self, PartnerWindowController};
+use wingmate::tobiifree::{
+    ConnectionStatus as TobiifreeConnectionStatus, Event as TobiifreeEvent, TargetBounds,
+};
 
 mod i18n;
 
@@ -260,6 +264,7 @@ struct Settings {
     rest_mode_key_binding: String,
     pointer_emphasis_style: String,
     pointer_emphasis_scale: f32,
+    native_gaze_enabled: bool,
     selection_sound_enabled: bool,
     auditory_fishing_enabled: bool,
     speech_policy: String,
@@ -311,6 +316,7 @@ impl Default for Settings {
             rest_mode_key_binding: String::new(),
             pointer_emphasis_style: "System".into(),
             pointer_emphasis_scale: 1.5,
+            native_gaze_enabled: false,
             selection_sound_enabled: false,
             auditory_fishing_enabled: false,
             speech_policy: "Immediate".into(),
@@ -712,6 +718,31 @@ struct AccessInputResponse {
     dwell_progress: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NativeGazeStatus {
+    Disabled,
+    Connecting,
+    Connected,
+    Tracking,
+    GazeLost,
+    DaemonUnavailable,
+    IncompatibleProtocol,
+}
+
+impl NativeGazeStatus {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Disabled => "Disabled",
+            Self::Connecting => "Connecting to tobiifreed…",
+            Self::Connected => "Connected — waiting for gaze",
+            Self::Tracking => "Tracking",
+            Self::GazeLost => "Gaze lost",
+            Self::DaemonUnavailable => "tobiifreed is not running",
+            Self::IncompatibleProtocol => "Incompatible tobiifreed protocol",
+        }
+    }
+}
+
 struct BackendProcess(Option<Child>);
 
 impl Drop for BackendProcess {
@@ -812,6 +843,11 @@ struct Wingmate {
     current_access_target_id: Option<String>,
     access_dwell_progress: f32,
     known_access_targets: HashMap<String, AccessTarget>,
+    access_rectangle_tracker: Option<RectangleTracker<String>>,
+    access_target_bounds: HashMap<String, Rectangle>,
+    gaze_target_id: Option<String>,
+    native_gaze_status: NativeGazeStatus,
+    native_gaze_fullscreen: bool,
     window_width: f32,
     window_height: f32,
 }
@@ -859,6 +895,8 @@ enum Message {
     AccessRelease(AccessTarget),
     AccessActivate(AccessTarget),
     AccessInputUpdated(Result<AccessInputResponse, String>),
+    AccessRectangle(RectangleUpdate<String>),
+    NativeGaze(TobiifreeEvent),
     LoadedSpeechState(Result<SpeechState, String>),
     SpeechStarted(Result<(), String>),
     SpeechControlFinished(Result<(), String>),
@@ -1169,6 +1207,11 @@ impl cosmic::Application for Wingmate {
             current_access_target_id: None,
             access_dwell_progress: 0.0,
             known_access_targets: HashMap::new(),
+            access_rectangle_tracker: None,
+            access_target_bounds: HashMap::new(),
+            gaze_target_id: None,
+            native_gaze_status: NativeGazeStatus::Disabled,
+            native_gaze_fullscreen: false,
             window_width: 1024.0,
             window_height: 768.0,
         };
@@ -1194,6 +1237,13 @@ impl cosmic::Application for Wingmate {
             || (self.settings.dwell_to_select_millis > 0 && self.current_access_target_id.is_some())
             || self.highlighted_access.is_some();
         let mut subscriptions = vec![event::listen().map(Message::InputEvent)];
+        subscriptions.push(
+            rectangle_tracker::subscription::<_, String>("wingmate-access-targets")
+                .map(|(_, update)| Message::AccessRectangle(update)),
+        );
+        if self.settings.native_gaze_enabled {
+            subscriptions.push(wingmate::tobiifree::subscription().map(Message::NativeGaze));
+        }
         if self.editing_access.enabled && self.editing_access.unlocked {
             subscriptions.push(
                 cosmic::iced::time::every(Duration::from_secs(30))
@@ -1317,6 +1367,7 @@ impl cosmic::Application for Wingmate {
             },
             Message::LoadedSettings(result) => match result {
                 Ok(v) => {
+                    let native_gaze_enabled = v.native_gaze_enabled;
                     let theme = theme_for_preference(
                         v.force_dark_theme,
                         self.core.system_is_dark(),
@@ -1342,18 +1393,36 @@ impl cosmic::Application for Wingmate {
                         self.last_workspace = self.page;
                     }
                     self.settings = v;
+                    self.native_gaze_status = if native_gaze_enabled {
+                        NativeGazeStatus::Connecting
+                    } else {
+                        NativeGazeStatus::Disabled
+                    };
+                    self.native_gaze_fullscreen = native_gaze_enabled;
                     self.status = fl!("status-ready");
                     let theme_task = cosmic::command::set_theme(theme);
+                    let gaze_window_task =
+                        self.core.main_window_id().map_or_else(Task::none, |id| {
+                            window::set_mode(
+                                id,
+                                if native_gaze_enabled {
+                                    window::Mode::Fullscreen
+                                } else {
+                                    window::Mode::Windowed
+                                },
+                            )
+                        });
                     if let Some(id) = startup_board_set_id {
                         self.status = fl!("status-opening-startup-screen");
                         return Task::batch(vec![
                             theme_task,
+                            gaze_window_task,
                             self.api
                                 .load_board_graph(id, false)
                                 .map(cosmic::Action::App),
                         ]);
                     }
-                    return theme_task;
+                    return Task::batch(vec![theme_task, gaze_window_task]);
                 }
                 Err(e) => self.status = e,
             },
@@ -1628,6 +1697,9 @@ impl cosmic::Application for Wingmate {
                 return self.api.predict(String::new()).map(cosmic::Action::App);
             }
             Message::AccessEnter(target) => {
+                if self.gaze_target_id.is_some() {
+                    return Task::none();
+                }
                 if self.settings.auditory_fishing_enabled && !self.input_is_paused {
                     play_selection_sound();
                 }
@@ -1637,7 +1709,6 @@ impl cosmic::Application for Wingmate {
             }
             Message::AccessExit(target) => {
                 let target_id = access_target_id(&target);
-                self.known_access_targets.remove(&target_id);
                 if self
                     .access_press
                     .as_ref()
@@ -1645,6 +1716,11 @@ impl cosmic::Application for Wingmate {
                 {
                     self.access_press = None;
                 }
+                // Pointer movement must not cancel the target currently owned by gaze.
+                if self.gaze_target_id.is_some() {
+                    return Task::none();
+                }
+                self.known_access_targets.remove(&target_id);
                 return self.api.access_input("exit", Some(target_id), None).map(cosmic::Action::App);
             }
             Message::AccessPress(target) => self.access_press = Some((target, Instant::now())),
@@ -1668,12 +1744,55 @@ impl cosmic::Application for Wingmate {
                     self.current_access_target_id = state.current_target_id;
                     self.access_dwell_progress = state.dwell_progress;
                     if let Some(id) = state.activation_target_id {
-                        if let Some(target) = self.known_access_targets.get(&id).cloned() {
+                        let target = self.known_access_targets.get(&id).cloned().or_else(|| {
+                            self.current_access_targets()
+                                .into_iter()
+                                .find(|target| access_target_id(target) == id)
+                        });
+                        if let Some(target) = target {
                             return self.activate_access(target);
                         }
                     }
+                    if state.is_paused {
+                        return self.leave_gaze_target();
+                    }
                 }
             }
+            Message::AccessRectangle(update) => match update {
+                RectangleUpdate::Init(tracker) => self.access_rectangle_tracker = Some(tracker),
+                RectangleUpdate::Rectangle((target_id, bounds)) => {
+                    self.access_target_bounds.insert(target_id, bounds);
+                }
+            },
+            Message::NativeGaze(event) => match event {
+                TobiifreeEvent::Status(status) => {
+                    self.native_gaze_status = match status {
+                        TobiifreeConnectionStatus::Connecting => NativeGazeStatus::Connecting,
+                        TobiifreeConnectionStatus::Connected => NativeGazeStatus::Connected,
+                        TobiifreeConnectionStatus::DaemonUnavailable => {
+                            NativeGazeStatus::DaemonUnavailable
+                        }
+                        TobiifreeConnectionStatus::IncompatibleProtocol => {
+                            NativeGazeStatus::IncompatibleProtocol
+                        }
+                    };
+                    if matches!(
+                        status,
+                        TobiifreeConnectionStatus::DaemonUnavailable
+                            | TobiifreeConnectionStatus::IncompatibleProtocol
+                    ) {
+                        return self.leave_gaze_target();
+                    }
+                }
+                TobiifreeEvent::Sample(sample) => {
+                    if sample.valid {
+                        self.native_gaze_status = NativeGazeStatus::Tracking;
+                        return self.update_gaze_target(sample.x, sample.y);
+                    }
+                    self.native_gaze_status = NativeGazeStatus::GazeLost;
+                    return self.leave_gaze_target();
+                }
+            },
             Message::InputEvent(event) => {
                 if let cosmic::iced::Event::Window(window::Event::Resized(size)) = &event {
                     self.window_width = size.width;
@@ -2153,6 +2272,7 @@ impl cosmic::Application for Wingmate {
                         self.settings.scan_category_items_enabled = enabled
                     }
                     "scanTopBarEnabled" => self.settings.scan_top_bar_enabled = enabled,
+                    "nativeGazeEnabled" => self.settings.native_gaze_enabled = enabled,
                     _ => {}
                 }
                 let setting_value = if key == "wordTypeColorScheme" {
@@ -2190,6 +2310,29 @@ impl cosmic::Application for Wingmate {
                     return Task::batch(vec![
                         cosmic::command::set_theme(theme),
                         save.map(cosmic::Action::App),
+                    ]);
+                }
+                if key == "nativeGazeEnabled" {
+                    self.native_gaze_status = if enabled {
+                        NativeGazeStatus::Connecting
+                    } else {
+                        NativeGazeStatus::Disabled
+                    };
+                    self.native_gaze_fullscreen = enabled;
+                    let window_task = self.core.main_window_id().map_or_else(Task::none, |id| {
+                        window::set_mode(
+                            id,
+                            if enabled {
+                                window::Mode::Fullscreen
+                            } else {
+                                window::Mode::Windowed
+                            },
+                        )
+                    });
+                    return Task::batch(vec![
+                        save.map(cosmic::Action::App),
+                        window_task,
+                        self.leave_gaze_target(),
                     ]);
                 }
                 return save.map(cosmic::Action::App);
@@ -3238,20 +3381,94 @@ impl Wingmate {
         }
     }
 
+    fn native_gaze_can_target(&self) -> bool {
+        self.settings.native_gaze_enabled
+            && self.native_gaze_fullscreen
+            && !self.input_is_paused
+            && matches!(self.page, Page::Communicate | Page::Screens)
+            && !self.manage_phrases
+            && !self.board_edit_mode
+    }
+
+    fn update_gaze_target(
+        &mut self,
+        normalized_x: f32,
+        normalized_y: f32,
+    ) -> Task<cosmic::Action<Message>> {
+        if !self.native_gaze_can_target() || self.window_width <= 0.0 || self.window_height <= 0.0 {
+            return self.leave_gaze_target();
+        }
+
+        let point = Point::new(
+            normalized_x * self.window_width,
+            normalized_y * self.window_height,
+        );
+        let target = wingmate::tobiifree::resolve_target(
+            point.x,
+            point.y,
+            self.current_access_targets()
+                .into_iter()
+                .filter_map(|target| {
+                    let target_id = access_target_id(&target);
+                    self.access_target_bounds.get(&target_id).map(|bounds| {
+                        (
+                            (target, target_id),
+                            TargetBounds {
+                                x: bounds.x,
+                                y: bounds.y,
+                                width: bounds.width,
+                                height: bounds.height,
+                            },
+                        )
+                    })
+                }),
+        );
+
+        let Some((target, target_id)) = target else {
+            return self.leave_gaze_target();
+        };
+        if self.gaze_target_id.as_deref() == Some(target_id.as_str()) {
+            return Task::none();
+        }
+
+        // Entering a different target replaces the controller's single hover target;
+        // a separate exit would only introduce an avoidable request-ordering race.
+        self.gaze_target_id = Some(target_id.clone());
+        self.known_access_targets.insert(target_id.clone(), target);
+        self.api
+            .access_input("enter", Some(target_id), None)
+            .map(cosmic::Action::App)
+    }
+
+    fn leave_gaze_target(&mut self) -> Task<cosmic::Action<Message>> {
+        let Some(target_id) = self.gaze_target_id.take() else {
+            return Task::none();
+        };
+        self.api
+            .access_input("exit", Some(target_id), None)
+            .map(cosmic::Action::App)
+    }
+
     fn access_widget<'a>(
         &self,
         content: Element<'a, Message>,
         target: AccessTarget,
     ) -> Element<'a, Message> {
+        let target_id = access_target_id(&target);
         let area = mouse_area(content)
             .on_enter(Message::AccessEnter(target.clone()))
             .on_exit(Message::AccessExit(target.clone()));
-        if self.settings.hold_to_select_millis > 0 {
+        let area: Element<'a, Message> = if self.settings.hold_to_select_millis > 0 {
             area.on_press(Message::AccessPress(target.clone()))
                 .on_release(Message::AccessRelease(target))
                 .into()
         } else {
             area.into()
+        };
+        if let Some(tracker) = &self.access_rectangle_tracker {
+            tracker.container(target_id, area).into()
+        } else {
+            area
         }
     }
 
@@ -5249,6 +5466,13 @@ impl Wingmate {
             column![
                 text("Interaction").size(24),
                 text("Choose how you point, select, and take a break."),
+                checkbox(self.settings.native_gaze_enabled)
+                    .label("Native TD-I13 eye gaze (tobiifreed)")
+                    .on_toggle(|enabled| Message::SettingBool("nativeGazeEnabled", enabled)),
+                text(format!(
+                    "Eye-gaze status: {}. Native gaze uses fullscreen mode.",
+                    self.native_gaze_status.label()
+                )),
                 settings_row(
                     "Select key",
                     pick_list(

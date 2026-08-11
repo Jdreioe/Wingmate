@@ -143,6 +143,8 @@ data class Settings(
     val restModeKeyBinding: String = "",
     val pointerEmphasisStyle: PointerEmphasisStyle = PointerEmphasisStyle.System,
     val pointerEmphasisScale: Float = 1.5f,
+    // Linux only: consume gaze from the local tobiifreed daemon in fullscreen mode.
+    val nativeGazeEnabled: Boolean = false,
     val selectionSoundEnabled: Boolean = false,
     val auditoryFishingEnabled: Boolean = false,
     // #119: immediate speech on each selection versus keeping composition silent
