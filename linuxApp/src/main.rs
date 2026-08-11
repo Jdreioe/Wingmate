@@ -709,6 +709,9 @@ struct AccessInputResponse {
     activation_target_id: Option<String>,
     is_paused: bool,
     current_target_id: Option<String>,
+    // Kept on the response; the transient rest-mode notice intentionally no
+    // longer renders a dwell percentage.
+    #[allow(dead_code)]
     dwell_progress: f32,
 }
 
@@ -809,8 +812,8 @@ struct Wingmate {
     scan_index: usize,
     last_scan_advance: Instant,
     input_is_paused: bool,
+    rest_notice_visible: bool,
     current_access_target_id: Option<String>,
-    access_dwell_progress: f32,
     known_access_targets: HashMap<String, AccessTarget>,
     window_width: f32,
     window_height: f32,
@@ -918,6 +921,7 @@ enum Message {
     SettingFloat(&'static str, f32),
     SettingString(&'static str, String),
     ToggleInputPause,
+    HideRestNotice,
     GridColumnsChanged(i32),
     StartupBoardSetChanged(String),
     StartupModeChanged(String),
@@ -1166,8 +1170,8 @@ impl cosmic::Application for Wingmate {
             scan_index: 0,
             last_scan_advance: Instant::now(),
             input_is_paused: false,
+            rest_notice_visible: false,
             current_access_target_id: None,
-            access_dwell_progress: 0.0,
             known_access_targets: HashMap::new(),
             window_width: 1024.0,
             window_height: 768.0,
@@ -1214,6 +1218,11 @@ impl cosmic::Application for Wingmate {
             subscriptions.push(
                 cosmic::iced::time::every(Duration::from_millis(200))
                     .map(|_| Message::PollPresetProgress),
+            );
+        }
+        if self.rest_notice_visible {
+            subscriptions.push(
+                cosmic::iced::time::every(Duration::from_secs(10)).map(|_| Message::HideRestNotice),
             );
         }
         Subscription::batch(subscriptions)
@@ -1664,9 +1673,14 @@ impl cosmic::Application for Wingmate {
             Message::AccessActivate(target) => return self.activate_access(target),
             Message::AccessInputUpdated(result) => {
                 if let Ok(state) = result {
+                    let was_paused = self.input_is_paused;
                     self.input_is_paused = state.is_paused;
                     self.current_access_target_id = state.current_target_id;
-                    self.access_dwell_progress = state.dwell_progress;
+                    if state.is_paused && !was_paused {
+                        self.rest_notice_visible = true;
+                    } else if !state.is_paused {
+                        self.rest_notice_visible = false;
+                    }
                     if let Some(id) = state.activation_target_id {
                         if let Some(target) = self.known_access_targets.get(&id).cloned() {
                             return self.activate_access(target);
@@ -2235,6 +2249,10 @@ impl cosmic::Application for Wingmate {
             }
             Message::ToggleInputPause => {
                 return self.api.access_input("togglePause", None, None).map(cosmic::Action::App);
+            }
+            Message::HideRestNotice => {
+                self.rest_notice_visible = false;
+                return Task::none();
             }
             Message::GridColumnsChanged(v) => {
                 self.settings.grid_columns = v;
@@ -2906,63 +2924,56 @@ impl cosmic::Application for Wingmate {
             24
         };
 
-        let page_content: Element<'_, Message> = column![
+        column![
             container(content)
                 .padding(content_padding)
                 .width(Fill)
                 .height(Fill),
+            self.interaction_bottom_control(),
             self.status_view(),
         ]
         .height(Fill)
-        .into();
-        let enabled = matches!(self.page, Page::Communicate | Page::Screens)
-            && (self.settings.dwell_to_select_millis > 0 || !self.settings.select_key_binding.is_empty());
-        if !enabled {
-            return page_content;
-        }
-
-        let fab_label = if self.input_is_paused {
-            "Resume input"
-        } else {
-            "Rest mode"
-        };
-        let fab = aac_toolbar_button(
-            if self.input_is_paused {
-                "media-playback-start-symbolic"
-            } else {
-                "media-playback-pause-symbolic"
-            },
-            fab_label,
-            Message::ToggleInputPause,
-        );
-        let fab_layer = container(fab)
-            .width(Fill)
-            .height(Fill)
-            .align_x(cosmic::iced::alignment::Horizontal::Right)
-            .align_y(cosmic::iced::alignment::Vertical::Bottom)
-            .padding(Padding {
-                top: 0.0,
-                right: 24.0,
-                bottom: 24.0,
-                left: 0.0,
-            });
-        let mut layers = vec![page_content, fab_layer.into()];
-        if self.input_is_paused {
-            layers.push(
-                container(text("Rest mode — hover selection and the Select key are paused").size(16))
-                    .width(Fill)
-                    .height(Fill)
-                    .align_x(cosmic::iced::alignment::Horizontal::Center)
-                    .align_y(cosmic::iced::alignment::Vertical::Top)
-                    .padding(16)
-                    .into(),
-            );
-        }
-        stack(layers).width(Fill).height(Fill).into()
+        .into()
     }
 }
 
 impl Wingmate {
+    fn interaction_bottom_control(&self) -> Element<'_, Message> {
+        let enabled = matches!(self.page, Page::Communicate | Page::Screens)
+            && (self.settings.dwell_to_select_millis > 0 || !self.settings.select_key_binding.is_empty());
+        if !enabled {
+            return Space::new().height(0).into();
+        }
+        let toggle = button(text(if self.input_is_paused { "Resume input" } else { "Rest mode" }).size(14))
+            .on_press(Message::ToggleInputPause)
+            .padding([8, 14]);
+        let notice: Element<'_, Message> = if self.rest_notice_visible && self.input_is_paused {
+            container(
+                row![
+                    text("Rest mode — hover selection and the Select key are paused").size(15),
+                    button(text("Resume input").size(14))
+                        .on_press(Message::ToggleInputPause)
+                        .padding([6, 12]),
+                ]
+                .spacing(12)
+                .align_y(cosmic::iced::alignment::Alignment::Center),
+            )
+            .padding([10, 12])
+            .class(cosmic::theme::iced::Container::Primary)
+            .into()
+        } else {
+            Space::new().height(0).into()
+        };
+        column![
+            container(notice).align_x(cosmic::iced::alignment::Alignment::Center),
+            container(toggle)
+                .align_x(cosmic::iced::alignment::Alignment::Start)
+                .padding([0, 0, 0, 8]),
+        ]
+        .spacing(6)
+        .width(Fill)
+        .into()
+    }
 
     fn status_view(&self) -> Element<'_, Message> {
         let status_text = if self.status.trim().is_empty() {

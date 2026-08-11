@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var showPronunciationSheet = false
     @State private var showSettingsPanel = false
     @State private var editingPhrase: Shared.Phrase? = nil
+    @State private var restBannerVisible = false
 
     @State private var recorder = AudioRecorder()
     @State private var recordingForPhraseId: String? = nil
@@ -211,16 +212,33 @@ struct ContentView: View {
                     .accessibilityAddTraits(.isButton)
                 }
             }
-            .overlay(alignment: .top) {
+            .overlay(alignment: .bottom) {
+                if model.inputIsPaused && restBannerVisible {
+                    HStack(spacing: 12) {
+                        Text("interaction.paused_status")
+                            .font(.subheadline.weight(.semibold))
+                        Button(action: model.toggleInputPause) {
+                            Text("interaction.resume")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.accentColor, lineWidth: 2))
+                    .padding(.bottom, 84)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .accessibilityAddTraits(.updatesFrequently)
+                }
+            }
+            .task(id: model.inputIsPaused) {
                 if model.inputIsPaused {
-                    Text("interaction.paused_status")
-                        .font(.headline)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(.regularMaterial, in: Capsule())
-                        .overlay(Capsule().stroke(Color.accentColor, lineWidth: 2))
-                        .padding(.top, 16)
-                        .accessibilityAddTraits(.updatesFrequently)
+                    withAnimation(.easeInOut(duration: 0.2)) { restBannerVisible = true }
+                    try? await Task.sleep(nanoseconds: 10_000_000_000)
+                    withAnimation(.easeInOut(duration: 0.2)) { restBannerVisible = false }
+                } else {
+                    withAnimation(.easeInOut(duration: 0.2)) { restBannerVisible = false }
                 }
             }
         }

@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -161,32 +163,53 @@ fun InteractionInputRoot(settings: Settings, enabled: Boolean = true, content: @
                     }
                 }
         ) {
+            var showRestNotice by remember { mutableStateOf(false) }
+            val inputPaused = host.state.isPaused
+            LaunchedEffect(inputPaused) {
+                if (inputPaused) {
+                    showRestNotice = true
+                    delay(10_000)
+                    showRestNotice = false
+                } else {
+                    showRestNotice = false
+                }
+            }
             content()
             if (enabled && (settings.dwellToSelectMillis > 0 || settings.selectKeyBinding.isNotBlank())) {
                 FloatingActionButton(
                     onClick = host::togglePause,
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp)
-                        .sizeIn(minWidth = 56.dp, minHeight = 56.dp)
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp)
+                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                         .semantics { liveRegion = LiveRegionMode.Polite }
                 ) {
                     Icon(
-                        if (host.state.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                        contentDescription = if (host.state.isPaused) resumeLabel else restLabel,
+                        if (inputPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                        contentDescription = if (inputPaused) resumeLabel else restLabel
                     )
                 }
-                if (host.state.isPaused) {
+                if (inputPaused && showRestNotice) {
                     Row(
                         Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = 16.dp)
-                            .background(MaterialTheme.colorScheme.inverseSurface, RoundedCornerShape(12.dp))
-                            .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 76.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.inverseSurface, RoundedCornerShape(14.dp))
+                            .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(14.dp))
                             .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .clickable { host.togglePause() }
                             .semantics { liveRegion = LiveRegionMode.Assertive },
                         verticalAlignment = Alignment.CenterVertically,
-                    ) { Text(pausedStatus, color = MaterialTheme.colorScheme.inverseOnSurface) }
+                    ) {
+                        Text(pausedStatus, color = MaterialTheme.colorScheme.inverseOnSurface)
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.inverseOnSurface,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
                 }
             }
         }
