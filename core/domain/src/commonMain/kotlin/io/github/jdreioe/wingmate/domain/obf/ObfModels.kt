@@ -26,7 +26,7 @@ enum class ObfButtonType(val wireValue: String) {
 /**
  * Visual shapes a button field can render as. Stored per-button in the
  * `ext_wingmate_button_style` extension so it round-trips through OBF/OBZ and
- * falls back to the default ([Rounded]) for consumers that do not know a value.
+ * falls back to the default ([Square]) for consumers that do not know a value.
  */
 enum class ObfButtonShape(val wireValue: String) {
     Rounded("rounded"),
@@ -180,17 +180,17 @@ data class ObfButton(
     )
 
     /**
-     * The visual shape of this button, falling back to [ObfButtonShape.Rounded]
+     * The visual shape of this button, falling back to [ObfButtonShape.Square]
      * when the extension is missing, non-string, or holds an unknown value so
      * forward-compatible OBF/OBZ imports never crash.
      */
     val shape: ObfButtonShape
         get() = ObfButtonShape.entries.firstOrNull {
             it.wireValue == (extensions[OBF_BUTTON_STYLE_EXTENSION] as? JsonPrimitive)?.contentOrNull
-        } ?: ObfButtonShape.Rounded
+        } ?: ObfButtonShape.Square
 
     fun withShape(shape: ObfButtonShape): ObfButton = copy(
-        extensions = if (shape == ObfButtonShape.Rounded) {
+        extensions = if (shape == ObfButtonShape.Square) {
             extensions - OBF_BUTTON_STYLE_EXTENSION
         } else {
             extensions + (OBF_BUTTON_STYLE_EXTENSION to JsonPrimitive(shape.wireValue))

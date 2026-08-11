@@ -14,7 +14,7 @@ class ObfButtonShapeTest {
         ObfButtonShape.entries.forEach { expected ->
             val button = ObfButton(id = "b").withShape(expected)
             assertEquals(expected, button.shape)
-            if (expected == ObfButtonShape.Rounded) {
+            if (expected == ObfButtonShape.Square) {
                 // Default shape is not persisted as an extension.
                 assertNull(button.extensions[OBF_BUTTON_STYLE_EXTENSION])
             } else {
@@ -27,33 +27,33 @@ class ObfButtonShapeTest {
     }
 
     @Test
-    fun defaultIsRoundedAndClearsExtension() {
+    fun defaultIsSquareAndClearsExtension() {
         val button = ObfButton(id = "b")
-        assertEquals(ObfButtonShape.Rounded, button.shape)
+        assertEquals(ObfButtonShape.Square, button.shape)
         assertNull(button.extensions[OBF_BUTTON_STYLE_EXTENSION])
 
-        val defaulted = ObfButton(id = "b").withShape(ObfButtonShape.Pill).withShape(ObfButtonShape.Rounded)
-        assertEquals(ObfButtonShape.Rounded, defaulted.shape)
+        val defaulted = ObfButton(id = "b").withShape(ObfButtonShape.Pill).withShape(ObfButtonShape.Square)
+        assertEquals(ObfButtonShape.Square, defaulted.shape)
         assertNull(defaulted.extensions[OBF_BUTTON_STYLE_EXTENSION])
     }
 
     @Test
-    fun unknownWireValueFallsBackToRounded() {
+    fun unknownWireValueFallsBackToSquare() {
         val button = ObfButton(
             id = "b",
             extensions = mapOf(OBF_BUTTON_STYLE_EXTENSION to JsonPrimitive("hexagon"))
         )
-        assertEquals(ObfButtonShape.Rounded, button.shape)
+        assertEquals(ObfButtonShape.Square, button.shape)
         assertFalse(button.extensions.containsKey("ext_wingmate_does_not_exist"))
     }
 
     @Test
-    fun nonStringValueFallsBackToRounded() {
+    fun nonStringValueFallsBackToSquare() {
         val button = ObfButton(
             id = "b",
             extensions = mapOf(OBF_BUTTON_STYLE_EXTENSION to JsonPrimitive(42))
         )
-        assertEquals(ObfButtonShape.Rounded, button.shape)
+        assertEquals(ObfButtonShape.Square, button.shape)
     }
 
     @Test

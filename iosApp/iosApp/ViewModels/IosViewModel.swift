@@ -30,6 +30,7 @@ struct BoardCellInfo: Identifiable, Equatable {
     var actions: [String]
     var soundId: String? = nil
     var soundDataUrl: String? = nil
+    var shape: String
 
     var id: String { "\(row):\(col)" }
 }
@@ -1809,7 +1810,8 @@ final class IosViewModel: ObservableObject {
                     hidden: cell.hidden,
                     actions: cell.actions,
                     soundId: cell.soundId,
-                    soundDataUrl: cell.soundDataUrl
+                    soundDataUrl: cell.soundDataUrl,
+                    shape: cell.shape
                 )
             }
             boardFieldItems = fields.map { field in

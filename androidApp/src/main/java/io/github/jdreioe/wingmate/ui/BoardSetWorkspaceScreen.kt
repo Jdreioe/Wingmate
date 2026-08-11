@@ -1688,7 +1688,7 @@ private fun BoardSetWorkspaceScreen(
             initialLanguage = target.button?.locale,
             initialMathMode = target.button?.mathMode == true,
             initialHidden = target.button?.hidden == true,
-            initialShape = target.button?.shape ?: ObfButtonShape.Rounded,
+            initialShape = target.button?.shape ?: ObfButtonShape.Square,
             initialWordType = target.button?.wordType,
             isKeyboardBoard = activeBoard.isKeyboard,
             showMathMode = supportsMathMode(settings.ttsEngine),

@@ -15,7 +15,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Corner radius (in dp) used for the rounded default button shape.
+ * Corner radius (in dp) used for the rounded button shape.
  */
 internal val ButtonDefaultCornerRadius = 12.dp
 

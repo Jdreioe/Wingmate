@@ -725,7 +725,7 @@ internal fun SpanningBoardGrid(
                             focus.first in item.row until item.row + item.rowSpan &&
                                 focus.second in item.column until item.column + item.columnSpan
                         } == true && item.button != null
-                        val ringShape = item.button?.shape?.toShape() ?: roundedShape()
+                        val ringShape = item.button?.shape?.toShape() ?: squareShape()
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()

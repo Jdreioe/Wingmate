@@ -794,6 +794,7 @@ struct SymbolBoardWorkspaceView: View {
 
     private func boardCellButton(row: Int, col: Int, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
         let cell = model.cellAt(row: row, col: col)
+        let cornerRadius = boardCellCornerRadius(cell, width: width, height: height)
         let isLinked = trimmed(cell?.linkedBoardId) != nil
         let sourceCellId = "\(row):\(col)"
         let hiddenInRunMode = !model.boardButtonIsVisible(
@@ -856,14 +857,14 @@ struct SymbolBoardWorkspaceView: View {
             .overlay {
                 let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
                 if !isEditMode && model.accessTargetId == targetId && model.pointerEmphasisStyle != "System" {
-                    RoundedRectangle(cornerRadius: model.pointerEmphasisStyle == "Ring" ? 20 : 2)
+                    RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(Color.accentColor, lineWidth: 3 * model.pointerEmphasisScale)
                         .padding(6 / model.pointerEmphasisScale)
                         .accessibilityHidden(true)
                         .allowsHitTesting(false)
                 }
                 if !isEditMode && model.accessTargetId == targetId && model.accessDwellProgress > 0 {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: cornerRadius)
                         .trim(from: 0, to: model.accessDwellProgress)
                         .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                         .accessibilityHidden(true)
@@ -913,10 +914,10 @@ struct SymbolBoardWorkspaceView: View {
         if cell == nil && isEditMode {
             return AnyView(
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: 0)
                         .fill(Color.clear)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: 0)
                                 .strokeBorder(Color(.separator), style: StrokeStyle(lineWidth: 1, dash: [4]))
                         )
                     Image(systemName: "plus")
@@ -974,17 +975,25 @@ struct SymbolBoardWorkspaceView: View {
         .padding(8)
         .frame(width: width, height: height, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height))
                 .fill(model.highContrastMode ? Color(.systemBackground) : colorFromHex(cell?.resolvedBackgroundColor, fallback: Color(.tertiarySystemBackground)))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height))
                 .stroke(isHighlighted
                     ? (model.highContrastMode ? Color.white : contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.accentColor))
                     : (model.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator))),
                     lineWidth: isHighlighted ? 4 : (model.highContrastMode ? 2 : (isLinked ? 1.5 : 1)))
         )
         )
+    }
+
+    private func boardCellCornerRadius(_ cell: BoardCellInfo?, width: CGFloat, height: CGFloat) -> CGFloat {
+        switch cell?.shape {
+        case "rounded", "speech", "thought": return 10
+        case "pill": return min(width, height) / 2
+        default: return 0
+        }
     }
 
     private func boardCellLabel(_ cell: BoardCellInfo?, fontScale: CGFloat = 1) -> some View {

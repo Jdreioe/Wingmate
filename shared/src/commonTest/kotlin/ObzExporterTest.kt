@@ -413,9 +413,9 @@ class ObzExporterTest {
     }
 
     @Test
-    fun unknownButtonShapeValueSurvivesImportAndFallsBackToRounded() {
+    fun unknownButtonShapeValueSurvivesImportAndFallsBackToSquare() {
         // A consumer/author that knows about a future shape must not break the
-        // default renderer: the raw value is preserved but resolves to Rounded.
+        // default renderer: the raw value is preserved but resolves to Square.
         val board = ObfBoard(
             format = "open-board-0.1",
             id = "unknown-shape",
@@ -428,7 +428,7 @@ class ObzExporterTest {
 
         val serialized = exporter.serializeBoard(board)
         val reparsed = ObfParser().parseBoard(serialized).getOrThrow()
-        assertEquals(ObfButtonShape.Rounded, reparsed.buttons.single().shape)
+        assertEquals(ObfButtonShape.Square, reparsed.buttons.single().shape)
         assertEquals(
             "zigzag_squiggly",
             reparsed.buttons.single().extensions[OBF_BUTTON_STYLE_EXTENSION]?.jsonPrimitive?.content

@@ -4381,6 +4381,7 @@ impl Wingmate {
                     .and_then(BoardButton::rendered_background_color)
                     .and_then(parse_hex_color)
             };
+            let field_radius = button_data.map(board_button_radius).unwrap_or(0.0);
             let label_color = field_color.map(contrasting_foreground);
             let has_symbol = symbol_source.is_some();
             let show_symbol = has_symbol && show_symbols;
@@ -4421,15 +4422,12 @@ impl Wingmate {
                 .align_x(cosmic::iced::alignment::Horizontal::Center)
                 .align_y(cosmic::iced::alignment::Vertical::Center);
             let field_widget: Element<'_, Message> = if self.board_edit_mode {
-                let mut field_button = button(centered_content)
+                button(centered_content)
                     .on_press(action)
                     .width(cosmic::iced::Length::Fixed(field_width))
                     .height(field_height)
-                    .class(cosmic::theme::iced::Button::Secondary);
-                if let Some(color) = field_color {
-                    field_button = field_button.class(colored_button_class(color));
-                }
-                field_button.into()
+                    .class(board_button_class(field_color, field_radius, false))
+                    .into()
             } else if button_data.is_none() {
                 button(centered_content)
                     .width(cosmic::iced::Length::Fixed(field_width))
@@ -4439,18 +4437,13 @@ impl Wingmate {
             } else {
                 let button_data = button_data.expect("checked above");
                 let target = AccessTarget::BoardButton(board.id.clone(), button_data.id.clone());
+                let highlighted = self.access_highlighted(&target);
                 let mut field_button = button(centered_content)
                     .width(cosmic::iced::Length::Fixed(field_width))
                     .height(field_height)
-                    .class(cosmic::theme::iced::Button::Secondary);
-                if let Some(color) = field_color {
-                    field_button = field_button.class(colored_button_class(color));
-                }
+                    .class(board_button_class(field_color, field_radius, highlighted));
                 if self.settings.hold_to_select_millis == 0 {
                     field_button = field_button.on_press(Message::AccessActivate(target.clone()));
-                }
-                if self.access_highlighted(&target) {
-                    field_button = field_button.class(cosmic::theme::iced::Button::Positive);
                 }
                 self.access_widget(field_button.into(), target)
             };
@@ -6736,16 +6729,43 @@ fn status_is_error(status: &str) -> bool {
     .any(|needle| normalized.contains(needle))
 }
 
-fn colored_button_class(color: cosmic::iced::Color) -> cosmic::theme::iced::Button {
-    cosmic::theme::iced::Button::Custom(Box::new(move |_theme, _status| {
-        let foreground = contrasting_foreground(color);
-        cosmic::iced::widget::button::Style {
-            background: Some(color.into()),
-            text_color: foreground,
-            icon_color: Some(foreground),
-            border_radius: 12.0.into(),
-            ..Default::default()
+fn board_button_radius(button: &BoardButton) -> f32 {
+    match button
+        .extensions
+        .get("ext_wingmate_button_style")
+        .and_then(serde_json::Value::as_str)
+    {
+        Some("rounded" | "speech" | "thought") => 12.0,
+        Some("pill") => 999.0,
+        _ => 0.0,
+    }
+}
+
+fn board_button_class(
+    color: Option<cosmic::iced::Color>,
+    radius: f32,
+    highlighted: bool,
+) -> cosmic::theme::iced::Button {
+    cosmic::theme::iced::Button::Custom(Box::new(move |theme, status| {
+        let base_class = if highlighted {
+            cosmic::theme::iced::Button::Positive
+        } else {
+            cosmic::theme::iced::Button::Secondary
+        };
+        let mut style = <cosmic::Theme as cosmic::iced::widget::button::Catalog>::style(
+            theme,
+            &base_class,
+            status,
+        );
+        if let Some(color) = color.filter(|_| !highlighted) {
+            let foreground = contrasting_foreground(color);
+            style.background = Some(color.into());
+            style.text_color = foreground;
+            style.icon_color = Some(foreground);
         }
+        style.border_radius = radius.into();
+        style.border.radius = radius.into();
+        style
     }))
 }
 
