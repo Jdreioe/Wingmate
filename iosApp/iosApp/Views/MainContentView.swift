@@ -82,16 +82,18 @@ struct MainContentView: View {
     }
 
     #if DEBUG
+    // The prediction slot always reserves its vertical space so the rest of the
+    // layout does not jump when predictions appear or disappear. Empty state is
+    // rendered as a blank bar of the same height.
     @ViewBuilder
     private var predictionBar: some View {
-        if !model.predictions.words.isEmpty || !model.predictions.letters.isEmpty {
-            PredictionBar(
-                result: model.predictions,
-                onWordSelected: { model.applyWordPrediction($0) },
-                onLetterSelected: { model.applyLetterPrediction($0) },
-                fontSizeScale: 1.0
-            )
-        }
+        PredictionBar(
+            result: model.predictions,
+            onWordSelected: { model.applyWordPrediction($0) },
+            onLetterSelected: { model.applyLetterPrediction($0) },
+            fontSizeScale: 1.0,
+            alwaysReserveSpace: true
+        )
     }
     #endif
     

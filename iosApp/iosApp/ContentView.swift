@@ -183,9 +183,9 @@ struct ContentView: View {
                 }
                 #endif
             }
-            .onKeyPress(phases: [.down, .up]) { press in
+            .onKeyPress(phases: [.down, .up]) { press -> KeyPress.Result in
                 guard !shouldShowWelcomeFlow else { return .ignored }
-                model.accessKey(press.characters, isDown: press.phase == .down) ? .handled : .ignored
+                return model.accessKey(press.characters, isDown: press.phase == .down) ? .handled : .ignored
             }
             .task {
                 while !Task.isCancelled {

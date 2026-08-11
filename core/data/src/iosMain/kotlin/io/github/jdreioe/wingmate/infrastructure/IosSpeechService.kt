@@ -127,7 +127,7 @@ class IosSpeechService(
                 trySaveHistory(spokenText, selectedVoice, selectedVoice.pitch, selectedVoice.rate, audioFilePath)
             }
             true
-        }.onFailure { t ->
+        }.getOrElse { t ->
             logger.warn { "Failed to play recorded audio file" }
             false
         }

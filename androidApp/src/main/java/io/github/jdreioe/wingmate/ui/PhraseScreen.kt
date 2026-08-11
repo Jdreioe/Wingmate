@@ -314,8 +314,13 @@ fun PhraseScreen(
                         val shouldPredict = currentText.isNotBlank() &&
                             (currentText.lastOrNull() == ' ' || activeTokenLength >= 2)
 
-                        if (!shouldPredict) {
+                        // Clear only when input is fully empty; keep last suggestions
+                        // while typing a short token so the bar doesn't blink.
+                        if (currentText.isBlank()) {
                             predictions = PredictionResult()
+                            return@collectLatest
+                        }
+                        if (!shouldPredict) {
                             return@collectLatest
                         }
 
@@ -737,6 +742,7 @@ fun PhraseScreen(
                         }
                     )
                     
+<<<<<<< Updated upstream:androidApp/src/main/java/io/github/jdreioe/wingmate/ui/PhraseScreen.kt
                     // On narrow screens, if keyboard is active, show prediction bar instead of SSML button
                     val isKeyboardVisible = WindowInsets.ime.asPaddingValues().calculateBottomPadding() > 0.dp
                     
@@ -768,29 +774,53 @@ fun PhraseScreen(
                                 .padding(vertical = 8.dp)
                         ) {
                             Text(stringResource(R.string.phrase_screen_ssml_controls), style = MaterialTheme.typography.bodyMedium)
+=======
+                    // Predictions / SSML slot. Fixed height reserves stable space so the
+                    // layout never jumps when suggestions appear, update, or clear.
+                    // On wide screens an empty slot just holds the height; on narrow
+                    // screens the SSML button fills the reserved space when idle.
+                    val hasPredictions = predictions.words.isNotEmpty() || predictions.letters.isNotEmpty()
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(60.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        when {
+                            predictionsEnabled && hasPredictions -> {
+                                PredictionBar(
+                                    predictions = predictions,
+                                    onWordSelected = { word ->
+                                        val fv = input
+                                        val updated = completePredictedWord(fv, word)
+                                        secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, updated.text, secondaryLanguageRanges)
+                                        input = updated
+                                        syncDisplayText(updated.text)
+                                    },
+                                    onLetterSelected = { letter ->
+                                        val fv = input
+                                        val updated = insertPredictedText(fv, letter.toString())
+                                        secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, updated.text, secondaryLanguageRanges)
+                                        input = updated
+                                        syncDisplayText(updated.text)
+                                    },
+                                    fontSizeScale = settings.fontSizeScale,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                )
+                            }
+                            !isWide -> {
+                                OutlinedButton(
+                                    onClick = { showSsmlDialog = true },
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .fillMaxWidth()
+                                        .height(40.dp)
+                                ) {
+                                    Text(stringResource(Res.string.phrase_screen_ssml_controls), style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+>>>>>>> Stashed changes:composeApp/src/commonMain/kotlin/io/github/jdreioe/wingmate/ui/PhraseScreen.kt
                         }
-                    }
-                    
-                    // Word and letter prediction bar in original position (only if keyboard is NOT active on narrow screens, or always on wide screens)
-                    if (predictionsEnabled && (isWide || !isKeyboardVisible) && (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty())) {
-                        PredictionBar(
-                            predictions = predictions,
-                            onWordSelected = { word ->
-                                val fv = input
-                                val updated = completePredictedWord(fv, word)
-                                secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, updated.text, secondaryLanguageRanges)
-                                input = updated
-                                syncDisplayText(updated.text)
-                            },
-                            onLetterSelected = { letter ->
-                                val fv = input
-                                val updated = insertPredictedText(fv, letter.toString())
-                                secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, updated.text, secondaryLanguageRanges)
-                                input = updated
-                                syncDisplayText(updated.text)
-                            },
-                            fontSizeScale = settings.fontSizeScale
-                        )
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
