@@ -57,6 +57,7 @@ import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
+import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -800,15 +801,32 @@ class KoinBridge : KoinComponent {
         OpenSymbolsClient.setProxyBaseUrl(url)
     }
 
-    suspend fun openSymbolsSearch(query: String, locale: String): IosOpenSymbolsResult {
-        return when (val result = OpenSymbolsClient.search(query, locale)) {
-            is OpenSymbolsClient.SearchResponse.Success -> IosOpenSymbolsResult(
+    suspend fun openSymbolsSearch(
+        query: String,
+        locale: String,
+        symbolPackage: String,
+        prioritizeArasaac: Boolean,
+    ): IosOpenSymbolsResult {
+        return when (
+            val result = SymbolSearchClient.search(
+                query = query,
+                locale = locale,
+                packageFilter = SymbolSearchClient.Package.fromWireValue(symbolPackage),
+                prioritizeArasaac = prioritizeArasaac,
+            )
+        ) {
+            is SymbolSearchClient.SearchResponse.Success -> IosOpenSymbolsResult(
                 symbols = result.symbols.map {
-                    IosOpenSymbol(id = it.id, name = it.name, imageUrl = it.image_url)
+                    IosOpenSymbol(
+                        id = it.id,
+                        name = it.name,
+                        imageUrl = it.imageUrl,
+                        source = it.source.name.lowercase(),
+                    )
                 },
                 errorCode = ""
             )
-            is OpenSymbolsClient.SearchResponse.Failure -> IosOpenSymbolsResult(
+            is SymbolSearchClient.SearchResponse.Failure -> IosOpenSymbolsResult(
                 symbols = emptyList(),
                 errorCode = result.error.toIosErrorCode()
             )
@@ -825,9 +843,10 @@ private fun OpenSymbolsClient.SearchError.toIosErrorCode(): String = when (this)
 }
 
 data class IosOpenSymbol(
-    val id: Long,
+    val id: String,
     val name: String? = null,
     val imageUrl: String? = null,
+    val source: String = "opensymbols",
 )
 
 data class IosOpenSymbolsResult(

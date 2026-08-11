@@ -48,7 +48,11 @@ object OpenSymbolsClient {
 
     fun isConfigured(): Boolean = proxyBaseUrl != null
 
-    suspend fun search(query: String, locale: String = "en"): SearchResponse = withContext(Dispatchers.Default) {
+    suspend fun search(
+        query: String,
+        locale: String = "en",
+        repository: Repository? = null,
+    ): SearchResponse = withContext(Dispatchers.Default) {
         val normalizedQuery = query.trim()
         if (normalizedQuery.isEmpty()) return@withContext SearchResponse.Success(emptyList())
         val baseUrl = proxyBaseUrl ?: return@withContext SearchResponse.Failure(SearchError.NotConfigured)
@@ -57,7 +61,15 @@ object OpenSymbolsClient {
             val response: HttpResponse = httpClient.post("$baseUrl$SEARCH_PATH") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
-                setBody(json.encodeToString(ProxySearchRequest(normalizedQuery, normalizeLocale(locale))))
+                setBody(
+                    json.encodeToString(
+                        ProxySearchRequest(
+                            query = normalizedQuery,
+                            locale = normalizeLocale(locale),
+                            repository = repository?.wireValue,
+                        )
+                    )
+                )
             }
 
             when (response.status) {
@@ -99,6 +111,8 @@ object OpenSymbolsClient {
 
     enum class SearchError { NotConfigured, Throttled, Network, Server }
 
+    enum class Repository(val wireValue: String) { Mulberry("mulberry") }
+
     sealed interface SearchResponse {
         data class Success(val symbols: List<SymbolResult>) : SearchResponse
         data class Failure(val error: SearchError) : SearchResponse
@@ -108,6 +122,7 @@ object OpenSymbolsClient {
     private data class ProxySearchRequest(
         val query: String,
         val locale: String,
+        val repository: String? = null,
     )
 
     @Serializable

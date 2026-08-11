@@ -17,6 +17,7 @@ export interface Env {
 interface SearchRequest {
   query: string;
   locale: string;
+  repository?: "mulberry";
 }
 
 interface OpenSymbolsTokenResponse {
@@ -53,8 +54,10 @@ function parseRequest(value: unknown): SearchRequest | undefined {
   if (typeof record.query !== "string" || typeof record.locale !== "string") return undefined;
   const query = record.query.trim();
   const locale = record.locale.trim().toLowerCase().split(/[-_]/, 1)[0];
+  const repository = record.repository;
   if (query.length === 0 || query.length > MAX_QUERY_LENGTH || !/^[a-z]{2}$/.test(locale)) return undefined;
-  return { query, locale };
+  if (repository !== undefined && repository !== "mulberry") return undefined;
+  return { query, locale, repository };
 }
 
 async function readJsonBody(request: Request): Promise<unknown> {
@@ -130,7 +133,7 @@ async function searchOpenSymbols(
 ): Promise<Response> {
   const token = await fetchToken(secret, fetcher);
   const url = new URL(SEARCH_URL);
-  url.searchParams.set("q", input.query);
+  url.searchParams.set("q", input.repository ? `${input.query} repo:${input.repository}` : input.query);
   url.searchParams.set("locale", input.locale);
   url.searchParams.set("safe", "1");
   const performSearch = (accessToken: string) => fetcher(url, {

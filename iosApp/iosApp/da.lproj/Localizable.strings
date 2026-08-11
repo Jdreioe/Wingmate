@@ -127,6 +127,11 @@
 "phrase.symbol.source" = "Symbolkilde";
 "phrase.symbol.source.opensymbols" = "OpenSymbols";
 "phrase.symbol.source.user_photos" = "Mine fotos";
+"phrase.symbol.package" = "Symbolpakke";
+"phrase.symbol.package.all" = "Alle";
+"phrase.symbol.package.opensymbols" = "OpenSymbols";
+"phrase.symbol.package.mulberry" = "Mulberry";
+"phrase.symbol.package.arasaac" = "ARASAAC";
 "phrase.symbol.search.placeholder" = "Søg symboler";
 "phrase.symbol.selected" = "Valgt symbol";
 "phrase.symbol.error.token_url" = "Kunne ikke oprette OpenSymbols token-URL";

@@ -7,9 +7,20 @@ import UIKit
 import AudioToolbox
 
 private struct CellOpenSymbolsSymbolResult {
-    let id: Int64
+    let id: String
     let name: String
     let image_url: String?
+    let source: String
+}
+
+private enum CellSymbolPackageFilter: String, CaseIterable, Identifiable {
+    case all
+    case opensymbols
+    case mulberry
+    case arasaac
+
+    var id: String { rawValue }
+    var localizationKey: LocalizedStringKey { LocalizedStringKey("phrase.symbol.package.\(rawValue)") }
 }
 
 private enum CellSymbolSource: String, CaseIterable, Identifiable {
@@ -166,6 +177,7 @@ struct SymbolBoardWorkspaceView: View {
     @State private var editingLinkedBoardId: String = ""
     @State private var editingSymbolSource: CellSymbolSource = .openSymbols
     @State private var editingSymbolQuery: String = ""
+    @State private var editingSymbolPackage: CellSymbolPackageFilter = .all
     @State private var editingSelectedSymbolUrl: String? = nil
     @State private var editingSelectedPhotoItem: PhotosPickerItem? = nil
     @State private var isImportingCellSymbolFile: Bool = false
@@ -1271,6 +1283,13 @@ struct SymbolBoardWorkspaceView: View {
                     .pickerStyle(.segmented)
 
                     if editingSymbolSource == .openSymbols {
+                        Picker("phrase.symbol.package", selection: $editingSymbolPackage) {
+                            ForEach(CellSymbolPackageFilter.allCases) { option in
+                                Text(option.localizationKey).tag(option)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
                         HStack(spacing: 8) {
                             TextField(NSLocalizedString("phrase.symbol.search.placeholder", comment: ""), text: $editingSymbolQuery)
                                 .textFieldStyle(.roundedBorder)
@@ -1290,6 +1309,40 @@ struct SymbolBoardWorkspaceView: View {
                                 }
                             }
                             .disabled(isSearchingCellSymbols || editingSymbolQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+
+                        if !editingSymbolResults.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 10) {
+                                    ForEach(editingSymbolResults.prefix(30), id: \.id) { symbol in
+                                        Button {
+                                            editingSelectedSymbolUrl = symbol.image_url
+                                            shouldClearEditingSymbol = false
+                                        } label: {
+                                            VStack(spacing: 4) {
+                                                if let imageUrl = symbol.image_url, let url = URL(string: imageUrl) {
+                                                    AsyncImage(url: url) { phase in
+                                                        if case .success(let image) = phase {
+                                                            image.resizable().scaledToFit()
+                                                        } else if case .empty = phase {
+                                                            ProgressView()
+                                                        } else {
+                                                            Image(systemName: "photo").foregroundStyle(.secondary)
+                                                        }
+                                                    }
+                                                    .frame(width: 56, height: 56)
+                                                }
+                                                Text(symbol.name).font(.caption2).lineLimit(1)
+                                                Text(LocalizedStringKey("phrase.symbol.package.\(symbol.source)"))
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .frame(width: 92, height: 116)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
                         }
                     } else {
                         HStack(spacing: 8) {
@@ -1716,7 +1769,12 @@ struct SymbolBoardWorkspaceView: View {
             editingSymbolResults = []
         }
 
-        guard let result = try? await bridge.openSymbolsSearch(query: trimmed, locale: "en") else {
+        guard let result = try? await bridge.openSymbolsSearch(
+            query: trimmed,
+            locale: Locale.current.identifier,
+            symbolPackage: editingSymbolPackage.rawValue,
+            prioritizeArasaac: false
+        ) else {
             await MainActor.run {
                 isSearchingCellSymbols = false
                 editingSymbolError = NSLocalizedString("phrase.symbol.error.search_failed", comment: "")
@@ -1726,7 +1784,14 @@ struct SymbolBoardWorkspaceView: View {
 
         await MainActor.run {
             if result.errorCode.isEmpty {
-                editingSymbolResults = result.symbols.map { CellOpenSymbolsSymbolResult(id: $0.id, name: $0.name ?? "", image_url: $0.imageUrl) }
+                editingSymbolResults = result.symbols.map {
+                    CellOpenSymbolsSymbolResult(
+                        id: $0.id,
+                        name: $0.name ?? "",
+                        image_url: $0.imageUrl,
+                        source: $0.source
+                    )
+                }
             } else {
                 editingSymbolError = NSLocalizedString("phrase.symbol.error.\(result.errorCode)", comment: "")
             }

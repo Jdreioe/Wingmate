@@ -363,11 +363,13 @@ fn default_pronunciation_alphabet() -> String {
 #[derive(Debug, Clone, Deserialize)]
 struct Symbol {
     #[serde(default)]
-    id: i64,
+    id: String,
     #[serde(default)]
     name: Option<String>,
     #[serde(default, rename = "imageUrl")]
     image_url: Option<String>,
+    #[serde(default)]
+    source: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -766,6 +768,7 @@ struct Wingmate {
     cell_linked_board_id: Option<String>,
     cell_actions: String,
     symbol_query: String,
+    symbol_package: String,
     symbols: Vec<Symbol>,
     symbol_loading: bool,
     pending_prediction_word: Option<String>,
@@ -947,6 +950,7 @@ enum Message {
     CellLabelChanged(String),
     CellVoiceChanged(String),
     CellSymbolQueryChanged(String),
+    CellSymbolPackageChanged(String),
     CellSymbolSearch,
     CellSymbolsLoaded(Result<SymbolSearchResult, String>),
     CellSymbolPicked(usize),
@@ -1119,6 +1123,7 @@ impl cosmic::Application for Wingmate {
             cell_linked_board_id: None,
             cell_actions: String::new(),
             symbol_query: String::new(),
+            symbol_package: "all".into(),
             symbols: vec![],
             symbol_loading: false,
             pending_prediction_word: None,
@@ -2692,6 +2697,10 @@ impl cosmic::Application for Wingmate {
             Message::CellSymbolQueryChanged(v) => {
                 self.symbol_query = v;
             }
+            Message::CellSymbolPackageChanged(v) => {
+                self.symbol_package = v;
+                self.symbols.clear();
+            }
             Message::CellSymbolSearch => {
                 let query = self.symbol_query.clone();
                 if query.trim().is_empty() {
@@ -2700,12 +2709,17 @@ impl cosmic::Application for Wingmate {
                 self.symbol_loading = true;
                 let api = self.api.clone();
                 let locale = self.settings.primary_language.clone();
+                let symbol_package = self.symbol_package.clone();
                 return Task::perform(
                     async move {
                         api.request_json(
                             Method::POST,
                             "/api/symbols/search",
-                            Some(serde_json::json!({"query": query, "locale": locale})),
+                            Some(serde_json::json!({
+                                "query": query,
+                                "locale": locale,
+                                "symbolPackage": symbol_package,
+                            })),
                         )
                         .await
                     },
@@ -3937,6 +3951,23 @@ impl Wingmate {
 
     fn board_workspace_view<'a>(&'a self, graph: &'a BoardGraph) -> Element<'a, Message> {
         if let Some((row_index, column_index)) = self.editing_cell {
+            let package_filters = [
+                ("all", fl!("symbol-package-all")),
+                ("opensymbols", "OpenSymbols".to_string()),
+                ("mulberry", "Mulberry".to_string()),
+                ("arasaac", "ARASAAC".to_string()),
+            ];
+            let package_row = row(package_filters.into_iter().map(|(value, label)| {
+                let label = if self.symbol_package == value {
+                    format!("✓ {label}")
+                } else {
+                    label
+                };
+                button(text(label))
+                    .on_press(Message::CellSymbolPackageChanged(value.to_string()))
+                    .into()
+            }))
+            .spacing(8);
             let mut editor = column![
                 text(fl!("board-field-edit-title")).size(30),
                 text_input(&fl!("board-field-label"), &self.cell_label)
@@ -3948,6 +3979,7 @@ impl Wingmate {
                 )
                 .on_input(Message::CellVoiceChanged)
                 .padding(12),
+                package_row,
                 row![
                     text_input(&fl!("board-symbol-search"), &self.symbol_query)
                         .on_input(Message::CellSymbolQueryChanged)
@@ -4005,10 +4037,15 @@ impl Wingmate {
                                     .clone()
                                     .unwrap_or_else(|| format!("#{}", symbol.id)),
                             ));
+                            content = content.push(text(match symbol.source.as_str() {
+                                "mulberry" => "Mulberry",
+                                "arasaac" => "ARASAAC",
+                                _ => "OpenSymbols",
+                            }).size(11));
                             button(content)
                                 .on_press(Message::CellSymbolPicked(index))
                                 .width(124)
-                                .height(80)
+                                .height(96)
                                 .padding([6, 10])
                                 .into()
                         }))
@@ -4019,7 +4056,7 @@ impl Wingmate {
                             scrollable::Scrollbar::default(),
                         ))
                         .width(Fill)
-                        .height(92),
+                        .height(108),
                 );
             }
             if let Some(image_url) = &self.cell_image_url {

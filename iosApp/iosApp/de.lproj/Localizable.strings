@@ -124,6 +124,11 @@
 "phrase.symbol.source" = "Symbolquelle";
 "phrase.symbol.source.opensymbols" = "OpenSymbols";
 "phrase.symbol.source.user_photos" = "Meine Fotos";
+"phrase.symbol.package" = "Symbolpaket";
+"phrase.symbol.package.all" = "Alle";
+"phrase.symbol.package.opensymbols" = "OpenSymbols";
+"phrase.symbol.package.mulberry" = "Mulberry";
+"phrase.symbol.package.arasaac" = "ARASAAC";
 "phrase.symbol.search.placeholder" = "Symbole suchen";
 "phrase.symbol.selected" = "Ausgewähltes Symbol";
 "phrase.symbol.error.token_url" = "OpenSymbols-Token-URL konnte nicht erstellt werden";

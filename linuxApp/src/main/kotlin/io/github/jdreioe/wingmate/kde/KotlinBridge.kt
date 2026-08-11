@@ -51,6 +51,7 @@ import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
+import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.AccessInputController
 import io.github.jdreioe.wingmate.application.AccessInputEffect
@@ -708,19 +709,28 @@ class KotlinBridge(private val port: Int = 8765) {
                     val body = json.parseToJsonElement(call.receiveText()).jsonObject
                     val query = body["query"]?.jsonPrimitive?.contentOrNull ?: ""
                     val locale = body["locale"]?.jsonPrimitive?.contentOrNull ?: "en"
-                    when (val result = OpenSymbolsClient.search(query, locale)) {
-                        is OpenSymbolsClient.SearchResponse.Success -> call.respond(
+                    val symbolPackage = body["symbolPackage"]?.jsonPrimitive?.contentOrNull ?: "all"
+                    when (
+                        val result = SymbolSearchClient.search(
+                            query = query,
+                            locale = locale,
+                            packageFilter = SymbolSearchClient.Package.fromWireValue(symbolPackage),
+                            prioritizeArasaac = downloadedArasaacAvailable(),
+                        )
+                    ) {
+                        is SymbolSearchClient.SearchResponse.Success -> call.respond(
                             LinuxSymbolSearchResponse(
                                 result.symbols.map {
                                     LinuxSymbolResult(
                                         id = it.id,
                                         name = it.name,
-                                        imageUrl = it.image_url,
+                                        imageUrl = it.imageUrl,
+                                        source = it.source.name.lowercase(),
                                     )
                                 }
                             )
                         )
-                        is OpenSymbolsClient.SearchResponse.Failure -> call.respond(
+                        is SymbolSearchClient.SearchResponse.Failure -> call.respond(
                             HttpStatusCode.ServiceUnavailable,
                             mapOf("error" to "Symbol search failed: ${result.error}"),
                         )
@@ -740,7 +750,7 @@ class KotlinBridge(private val port: Int = 8765) {
                     val body = json.parseToJsonElement(call.receiveText()).jsonObject
                     val url = body["url"]?.jsonPrimitive?.contentOrNull.orEmpty()
                     if (url.isBlank()) return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing url"))
-                    val localFile = trustedLocalImageFile(url)
+                    val localFile = trustedLocalImageFile(url) ?: downloadedArasaacFile(url)
                     val cacheFile = File(imageCacheDirectory(), sha256(url))
                     val bytes: ByteArray
                     val contentType: String
@@ -1483,9 +1493,10 @@ data class LinuxSymbolSearchResponse(val symbols: List<LinuxSymbolResult>)
 
 @Serializable
 data class LinuxSymbolResult(
-    val id: Long,
+    val id: String,
     val name: String,
     val imageUrl: String? = null,
+    val source: String = "opensymbols",
 )
 
 @Serializable
@@ -1636,6 +1647,18 @@ private const val TOKEN_HEADER_NAME = "X-Wingmate-Token"
 private fun imageCacheDirectory(): File =
     File(System.getenv("XDG_CACHE_HOME")?.takeIf { it.isNotBlank() }
         ?: File(System.getProperty("user.home"), ".cache").path, "wingmate/images")
+
+private fun downloadedArasaacAvailable(): Boolean =
+    File(System.getProperty("user.home"), ".wingmate/arasaac-symbols")
+        .listFiles { file -> file.isFile && file.extension == "png" }
+        ?.isNotEmpty() == true
+
+private fun downloadedArasaacFile(source: String): File? {
+    val id = Regex("api\\.arasaac\\.org/api/pictograms/(\\d+)")
+        .find(source)?.groupValues?.getOrNull(1)?.toLongOrNull() ?: return null
+    return File(System.getProperty("user.home"), ".wingmate/arasaac-symbols/$id.png")
+        .takeIf { it.isFile && it.length() > 0 }
+}
 
 private fun boardPresetCacheDirectory(): File =
     File(System.getenv("XDG_CACHE_HOME")?.takeIf { it.isNotBlank() }

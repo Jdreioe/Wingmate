@@ -5,9 +5,20 @@ import PhotosUI
 import UniformTypeIdentifiers
 
 private struct OpenSymbolsSymbolResult {
-    let id: Int64
+    let id: String
     let name: String
     let image_url: String?
+    let source: String
+}
+
+private enum SymbolPackageFilter: String, CaseIterable, Identifiable {
+    case all
+    case opensymbols
+    case mulberry
+    case arasaac
+
+    var id: String { rawValue }
+    var localizationKey: LocalizedStringKey { LocalizedStringKey("phrase.symbol.package.\(rawValue)") }
 }
 
 private enum PhraseSymbolSource: String, CaseIterable, Identifiable {
@@ -29,14 +40,24 @@ private func resolveOpenSymbolsProxyUrl() -> String? {
     return nil
 }
 
-private func searchOpenSymbolsUsingBridge(_ query: String) async -> (results: [OpenSymbolsSymbolResult], errorCode: String?) {
+private func searchOpenSymbolsUsingBridge(
+    _ query: String,
+    packageFilter: SymbolPackageFilter
+) async -> (results: [OpenSymbolsSymbolResult], errorCode: String?) {
     let bridge = KoinBridge()
     bridge.setOpenSymbolsProxyUrl(url: resolveOpenSymbolsProxyUrl())
-    guard let result = try? await bridge.openSymbolsSearch(query: query, locale: "en") else {
+    guard let result = try? await bridge.openSymbolsSearch(
+        query: query,
+        locale: Locale.current.identifier,
+        symbolPackage: packageFilter.rawValue,
+        prioritizeArasaac: false
+    ) else {
         return ([], "search_failed")
     }
     if result.errorCode.isEmpty {
-        let mapped = result.symbols.map { OpenSymbolsSymbolResult(id: $0.id, name: $0.name ?? "", image_url: $0.imageUrl) }
+        let mapped = result.symbols.map {
+            OpenSymbolsSymbolResult(id: $0.id, name: $0.name ?? "", image_url: $0.imageUrl, source: $0.source)
+        }
         return (mapped, nil)
     }
     return ([], result.errorCode)
@@ -143,6 +164,7 @@ struct AddPhraseSheet: View {
     @State private var alternativeText: String = ""
     @State private var symbolSource: PhraseSymbolSource = .openSymbols
     @State private var symbolQuery: String = ""
+    @State private var symbolPackage: SymbolPackageFilter = .all
     @State private var selectedSymbolUrl: String? = nil
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var isImportingSymbolFile: Bool = false
@@ -198,6 +220,13 @@ struct AddPhraseSheet: View {
                             .pickerStyle(.segmented)
 
                             if symbolSource == .openSymbols {
+                                Picker("phrase.symbol.package", selection: $symbolPackage) {
+                                    ForEach(SymbolPackageFilter.allCases) { option in
+                                        Text(option.localizationKey).tag(option)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+
                                 HStack(spacing: 8) {
                                     TextField(NSLocalizedString("phrase.symbol.search.placeholder", comment: ""), text: $symbolQuery)
                                         .textFieldStyle(.roundedBorder)
@@ -304,9 +333,12 @@ struct AddPhraseSheet: View {
                                                         .font(.caption2)
                                                         .lineLimit(2)
                                                         .multilineTextAlignment(.center)
+                                                    Text(LocalizedStringKey("phrase.symbol.package.\(symbol.source)"))
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.secondary)
                                                 }
                                                 .padding(8)
-                                                .frame(width: 92, height: 110)
+                                                .frame(width: 92, height: 126)
                                                 .background(
                                                     RoundedRectangle(cornerRadius: 10)
                                                         .fill(selectedSymbolUrl == symbol.image_url ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground))
@@ -530,7 +562,7 @@ struct AddPhraseSheet: View {
             symbolResults = []
         }
 
-        let (results, errorCode) = await searchOpenSymbolsUsingBridge(trimmed)
+        let (results, errorCode) = await searchOpenSymbolsUsingBridge(trimmed, packageFilter: symbolPackage)
 
         await MainActor.run {
             if let errorCode {
@@ -609,6 +641,7 @@ struct EditPhraseSheet: View {
     @State private var name: String = ""
     @State private var symbolSource: PhraseSymbolSource = .openSymbols
     @State private var symbolQuery: String = ""
+    @State private var symbolPackage: SymbolPackageFilter = .all
     @State private var selectedSymbolUrl: String? = nil
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var isImportingSymbolFile: Bool = false
@@ -664,6 +697,13 @@ struct EditPhraseSheet: View {
                             .pickerStyle(.segmented)
 
                             if symbolSource == .openSymbols {
+                                Picker("phrase.symbol.package", selection: $symbolPackage) {
+                                    ForEach(SymbolPackageFilter.allCases) { option in
+                                        Text(option.localizationKey).tag(option)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+
                                 HStack(spacing: 8) {
                                     TextField(NSLocalizedString("phrase.symbol.search.placeholder", comment: ""), text: $symbolQuery)
                                         .textFieldStyle(.roundedBorder)
@@ -772,9 +812,12 @@ struct EditPhraseSheet: View {
                                                         .font(.caption2)
                                                         .lineLimit(2)
                                                         .multilineTextAlignment(.center)
+                                                    Text(LocalizedStringKey("phrase.symbol.package.\(symbol.source)"))
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.secondary)
                                                 }
                                                 .padding(8)
-                                                .frame(width: 92, height: 110)
+                                                .frame(width: 92, height: 126)
                                                 .background(
                                                     RoundedRectangle(cornerRadius: 10)
                                                         .fill(selectedSymbolUrl == symbol.image_url ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground))
@@ -1018,7 +1061,7 @@ struct EditPhraseSheet: View {
             symbolResults = []
         }
 
-        let (results, errorCode) = await searchOpenSymbolsUsingBridge(trimmed)
+        let (results, errorCode) = await searchOpenSymbolsUsingBridge(trimmed, packageFilter: symbolPackage)
 
         await MainActor.run {
             if let errorCode {

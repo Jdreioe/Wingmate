@@ -36,6 +36,17 @@ describe("OpenSymbols proxy", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("allows only supported repository filters", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const response = await handleRequest(
+      request({ query: "hello", locale: "en", repository: "private-library" }),
+      environment(),
+      fetcher,
+    );
+    expect(response.status).toBe(400);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("rejects oversized bodies before parsing them", async () => {
     const fetcher = vi.fn<typeof fetch>();
     const response = await handleRequest(request({ query: "x".repeat(2_000), locale: "en" }), environment(), fetcher);
@@ -71,5 +82,18 @@ describe("OpenSymbols proxy", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify([{ id: 1, name: "Hello", private: "value" }]), { status: 200 }));
     const response = await handleRequest(request({ query: "hello", locale: "en" }), environment(), fetcher);
     expect(await response.json()).toEqual([{ id: 1, name: "Hello" }]);
+  });
+
+  it("limits Mulberry searches using the documented repository operator", async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "token" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ id: 2, name: "Hello", repo_key: "mulberry" }]), { status: 200 }));
+    const response = await handleRequest(
+      request({ query: "hello", locale: "en", repository: "mulberry" }),
+      environment(),
+      fetcher,
+    );
+    expect(response.status).toBe(200);
+    expect(String(fetcher.mock.calls[1][0])).toContain("q=hello+repo%3Amulberry");
   });
 });
