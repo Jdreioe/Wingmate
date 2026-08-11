@@ -291,6 +291,7 @@
 "symbol.workspace.subtitle" = "Build and manage screens";
 
 "boardset.create" = "New Screen";
+"boardset.creating" = "Creating screen…";
 "boardset.create_first" = "Create Your First Screen";
 "boardset.empty" = "No screens yet";
 "boardset.default_name" = "New Screen";

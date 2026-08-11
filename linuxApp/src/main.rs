@@ -1107,7 +1107,7 @@ impl cosmic::Application for Wingmate {
             current_page_name: String::new(),
             board_rows: 4,
             board_columns: 4,
-            board_template: "Quick Core 24".into(),
+            board_template: "Blank".into(),
             preset_importing: false,
             preset_progress: None,
             editing_cell: None,
@@ -2447,6 +2447,9 @@ impl cosmic::Application for Wingmate {
             Message::CreateBoardSet => {
                 let name = std::mem::take(&mut self.new_board_set);
                 if !name.trim().is_empty() {
+                    self.preset_importing = true;
+                    self.preset_progress = None;
+                    self.status = fl!("status-creating-screen");
                     if self.board_template.starts_with("Quick Core ") {
                         self.status = fl!("status-loading-quick-core");
                         self.preset_importing = true;
@@ -3746,6 +3749,19 @@ impl Wingmate {
     }
 
     fn screens_view(&self) -> Element<'_, Message> {
+        if self.preset_importing {
+            return container(
+                column![
+                    text(fl!("status-creating-screen")).size(20),
+                    progress_bar::<cosmic::Theme>(0.0..=1.0, self.preset_progress.unwrap_or(0.0)),
+                ]
+                .spacing(12)
+                .align_x(cosmic::iced::alignment::Alignment::Center),
+            )
+            .center(Fill)
+            .into();
+        }
+
         if let Some(graph) = &self.board_graph {
             return self.board_workspace_view(graph);
         }
@@ -3889,7 +3905,6 @@ impl Wingmate {
                 .spacing(14)
                 .align_y(cosmic::iced::alignment::Alignment::Center)
                 .wrap(),
-                text(fl!("screens-quick-core-attribution")).size(13),
                 preset_progress,
             ]
             .spacing(10),
@@ -5376,15 +5391,7 @@ fn settings_row<'a>(
 }
 
 fn board_template_options() -> Vec<String> {
-    [
-        "Quick Core 24",
-        "Quick Core 40",
-        "Quick Core 60",
-        "Quick Core 84",
-        "Quick Core 112",
-        "Blank",
-        "Calculator",
-    ]
+    ["Blank", "Calculator"]
     .into_iter()
     .map(str::to_string)
     .collect()
@@ -6856,8 +6863,8 @@ mod tests {
     }
 
     #[test]
-    fn quick_core_presets_use_stable_bridge_keys() {
-        assert_eq!(board_template_options().len(), 7);
+    fn quick_core_presets_stay_hidden_but_keep_stable_bridge_keys() {
+        assert_eq!(board_template_options(), ["Blank", "Calculator"]);
         assert_eq!(board_template_key("Quick Core 24"), "quick-core-24");
         assert_eq!(board_template_key("Quick Core 112"), "quick-core-112");
         assert_eq!(board_template_key("Calculator"), "calculator");

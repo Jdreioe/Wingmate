@@ -216,6 +216,7 @@ fun BoardSetManagerScreen(
     var route by remember { mutableStateOf<BoardSetRoute>(BoardSetRoute.Library) }
     var boardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var isCreating by remember { mutableStateOf(false) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var isQuickCoreImporting by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
@@ -243,6 +244,12 @@ fun BoardSetManagerScreen(
                 .onFailure { statusMessage = it.message ?: loadError }
             isLoading = false
         }
+    }
+
+    fun showCreatedBoardSet(created: ObfBoardSet) {
+        boardSets = (listOf(created) + boardSets)
+            .distinctBy { it.id }
+            .sortedByDescending { it.updatedAt }
     }
 
     fun deleteBoardSet(boardSet: ObfBoardSet) {
@@ -276,6 +283,7 @@ fun BoardSetManagerScreen(
         BoardSetRoute.Library -> BoardSetLibraryScreen(
             boardSets = boardSets,
             isLoading = isLoading,
+            isCreating = isCreating,
             statusMessage = statusMessage,
             onBack = onBack,
             onOpenSettings = { showSettings = true },
@@ -334,15 +342,15 @@ fun BoardSetManagerScreen(
         CreateBoardSetDialog(
             onDismiss = { showCreateDialog = false },
             onCreate = { name, rows, columns, template, keyboardPreset ->
-                if (template != BoardSetTemplate.Blank && template.quickCoreSlug == null) {
-                    showCreateDialog = false
-                }
+                showCreateDialog = false
+                isCreating = true
                 scope.launch {
                     val quickCoreSlug = template.quickCoreSlug
                     if (quickCoreSlug != null) {
                         val service = quickCorePresetService
                         if (service == null) {
                             statusMessage = createError
+                            isCreating = false
                             return@launch
                         }
                         isQuickCoreImporting = true
@@ -351,13 +359,14 @@ fun BoardSetManagerScreen(
                                 val created = useCase.renameBoardSet(result.boardSet.id, name.trim())
                                     ?: result.boardSet
                                 showCreateDialog = false
-                                refreshBoardSets()
+                                showCreatedBoardSet(created)
                                 route = BoardSetRoute.Workspace(created.id, BoardWorkspaceMode.Run)
                             }
                             is BoardImportResult.Failure -> statusMessage = result.context
                             BoardImportResult.Cancelled -> Unit
                         }
                         isQuickCoreImporting = false
+                        isCreating = false
                         return@launch
                     }
                     runCatching {
@@ -369,26 +378,18 @@ fun BoardSetManagerScreen(
                         }
                     }
                         .onSuccess { created ->
-                            showCreateDialog = false
+                            showCreatedBoardSet(created)
                             when (template) {
                                 BoardSetTemplate.Blank -> {
-                                    refreshBoardSets()
                                     route = BoardSetRoute.Workspace(created.id, BoardWorkspaceMode.Edit)
                                 }
-                                BoardSetTemplate.Calculator -> {
-                                    boardSets = (listOf(created) + boardSets)
-                                        .distinctBy { it.id }
-                                        .sortedByDescending { it.updatedAt }
-                                }
-                                BoardSetTemplate.Keyboard -> {
-                                    boardSets = (listOf(created) + boardSets)
-                                        .distinctBy { it.id }
-                                        .sortedByDescending { it.updatedAt }
-                                }
+                                BoardSetTemplate.Calculator,
+                                BoardSetTemplate.Keyboard -> Unit
                                 else -> Unit
                             }
                         }
                         .onFailure { statusMessage = it.message ?: createError }
+                    isCreating = false
                 }
             },
             quickCoreProgress = quickCoreProgress?.fraction?.toFloat(),
@@ -455,6 +456,7 @@ fun BoardSetManagerScreen(
 private fun BoardSetLibraryScreen(
     boardSets: List<ObfBoardSet>,
     isLoading: Boolean,
+    isCreating: Boolean,
     statusMessage: String?,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -504,15 +506,25 @@ private fun BoardSetLibraryScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onCreate,
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text(stringResource(R.string.board_sets_new)) }
-            )
+            if (!isLoading && !isCreating) {
+                ExtendedFloatingActionButton(
+                    onClick = onCreate,
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text = { Text(stringResource(R.string.board_sets_new)) }
+                )
+            }
         }
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             when {
+                isCreating -> Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator()
+                    Text(stringResource(R.string.board_sets_creating))
+                }
                 isLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                 boardSets.isEmpty() -> Column(
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),

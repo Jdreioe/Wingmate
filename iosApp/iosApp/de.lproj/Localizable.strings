@@ -237,6 +237,7 @@
 "symbol.workspace.subtitle" = "Bildschirme erstellen und verwalten";
 
 "boardset.create" = "Neuer Bildschirm";
+"boardset.creating" = "Bildschirm wird erstellt…";
 "boardset.create_first" = "Ersten Bildschirm erstellen";
 "boardset.empty" = "Noch keine Bildschirme";
 "boardset.default_name" = "Neuer Bildschirm";

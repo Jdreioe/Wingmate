@@ -170,6 +170,7 @@ final class IosViewModel: ObservableObject {
     @Published var boardModeEnabled: Bool = false
     @Published var quickCoreDownloadProgress: Double? = nil
     @Published var isImportingQuickCore: Bool = false
+    @Published var isCreatingBoardSet: Bool = false
     @Published var boardSets: [BoardSetInfo] = []
     @Published var selectedBoardSetId: String? = nil
     @Published var selectedBoardId: String? = nil
@@ -1494,6 +1495,8 @@ final class IosViewModel: ObservableObject {
     }
 
     func createBoardSet(name: String, rows: Int, columns: Int) async {
+        isCreatingBoardSet = true
+        defer { isCreatingBoardSet = false }
         let boardsetName = normalizedBoardsetName(name)
         let safeRows = min(max(rows, 1), 12)
         let safeColumns = min(max(columns, 1), 12)
@@ -1516,6 +1519,8 @@ final class IosViewModel: ObservableObject {
     }
 
     func createKeyboardBoardSet(name: String, preset: String) async {
+        isCreatingBoardSet = true
+        defer { isCreatingBoardSet = false }
         let boardsetName = normalizedBoardsetName(name)
         do {
             let sharedSet = try await bridge.createKeyboardBoardSet(name: boardsetName, preset: preset)
@@ -1531,6 +1536,8 @@ final class IosViewModel: ObservableObject {
     }
 
     func importQuickCorePreset(name: String, slug: String) async {
+        isCreatingBoardSet = true
+        defer { isCreatingBoardSet = false }
         isImportingQuickCore = true
         quickCoreDownloadProgress = 0
         let monitor = Task { @MainActor in

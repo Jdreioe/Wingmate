@@ -361,7 +361,8 @@ struct SymbolBoardWorkspaceView: View {
     // MARK: - Library View
     @ViewBuilder
     private var libraryView: some View {
-        VStack(spacing: 16) {
+        ZStack {
+            VStack(spacing: 16) {
             // Header bar
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
@@ -436,6 +437,16 @@ struct SymbolBoardWorkspaceView: View {
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 24)
+                }
+            }
+            }
+            if model.isCreatingBoardSet {
+                Color(.systemBackground)
+                    .ignoresSafeArea()
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("boardset.creating")
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -1062,11 +1073,6 @@ struct SymbolBoardWorkspaceView: View {
                         Text("boardset.create_blank").tag(BoardSetCreationKind.blank)
                         Text("boardset.create_keyboard_qwerty").tag(BoardSetCreationKind.qwerty)
                         Text("boardset.create_keyboard_alphabetical").tag(BoardSetCreationKind.alphabetical)
-                        Text("boardset.create_quick_core_24").tag(BoardSetCreationKind.quickCore24)
-                        Text("boardset.create_quick_core_40").tag(BoardSetCreationKind.quickCore40)
-                        Text("boardset.create_quick_core_60").tag(BoardSetCreationKind.quickCore60)
-                        Text("boardset.create_quick_core_84").tag(BoardSetCreationKind.quickCore84)
-                        Text("boardset.create_quick_core_112").tag(BoardSetCreationKind.quickCore112)
                     }
                 }
                 if createBoardsetKind == .blank {
@@ -1098,6 +1104,7 @@ struct SymbolBoardWorkspaceView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("common.save") {
+                        showCreateBoardsetSheet = false
                         Task {
                             if let quickCoreTitle = createBoardsetKind.quickCoreTitle {
                                 await model.importQuickCorePreset(
@@ -1113,7 +1120,6 @@ struct SymbolBoardWorkspaceView: View {
                             createBoardsetRows = 4
                             createBoardsetColumns = 4
                             createBoardsetKind = .blank
-                            showCreateBoardsetSheet = false
                         }
                     }
                     .disabled(model.isImportingQuickCore)

@@ -240,6 +240,7 @@
 "symbol.workspace.subtitle" = "Byg og administrer skærme";
 
 "boardset.create" = "Ny skærm";
+"boardset.creating" = "Opretter skærm…";
 "boardset.create_first" = "Opret din første skærm";
 "boardset.empty" = "Ingen skærme endnu";
 "boardset.default_name" = "Ny skærm";

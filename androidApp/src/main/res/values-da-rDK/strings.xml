@@ -33,6 +33,7 @@
     <string name="board_sets_empty_title">Ingen skærme endnu</string>
     <string name="board_sets_empty_body">Opret en skærm for at komme i gang.</string>
     <string name="board_sets_create">Opret skærm</string>
+    <string name="board_sets_creating">Opretter skærm…</string>
     <plurals name="board_sets_board_count">
         <item quantity="one">%1$d side</item>
         <item quantity="other">%1$d sider</item>

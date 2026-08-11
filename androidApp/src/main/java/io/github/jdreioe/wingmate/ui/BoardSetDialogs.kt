@@ -139,22 +139,6 @@ internal fun CreateBoardSetDialog(
                         },
                         label = { Text(stringResource(R.string.board_dialog_template_keyboard)) }
                     )
-                    listOf(
-                        BoardSetTemplate.QuickCore24 to "Quick Core 24",
-                        BoardSetTemplate.QuickCore40 to "Quick Core 40",
-                        BoardSetTemplate.QuickCore60 to "Quick Core 60",
-                        BoardSetTemplate.QuickCore84 to "Quick Core 84",
-                        BoardSetTemplate.QuickCore112 to "Quick Core 112",
-                    ).forEach { (choice, label) ->
-                        FilterChip(
-                            selected = template == choice,
-                            onClick = {
-                                template = choice
-                                if (name.isBlank()) name = label
-                            },
-                            label = { Text(label) },
-                        )
-                    }
                 }
                 if (template == BoardSetTemplate.Keyboard) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
