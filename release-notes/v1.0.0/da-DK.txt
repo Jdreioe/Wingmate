@@ -1,0 +1,4 @@
+Velkommen til Wingmate 1.0.
+• Kommunikér med sætninger, tilpassede symboltavler og tale.
+• Tilpas Wingmate til forskellige betjeningsmåder med fleksible tilgængelighedsindstillinger.
+• Udviklet med fokus på privatliv, herunder sikker opbevaring af oplysninger til taletjenesten.

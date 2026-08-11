@@ -1,0 +1,4 @@
+Welcome to Wingmate 1.0.
+• Communicate using phrases, customizable symbol boards, and speech.
+• Adapt Wingmate to different ways of interacting with flexible accessibility controls.
+• Built with privacy in mind, including secure storage for speech credentials.
