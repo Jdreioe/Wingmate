@@ -221,6 +221,9 @@
 "settings.accessibility.feedback" = "Feedback & Logging";
 "settings.accessibility.selection_sound" = "Selection Sound";
 "settings.accessibility.auditory_fishing" = "Auditory Fishing";
+"settings.speech_policy.title" = "Speech When Selecting";
+"settings.speech_policy.immediate" = "Immediate";
+"settings.speech_policy.sentence_only" = "Sentence Only";
 "settings.accessibility.usage_logging" = "Standardized Logging (OBL)";
 "settings.general.startup" = "Open at Startup";
 "settings.general.startup_mode" = "Startup Mode";

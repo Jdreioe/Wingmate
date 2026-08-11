@@ -141,6 +141,8 @@ final class IosViewModel: ObservableObject {
     @Published var selectionDebounceMillis: Double = 0
     @Published var selectionSoundEnabled: Bool = false
     @Published var auditoryFishingEnabled: Bool = false
+    // #119: legacy immediate speech per selection, or sentence-only composition.
+    @Published var speechPolicy: String = "Immediate"
     @Published var selectKeyBinding: String = ""
     @Published var restModeKeyBinding: String = ""
     @Published var pointerEmphasisStyle: String = "System"
@@ -475,6 +477,7 @@ final class IosViewModel: ObservableObject {
                 self.selectionDebounceMillis = Double(settings.selectionDebounceMillis)
                 self.selectionSoundEnabled = settings.selectionSoundEnabled
                 self.auditoryFishingEnabled = settings.auditoryFishingEnabled
+                self.speechPolicy = settings.speechPolicy.name
                 self.selectKeyBinding = settings.selectKeyBinding
                 self.restModeKeyBinding = settings.restModeKeyBinding
                 self.pointerEmphasisStyle = settings.pointerEmphasisStyle.name
@@ -566,6 +569,10 @@ final class IosViewModel: ObservableObject {
         isApplyingSentencePhraseInput = true
         onInputChanged(input)
         isApplyingSentencePhraseInput = false
+        // #119: immediate speech policy speaks each inserted phrase as it is composed.
+        if speechPolicy == "Immediate" {
+            speak(title)
+        }
         #if DEBUG
         // Incremental learning for development builds with predictions enabled.
         Task { _ = try? await bridge.learnPhrase(text: t) }
@@ -1011,6 +1018,18 @@ final class IosViewModel: ObservableObject {
     func setAuditoryFishingEnabled(_ enabled: Bool) {
         auditoryFishingEnabled = enabled
         Task { _ = try? await bridge.updateAuditoryFishingEnabled(enabled: enabled) }
+    }
+
+    func setSpeechPolicy(_ policy: String) {
+        guard policy == "Immediate" || policy == "SentenceOnly" else { return }
+        speechPolicy = policy
+        Task { _ = try? await bridge.updateSpeechPolicy(policy: policy) }
+    }
+
+    /// Whether a single board/button selection speaks immediately, honoring the
+    /// global speech policy and the resolved board activation behavior.
+    var shouldSpeakSelectionImmediately: Bool {
+        bridge.speechPolicySpeaksSelection(policy: speechPolicy, behavior: boardActivationBehavior)
     }
 
     func setBoardShowMessageBar(_ enabled: Bool) {

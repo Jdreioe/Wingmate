@@ -58,6 +58,7 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PredictionResult
+import io.github.jdreioe.wingmate.domain.SpeechPolicy
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TextEditingPolicy
@@ -1081,6 +1082,34 @@ fun PhraseScreen(
                             }
                         }
                     }
+                    // #119: unified phrase playback for the grid's explicit play affordance and
+                    // immediate-policy insertion. Plays the recording when present, else TTS.
+                    suspend fun speakPhraseFromGrid(phrase: Phrase) {
+                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                        val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
+                        val playedRecorded = phrase.recordingPath?.let { path ->
+                            runCatching {
+                                speechService.speakRecordedAudio(
+                                    audioFilePath = path,
+                                    textForHistory = textToSpeak,
+                                    voice = selected
+                                )
+                            }.getOrDefault(false)
+                        } ?: false
+                        if (!playedRecorded) {
+                            speechService.speak(textToSpeak, selected)
+                        }
+                        featureUsageReporter.reportEvent(
+                            FeatureUsageEvents.PHRASE_PLAYED,
+                            "source" to "grid",
+                            "used_recording" to playedRecorded.toString()
+                        )
+                        // Refresh history from repo
+                        try {
+                            val list = saidRepo.list()
+                            uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
+                        } catch (_: Throwable) {}
+                    }
                     PhraseGrid(
                         phrases = visiblePhrases,
                         onInsert = { phrase ->
@@ -1097,6 +1126,12 @@ fun PhraseScreen(
                                 FeatureUsageEvents.PHRASE_INSERTED,
                                 "source" to if (phrase.parentId == HistoryCategoryId) "history" else "grid"
                             )
+                            // #119: immediate speech policy also speaks the inserted phrase.
+                            if (settings.speechPolicy == SpeechPolicy.Immediate && phrase.linkedBoardId == null) {
+                                uiScope.launch(Dispatchers.IO) {
+                                    runCatching { speakPhraseFromGrid(phrase) }
+                                }
+                            }
                         },
                         onPlay = { phrase ->
                             // Classic Folder Navigation: if item has a linked board, entering it updates the view
@@ -1111,30 +1146,7 @@ fun PhraseScreen(
                             } else {
                                 uiScope.launch(Dispatchers.IO) {
                                     try {
-                                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                        val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
-                                        val playedRecorded = phrase.recordingPath?.let { path ->
-                                            runCatching {
-                                                speechService.speakRecordedAudio(
-                                                    audioFilePath = path,
-                                                    textForHistory = textToSpeak,
-                                                    voice = selected
-                                                )
-                                            }.getOrDefault(false)
-                                        } ?: false
-                                        if (!playedRecorded) {
-                                            speechService.speak(textToSpeak, selected)
-                                        }
-                                        featureUsageReporter.reportEvent(
-                                            FeatureUsageEvents.PHRASE_PLAYED,
-                                            "source" to "grid",
-                                            "used_recording" to playedRecorded.toString()
-                                        )
-                                        // Refresh history from repo
-                                        try {
-                                            val list = saidRepo.list()
-                                            uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
-                                        } catch (_: Throwable) {}
+                                        speakPhraseFromGrid(phrase)
                                     } catch (_: Throwable) {}
                                 }
                             }

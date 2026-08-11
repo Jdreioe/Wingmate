@@ -366,6 +366,13 @@ private struct AccessibilitySettingsView: View {
                 Toggle("settings.accessibility.selection_sound", isOn: Binding(
                     get: { model.selectionSoundEnabled }, set: { model.setSelectionSoundEnabled($0) }
                 ))
+                Picker("settings.speech_policy.title", selection: Binding(
+                    get: { model.speechPolicy }, set: { model.setSpeechPolicy($0) }
+                )) {
+                    Text("settings.speech_policy.immediate").tag("Immediate")
+                    Text("settings.speech_policy.sentence_only").tag("SentenceOnly")
+                }
+                .pickerStyle(.menu)
                 Toggle("settings.accessibility.auditory_fishing", isOn: Binding(
                     get: { model.auditoryFishingEnabled }, set: { model.setAuditoryFishingEnabled($0) }
                 ))

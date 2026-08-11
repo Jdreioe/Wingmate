@@ -50,6 +50,7 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
+import io.github.jdreioe.wingmate.domain.SpeechPolicy
 import io.github.jdreioe.wingmate.infrastructure.ArasaacDownloadProgress
 import io.github.jdreioe.wingmate.infrastructure.ArasaacSymbolDownloadService
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
@@ -128,6 +129,7 @@ fun SettingsScreen(
     var dwellToSelectMillis by remember { mutableStateOf(0L) }
     var selectionSoundEnabled by remember { mutableStateOf(false) }
     var auditoryFishingEnabled by remember { mutableStateOf(false) }
+    var speechPolicy by remember { mutableStateOf(SpeechPolicy.Immediate) }
     var selectionDebounceMillis by remember { mutableStateOf(0L) }
     var selectionHighlightMillis by remember { mutableStateOf(0L) }
     var selectKeyBinding by remember { mutableStateOf("") }
@@ -223,6 +225,7 @@ fun SettingsScreen(
         dwellToSelectMillis = s.dwellToSelectMillis
         selectionSoundEnabled = s.selectionSoundEnabled
         auditoryFishingEnabled = s.auditoryFishingEnabled
+        speechPolicy = s.speechPolicy
         selectionDebounceMillis = s.selectionDebounceMillis
         selectionHighlightMillis = s.selectionHighlightMillis
         selectKeyBinding = s.selectKeyBinding
@@ -524,6 +527,11 @@ fun SettingsScreen(
                                         onSelectionSoundChange = { checked -> selectionSoundEnabled = checked; updateSettings { it.copy(selectionSoundEnabled = checked) } },
                                         auditoryFishingEnabled = auditoryFishingEnabled,
                                         onAuditoryFishingChange = { checked -> auditoryFishingEnabled = checked; updateSettings { it.copy(auditoryFishingEnabled = checked) } },
+                                        speechPolicy = speechPolicy,
+                                        onSpeechPolicyChange = { policy ->
+                                            speechPolicy = policy
+                                            updateSettings { it.copy(speechPolicy = policy) }
+                                        },
                                         selectionDebounceMillis = selectionDebounceMillis,
                                         onSelectionDebounceChange = { selectionDebounceMillis = it },
                                         onSelectionDebounceChangeFinished = { updateSettings { it.copy(selectionDebounceMillis = selectionDebounceMillis) } },
@@ -1441,6 +1449,8 @@ private fun AccessibilitySection(
     onSelectionSoundChange: (Boolean) -> Unit,
     auditoryFishingEnabled: Boolean,
     onAuditoryFishingChange: (Boolean) -> Unit,
+    speechPolicy: SpeechPolicy,
+    onSpeechPolicyChange: (SpeechPolicy) -> Unit,
     selectionDebounceMillis: Long,
     onSelectionDebounceChange: (Long) -> Unit,
     onSelectionDebounceChangeFinished: () -> Unit,
@@ -1517,6 +1527,22 @@ private fun AccessibilitySection(
             checked = selectionSoundEnabled,
             onCheckedChange = onSelectionSoundChange,
             title = stringResource(R.string.ui_settings_selection_sound_title)
+        )
+        SettingsGroupDivider()
+        SettingsChoiceChips(
+            title = stringResource(R.string.ui_settings_speech_policy_title),
+            description = stringResource(R.string.ui_settings_speech_policy_desc),
+            selected = speechPolicy,
+            options = SpeechPolicy.entries,
+            label = { policy ->
+                stringResource(
+                    when (policy) {
+                        SpeechPolicy.Immediate -> R.string.ui_settings_speech_policy_immediate
+                        SpeechPolicy.SentenceOnly -> R.string.ui_settings_speech_policy_sentence_only
+                    }
+                )
+            },
+            onSelect = onSpeechPolicyChange
         )
         SettingsGroupDivider()
         SettingsSwitch(

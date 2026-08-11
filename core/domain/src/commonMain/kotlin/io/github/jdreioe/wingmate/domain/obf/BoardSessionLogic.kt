@@ -1,5 +1,7 @@
 package io.github.jdreioe.wingmate.domain.obf
 
+import io.github.jdreioe.wingmate.domain.SpeechPolicy
+
 /**
  * Shared board-session logic used identically by every native client
  * (Android Compose, iOS SwiftUI, Linux). Keeping these here means prediction
@@ -30,6 +32,19 @@ fun shouldAddBoardSelection(behavior: BoardActivationBehavior): Boolean =
 /** Whether the activation behavior speaks the selection. */
 fun shouldSpeakBoardSelection(behavior: BoardActivationBehavior): Boolean =
     behavior != BoardActivationBehavior.AddOnly
+
+/**
+ * Whether a single selection speaks immediately, honoring the global speech
+ * policy. In immediate mode the selection's activation behavior decides; in
+ * sentence-only mode nothing speaks while composing. Applies identically to
+ * OBF buttons, recorded sounds, and phrase-grid selections.
+ */
+fun shouldSpeakSelectionImmediately(policy: SpeechPolicy, behavior: BoardActivationBehavior): Boolean =
+    policy == SpeechPolicy.Immediate && shouldSpeakBoardSelection(behavior)
+
+/** Convenience for phrase-grid selections, which carry no board-level behavior. */
+fun shouldSpeakPhraseSelection(policy: SpeechPolicy): Boolean =
+    policy == SpeechPolicy.Immediate
 
 /**
  * Resolve the board to show after a selection, given the return behavior and the

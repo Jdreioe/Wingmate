@@ -46,6 +46,7 @@ import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
 import io.github.jdreioe.wingmate.domain.obf.shouldSpeakBoardSelection
+import io.github.jdreioe.wingmate.domain.obf.shouldSpeakSelectionImmediately
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
@@ -336,6 +337,11 @@ class KotlinBridge(private val port: Int = 8765) {
                 jsonObj["selectionHighlightMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(selectionHighlightMillis = it.coerceAtLeast(0)) }
                 jsonObj["selectionSoundEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(selectionSoundEnabled = it) }
                 jsonObj["auditoryFishingEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(auditoryFishingEnabled = it) }
+                jsonObj["speechPolicy"]?.jsonPrimitive?.contentOrNull?.let { value ->
+                    newSettings = newSettings.copy(speechPolicy = runCatching {
+                        io.github.jdreioe.wingmate.domain.SpeechPolicy.valueOf(value)
+                    }.getOrDefault(newSettings.speechPolicy))
+                }
                 jsonObj["usageLoggingEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(usageLoggingEnabled = it) }
                 jsonObj["historyVisible"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(historyVisible = it) }
                 jsonObj["boardShowMessageBar"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(boardShowMessageBar = it) }
@@ -1185,7 +1191,10 @@ class KotlinBridge(private val port: Int = 8765) {
                             }
                             if (
                                 text.isNotEmpty() &&
-                                shouldSpeakBoardSelection(resolved.activationBehavior)
+                                shouldSpeakSelectionImmediately(
+                                    appSettings.speechPolicy,
+                                    resolved.activationBehavior
+                                )
                             ) {
                                 speakText = text
                             }
