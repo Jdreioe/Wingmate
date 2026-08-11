@@ -1,0 +1,127 @@
+name: Promote Google Play release to production
+
+on:
+  push:
+    tags: ["production-v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Previously published open beta version, for example 0.8.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: google-play-production
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: google-play-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate production release
+        id: version
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            if [[ ! "$GITHUB_REF_NAME" =~ ^production-v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "Expected a production tag such as production-v0.8.0" >&2
+              exit 1
+            fi
+            version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          else
+            version="$REQUESTED_VERSION"
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Expected a version such as 0.8.0" >&2
+              exit 1
+            fi
+          fi
+
+          beta_tag="v$version"
+          if ! git rev-parse --verify --quiet "refs/tags/$beta_tag^{commit}" >/dev/null; then
+            echo "The matching beta tag $beta_tag does not exist" >&2
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            beta_commit="$(git rev-parse "refs/tags/$beta_tag^{commit}")"
+            production_commit="$(git rev-parse "HEAD^{commit}")"
+            if [[ "$beta_commit" != "$production_commit" ]]; then
+              echo "$GITHUB_REF_NAME and $beta_tag must point to the same commit" >&2
+              exit 1
+            fi
+          fi
+
+          latest_beta_tag=""
+          while IFS= read -r candidate; do
+            if [[ "$candidate" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              latest_beta_tag="$candidate"
+              break
+            fi
+          done < <(git tag --list 'v*.*.*' --sort=-version:refname)
+          if [[ "$latest_beta_tag" != "$beta_tag" ]]; then
+            echo "Refusing to promote $beta_tag because the latest beta tag is $latest_beta_tag" >&2
+            exit 1
+          fi
+
+          if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Expected a version such as 0.8.0" >&2
+            exit 1
+          fi
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          if (( 10#$minor > 999 || 10#$patch > 999 )); then
+            echo "Minor and patch versions must be between 0 and 999" >&2
+            exit 1
+          fi
+          version_code=$((1000000000 + 10#$major * 1000000 + 10#$minor * 1000 + 10#$patch))
+          if (( version_code < 1 || version_code > 2100000000 )); then
+            echo "Calculated Android version code is outside Google's supported range" >&2
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
+          echo "beta_tag=$beta_tag" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Prepare production release notes
+        run: bash ci_scripts/prepare_play_release_notes.sh "${{ steps.version.outputs.beta_tag }}" production
+
+      - name: Install Infisical CLI
+        run: |
+          set -o pipefail
+          curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | sudo -E bash
+          sudo apt-get update
+          sudo apt-get install -y infisical
+          infisical --version
+
+      - name: Promote open beta release to production
+        env:
+          INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
+          INFISICAL_PROJECT_ID: ad96050f-9132-4f4e-ae16-e46e4c5734fc
+          INFISICAL_API_URL: https://eu.infisical.com
+          INFISICAL_SKIP: "1"
+        run: >-
+          infisical run --projectId="$INFISICAL_PROJECT_ID" --env=prod --
+          ./gradlew :androidApp:promoteReleaseArtifact
+          --from-track beta
+          --promote-track production
+          --version-code "${{ steps.version.outputs.version_code }}"
+          --release-status completed
+          --release-name "Wingmate ${{ steps.version.outputs.version }}"

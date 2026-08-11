@@ -1,16 +1,20 @@
-name: Deploy to Google Play
+name: Deploy Google Play open beta release
 
 on:
   push:
-    tags:
-      - "prod/*"
-      - "staging/*"
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semantic version to publish, for example 0.8.0"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: google-play-${{ github.ref }}
+  group: google-play-beta
   cancel-in-progress: false
 
 jobs:
@@ -20,39 +24,56 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
 
-      - name: Configure release from tag
-        id: release
+      - name: Set Android version
+        id: version
         shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
-          channel="${GITHUB_REF_NAME%%/*}"
-          version="${GITHUB_REF_NAME#*/}"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            if [[ ! "$GITHUB_REF_NAME" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "Expected a release tag such as v0.8.0" >&2
+              exit 1
+            fi
+            version_name="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          else
+            version_name="$REQUESTED_VERSION"
+            if [[ ! "$version_name" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "Expected a version such as 0.8.0" >&2
+              exit 1
+            fi
+          fi
 
-          if [[ ! "$version" =~ ^1\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Release tags must be prod/1.x.y or staging/1.x.y"
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          if (( 10#$minor > 999 || 10#$patch > 999 )); then
+            echo "Minor and patch versions must be between 0 and 999" >&2
             exit 1
           fi
 
-          case "$channel" in
-            prod) track="production" ;;
-            staging) track="alpha" ;;
-            *)
-              echo "::error::Unknown release channel: $channel"
-              exit 1
-              ;;
-          esac
+          # Deterministic so the production workflow can promote this exact build.
+          # The base places tagged releases above codes produced by the old workflow.
+          version_code=$((1000000000 + 10#$major * 1000000 + 10#$minor * 1000 + 10#$patch))
+          if (( version_code < 1 || version_code > 2100000000 )); then
+            echo "Calculated Android version code is outside Google's supported range" >&2
+            exit 1
+          fi
 
-          version_code=$((10000 + GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
-          echo "WINGMATE_VERSION_NAME=$version" >> "$GITHUB_ENV"
+          echo "WINGMATE_VERSION_NAME=$version_name" >> "$GITHUB_ENV"
           echo "WINGMATE_VERSION_CODE=$version_code" >> "$GITHUB_ENV"
-          echo "PLAY_TRACK=$track" >> "$GITHUB_ENV"
-          echo "channel=$channel" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release_tag=v$version_name" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare tagged Play Store release notes
+        run: bash ci_scripts/prepare_play_release_notes.sh "${{ steps.version.outputs.release_tag }}" beta
 
       - name: Install Infisical CLI
         run: |
@@ -62,8 +83,12 @@ jobs:
           sudo apt-get install -y infisical
           infisical --version
 
-      - name: Publish to Google Play
-        run: infisical run --projectId="$INFISICAL_PROJECT_ID" --env=prod -- ./gradlew publishReleaseBundle --track "$PLAY_TRACK"
+      - name: Publish to Google Play open beta
+        run: >-
+          infisical run --projectId="$INFISICAL_PROJECT_ID" --env=prod --
+          ./gradlew :androidApp:publishReleaseBundle
+          --track beta
+          --release-name "Wingmate $WINGMATE_VERSION_NAME"
         env:
           INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
           INFISICAL_PROJECT_ID: ad96050f-9132-4f4e-ae16-e46e4c5734fc
@@ -74,5 +99,5 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: android-${{ steps.release.outputs.channel }}-${{ steps.release.outputs.version }}
+          name: android-${{ steps.version.outputs.release_tag }}
           path: androidApp/build/outputs/bundle/release/app-release.aab
