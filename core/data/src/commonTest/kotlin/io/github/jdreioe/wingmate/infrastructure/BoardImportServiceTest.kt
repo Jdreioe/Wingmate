@@ -8,6 +8,7 @@ import io.github.jdreioe.wingmate.platform.ArchiveReader
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfMediaUrlLoader
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import kotlinx.coroutines.runBlocking
@@ -314,6 +315,68 @@ class BoardImportServiceTest {
         assertEquals(soundPath, food.buttons.single().let { btn ->
             food.sounds.first { it.id == btn.soundId }.path
         })
+    }
+
+    @Test
+    fun importObz_prefersInArchivePathOverRemoteDataUrl() = runBlocking {
+        val boardRepo = InMemoryBoardRepository()
+        val storage = InMemoryFileStorage()
+        val homeJson = """
+            {
+              "format": "open-board-0.1",
+              "id": "home",
+              "name": "Home",
+              "buttons": [{ "id": "b", "label": "B", "image_id": "img1" }],
+              "grid": { "rows": 1, "columns": 1, "order": [["b"]] },
+              "images": [
+                {
+                  "id": "img1",
+                  "content_type": "image/png",
+                  "path": "images/local.png",
+                  "data_url": "https://example.invalid/image.png"
+                }
+              ]
+            }
+        """.trimIndent()
+        val manifest = """
+            {
+              "format": "open-board-0.1",
+              "root": "boards/home.obf",
+              "paths": { "boards": { "home": "boards/home.obf" }, "images": { "img1": "images/local.png" } }
+            }
+        """.trimIndent()
+        val picker = FakeFilePicker(
+            zipFiles = mapOf(
+                "pack.obz" to mapOf(
+                    "manifest.json" to manifest.encodeToByteArray(),
+                    "boards/home.obf" to homeJson.encodeToByteArray(),
+                    "images/local.png" to byteArrayOf(4, 2, 1)
+                )
+            )
+        )
+        // Any remote fetch would fail the test.
+        val urlLoader = ObfMediaUrlLoader { _ -> error("remote fetch should not happen for local media") }
+        val service = BoardImportService(
+            obfParser = ObfParser(),
+            boardRepository = boardRepo,
+            boardSetRepository = InMemoryBoardSetRepository(),
+            filePicker = picker,
+            fileStorage = storage,
+            urlLoader = urlLoader
+        )
+
+        val result = service.importBoardSetFromPathResult("pack.obz")
+
+        val success = assertIs<BoardImportResult.Success>(result)
+        assertTrue(success.warnings.none { it.code == "deferred_url" || it.code == "unavailable_data_url" })
+        val home = boardRepo.getBoard(success.boardSet.rootBoardId)
+        assertNotNull(home)
+        val storedPath = home.images.single().path
+        assertNotNull(storedPath)
+        assertEquals(
+            listOf<Byte>(4, 2, 1),
+            storage.loadBytes(storedPath)?.toList().orEmpty()
+        )
     }
 
     private class FakeFilePicker(

@@ -94,6 +94,7 @@ internal fun CreateBoardSetDialog(
     onDismiss: () -> Unit,
     onCreate: (name: String, rows: Int, columns: Int, template: BoardSetTemplate, keyboardPreset: KeyboardPreset) -> Unit,
     quickCoreProgress: Float? = null,
+    quickCoreStage: String? = null,
     isQuickCoreImporting: Boolean = false,
 ) {
     var name by remember { mutableStateOf("") }
@@ -190,7 +191,9 @@ internal fun CreateBoardSetDialog(
                 }
                 if (isQuickCoreImporting) {
                     Text(stringResource(R.string.board_dialog_quick_core_downloading))
-                    if (quickCoreProgress != null) {
+                    if (quickCoreStage == "importing") {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    } else if (quickCoreProgress != null) {
                         LinearProgressIndicator(
                             progress = { quickCoreProgress },
                             modifier = Modifier.fillMaxWidth(),

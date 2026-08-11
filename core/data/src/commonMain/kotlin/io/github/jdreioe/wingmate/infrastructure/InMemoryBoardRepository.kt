@@ -14,6 +14,10 @@ class InMemoryBoardRepository : BoardRepository {
         boards[board.id] = board
     }
 
+    override suspend fun saveBoards(saved: List<ObfBoard>) {
+        saved.forEach { boards[it.id] = it }
+    }
+
     override suspend fun listBoards(): List<ObfBoard> {
         return boards.values.toList()
     }

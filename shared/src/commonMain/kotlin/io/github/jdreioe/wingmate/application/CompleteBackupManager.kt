@@ -230,7 +230,7 @@ class CompleteBackupManager(
         saidTextRepository.deleteAll()
         dictionaryRepository.clear()
 
-        payload.boards.forEach { boardRepository.saveBoard(it) }
+        boardRepository.saveBoards(payload.boards)
         payload.boardSets.forEach { boardSetRepository.saveBoardSet(it) }
         payload.categories.forEach { categoryRepository.add(it) }
         payload.phrases.forEach { phraseRepository.add(it) }

@@ -392,6 +392,7 @@ fun BoardSetManagerScreen(
                 }
             },
             quickCoreProgress = quickCoreProgress?.fraction?.toFloat(),
+            quickCoreStage = quickCoreProgress?.stage,
             isQuickCoreImporting = isQuickCoreImporting,
         )
     }

@@ -82,7 +82,7 @@ val appModule = module {
             urlLoader = get()
         )
     }
-    single { QuickCorePresetService(getOrNull() ?: HttpClient(), get()) }
+    single { QuickCorePresetService(getOrNull() ?: HttpClient(), get(), getOrNull()) }
     
     single<AacLogger> { RealAacLogger(get(), getOrNull(named("logDir")), get()) }
 
