@@ -157,6 +157,7 @@ display-appearance-help = System følger skrivebordets udseendeportal. Vælg Lys
 display-show-labels = Vis etiketter
 display-show-symbols = Vis symboler
 display-high-contrast = Høj kontrast
+display-word-type-colors = Automatiske Fitzgerald-ordtypefarver
 display-message-bar = Vis beskedlinje på kommunikationstavler
 display-font-scale = Tekststørrelse
 display-button-scale = Knapstørrelse

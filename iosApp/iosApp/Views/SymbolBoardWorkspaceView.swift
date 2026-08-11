@@ -171,6 +171,7 @@ struct SymbolBoardWorkspaceView: View {
     @State private var editingActions: [String] = []
     @State private var editingInsertedTextFollowsLabel = false
     @State private var editingBackgroundPickerColor: Color = Color(.tertiarySystemBackground)
+    @State private var editingWordType: String = ""
     @State private var editingBorderPickerColor: Color = Color(.separator)
     @State private var useCustomBackgroundColor: Bool = false
     @State private var useCustomBorderColor: Bool = false
@@ -959,13 +960,13 @@ struct SymbolBoardWorkspaceView: View {
             if let linkedBoardId = trimmed(cell?.linkedBoardId) {
                 Label(model.boardDisplayName(id: linkedBoardId), systemImage: "arrowshape.turn.up.right")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.secondary))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else if let vocalization = trimmed(cell?.vocalization), vocalization != trimmed(cell?.label) {
                 Text(vocalization)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.secondary))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -974,12 +975,12 @@ struct SymbolBoardWorkspaceView: View {
         .frame(width: width, height: height, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(model.highContrastMode ? Color(.systemBackground) : colorFromHex(cell?.backgroundColor, fallback: Color(.tertiarySystemBackground)))
+                .fill(model.highContrastMode ? Color(.systemBackground) : colorFromHex(cell?.resolvedBackgroundColor, fallback: Color(.tertiarySystemBackground)))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(isHighlighted
-                    ? (model.highContrastMode ? Color.white : Color.accentColor)
+                    ? (model.highContrastMode ? Color.white : contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.accentColor))
                     : (model.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator))),
                     lineWidth: isHighlighted ? 4 : (model.highContrastMode ? 2 : (isLinked ? 1.5 : 1)))
         )
@@ -991,7 +992,7 @@ struct SymbolBoardWorkspaceView: View {
             .font(.subheadline)
             .fontWeight(cell == nil ? .regular : .semibold)
             .lineLimit(2)
-            .foregroundStyle(.primary)
+            .foregroundStyle(model.highContrastMode ? Color.primary : contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.primary))
             .frame(maxWidth: .infinity, alignment: .leading)
             .scaleEffect(fontScale, anchor: .leading)
     }
@@ -1415,6 +1416,15 @@ struct SymbolBoardWorkspaceView: View {
                         ColorPicker("boardset.cell.border_picker", selection: $editingBorderPickerColor, supportsOpacity: true)
                     }
                 }
+
+                Section("boardset.cell.word_type") {
+                    Picker("boardset.cell.word_type", selection: $editingWordType) {
+                        Text("boardset.cell.word_type.automatic").tag("")
+                        ForEach(["pronoun", "verb", "descriptor", "noun", "social", "other"], id: \.self) { type in
+                            Text(LocalizedStringKey("boardset.cell.word_type.\(type)")).tag(type)
+                        }
+                    }
+                }
             }
             .navigationTitle(Text("boardset.cell.edit_title"))
             .toolbar {
@@ -1441,7 +1451,8 @@ struct SymbolBoardWorkspaceView: View {
                                 linkedBoardId: editingLinkedBoardId,
                                 imageUrl: editingSelectedSymbolUrl,
                                 clearImage: shouldClearEditingSymbol,
-                                actions: actions
+                                actions: actions,
+                                wordType: editingWordType
                             )
                             if case .custom(let span) = editingSpan, editingCellHasButton {
                                 await model.resizeSelectedBoardField(
@@ -1688,6 +1699,7 @@ struct SymbolBoardWorkspaceView: View {
             editingBorderPickerColor = Color(.separator)
         }
         editingLinkedBoardId = existing?.linkedBoardId ?? ""
+        editingWordType = existing?.wordType ?? ""
         editingSelectedSymbolUrl = existing?.imageUrl
         shouldClearEditingSymbol = false
         editingSymbolQuery = ""
@@ -1732,6 +1744,22 @@ struct SymbolBoardWorkspaceView: View {
         }
 
         return fallback
+    }
+
+    private func contrastingColor(for hex: String?, fallback: Color) -> Color {
+        var value = (hex ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.hasPrefix("#") { value.removeFirst() }
+        guard value.count == 6, let parsed = UInt64(value, radix: 16) else { return fallback }
+        func linear(_ channel: UInt64) -> Double {
+            let value = Double(channel) / 255.0
+            return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * linear((parsed >> 16) & 0xFF)
+            + 0.7152 * linear((parsed >> 8) & 0xFF)
+            + 0.0722 * linear(parsed & 0xFF)
+        let blackContrast = (luminance + 0.05) / 0.05
+        let whiteContrast = 1.05 / (luminance + 0.05)
+        return blackContrast >= whiteContrast ? .black : .white
     }
 
     private func hexFromColor(_ color: Color) -> String {

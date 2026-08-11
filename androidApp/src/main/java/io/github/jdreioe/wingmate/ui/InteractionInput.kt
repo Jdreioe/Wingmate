@@ -13,7 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Button
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -176,7 +176,7 @@ fun InteractionInputRoot(settings: Settings, enabled: Boolean = true, content: @
             }
             content()
             if (enabled && (settings.dwellToSelectMillis > 0 || settings.selectKeyBinding.isNotBlank())) {
-                Button(
+                FloatingActionButton(
                     onClick = host::togglePause,
                     modifier = Modifier
                         .align(Alignment.BottomStart)

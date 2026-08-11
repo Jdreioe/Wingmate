@@ -197,6 +197,14 @@
     <string name="board_dialog_hidden_description">Keep this button available for editing but hide it during normal communication.</string>
     <string name="board_dialog_clear_image">Clear image</string>
     <string name="board_dialog_color">Field color</string>
+    <string name="board_dialog_word_type">Word type</string>
+    <string name="board_dialog_word_type_automatic">Automatic</string>
+    <string name="board_dialog_word_type_pronoun">Pronoun</string>
+    <string name="board_dialog_word_type_verb">Verb</string>
+    <string name="board_dialog_word_type_descriptor">Descriptor</string>
+    <string name="board_dialog_word_type_noun">Noun</string>
+    <string name="board_dialog_word_type_social">Social word</string>
+    <string name="board_dialog_word_type_other">Other</string>
     <string name="board_dialog_pick_color">Pick</string>
     <string name="board_dialog_shape">Button shape</string>
     <string name="board_dialog_shape_rounded">Rounded</string>
@@ -388,6 +396,8 @@
     <string name="phrase_add_cd">Add phrase</string>
 
     <string name="ui_settings_title">Settings</string>
+    <string name="ui_settings_word_type_colors_title">Word-type colors</string>
+    <string name="ui_settings_word_type_colors_desc">Automatically apply Fitzgerald colors when a button has no custom color</string>
     <string name="ui_settings_search">Search settings</string>
     <string name="ui_settings_search_empty">No matching settings</string>
     <string name="ui_settings_speech_title">Speech and language</string>

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonShape
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
+import io.github.jdreioe.wingmate.domain.obf.WordType
 import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.domain.PhraseRecordingService
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
@@ -58,6 +59,16 @@ private fun ObfButtonShape.labelRes(): Int = when (this) {
     ObfButtonShape.Pill -> R.string.board_dialog_shape_pill
     ObfButtonShape.Speech -> R.string.board_dialog_shape_speech
     ObfButtonShape.Thought -> R.string.board_dialog_shape_thought
+}
+
+@StringRes
+private fun WordType.labelRes(): Int = when (this) {
+    WordType.Pronoun -> R.string.board_dialog_word_type_pronoun
+    WordType.Verb -> R.string.board_dialog_word_type_verb
+    WordType.Descriptor -> R.string.board_dialog_word_type_descriptor
+    WordType.Noun -> R.string.board_dialog_word_type_noun
+    WordType.Social -> R.string.board_dialog_word_type_social
+    WordType.Other -> R.string.board_dialog_word_type_other
 }
 
 /** Small, literal previews make the authoring choice understandable without
@@ -276,6 +287,7 @@ internal fun EditBoardCellDialog(
     initialMathMode: Boolean = false,
     initialHidden: Boolean = false,
     initialShape: ObfButtonShape = ObfButtonShape.Rounded,
+    initialWordType: WordType? = null,
     isKeyboardBoard: Boolean = false,
     showMathMode: Boolean = true,
     availableBoards: List<ObfBoard> = emptyList(),
@@ -296,7 +308,8 @@ internal fun EditBoardCellDialog(
         linkedBoardId: String?,
         action: String?,
         actions: List<String>,
-        shape: ObfButtonShape
+        shape: ObfButtonShape,
+        wordType: WordType?
     ) -> Unit,
     onClearCell: () -> Unit
 ) {
@@ -308,6 +321,7 @@ internal fun EditBoardCellDialog(
     var recordingError by remember { mutableStateOf<String?>(null) }
     var backgroundColor by remember { mutableStateOf(initialBackgroundColor) }
     var shape by remember { mutableStateOf(initialShape) }
+    var wordType by remember { mutableStateOf(initialWordType) }
     var language by remember { mutableStateOf(initialLanguage) }
     var mathMode by remember { mutableStateOf(initialMathMode) }
     var hidden by remember { mutableStateOf(initialHidden) }
@@ -444,6 +458,29 @@ internal fun EditBoardCellDialog(
                         )
                     }
                     Switch(checked = hidden, onCheckedChange = { hidden = it })
+                }
+
+                Text(
+                    stringResource(R.string.board_dialog_word_type),
+                    style = MaterialTheme.typography.labelLarge
+                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilterChip(
+                        selected = wordType == null,
+                        onClick = { wordType = null },
+                        label = { Text(stringResource(R.string.board_dialog_word_type_automatic)) }
+                    )
+                    WordType.entries.forEach { type ->
+                        FilterChip(
+                            selected = wordType == type,
+                            onClick = { wordType = type },
+                            label = { Text(stringResource(type.labelRes())) }
+                        )
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { showImageSourcePicker = true }) {
@@ -762,7 +799,8 @@ TextButton(
                                 linkedBoardId.takeIf { opensPage },
                                 normalized.singleOrNull(),
                                 if (normalized.size > 1) normalized else emptyList(),
-                                shape
+                                shape,
+                                wordType
                             )
                         },
                 enabled = label.isNotBlank() && (!opensPage || linkedBoardId != null)

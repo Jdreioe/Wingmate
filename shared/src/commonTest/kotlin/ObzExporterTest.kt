@@ -6,6 +6,10 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonShape
 import io.github.jdreioe.wingmate.domain.obf.OBF_BUTTON_STYLE_EXTENSION
+import io.github.jdreioe.wingmate.domain.obf.OBF_WORD_TYPE_EXTENSION
+import io.github.jdreioe.wingmate.domain.obf.WordType
+import io.github.jdreioe.wingmate.domain.obf.withWordType
+import io.github.jdreioe.wingmate.domain.obf.wordType
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.ObfLicense
@@ -40,6 +44,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.assertIs
 
@@ -389,6 +394,22 @@ class ObzExporterTest {
             "speech",
             reparsed.buttons.first { it.id == "b1" }.extensions[OBF_BUTTON_STYLE_EXTENSION]?.jsonPrimitive?.content
         )
+    }
+
+    @Test
+    fun manualWordTypeRoundTripsWithoutPersistingGeneratedColor() {
+        val board = ObfBoard(
+            format = "open-board-0.1",
+            id = "word-type-board",
+            buttons = listOf(ObfButton(id = "b1", label = "play").withWordType(WordType.Noun))
+        )
+
+        val serialized = exporter.serializeBoard(board)
+        assertTrue(serialized.contains(OBF_WORD_TYPE_EXTENSION))
+
+        val reparsed = ObfParser().parseBoard(serialized).getOrThrow()
+        assertEquals(WordType.Noun, reparsed.buttons.single().wordType)
+        assertNull(reparsed.buttons.single().backgroundColor)
     }
 
     @Test

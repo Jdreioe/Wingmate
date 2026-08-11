@@ -198,16 +198,18 @@ struct ContentView: View {
                     }
                 }
             }
-            .overlay(alignment: .bottomLeading) {
+            .overlay(alignment: .bottomTrailing) {
                 if !shouldShowWelcomeFlow && (model.dwellToSelectMillis > 0 || !model.selectKeyBinding.isEmpty) {
                     Button(action: model.toggleInputPause) {
                         Image(systemName: model.inputIsPaused ? "play.fill" : "pause.fill")
-                            .frame(width: 44, height: 44)
+                            .font(.title2.weight(.semibold))
+                            .frame(minWidth: 56, minHeight: 56)
                     }
                     .buttonStyle(.borderedProminent)
-                    .clipShape(Circle())
-                    .padding(12)
+                    .buttonBorderShape(.circle)
+                    .padding(16)
                     .accessibilityLabel(Text(model.inputIsPaused ? "interaction.resume" : "interaction.rest_mode"))
+                    .accessibilityAddTraits(.isButton)
                 }
             }
             .overlay(alignment: .bottom) {
