@@ -463,6 +463,11 @@
 "boardset.create_blank" = "Tom tavle";
 "boardset.create_keyboard_qwerty" = "QWERTY-tastatur";
 "boardset.create_keyboard_alphabetical" = "Alfabetisk tastatur";
+"boardset.create_quick_core_24" = "Quick Core 24";
+"boardset.create_quick_core_40" = "Quick Core 40";
+"boardset.create_quick_core_60" = "Quick Core 60";
+"boardset.create_quick_core_84" = "Quick Core 84";
+"boardset.create_quick_core_112" = "Quick Core 112";
 "boardset.keyboard_layout" = "Tastaturlag";
 "boardset.keyboard_symbols" = "Symboler";
 "boardset.cell.keyboard_action" = "Tastaturfunktion";

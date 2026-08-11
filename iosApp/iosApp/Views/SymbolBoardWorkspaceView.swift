@@ -51,11 +51,11 @@ private enum BoardSetCreationKind: String, CaseIterable, Identifiable {
 
     var quickCoreTitle: String? {
         switch self {
-        case .quickCore24: "Quick Core 24"
-        case .quickCore40: "Quick Core 40"
-        case .quickCore60: "Quick Core 60"
-        case .quickCore84: "Quick Core 84"
-        case .quickCore112: "Quick Core 112"
+        case .quickCore24: NSLocalizedString("boardset.create_quick_core_24", comment: "")
+        case .quickCore40: NSLocalizedString("boardset.create_quick_core_40", comment: "")
+        case .quickCore60: NSLocalizedString("boardset.create_quick_core_60", comment: "")
+        case .quickCore84: NSLocalizedString("boardset.create_quick_core_84", comment: "")
+        case .quickCore112: NSLocalizedString("boardset.create_quick_core_112", comment: "")
         default: nil
         }
     }
@@ -1062,11 +1062,11 @@ struct SymbolBoardWorkspaceView: View {
                         Text("boardset.create_blank").tag(BoardSetCreationKind.blank)
                         Text("boardset.create_keyboard_qwerty").tag(BoardSetCreationKind.qwerty)
                         Text("boardset.create_keyboard_alphabetical").tag(BoardSetCreationKind.alphabetical)
-                        Text("Quick Core 24").tag(BoardSetCreationKind.quickCore24)
-                        Text("Quick Core 40").tag(BoardSetCreationKind.quickCore40)
-                        Text("Quick Core 60").tag(BoardSetCreationKind.quickCore60)
-                        Text("Quick Core 84").tag(BoardSetCreationKind.quickCore84)
-                        Text("Quick Core 112").tag(BoardSetCreationKind.quickCore112)
+                        Text("boardset.create_quick_core_24").tag(BoardSetCreationKind.quickCore24)
+                        Text("boardset.create_quick_core_40").tag(BoardSetCreationKind.quickCore40)
+                        Text("boardset.create_quick_core_60").tag(BoardSetCreationKind.quickCore60)
+                        Text("boardset.create_quick_core_84").tag(BoardSetCreationKind.quickCore84)
+                        Text("boardset.create_quick_core_112").tag(BoardSetCreationKind.quickCore112)
                     }
                 }
                 if createBoardsetKind == .blank {
