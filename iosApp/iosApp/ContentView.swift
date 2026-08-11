@@ -197,15 +197,17 @@ struct ContentView: View {
                     }
                 }
             }
-            .overlay(alignment: .topLeading) {
+            .overlay(alignment: .bottomTrailing) {
                 if !shouldShowWelcomeFlow && (model.dwellToSelectMillis > 0 || !model.selectKeyBinding.isEmpty) {
                     Button(action: model.toggleInputPause) {
-                        Label(model.inputIsPaused ? "interaction.resume" : "interaction.rest_mode",
-                              systemImage: model.inputIsPaused ? "play.fill" : "pause.fill")
+                        Image(systemName: model.inputIsPaused ? "play.fill" : "pause.fill")
+                            .font(.title2.weight(.semibold))
                             .frame(minWidth: 56, minHeight: 56)
                     }
                     .buttonStyle(.borderedProminent)
-                    .padding(8)
+                    .buttonBorderShape(.circle)
+                    .padding(16)
+                    .accessibilityLabel(Text(model.inputIsPaused ? "interaction.resume" : "interaction.rest_mode"))
                     .accessibilityAddTraits(.isButton)
                 }
             }
@@ -217,7 +219,7 @@ struct ContentView: View {
                         .padding(.vertical, 10)
                         .background(.regularMaterial, in: Capsule())
                         .overlay(Capsule().stroke(Color.accentColor, lineWidth: 2))
-                        .padding(.top, 72)
+                        .padding(.top, 16)
                         .accessibilityAddTraits(.updatesFrequently)
                 }
             }

@@ -1,6 +1,7 @@
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
+import io.github.jdreioe.wingmate.domain.WordTypeColorScheme
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import kotlinx.serialization.json.Json
@@ -25,6 +26,7 @@ class SettingsModelTest {
         assertEquals(true, settings.boardShowMessageBar)
         assertEquals(BoardActivationBehavior.SpeakAndAdd, settings.boardActivationBehavior)
         assertEquals(BoardReturnBehavior.Stay, settings.boardReturnBehavior)
+        assertEquals(WordTypeColorScheme.None, settings.wordTypeColorScheme)
     }
 
     @Test
@@ -71,6 +73,16 @@ class SettingsModelTest {
         val encoded = json.encodeToString(Settings(historyVisible = false))
         val decoded = json.decodeFromString<Settings>(encoded)
         assertEquals(false, decoded.historyVisible)
+    }
+
+    @Test
+    fun wordTypeColorSchemeIsOffForExistingSettingsAndRoundTripsWhenEnabled() {
+        assertEquals(
+            WordTypeColorScheme.None,
+            json.decodeFromString<Settings>("{}").wordTypeColorScheme
+        )
+        val enabled = Settings(wordTypeColorScheme = WordTypeColorScheme.Fitzgerald)
+        assertEquals(enabled, json.decodeFromString<Settings>(json.encodeToString(enabled)))
     }
 
     @Test

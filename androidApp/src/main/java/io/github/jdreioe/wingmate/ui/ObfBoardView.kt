@@ -99,6 +99,7 @@ import io.github.jdreioe.wingmate.domain.AacLogger
 import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
+import io.github.jdreioe.wingmate.domain.obf.resolvedBackgroundColor
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import org.koin.compose.koinInject
 import kotlinx.coroutines.delay
@@ -1106,10 +1107,15 @@ fun ObfButtonItem(
     val highContrastContainer = if (MaterialTheme.colorScheme.surface == Color.Black || settings.forceDarkTheme == true) Color.Black else Color.White
     val highContrastContent = if (highContrastContainer == Color.Black) Color.White else Color.Black
     
+    val resolvedBackgroundColor = button.resolvedBackgroundColor(
+        settings.wordTypeColorScheme,
+        locale,
+        displayLabel
+    )
     val bgColor = if (settings.highContrastMode) {
         highContrastContainer
     } else {
-        button.backgroundColor?.let { runCatching { parseHexToColor(it) }.getOrNull() } 
+        resolvedBackgroundColor?.let { runCatching { parseHexToColor(it) }.getOrNull() }
             ?: MaterialTheme.colorScheme.surfaceVariant
     }
     
@@ -1121,7 +1127,7 @@ fun ObfButtonItem(
     
     val contentColor = when {
         settings.highContrastMode -> highContrastContent
-        button.backgroundColor != null -> contrastingContentColor(bgColor)
+        resolvedBackgroundColor != null -> contrastingContentColor(bgColor)
         else -> MaterialTheme.colorScheme.onSurface
     }
     val buttonShape = button.shape.toShape()

@@ -11,6 +11,8 @@ import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.WordType
+import io.github.jdreioe.wingmate.domain.obf.withWordType
 import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_SETTINGS_EXTENSION
 import io.github.jdreioe.wingmate.domain.obf.encodeBoardSettings
 import kotlinx.serialization.encodeToString
@@ -370,6 +372,7 @@ class BoardSetUseCase(
         hidden: Boolean = false,
         linkedBoardId: String? = null,
         actions: List<String> = emptyList(),
+        wordType: WordType? = null,
     ): ObfBoard? {
         val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
         if (boardSet.isLocked) return null
@@ -423,7 +426,7 @@ class BoardSetUseCase(
             loadBoard = linkedBoardId?.takeIf { it in boardSet.boardIds }?.let { ObfLoadBoard(id = it) },
             action = actions.singleOrNull(),
             actions = if (actions.size > 1) actions else emptyList(),
-        )
+        ).withWordType(wordType)
 
         val updatedButtons = if (existingButton == null) {
             board.buttons + updatedButton

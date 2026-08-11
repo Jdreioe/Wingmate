@@ -375,7 +375,8 @@ fun updateDraftCell(
     linkedBoardId: String?,
     action: String? = null,
     actions: List<String> = emptyList(),
-    shape: ObfButtonShape = ObfButtonShape.Rounded
+    shape: ObfButtonShape = ObfButtonShape.Rounded,
+    wordType: WordType? = null
 ): BoardSetGraph {
     val board = graph.boardsById[boardId] ?: return graph
     val grid = board.grid ?: return graph
@@ -431,7 +432,7 @@ fun updateDraftCell(
         },
         action = action?.trim()?.ifBlank { null },
         actions = actions
-    ).withMathMode(mathMode).withShape(shape)
+    ).withMathMode(mathMode).withShape(shape).withWordType(wordType)
     val buttons = if (existingButton == null) board.buttons + button else board.buttons.map {
         if (it.id == button.id) button else it
     }

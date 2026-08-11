@@ -52,6 +52,12 @@ enum class PointerEmphasisStyle {
 }
 
 @Serializable
+enum class WordTypeColorScheme {
+    None,
+    Fitzgerald
+}
+
+@Serializable
 data class Settings(
     val language: String = "en-US",
     val voice: String = "default",
@@ -106,6 +112,9 @@ data class Settings(
     val holdToSelectMillis: Long = 0,
     val gridColumns: Int = 3,
     val highContrastMode: Boolean = false,
+    // Automatically color vocabulary buttons by grammatical word type. Explicit
+    // author colors always take precedence.
+    val wordTypeColorScheme: WordTypeColorScheme = WordTypeColorScheme.None,
     val dwellToSelectMillis: Long = 0,
     // Interaction shortcuts use portable tokens such as "Space", "Enter", or "F8".
     // Empty disables the shortcut so ordinary typing is never intercepted by default.

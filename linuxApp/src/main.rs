@@ -253,6 +253,7 @@ struct Settings {
     label_at_top: bool,
     grid_columns: i32,
     high_contrast_mode: bool,
+    word_type_color_scheme: String,
     hold_to_select_millis: i64,
     dwell_to_select_millis: i64,
     select_key_binding: String,
@@ -302,6 +303,7 @@ impl Default for Settings {
             label_at_top: false,
             grid_columns: 3,
             high_contrast_mode: false,
+            word_type_color_scheme: "None".into(),
             hold_to_select_millis: 0,
             dwell_to_select_millis: 0,
             select_key_binding: String::new(),
@@ -625,6 +627,18 @@ struct BoardButton {
     action: Option<String>,
     #[serde(default)]
     actions: Vec<String>,
+    #[serde(default)]
+    extensions: HashMap<String, serde_json::Value>,
+}
+
+impl BoardButton {
+    fn rendered_background_color(&self) -> Option<&str> {
+        self.background_color.as_deref().or_else(|| {
+            self.extensions
+                .get("ext_wingmate_resolved_background_color")
+                .and_then(serde_json::Value::as_str)
+        })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -764,6 +778,7 @@ struct Wingmate {
     cell_vocalization: String,
     cell_image_url: Option<String>,
     cell_background_color: String,
+    cell_word_type: String,
     cell_hidden: bool,
     cell_linked_board_id: Option<String>,
     cell_actions: String,
@@ -958,6 +973,7 @@ enum Message {
     CellLocalImage,
     CellLocalImageImported(Result<ImportedImage, String>),
     CellBackgroundChanged(String),
+    CellWordTypeChanged(String),
     CellHiddenChanged(bool),
     CellLinkedBoardChanged(String),
     CellActionsChanged(String),
@@ -1119,6 +1135,7 @@ impl cosmic::Application for Wingmate {
             cell_vocalization: String::new(),
             cell_image_url: None,
             cell_background_color: String::new(),
+            cell_word_type: "Automatic".into(),
             cell_hidden: false,
             cell_linked_board_id: None,
             cell_actions: String::new(),
@@ -2112,6 +2129,13 @@ impl cosmic::Application for Wingmate {
                     "showSymbols" => self.settings.show_symbols = enabled,
                     "labelAtTop" => self.settings.label_at_top = enabled,
                     "highContrastMode" => self.settings.high_contrast_mode = enabled,
+                    "wordTypeColorScheme" => {
+                        self.settings.word_type_color_scheme = if enabled {
+                            "Fitzgerald".into()
+                        } else {
+                            "None".into()
+                        }
+                    }
                     "selectionSoundEnabled" => self.settings.selection_sound_enabled = enabled,
                     "auditoryFishingEnabled" => self.settings.auditory_fishing_enabled = enabled,
                     "usageLoggingEnabled" => self.settings.usage_logging_enabled = enabled,
@@ -2127,26 +2151,31 @@ impl cosmic::Application for Wingmate {
                     "scanTopBarEnabled" => self.settings.scan_top_bar_enabled = enabled,
                     _ => {}
                 }
+                let setting_value = if key == "wordTypeColorScheme" {
+                    serde_json::Value::String(self.settings.word_type_color_scheme.clone())
+                } else {
+                    serde_json::Value::Bool(enabled)
+                };
                 let save = if matches!(
                     key,
-                    "showLabels" | "showSymbols" | "labelAtTop" | "boardShowMessageBar"
+                    "showLabels" | "showSymbols" | "labelAtTop" | "boardShowMessageBar" | "wordTypeColorScheme"
                 ) {
                     self.board_graph.as_ref().map_or_else(
                         || {
                             self.api
-                                .patch_setting(key, serde_json::Value::Bool(enabled))
+                                .patch_setting(key, setting_value.clone())
                         },
                         |graph| {
                             self.api.patch_setting_and_reload_board(
                                 key,
-                                serde_json::Value::Bool(enabled),
+                                setting_value.clone(),
                                 graph.board_set.id.clone(),
                             )
                         },
                     )
                 } else {
                     self.api
-                        .patch_setting(key, serde_json::Value::Bool(enabled))
+                        .patch_setting(key, setting_value)
                 };
                 if key == "highContrastMode" {
                     let theme = theme_for_preference(
@@ -2631,6 +2660,7 @@ impl cosmic::Application for Wingmate {
                 self.cell_vocalization.clear();
                 self.cell_image_url = None;
                 self.cell_background_color.clear();
+                self.cell_word_type = "Automatic".into();
                 self.cell_hidden = false;
                 self.cell_linked_board_id = None;
                 self.cell_actions.clear();
@@ -2671,6 +2701,9 @@ impl cosmic::Application for Wingmate {
                         button.vocalization.clone().unwrap_or_default(),
                         image_url,
                         button.background_color.clone().unwrap_or_default(),
+                        button.extensions.get("ext_wingmate_word_type")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("Automatic").to_string(),
                         button.hidden,
                         button.load_board.as_ref().map(|target| target.id.clone()),
                         if button.actions.is_empty() {
@@ -2680,13 +2713,22 @@ impl cosmic::Application for Wingmate {
                         },
                     )
                 });
-                if let Some((label, vocalization, image_url, background, hidden, linked, actions)) =
-                    details
+                if let Some((
+                    label,
+                    vocalization,
+                    image_url,
+                    background,
+                    word_type,
+                    hidden,
+                    linked,
+                    actions,
+                )) = details
                 {
                     self.cell_label = label;
                     self.cell_vocalization = vocalization;
                     self.cell_image_url = image_url;
                     self.cell_background_color = background;
+                    self.cell_word_type = word_type;
                     self.cell_hidden = hidden;
                     self.cell_linked_board_id = linked;
                     self.cell_actions = actions;
@@ -2767,6 +2809,7 @@ impl cosmic::Application for Wingmate {
                 Err(error) => self.status = format!("Image import failed: {error}"),
             },
             Message::CellBackgroundChanged(value) => self.cell_background_color = value,
+            Message::CellWordTypeChanged(value) => self.cell_word_type = value,
             Message::CellHiddenChanged(value) => self.cell_hidden = value,
             Message::CellLinkedBoardChanged(value) => {
                 self.cell_linked_board_id = if value == "No page link" {
@@ -2799,6 +2842,7 @@ impl cosmic::Application for Wingmate {
                             self.cell_vocalization.clone(),
                             self.cell_image_url.clone(),
                             self.cell_background_color.clone(),
+                            self.cell_word_type.clone(),
                             self.cell_hidden,
                             self.cell_linked_board_id.clone(),
                             self.cell_actions
@@ -2857,8 +2901,7 @@ impl cosmic::Application for Wingmate {
             24
         };
 
-        column![
-            self.interaction_status_view(),
+        let page_content: Element<'_, Message> = column![
             container(content)
                 .padding(content_padding)
                 .width(Fill)
@@ -2866,33 +2909,55 @@ impl cosmic::Application for Wingmate {
             self.status_view(),
         ]
         .height(Fill)
-        .into()
+        .into();
+        let enabled = matches!(self.page, Page::Communicate | Page::Screens)
+            && (self.settings.dwell_to_select_millis > 0 || !self.settings.select_key_binding.is_empty());
+        if !enabled {
+            return page_content;
+        }
+
+        let fab_label = if self.input_is_paused {
+            "Resume input"
+        } else {
+            "Rest mode"
+        };
+        let fab = aac_toolbar_button(
+            if self.input_is_paused {
+                "media-playback-start-symbolic"
+            } else {
+                "media-playback-pause-symbolic"
+            },
+            fab_label,
+            Message::ToggleInputPause,
+        );
+        let fab_layer = container(fab)
+            .width(Fill)
+            .height(Fill)
+            .align_x(cosmic::iced::alignment::Horizontal::Right)
+            .align_y(cosmic::iced::alignment::Vertical::Bottom)
+            .padding(Padding {
+                top: 0.0,
+                right: 24.0,
+                bottom: 24.0,
+                left: 0.0,
+            });
+        let mut layers = vec![page_content, fab_layer.into()];
+        if self.input_is_paused {
+            layers.push(
+                container(text("Rest mode — hover selection and the Select key are paused").size(16))
+                    .width(Fill)
+                    .height(Fill)
+                    .align_x(cosmic::iced::alignment::Horizontal::Center)
+                    .align_y(cosmic::iced::alignment::Vertical::Top)
+                    .padding(16)
+                    .into(),
+            );
+        }
+        stack(layers).width(Fill).height(Fill).into()
     }
 }
 
 impl Wingmate {
-    fn interaction_status_view(&self) -> Element<'_, Message> {
-        let enabled = matches!(self.page, Page::Communicate | Page::Screens)
-            && (self.settings.dwell_to_select_millis > 0 || !self.settings.select_key_binding.is_empty());
-        if !enabled {
-            return Space::new().height(0).into();
-        }
-        let action = button(text(if self.input_is_paused { "Resume input" } else { "Rest mode" }).size(18))
-            .on_press(Message::ToggleInputPause)
-            .padding([14, 20]);
-        let status = if self.input_is_paused {
-            "Rest mode — hover selection and the Select key are paused".to_string()
-        } else if self.access_dwell_progress > 0.0 {
-            format!("Pointer input active · Hover selection {}%", (self.access_dwell_progress * 100.0).round() as i32)
-        } else {
-            "Pointer input active".to_string()
-        };
-        container(row![action, text(status).size(16).width(Fill)].spacing(14).align_y(cosmic::iced::alignment::Alignment::Center))
-            .padding([8, 24])
-            .width(Fill)
-            .class(if self.input_is_paused { cosmic::theme::iced::Container::Primary } else { cosmic::theme::iced::Container::Secondary })
-            .into()
-    }
 
     fn status_view(&self) -> Element<'_, Message> {
         let status_text = if self.status.trim().is_empty() {
@@ -4089,6 +4154,22 @@ impl Wingmate {
                         text_input(&fl!("board-background-color"), &self.cell_background_color)
                             .on_input(Message::CellBackgroundChanged)
                             .padding(12),
+                        pick_list(
+                            vec![
+                                "Automatic",
+                                "pronoun",
+                                "verb",
+                                "descriptor",
+                                "noun",
+                                "social",
+                                "other",
+                            ]
+                            .into_iter()
+                            .map(str::to_string)
+                            .collect::<Vec<_>>(),
+                            Some(self.cell_word_type.clone()),
+                            Message::CellWordTypeChanged,
+                        ),
                         pick_list(page_options, selected_page, Message::CellLinkedBoardChanged),
                         checkbox(self.cell_hidden)
                             .label(fl!("board-hidden-run"))
@@ -4260,9 +4341,13 @@ impl Wingmate {
             let label_size = ((field_height * 0.18).clamp(22.0, 38.0)
                 * self.settings.font_size_scale)
                 .clamp(18.0, 48.0);
-            let field_color = button_data
-                .and_then(|button| button.background_color.as_deref())
-                .and_then(parse_hex_color);
+            let field_color = if self.settings.high_contrast_mode {
+                None
+            } else {
+                button_data
+                    .and_then(BoardButton::rendered_background_color)
+                    .and_then(parse_hex_color)
+            };
             let label_color = field_color.map(contrasting_foreground);
             let has_symbol = symbol_source.is_some();
             let show_symbol = has_symbol && show_symbols;
@@ -5036,6 +5121,9 @@ impl Wingmate {
                 checkbox(self.settings.high_contrast_mode)
                     .label(fl!("display-high-contrast"))
                     .on_toggle(|enabled| Message::SettingBool("highContrastMode", enabled)),
+                checkbox(self.settings.word_type_color_scheme == "Fitzgerald")
+                    .label(fl!("display-word-type-colors"))
+                    .on_toggle(|enabled| Message::SettingBool("wordTypeColorScheme", enabled)),
                 checkbox(self.settings.board_show_message_bar)
                     .label(fl!("display-message-bar"))
                     .on_toggle(|enabled| Message::SettingBool("boardShowMessageBar", enabled)),
@@ -6416,6 +6504,7 @@ impl Api {
         vocalization: String,
         image_url: Option<String>,
         background_color: String,
+        word_type: String,
         hidden: bool,
         linked_board_id: Option<String>,
         actions: Vec<String>,
@@ -6436,6 +6525,7 @@ impl Api {
                         "vocalization": vocalization,
                         "imageUrl": image_url,
                         "backgroundColor": background_color,
+                        "wordType": if word_type == "Automatic" { None } else { Some(word_type) },
                         "hidden": hidden,
                         "linkedBoardId": linked_board_id,
                         "actions": actions,

@@ -213,6 +213,15 @@
 "settings.display.label_top" = "Put Labels at the Top";
 "settings.display.columns" = "Grid Columns";
 "settings.display.high_contrast" = "High Contrast Mode";
+"settings.display.word_type_colors" = "Automatic Fitzgerald word-type colors";
+"boardset.cell.word_type" = "Word type";
+"boardset.cell.word_type.automatic" = "Automatic";
+"boardset.cell.word_type.pronoun" = "Pronoun";
+"boardset.cell.word_type.verb" = "Verb";
+"boardset.cell.word_type.descriptor" = "Descriptor";
+"boardset.cell.word_type.noun" = "Noun";
+"boardset.cell.word_type.social" = "Social word";
+"boardset.cell.word_type.other" = "Other";
 "settings.display.interface_size" = "Interface Size";
 "settings.accessibility.touch_timing" = "Touch & Timing";
 "settings.accessibility.hold" = "Hold to Select";

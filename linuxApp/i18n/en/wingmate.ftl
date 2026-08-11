@@ -157,6 +157,7 @@ display-appearance-help = System follows the desktop appearance portal. Choose L
 display-show-labels = Show labels
 display-show-symbols = Show symbols
 display-high-contrast = High contrast
+display-word-type-colors = Automatic Fitzgerald word-type colors
 display-message-bar = Show message bar on communication boards
 display-font-scale = Text size
 display-button-scale = Button size
