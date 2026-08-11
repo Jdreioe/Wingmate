@@ -164,6 +164,7 @@ display-button-scale = Button size
 display-input-scale = Input field size
 access-selection-timing = Selection timing
 access-selection-sound = Play a sound when selected
+access-speech-policy = Speech when selecting
 access-auditory-cue = Play a cue while exploring choices
 access-switch-scanning = Switch scanning
 access-enable-scanning = Enable scanning (Space or Enter selects)

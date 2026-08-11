@@ -1501,8 +1501,8 @@ struct SymbolBoardWorkspaceView: View {
         if cell.actions.isEmpty {
             let behavior = model.boardActivationBehavior
             let shouldAdd = behavior != "SpeakOnly"
-            let shouldSpeak = behavior != "AddOnly"
-            if let sound = trimmed(cell.soundDataUrl) {
+            let shouldSpeak = model.shouldSpeakSelectionImmediately
+            if shouldSpeak, let sound = trimmed(cell.soundDataUrl) {
                 model.playBoardButtonSound(sound)
             }
             if shouldAdd {

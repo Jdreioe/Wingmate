@@ -2,7 +2,28 @@ package io.github.jdreioe.wingmate.domain
 
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+
+/**
+ * How selections speak while the user composes, applied as a global access
+ * preference across every native client.
+ *
+ * - [Immediate]: each applicable selection (phrase, board button, recording)
+ *   speaks as it is selected.
+ * - [SentenceOnly]: composition is silent; speech happens only when the
+ *   constructed sentence is explicitly activated (the [`:speak` action] or the
+ *   sentence-bar speak button). Helpers such as auditory fishing, button
+ *   previews, and scanning prompts are documented exceptions and still speak.
+ */
+@Serializable
+enum class SpeechPolicy {
+    @SerialName("immediate")
+    Immediate,
+
+    @SerialName("sentence_only")
+    SentenceOnly
+}
 
 @Serializable
 data class Phrase(
@@ -124,6 +145,9 @@ data class Settings(
     val pointerEmphasisScale: Float = 1.5f,
     val selectionSoundEnabled: Boolean = false,
     val auditoryFishingEnabled: Boolean = false,
+    // #119: immediate speech on each selection versus keeping composition silent
+    // until the constructed sentence is activated.
+    val speechPolicy: SpeechPolicy = SpeechPolicy.Immediate,
     // #118: ignore repeated activations of the same target inside this window (ms). 0 disables.
     val selectionDebounceMillis: Long = 0,
     // #120: show a time-bounded visual highlight on the last selected target (ms). 0 disables.

@@ -22,6 +22,7 @@ import io.github.jdreioe.wingmate.domain.SpeechServiceConfigStatus
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.SpeechPolicy
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
 import io.github.jdreioe.wingmate.domain.WordTypeColorScheme
@@ -56,6 +57,7 @@ import io.github.jdreioe.wingmate.domain.obf.joinSentenceText
 import io.github.jdreioe.wingmate.domain.obf.buttonSpeechPart
 import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
 import io.github.jdreioe.wingmate.domain.obf.shouldSpeakBoardSelection
+import io.github.jdreioe.wingmate.domain.obf.shouldSpeakSelectionImmediately
 import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.buildResolvedSentence
 import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
@@ -221,6 +223,19 @@ class KoinBridge : KoinComponent {
     suspend fun updateSelectionSoundEnabled(enabled: Boolean) = updateSettings { it.copy(selectionSoundEnabled = enabled) }
     suspend fun updateAuditoryFishingEnabled(enabled: Boolean) = updateSettings { it.copy(auditoryFishingEnabled = enabled) }
     suspend fun updateSelectionHighlightMillis(millis: Long) = updateSettings { it.copy(selectionHighlightMillis = millis.coerceIn(0, 5_000)) }
+    suspend fun updateSpeechPolicy(policy: String) = updateSettings {
+        it.copy(speechPolicy = runCatching { SpeechPolicy.valueOf(policy) }.getOrDefault(SpeechPolicy.Immediate))
+    }
+    /**
+     * Whether a single selection should speak immediately, given the global
+     * speech policy and the resolved board activation behavior. Sentence-only
+     * never speaks during composition.
+     */
+    fun speechPolicySpeaksSelection(policy: String, behavior: String): Boolean =
+        shouldSpeakSelectionImmediately(
+            policy = runCatching { SpeechPolicy.valueOf(policy) }.getOrDefault(SpeechPolicy.Immediate),
+            behavior = behavior.toBoardActivationBehavior()
+        )
 
     fun accessInputEnter(targetId: String): IosAccessInputResult {
         accessInput.targetEntered(targetId, nowMillis())

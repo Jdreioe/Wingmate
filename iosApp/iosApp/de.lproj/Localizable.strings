@@ -410,6 +410,9 @@
 "settings.accessibility.feedback" = "Feedback & Protokollierung";
 "settings.accessibility.selection_sound" = "Auswahlton";
 "settings.accessibility.auditory_fishing" = "Akustische Suche";
+"settings.speech_policy.title" = "Sprache beim Auswählen";
+"settings.speech_policy.immediate" = "Sofort";
+"settings.speech_policy.sentence_only" = "Nur Satz";
 "settings.accessibility.usage_logging" = "Standardisierte Protokollierung (OBL)";
 "settings.general.startup" = "Beim Start öffnen";
 "settings.general.startup_mode" = "Startmodus";

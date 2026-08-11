@@ -557,6 +557,10 @@
     <string name="ui_settings_selection_highlight_title">Selection highlight (ms)</string>
     <string name="ui_settings_selection_highlight_desc">Show a brief outline after selecting a button. Set to 0 to disable.</string>
     <string name="ui_settings_selection_sound_title">Selection sound</string>
+    <string name="ui_settings_speech_policy_title">Speech on select</string>
+    <string name="ui_settings_speech_policy_desc">Speak each selection immediately, or stay silent until the composed sentence is activated.</string>
+    <string name="ui_settings_speech_policy_immediate">Immediate</string>
+    <string name="ui_settings_speech_policy_sentence_only">Sentence only</string>
     <string name="ui_settings_auditory_fishing_title">Auditory fishing</string>
     <string name="ui_settings_auditory_fishing_desc">Whisper the label when a button is hovered or touched.</string>
     <string name="ui_settings_usage_logging_title">Standardized logging (OBL)</string>

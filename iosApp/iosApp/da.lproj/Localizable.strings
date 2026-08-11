@@ -422,6 +422,9 @@
 "settings.accessibility.feedback" = "Feedback og logning";
 "settings.accessibility.selection_sound" = "Lyd ved valg";
 "settings.accessibility.auditory_fishing" = "Auditiv søgning";
+"settings.speech_policy.title" = "Tale ved valg";
+"settings.speech_policy.immediate" = "Straks";
+"settings.speech_policy.sentence_only" = "Kun sætning";
 "settings.accessibility.usage_logging" = "Standardiseret logning (OBL)";
 "settings.general.startup" = "Åbn ved opstart";
 "settings.general.startup_mode" = "Opstartstilstand";

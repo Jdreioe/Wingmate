@@ -121,7 +121,7 @@ import io.github.jdreioe.wingmate.domain.obf.CellTapResult
 import io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion
 import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
 import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
-import io.github.jdreioe.wingmate.domain.obf.shouldSpeakBoardSelection
+import io.github.jdreioe.wingmate.domain.obf.shouldSpeakSelectionImmediately
 import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.buildResolvedSentence
 import io.github.jdreioe.wingmate.domain.obf.orderedPredictionButtonIds
@@ -1484,7 +1484,10 @@ private fun BoardSetWorkspaceScreen(
                                     val sound = button.soundId?.let { id ->
                                         activeBoard.sounds.firstOrNull { it.id == id }
                                     }
-                                    if (shouldSpeakBoardSelection(resolvedBoardSettings.activationBehavior)) {
+                                    if (shouldSpeakSelectionImmediately(
+                                        settings.speechPolicy,
+                                        resolvedBoardSettings.activationBehavior
+                                    )) {
                                         scope.launch(Dispatchers.IO) {
                                             val recordedPath = sound?.path?.takeIf {
                                                 it.isNotBlank() && sound.data.isNullOrBlank() && sound.dataUrl.isNullOrBlank()

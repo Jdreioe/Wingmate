@@ -262,6 +262,7 @@ struct Settings {
     pointer_emphasis_scale: f32,
     selection_sound_enabled: bool,
     auditory_fishing_enabled: bool,
+    speech_policy: String,
     selection_highlight_millis: i64,
     selection_debounce_millis: i64,
     startup_board_set_id: Option<String>,
@@ -312,6 +313,7 @@ impl Default for Settings {
             pointer_emphasis_scale: 1.5,
             selection_sound_enabled: false,
             auditory_fishing_enabled: false,
+            speech_policy: "Immediate".into(),
             selection_highlight_millis: 0,
             selection_debounce_millis: 0,
             startup_board_set_id: None,
@@ -677,6 +679,8 @@ enum AccessTarget {
     Recording(String),
     BoardButton(String, String),
     Category(Option<String>),
+    /// Sentence-only composition: append text to the draft without speaking.
+    Insert(String),
 }
 
 fn access_target_id(target: &AccessTarget) -> String {
@@ -2224,6 +2228,7 @@ impl cosmic::Application for Wingmate {
                     "selectKeyBinding" => self.settings.select_key_binding = value.clone(),
                     "restModeKeyBinding" => self.settings.rest_mode_key_binding = value.clone(),
                     "pointerEmphasisStyle" => self.settings.pointer_emphasis_style = value.clone(),
+                    "speechPolicy" => self.settings.speech_policy = value.clone(),
                     _ => {}
                 }
                 return self.api.patch_setting(key, serde_json::json!(value)).map(cosmic::Action::App);
@@ -3108,6 +3113,37 @@ impl Wingmate {
         }
     }
 
+    /// Compose silently: append text to the draft with word spacing.
+    fn compose_phrase(&mut self, text: &str) {
+        let text = text.trim();
+        if text.is_empty() {
+            return;
+        }
+        if !self.draft.is_empty() && !self.draft.ends_with(' ') {
+            self.draft.push(' ');
+        }
+        self.draft.push_str(text);
+    }
+
+    /// Resolve a phrase's access target, honoring the global speech policy.
+    /// Sentence-only mode composes silently instead of speaking on selection;
+    /// linked-board phrases always navigate.
+    fn phrase_access_target(&self, phrase: &Phrase) -> AccessTarget {
+        if let Some(id) = phrase.linked_board_id.clone() {
+            return AccessTarget::Category(Some(id));
+        }
+        let spoken = phrase.name.clone().unwrap_or_else(|| phrase.text.clone());
+        if self.settings.speech_policy == "SentenceOnly" {
+            AccessTarget::Insert(spoken)
+        } else {
+            phrase
+                .recording_path
+                .clone()
+                .map(AccessTarget::Recording)
+                .unwrap_or_else(|| AccessTarget::Speak(spoken))
+        }
+    }
+
     fn activate_access(&mut self, target: AccessTarget) -> Task<cosmic::Action<Message>> {
         let debounce = Duration::from_millis(self.settings.selection_debounce_millis.max(0) as u64);
         if self
@@ -3131,6 +3167,11 @@ impl Wingmate {
             AccessTarget::Recording(path) => {
                 self.status = fl!("status-playing-recording");
                 play_audio_file(path).map(cosmic::Action::App)
+            }
+            AccessTarget::Insert(text) => {
+                self.compose_phrase(&text);
+                self.partner.update_text(self.draft.clone());
+                Task::none()
             }
             AccessTarget::BoardButton(board_id, button_id) => self
                 .api
@@ -3164,20 +3205,7 @@ impl Wingmate {
                 }
                 if self.settings.scan_phrase_grid_enabled {
                     targets.extend(self.phrases.iter().filter(|phrase| !phrase.is_hidden).map(
-                        |phrase| {
-                            phrase
-                                .linked_board_id
-                                .clone()
-                                .map(|id| AccessTarget::Category(Some(id)))
-                                .or_else(|| {
-                                    phrase.recording_path.clone().map(AccessTarget::Recording)
-                                })
-                                .unwrap_or_else(|| {
-                                    AccessTarget::Speak(
-                                        phrase.name.clone().unwrap_or_else(|| phrase.text.clone()),
-                                    )
-                                })
-                        },
+                        |phrase| self.phrase_access_target(phrase),
                     ));
                 }
                 targets
@@ -3516,13 +3544,7 @@ impl Wingmate {
             let mut grid_row = row![].spacing(10);
             for phrase in chunk {
                 let label = phrase.text.clone();
-                let spoken = phrase.name.clone().unwrap_or_else(|| phrase.text.clone());
-                let access_target = phrase
-                    .linked_board_id
-                    .clone()
-                    .map(|id| AccessTarget::Category(Some(id)))
-                    .or_else(|| phrase.recording_path.clone().map(AccessTarget::Recording))
-                    .unwrap_or_else(|| AccessTarget::Speak(spoken));
+                let access_target = self.phrase_access_target(phrase);
                 let show_symbol = phrase.image_url.is_some() && self.settings.show_symbols;
                 let show_label = self.settings.show_labels || !show_symbol;
                 let mut phrase_content = column![]
@@ -5315,6 +5337,16 @@ impl Wingmate {
                     )
                     .step(100)
                     .width(240)
+                ]
+                .spacing(10),
+                row![
+                    text(fl!("access-speech-policy")).width(Fill),
+                    pick_list(
+                        vec!["Immediate".to_string(), "SentenceOnly".to_string()],
+                        Some(self.settings.speech_policy.clone()),
+                        |value| Message::SettingString("speechPolicy", value),
+                    )
+                    .width(180),
                 ]
                 .spacing(10),
                 checkbox(self.settings.selection_sound_enabled)

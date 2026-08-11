@@ -164,6 +164,7 @@ display-button-scale = Knapstørrelse
 display-input-scale = Størrelse på inputfelt
 access-selection-timing = Valgtiming
 access-selection-sound = Afspil en lyd ved valg
+access-speech-policy = Tale ved valg
 access-auditory-cue = Afspil et signal, mens valgmuligheder udforskes
 access-switch-scanning = Kontaktscanning
 access-enable-scanning = Aktivér scanning (Mellemrum eller Enter vælger)
