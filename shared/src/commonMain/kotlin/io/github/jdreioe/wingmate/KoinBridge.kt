@@ -24,6 +24,7 @@ import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
+import io.github.jdreioe.wingmate.domain.WordTypeColorScheme
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
@@ -37,6 +38,10 @@ import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
+import io.github.jdreioe.wingmate.domain.obf.WordType
+import io.github.jdreioe.wingmate.domain.obf.resolvedBackgroundColor
+import io.github.jdreioe.wingmate.domain.obf.wordType
+import io.github.jdreioe.wingmate.domain.obf.withWordType
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
@@ -198,6 +203,10 @@ class KoinBridge : KoinComponent {
     suspend fun updateLabelAtTop(enabled: Boolean) = updateSettings { it.copy(labelAtTop = enabled) }
     suspend fun updateGridColumns(columns: Int) = updateSettings { it.copy(gridColumns = columns.coerceIn(1, 6)) }
     suspend fun updateHighContrastMode(enabled: Boolean) = updateSettings { it.copy(highContrastMode = enabled) }
+    suspend fun updateWordTypeColorScheme(scheme: String) = updateSettings {
+        it.copy(wordTypeColorScheme = runCatching { WordTypeColorScheme.valueOf(scheme) }
+            .getOrDefault(WordTypeColorScheme.None))
+    }
     suspend fun updateHoldToSelectMillis(millis: Long) = updateSettings { it.copy(holdToSelectMillis = millis.coerceIn(0, 2_000)) }
     suspend fun updateDwellToSelectMillis(millis: Long) = updateSettings { it.copy(dwellToSelectMillis = millis.coerceIn(0, 5_000)) }
     suspend fun updateSelectKeyBinding(binding: String) = updateSettings { it.copy(selectKeyBinding = binding) }
@@ -488,16 +497,25 @@ class KoinBridge : KoinComponent {
         val grid = board.grid ?: return emptyList()
         val buttons = board.buttons.associateBy { it.id }
         val images = board.images.associateBy { it.id }
-        val locale = get<SettingsUseCase>().get().primaryLanguage
+        val settings = get<SettingsUseCase>().get()
+        val locale = settings.primaryLanguage
         return grid.order.flatMapIndexed { row, columns ->
             columns.mapIndexedNotNull { col, buttonId ->
                 val id = buttonId ?: return@mapIndexedNotNull null
                 val button = buttons[id] ?: return@mapIndexedNotNull null
+                val localizedLabel = resolveObfLocalizedString(board.strings, locale, button.label)
                 IosBoardCell(
                     row, col, id,
-                    resolveObfLocalizedString(board.strings, locale, button.label),
+                    localizedLabel,
                     resolveObfLocalizedString(board.strings, locale, button.vocalization),
-                    button.backgroundColor, button.borderColor, button.loadBoard?.id,
+                    button.backgroundColor,
+                    button.resolvedBackgroundColor(
+                        settings.wordTypeColorScheme,
+                        board.locale ?: locale,
+                        localizedLabel,
+                    ),
+                    button.wordType?.wireValue,
+                    button.borderColor, button.loadBoard?.id,
                     button.imageId, button.imageId?.let { images[it]?.url }, button.hidden,
                     button.resolvedActions(),
                     button.soundId,
@@ -596,7 +614,7 @@ class KoinBridge : KoinComponent {
     suspend fun upsertBoardCellButton(
         boardId: String, row: Int, col: Int, label: String?, vocalization: String?,
         backgroundColor: String?, borderColor: String?, linkedBoardId: String?,
-        imageUrl: String?, clearImage: Boolean, actions: List<String>
+        imageUrl: String?, clearImage: Boolean, actions: List<String>, wordType: String?
     ): ObfBoard? {
         val repo = get<BoardRepository>()
         val board = repo.getBoard(boardId) ?: return null
@@ -618,7 +636,7 @@ class KoinBridge : KoinComponent {
             loadBoard = linkedBoardId?.let { ObfLoadBoard(id = it) },
             action = actions.singleOrNull(),
             actions = if (actions.size > 1) actions else emptyList()
-        )
+        ).withWordType(wordType?.let { value -> WordType.entries.firstOrNull { it.wireValue == value } })
         val buttons = board.buttons.filterNot { it.id == buttonId } + button
         val order = grid.order.mapIndexed { r, columns ->
             columns.mapIndexed { c, id -> if (r == row && c == col) buttonId else id }
@@ -883,6 +901,8 @@ data class IosBoardCell(
     val label: String?,
     val vocalization: String?,
     val backgroundColor: String?,
+    val resolvedBackgroundColor: String?,
+    val wordType: String?,
     val borderColor: String?,
     val linkedBoardId: String?,
     val imageId: String?,

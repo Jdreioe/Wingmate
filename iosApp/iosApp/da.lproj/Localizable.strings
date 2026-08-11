@@ -405,6 +405,15 @@
 "settings.display.label_top" = "Placér tekst øverst";
 "settings.display.columns" = "Gitterkolonner";
 "settings.display.high_contrast" = "Høj kontrast";
+"settings.display.word_type_colors" = "Automatiske Fitzgerald-ordtypefarver";
+"boardset.cell.word_type" = "Ordtype";
+"boardset.cell.word_type.automatic" = "Automatisk";
+"boardset.cell.word_type.pronoun" = "Stedord";
+"boardset.cell.word_type.verb" = "Udsagnsord";
+"boardset.cell.word_type.descriptor" = "Beskrivende ord";
+"boardset.cell.word_type.noun" = "Navneord";
+"boardset.cell.word_type.social" = "Socialt ord";
+"boardset.cell.word_type.other" = "Andet";
 "settings.display.interface_size" = "Brugerfladens størrelse";
 "settings.accessibility.touch_timing" = "Berøring og timing";
 "settings.accessibility.hold" = "Hold for at vælge";

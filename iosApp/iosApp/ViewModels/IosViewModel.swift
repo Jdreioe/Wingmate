@@ -20,6 +20,8 @@ struct BoardCellInfo: Identifiable, Equatable {
     var label: String?
     var vocalization: String?
     var backgroundColor: String?
+    var resolvedBackgroundColor: String?
+    var wordType: String?
     var borderColor: String?
     var linkedBoardId: String?
     var imageId: String?
@@ -136,6 +138,7 @@ final class IosViewModel: ObservableObject {
     @Published var labelAtTop: Bool = false
     @Published var preferredGridColumns: Int = 3
     @Published var highContrastMode: Bool = false
+    @Published var wordTypeColorScheme: String = "None"
     @Published var holdToSelectMillis: Double = 0
     @Published var dwellToSelectMillis: Double = 0
     @Published var selectionDebounceMillis: Double = 0
@@ -470,6 +473,7 @@ final class IosViewModel: ObservableObject {
                 self.labelAtTop = settings.labelAtTop
                 self.preferredGridColumns = min(max(Int(settings.gridColumns), 1), 6)
                 self.highContrastMode = settings.highContrastMode
+                self.wordTypeColorScheme = settings.wordTypeColorScheme.name
                 self.holdToSelectMillis = Double(settings.holdToSelectMillis)
                 self.dwellToSelectMillis = Double(settings.dwellToSelectMillis)
                 self.selectionDebounceMillis = Double(settings.selectionDebounceMillis)
@@ -933,6 +937,14 @@ final class IosViewModel: ObservableObject {
     func setHighContrastMode(_ enabled: Bool) {
         highContrastMode = enabled
         Task { _ = try? await bridge.updateHighContrastMode(enabled: enabled) }
+    }
+
+    func setWordTypeColorsEnabled(_ enabled: Bool) {
+        wordTypeColorScheme = enabled ? "Fitzgerald" : "None"
+        Task {
+            _ = try? await bridge.updateWordTypeColorScheme(scheme: wordTypeColorScheme)
+            await refreshBoardCells()
+        }
     }
 
     func setHoldToSelectMillis(_ value: Double) {
@@ -1769,6 +1781,8 @@ final class IosViewModel: ObservableObject {
                     label: cell.label,
                     vocalization: cell.vocalization,
                     backgroundColor: cell.backgroundColor,
+                    resolvedBackgroundColor: cell.resolvedBackgroundColor,
+                    wordType: cell.wordType,
                     borderColor: cell.borderColor,
                     linkedBoardId: cell.linkedBoardId,
                     imageId: cell.imageId,
@@ -1804,7 +1818,8 @@ final class IosViewModel: ObservableObject {
         linkedBoardId: String?,
         imageUrl: String?,
         clearImage: Bool,
-        actions: [String]
+        actions: [String],
+        wordType: String?
     ) async {
         guard let boardId = selectedBoardId else {
             boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
@@ -1834,7 +1849,8 @@ final class IosViewModel: ObservableObject {
                 linkedBoardId: normalizedLink,
                 imageUrl: normalizedImageUrl,
                 clearImage: clearImage,
-                actions: actions
+                actions: actions,
+                wordType: normalizedOptionalText(wordType)
             ) else {
                 boardStatusMessage = NSLocalizedString("boardset.error.cell_update_failed", comment: "")
                 return

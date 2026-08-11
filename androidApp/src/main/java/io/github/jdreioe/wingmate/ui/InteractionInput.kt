@@ -12,7 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Button
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -163,22 +163,24 @@ fun InteractionInputRoot(settings: Settings, enabled: Boolean = true, content: @
         ) {
             content()
             if (enabled && (settings.dwellToSelectMillis > 0 || settings.selectKeyBinding.isNotBlank())) {
-                Button(
+                FloatingActionButton(
                     onClick = host::togglePause,
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(8.dp)
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
                         .sizeIn(minWidth = 56.dp, minHeight = 56.dp)
                         .semantics { liveRegion = LiveRegionMode.Polite }
                 ) {
-                    Icon(if (host.state.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause, contentDescription = null)
-                    Text(if (host.state.isPaused) resumeLabel else restLabel, Modifier.padding(start = 8.dp))
+                    Icon(
+                        if (host.state.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                        contentDescription = if (host.state.isPaused) resumeLabel else restLabel,
+                    )
                 }
                 if (host.state.isPaused) {
                     Row(
                         Modifier
                             .align(Alignment.TopCenter)
-                            .padding(top = 72.dp)
+                            .padding(top = 16.dp)
                             .background(MaterialTheme.colorScheme.inverseSurface, RoundedCornerShape(12.dp))
                             .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
                             .padding(horizontal = 16.dp, vertical = 10.dp)

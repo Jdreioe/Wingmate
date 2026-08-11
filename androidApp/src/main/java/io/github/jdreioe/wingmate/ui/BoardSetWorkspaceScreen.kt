@@ -100,6 +100,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonType
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonShape
+import io.github.jdreioe.wingmate.domain.obf.wordType
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
@@ -1685,6 +1686,7 @@ private fun BoardSetWorkspaceScreen(
             initialMathMode = target.button?.mathMode == true,
             initialHidden = target.button?.hidden == true,
             initialShape = target.button?.shape ?: ObfButtonShape.Rounded,
+            initialWordType = target.button?.wordType,
             isKeyboardBoard = activeBoard.isKeyboard,
             showMathMode = supportsMathMode(settings.ttsEngine),
             availableBoards = activeGraph.boards.filterNot { it.id == activeBoard.id },
@@ -1694,7 +1696,7 @@ private fun BoardSetWorkspaceScreen(
             hasExistingValue = target.button != null,
             onDismiss = { editingCell = null },
             onSave = { label, vocalization, imageUrl, recordingPath, backgroundColor, language, mathMode, hidden, linkedBoardId,
-                       action, actions, shape ->
+                       action, actions, shape, wordType ->
                 val session = editSession ?: return@EditBoardCellDialog
                 editSession = session.apply(
                     updateDraftCell(
@@ -1713,7 +1715,8 @@ private fun BoardSetWorkspaceScreen(
                         linkedBoardId = linkedBoardId,
                         action = action,
                         actions = actions,
-                        shape = shape
+                        shape = shape,
+                        wordType = wordType
                     )
                 )
                 editingCell = null

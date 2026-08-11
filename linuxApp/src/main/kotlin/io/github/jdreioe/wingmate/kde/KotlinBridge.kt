@@ -28,6 +28,7 @@ import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
+import io.github.jdreioe.wingmate.domain.WordTypeColorScheme
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
@@ -50,6 +51,8 @@ import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.WordType
+import io.github.jdreioe.wingmate.domain.obf.resolvedBackgroundColor
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
@@ -322,6 +325,11 @@ class KotlinBridge(private val port: Int = 8765) {
                 jsonObj["labelAtTop"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(labelAtTop = it) }
                 jsonObj["gridColumns"]?.jsonPrimitive?.intOrNull?.let { newSettings = newSettings.copy(gridColumns = it.coerceIn(1, 12)) }
                 jsonObj["highContrastMode"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(highContrastMode = it) }
+                jsonObj["wordTypeColorScheme"]?.jsonPrimitive?.contentOrNull?.let { value ->
+                    newSettings = newSettings.copy(wordTypeColorScheme = runCatching {
+                        WordTypeColorScheme.valueOf(value)
+                    }.getOrDefault(WordTypeColorScheme.None))
+                }
                 jsonObj["holdToSelectMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(holdToSelectMillis = it.coerceAtLeast(0)) }
                 jsonObj["dwellToSelectMillis"]?.jsonPrimitive?.longOrNull?.let { newSettings = newSettings.copy(dwellToSelectMillis = it.coerceAtLeast(0)) }
                 jsonObj["selectKeyBinding"]?.jsonPrimitive?.contentOrNull?.let { newSettings = newSettings.copy(selectKeyBinding = it) }
@@ -931,11 +939,28 @@ class KotlinBridge(private val port: Int = 8765) {
                     // absolute paths avoids one HTTP request plus base64 encode/decode
                     // for every symbol when a large page opens.
                     val renderBoards = responseBoards.map { board ->
-                        board.copy(images = board.images.map { image ->
+                        board.copy(
+                            buttons = board.buttons.map { button ->
+                                val generated = button.resolvedBackgroundColor(
+                                    appSettings.wordTypeColorScheme,
+                                    board.locale ?: appSettings.primaryLanguage,
+                                    resolveObfLocalizedString(
+                                        board.strings,
+                                        appSettings.primaryLanguage,
+                                        button.label,
+                                    ),
+                                ).takeIf { button.backgroundColor == null }
+                                if (generated == null) button else button.copy(
+                                    extensions = button.extensions +
+                                        ("ext_wingmate_resolved_background_color" to JsonPrimitive(generated))
+                                )
+                            },
+                            images = board.images.map { image ->
                             val path = image.path
                             if (path.isNullOrBlank() || path.startsWith('/')) image
                             else image.copy(path = localImageFile(path)?.absolutePath ?: path)
-                        })
+                            }
+                        )
                     }
                     call.respondText(
                         json.encodeToString(
@@ -1077,6 +1102,9 @@ class KotlinBridge(private val port: Int = 8765) {
                     body["linkedBoardId"]?.jsonPrimitive?.contentOrNull ?: existing?.loadBoard?.id,
                     body["actions"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull }
                         ?: existing?.let { it.actions.ifEmpty { listOfNotNull(it.action) } }.orEmpty(),
+                    (body["wordType"] as? JsonPrimitive)?.contentOrNull?.let { value ->
+                        WordType.entries.firstOrNull { it.wireValue == value }
+                    },
                 ) ?: return@put call.respond(HttpStatusCode.BadRequest)
                 call.respond(board)
             }

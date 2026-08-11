@@ -511,6 +511,16 @@
     <string name="ui_settings_hold_to_select_desc">Forhindrer utilsigtede tryk. Sæt til 0 for at deaktivere.</string>
     <string name="ui_settings_grid_columns_title">Gitterkolonner</string>
     <string name="ui_settings_high_contrast_title">Højkontrast-tilstand</string>
+    <string name="ui_settings_word_type_colors_title">Ordtypefarver</string>
+    <string name="ui_settings_word_type_colors_desc">Anvend automatisk Fitzgerald-farver, når en knap ikke har en brugerdefineret farve</string>
+    <string name="board_dialog_word_type">Ordtype</string>
+    <string name="board_dialog_word_type_automatic">Automatisk</string>
+    <string name="board_dialog_word_type_pronoun">Stedord</string>
+    <string name="board_dialog_word_type_verb">Udsagnsord</string>
+    <string name="board_dialog_word_type_descriptor">Beskrivende ord</string>
+    <string name="board_dialog_word_type_noun">Navneord</string>
+    <string name="board_dialog_word_type_social">Socialt ord</string>
+    <string name="board_dialog_word_type_other">Andet</string>
     <string name="phrase_edit_hidden_title">Skjult</string>
     <string name="phrase_edit_hidden_desc">Skjul denne frase fra gitteret</string>
     <string name="ui_settings_dwell_to_select_title">Dwell-valg (ms)</string>

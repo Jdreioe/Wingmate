@@ -46,6 +46,7 @@ import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
+import io.github.jdreioe.wingmate.domain.WordTypeColorScheme
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
@@ -122,6 +123,7 @@ fun SettingsScreen(
     var boardReturnBehavior by remember { mutableStateOf(BoardReturnBehavior.Stay) }
     var gridColumns by remember { mutableStateOf(3) }
     var highContrastMode by remember { mutableStateOf(false) }
+    var wordTypeColorScheme by remember { mutableStateOf(WordTypeColorScheme.None) }
 
     // --- Accessibility section state ---
     var holdToSelectMillis by remember { mutableStateOf(0L) }
@@ -220,6 +222,7 @@ fun SettingsScreen(
         holdToSelectMillis = s.holdToSelectMillis
         gridColumns = s.gridColumns
         highContrastMode = s.highContrastMode
+        wordTypeColorScheme = s.wordTypeColorScheme
         dwellToSelectMillis = s.dwellToSelectMillis
         selectionSoundEnabled = s.selectionSoundEnabled
         auditoryFishingEnabled = s.auditoryFishingEnabled
@@ -511,7 +514,12 @@ fun SettingsScreen(
                                         onGridColumnsChange = { gridColumns = it },
                                         onGridColumnsChangeFinished = { updateSettings { it.copy(gridColumns = gridColumns) } },
                                         highContrastMode = highContrastMode,
-                                        onHighContrastModeChange = { checked -> highContrastMode = checked; updateSettings { it.copy(highContrastMode = checked) } }
+                                        onHighContrastModeChange = { checked -> highContrastMode = checked; updateSettings { it.copy(highContrastMode = checked) } },
+                                        wordTypeColorScheme = wordTypeColorScheme,
+                                        onWordTypeColorSchemeChange = { scheme ->
+                                            wordTypeColorScheme = scheme
+                                            updateSettings { it.copy(wordTypeColorScheme = scheme) }
+                                        }
                                     )
                                     SettingsTab.Accessibility -> AccessibilitySection(
                                         holdToSelectMillis = holdToSelectMillis,
@@ -1298,7 +1306,9 @@ private fun DisplaySection(
     onGridColumnsChange: (Int) -> Unit,
     onGridColumnsChangeFinished: () -> Unit,
     highContrastMode: Boolean,
-    onHighContrastModeChange: (Boolean) -> Unit
+    onHighContrastModeChange: (Boolean) -> Unit,
+    wordTypeColorScheme: WordTypeColorScheme,
+    onWordTypeColorSchemeChange: (WordTypeColorScheme) -> Unit
 ) {
     SettingsGroup(title = stringResource(R.string.ui_settings_grid_layout)) {
         SettingsSwitch(
@@ -1335,6 +1345,17 @@ private fun DisplaySection(
             checked = highContrastMode,
             onCheckedChange = onHighContrastModeChange,
             title = stringResource(R.string.ui_settings_high_contrast_title)
+        )
+        SettingsGroupDivider()
+        SettingsSwitch(
+            checked = wordTypeColorScheme == WordTypeColorScheme.Fitzgerald,
+            onCheckedChange = {
+                onWordTypeColorSchemeChange(
+                    if (it) WordTypeColorScheme.Fitzgerald else WordTypeColorScheme.None
+                )
+            },
+            title = stringResource(R.string.ui_settings_word_type_colors_title),
+            description = stringResource(R.string.ui_settings_word_type_colors_desc)
         )
     }
 
