@@ -344,7 +344,8 @@
     <string name="import_options_skip">Spring over for nu</string>
     <string name="import_options_recommended">Anbefalet</string>
 
-    <string name="opensymbols_search_title">Søg OpenSymbols</string>
+    <string name="opensymbols_search_title">Søg efter symboler</string>
+    <string name="symbol_package_all">Alle</string>
     <string name="opensymbols_search_label">Søg efter piktogram...</string>
     <string name="opensymbols_search_cd">Søg</string>
     <string name="opensymbols_not_configured">OpenSymbols er ikke konfigureret i denne build.\nSæt WINGMATE_OPENSYMBOLS_PROXY_URL i local.properties før build.</string>

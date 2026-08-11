@@ -42,6 +42,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButtonShape
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.domain.PhraseRecordingService
+import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import kotlinx.coroutines.launch
 import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
@@ -351,6 +352,7 @@ internal fun EditBoardCellDialog(
     var showImageSourcePicker by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
     val koin = getKoin()
+    val imageCacher = remember(koin) { koin.getOrNull<ImageCacher>() }
     val recordingService = remember(koin) { koin.getOrNull<PhraseRecordingService>() }
     val scope = rememberCoroutineScope()
     LaunchedEffect(label, vocalization, insertedTextFollowsLabel) {
@@ -782,7 +784,11 @@ TextButton(
         OpenSymbolsSearchDialog(
             onDismiss = { showSymbolSearch = false },
             onSelect = { selectedUrl ->
-                imageUrl = selectedUrl
+                if (imageCacher != null) {
+                    scope.launch { imageUrl = imageCacher.getCachedImagePath(selectedUrl) }
+                } else {
+                    imageUrl = selectedUrl
+                }
                 showSymbolSearch = false
             }
         )

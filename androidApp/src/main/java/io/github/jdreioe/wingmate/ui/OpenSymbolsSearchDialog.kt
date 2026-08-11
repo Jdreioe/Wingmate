@@ -1,6 +1,8 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -14,11 +16,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
+import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
+import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import kotlinx.coroutines.delay
 import androidx.compose.ui.res.stringResource
 
 import com.hojmoseit.wingmate.R
+import org.koin.compose.getKoin
 /**
  * Dialog to search OpenSymbols for pictograms.
  * Returns the selected image URL on pick.
@@ -29,22 +34,25 @@ fun OpenSymbolsSearchDialog(
     onSelect: (imageUrl: String) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<OpenSymbolsClient.SymbolResult>>(emptyList()) }
+    var results by remember { mutableStateOf<List<SymbolSearchClient.SymbolResult>>(emptyList()) }
+    var packageFilter by remember { mutableStateOf(SymbolSearchClient.Package.All) }
     var isLoading by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<OpenSymbolsClient.SearchError?>(null) }
     var retryKey by remember { mutableStateOf(0) }
-    val isConfigured = OpenSymbolsClient.isConfigured()
+    var prioritizeArasaac by remember { mutableStateOf(false) }
+    val koin = getKoin()
+    val imageCacher = remember(koin) { koin.getOrNull<ImageCacher>() }
     val notConfiguredMessage = stringResource(R.string.opensymbols_not_configured)
     val normalizedQuery = searchQuery.trim()
     val locale = Locale.current.language
 
-    LaunchedEffect(isConfigured, normalizedQuery, locale, retryKey) {
-        if (!isConfigured) {
-            isLoading = false
-            results = emptyList()
-            searchError = OpenSymbolsClient.SearchError.NotConfigured
-            return@LaunchedEffect
-        }
+    LaunchedEffect(imageCacher) {
+        prioritizeArasaac = runCatching {
+            (imageCacher?.cachedArasaacSymbolCount() ?: 0) > 0
+        }.getOrDefault(false)
+    }
+
+    LaunchedEffect(normalizedQuery, locale, packageFilter, prioritizeArasaac, retryKey) {
 
         if (normalizedQuery.isBlank()) {
             isLoading = false
@@ -56,9 +64,16 @@ fun OpenSymbolsSearchDialog(
         delay(350)
         isLoading = true
         searchError = null
-        when (val response = OpenSymbolsClient.search(normalizedQuery, locale)) {
-            is OpenSymbolsClient.SearchResponse.Success -> results = response.symbols
-            is OpenSymbolsClient.SearchResponse.Failure -> {
+        when (
+            val response = SymbolSearchClient.search(
+                query = normalizedQuery,
+                locale = locale,
+                packageFilter = packageFilter,
+                prioritizeArasaac = prioritizeArasaac,
+            )
+        ) {
+            is SymbolSearchClient.SearchResponse.Success -> results = response.symbols
+            is SymbolSearchClient.SearchResponse.Failure -> {
                 results = emptyList()
                 searchError = response.error
             }
@@ -80,18 +95,33 @@ fun OpenSymbolsSearchDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().then(showKeyboard)
                 )
-                
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    SymbolSearchClient.Package.entries.forEach { option ->
+                        FilterChip(
+                            selected = packageFilter == option,
+                            onClick = { packageFilter = option },
+                            label = {
+                                Text(
+                                    when (option) {
+                                        SymbolSearchClient.Package.All -> stringResource(R.string.symbol_package_all)
+                                        SymbolSearchClient.Package.OpenSymbols -> "OpenSymbols"
+                                        SymbolSearchClient.Package.Mulberry -> "Mulberry"
+                                        SymbolSearchClient.Package.Arasaac -> "ARASAAC"
+                                    }
+                                )
+                            },
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 // Results grid
-                if (!isConfigured) {
-                    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                        Text(
-                            notConfiguredMessage,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                } else if (isLoading) {
+                if (isLoading) {
                     Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
@@ -105,6 +135,7 @@ fun OpenSymbolsSearchDialog(
                             when (searchError) {
                                 OpenSymbolsClient.SearchError.Throttled ->
                                     stringResource(R.string.opensymbols_throttled)
+                                OpenSymbolsClient.SearchError.NotConfigured -> notConfiguredMessage
                                 else -> stringResource(R.string.opensymbols_search_failed)
                             },
                             style = MaterialTheme.typography.bodyMedium
@@ -128,7 +159,7 @@ fun OpenSymbolsSearchDialog(
                             SymbolGridItem(
                                 symbol = symbol,
                                 onClick = {
-                                    symbol.image_url?.let { url ->
+                                    symbol.imageUrl?.let { url ->
                                         onSelect(url)
                                         onDismiss()
                                     }
@@ -148,7 +179,7 @@ fun OpenSymbolsSearchDialog(
 
 @Composable
 private fun SymbolGridItem(
-    symbol: OpenSymbolsClient.SymbolResult,
+    symbol: SymbolSearchClient.SymbolResult,
     onClick: () -> Unit
 ) {
     Card(
@@ -156,7 +187,7 @@ private fun SymbolGridItem(
             .padding(4.dp)
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clickable(enabled = symbol.image_url != null, onClick = onClick),
+            .clickable(enabled = symbol.imageUrl != null, onClick = onClick),
         shape = RoundedCornerShape(8.dp)
     ) {
         Column(
@@ -165,7 +196,7 @@ private fun SymbolGridItem(
             verticalArrangement = Arrangement.Center
         ) {
             SubcomposeAsyncImage(
-                    model = symbol.image_url,
+                    model = symbol.imageUrl,
                     contentDescription = symbol.name,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -181,6 +212,16 @@ private fun SymbolGridItem(
                 text = symbol.name,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1
+            )
+            Text(
+                text = when (symbol.source) {
+                    SymbolSearchClient.Source.OpenSymbols -> "OpenSymbols"
+                    SymbolSearchClient.Source.Mulberry -> "Mulberry"
+                    SymbolSearchClient.Source.Arasaac -> "ARASAAC"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
             )
         }
     }

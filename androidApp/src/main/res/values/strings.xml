@@ -346,7 +346,8 @@
     <string name="import_options_skip">Skip for now</string>
     <string name="import_options_recommended">Recommended</string>
 
-    <string name="opensymbols_search_title">Search OpenSymbols</string>
+    <string name="opensymbols_search_title">Search symbols</string>
+    <string name="symbol_package_all">All</string>
     <string name="opensymbols_search_label">Search for pictogram...</string>
     <string name="opensymbols_search_cd">Search</string>
     <string name="opensymbols_not_configured">OpenSymbols is not configured in this build.\nSet WINGMATE_OPENSYMBOLS_PROXY_URL in local.properties before building.</string>
