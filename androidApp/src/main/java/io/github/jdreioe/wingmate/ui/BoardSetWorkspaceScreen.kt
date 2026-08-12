@@ -65,6 +65,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -73,6 +78,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.ObzExportResult
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
@@ -156,15 +162,6 @@ import kotlin.random.Random
 import kotlin.time.Clock
 
 import com.hojmoseit.wingmate.R
-private enum class BoardWorkspaceMode { Run, Edit }
-
-private sealed interface BoardSetRoute {
-    data object Library : BoardSetRoute
-    data class Workspace(
-        val boardSetId: String,
-        val mode: BoardWorkspaceMode
-    ) : BoardSetRoute
-}
 
 internal data class BoardSetEditSession(
     val original: BoardSetGraph,
@@ -195,7 +192,7 @@ private data class WorkspaceCellTarget(
  * Board-set entry point with a familiar library -> Run/Edit workspace flow.
  */
 @Composable
-fun BoardSetManagerScreen(
+fun BoardSetManagerRoot(
     onBack: () -> Unit,
     onBackToWelcome: () -> Unit,
     createOnLaunch: Boolean = false,
@@ -206,249 +203,203 @@ fun BoardSetManagerScreen(
     val boardSetSpeechCache = koinInject<BoardSetSpeechCacheUseCase>()
     val boardImportService = remember(koin) { koin.getOrNull<BoardImportService>() }
     val quickCorePresetService = remember(koin) { koin.getOrNull<QuickCorePresetService>() }
-    val quickCoreProgress by quickCorePresetService?.progress?.collectAsState()
-        ?: remember { mutableStateOf(null) }
-    val speechService = koinInject<SpeechService>()
-    val voiceUseCase = koinInject<VoiceUseCase>()
-    val featureUsageReporter = koinInject<io.github.jdreioe.wingmate.application.FeatureUsageReporter>()
-    val updateService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.UpdateService>() }
     val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
-    val scope = rememberCoroutineScope()
-    var route by remember { mutableStateOf<BoardSetRoute>(BoardSetRoute.Library) }
-    var boardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var isCreating by remember { mutableStateOf(false) }
-    var showCreateDialog by remember { mutableStateOf(false) }
-    var isQuickCoreImporting by remember { mutableStateOf(false) }
-    var showSettings by remember { mutableStateOf(false) }
-    var showImportExport by remember { mutableStateOf(false) }
-    var deleteTarget by remember { mutableStateOf<ObfBoardSet?>(null) }
-    var pendingProtectedDelete by remember { mutableStateOf<ObfBoardSet?>(null) }
-    var showDeleteAccessDialog by remember { mutableStateOf(false) }
-    var statusMessage by remember { mutableStateOf<String?>(null) }
-    val loadError = stringResource(R.string.board_sets_load_error)
-    val duplicatedMessage = stringResource(R.string.board_sets_duplicated)
-    val duplicateError = stringResource(R.string.board_sets_duplicate_error)
-    val lockError = stringResource(R.string.board_sets_lock_error)
-    val createError = stringResource(R.string.board_sets_create_error)
-    val deletedMessage = stringResource(R.string.board_sets_deleted)
-    val deleteError = stringResource(R.string.board_sets_delete_error)
-    val importedMessage = stringResource(R.string.board_sets_imported)
-    val importError = stringResource(R.string.board_sets_import_error)
+    val operations = remember(
+        useCase,
+        boardSetSpeechCache,
+        boardImportService,
+        quickCorePresetService,
+        editingAccessController,
+    ) {
+        DefaultBoardSetManagerOperations(
+            useCase = useCase,
+            speechCache = boardSetSpeechCache,
+            importService = boardImportService,
+            quickCoreService = quickCorePresetService,
+            editingAccessController = editingAccessController,
+        )
+    }
+    val factory = remember(operations) {
+        viewModelFactory {
+            initializer {
+                BoardSetManagerViewModel(
+                    savedStateHandle = createSavedStateHandle(),
+                    operations = operations,
+                )
+            }
+        }
+    }
+    val viewModel: BoardSetManagerViewModel = viewModel(factory = factory)
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val defaultBoardName = stringResource(R.string.board_dialog_default_board_name)
 
-    fun refreshBoardSets() {
-        scope.launch {
-            isLoading = true
-            runCatching { useCase.listBoardSets() }
-                .onSuccess { boardSets = it }
-                .onFailure { statusMessage = it.message ?: loadError }
-            isLoading = false
-        }
-    }
-
-    fun showCreatedBoardSet(created: ObfBoardSet) {
-        boardSets = (listOf(created) + boardSets)
-            .distinctBy { it.id }
-            .sortedByDescending { it.updatedAt }
-    }
-
-    fun deleteBoardSet(boardSet: ObfBoardSet) {
-        scope.launch {
-            runCatching { useCase.deleteBoardSet(boardSet.id) }
-                .onSuccess {
-                    statusMessage = deletedMessage
-                    refreshBoardSets()
-                }
-                .onFailure { statusMessage = it.message ?: deleteError }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        refreshBoardSets()
-        boardSetSpeechCache.cacheAll()
-    }
-    LaunchedEffect(initialBoardSetId) {
-        val targetBoardSet = initialBoardSetId?.let { id ->
-            withContext(Dispatchers.Default) { useCase.getBoardSet(id) }
-        }
-        if (targetBoardSet != null) {
-            route = BoardSetRoute.Workspace(targetBoardSet.id, BoardWorkspaceMode.Run)
-        }
-    }
-    LaunchedEffect(createOnLaunch) {
-        if (createOnLaunch) showCreateDialog = true
-    }
-
-    when (val currentRoute = route) {
-        BoardSetRoute.Library -> BoardSetLibraryScreen(
-            boardSets = boardSets,
-            isLoading = isLoading,
-            isCreating = isCreating,
-            statusMessage = statusMessage,
-            onBack = onBack,
-            onOpenSettings = { showSettings = true },
-            onCreate = { showCreateDialog = true },
-            onImport = boardImportService?.let { importService -> {
-                scope.launch {
-                    when (val result = importService.importBoardSetResult()) {
-                        is BoardImportResult.Success -> {
-                                val imported = result.boardSet
-                                boardSetSpeechCache.cacheBoardSet(imported.id)
-                                statusMessage = importedMessage
-                                refreshBoardSets()
-                                route = BoardSetRoute.Workspace(imported.id, BoardWorkspaceMode.Run)
-                        }
-                        BoardImportResult.Cancelled -> Unit
-                        is BoardImportResult.Failure -> {
-                            statusMessage = result.context.ifBlank { importError }
-                        }
-                    }
-                }
-            } },
-            onOpen = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Run) },
-            onEdit = { route = BoardSetRoute.Workspace(it.id, BoardWorkspaceMode.Edit) },
-            onDuplicate = { boardSet ->
-                scope.launch {
-                    runCatching { useCase.duplicateBoardSet(boardSet.id) }
-                        .onSuccess {
-                            statusMessage = duplicatedMessage
-                            refreshBoardSets()
-                        }
-                        .onFailure { statusMessage = it.message ?: duplicateError }
-                }
-            },
-            onToggleLock = { boardSet ->
-                scope.launch {
-                    runCatching { useCase.toggleLocked(boardSet.id) }
-                        .onSuccess { refreshBoardSets() }
-                        .onFailure { statusMessage = it.message ?: lockError }
-                }
-            },
-            onDelete = { deleteTarget = it }
+    LaunchedEffect(viewModel, createOnLaunch, initialBoardSetId) {
+        viewModel.onAction(
+            BoardSetManagerAction.Initialize(
+                createOnLaunch = createOnLaunch,
+                initialBoardSetId = initialBoardSetId,
+            )
         )
-
-        is BoardSetRoute.Workspace -> BoardSetWorkspaceScreen(
-            boardSetId = currentRoute.boardSetId,
-            initialMode = currentRoute.mode,
-            onSwitchToKeyboard = onBack,
-            onExitToLibrary = {
-                route = BoardSetRoute.Library
-                refreshBoardSets()
+    }
+    LaunchedEffect(viewModel, onBack) {
+        viewModel.events.collect { event ->
+            when (event) {
+                BoardSetManagerEvent.NavigateBack -> onBack()
             }
+        }
+    }
+
+    when (val route = state.route) {
+        BoardSetManagerRoute.Library -> BoardSetManagerScreen(
+            state = state,
+            statusMessage = state.statusMessage?.resolve(),
+            importAvailable = boardImportService != null,
+            onAction = viewModel::onAction,
+        )
+        is BoardSetManagerRoute.Workspace -> BoardSetWorkspaceScreen(
+            boardSetId = route.boardSetId,
+            initialMode = route.mode,
+            onSwitchToKeyboard = { viewModel.onAction(BoardSetManagerAction.BackClicked) },
+            onExitToLibrary = { viewModel.onAction(BoardSetManagerAction.WorkspaceExited) },
         )
     }
 
-    if (showCreateDialog) {
+    if (state.showCreateDialog) {
         CreateBoardSetDialog(
-            onDismiss = { showCreateDialog = false },
-            onCreate = { name, rows, columns, template, keyboardPreset ->
-                showCreateDialog = false
-                isCreating = true
-                scope.launch {
-                    val quickCoreSlug = template.quickCoreSlug
-                    if (quickCoreSlug != null) {
-                        val service = quickCorePresetService
-                        if (service == null) {
-                            statusMessage = createError
-                            isCreating = false
-                            return@launch
-                        }
-                        isQuickCoreImporting = true
-                        when (val result = service.importPreset(quickCoreSlug)) {
-                            is BoardImportResult.Success -> {
-                                val created = useCase.renameBoardSet(result.boardSet.id, name.trim())
-                                    ?: result.boardSet
-                                showCreateDialog = false
-                                showCreatedBoardSet(created)
-                                route = BoardSetRoute.Workspace(created.id, BoardWorkspaceMode.Run)
-                            }
-                            is BoardImportResult.Failure -> statusMessage = result.context
-                            BoardImportResult.Cancelled -> Unit
-                        }
-                        isQuickCoreImporting = false
-                        isCreating = false
-                        return@launch
-                    }
-                    runCatching {
-                        when (template) {
-                            BoardSetTemplate.Blank -> useCase.createBoardSet(name.trim(), rows, columns, defaultBoardName)
-                            BoardSetTemplate.Calculator -> useCase.createCalculatorBoardSet(name.trim())
-                            BoardSetTemplate.Keyboard -> useCase.createKeyboardBoardSet(name.trim(), keyboardPreset)
-                            else -> error("Quick Core presets are imported separately")
-                        }
-                    }
-                        .onSuccess { created ->
-                            showCreatedBoardSet(created)
-                            when (template) {
-                                BoardSetTemplate.Blank -> {
-                                    route = BoardSetRoute.Workspace(created.id, BoardWorkspaceMode.Edit)
-                                }
-                                BoardSetTemplate.Calculator,
-                                BoardSetTemplate.Keyboard -> Unit
-                                else -> Unit
-                            }
-                        }
-                        .onFailure { statusMessage = it.message ?: createError }
-                    isCreating = false
-                }
+            draft = state.createDraft,
+            onDismiss = { viewModel.onAction(BoardSetManagerAction.CreateDismissed) },
+            onNameChange = { viewModel.onAction(BoardSetManagerAction.CreateNameChanged(it)) },
+            onRowsChange = { viewModel.onAction(BoardSetManagerAction.CreateRowsChanged(it)) },
+            onColumnsChange = { viewModel.onAction(BoardSetManagerAction.CreateColumnsChanged(it)) },
+            onTemplateSelected = { template, suggestedName ->
+                viewModel.onAction(BoardSetManagerAction.CreateTemplateSelected(template, suggestedName))
             },
-            quickCoreProgress = quickCoreProgress?.fraction?.toFloat(),
-            quickCoreStage = quickCoreProgress?.stage,
-            isQuickCoreImporting = isQuickCoreImporting,
+            onKeyboardPresetSelected = {
+                viewModel.onAction(BoardSetManagerAction.CreateKeyboardPresetSelected(it))
+            },
+            onCreate = {
+                val draft = state.createDraft
+                viewModel.onAction(
+                    BoardSetManagerAction.CreateSubmitted(
+                        name = draft.name,
+                        rows = draft.rowsText.toIntOrNull() ?: 4,
+                        columns = draft.columnsText.toIntOrNull() ?: 8,
+                        template = draft.template,
+                        keyboardPreset = draft.keyboardPreset,
+                        defaultBoardName = defaultBoardName,
+                    )
+                )
+            },
+            quickCoreProgress = state.quickCoreProgress?.fraction,
+            quickCoreStage = state.quickCoreProgress?.stage,
+            isQuickCoreImporting = state.isQuickCoreImporting,
         )
     }
 
-    deleteTarget?.let { boardSet ->
+    state.deleteTargetId?.let { targetId ->
+        val boardSet = state.boardSets.firstOrNull { it.id == targetId } ?: return@let
         AlertDialog(
-            onDismissRequest = { deleteTarget = null },
+            onDismissRequest = { viewModel.onAction(BoardSetManagerAction.DeleteDismissed) },
             title = { Text(stringResource(R.string.board_sets_delete_title)) },
             text = { Text(stringResource(R.string.board_sets_delete_body, boardSet.name)) },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        deleteTarget = null
-                        scope.launch {
-                            if (editingAccessController?.requiresUnlock() == true) {
-                                pendingProtectedDelete = boardSet
-                                showDeleteAccessDialog = true
-                            } else {
-                                deleteBoardSet(boardSet)
-                            }
-                        }
-                    }
+                    onClick = { viewModel.onAction(BoardSetManagerAction.DeleteConfirmed) }
                 ) { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.common_cancel)) }
+                TextButton(onClick = { viewModel.onAction(BoardSetManagerAction.DeleteDismissed) }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
             }
         )
     }
 
-    if (showDeleteAccessDialog && editingAccessController != null) {
+    if (state.showDeleteAccessDialog && editingAccessController != null) {
         EditingAccessDialog(
             controller = editingAccessController,
             mode = EditingAccessDialogMode.Unlock,
-            onDismiss = {
-                showDeleteAccessDialog = false
-                pendingProtectedDelete = null
-            },
-            onSuccess = {
-                showDeleteAccessDialog = false
-                pendingProtectedDelete?.let(::deleteBoardSet)
-                pendingProtectedDelete = null
-            }
+            onDismiss = { viewModel.onAction(BoardSetManagerAction.DeleteAccessDismissed) },
+            onSuccess = { viewModel.onAction(BoardSetManagerAction.DeleteAccessGranted) },
         )
     }
 
-    if (showSettings) {
+    if (state.showSettings) {
         SettingsScreen(
-            onDismiss = { showSettings = false },
-            onBackToWelcome = onBackToWelcome
+            onDismiss = { viewModel.onAction(BoardSetManagerAction.SettingsDismissed) },
+            onBackToWelcome = {
+                viewModel.onAction(BoardSetManagerAction.SettingsDismissed)
+                onBackToWelcome()
+            },
         )
     }
-    if (showImportExport) {
-        SettingsExportDialog(onDismiss = { showImportExport = false })
+}
+
+@Composable
+private fun BoardSetManagerMessage.resolve(): String = when (this) {
+    is BoardSetManagerMessage.Dynamic -> value
+    is BoardSetManagerMessage.Resource -> stringResource(id)
+}
+
+@Composable
+internal fun BoardSetManagerScreen(
+    state: BoardSetManagerState,
+    statusMessage: String?,
+    importAvailable: Boolean,
+    onAction: (BoardSetManagerAction) -> Unit,
+) {
+    BoardSetLibraryScreen(
+        boardSets = state.boardSets,
+        isLoading = state.isLoading,
+        isCreating = state.isCreating,
+        statusMessage = statusMessage,
+        onBack = { onAction(BoardSetManagerAction.BackClicked) },
+        onOpenSettings = { onAction(BoardSetManagerAction.SettingsClicked) },
+        onCreate = { onAction(BoardSetManagerAction.CreateClicked) },
+        onImport = if (importAvailable) {
+            { onAction(BoardSetManagerAction.ImportClicked) }
+        } else {
+            null
+        },
+        onOpen = { onAction(BoardSetManagerAction.OpenClicked(it.id)) },
+        onEdit = { onAction(BoardSetManagerAction.EditClicked(it.id)) },
+        onDuplicate = { onAction(BoardSetManagerAction.DuplicateClicked(it.id)) },
+        onToggleLock = { onAction(BoardSetManagerAction.ToggleLockClicked(it.id)) },
+        onDelete = { onAction(BoardSetManagerAction.DeleteClicked(it.id)) },
+    )
+}
+
+@Preview(showBackground = true, widthDp = 1000, heightDp = 700)
+@Composable
+private fun BoardSetManagerScreenPreview() {
+    AppTheme {
+        BoardSetManagerScreen(
+            state = BoardSetManagerState(
+                boardSets = listOf(
+                    ObfBoardSet(
+                        id = "core-words",
+                        name = "Core words",
+                        rootBoardId = "home",
+                        boardIds = listOf("home", "people", "places"),
+                        createdAt = 1L,
+                        updatedAt = 2L,
+                    ),
+                    ObfBoardSet(
+                        id = "school",
+                        name = "School",
+                        rootBoardId = "classroom",
+                        boardIds = listOf("classroom", "subjects"),
+                        isLocked = true,
+                        createdAt = 1L,
+                        updatedAt = 2L,
+                    ),
+                ),
+                isLoading = false,
+            ),
+            statusMessage = null,
+            importAvailable = true,
+            onAction = {},
+        )
     }
 }
 

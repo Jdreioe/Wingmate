@@ -90,6 +90,7 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = vCode
         versionName = vName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField(
             "String",
             "OPENSYMBOLS_PROXY_URL",
@@ -185,12 +186,15 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2025.09.01")
     implementation(composeBom)
     androidTestImplementation(composeBom)
+    androidTestImplementation(libs.androidx.testExt.junit)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
     // Common AndroidX helpers
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.lifecycle.runtimeKtx)
     implementation("androidx.lifecycle:lifecycle-runtime-compose:${libs.versions.androidx.lifecycle.get()}")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:${libs.versions.androidx.lifecycle.get()}")
 
     implementation(libs.androidx.activity.compose)
     implementation("androidx.compose.ui:ui")
@@ -198,6 +202,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     // Image loading
     implementation("io.coil-kt.coil3:coil-compose:3.5.0")
@@ -220,6 +225,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlinx.serialization.json)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${libs.versions.kotlinx.coroutines.get()}")
 }
 
 kotlin {

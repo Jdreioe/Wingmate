@@ -103,17 +103,18 @@ internal enum class BoardSetTemplate(val quickCoreSlug: String? = null) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CreateBoardSetDialog(
+    draft: CreateBoardSetDraft,
     onDismiss: () -> Unit,
-    onCreate: (name: String, rows: Int, columns: Int, template: BoardSetTemplate, keyboardPreset: KeyboardPreset) -> Unit,
+    onNameChange: (String) -> Unit,
+    onRowsChange: (String) -> Unit,
+    onColumnsChange: (String) -> Unit,
+    onTemplateSelected: (BoardSetTemplate, suggestedName: String?) -> Unit,
+    onKeyboardPresetSelected: (KeyboardPreset) -> Unit,
+    onCreate: () -> Unit,
     quickCoreProgress: Float? = null,
     quickCoreStage: String? = null,
     isQuickCoreImporting: Boolean = false,
 ) {
-    var name by remember { mutableStateOf("") }
-    var rowsText by remember { mutableStateOf("4") }
-    var columnsText by remember { mutableStateOf("8") }
-    var template by remember { mutableStateOf(BoardSetTemplate.Blank) }
-    var keyboardPreset by remember { mutableStateOf(KeyboardPreset.Qwerty) }
     val calculatorName = stringResource(R.string.calculator_default_name)
     val keyboardName = stringResource(R.string.keyboard_default_name)
 
@@ -123,63 +124,57 @@ internal fun CreateBoardSetDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
+                    value = draft.name,
+                    onValueChange = onNameChange,
                     label = { Text(stringResource(R.string.board_dialog_set_name)) },
                     singleLine = true
                 )
                 Text(stringResource(R.string.board_dialog_template), style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
-                        selected = template == BoardSetTemplate.Blank,
-                        onClick = { template = BoardSetTemplate.Blank },
+                        selected = draft.template == BoardSetTemplate.Blank,
+                        onClick = { onTemplateSelected(BoardSetTemplate.Blank, null) },
                         label = { Text(stringResource(R.string.board_dialog_template_blank)) }
                     )
                     FilterChip(
-                        selected = template == BoardSetTemplate.Calculator,
-                        onClick = {
-                            template = BoardSetTemplate.Calculator
-                            if (name.isBlank()) name = calculatorName
-                        },
+                        selected = draft.template == BoardSetTemplate.Calculator,
+                        onClick = { onTemplateSelected(BoardSetTemplate.Calculator, calculatorName) },
                         label = { Text(stringResource(R.string.board_dialog_template_calculator)) }
                     )
                     FilterChip(
-                        selected = template == BoardSetTemplate.Keyboard,
-                        onClick = {
-                            template = BoardSetTemplate.Keyboard
-                            if (name.isBlank()) name = keyboardName
-                        },
+                        selected = draft.template == BoardSetTemplate.Keyboard,
+                        onClick = { onTemplateSelected(BoardSetTemplate.Keyboard, keyboardName) },
                         label = { Text(stringResource(R.string.board_dialog_template_keyboard)) }
                     )
                 }
-                if (template == BoardSetTemplate.Keyboard) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (draft.template == BoardSetTemplate.Keyboard) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         stringResource(R.string.board_dialog_keyboard_preset),
                         modifier = Modifier.align(Alignment.CenterVertically),
                         style = MaterialTheme.typography.labelLarge
                     )
                     FilterChip(
-                        selected = keyboardPreset == KeyboardPreset.Qwerty,
-                        onClick = { keyboardPreset = KeyboardPreset.Qwerty },
+                        selected = draft.keyboardPreset == KeyboardPreset.Qwerty,
+                        onClick = { onKeyboardPresetSelected(KeyboardPreset.Qwerty) },
                         label = { Text(stringResource(R.string.board_dialog_keyboard_preset_qwerty)) }
                     )
                     FilterChip(
-                        selected = keyboardPreset == KeyboardPreset.Alphabetical,
-                        onClick = { keyboardPreset = KeyboardPreset.Alphabetical },
+                        selected = draft.keyboardPreset == KeyboardPreset.Alphabetical,
+                        onClick = { onKeyboardPresetSelected(KeyboardPreset.Alphabetical) },
                         label = { Text(stringResource(R.string.board_dialog_keyboard_preset_alphabetical)) }
                     )
                 }
-                if (template == BoardSetTemplate.Blank) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (draft.template == BoardSetTemplate.Blank) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        value = rowsText,
-                        onValueChange = { rowsText = it.filter(Char::isDigit) },
+                        value = draft.rowsText,
+                        onValueChange = onRowsChange,
                         label = { Text(stringResource(R.string.board_dialog_rows)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
                     OutlinedTextField(
-                        value = columnsText,
-                        onValueChange = { columnsText = it.filter(Char::isDigit) },
+                        value = draft.columnsText,
+                        onValueChange = onColumnsChange,
                         label = { Text(stringResource(R.string.board_dialog_columns)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
@@ -202,8 +197,8 @@ internal fun CreateBoardSetDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(name, rowsText.toIntOrNull() ?: 4, columnsText.toIntOrNull() ?: 8, template, keyboardPreset) },
-                enabled = name.isNotBlank() && !isQuickCoreImporting
+                onClick = onCreate,
+                enabled = draft.name.isNotBlank() && !isQuickCoreImporting
             ) { Text(stringResource(R.string.board_dialog_create)) }
         },
         dismissButton = {
