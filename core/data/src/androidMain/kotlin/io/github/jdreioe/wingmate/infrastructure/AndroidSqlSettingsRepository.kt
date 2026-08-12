@@ -29,19 +29,12 @@ class AndroidSqlSettingsRepository(private val context: Context) : SettingsRepos
         val db = helper.readableDatabase
         // Removed SLF4J logger for cross-platform compatibility
         val cursor = db.query("ui_settings", arrayOf("data"), "id = 1", null, null, null, null)
-        if (cursor.moveToFirst()) {
-            val text = cursor.getString(cursor.getColumnIndexOrThrow("data"))
-            cursor.close()
-            return@withContext try {
-                val s = json.decodeFromString(Settings.serializer(), text)
-                println("Loaded UI settings from SQLite: {}: ${s}")
-                s
-            } catch (t: Throwable) {
-                println("Failed to decode UI settings from SQLite: ${t}")
-                Settings()
+        cursor.use {
+            if (it.moveToFirst()) {
+                val text = it.getString(it.getColumnIndexOrThrow("data"))
+                return@withContext json.decodeFromString(Settings.serializer(), text)
             }
         }
-        cursor.close()
         return@withContext Settings()
     }
 
@@ -50,7 +43,6 @@ class AndroidSqlSettingsRepository(private val context: Context) : SettingsRepos
         // Removed SLF4J logger for cross-platform compatibility
         val text = json.encodeToString(Settings.serializer(), settings)
         db.execSQL("INSERT OR REPLACE INTO ui_settings (id, data) VALUES (1, ?)", arrayOf(text))
-        println("Saved UI settings to SQLite: {}: ${settings}")
         return@withContext settings
     }
 }

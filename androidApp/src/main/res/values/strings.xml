@@ -26,6 +26,19 @@
     <string name="common_back">Back</string>
     <string name="common_continue">Continue</string>
     <string name="common_retry">Retry</string>
+    <string name="startup_load_failed">Wingmate could not load your settings. Your existing configuration has not been changed.</string>
+    <string name="welcome_import_unreadable">The selected file could not be read. Tap the import option to retry.</string>
+    <string name="welcome_import_persistence_failed">The screen could not be saved. Your current screens were kept; tap to retry.</string>
+    <string name="welcome_import_invalid">This screen file is not valid or supported. Choose another file or retry.</string>
+    <string name="welcome_import_unexpected">Unable to import this screen. Tap the import option to retry.</string>
+    <string name="voice_load_failed">Voices could not be loaded. Check your connection or device voice settings, then retry.</string>
+    <string name="voice_save_failed">The voice could not be saved. Your current communication setup was kept; tap the voice to retry.</string>
+    <string name="backup_picker_failed">The file picker could not be opened. Try again.</string>
+    <string name="backup_create_failed">The backup could not be created. Your data was not changed; try again.</string>
+    <string name="language_load_failed">Language settings could not be loaded. Your current settings were not changed.</string>
+    <string name="language_save_failed">The language change could not be completed. Review the current selections, then choose a language to retry.</string>
+    <string name="settings_load_failed">Settings could not be loaded. Your current configuration was not changed.</string>
+    <string name="settings_save_failed">The setting could not be saved. Retry to reload the stored configuration.</string>
 
     <string name="board_sets_title">Screens</string>
     <string name="board_sets_subtitle">Choose a screen to communicate</string>
@@ -116,6 +129,7 @@
     <string name="board_workspace_finish_body">Save your changes before returning to communication mode?</string>
     <string name="board_workspace_saved">Changes saved</string>
     <string name="board_workspace_save_error">Unable to save changes</string>
+    <string name="board_workspace_export_error">The screen could not be exported. Your current screen was not changed; try again.</string>
     <string name="board_workspace_save_phrase">Save to phrases</string>
     <string name="board_workspace_phrase_saved">Saved to All phrases</string>
     <string name="board_workspace_phrase_save_error">Unable to save the sentence to phrases</string>

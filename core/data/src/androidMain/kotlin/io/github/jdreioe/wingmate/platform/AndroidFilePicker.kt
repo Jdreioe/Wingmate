@@ -7,6 +7,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Android implementation of FilePicker using ActivityResultLauncher.
@@ -92,7 +93,6 @@ class AndroidFilePicker(private val context: Context) : FilePicker {
             }
             tempFile.absolutePath
         } catch (e: Exception) {
-            e.printStackTrace()
             uri.toString() // Fallback to URI string if copy fails
         }
     }
@@ -100,7 +100,7 @@ class AndroidFilePicker(private val context: Context) : FilePicker {
     override suspend fun pickFile(title: String, extensions: List<String>): String? = suspendCancellableCoroutine { cont ->
         val safeLauncher = launcher
         if (safeLauncher == null) {
-            cont.resume(null)
+            cont.resumeWithException(IllegalStateException("File picker is unavailable"))
             return@suspendCancellableCoroutine
         }
         
@@ -112,7 +112,7 @@ class AndroidFilePicker(private val context: Context) : FilePicker {
             safeLauncher(extensions)
         } catch (e: Exception) {
             activeContinuation = null
-            cont.resume(null)
+            cont.resumeWithException(IllegalStateException("File picker could not be opened", e))
         }
     }
 
@@ -127,7 +127,6 @@ class AndroidFilePicker(private val context: Context) : FilePicker {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
             null
         }
     }
@@ -146,8 +145,7 @@ class AndroidFilePicker(private val context: Context) : FilePicker {
         } catch (e: ArchiveReadException) {
             throw e
         } catch (e: Exception) {
-            e.printStackTrace()
-            null
+            throw ArchiveReadException(ArchiveReadError.IO_ERROR, "Archive could not be opened", e)
         }
     }
 

@@ -61,6 +61,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -144,6 +145,7 @@ import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.resized
 import io.github.jdreioe.wingmate.domain.obf.moveOrSwapField
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -240,9 +242,10 @@ fun BoardSetManagerScreen(
     fun refreshBoardSets() {
         scope.launch {
             isLoading = true
+            statusMessage = null
             runCatching { useCase.listBoardSets() }
                 .onSuccess { boardSets = it }
-                .onFailure { statusMessage = it.message ?: loadError }
+                .onFailure { statusMessage = loadError }
             isLoading = false
         }
     }
@@ -260,7 +263,7 @@ fun BoardSetManagerScreen(
                     statusMessage = deletedMessage
                     refreshBoardSets()
                 }
-                .onFailure { statusMessage = it.message ?: deleteError }
+                .onFailure { statusMessage = deleteError }
         }
     }
 
@@ -289,6 +292,7 @@ fun BoardSetManagerScreen(
             onBack = onBack,
             onOpenSettings = { showSettings = true },
             onCreate = { showCreateDialog = true },
+            onRetry = ::refreshBoardSets,
             onImport = boardImportService?.let { importService -> {
                 scope.launch {
                     when (val result = importService.importBoardSetResult()) {
@@ -301,7 +305,7 @@ fun BoardSetManagerScreen(
                         }
                         BoardImportResult.Cancelled -> Unit
                         is BoardImportResult.Failure -> {
-                            statusMessage = result.context.ifBlank { importError }
+                            statusMessage = importError
                         }
                     }
                 }
@@ -315,14 +319,14 @@ fun BoardSetManagerScreen(
                             statusMessage = duplicatedMessage
                             refreshBoardSets()
                         }
-                        .onFailure { statusMessage = it.message ?: duplicateError }
+                        .onFailure { statusMessage = duplicateError }
                 }
             },
             onToggleLock = { boardSet ->
                 scope.launch {
                     runCatching { useCase.toggleLocked(boardSet.id) }
                         .onSuccess { refreshBoardSets() }
-                        .onFailure { statusMessage = it.message ?: lockError }
+                        .onFailure { statusMessage = lockError }
                 }
             },
             onDelete = { deleteTarget = it }
@@ -363,7 +367,7 @@ fun BoardSetManagerScreen(
                                 showCreatedBoardSet(created)
                                 route = BoardSetRoute.Workspace(created.id, BoardWorkspaceMode.Run)
                             }
-                            is BoardImportResult.Failure -> statusMessage = result.context
+                            is BoardImportResult.Failure -> statusMessage = importError
                             BoardImportResult.Cancelled -> Unit
                         }
                         isQuickCoreImporting = false
@@ -389,7 +393,7 @@ fun BoardSetManagerScreen(
                                 else -> Unit
                             }
                         }
-                        .onFailure { statusMessage = it.message ?: createError }
+                        .onFailure { statusMessage = createError }
                     isCreating = false
                 }
             },
@@ -462,6 +466,7 @@ private fun BoardSetLibraryScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onCreate: () -> Unit,
+    onRetry: () -> Unit,
     onImport: (() -> Unit)?,
     onOpen: (ObfBoardSet) -> Unit,
     onEdit: (ObfBoardSet) -> Unit,
@@ -542,7 +547,11 @@ private fun BoardSetLibraryScreen(
                         Text(it, color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = onCreate) { Text(stringResource(R.string.board_sets_create)) }
+                    if (statusMessage != null) {
+                        Button(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
+                    } else {
+                        Button(onClick = onCreate) { Text(stringResource(R.string.board_sets_create)) }
+                    }
                 }
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -652,6 +661,7 @@ private fun BoardSetWorkspaceScreen(
     var highlightedButtonId by remember(boardSetId) { mutableStateOf<String?>(null) }
     var highlightGeneration by remember(boardSetId) { mutableLongStateOf(0L) }
     var isLoading by remember(boardSetId) { mutableStateOf(true) }
+    var loadRetryKey by remember(boardSetId) { mutableIntStateOf(0) }
     var statusMessage by remember(boardSetId) { mutableStateOf<String?>(null) }
     var nativeKeyboardDraft by remember(boardSetId) { mutableStateOf<String?>(null) }
     var showAddBoardDialog by remember { mutableStateOf(false) }
@@ -669,6 +679,7 @@ private fun BoardSetWorkspaceScreen(
     var appBarMenuExpanded by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(R.string.board_workspace_unlock_to_edit)
     val saveErrorMessage = stringResource(R.string.board_workspace_save_error)
+    val exportErrorMessage = stringResource(R.string.board_workspace_export_error)
     // Placeholder substituted in click handler (stringResource formatting is composition-only).
     val unsupportedActionTemplate = stringResource(R.string.board_workspace_unsupported_action, "%ACTION%")
 
@@ -708,11 +719,17 @@ private fun BoardSetWorkspaceScreen(
     // they may be the first communication surface a user opens.
     LaunchedEffect(predictionService, saidTextRepository, settings.primaryLanguage) {
         val service = predictionService ?: return@LaunchedEffect
-        runCatching {
+        try {
             val history = saidTextRepository.list()
             val nGramService = service as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
             if (nGramService != null) {
-                val dictionary = dictionaryLoader?.loadDictionary(settings.primaryLanguage).orEmpty()
+                val dictionary = try {
+                    dictionaryLoader?.loadDictionary(settings.primaryLanguage).orEmpty()
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (_: Exception) {
+                    emptyList()
+                }
                 if (dictionary.isNotEmpty()) {
                     nGramService.setBaseLanguage(dictionary)
                     nGramService.train(history, clear = false)
@@ -722,26 +739,40 @@ private fun BoardSetWorkspaceScreen(
             } else {
                 service.train(history)
             }
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (_: Exception) {
+            // Prediction training is optional; the communication surface stays intact.
         }
     }
 
-    LaunchedEffect(boardSetId) {
+    LaunchedEffect(boardSetId, loadRetryKey) {
         isLoading = true
-        val loaded = withContext(Dispatchers.Default) { useCase.loadBoardSetGraph(boardSetId) }
-        val normalized = loaded?.withHomeFieldsBottomLeft()
-        savedGraph = normalized
-        selectedBoardId = normalized?.boardSet?.rootBoardId
-        if (normalized != null && initialMode == BoardWorkspaceMode.Edit && !normalized.boardSet.isLocked) {
-            if (editingAccessController?.requiresUnlock() == true) {
+        statusMessage = null
+        try {
+            val loaded = withContext(Dispatchers.Default) { useCase.loadBoardSetGraph(boardSetId) }
+                ?: error("Screen not found")
+            val normalized = loaded.withHomeFieldsBottomLeft()
+            savedGraph = normalized
+            selectedBoardId = normalized.boardSet.rootBoardId
+            if (initialMode == BoardWorkspaceMode.Edit && !normalized.boardSet.isLocked) {
+                if (editingAccessController?.requiresUnlock() == true) {
+                    mode = BoardWorkspaceMode.Run
+                    showEditingAccessDialog = true
+                } else {
+                    editSession = BoardSetEditSession(normalized, normalized)
+                }
+            } else if (normalized.boardSet.isLocked) {
                 mode = BoardWorkspaceMode.Run
-                showEditingAccessDialog = true
-            } else {
-                editSession = BoardSetEditSession(normalized, normalized)
             }
-        } else if (normalized?.boardSet?.isLocked == true) {
-            mode = BoardWorkspaceMode.Run
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (_: Exception) {
+            savedGraph = null
+            selectedBoardId = null
+        } finally {
+            isLoading = false
         }
-        isLoading = false
     }
 
     // #120: expire the selection highlight after the configured duration. Re-activating a
@@ -886,7 +917,7 @@ private fun BoardSetWorkspaceScreen(
             try {
                 val graph = activeGraph
                 if (graph == null) {
-                    statusMessage = "Export failed: no board set loaded"
+                    statusMessage = exportErrorMessage
                 } else {
                     when (val export = useCase.exportBoardSetAsObzResult(graph.boardSet.id)) {
                         is ObzExportResult.Success -> {
@@ -904,16 +935,14 @@ private fun BoardSetWorkspaceScreen(
                             }
                         }
                         is ObzExportResult.Failure -> {
-                            val resources = export.resources
-                                .takeIf { it.isNotEmpty() }
-                                ?.joinToString(prefix = ": ")
-                                .orEmpty()
-                            statusMessage = "Export failed: ${export.context}$resources"
+                            statusMessage = exportErrorMessage
                     }
                     }
                 }
-            } catch (e: Exception) {
-                statusMessage = "Export failed: ${e.message ?: "unknown error"}"
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (_: Exception) {
+                statusMessage = exportErrorMessage
             } finally {
                 isExporting = false
             }
@@ -1338,6 +1367,9 @@ private fun BoardSetWorkspaceScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(stringResource(R.string.board_workspace_load_error))
+                    TextButton(onClick = { loadRetryKey++ }) {
+                        Text(stringResource(R.string.common_retry))
+                    }
                     TextButton(onClick = onExitToLibrary) {
                         Text(stringResource(R.string.board_workspace_back_to_library))
                     }
@@ -1750,17 +1782,22 @@ private fun BoardSetWorkspaceScreen(
                     // Persist on an application-scoped scope so leaving this screen can't
                     // cancel the write halfway; branch back to the main thread for state updates.
                     val appScope = koin.get<CoroutineScope>()
-                    appScope.launch(Dispatchers.Main) {
-                        withContext(Dispatchers.Default) {
+                    appScope.launch {
+                        val result = withContext(Dispatchers.Default) {
                             useCase.saveBoardSetGraph(graph)
-                        }.onSuccess { saved ->
-                            savedGraph = saved
-                        }.onFailure { error ->
-                            // Persistence failed: drop back into editing with the draft intact
-                            // so the user does not lose their work.
-                            mode = BoardWorkspaceMode.Edit
-                            editSession = session
-                            statusMessage = error.message ?: saveErrorMessage
+                        }
+                        // UI updates remain tied to this screen's lifecycle even though the
+                        // persistence itself is allowed to finish after navigation.
+                        scope.launch {
+                            result.onSuccess { saved ->
+                                savedGraph = saved
+                            }.onFailure {
+                                // Persistence failed: drop back into editing with the draft intact
+                                // so the user does not lose their work.
+                                mode = BoardWorkspaceMode.Edit
+                                editSession = session
+                                statusMessage = saveErrorMessage
+                            }
                         }
                     }
                 }) { Text(stringResource(R.string.board_workspace_save_changes)) }

@@ -15,12 +15,14 @@ class AndroidSqlVoiceRepository(private val context: Context) : VoiceRepository 
     override suspend fun getVoices(): List<Voice> = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
         val cursor = db.query("voice_catalog", arrayOf("list"), "id = ?", arrayOf("1"), null, null, null)
-        val list = if (cursor.moveToFirst()) {
-            val text = cursor.getString(cursor.getColumnIndexOrThrow("list"))
-            runCatching { json.decodeFromString(ListSerializer(Voice.serializer()), text) }.getOrNull() ?: emptyList()
-        } else emptyList()
-        cursor.close()
-        list
+        cursor.use {
+            if (it.moveToFirst()) {
+                val text = it.getString(it.getColumnIndexOrThrow("list"))
+                json.decodeFromString(ListSerializer(Voice.serializer()), text)
+            } else {
+                emptyList()
+            }
+        }
     }
 
     override suspend fun saveVoices(list: List<Voice>) = withContext(Dispatchers.IO) {
@@ -33,22 +35,18 @@ class AndroidSqlVoiceRepository(private val context: Context) : VoiceRepository 
         val text = json.encodeToString(Voice.serializer(), voice)
         val db = helper.writableDatabase
         db.execSQL("INSERT OR REPLACE INTO voices (id, data) VALUES (1, ?)", arrayOf(text))
-        println("Saved selected voice to SQLite: ${voice.name}")
     }
 
     override suspend fun getSelected(): Voice? = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
         val cursor = db.query("voices", arrayOf("data"), "id = ?", arrayOf("1"), null, null, null)
-        val v = if (cursor.moveToFirst()) {
-            val text = cursor.getString(cursor.getColumnIndexOrThrow("data"))
-            try {
+        cursor.use {
+            if (it.moveToFirst()) {
+                val text = it.getString(it.getColumnIndexOrThrow("data"))
                 json.decodeFromString(Voice.serializer(), text)
-            } catch (t: Throwable) {
-                println("Failed to decode selected voice: $t")
+            } else {
                 null
             }
-        } else null
-        cursor.close()
-        return@withContext v
+        }
     }
 }

@@ -23,6 +23,7 @@ fun ImportOptionsScreen(
     onImportModern: () -> Unit,
     onCreateFromScratch: () -> Unit,
     onSkip: () -> Unit,
+    errorMessage: String? = null,
     showClassic: Boolean = true,
     showModern: Boolean = true,
     showCreateFromScratch: Boolean = true
@@ -83,6 +84,15 @@ fun ImportOptionsScreen(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
+
+            errorMessage?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             TextButton(onClick = onSkip) {
                 Text(stringResource(R.string.import_options_skip))

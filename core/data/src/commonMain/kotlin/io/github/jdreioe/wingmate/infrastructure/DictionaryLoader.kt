@@ -4,7 +4,10 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
+
+class DictionaryLoadException : Exception("Dictionary could not be loaded")
 
 /**
  * Loads language dictionaries from the AOSP dictionaries repository on Codeberg.
@@ -62,12 +65,14 @@ class DictionaryLoader(private val fileStorage: io.github.jdreioe.wingmate.domai
             
             try {
                 val response = httpClient.get(url)
+                if (response.status.value !in 200..299) throw DictionaryLoadException()
                 val responseText = response.bodyAsText()
                 
                 // Parse on Default dispatcher (CPU bound)
                 val words = withContext(Dispatchers.Default) {
                     parseDictionary(responseText)
                 }
+                if (words.isEmpty()) throw DictionaryLoadException()
                 
                 println("DEBUG: Loaded ${words.size} words for language $languageCode ($baseName)")
                 
@@ -83,10 +88,10 @@ class DictionaryLoader(private val fileStorage: io.github.jdreioe.wingmate.domai
                     }
                 }
                 words
-            } catch (e: Exception) {
-                println("DEBUG: Failed to fetch dictionary for $languageCode ($url): ${e.message}")
-                e.printStackTrace()
-                emptyList()
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (_: Exception) {
+                throw DictionaryLoadException()
             }
         }
     }
