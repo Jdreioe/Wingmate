@@ -90,6 +90,11 @@ class SettingsStateManager(
      * Get current settings value synchronously
      */
     fun getCurrentSettings(): Settings = _settings.value
+
+    /** Applies settings that another trusted startup/restore read already loaded. */
+    fun applyLoadedSettings(settings: Settings) {
+        _settings.value = settings
+    }
     
     /**
      * Reload settings from repository (useful for external changes)

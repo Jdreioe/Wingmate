@@ -24,6 +24,7 @@ import io.github.jdreioe.wingmate.platform.ArchiveEntry
 import io.github.jdreioe.wingmate.platform.readEntryBytes
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
@@ -145,7 +146,13 @@ class CompleteBackupManager(
 
     suspend fun restoreBackup(path: String): BackupRestoreResult = restoreMutex.withLock {
         val picker = filePicker ?: return@withLock BackupRestoreResult.Failure("File import is unavailable")
-        val archive = runCatching { picker.openArchive(path) }.getOrNull()
+        val archive = try {
+            picker.openArchive(path)
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (_: Exception) {
+            null
+        }
             ?: return@withLock BackupRestoreResult.Failure("Could not open backup archive")
         val restoredMedia = mutableListOf<String>()
         try {
@@ -201,9 +208,12 @@ class CompleteBackupManager(
             }
             mutableRestoreRevision.value += 1
             BackupRestoreResult.Success(payload)
-        } catch (error: Throwable) {
+        } catch (failure: CancellationException) {
             restoredMedia.forEach { runCatching { mediaAccess.deleteRestored(it) } }
-            BackupRestoreResult.Failure(error.message ?: "Backup restore failed")
+            throw failure
+        } catch (_: Exception) {
+            restoredMedia.forEach { runCatching { mediaAccess.deleteRestored(it) } }
+            BackupRestoreResult.Failure("Backup could not be restored safely")
         } finally {
             archive.close()
         }

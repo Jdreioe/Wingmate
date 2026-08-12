@@ -16,6 +16,7 @@ import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
@@ -33,6 +34,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
     var loading by remember { mutableStateOf(true) }
     var voices by remember { mutableStateOf<List<Voice>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
+    var operationError by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<Voice?>(null) }
     var showVoiceSettings by remember { mutableStateOf(false) }
     var editingVoice by remember { mutableStateOf<Voice?>(null) }
@@ -44,21 +46,20 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
     var showGenderFilter by remember { mutableStateOf(false) }
     var voiceSearch by remember { mutableStateOf("") }
     var genderFilter by remember { mutableStateOf<String?>(null) }
+    var retryKey by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
+    val voiceLoadFailed = stringResource(R.string.voice_load_failed)
+    val voiceSaveFailed = stringResource(R.string.voice_save_failed)
 
     val systemVoiceProvider = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>() }
 
-    LaunchedEffect(Unit) {
-        // Check TTS preference first
-        if (settingsUseCase != null) {
-            val settings = withContext(Dispatchers.Default) { 
-                runCatching { settingsUseCase.get() }.getOrNull() 
-            }
-            ttsEngine = settings?.ttsEngine ?: TtsEngine.SYSTEM
-        }
-        
+    LaunchedEffect(retryKey) {
         loading = true
+        error = null
         try {
+            val settings = checkNotNull(settingsUseCase) { "Settings are unavailable" }
+                .let { withContext(Dispatchers.Default) { it.get() } }
+            ttsEngine = settings.ttsEngine
             if (ttsEngine == TtsEngine.SYSTEM) {
                 // Load system voices
                 val allSystemVoices = systemVoiceProvider?.getSystemVoices() ?: listOf(
@@ -78,12 +79,23 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                     .sorted()
                 
                 // Get currently selected voice if any
-                selected = try { useCase.selected() } catch (e: Exception) { null }
+                selected = useCase.selected()
             } else {
                 // Load Azure voices
-                val fromCloud = withContext(Dispatchers.Default) { useCase.refreshFromAzure() }
+                var cloudRefreshFailed = false
+                val fromCloud = try {
+                    withContext(Dispatchers.Default) { useCase.refreshFromAzure() }
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (_: Exception) {
+                    cloudRefreshFailed = true
+                    emptyList()
+                }
                 val local = withContext(Dispatchers.Default) { useCase.list() }
                 val allVoices = (fromCloud + local).distinctBy { it.name }
+                if (allVoices.isEmpty() && cloudRefreshFailed) {
+                    error("No cached voices were available after refresh failed")
+                }
                 voices = allVoices
                 
                 // Extract available languages from Azure voices
@@ -96,10 +108,13 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                 
                 selected = useCase.selected()
             }
-        } catch (t: Throwable) {
-            error = t.message
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (_: Exception) {
+            error = voiceLoadFailed
+        } finally {
+            loading = false
         }
-        loading = false
     }
 
     val queryTerms = remember(voiceSearch) {
@@ -161,6 +176,10 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
         title = { Text(stringResource(R.string.voice_select_title)) },
         text = {
             Column(Modifier.fillMaxWidth()) {
+                operationError?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.height(8.dp))
+                }
                 // Voice search and filter section.
                 if (!loading && error == null) {
                     val showKeyboard = rememberShowKeyboardOnFocus()
@@ -281,7 +300,10 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                 if (loading) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() }
                 } else if (error != null) {
-                    Text(stringResource(R.string.voice_error, error ?: ""))
+                    Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = { retryKey++ }) {
+                        Text(stringResource(R.string.common_retry))
+                    }
                 } else if (ttsEngine == TtsEngine.SYSTEM) {
                     // Show system voices
                     Text(
@@ -308,24 +330,23 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                                     .fillMaxWidth()
                                     .clickable {
                                         scope.launch {
+                                            operationError = null
                                             try {
-                                                println("User selected system voice: ${v.name}")
                                                 useCase.select(v)
                                                 // Update settings if needed
                                                 val primary = v.primaryLanguage ?: ""
                                                 if (primary.isNotBlank() && settingsUseCase != null) {
-                                                    try {
-                                                        val current = settingsUseCase.get()
-                                                        val updated = current.copy(primaryLanguage = primary)
-                                                        settingsUseCase.update(updated)
-                                                    } catch (t: Throwable) {
-                                                        println("Failed to persist primaryLanguage: $t")
-                                                    }
+                                                    val current = settingsUseCase.get()
+                                                    val updated = current.copy(primaryLanguage = primary)
+                                                    settingsUseCase.update(updated)
                                                 }
-                                            } catch (t: Throwable) {
-                                                println("Failed to select system voice ${v.name}: $t")
+                                                selected = v
+                                                onDismiss()
+                                            } catch (failure: CancellationException) {
+                                                throw failure
+                                            } catch (_: Exception) {
+                                                operationError = voiceSaveFailed
                                             }
-                                            onDismiss()
                                         }
                                     }
                                     .padding(8.dp)) {
@@ -370,26 +391,23 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                                     .fillMaxWidth()
                                     .clickable(enabled = true, onClickLabel = null) {
                                         scope.launch {
+                                            operationError = null
                                             try {
-                                                println("User selected voice: ${v.name} (primary=${v.primaryLanguage}, selected=${v.selectedLanguage})")
                                                 useCase.select(v)
                                                 // also persist UI primary language when selecting a voice
                                                 val primary = v.selectedLanguage.ifBlank { v.primaryLanguage ?: "" }
                                                 if (primary.isNotBlank() && settingsUseCase != null) {
-                                                    try {
-                                                        println("Persisting primaryLanguage='$primary' to Settings")
-                                                        val current = settingsUseCase.get()
-                                                        val updated = current.copy(primaryLanguage = primary)
-                                                        settingsUseCase.update(updated)
-                                                        println("Persisted primaryLanguage='$primary'")
-                                                    } catch (t: Throwable) {
-                                                        println("Failed to persist primaryLanguage: $t")
-                                                    }
+                                                    val current = settingsUseCase.get()
+                                                    val updated = current.copy(primaryLanguage = primary)
+                                                    settingsUseCase.update(updated)
                                                 }
-                                            } catch (t: Throwable) {
-                                                println("Failed to select voice ${v.name}: $t")
+                                                selected = v
+                                                onDismiss()
+                                            } catch (failure: CancellationException) {
+                                                throw failure
+                                            } catch (_: Exception) {
+                                                operationError = voiceSaveFailed
                                             }
-                                            onDismiss()
                                         }
                                     }
                                     .padding(8.dp)) {
@@ -426,31 +444,24 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
             onSave = { updated ->
                 // persist updated voice selection
                 scope2.launch {
+                    operationError = null
                     try {
-                        println("Saving updated voice ${updated.name} (selectedLang=${updated.selectedLanguage}, primary=${updated.primaryLanguage})")
                         useCase.select(updated)
                         // also persist primary language from updated voice if available
-                        try {
-                            val primary = updated.selectedLanguage.ifBlank { updated.primaryLanguage ?: "" }
-                            if (primary.isNotBlank() && settingsUseCase != null) {
-                                println("Persisting primaryLanguage='$primary' from voice settings")
-                                val current = settingsUseCase.get()
-                                val updatedSettings = current.copy(primaryLanguage = primary)
-                                settingsUseCase.update(updatedSettings)
-                                println("Persisted primaryLanguage='$primary' from voice settings")
-                            }
-                        } catch (t: Throwable) {
-                            println("Failed to persist primary language from voice settings: $t")
+                        val primary = updated.selectedLanguage.ifBlank { updated.primaryLanguage ?: "" }
+                        if (primary.isNotBlank() && settingsUseCase != null) {
+                            val current = settingsUseCase.get()
+                            val updatedSettings = current.copy(primaryLanguage = primary)
+                            settingsUseCase.update(updatedSettings)
                         }
-                    } catch (t: Throwable) {
-                        println("Failed to save updated voice: $t")
-                    }
-                    showVoiceSettings = false
-                    // refresh list/selection
-                    try {
+                        showVoiceSettings = false
                         voices = (useCase.refreshFromAzure() + useCase.list()).distinctBy { it.name }
                         selected = useCase.selected()
-                    } catch (_: Throwable) {}
+                    } catch (failure: CancellationException) {
+                        throw failure
+                    } catch (_: Exception) {
+                        operationError = voiceSaveFailed
+                    }
                 }
             },
             onOpenWelcomeFlow = onOpenWelcomeFlow

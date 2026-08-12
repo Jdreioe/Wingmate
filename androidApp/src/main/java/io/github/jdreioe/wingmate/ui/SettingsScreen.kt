@@ -56,6 +56,7 @@ import io.github.jdreioe.wingmate.infrastructure.ArasaacDownloadProgress
 import io.github.jdreioe.wingmate.infrastructure.ArasaacSymbolDownloadService
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -160,6 +161,11 @@ fun SettingsScreen(
     var dictionaryEntries by remember { mutableStateOf<List<PronunciationEntry>>(emptyList()) }
 
     var loading by remember { mutableStateOf(true) }
+    var settingsError by remember { mutableStateOf<String?>(null) }
+    var settingsRetryKey by remember { mutableIntStateOf(0) }
+    val settingsLoadFailed = stringResource(R.string.settings_load_failed)
+    val settingsSaveFailed = stringResource(R.string.settings_save_failed)
+    val voiceReadFailed = stringResource(R.string.voice_load_failed)
     val scope = rememberCoroutineScope()
     val settingsUpdateMutex = remember { Mutex() }
 
@@ -179,23 +185,39 @@ fun SettingsScreen(
     // Helper to update settings reactively
     fun updateSettings(update: (Settings) -> Settings) {
         scope.launch {
-            settingsUpdateMutex.withLock {
-                if (settingsStateManager != null) {
-                    settingsStateManager.updateSettings(update)
-                } else {
-                    settingsUseCase?.let { useCase ->
+            try {
+                settingsUpdateMutex.withLock {
+                    if (settingsStateManager != null) {
+                        settingsStateManager.updateSettings(update)
+                    } else {
+                        val useCase = checkNotNull(settingsUseCase) { "Settings are unavailable" }
                         withContext(Dispatchers.Default) {
-                            val current = runCatching { useCase.get() }.getOrNull() ?: Settings()
-                            useCase.update(update(current))
+                            useCase.update(update(useCase.get()))
                         }
                     }
                 }
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (_: Exception) {
+                settingsError = settingsSaveFailed
             }
         }
     }
 
+    suspend fun selectedVoiceOrReport(): Voice? = try {
+        voiceUseCase?.selected()
+    } catch (failure: CancellationException) {
+        throw failure
+    } catch (_: Exception) {
+        settingsError = voiceReadFailed
+        null
+    }
+
     // Load all settings on first composition
-    LaunchedEffect(Unit) {
+    LaunchedEffect(settingsRetryKey) {
+        loading = true
+        settingsError = null
+        try {
         val cfg = withContext(Dispatchers.Default) { configRepo?.getSpeechConfigStatus() }
         cfg?.let {
             endpoint = it.endpoint
@@ -203,7 +225,7 @@ fun SettingsScreen(
         }
 
         val s = withContext(Dispatchers.Default) {
-            runCatching { settingsUseCase?.get() }.getOrNull() ?: Settings()
+            checkNotNull(settingsUseCase) { "Settings are unavailable" }.get()
         }
         ttsEngine = s.ttsEngine
         virtualMic = s.virtualMicEnabled
@@ -213,7 +235,7 @@ fun SettingsScreen(
         startupMode = s.startupMode
         startupBoardSetId = s.startupBoardSetId
         availableBoardSets = withContext(Dispatchers.Default) {
-            runCatching { boardSetUseCase?.listBoardSets().orEmpty() }.getOrDefault(emptyList())
+            checkNotNull(boardSetUseCase) { "Screen storage is unavailable" }.listBoardSets()
         }
         showLabels = s.showLabels
         showSymbols = s.showSymbols
@@ -243,7 +265,13 @@ fun SettingsScreen(
         inputFieldScale = s.inputFieldScale
         featureUsageReporter?.setEnabled(s.featureUsageReportingEnabled)
         cachedArasaacSymbols = runCatching { arasaacDownloader?.cachedCount() ?: 0 }.getOrDefault(0)
-        loading = false
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (_: Exception) {
+            settingsError = settingsLoadFailed
+        } finally {
+            loading = false
+        }
     }
 
     // Load pronunciation entries when opening the dictionary
@@ -327,6 +355,17 @@ fun SettingsScreen(
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
                         }
+                    } else if (settingsError != null) {
+                        Column(
+                            modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text(settingsError.orEmpty(), color = MaterialTheme.colorScheme.error)
+                            Button(onClick = { settingsRetryKey++ }) {
+                                Text(stringResource(R.string.common_retry))
+                            }
+                        }
                     } else if (showPronunciationDictionary) {
                         DictionaryScreen(
                             entries = dictionaryEntries,
@@ -355,7 +394,7 @@ fun SettingsScreen(
                             },
                             onTestEntry = { word, phoneme, alphabet ->
                                 scope.launch {
-                                    val voice = runCatching { voiceUseCase?.selected() }.getOrNull()
+                                    val voice = selectedVoiceOrReport()
                                     val pronunciationMarkup = if (alphabet == "text") {
                                         "<sub alias=\"$phoneme\">$word</sub>"
                                     } else {
@@ -370,7 +409,7 @@ fun SettingsScreen(
                                 }
                             },
                             onGuessPronunciation = { word ->
-                                val voice = runCatching { voiceUseCase?.selected() }.getOrNull()
+                                val voice = selectedVoiceOrReport()
                                 speechService?.guessPronunciation(
                                     word,
                                     voice?.selectedLanguage ?: voice?.primaryLanguage ?: "en"
@@ -1623,6 +1662,8 @@ private fun BackupSettingsGroup() {
     val exported = stringResource(R.string.backup_exported)
     val restored = stringResource(R.string.backup_restored)
     val cancelled = stringResource(R.string.backup_cancelled)
+    val backupPickerFailed = stringResource(R.string.backup_picker_failed)
+    val backupCreateFailed = stringResource(R.string.backup_create_failed)
 
     SettingsGroup(title = stringResource(R.string.backup_title)) {
         Text(
@@ -1637,11 +1678,20 @@ private fun BackupSettingsGroup() {
                 onClick = {
                     backupWorking = true
                     backupScope.launch {
-                        backupStatus = runCatching {
+                        try {
                             val bytes = checkNotNull(backupManager).exportBackup()
-                            if (checkNotNull(backupShareService).shareFile("wingmate-${Clock.System.now().toEpochMilliseconds()}.wingmate-backup", bytes)) exported else cancelled
-                        }.getOrElse { it.message ?: "Backup failed" }
-                        backupWorking = false
+                            backupStatus = if (checkNotNull(backupShareService).shareFile("wingmate-${Clock.System.now().toEpochMilliseconds()}.wingmate-backup", bytes)) {
+                                exported
+                            } else {
+                                cancelled
+                            }
+                        } catch (failure: CancellationException) {
+                            throw failure
+                        } catch (_: Exception) {
+                            backupStatus = backupCreateFailed
+                        } finally {
+                            backupWorking = false
+                        }
                     }
                 }
             ) { Text(stringResource(R.string.backup_create)) }
@@ -1649,10 +1699,17 @@ private fun BackupSettingsGroup() {
                 enabled = !backupWorking && backupManager != null && backupFilePicker != null,
                 onClick = {
                     backupScope.launch {
-                        pendingRestorePath = backupFilePicker?.pickFile(
-                            title = "Restore Wingmate backup",
-                            extensions = listOf("wingmate-backup", "zip")
-                        )
+                        backupStatus = null
+                        try {
+                            pendingRestorePath = backupFilePicker?.pickFile(
+                                title = "Restore Wingmate backup",
+                                extensions = listOf("wingmate-backup", "zip")
+                            )
+                        } catch (failure: CancellationException) {
+                            throw failure
+                        } catch (_: Exception) {
+                            backupStatus = backupPickerFailed
+                        }
                     }
                 }
             ) { Text(stringResource(R.string.backup_restore)) }
@@ -1969,6 +2026,7 @@ internal fun VoiceSelectionPage(
     var loading by remember { mutableStateOf(true) }
     var voices by remember { mutableStateOf<List<Voice>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
+    var operationError by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<Voice?>(null) }
     var showVoiceSettings by remember { mutableStateOf(false) }
     var editingVoice by remember { mutableStateOf<Voice?>(null) }
@@ -1978,30 +2036,43 @@ internal fun VoiceSelectionPage(
     var availableLanguages by remember { mutableStateOf<List<String>>(emptyList()) }
     var voiceSearch by remember { mutableStateOf("") }
     var genderFilter by remember { mutableStateOf<String?>(null) }
+    var retryKey by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
     val systemVoiceProvider = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>() }
 
-    LaunchedEffect(Unit) {
-        if (settingsUseCase != null) {
-            val settings = withContext(Dispatchers.Default) {
-                runCatching { settingsUseCase.get() }.getOrNull()
-            }
-            ttsEngine = settings?.ttsEngine ?: TtsEngine.SYSTEM
-        }
+    val voiceLoadFailed = stringResource(R.string.voice_load_failed)
+    val voiceSaveFailed = stringResource(R.string.voice_save_failed)
+
+    LaunchedEffect(retryKey) {
         loading = true
+        error = null
         try {
+            val settings = checkNotNull(settingsUseCase) { "Settings are unavailable" }
+                .let { withContext(Dispatchers.Default) { it.get() } }
+            ttsEngine = settings.ttsEngine
             if (ttsEngine == TtsEngine.SYSTEM) {
                 val allSystemVoices = systemVoiceProvider?.getSystemVoices() ?: listOf(
                     Voice(name = "system-default", displayName = "System Default", primaryLanguage = "en-US", gender = "Unknown")
                 )
                 systemVoices = allSystemVoices
                 availableLanguages = allSystemVoices.mapNotNull { it.primaryLanguage }.distinct().sorted()
-                selected = try { useCase.selected() } catch (e: Exception) { null }
+                selected = useCase.selected()
             } else {
-                val fromCloud = withContext(Dispatchers.Default) { useCase.refreshFromAzure() }
+                var cloudRefreshFailed = false
+                val fromCloud = try {
+                    withContext(Dispatchers.Default) { useCase.refreshFromAzure() }
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (_: Exception) {
+                    cloudRefreshFailed = true
+                    emptyList()
+                }
                 val local = withContext(Dispatchers.Default) { useCase.list() }
                 val allVoices = (fromCloud + local).distinctBy { it.name }
+                if (allVoices.isEmpty() && cloudRefreshFailed) {
+                    error("No cached voices were available after refresh failed")
+                }
                 voices = allVoices
                 availableLanguages = allVoices
                     .flatMap { voice -> listOfNotNull(voice.primaryLanguage) + (voice.supportedLanguages ?: emptyList()) }
@@ -2009,10 +2080,13 @@ internal fun VoiceSelectionPage(
                     .sorted()
                 selected = useCase.selected()
             }
-        } catch (t: Throwable) {
-            error = t.message
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (_: Exception) {
+            error = voiceLoadFailed
+        } finally {
+            loading = false
         }
-        loading = false
     }
 
     val queryTerms = remember(voiceSearch) {
@@ -2108,10 +2182,17 @@ internal fun VoiceSelectionPage(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
+        operationError?.let {
+            Text(it, color = MaterialTheme.colorScheme.error)
+        }
+
         if (loading) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         } else if (error != null) {
-            Text(stringResource(R.string.voice_error, error ?: ""))
+            Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
+            TextButton(onClick = { retryKey++ }) {
+                Text(stringResource(R.string.common_retry))
+            }
         } else {
             val filteredVoices = if (ttsEngine == TtsEngine.SYSTEM) filteredSystemVoices else filteredAzureVoices
             val titleRes = if (ttsEngine == TtsEngine.SYSTEM) {
@@ -2137,6 +2218,7 @@ internal fun VoiceSelectionPage(
                             showSettings = ttsEngine != TtsEngine.SYSTEM,
                             onSelect = {
                                 scope.launch {
+                                    operationError = null
                                     try {
                                         useCase.select(v)
                                         val primary = if (ttsEngine == TtsEngine.SYSTEM) (v.primaryLanguage ?: "") else v.selectedLanguage.ifBlank { v.primaryLanguage ?: "" }
@@ -2144,10 +2226,13 @@ internal fun VoiceSelectionPage(
                                             val current = settingsUseCase.get()
                                             settingsUseCase.update(current.copy(primaryLanguage = primary))
                                         }
-                                    } catch (t: Throwable) {
-                                        println("Failed to select voice ${v.name}: $t")
+                                        selected = v
+                                        onVoiceSelected?.invoke() ?: onBack()
+                                    } catch (failure: CancellationException) {
+                                        throw failure
+                                    } catch (_: Exception) {
+                                        operationError = voiceSaveFailed
                                     }
-                                    onVoiceSelected?.invoke() ?: onBack()
                                 }
                             },
                             onSettings = {
@@ -2171,6 +2256,7 @@ internal fun VoiceSelectionPage(
             onDismiss = { showVoiceSettings = false },
             onSave = { updated ->
                 scope.launch {
+                    operationError = null
                     try {
                         useCase.select(updated)
                         val primary = updated.selectedLanguage.ifBlank { updated.primaryLanguage ?: "" }
@@ -2178,14 +2264,14 @@ internal fun VoiceSelectionPage(
                             val current = settingsUseCase.get()
                             settingsUseCase.update(current.copy(primaryLanguage = primary))
                         }
-                    } catch (t: Throwable) {
-                        println("Failed to save updated voice: $t")
-                    }
-                    showVoiceSettings = false
-                    try {
+                        showVoiceSettings = false
                         voices = (useCase.refreshFromAzure() + useCase.list()).distinctBy { it.name }
                         selected = useCase.selected()
-                    } catch (_: Throwable) {}
+                    } catch (failure: CancellationException) {
+                        throw failure
+                    } catch (_: Exception) {
+                        operationError = voiceSaveFailed
+                    }
                 }
             }
         )
@@ -2299,25 +2385,53 @@ internal fun LanguageSelectionPage(
     var secondary by remember { mutableStateOf("") }
     var selectedVoiceIsMultilingual by remember { mutableStateOf(false) }
     var useSecondaryLanguage by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var operationError by remember { mutableStateOf<String?>(null) }
+    var retryKey by remember { mutableIntStateOf(0) }
+    val languageLoadFailed = stringResource(R.string.language_load_failed)
+    val languageSaveFailed = stringResource(R.string.language_save_failed)
 
-    LaunchedEffect(Unit) {
-        val settings = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-        primary = settings.primaryLanguage
-        secondary = settings.secondaryLanguage
-        val sel = runCatching { voiceUseCase.selected() }.getOrNull()
-        selectedVoiceIsMultilingual = sel?.supportedLanguages
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?.distinct()
-            ?.size
-            ?.let { it > 1 }
-            ?: false
-        useSecondaryLanguage = selectedVoiceIsMultilingual &&
-            settings.secondaryLanguage.isNotBlank() &&
-            settings.secondaryLanguage != settings.primaryLanguage
-        available = (sel?.supportedLanguages ?: emptyList())
-            .ifEmpty { listOf(settings.primaryLanguage, settings.secondaryLanguage, "en-US").filter { it.isNotBlank() } }
-            .distinct()
+    LaunchedEffect(retryKey) {
+        loading = true
+        loadError = null
+        try {
+            val settings = settingsUseCase.get()
+            val sel = voiceUseCase.selected()
+            primary = settings.primaryLanguage
+            secondary = settings.secondaryLanguage
+            selectedVoiceIsMultilingual = sel?.supportedLanguages
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.distinct()
+                ?.size
+                ?.let { it > 1 }
+                ?: false
+            useSecondaryLanguage = selectedVoiceIsMultilingual &&
+                settings.secondaryLanguage.isNotBlank() &&
+                settings.secondaryLanguage != settings.primaryLanguage
+            available = (sel?.supportedLanguages ?: emptyList())
+                .ifEmpty { listOf(settings.primaryLanguage, settings.secondaryLanguage, "en-US").filter { it.isNotBlank() } }
+                .distinct()
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (_: Exception) {
+            loadError = languageLoadFailed
+        } finally {
+            loading = false
+        }
+    }
+
+    if (loading) {
+        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
+    loadError?.let { message ->
+        Column(modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(message, color = MaterialTheme.colorScheme.error)
+            Button(onClick = { retryKey++ }) { Text(stringResource(R.string.common_retry)) }
+        }
+        return
     }
 
     val normalizedAvailable = remember(available) {
@@ -2344,8 +2458,11 @@ internal fun LanguageSelectionPage(
 
     fun updateLanguage(target: String, value: String) {
         scope.launch {
+            operationError = null
+            var previous: Settings? = null
             try {
-                val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
+                val current = settingsUseCase.get()
+                previous = current
                 val updated = if (target == "primary") current.copy(primaryLanguage = value) else current.copy(secondaryLanguage = value)
                 settingsUseCase.update(updated)
                 featureUsageReporter.reportEvent(
@@ -2354,14 +2471,27 @@ internal fun LanguageSelectionPage(
                     "value" to value
                 )
                 if (target == "primary") {
-                    try {
-                        val vuse = runCatching { voiceUseCase.selected() }.getOrNull()
-                        if (vuse != null) {
-                            runCatching { voiceUseCase.select(vuse.copy(selectedLanguage = value)) }
-                        }
-                    } catch (_: Throwable) {}
+                    voiceUseCase.selected()?.let { voiceUseCase.select(it.copy(selectedLanguage = value)) }
                 }
-            } catch (_: Throwable) {}
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (_: Exception) {
+                val persisted = try {
+                    settingsUseCase.get()
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (_: Exception) {
+                    previous
+                }
+                persisted?.let {
+                    primary = it.primaryLanguage
+                    secondary = it.secondaryLanguage
+                    useSecondaryLanguage = selectedVoiceIsMultilingual &&
+                        it.secondaryLanguage.isNotBlank() &&
+                        it.secondaryLanguage != it.primaryLanguage
+                }
+                operationError = languageSaveFailed
+            }
         }
     }
 
@@ -2371,6 +2501,10 @@ internal fun LanguageSelectionPage(
             .padding(top = 24.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        operationError?.let {
+            Text(it, color = MaterialTheme.colorScheme.error)
+        }
+
         OutlinedTextField(
             value = filter,
             onValueChange = { filter = it },
