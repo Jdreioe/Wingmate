@@ -24,6 +24,7 @@ class BoardWorkspaceContentTest {
                     ),
                     hasActiveBoard = true,
                     onBackToLibrary = {},
+                    onRetry = {},
                 ) {
                     Text("Communication board")
                 }
@@ -37,6 +38,7 @@ class BoardWorkspaceContentTest {
     @Test
     fun recoverableFailureWithoutBoardCanReturnToLibrary() {
         var returnedToLibrary = false
+        var retried = false
         composeRule.setContent {
             AppTheme {
                 BoardWorkspaceContent(
@@ -47,13 +49,16 @@ class BoardWorkspaceContentTest {
                     ),
                     hasActiveBoard = false,
                     onBackToLibrary = { returnedToLibrary = true },
+                    onRetry = { retried = true },
                 ) {}
             }
         }
 
         composeRule.onNodeWithText("Could not load board").assertIsDisplayed()
+        composeRule.onNodeWithText("Retry").performClick()
         composeRule.onNodeWithText("Back to library").performClick()
 
+        assertTrue(retried)
         assertTrue(returnedToLibrary)
     }
 }

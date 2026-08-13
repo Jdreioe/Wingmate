@@ -34,6 +34,7 @@ import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.platform.FilePicker
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.res.stringResource
@@ -68,7 +69,19 @@ fun WelcomeScreen(
     
     // Import state
     var isImporting by remember { mutableStateOf(false) }
+    var importError by remember { mutableStateOf<String?>(null) }
+    val importUnreadable = stringResource(R.string.welcome_import_unreadable)
+    val importPersistenceFailed = stringResource(R.string.welcome_import_persistence_failed)
+    val importInvalid = stringResource(R.string.welcome_import_invalid)
+    val importUnexpected = stringResource(R.string.welcome_import_unexpected)
+    val backupPickerFailed = stringResource(R.string.backup_picker_failed)
     val scope = rememberCoroutineScope()
+
+    fun importFailureMessage(result: BoardImportResult.Failure): String = when (result.code) {
+        io.github.jdreioe.wingmate.infrastructure.BoardImportErrorCode.FILE_UNREADABLE -> importUnreadable
+        io.github.jdreioe.wingmate.infrastructure.BoardImportErrorCode.PERSISTENCE_FAILED -> importPersistenceFailed
+        else -> importInvalid
+    }
 
     LaunchedEffect(Unit) {
         featureUsageReporter?.reportEvent(FeatureUsageEvents.WELCOME_STARTED)
@@ -122,10 +135,17 @@ fun WelcomeScreen(
                         enabled = !isRestoring && backupManager != null && backupFilePicker != null,
                         onClick = {
                             scope.launch {
-                                pendingRestorePath = backupFilePicker?.pickFile(
-                                    title = "Restore Wingmate backup",
-                                    extensions = listOf("wingmate-backup", "zip")
-                                )
+                                restoreStatus = null
+                                try {
+                                    pendingRestorePath = backupFilePicker?.pickFile(
+                                        title = "Restore Wingmate backup",
+                                        extensions = listOf("wingmate-backup", "zip")
+                                    )
+                                } catch (failure: CancellationException) {
+                                    throw failure
+                                } catch (_: Exception) {
+                                    restoreStatus = backupPickerFailed
+                                }
                             }
                         }
                     ) {
@@ -190,6 +210,7 @@ fun WelcomeScreen(
                     onImportClassic = { 
                         scope.launch {
                             isImporting = true
+                            importError = null
                             featureUsageReporter?.reportEvent(
                                 FeatureUsageEvents.BOARD_IMPORT_STARTED,
                                 "mode" to "classic"
@@ -205,6 +226,7 @@ fun WelcomeScreen(
                                     step = 3
                                   }
                                   is BoardImportResult.Failure -> {
+                                    importError = importFailureMessage(result)
                                     featureUsageReporter?.reportEvent(
                                         FeatureUsageEvents.BOARD_IMPORT_FAILED,
                                         "mode" to "classic",
@@ -213,13 +235,15 @@ fun WelcomeScreen(
                                   }
                                   BoardImportResult.Cancelled, null -> Unit
                                 }
-                            } catch (e: Throwable) {
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (_: Exception) {
+                                importError = importUnexpected
                                 featureUsageReporter?.reportEvent(
                                     FeatureUsageEvents.BOARD_IMPORT_FAILED,
                                     "mode" to "classic",
                                     "reason" to "exception"
                                 )
-                                e.printStackTrace()
                             } finally {
                                 isImporting = false
                             }
@@ -228,6 +252,7 @@ fun WelcomeScreen(
                     onImportModern = {
                          scope.launch {
                             isImporting = true
+                            importError = null
                             featureUsageReporter?.reportEvent(
                                 FeatureUsageEvents.BOARD_IMPORT_STARTED,
                                 "mode" to "modern"
@@ -242,6 +267,7 @@ fun WelcomeScreen(
                                     step = 3
                                   }
                                   is BoardImportResult.Failure -> {
+                                    importError = importFailureMessage(result)
                                     featureUsageReporter?.reportEvent(
                                         FeatureUsageEvents.BOARD_IMPORT_FAILED,
                                         "mode" to "modern",
@@ -250,13 +276,15 @@ fun WelcomeScreen(
                                   }
                                   BoardImportResult.Cancelled, null -> Unit
                                 }
-                            } catch (e: Throwable) {
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (_: Exception) {
+                                importError = importUnexpected
                                 featureUsageReporter?.reportEvent(
                                     FeatureUsageEvents.BOARD_IMPORT_FAILED,
                                     "mode" to "modern",
                                     "reason" to "exception"
                                 )
-                                e.printStackTrace()
                             } finally {
                                 isImporting = false
                             }
@@ -277,6 +305,7 @@ fun WelcomeScreen(
                         )
                         step = 3
                     },
+                    errorMessage = importError,
                     showClassic = startupMode == StartupMode.Screens,
                     showModern = startupMode == StartupMode.Keyboard,
                     showCreateFromScratch = startupMode == StartupMode.Screens

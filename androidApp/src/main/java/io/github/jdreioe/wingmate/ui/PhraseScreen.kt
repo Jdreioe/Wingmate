@@ -268,13 +268,19 @@ fun PhraseScreen(
                     val ngramService = predictionService as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
                     if (ngramService != null) {
                         if (dictionaryLoader != null) {
-                            val dictWords = dictionaryLoader.loadDictionary(primaryLanguageState.value)
+                            val dictWords = try {
+                                dictionaryLoader.loadDictionary(primaryLanguageState.value)
+                            } catch (failure: kotlinx.coroutines.CancellationException) {
+                                throw failure
+                            } catch (_: Exception) {
+                                emptyList()
+                            }
                             if (dictWords.isNotEmpty()) {
                                 ngramService.setBaseLanguage(dictWords)
                                 // History trained on TOP of dictionary, so don't clear
                                 ngramService.train(list, clear = false)
                             } else {
-                                // No dictionary (or failed), so standard train (clears old data)
+                                // Unsupported/unavailable dictionaries fall back to private local history.
                                 ngramService.train(list)
                             }
                         } else {
@@ -286,8 +292,10 @@ fun PhraseScreen(
                         predictionService.train(list)
                         predictionModelVersion++
                     }
-                } catch (e: Throwable) {
-                    historyItems = emptyList()
+                } catch (failure: kotlinx.coroutines.CancellationException) {
+                    throw failure
+                } catch (_: Exception) {
+                    // Preserve the currently visible history if a refresh fails.
                 }
             }
             

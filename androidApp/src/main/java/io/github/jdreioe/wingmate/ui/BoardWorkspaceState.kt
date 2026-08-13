@@ -36,6 +36,7 @@ internal data class BoardWorkspaceState(
     val isFullscreen: Boolean = false,
     val isExporting: Boolean = false,
     val statusMessage: String? = null,
+    val loadRequestId: Int = 0,
 ) {
     val activeGraph: BoardSetGraph? get() = editSession?.draft ?: savedGraph
     val canNavigateBack: Boolean get() = boardStack.isNotEmpty()
@@ -76,6 +77,7 @@ internal sealed interface BoardWorkspaceContentStatus {
 internal sealed interface BoardWorkspaceAction {
     data class Initialize(val graph: BoardSetGraph?, val startInEditMode: Boolean) : BoardWorkspaceAction
     data class LoadFailed(val message: String) : BoardWorkspaceAction
+    data object RetryLoad : BoardWorkspaceAction
     data class SelectBoard(val boardId: String) : BoardWorkspaceAction
     data class OpenBoard(val boardId: String) : BoardWorkspaceAction
     data object BackClicked : BoardWorkspaceAction
@@ -159,12 +161,18 @@ internal class BoardWorkspaceViewModel(
                         } else {
                             BoardWorkspaceMode.Run
                         },
+                        statusMessage = null,
                     )
                 }
             }
             is BoardWorkspaceAction.LoadFailed -> _state.value.copy(
                 contentStatus = BoardWorkspaceContentStatus.RecoverableFailure(action.message),
                 statusMessage = action.message,
+            )
+            BoardWorkspaceAction.RetryLoad -> _state.value.copy(
+                contentStatus = BoardWorkspaceContentStatus.Loading,
+                statusMessage = null,
+                loadRequestId = _state.value.loadRequestId + 1,
             )
             is BoardWorkspaceAction.SelectBoard -> _state.value.selectBoard(action.boardId)
             is BoardWorkspaceAction.OpenBoard -> _state.value.openBoard(action.boardId)

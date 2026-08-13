@@ -82,6 +82,7 @@ internal sealed interface BoardSetManagerAction {
     data object SettingsClicked : BoardSetManagerAction
     data object SettingsDismissed : BoardSetManagerAction
     data object CreateClicked : BoardSetManagerAction
+    data object RetryLoad : BoardSetManagerAction
     data object CreateDismissed : BoardSetManagerAction
     data class CreateNameChanged(val name: String) : BoardSetManagerAction
     data class CreateRowsChanged(val rowsText: String) : BoardSetManagerAction
@@ -256,6 +257,7 @@ internal class BoardSetManagerViewModel(
             BoardSetManagerAction.SettingsClicked -> setShowSettings(true)
             BoardSetManagerAction.SettingsDismissed -> setShowSettings(false)
             BoardSetManagerAction.CreateClicked -> setShowCreateDialog(true)
+            BoardSetManagerAction.RetryLoad -> refreshBoardSets()
             BoardSetManagerAction.CreateDismissed -> dismissCreateDialog()
             is BoardSetManagerAction.CreateNameChanged -> updateCreateDraft(
                 _state.value.createDraft.copy(name = action.name)
@@ -315,10 +317,10 @@ internal class BoardSetManagerViewModel(
 
     private fun refreshBoardSets() {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true) }
+            _state.update { it.copy(isLoading = true, statusMessage = null) }
             runCatching { operations.listBoardSets() }
                 .onSuccess { boardSets -> _state.update { it.copy(boardSets = boardSets) } }
-                .onFailure { error -> setStatus(error.toMessage(R.string.board_sets_load_error)) }
+                .onFailure { setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_load_error)) }
             _state.update { it.copy(isLoading = false) }
         }
     }
@@ -334,8 +336,7 @@ internal class BoardSetManagerViewModel(
                 }
                 BoardImportResult.Cancelled -> Unit
                 is BoardImportResult.Failure -> setStatus(
-                    result.context.takeIf(String::isNotBlank)?.let(BoardSetManagerMessage::Dynamic)
-                        ?: BoardSetManagerMessage.Resource(R.string.board_sets_import_error)
+                    BoardSetManagerMessage.Resource(R.string.board_sets_import_error)
                 )
             }
         }
@@ -348,7 +349,7 @@ internal class BoardSetManagerViewModel(
                     setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_duplicated))
                     refreshBoardSets()
                 }
-                .onFailure { setStatus(it.toMessage(R.string.board_sets_duplicate_error)) }
+                .onFailure { setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_duplicate_error)) }
         }
     }
 
@@ -356,7 +357,7 @@ internal class BoardSetManagerViewModel(
         viewModelScope.launch {
             runCatching { operations.toggleLocked(id) }
                 .onSuccess { refreshBoardSets() }
-                .onFailure { setStatus(it.toMessage(R.string.board_sets_lock_error)) }
+                .onFailure { setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_lock_error)) }
         }
     }
 
@@ -392,7 +393,7 @@ internal class BoardSetManagerViewModel(
                     setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_deleted))
                     refreshBoardSets()
                 }
-                .onFailure { setStatus(it.toMessage(R.string.board_sets_delete_error)) }
+                .onFailure { setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_delete_error)) }
         }
     }
 
@@ -442,8 +443,8 @@ internal class BoardSetManagerViewModel(
                         openWorkspace(created.id, BoardWorkspaceMode.Run)
                     }
                 }
-            }.onFailure { error ->
-                setStatus(error.toMessage(R.string.board_sets_create_error))
+            }.onFailure {
+                setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_create_error))
             }
             _state.update { it.copy(isCreating = false, isQuickCoreImporting = false) }
         }
@@ -524,10 +525,6 @@ internal class BoardSetManagerViewModel(
     private fun sendEvent(event: BoardSetManagerEvent) {
         viewModelScope.launch { _events.send(event) }
     }
-
-    private fun Throwable.toMessage(@StringRes fallback: Int): BoardSetManagerMessage =
-        message?.takeIf(String::isNotBlank)?.let(BoardSetManagerMessage::Dynamic)
-            ?: BoardSetManagerMessage.Resource(fallback)
 
     private class BoardSetCreationException(message: String) : Exception(message)
 

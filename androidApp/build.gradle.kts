@@ -215,8 +215,8 @@ dependencies {
     implementation(libs.koin.compose)
 
     // Ktor engine for ARM API calls
-    implementation("io.ktor:ktor-client-okhttp:2.3.12")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.kotlinx.serialization.json)
 
     // Dual-screen / WindowManager (API 34+ rear display & window area APIs)
     implementation(libs.androidx.window)

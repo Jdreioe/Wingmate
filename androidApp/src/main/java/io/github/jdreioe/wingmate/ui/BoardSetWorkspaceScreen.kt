@@ -151,6 +151,7 @@ import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.resized
 import io.github.jdreioe.wingmate.domain.obf.moveOrSwapField
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -338,6 +339,7 @@ internal fun BoardSetManagerScreen(
         onBack = { onAction(BoardSetManagerAction.BackClicked) },
         onOpenSettings = { onAction(BoardSetManagerAction.SettingsClicked) },
         onCreate = { onAction(BoardSetManagerAction.CreateClicked) },
+        onRetry = { onAction(BoardSetManagerAction.RetryLoad) },
         onImport = if (importAvailable) {
             { onAction(BoardSetManagerAction.ImportClicked) }
         } else {
@@ -395,6 +397,7 @@ private fun BoardSetLibraryScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onCreate: () -> Unit,
+    onRetry: () -> Unit,
     onImport: (() -> Unit)?,
     onOpen: (ObfBoardSet) -> Unit,
     onEdit: (ObfBoardSet) -> Unit,
@@ -475,7 +478,11 @@ private fun BoardSetLibraryScreen(
                         Text(it, color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = onCreate) { Text(stringResource(R.string.board_sets_create)) }
+                    if (statusMessage != null) {
+                        Button(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
+                    } else {
+                        Button(onClick = onCreate) { Text(stringResource(R.string.board_sets_create)) }
+                    }
                 }
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -607,7 +614,9 @@ private fun BoardSetWorkspaceRoot(
     val showEditingAccessDialog = workspace.showEditingAccessDialog
     var appBarMenuExpanded by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(R.string.board_workspace_unlock_to_edit)
+    val loadErrorMessage = stringResource(R.string.board_workspace_load_error)
     val saveErrorMessage = stringResource(R.string.board_workspace_save_error)
+    val exportErrorMessage = stringResource(R.string.board_workspace_export_error)
     // Placeholder substituted in click handler (stringResource formatting is composition-only).
     val unsupportedActionTemplate = stringResource(R.string.board_workspace_unsupported_action, "%ACTION%")
 
@@ -647,11 +656,17 @@ private fun BoardSetWorkspaceRoot(
     // they may be the first communication surface a user opens.
     LaunchedEffect(predictionService, saidTextRepository, settings.primaryLanguage) {
         val service = predictionService ?: return@LaunchedEffect
-        runCatching {
+        try {
             val history = saidTextRepository.list()
             val nGramService = service as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
             if (nGramService != null) {
-                val dictionary = dictionaryLoader?.loadDictionary(settings.primaryLanguage).orEmpty()
+                val dictionary = try {
+                    dictionaryLoader?.loadDictionary(settings.primaryLanguage).orEmpty()
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (_: Exception) {
+                    emptyList()
+                }
                 if (dictionary.isNotEmpty()) {
                     nGramService.setBaseLanguage(dictionary)
                     nGramService.train(history, clear = false)
@@ -661,15 +676,19 @@ private fun BoardSetWorkspaceRoot(
             } else {
                 service.train(history)
             }
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (_: Exception) {
+            // Prediction training is optional; the communication surface stays intact.
         }
     }
 
-    LaunchedEffect(boardSetId) {
+    LaunchedEffect(boardSetId, workspace.loadRequestId) {
         if (workspaceViewModel.state.value.savedGraph != null) return@LaunchedEffect
-        runCatching {
-            withContext(Dispatchers.Default) { useCase.loadBoardSetGraph(boardSetId) }
-                ?.withHomeFieldsBottomLeft()
-        }.onSuccess { graph ->
+        try {
+            val graph = withContext(Dispatchers.Default) {
+                useCase.loadBoardSetGraph(boardSetId)
+            }?.withHomeFieldsBottomLeft()
             val requiresUnlock = graph != null &&
                 initialMode == BoardWorkspaceMode.Edit &&
                 !graph.boardSet.isLocked &&
@@ -683,11 +702,11 @@ private fun BoardSetWorkspaceRoot(
             if (requiresUnlock) {
                 workspaceViewModel.onAction(BoardWorkspaceAction.EditingAccessRequired)
             }
-        }.onFailure { error ->
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (_: Exception) {
             workspaceViewModel.onAction(
-                BoardWorkspaceAction.LoadFailed(
-                    error.message ?: "Unable to load board set"
-                )
+                BoardWorkspaceAction.LoadFailed(loadErrorMessage)
             )
         }
     }
@@ -829,7 +848,7 @@ private fun BoardSetWorkspaceRoot(
             try {
                 val graph = activeGraph
                 if (graph == null) {
-                    resultMessage = "Export failed: no board set loaded"
+                    resultMessage = exportErrorMessage
                 } else {
                     when (val export = useCase.exportBoardSetAsObzResult(graph.boardSet.id)) {
                         is ObzExportResult.Success -> {
@@ -846,17 +865,13 @@ private fun BoardSetWorkspaceRoot(
                                 resultMessage = "Export saved (${obzBytes.size} bytes)"
                             }
                         }
-                        is ObzExportResult.Failure -> {
-                            val resources = export.resources
-                                .takeIf { it.isNotEmpty() }
-                                ?.joinToString(prefix = ": ")
-                                .orEmpty()
-                            resultMessage = "Export failed: ${export.context}$resources"
-                    }
+                        is ObzExportResult.Failure -> resultMessage = exportErrorMessage
                     }
                 }
-            } catch (e: Exception) {
-                resultMessage = "Export failed: ${e.message ?: "unknown error"}"
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (_: Exception) {
+                resultMessage = exportErrorMessage
             } finally {
                 workspaceViewModel.onAction(BoardWorkspaceAction.ExportFinished(resultMessage))
             }
@@ -1300,6 +1315,7 @@ private fun BoardSetWorkspaceRoot(
                 state = workspace,
                 hasActiveBoard = activeGraph != null && activeBoard != null,
                 onBackToLibrary = onExitToLibrary,
+                onRetry = { workspaceViewModel.onAction(BoardWorkspaceAction.RetryLoad) },
             ) {
                 if (activeGraph != null && activeBoard != null) {
                     if (!isFullscreen && mode == BoardWorkspaceMode.Edit) {
@@ -1726,17 +1742,22 @@ private fun BoardSetWorkspaceRoot(
                     // Persist on an application-scoped scope so leaving this screen can't
                     // cancel the write halfway; branch back to the main thread for state updates.
                     val appScope = koin.get<CoroutineScope>()
-                    appScope.launch(Dispatchers.Main) {
-                        withContext(Dispatchers.Default) {
+                    appScope.launch {
+                        val result = withContext(Dispatchers.Default) {
                             useCase.saveBoardSetGraph(graph)
-                        }.onSuccess { saved ->
-                            workspaceViewModel.onAction(BoardWorkspaceAction.SaveSucceeded(saved))
-                        }.onFailure { error ->
-                            // Persistence failed: drop back into editing with the draft intact
-                            // so the user does not lose their work.
-                            workspaceViewModel.onAction(
-                                BoardWorkspaceAction.SaveFailed(error.message ?: saveErrorMessage)
-                            )
+                        }
+                        // State updates remain tied to this screen even though persistence is
+                        // allowed to finish after navigation.
+                        scope.launch {
+                            result.onSuccess { saved ->
+                                workspaceViewModel.onAction(BoardWorkspaceAction.SaveSucceeded(saved))
+                            }.onFailure {
+                                // Persistence failed: drop back into editing with the draft intact
+                                // so the user does not lose their work.
+                                workspaceViewModel.onAction(
+                                    BoardWorkspaceAction.SaveFailed(saveErrorMessage)
+                                )
+                            }
                         }
                     }
                 }) { Text(stringResource(R.string.board_workspace_save_changes)) }
@@ -1821,6 +1842,7 @@ internal fun BoardWorkspaceContent(
     state: BoardWorkspaceState,
     hasActiveBoard: Boolean,
     onBackToLibrary: () -> Unit,
+    onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -1835,6 +1857,11 @@ internal fun BoardWorkspaceContent(
             ) {
                 val failure = state.contentStatus as? BoardWorkspaceContentStatus.RecoverableFailure
                 Text(failure?.message ?: stringResource(R.string.board_workspace_load_error))
+                if (failure != null) {
+                    TextButton(onClick = onRetry) {
+                        Text(stringResource(R.string.common_retry))
+                    }
+                }
                 TextButton(onClick = onBackToLibrary) {
                     Text(stringResource(R.string.board_workspace_back_to_library))
                 }
@@ -1866,6 +1893,7 @@ private fun BoardWorkspaceContentPreview() {
             ),
             hasActiveBoard = true,
             onBackToLibrary = {},
+            onRetry = {},
         ) {
             Text(
                 text = "Communication board",

@@ -137,6 +137,21 @@ class BoardWorkspaceStateTest {
     }
 
     @Test
+    fun `retrying a failed load returns to loading without clearing communication`() {
+        val viewModel = BoardWorkspaceViewModel(SavedStateHandle())
+        val sentence = ObfButton(id = "hello", label = "Hello", vocalization = "Hello")
+        viewModel.onAction(BoardWorkspaceAction.ReplaceSentence(listOf(sentence)))
+        viewModel.onAction(BoardWorkspaceAction.LoadFailed("Could not load"))
+
+        viewModel.onAction(BoardWorkspaceAction.RetryLoad)
+
+        assertEquals(BoardWorkspaceContentStatus.Loading, viewModel.state.value.contentStatus)
+        assertEquals(1, viewModel.state.value.loadRequestId)
+        assertEquals(listOf(sentence), viewModel.state.value.selectedButtons)
+        assertEquals(null, viewModel.state.value.statusMessage)
+    }
+
+    @Test
     fun `dirty edit asks for confirmation and undo restores original graph`() {
         val original = graph(name = "Core words")
         val viewModel = BoardWorkspaceViewModel(SavedStateHandle())
