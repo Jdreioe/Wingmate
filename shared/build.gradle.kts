@@ -48,12 +48,12 @@ kotlin {
                 api(project(":feature:communication:data"))
                 api(project(":feature:communication:presentation"))
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+                implementation(libs.kotlinx.serialization.json)
                 implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
                 api(libs.koin.core)
-                implementation("io.ktor:ktor-client-core:2.3.12")
-                implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
-                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
+                implementation(libs.ktor.client.core)
+                implementation(libs.ktor.client.contentNegotiation)
+                implementation(libs.ktor.serialization.json)
                 // Add logging for Kotlin Multiplatform
                 implementation("io.github.oshai:kotlin-logging:7.0.0")
                 implementation(libs.okio)
@@ -77,7 +77,7 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
-                implementation("io.ktor:ktor-client-okhttp:2.3.12")
+                implementation(libs.ktor.client.okhttp)
                 implementation(
                     "com.github.aptabase:aptabase-kotlin:${libs.versions.aptabase.get()}"
                 ) {
@@ -99,7 +99,7 @@ kotlin {
         applyDefaultHierarchyTemplate()
         val iosMain by getting {
             dependencies {
-                implementation("io.ktor:ktor-client-darwin:2.3.12")
+                implementation(libs.ktor.client.darwin)
                 // Ensure Koin is resolved for iOS binaries too
                 api(libs.koin.core)
                 // Compose Multiplatform for iOS UI
@@ -112,7 +112,7 @@ kotlin {
         }
         val jvmMain by getting {
             dependencies {
-                implementation("io.ktor:ktor-client-okhttp:2.3.12")
+                implementation(libs.ktor.client.okhttp)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
                 // Compose Multiplatform for desktop JVM UI
                 implementation(compose.runtime)

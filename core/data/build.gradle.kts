@@ -25,10 +25,10 @@ kotlin {
                 implementation(libs.koin.core)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-                implementation("io.ktor:ktor-client-core:2.3.12")
-                implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
-                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
+                implementation(libs.kotlinx.serialization.json)
+                implementation(libs.ktor.client.core)
+                implementation(libs.ktor.client.contentNegotiation)
+                implementation(libs.ktor.serialization.json)
                 implementation("io.github.oshai:kotlin-logging:7.0.0")
                 implementation("io.github.pdvrieze.xmlutil:core:0.91.3")
                 implementation(libs.okio)
@@ -39,7 +39,7 @@ kotlin {
 
         val androidMain by getting {
             dependencies {
-                implementation("io.ktor:ktor-client-okhttp:2.3.12")
+                implementation(libs.ktor.client.okhttp)
                 implementation("androidx.core:core-ktx:1.13.1")
                 implementation("app.cash.sqldelight:android-driver:2.0.2")
                 implementation("org.apache.commons:commons-compress:1.27.1")
@@ -49,7 +49,7 @@ kotlin {
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
-                implementation("io.ktor:ktor-client-mock:2.3.12")
+                implementation(libs.ktor.client.mock)
             }
         }
 
@@ -57,14 +57,14 @@ kotlin {
 
         val iosMain by getting {
             dependencies {
-                implementation("io.ktor:ktor-client-darwin:2.3.12")
+                implementation(libs.ktor.client.darwin)
                 implementation("app.cash.sqldelight:native-driver:2.0.2")
             }
         }
 
         val jvmMain by getting {
             dependencies {
-                implementation("io.ktor:ktor-client-okhttp:2.3.12")
+                implementation(libs.ktor.client.okhttp)
                 implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
                 implementation("org.apache.commons:commons-compress:1.27.1")
             }
