@@ -138,7 +138,7 @@ fun AddPhraseDialog(
         text = {
             val scrollState = rememberScrollState()
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(scrollState)) {
-                val showKeyboard = rememberShowKeyboardOnFocus()
+                val showKeyboard = Modifier.showKeyboardOnFocus()
                 OutlinedTextField(
                     value = altText,
                     onValueChange = { altText = it },

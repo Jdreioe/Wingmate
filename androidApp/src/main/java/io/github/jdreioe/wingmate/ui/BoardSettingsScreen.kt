@@ -231,7 +231,7 @@ private fun BoardSettingsHome(
     onOpenPreference: (BoardSettingPreference) -> Unit,
     onReset: () -> Unit
 ) {
-    val showKeyboard = rememberShowKeyboardOnFocus()
+    val showKeyboard = Modifier.showKeyboardOnFocus()
     Column(
         modifier = Modifier
             .fillMaxSize()

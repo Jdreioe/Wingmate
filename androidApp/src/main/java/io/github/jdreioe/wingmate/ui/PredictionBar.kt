@@ -30,8 +30,8 @@ fun PredictionBar(
     predictions: PredictionResult,
     onWordSelected: (String) -> Unit,
     onLetterSelected: (Char) -> Unit,
-    fontSizeScale: Float = 1f,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    fontSizeScale: Float = 1f
 ) {
     if (predictions.words.isEmpty() && predictions.letters.isEmpty()) {
         return

@@ -144,8 +144,9 @@ fun InteractionInputRoot(settings: Settings, enabled: Boolean = true, content: @
     }
     SideEffect { AndroidAccessInputBus.update(settings, enabled) }
     LaunchedEffect(settings.dwellToSelectMillis, enabled) {
+        if (!enabled || settings.dwellToSelectMillis <= 0) return@LaunchedEffect
         while (true) {
-            if (enabled) host.tick(settings)
+            host.tick(settings)
             delay(16)
         }
     }

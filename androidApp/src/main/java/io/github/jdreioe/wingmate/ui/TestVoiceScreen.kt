@@ -95,7 +95,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
             
             // Test text input
-            val showKeyboard = rememberShowKeyboardOnFocus()
+            val showKeyboard = Modifier.showKeyboardOnFocus()
             OutlinedTextField(
                 value = testText,
                 onValueChange = { testText = it },

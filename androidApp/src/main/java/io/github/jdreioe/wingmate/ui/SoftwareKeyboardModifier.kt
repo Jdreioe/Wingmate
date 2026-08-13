@@ -6,22 +6,20 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 /**
- * A composable that returns a [Modifier] which requests the software keyboard to show
- * whenever the TextField gains focus. Apply this modifier to any TextField's modifier chain.
+ * Requests the software keyboard whenever the modified text field gains focus.
  *
  * Usage:
  * ```
- * val showKeyboard = rememberShowKeyboardOnFocus()
  * OutlinedTextField(
  *     ...
- *     modifier = Modifier.fillMaxWidth().then(showKeyboard)
+ *     modifier = Modifier.fillMaxWidth().showKeyboardOnFocus()
  * )
  * ```
  */
 @Composable
-fun rememberShowKeyboardOnFocus(): Modifier {
+fun Modifier.showKeyboardOnFocus(): Modifier {
     val keyboardController = LocalSoftwareKeyboardController.current
-    return Modifier.onFocusChanged { focusState ->
+    return onFocusChanged { focusState ->
         if (focusState.isFocused) {
             keyboardController?.show()
         }

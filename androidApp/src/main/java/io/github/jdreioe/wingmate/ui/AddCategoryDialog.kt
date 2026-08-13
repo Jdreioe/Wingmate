@@ -32,7 +32,7 @@ fun AddCategoryDialog(existingNames: List<String> = emptyList(), availableLangua
 
     AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.category_add_title)) }, text = {
         Column(modifier = Modifier.fillMaxWidth()) {
-            val showKeyboard = rememberShowKeyboardOnFocus()
+            val showKeyboard = Modifier.showKeyboardOnFocus()
             OutlinedTextField(value = name, onValueChange = {
                 name = it
                 error = null

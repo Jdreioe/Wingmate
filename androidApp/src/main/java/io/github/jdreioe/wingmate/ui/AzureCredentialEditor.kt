@@ -52,7 +52,7 @@ internal fun AzureCredentialEditor(
         return
     }
 
-    val showKeyboard = rememberShowKeyboardOnFocus()
+    val showKeyboard = Modifier.showKeyboardOnFocus()
     Column(modifier = modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = endpoint,
