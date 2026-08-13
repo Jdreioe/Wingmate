@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -120,6 +121,7 @@ import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.withHomeFieldsBottomLeft
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.obf.GridFieldSpan
@@ -137,7 +139,6 @@ import io.github.jdreioe.wingmate.domain.obf.renameDraftBoard
 import io.github.jdreioe.wingmate.domain.obf.resizeDraftBoard
 import io.github.jdreioe.wingmate.domain.obf.moveDraftField
 import io.github.jdreioe.wingmate.domain.obf.resizeDraftField
-import io.github.jdreioe.wingmate.domain.obf.withHomeFieldsBottomLeft
 import io.github.jdreioe.wingmate.domain.obf.updateDraftCell
 import io.github.jdreioe.wingmate.domain.obf.clearDraftCell
 import io.github.jdreioe.wingmate.domain.obf.joinSentenceText
@@ -162,25 +163,6 @@ import kotlin.random.Random
 import kotlin.time.Clock
 
 import com.hojmoseit.wingmate.R
-
-internal data class BoardSetEditSession(
-    val original: BoardSetGraph,
-    val draft: BoardSetGraph,
-    val undoStack: List<BoardSetGraph> = emptyList()
-) {
-    val isDirty: Boolean get() = draft != original
-
-    fun apply(updated: BoardSetGraph): BoardSetEditSession {
-        val normalized = updated.withHomeFieldsBottomLeft()
-        if (normalized == draft) return this
-        return copy(draft = normalized, undoStack = undoStack + draft)
-    }
-
-    fun undo(): BoardSetEditSession {
-        val previous = undoStack.lastOrNull() ?: return this
-        return copy(draft = previous, undoStack = undoStack.dropLast(1))
-    }
-}
 
 private data class WorkspaceCellTarget(
     val row: Int,
@@ -256,7 +238,7 @@ fun BoardSetManagerRoot(
             importAvailable = boardImportService != null,
             onAction = viewModel::onAction,
         )
-        is BoardSetManagerRoute.Workspace -> BoardSetWorkspaceScreen(
+        is BoardSetManagerRoute.Workspace -> BoardSetWorkspaceRoot(
             boardSetId = route.boardSetId,
             initialMode = route.mode,
             onSwitchToKeyboard = { viewModel.onAction(BoardSetManagerAction.BackClicked) },
@@ -570,7 +552,7 @@ private fun BoardSetLibraryCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BoardSetWorkspaceScreen(
+private fun BoardSetWorkspaceRoot(
     boardSetId: String,
     initialMode: BoardWorkspaceMode,
     onSwitchToKeyboard: () -> Unit,
@@ -590,33 +572,39 @@ private fun BoardSetWorkspaceScreen(
     val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
     val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
     val scope = rememberCoroutineScope()
-    var savedGraph by remember(boardSetId) { mutableStateOf<BoardSetGraph?>(null) }
-    var editSession by remember(boardSetId) { mutableStateOf<BoardSetEditSession?>(null) }
-    var mode by remember(boardSetId) { mutableStateOf(initialMode) }
-    var selectedBoardId by remember(boardSetId) { mutableStateOf<String?>(null) }
-    var boardStack by remember(boardSetId) { mutableStateOf<List<String>>(emptyList()) }
-    var selectedButtons by remember(boardSetId) {
-        mutableStateOf<List<Pair<ObfButton, ImageBitmap?>>>(emptyList())
+    val workspaceFactory = remember(boardSetId) {
+        viewModelFactory {
+            initializer { BoardWorkspaceViewModel(createSavedStateHandle()) }
+        }
     }
+    val workspaceViewModel: BoardWorkspaceViewModel = viewModel(
+        key = "board-workspace-$boardSetId",
+        factory = workspaceFactory,
+    )
+    val workspace by workspaceViewModel.state.collectAsStateWithLifecycle()
+    val savedGraph = workspace.savedGraph
+    val editSession = workspace.editSession
+    val mode = workspace.mode
+    val statusMessage = workspace.statusMessage
+    val showFinishDialog = workspace.showFinishDialog
+    val isExporting = workspace.isExporting
+    val isFullscreen = workspace.isFullscreen
+    val selectedButtonModels = workspace.selectedButtons
+    val selectedButtons: List<Pair<ObfButton, ImageBitmap?>> = selectedButtonModels.map { it to null }
     // #120: time-bounded selection highlight.
     val selectionHighlight = remember(boardSetId) { SelectionHighlight() }
     var highlightedButtonId by remember(boardSetId) { mutableStateOf<String?>(null) }
     var highlightGeneration by remember(boardSetId) { mutableLongStateOf(0L) }
-    var isLoading by remember(boardSetId) { mutableStateOf(true) }
-    var statusMessage by remember(boardSetId) { mutableStateOf<String?>(null) }
     var nativeKeyboardDraft by remember(boardSetId) { mutableStateOf<String?>(null) }
     var showAddBoardDialog by remember { mutableStateOf(false) }
     var editingCell by remember { mutableStateOf<WorkspaceCellTarget?>(null) }
     var selectedField by remember(boardSetId) { mutableStateOf<Pair<Int, Int>?>(null) }
-    var showFinishDialog by remember { mutableStateOf(false) }
     var showResizeBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
     var settingsTarget by remember(boardSetId) { mutableStateOf<BoardSettingsTarget?>(null) }
-    var isExporting by remember(boardSetId) { mutableStateOf(false) }
-    var isFullscreen by remember(boardSetId) { mutableStateOf(false) }
     val hiddenButtonsSession = remember(boardSetId) { HiddenButtonsSession() }
     val showHiddenButtons = hiddenButtonsSession.revealed
-    var showEditingAccessDialog by remember(boardSetId) { mutableStateOf(false) }
+    val showEditingAccessDialog = workspace.showEditingAccessDialog
     var appBarMenuExpanded by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(R.string.board_workspace_unlock_to_edit)
     val saveErrorMessage = stringResource(R.string.board_workspace_save_error)
@@ -677,22 +665,42 @@ private fun BoardSetWorkspaceScreen(
     }
 
     LaunchedEffect(boardSetId) {
-        isLoading = true
-        val loaded = withContext(Dispatchers.Default) { useCase.loadBoardSetGraph(boardSetId) }
-        val normalized = loaded?.withHomeFieldsBottomLeft()
-        savedGraph = normalized
-        selectedBoardId = normalized?.boardSet?.rootBoardId
-        if (normalized != null && initialMode == BoardWorkspaceMode.Edit && !normalized.boardSet.isLocked) {
-            if (editingAccessController?.requiresUnlock() == true) {
-                mode = BoardWorkspaceMode.Run
-                showEditingAccessDialog = true
-            } else {
-                editSession = BoardSetEditSession(normalized, normalized)
+        if (workspaceViewModel.state.value.savedGraph != null) return@LaunchedEffect
+        runCatching {
+            withContext(Dispatchers.Default) { useCase.loadBoardSetGraph(boardSetId) }
+                ?.withHomeFieldsBottomLeft()
+        }.onSuccess { graph ->
+            val requiresUnlock = graph != null &&
+                initialMode == BoardWorkspaceMode.Edit &&
+                !graph.boardSet.isLocked &&
+                editingAccessController?.requiresUnlock() == true
+            workspaceViewModel.onAction(
+                BoardWorkspaceAction.Initialize(
+                    graph = graph,
+                    startInEditMode = initialMode == BoardWorkspaceMode.Edit && !requiresUnlock,
+                )
+            )
+            if (requiresUnlock) {
+                workspaceViewModel.onAction(BoardWorkspaceAction.EditingAccessRequired)
             }
-        } else if (normalized?.boardSet?.isLocked == true) {
-            mode = BoardWorkspaceMode.Run
+        }.onFailure { error ->
+            workspaceViewModel.onAction(
+                BoardWorkspaceAction.LoadFailed(
+                    error.message ?: "Unable to load board set"
+                )
+            )
         }
-        isLoading = false
+    }
+
+    LaunchedEffect(workspaceViewModel, onExitToLibrary) {
+        workspaceViewModel.events.collect { event ->
+            when (event) {
+                BoardWorkspaceEvent.NavigateToLibrary -> {
+                    hiddenButtonsSession.reset()
+                    onExitToLibrary()
+                }
+            }
+        }
     }
 
     // #120: expire the selection highlight after the configured duration. Re-activating a
@@ -720,7 +728,7 @@ private fun BoardSetWorkspaceScreen(
     }
 
     val activeGraph = editSession?.draft ?: savedGraph
-    val activeBoard = activeGraph?.boardsById?.get(selectedBoardId)
+    val activeBoard = activeGraph?.boardsById?.get(workspace.selectedBoardId)
     val resolvedBoardSettings = remember(
         activeGraph?.boardSet?.screenSettings,
         activeBoard?.extensions,
@@ -788,20 +796,17 @@ private fun BoardSetWorkspaceScreen(
     fun enterEditing() {
         val graph = savedGraph ?: return
         if (graph.boardSet.isLocked) {
-            statusMessage = unlockToEditMessage
+            workspaceViewModel.onAction(BoardWorkspaceAction.StatusChanged(unlockToEditMessage))
             return
         }
-        selectedButtons = emptyList()
-        boardStack = emptyList()
         selectedField = null
-        editSession = BoardSetEditSession(graph, graph)
-        mode = BoardWorkspaceMode.Edit
+        workspaceViewModel.onAction(BoardWorkspaceAction.StartEditing)
     }
 
     fun startEditing() {
         scope.launch {
             if (editingAccessController?.requiresUnlock() == true) {
-                showEditingAccessDialog = true
+                workspaceViewModel.onAction(BoardWorkspaceAction.EditingAccessRequired)
             } else {
                 enterEditing()
             }
@@ -809,35 +814,22 @@ private fun BoardSetWorkspaceScreen(
     }
 
     fun requestFinishEditing() {
-        val session = editSession ?: return
-        if (session.isDirty) showFinishDialog = true
-        else {
-            selectedField = null
-            editSession = null
-            mode = BoardWorkspaceMode.Run
-        }
+        selectedField = null
+        workspaceViewModel.onAction(BoardWorkspaceAction.FinishEditingClicked)
     }
 
     fun navigateBack() {
-        if (mode == BoardWorkspaceMode.Edit) {
-            requestFinishEditing()
-        } else if (boardStack.isNotEmpty()) {
-            selectedBoardId = boardStack.last()
-            boardStack = boardStack.dropLast(1)
-        } else {
-            hiddenButtonsSession.reset()
-            onExitToLibrary()
-        }
+        workspaceViewModel.onAction(BoardWorkspaceAction.BackClicked)
     }
 
     fun exportBoardSet() {
         scope.launch {
-            isExporting = true
-            statusMessage = null
+            workspaceViewModel.onAction(BoardWorkspaceAction.ExportStarted)
+            var resultMessage = "Export cancelled"
             try {
                 val graph = activeGraph
                 if (graph == null) {
-                    statusMessage = "Export failed: no board set loaded"
+                    resultMessage = "Export failed: no board set loaded"
                 } else {
                     when (val export = useCase.exportBoardSetAsObzResult(graph.boardSet.id)) {
                         is ObzExportResult.Success -> {
@@ -845,13 +837,13 @@ private fun BoardSetWorkspaceScreen(
                             val fileName = "${graph.boardSet.name}.obz"
                             if (shareService != null) {
                                 val shared = shareService.shareFile(fileName, obzBytes)
-                                statusMessage = if (shared) {
+                                resultMessage = if (shared) {
                                     "Exported ${graph.boardSet.name}.obz"
                                 } else {
                                     "Export cancelled"
                                 }
                             } else {
-                                statusMessage = "Export saved (${obzBytes.size} bytes)"
+                                resultMessage = "Export saved (${obzBytes.size} bytes)"
                             }
                         }
                         is ObzExportResult.Failure -> {
@@ -859,14 +851,14 @@ private fun BoardSetWorkspaceScreen(
                                 .takeIf { it.isNotEmpty() }
                                 ?.joinToString(prefix = ": ")
                                 .orEmpty()
-                            statusMessage = "Export failed: ${export.context}$resources"
+                            resultMessage = "Export failed: ${export.context}$resources"
                     }
                     }
                 }
             } catch (e: Exception) {
-                statusMessage = "Export failed: ${e.message ?: "unknown error"}"
+                resultMessage = "Export failed: ${e.message ?: "unknown error"}"
             } finally {
-                isExporting = false
+                workspaceViewModel.onAction(BoardWorkspaceAction.ExportFinished(resultMessage))
             }
         }
     }
@@ -885,17 +877,21 @@ private fun BoardSetWorkspaceScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    selectedButtons = currentDraft.takeIf { it.isNotEmpty() }
-                        ?.let { text ->
-                            listOf(
-                                ObfButton(
-                                    id = workspaceId("native-keyboard"),
-                                    label = text,
-                                    vocalization = text,
-                                ) to null
-                            )
-                        }
-                        .orEmpty()
+                    workspaceViewModel.onAction(
+                        BoardWorkspaceAction.ReplaceSentence(
+                            currentDraft.takeIf { it.isNotEmpty() }
+                                ?.let { text ->
+                                    listOf(
+                                        ObfButton(
+                                            id = workspaceId("native-keyboard"),
+                                            label = text,
+                                            vocalization = text,
+                                        )
+                                    )
+                                }
+                                .orEmpty()
+                        )
+                    )
                     nativeKeyboardDraft = null
                 }) {
                     Text(stringResource(R.string.board_native_keyboard_return))
@@ -953,7 +949,7 @@ private fun BoardSetWorkspaceScreen(
                         }
                     )
                 }
-                editSession = session.apply(updated)
+                workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(updated))
             },
             onBack = { settingsTarget = null }
         )
@@ -1025,7 +1021,7 @@ private fun BoardSetWorkspaceScreen(
                                         enabled = editSession?.undoStack?.isNotEmpty() == true,
                                         onClick = {
                                             appBarMenuExpanded = false
-                                            editSession = editSession?.undo()
+                                            workspaceViewModel.onAction(BoardWorkspaceAction.UndoEdit)
                                         }
                                     )
                                     DropdownMenuItem(
@@ -1070,7 +1066,11 @@ private fun BoardSetWorkspaceScreen(
                                             val session = editSession
                                             val board = activeBoard
                                             if (session != null && board != null) {
-                                                editSession = session.apply(setDraftRoot(session.draft, board.id))
+                                                workspaceViewModel.onAction(
+                                                    BoardWorkspaceAction.ApplyEdit(
+                                                        setDraftRoot(session.draft, board.id)
+                                                    )
+                                                )
                                             }
                                         }
                                     )
@@ -1113,7 +1113,9 @@ private fun BoardSetWorkspaceScreen(
                                         leadingIcon = { Icon(Icons.Default.Fullscreen, contentDescription = null) },
                                         onClick = {
                                             appBarMenuExpanded = false
-                                            isFullscreen = true
+                                            workspaceViewModel.onAction(
+                                                BoardWorkspaceAction.FullscreenChanged(true)
+                                            )
                                         }
                                     )
                                     DropdownMenuItem(
@@ -1133,14 +1135,17 @@ private fun BoardSetWorkspaceScreen(
                                             exportBoardSet()
                                         }
                                     )
-                                    if (selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
+                                    if (workspace.selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.board_workspace_home)) },
                                             leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
                                             onClick = {
                                                 appBarMenuExpanded = false
-                                                selectedBoardId = activeGraph?.boardSet?.rootBoardId
-                                                boardStack = emptyList()
+                                                activeGraph?.boardSet?.rootBoardId?.let { rootBoardId ->
+                                                    workspaceViewModel.onAction(
+                                                        BoardWorkspaceAction.GoHome(rootBoardId)
+                                                    )
+                                                }
                                             }
                                         )
                                     }
@@ -1159,7 +1164,7 @@ private fun BoardSetWorkspaceScreen(
                         }
                     } else if (mode == BoardWorkspaceMode.Edit) {
                         IconButton(
-                            onClick = { editSession = editSession?.undo() },
+                            onClick = { workspaceViewModel.onAction(BoardWorkspaceAction.UndoEdit) },
                             enabled = editSession?.undoStack?.isNotEmpty() == true
                         ) {
                             Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.board_workspace_undo))
@@ -1184,7 +1189,11 @@ private fun BoardSetWorkspaceScreen(
                                 val session = editSession
                                 val board = activeBoard
                                 if (session != null && board != null) {
-                                    editSession = session.apply(setDraftRoot(session.draft, board.id))
+                                    workspaceViewModel.onAction(
+                                        BoardWorkspaceAction.ApplyEdit(
+                                            setDraftRoot(session.draft, board.id)
+                                        )
+                                    )
                                 }
                             },
                             enabled = activeBoard != null && activeBoard.id != activeGraph.boardSet.rootBoardId
@@ -1232,7 +1241,9 @@ private fun BoardSetWorkspaceScreen(
                                 )
                             )
                         }
-                        IconButton(onClick = { isFullscreen = true }) {
+                        IconButton(onClick = {
+                            workspaceViewModel.onAction(BoardWorkspaceAction.FullscreenChanged(true))
+                        }) {
                             Icon(
                                 Icons.Default.Fullscreen,
                                 contentDescription = stringResource(R.string.board_workspace_enter_fullscreen)
@@ -1253,10 +1264,13 @@ private fun BoardSetWorkspaceScreen(
                                 contentDescription = stringResource(R.string.phrase_screen_import_export_data)
                             )
                         }
-                        if (selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
+                        if (workspace.selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
                             IconButton(onClick = {
-                                selectedBoardId = activeGraph?.boardSet?.rootBoardId
-                                boardStack = emptyList()
+                                activeGraph?.boardSet?.rootBoardId?.let { rootBoardId ->
+                                    workspaceViewModel.onAction(
+                                        BoardWorkspaceAction.GoHome(rootBoardId)
+                                    )
+                                }
                             }) {
                                 Icon(Icons.Default.Home, contentDescription = stringResource(R.string.board_workspace_home))
                             }
@@ -1282,33 +1296,21 @@ private fun BoardSetWorkspaceScreen(
         },
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            when {
-                isLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                activeGraph == null || activeBoard == null -> Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(stringResource(R.string.board_workspace_load_error))
-                    TextButton(onClick = onExitToLibrary) {
-                        Text(stringResource(R.string.board_workspace_back_to_library))
-                    }
-                }
-                else -> Column(Modifier.fillMaxSize()) {
-                    if (!isFullscreen) statusMessage?.let {
-                        Text(
-                            it,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+            BoardWorkspaceContent(
+                state = workspace,
+                hasActiveBoard = activeGraph != null && activeBoard != null,
+                onBackToLibrary = onExitToLibrary,
+            ) {
+                if (activeGraph != null && activeBoard != null) {
                     if (!isFullscreen && mode == BoardWorkspaceMode.Edit) {
                         BoardStrip(
                             boards = activeGraph.boards,
-                            selectedBoardId = selectedBoardId,
+                            selectedBoardId = workspace.selectedBoardId,
                             onSelect = {
-                                selectedBoardId = it
-                                boardStack = emptyList()
-                                selectedButtons = emptyList()
+                                workspaceViewModel.onAction(
+                                    BoardWorkspaceAction.SelectBoard(it)
+                                )
+                                workspaceViewModel.onAction(BoardWorkspaceAction.ClearSentence)
                                 selectedField = null
                             }
                         )
@@ -1394,14 +1396,21 @@ private fun BoardSetWorkspaceScreen(
                                             }
                                         }
                                         is ObfButtonActionEffect.Unsupported -> {
-                                            statusMessage = unsupportedActionTemplate.replace("%ACTION%", effect.action)
+                                            workspaceViewModel.onAction(
+                                                BoardWorkspaceAction.StatusChanged(
+                                                    unsupportedActionTemplate.replace("%ACTION%", effect.action)
+                                                )
+                                            )
                                         }
                                     }
                                 }
-                                selectedButtons = nextSelection
+                                workspaceViewModel.onAction(
+                                    BoardWorkspaceAction.ReplaceSentence(nextSelection.map { it.first })
+                                )
                                 if (navigateHome) {
-                                    boardStack = emptyList()
-                                    selectedBoardId = activeGraph.boardSet.rootBoardId
+                                    workspaceViewModel.onAction(
+                                        BoardWorkspaceAction.GoHome(activeGraph.boardSet.rootBoardId)
+                                    )
                                 }
                                 if (speakAfterActions) {
                                     speakSelectedButtons(
@@ -1417,8 +1426,9 @@ private fun BoardSetWorkspaceScreen(
                             } else {
                                 val linkedBoard = activeGraph.resolveLinkedBoard(button.loadBoard)
                                 if (linkedBoard != null) {
-                                    selectedBoardId?.let { boardStack = boardStack + it }
-                                    selectedBoardId = linkedBoard.id
+                                    workspaceViewModel.onAction(
+                                        BoardWorkspaceAction.OpenBoard(linkedBoard.id)
+                                    )
                                 } else {
                                     val resolved = resolveObfLocalizedString(
                                         activeBoard.strings,
@@ -1430,7 +1440,11 @@ private fun BoardSetWorkspaceScreen(
                                         spokenText.isNotEmpty() &&
                                         shouldAddBoardSelection(resolvedBoardSettings.activationBehavior)
                                     ) {
-                                        selectedButtons = selectedButtons + (button to null)
+                                        workspaceViewModel.onAction(
+                                            BoardWorkspaceAction.ReplaceSentence(
+                                                selectedButtonModels + button
+                                            )
+                                        )
                                     }
                                     val sound = button.soundId?.let { id ->
                                         activeBoard.sounds.firstOrNull { it.id == id }
@@ -1470,12 +1484,16 @@ private fun BoardSetWorkspaceScreen(
                                     if (spokenText.isNotEmpty() || sound != null) {
                                         val returned = applyBoardReturnBehavior(
                                             behavior = resolvedBoardSettings.returnBehavior,
-                                            currentBoardId = selectedBoardId,
-                                            boardStack = boardStack,
+                                            currentBoardId = workspace.selectedBoardId,
+                                            boardStack = workspace.boardStack,
                                             rootBoardId = activeGraph.boardSet.rootBoardId
                                         )
-                                        selectedBoardId = returned.first
-                                        boardStack = returned.second
+                                        workspaceViewModel.onAction(
+                                            BoardWorkspaceAction.RestorePosition(
+                                                selectedBoardId = returned.first,
+                                                boardStack = returned.second,
+                                            )
+                                        )
                                     }
                                 }
                             }
@@ -1506,7 +1524,7 @@ private fun BoardSetWorkspaceScreen(
                                 val boardId = activeBoard.id
                                 if (session != null) {
                                     selectedField = null
-                                    editSession = session.apply(
+                                    workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(
                                         moveDraftField(
                                             session.draft,
                                             boardId,
@@ -1515,7 +1533,7 @@ private fun BoardSetWorkspaceScreen(
                                             toRow,
                                             toColumn
                                         )
-                                    )
+                                    ))
                                 }
                             }
                         } else null,
@@ -1538,7 +1556,7 @@ private fun BoardSetWorkspaceScreen(
                                     columnSpan = columnSpan
                                 )
                                 if (resized != session.draft) {
-                                    editSession = session.apply(resized)
+                                    workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(resized))
                                 }
                             }
                         } else null,
@@ -1546,13 +1564,13 @@ private fun BoardSetWorkspaceScreen(
                             { fraction ->
                                 val session = editSession ?: return@ObfBoardView
                                 val boardId = activeBoard.id
-                                editSession = session.apply(
+                                workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(
                                     session.draft.copy(
                                         boards = session.draft.boards.map { board ->
                                             if (board.id == boardId) board.withGridHeightFraction(fraction) else board
                                         }
                                     )
-                                )
+                                ))
                             }
                         } else null,
                         homeBoardId = activeGraph.boardSet.rootBoardId,
@@ -1568,9 +1586,11 @@ private fun BoardSetWorkspaceScreen(
                             )
                         },
                         onDeleteLast = {
-                            if (selectedButtons.isNotEmpty()) selectedButtons = selectedButtons.dropLast(1)
+                            workspaceViewModel.onAction(BoardWorkspaceAction.RemoveLastSentenceButton)
                         },
-                        onClearSentence = { selectedButtons = emptyList() },
+                        onClearSentence = {
+                            workspaceViewModel.onAction(BoardWorkspaceAction.ClearSentence)
+                        },
                         modifier = Modifier.weight(1f).fillMaxWidth()
                     )
                 }
@@ -1582,7 +1602,9 @@ private fun BoardSetWorkspaceScreen(
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                     tonalElevation = 4.dp
                 ) {
-                    IconButton(onClick = { isFullscreen = false }) {
+                    IconButton(onClick = {
+                        workspaceViewModel.onAction(BoardWorkspaceAction.FullscreenChanged(false))
+                    }) {
                         Icon(
                             Icons.Default.FullscreenExit,
                             contentDescription = stringResource(R.string.board_workspace_exit_fullscreen)
@@ -1600,8 +1622,10 @@ private fun BoardSetWorkspaceScreen(
             onCreate = { name, rows, columns, keyboardLayout ->
                 val session = editSession ?: return@CreateBoardDialog
                 val updated = addDraftBoard(session.draft, name, rows, columns, keyboardLayout)
-                editSession = session.apply(updated)
-                selectedBoardId = updated.boards.last().id
+                workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(updated))
+                workspaceViewModel.onAction(
+                    BoardWorkspaceAction.SelectBoard(updated.boards.last().id)
+                )
                 showAddBoardDialog = false
             }
         )
@@ -1611,9 +1635,10 @@ private fun BoardSetWorkspaceScreen(
         EditingAccessDialog(
             controller = editingAccessController,
             mode = EditingAccessDialogMode.Unlock,
-            onDismiss = { showEditingAccessDialog = false },
+            onDismiss = {
+                workspaceViewModel.onAction(BoardWorkspaceAction.EditingAccessDismissed)
+            },
             onSuccess = {
-                showEditingAccessDialog = false
                 enterEditing()
             }
         )
@@ -1652,7 +1677,7 @@ private fun BoardSetWorkspaceScreen(
             onSave = { label, vocalization, imageUrl, recordingPath, backgroundColor, language, mathMode, hidden, linkedBoardId,
                        action, actions, shape, wordType ->
                 val session = editSession ?: return@EditBoardCellDialog
-                editSession = session.apply(
+                workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(
                     updateDraftCell(
                         graph = session.draft,
                         boardId = activeBoard.id,
@@ -1672,14 +1697,14 @@ private fun BoardSetWorkspaceScreen(
                         shape = shape,
                         wordType = wordType
                     )
-                )
+                ))
                 editingCell = null
             },
             onClearCell = {
                 val session = editSession ?: return@EditBoardCellDialog
-                editSession = session.apply(
+                workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(
                     clearDraftCell(session.draft, activeBoard.id, target.row, target.column)
-                )
+                ))
                 editingCell = null
             }
         )
@@ -1687,16 +1712,16 @@ private fun BoardSetWorkspaceScreen(
 
     if (showFinishDialog) {
         AlertDialog(
-            onDismissRequest = { showFinishDialog = false },
+            onDismissRequest = {
+                workspaceViewModel.onAction(BoardWorkspaceAction.KeepEditing)
+            },
             title = { Text(stringResource(R.string.board_workspace_finish_title)) },
             text = { Text(stringResource(R.string.board_workspace_finish_body)) },
             confirmButton = {
                 Button(onClick = {
                     val session = editSession ?: return@Button
-                    showFinishDialog = false
                     selectedField = null
-                    editSession = null
-                    mode = BoardWorkspaceMode.Run
+                    workspaceViewModel.onAction(BoardWorkspaceAction.SaveStarted)
                     val graph = session.draft
                     // Persist on an application-scoped scope so leaving this screen can't
                     // cancel the write halfway; branch back to the main thread for state updates.
@@ -1705,13 +1730,13 @@ private fun BoardSetWorkspaceScreen(
                         withContext(Dispatchers.Default) {
                             useCase.saveBoardSetGraph(graph)
                         }.onSuccess { saved ->
-                            savedGraph = saved
+                            workspaceViewModel.onAction(BoardWorkspaceAction.SaveSucceeded(saved))
                         }.onFailure { error ->
                             // Persistence failed: drop back into editing with the draft intact
                             // so the user does not lose their work.
-                            mode = BoardWorkspaceMode.Edit
-                            editSession = session
-                            statusMessage = error.message ?: saveErrorMessage
+                            workspaceViewModel.onAction(
+                                BoardWorkspaceAction.SaveFailed(error.message ?: saveErrorMessage)
+                            )
                         }
                     }
                 }) { Text(stringResource(R.string.board_workspace_save_changes)) }
@@ -1719,13 +1744,12 @@ private fun BoardSetWorkspaceScreen(
             dismissButton = {
                 Row {
                     TextButton(onClick = {
-                        showFinishDialog = false
                         selectedField = null
-                        editSession = null
-                        mode = BoardWorkspaceMode.Run
-                        selectedBoardId = savedGraph?.boardSet?.rootBoardId
+                        workspaceViewModel.onAction(BoardWorkspaceAction.DiscardEdits)
                     }) { Text(stringResource(R.string.board_workspace_discard)) }
-                    TextButton(onClick = { showFinishDialog = false }) {
+                    TextButton(onClick = {
+                        workspaceViewModel.onAction(BoardWorkspaceAction.KeepEditing)
+                    }) {
                         Text(stringResource(R.string.board_workspace_keep_editing))
                     }
                 }
@@ -1746,7 +1770,7 @@ private fun BoardSetWorkspaceScreen(
                 if (resized == session.draft) {
                     false
                 } else {
-                    editSession = session.apply(resized)
+                    workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(resized))
                     showResizeBoardDialog = false
                     true
                 }
@@ -1771,8 +1795,10 @@ private fun BoardSetWorkspaceScreen(
                     val session = editSession
                     if (session != null) {
                         val updated = deleteDraftBoard(session.draft, activeBoard.id)
-                        editSession = session.apply(updated)
-                        selectedBoardId = updated.boardSet.rootBoardId
+                        workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(updated))
+                        workspaceViewModel.onAction(
+                            BoardWorkspaceAction.GoHome(updated.boardSet.rootBoardId)
+                        )
                     }
                     showDeleteBoardDialog = false
                 }) { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error) }
@@ -1783,6 +1809,70 @@ private fun BoardSetWorkspaceScreen(
                 }
             }
         )
+    }
+}
+
+/**
+ * Stateless workspace shell. It keeps loading and failure rendering independent from the
+ * orchestration-heavy root while allowing the real board surface to remain a cohesive section.
+ */
+@Composable
+internal fun BoardWorkspaceContent(
+    state: BoardWorkspaceState,
+    hasActiveBoard: Boolean,
+    onBackToLibrary: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Box(modifier.fillMaxSize()) {
+        when {
+            state.contentStatus == BoardWorkspaceContentStatus.Loading && !hasActiveBoard -> {
+                CircularProgressIndicator(Modifier.align(Alignment.Center))
+            }
+            !hasActiveBoard -> Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                val failure = state.contentStatus as? BoardWorkspaceContentStatus.RecoverableFailure
+                Text(failure?.message ?: stringResource(R.string.board_workspace_load_error))
+                TextButton(onClick = onBackToLibrary) {
+                    Text(stringResource(R.string.board_workspace_back_to_library))
+                }
+            }
+            else -> Column(Modifier.fillMaxSize()) {
+                if (!state.isFullscreen) state.statusMessage?.let { message ->
+                    Text(
+                        message,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                content()
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 600, heightDp = 400)
+@Composable
+private fun BoardWorkspaceContentPreview() {
+    AppTheme {
+        BoardWorkspaceContent(
+            state = BoardWorkspaceState(
+                contentStatus = BoardWorkspaceContentStatus.Ready,
+                statusMessage = "Board saved",
+            ),
+            hasActiveBoard = true,
+            onBackToLibrary = {},
+        ) {
+            Text(
+                text = "Communication board",
+                modifier = Modifier.padding(24.dp),
+                style = MaterialTheme.typography.headlineMedium,
+            )
+        }
     }
 }
 
