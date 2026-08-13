@@ -19,7 +19,9 @@ import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -66,14 +68,14 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
             val fromCloud = try {
                 withContext(Dispatchers.IO) { useCase.refreshFromAzure() }
             } catch (e: Exception) {
-                println("Failed to refresh from Azure: $e")
+                OperationalLogger.warn("voice_catalog.refresh", "failed", exceptionClass = e.loggingClassName())
                 emptyList()
             }
             
             val local = try {
                 withContext(Dispatchers.IO) { useCase.list() }
             } catch (e: Exception) {
-                println("Failed to load local voices: $e")
+                OperationalLogger.warn("voice_catalog.load", "failed", exceptionClass = e.loggingClassName())
                 emptyList()
             }
             
@@ -88,13 +90,13 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
             val alreadySelected = try {
                 withContext(Dispatchers.IO) { useCase.selected() }
             } catch (e: Exception) {
-                println("Failed to load selected voice: $e")
+                OperationalLogger.warn("voice_selection.load", "failed", exceptionClass = e.loggingClassName())
                 null
             }
             selected = alreadySelected
         } catch (t: Throwable) {
             error = "Failed to load voices: ${t.message}"
-            println("Voice loading error: $t")
+            OperationalLogger.warn("voice_catalog.load", "failed", exceptionClass = t.loggingClassName())
         } finally {
             loading = false
         }
@@ -389,10 +391,14 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                                                 voice
                                             }
                                             withContext(Dispatchers.IO) { useCase.select(voiceToSelect) }
-                                            println("Selected voice: ${voice.name} with language: ${voiceToSelect.selectedLanguage}")
+                                            OperationalLogger.info("voice_selection.save", "succeeded")
                                             selected = voiceToSelect
                                         } catch (t: Throwable) {
-                                            println("Failed to select voice: ${voice.name}: $t")
+                                            OperationalLogger.warn(
+                                                operation = "voice_selection.save",
+                                                outcome = "failed",
+                                                exceptionClass = t.loggingClassName(),
+                                            )
                                         }
                                     }
                                 }

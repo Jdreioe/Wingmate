@@ -6,10 +6,9 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.serialization.Serializable
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import kotlin.time.Clock
-
-private val logger = KotlinLogging.logger {}
 
 /**
  * Token Exchange Client for secure Azure TTS authentication.
@@ -42,13 +41,13 @@ class TokenExchangeClient(
             cachedRegion?.let { region ->
                 if (tokenExpiry > now + 60_000) {
                     val remainingSeconds = (tokenExpiry - now) / 1000
-                    logger.debug { "Using cached token, expires in ${remainingSeconds}s" }
+                    OperationalLogger.debug("speech_token.acquire", "cache_hit")
                     return TokenResult.Success(token, region, remainingSeconds)
                 }
             }
         }
         
-        logger.info { "Fetching new token from exchange service" }
+        OperationalLogger.info("speech_token.exchange", "started")
         
         return try {
             val response = httpClient.post(tokenExchangeUrl) {
@@ -65,24 +64,32 @@ class TokenExchangeClient(
                     cachedRegion = body.region
                     tokenExpiry = now + (body.expiresIn * 1000)
                     
-                    logger.info { "Token exchange successful, expires in ${body.expiresIn}s" }
+                    OperationalLogger.info("speech_token.exchange", "succeeded")
                     TokenResult.Success(body.token, body.region, body.expiresIn)
                 }
                 response.status.value == 401 -> {
-                    logger.error { "Token exchange unauthorized - check CLIENT_API_KEY" }
+                    OperationalLogger.warn("speech_token.exchange", "unauthorized", statusCode = 401)
                     TokenResult.Unauthorized
                 }
                 response.status.value == 429 -> {
-                    logger.error { "Token exchange rate limited" }
+                    OperationalLogger.warn("speech_token.exchange", "rate_limited", statusCode = 429)
                     TokenResult.RateLimited
                 }
                 else -> {
-                    logger.error { "Token exchange failed: ${response.status}" }
+                    OperationalLogger.error(
+                        operation = "speech_token.exchange",
+                        outcome = "failed",
+                        statusCode = response.status.value,
+                    )
                     TokenResult.Error("Token exchange failed: ${response.status}")
                 }
             }
         } catch (e: Exception) {
-            logger.error(e) { "Token exchange network error" }
+            OperationalLogger.error(
+                operation = "speech_token.exchange",
+                outcome = "network_failed",
+                exceptionClass = e.loggingClassName(),
+            )
             TokenResult.Error(e.message ?: "Network error during token exchange")
         }
     }
@@ -92,7 +99,7 @@ class TokenExchangeClient(
      * Call this if you receive a 401 from Azure TTS.
      */
     fun invalidateToken() {
-        logger.info { "Invalidating cached token" }
+        OperationalLogger.info("speech_token.cache", "invalidated")
         cachedToken = null
         cachedRegion = null
         tokenExpiry = 0

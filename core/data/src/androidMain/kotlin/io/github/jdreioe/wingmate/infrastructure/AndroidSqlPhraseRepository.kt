@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PhraseRepository
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -44,7 +45,7 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             )
         }
         cursor.close()
-        println("Loaded {} phrases from SQLite: ${list.size}")
+        OperationalLogger.debug("phrase.load", "succeeded", count = list.size)
         return@withContext list
     }
 

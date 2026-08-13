@@ -1,7 +1,9 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.AacLogger
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -72,7 +74,11 @@ class RealAacLogger(
                 sink.writeUtf8(json + "\n")
                 sink.close()
             }.onFailure { e ->
-                println("Failed to log OBL event: ${e.message}")
+                OperationalLogger.warn(
+                    operation = "usage_log.write",
+                    outcome = "failed",
+                    exceptionClass = e.loggingClassName(),
+                )
             }
         }
     }

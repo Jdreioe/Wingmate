@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.CategoryRepository
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -23,7 +24,7 @@ class AndroidSqlCategoryRepository(private val context: Context) : CategoryRepos
             list += CategoryItem(id = id, name = name, selectedLanguage = selectedLanguage)
         }
         cursor.close()
-        println("Loaded {} categories from SQLite: ${list.size}")
+        OperationalLogger.debug("category.load", "succeeded", count = list.size)
         return@withContext list
     }
 

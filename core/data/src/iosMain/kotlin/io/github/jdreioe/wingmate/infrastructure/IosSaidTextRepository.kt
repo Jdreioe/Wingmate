@@ -2,15 +2,14 @@ package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.datetime.Clock
 import platform.Foundation.NSUserDefaults
-
-private val saidLogger = KotlinLogging.logger {}
 
 class IosSaidTextRepository : SaidTextRepository {
     private val defaults by lazy { NSUserDefaults.standardUserDefaults() }
@@ -29,7 +28,7 @@ class IosSaidTextRepository : SaidTextRepository {
         )
         existing.add(enriched)
         saveAll(existing)
-        saidLogger.debug { "Saved SaidText item id=${enriched.id} voice=${enriched.voiceName} lang=${enriched.primaryLanguage}" }
+        OperationalLogger.debug("speech_history.save", "succeeded", count = existing.size)
         enriched
     }
 
@@ -48,7 +47,11 @@ class IosSaidTextRepository : SaidTextRepository {
         return try {
             json.decodeFromString(ListSerializer(SaidText.serializer()), text)
         } catch (t: Throwable) {
-            saidLogger.warn(t) { "Failed to decode SaidText list; returning empty" }
+            OperationalLogger.warn(
+                operation = "speech_history.load",
+                outcome = "failed",
+                exceptionClass = t.loggingClassName(),
+            )
             emptyList()
         }
     }
@@ -59,7 +62,11 @@ class IosSaidTextRepository : SaidTextRepository {
             defaults.setObject(text, storageKey)
             defaults.synchronize()
         } catch (t: Throwable) {
-            saidLogger.warn(t) { "Failed to save SaidText list" }
+            OperationalLogger.warn(
+                operation = "speech_history.save",
+                outcome = "failed",
+                exceptionClass = t.loggingClassName(),
+            )
         }
     }
 }

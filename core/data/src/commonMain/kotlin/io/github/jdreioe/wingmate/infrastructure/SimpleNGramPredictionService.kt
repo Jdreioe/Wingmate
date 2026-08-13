@@ -1,6 +1,6 @@
 package io.github.jdreioe.wingmate.infrastructure
 
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.PredictionResult
 import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.TextPredictionService
@@ -17,7 +17,6 @@ import kotlinx.coroutines.withContext
  * the most frequently seen spelling for display.
  */
 class SimpleNGramPredictionService : TextPredictionService {
-    private val log = KotlinLogging.logger("SimpleNGramPredictionService")
     private val mutex = Mutex()
 
     private companion object {
@@ -117,10 +116,7 @@ class SimpleNGramPredictionService : TextPredictionService {
             .take(TOP_WORD_CACHE_LIMIT)
             .toList()
         trained = true
-        log.debug {
-            "Training complete. vocab=${wordFrequency.size}, prefixes=${wordsByPrefix.size}, " +
-                "bigrams=${bigramCounts.size}, trigrams=${trigramCounts.size}"
-        }
+        OperationalLogger.debug("prediction_model.train", "succeeded", count = wordFrequency.size)
     }
 
     private fun trainOnText(text: String, weight: Int) {

@@ -6,9 +6,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
@@ -32,9 +34,8 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
     val settingsStateManager = remember(koin) { koin.getOrNull<SettingsStateManager>() }
     val featureUsageReporter = remember(koin) { koin.getOrNull<FeatureUsageReporter>() }
 
-    // Log which ConfigRepository implementation we got (helps diagnose persistence)
     LaunchedEffect(configRepo) {
-        println("ConfigRepository implementation: ${configRepo?.javaClass?.name ?: "<none>"}")
+        OperationalLogger.debug("speech_config.repository", "resolved", enabled = configRepo != null)
     }
 
     if (configRepo == null) {
@@ -75,7 +76,7 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
     LaunchedEffect(Unit) {
         // load existing config
         val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfigStatus() }
-        println("Loaded Azure config; credentialConfigured=${cfg.credentialConfigured}")
+        OperationalLogger.debug("speech_config.load", "succeeded", enabled = cfg.credentialConfigured)
         endpoint = cfg.endpoint
         credentialConfigured = cfg.credentialConfigured
         
@@ -370,12 +371,16 @@ fun AzureSettingsDialog(show: Boolean, onDismiss: () -> Unit, onSaved: (() -> Un
                             (!credentialConfigured || replacingCredentials) &&
                             endpoint.isNotBlank() && subscriptionKey.isNotBlank()
                         ) {
-                            println("Saving speech config: endpoint='$endpoint'")
+                            OperationalLogger.info("speech_config.save", "started")
                             try {
                                 configRepo.saveSpeechConfig(SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey))
-                                println("Successfully saved speech config")
+                                OperationalLogger.info("speech_config.save", "succeeded")
                             } catch (t: Throwable) {
-                                println("Failed to save speech config: $t")
+                                OperationalLogger.warn(
+                                    operation = "speech_config.save",
+                                    outcome = "failed",
+                                    exceptionClass = t.loggingClassName(),
+                                )
                                 throw t
                             }
                         }

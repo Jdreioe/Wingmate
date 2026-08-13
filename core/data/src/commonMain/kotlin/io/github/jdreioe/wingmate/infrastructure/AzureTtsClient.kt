@@ -4,16 +4,16 @@ import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
+import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.github.oshai.kotlinlogging.KotlinLogging
 import nl.adaptivity.xmlutil.EventType
 import nl.adaptivity.xmlutil.xmlStreaming
 
-private val logger = KotlinLogging.logger {}
 /**
  * Enhanced shared Azure TTS client with improved audio quality and error handling.
  * Accepts SSML and returns audio bytes (mp3) from Azure.
@@ -48,9 +48,7 @@ object AzureTtsClient {
         }
         val url = "$baseUrl/cognitiveservices/v1"
 
-        // Enhanced logging with request details
-        logger.info { "Azure TTS request -> url=$url (endpoint=${config.endpoint}, format=${audioFormat.value})" }
-        logger.debug { "SSML length=${ssml.length} chars" }
+        OperationalLogger.info("azure_tts.synthesize", "started")
 
         try {
             val response: HttpResponse = client.post(url) {
@@ -65,12 +63,12 @@ object AzureTtsClient {
                 setBody(ssml)
             }
 
-            logger.info { "Azure TTS response status=${response.status}" }
+            OperationalLogger.info("azure_tts.synthesize", "response_received", statusCode = response.status.value)
             
             when {
                 response.status.isSuccess() -> {
                     val bytes = response.body<ByteArray>()
-                    logger.info { "Azure TTS returned ${bytes.size} bytes (${bytes.size / 1024}KB)" }
+                    OperationalLogger.info("azure_tts.synthesize", "succeeded", count = bytes.size)
                     
                     if (bytes.isEmpty()) {
                         throw RuntimeException("Azure TTS returned empty audio data")
@@ -79,23 +77,23 @@ object AzureTtsClient {
                     return bytes
                 }
                 response.status.value == 401 -> {
-                    logger.error { "Azure TTS authentication failed: ${response.status}" }
+                    OperationalLogger.warn("azure_tts.synthesize", "authentication_failed", statusCode = 401)
                     throw RuntimeException("Azure TTS authentication failed. Please check your subscription key.")
                 }
                 response.status.value == 429 -> {
-                    logger.error { "Azure TTS rate limit exceeded: ${response.status}" }
+                    OperationalLogger.warn("azure_tts.synthesize", "rate_limited", statusCode = 429)
                     throw RuntimeException("Azure TTS rate limit exceeded. Please try again later.")
                 }
                 response.status.value in 400..499 -> {
-                    logger.error { "Azure TTS client error: ${response.status}" }
+                    OperationalLogger.error("azure_tts.synthesize", "client_error", statusCode = response.status.value)
                     throw RuntimeException("Azure TTS request error: ${response.status.description}")
                 }
                 response.status.value in 500..599 -> {
-                    logger.error { "Azure TTS server error: ${response.status}" }
+                    OperationalLogger.error("azure_tts.synthesize", "server_error", statusCode = response.status.value)
                     throw RuntimeException("Azure TTS server error: ${response.status.description}")
                 }
                 else -> {
-                    logger.error { "Azure TTS failed: ${response.status}" }
+                    OperationalLogger.error("azure_tts.synthesize", "failed", statusCode = response.status.value)
                     throw RuntimeException("Azure TTS failed: ${response.status.description}")
                 }
             }
@@ -103,7 +101,11 @@ object AzureTtsClient {
             when (e) {
                 is RuntimeException -> throw e
                 else -> {
-                    logger.error(e) { "Azure TTS network error" }
+                    OperationalLogger.error(
+                        operation = "azure_tts.synthesize",
+                        outcome = "network_failed",
+                        exceptionClass = e.loggingClassName(),
+                    )
                     throw RuntimeException("Azure TTS network error: ${e.message}", e)
                 }
             }
@@ -270,7 +272,6 @@ object AzureTtsClient {
                 ?: "en-US"
         val pitch = voice.pitchForSSML ?: voice.pitch?.let(::convertPitchToSSML) ?: "medium"
         val rate = voice.rateForSSML ?: voice.rate?.let(::convertRateToSSML) ?: "medium"
-        logger.debug { "resolveVoiceParams: voiceName=${voice.name} baseLang=$baseLang pitch=$pitch rate=$rate" }
         return VoiceParams(voiceName, baseLang, pitch, rate)
     }
 
@@ -568,8 +569,7 @@ object AzureTtsClient {
     ): ByteArray {
         val url = "https://$region.tts.speech.microsoft.com/cognitiveservices/v1"
         
-        logger.info { "Azure TTS (token auth) -> url=$url, format=${audioFormat.value}" }
-        logger.debug { "SSML length=${ssml.length} chars" }
+        OperationalLogger.info("azure_tts.token_synthesize", "started")
         
         try {
             val response: HttpResponse = client.post(url) {
@@ -584,12 +584,12 @@ object AzureTtsClient {
                 setBody(ssml)
             }
             
-            logger.info { "Azure TTS (token auth) response status=${response.status}" }
+            OperationalLogger.info("azure_tts.token_synthesize", "response_received", statusCode = response.status.value)
             
             when {
                 response.status.isSuccess() -> {
                     val bytes = response.body<ByteArray>()
-                    logger.info { "Azure TTS returned ${bytes.size} bytes (${bytes.size / 1024}KB)" }
+                    OperationalLogger.info("azure_tts.token_synthesize", "succeeded", count = bytes.size)
                     
                     if (bytes.isEmpty()) {
                         throw RuntimeException("Azure TTS returned empty audio data")
@@ -597,15 +597,19 @@ object AzureTtsClient {
                     return bytes
                 }
                 response.status.value == 401 -> {
-                    logger.error { "Azure TTS token expired or invalid" }
+                    OperationalLogger.warn("azure_tts.token_synthesize", "authentication_failed", statusCode = 401)
                     throw TokenExpiredException("Azure TTS token expired or invalid")
                 }
                 response.status.value == 429 -> {
-                    logger.error { "Azure TTS rate limit exceeded" }
+                    OperationalLogger.warn("azure_tts.token_synthesize", "rate_limited", statusCode = 429)
                     throw RuntimeException("Azure TTS rate limit exceeded. Please try again later.")
                 }
                 else -> {
-                    logger.error { "Azure TTS failed: ${response.status}" }
+                    OperationalLogger.error(
+                        operation = "azure_tts.token_synthesize",
+                        outcome = "failed",
+                        statusCode = response.status.value,
+                    )
                     throw RuntimeException("Azure TTS failed: ${response.status}")
                 }
             }
@@ -614,7 +618,11 @@ object AzureTtsClient {
         } catch (e: RuntimeException) {
             throw e
         } catch (e: Exception) {
-            logger.error(e) { "Azure TTS network error" }
+            OperationalLogger.error(
+                operation = "azure_tts.token_synthesize",
+                outcome = "network_failed",
+                exceptionClass = e.loggingClassName(),
+            )
             throw RuntimeException("Azure TTS network error", e)
         }
     }
@@ -634,7 +642,7 @@ object AzureTtsClient {
         }
         val url = "$baseUrl/cognitiveservices/voices/list"
         
-        logger.info { "Fetching Azure voices from $url" }
+        OperationalLogger.info("azure_voice_catalog.fetch", "started")
         
         try {
             val response: HttpResponse = client.get(url) {
@@ -647,14 +655,22 @@ object AzureTtsClient {
             
             if (response.status.isSuccess()) {
                 val azureVoices = response.body<List<AzureVoiceDto>>()
-                logger.info { "Fetched ${azureVoices.size} voices from Azure" }
+                OperationalLogger.info("azure_voice_catalog.fetch", "succeeded", count = azureVoices.size)
                 return azureVoices.map { it.toDomain() }
             } else {
-                logger.error { "Failed to fetch voices: ${response.status}" }
+                OperationalLogger.error(
+                    operation = "azure_voice_catalog.fetch",
+                    outcome = "failed",
+                    statusCode = response.status.value,
+                )
                 throw RuntimeException("Failed to fetch voices: ${response.status}")
             }
         } catch (e: Exception) {
-            logger.error(e) { "Error fetching voices" }
+            OperationalLogger.error(
+                operation = "azure_voice_catalog.fetch",
+                outcome = "failed",
+                exceptionClass = e.loggingClassName(),
+            )
             throw e
         }
     }

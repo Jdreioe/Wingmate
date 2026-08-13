@@ -33,7 +33,11 @@ class UserDataManager(private val saidTextRepository: SaidTextRepository) {
                 saidTextRepository.addAll(history)
             }
         } catch (e: Exception) {
-            println("Error importing data: ${e.message}")
+            OperationalLogger.warn(
+                operation = "user_data.import",
+                outcome = "failed",
+                exceptionClass = e.loggingClassName(),
+            )
             throw e
         }
     }

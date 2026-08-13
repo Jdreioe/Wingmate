@@ -5,6 +5,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -36,19 +37,19 @@ class AndroidSqlConfigRepository(private val context: Context) : ConfigRepositor
         writeSecure(config)
         check(readSecure() == config) { "Secure Azure credential write could not be verified" }
         deleteLegacyPlaintext()
-        println("Saved Azure speech configuration securely; credentialConfigured=true")
+        OperationalLogger.info("speech_config.save", "succeeded", enabled = true)
     }
 
     override suspend fun clearSpeechConfig() = withContext(Dispatchers.IO) {
         check(prefs.edit().remove(ENCRYPTED_CONFIG).commit()) { "Could not clear secure Azure configuration" }
         deleteLegacyPlaintext()
-        println("Cleared Azure speech configuration; credentialConfigured=false")
+        OperationalLogger.info("speech_config.clear", "succeeded", enabled = false)
     }
 
     private fun migrateLegacy(): SpeechServiceConfig? {
         val legacy = readLegacySqlite() ?: readLegacyPreferences() ?: return null
         migrateLegacySpeechConfig(legacy, ::writeSecure, ::readSecure, ::deleteLegacyPlaintext)
-        println("Migrated Azure speech configuration to Android Keystore")
+        OperationalLogger.info("speech_config.migrate", "succeeded")
         return legacy
     }
 
@@ -67,7 +68,7 @@ class AndroidSqlConfigRepository(private val context: Context) : ConfigRepositor
     private fun decodeLegacy(value: String): SpeechServiceConfig? = runCatching {
         json.decodeFromString(SpeechServiceConfig.serializer(), value)
     }.onFailure {
-        println("Could not decode legacy Azure configuration; credential contents redacted")
+        OperationalLogger.warn("speech_config.legacy_decode", "failed")
     }.getOrNull()
 
     private fun deleteLegacyPlaintext() {
@@ -93,7 +94,7 @@ class AndroidSqlConfigRepository(private val context: Context) : ConfigRepositor
             val plaintext = cipher.doFinal(bytes.copyOfRange(IV_SIZE, bytes.size)).decodeToString()
             json.decodeFromString(SpeechServiceConfig.serializer(), plaintext)
         }.onFailure {
-            println("Could not read secure Azure configuration; credential contents redacted")
+            OperationalLogger.warn("speech_config.secure_read", "failed")
         }.getOrThrow()
     }
 

@@ -11,7 +11,8 @@ import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceRepository
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
@@ -32,8 +33,6 @@ import platform.Foundation.NSData
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
 import platform.Foundation.create
-
-private val logger = KotlinLogging.logger {}
 
 @OptIn(ExperimentalForeignApi::class)
 class IosSpeechService(
@@ -128,7 +127,7 @@ class IosSpeechService(
             }
             true
         }.onFailure {
-            logger.warn { "Failed to play recorded audio file" }
+            OperationalLogger.warn("speech_recording.play", "failed")
         }.getOrDefault(false)
     }
 
@@ -180,7 +179,7 @@ class IosSpeechService(
             }
             lookup(langCode, requireLanguageTag = false) ?: if (langCode != "en") lookup("en", requireLanguageTag = true) else null
         } catch (e: Exception) {
-            logger.warn { "Failed to guess pronunciation" }
+            OperationalLogger.warn("pronunciation.lookup", "failed")
             null
         }
     }
@@ -208,7 +207,7 @@ class IosSpeechService(
             audioPlayer.prepareToPlay()
             audioPlayer.play()
         }.onFailure { t ->
-            logger.warn { "Failed to play recorded audio" }
+            OperationalLogger.warn("speech_recording.play", "failed")
         }
     }
 
@@ -224,7 +223,11 @@ class IosSpeechService(
             audioPlayer.prepareToPlay()
             audioPlayer.play()
         }.onFailure { t ->
-            logger.warn(t) { "Failed to play synthesized Azure audio" }
+            OperationalLogger.warn(
+                operation = "speech_audio.play",
+                outcome = "failed",
+                exceptionClass = t.loggingClassName(),
+            )
         }
     }
 

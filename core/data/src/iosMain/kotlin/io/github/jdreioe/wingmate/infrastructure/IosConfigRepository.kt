@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
@@ -59,14 +60,14 @@ class IosConfigRepository : ConfigRepository {
         val legacy = runCatching {
             json.decodeFromString(SpeechServiceConfig.serializer(), legacyText)
         }.getOrElse {
-            println("Could not decode legacy Azure configuration; credential contents redacted")
+            OperationalLogger.warn("speech_config.legacy_decode", "failed")
             return@withContext null
         }
         migrateLegacySpeechConfig(legacy, ::writeKeychain, ::readKeychain) {
             defaults.removeObjectForKey(LEGACY_KEY)
             defaults.synchronize()
         }
-        println("Migrated Azure speech configuration to iOS Keychain")
+        OperationalLogger.info("speech_config.migrate", "succeeded")
         legacy
     }
 
@@ -76,14 +77,14 @@ class IosConfigRepository : ConfigRepository {
         check(readKeychain() == config) { "Secure Azure credential write could not be verified" }
         defaults.removeObjectForKey(LEGACY_KEY)
         defaults.synchronize()
-        println("Saved Azure speech configuration securely; credentialConfigured=true")
+        OperationalLogger.info("speech_config.save", "succeeded", enabled = true)
     }
 
     override suspend fun clearSpeechConfig() = withContext(Dispatchers.Default) {
         deleteKeychain()
         defaults.removeObjectForKey(LEGACY_KEY)
         defaults.synchronize()
-        println("Cleared Azure speech configuration; credentialConfigured=false")
+        OperationalLogger.info("speech_config.clear", "succeeded", enabled = false)
     }
 
     private fun readKeychain(): SpeechServiceConfig? = memScoped {

@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
@@ -39,7 +40,7 @@ fun AzureSettingsFullScreen(
 
     LaunchedEffect(configRepo, settingsUseCase) {
         val cfg = withContext(Dispatchers.Default) { configRepo.getSpeechConfigStatus() }
-        println("Loaded Azure config; credentialConfigured=${cfg.credentialConfigured}")
+        OperationalLogger.debug("speech_config.load", "succeeded", enabled = cfg.credentialConfigured)
         endpoint = cfg.endpoint
         credentialConfigured = cfg.credentialConfigured
 

@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.infrastructure
 
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -37,7 +38,7 @@ class DictionaryLoader(private val fileStorage: io.github.jdreioe.wingmate.domai
         
         // Return from memory cache if available
         cache[cacheKey]?.let { 
-            println("DEBUG: Dictionary for $languageCode (file=$baseName) found in memory cache")
+            OperationalLogger.debug("dictionary.load", "memory_cache_hit")
             return it 
         }
         
@@ -48,11 +49,11 @@ class DictionaryLoader(private val fileStorage: io.github.jdreioe.wingmate.domai
                 val fileName = "$baseName.combined"
                 val cachedContent = fileStorage.load(fileName)
                 if (cachedContent != null && cachedContent.isNotBlank()) {
-                    println("DEBUG: Dictionary for $languageCode loaded from disk cache ($fileName)")
                     val words = withContext(Dispatchers.Default) {
                         parseDictionary(cachedContent)
                     }
                     if (words.isNotEmpty()) {
+                        OperationalLogger.debug("dictionary.load", "disk_cache_hit", count = words.size)
                         cache[cacheKey] = words
                         return@withContext words
                     }
@@ -61,8 +62,8 @@ class DictionaryLoader(private val fileStorage: io.github.jdreioe.wingmate.domai
             
             val url = "$BASE_URL/$baseName.combined"
             
-            println("DEBUG: Fetching dictionary from $url")
-            
+            OperationalLogger.debug("dictionary.load", "network_started")
+
             try {
                 val response = httpClient.get(url)
                 if (response.status.value !in 200..299) throw DictionaryLoadException()
@@ -74,7 +75,7 @@ class DictionaryLoader(private val fileStorage: io.github.jdreioe.wingmate.domai
                 }
                 if (words.isEmpty()) throw DictionaryLoadException()
                 
-                println("DEBUG: Loaded ${words.size} words for language $languageCode ($baseName)")
+                OperationalLogger.info("dictionary.load", "network_succeeded", count = words.size)
                 
                 // Cache the result
                 if (words.isNotEmpty()) {
@@ -84,7 +85,7 @@ class DictionaryLoader(private val fileStorage: io.github.jdreioe.wingmate.domai
                     if (fileStorage != null) {
                         val fileName = "$baseName.combined"
                         fileStorage.save(fileName, responseText)
-                        println("DEBUG: Saved dictionary for $languageCode to disk as $fileName")
+                        OperationalLogger.debug("dictionary.cache", "write_succeeded", count = words.size)
                     }
                 }
                 words
