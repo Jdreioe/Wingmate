@@ -122,7 +122,7 @@ fun UiLanguageDialog(
             Column(Modifier.fillMaxWidth().verticalScroll(scrollState)) {
                 Text(stringResource(R.string.language_filter_languages), style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(8.dp))
-                val showKeyboard = rememberShowKeyboardOnFocus()
+                val showKeyboard = Modifier.showKeyboardOnFocus()
                 OutlinedTextField(
                     value = filter,
                     onValueChange = { filter = it },

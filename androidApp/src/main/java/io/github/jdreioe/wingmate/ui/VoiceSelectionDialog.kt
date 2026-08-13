@@ -20,6 +20,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
 
@@ -182,7 +183,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                 }
                 // Voice search and filter section.
                 if (!loading && error == null) {
-                    val showKeyboard = rememberShowKeyboardOnFocus()
+                    val showKeyboard = Modifier.showKeyboardOnFocus()
                     OutlinedTextField(
                         value = voiceSearch,
                         onValueChange = { voiceSearch = it },
@@ -289,7 +290,12 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                     }
 
                     Text(
-                        text = stringResource(R.string.voice_showing_count, visibleVoiceCount, totalVoiceCount),
+                        text = pluralStringResource(
+                            R.plurals.voice_showing_count,
+                            totalVoiceCount,
+                            visibleVoiceCount,
+                            totalVoiceCount,
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

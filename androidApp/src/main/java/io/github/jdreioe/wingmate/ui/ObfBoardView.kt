@@ -207,7 +207,7 @@ fun ObfBoardView(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                        renderAbsoluteButtons(
+                        RenderAbsoluteButtons(
                             board,
                             imagesById,
                             extractedImages,
@@ -224,7 +224,7 @@ fun ObfBoardView(
             }
         } else {
             BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground).padding(8.dp)) {
-                renderAbsoluteButtons(
+                RenderAbsoluteButtons(
                     board,
                     imagesById,
                     extractedImages,
@@ -880,11 +880,11 @@ fun SymbolBar(
     onSpeak: () -> Unit,
     onDelete: () -> Unit,
     onClear: () -> Unit,
+    modifier: Modifier = Modifier,
     showSpeak: Boolean = true,
     showDelete: Boolean = true,
     showClear: Boolean = true,
-    presentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
-    modifier: Modifier = Modifier
+    presentation: SymbolBarPresentation = SymbolBarPresentation.Normal
 ) {
     val textScrollState = rememberScrollState()
     val textStyle = when (presentation) {
@@ -1370,7 +1370,7 @@ fun ObfButtonItem(
 }
 
 @Composable
-private fun BoxWithConstraintsScope.renderAbsoluteButtons(
+private fun BoxWithConstraintsScope.RenderAbsoluteButtons(
     board: ObfBoard,
     imagesById: Map<String, ObfImage>,
     extractedImages: Map<String, ByteArray>,

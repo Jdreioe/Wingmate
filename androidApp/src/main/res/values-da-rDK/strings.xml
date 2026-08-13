@@ -9,7 +9,6 @@
     <string name="filter_languages">Filtrer sprog</string>
     <string name="all_languages">Alle sprog</string>
     <string name="gender">Køn</string>
-    <string name="showing_voices">Viser %1$d af %2$d stemmer</string>
     <string name="no_system_voices_match">Ingen systemstemmer matcher de aktuelle filtre</string>
     <string name="no_azure_voices_match">Ingen Azure-stemmer matcher de aktuelle filtre</string>
     <string name="close">Luk</string>
@@ -26,6 +25,19 @@
     <string name="common_back">Tilbage</string>
     <string name="common_continue">Fortsæt</string>
     <string name="common_retry">Prøv igen</string>
+    <string name="startup_load_failed">Wingmate kunne ikke indlæse dine indstillinger. Din eksisterende konfiguration er ikke blevet ændret.</string>
+    <string name="welcome_import_unreadable">Den valgte fil kunne ikke læses. Tryk på importmuligheden for at prøve igen.</string>
+    <string name="welcome_import_persistence_failed">Skærmen kunne ikke gemmes. Dine nuværende skærme blev bevaret; tryk for at prøve igen.</string>
+    <string name="welcome_import_invalid">Denne skærmfil er ugyldig eller understøttes ikke. Vælg en anden fil, eller prøv igen.</string>
+    <string name="welcome_import_unexpected">Skærmen kunne ikke importeres. Tryk på importmuligheden for at prøve igen.</string>
+    <string name="voice_load_failed">Stemmerne kunne ikke indlæses. Kontrollér din forbindelse eller enhedens stemmeindstillinger, og prøv igen.</string>
+    <string name="voice_save_failed">Stemmen kunne ikke gemmes. Din nuværende kommunikationsopsætning blev bevaret; tryk på stemmen for at prøve igen.</string>
+    <string name="backup_picker_failed">Filvælgeren kunne ikke åbnes. Prøv igen.</string>
+    <string name="backup_create_failed">Sikkerhedskopien kunne ikke oprettes. Dine data blev ikke ændret; prøv igen.</string>
+    <string name="language_load_failed">Sprogindstillingerne kunne ikke indlæses. Dine nuværende indstillinger blev ikke ændret.</string>
+    <string name="language_save_failed">Sprogændringen kunne ikke gennemføres. Gennemgå de nuværende valg, og vælg derefter et sprog for at prøve igen.</string>
+    <string name="settings_load_failed">Indstillingerne kunne ikke indlæses. Din nuværende konfiguration blev ikke ændret.</string>
+    <string name="settings_save_failed">Indstillingen kunne ikke gemmes. Prøv igen for at genindlæse den gemte konfiguration.</string>
 
     <string name="board_sets_title">Skærme</string>
     <string name="board_sets_subtitle">Vælg en skærm til kommunikation</string>
@@ -116,6 +128,7 @@
     <string name="board_workspace_finish_body">Gem ændringerne, før du vender tilbage til kommunikation?</string>
     <string name="board_workspace_saved">Ændringerne blev gemt</string>
     <string name="board_workspace_save_error">Ændringerne kunne ikke gemmes</string>
+    <string name="board_workspace_export_error">Skærmen kunne ikke eksporteres. Din nuværende skærm blev ikke ændret; prøv igen.</string>
     <string name="board_workspace_save_phrase">Gem under fraser</string>
     <string name="board_workspace_phrase_saved">Gemt under Alle fraser</string>
     <string name="board_workspace_phrase_save_error">Sætningen kunne ikke gemmes under fraser</string>
@@ -269,6 +282,8 @@
     <string name="azure_setup_save_continue">Gem og fortsæt</string>
     <string name="azure_setup_complete_title">Sådan!</string>
     <string name="azure_setup_complete_description">Dine Azure Speech-oplysninger er gemt sikkert på denne enhed.</string>
+    <string name="azure_credentials_configured">Azure Speech-oplysningerne er konfigureret sikkert på denne enhed.</string>
+    <string name="azure_credentials_replace">Erstat Azure-oplysninger</string>
     <string name="azure_setup_error_endpoint">Indtast Speech-endpointet eller regionen.</string>
     <string name="azure_setup_error_key">Indtast en Speech-abonnementsnøgle.</string>
     <string name="azure_setup_error_save">Azure-oplysningerne kunne ikke gemmes: %1$s</string>
@@ -282,7 +297,10 @@
     <string name="voice_filter_languages_content_desc">Filtrer sprog</string>
     <string name="voice_all_languages">Alle sprog</string>
     <string name="voice_gender_label">Køn: %1$s</string>
-    <string name="voice_showing_count">Viser %1$d af %2$d stemmer</string>
+    <plurals name="voice_showing_count">
+        <item quantity="one">Viser %1$d af %2$d stemme</item>
+        <item quantity="other">Viser %1$d af %2$d stemmer</item>
+    </plurals>
     <string name="voice_error">Fejl: %1$s</string>
     <string name="voice_system_title">System TTS-stemmer</string>
     <string name="voice_system_title_with_lang">System TTS-stemmer (%1$s)</string>
@@ -414,9 +432,14 @@
     <string name="ui_settings_symbols_download_desc">Gem hele ARASAAC-biblioteket i 500 px på denne enhed til offlinebrug. Kræver cirka 300 MB; Wi-Fi anbefales.</string>
     <string name="ui_settings_symbols_download">Download symboler</string>
     <string name="ui_settings_symbols_downloading">Downloader %1$d af %2$d…</string>
-    <string name="ui_settings_symbols_cached">%1$d symboler er tilgængelige offline</string>
-    <string name="ui_settings_symbols_complete">Alle %1$d symboler er tilgængelige offline</string>
-    <string name="ui_settings_symbols_failed">Download afsluttet; %1$d symboler kunne ikke downloades. Tryk for at prøve igen.</string>
+    <plurals name="ui_settings_symbols_cached">
+        <item quantity="one">%1$d symbol er tilgængeligt offline</item>
+        <item quantity="other">%1$d symboler er tilgængelige offline</item>
+    </plurals>
+    <plurals name="ui_settings_symbols_failed">
+        <item quantity="one">Download afsluttet; %1$d symbol kunne ikke downloades. Tryk for at prøve igen.</item>
+        <item quantity="other">Download afsluttet; %1$d symboler kunne ikke downloades. Tryk for at prøve igen.</item>
+    </plurals>
     <string name="ui_settings_symbols_unavailable">Offline-lagring af symboler er ikke tilgængelig på denne enhed.</string>
 
     <string name="test_voice_default_text">Hej! Sådan lyder jeg. Velkommen til Wingmate!</string>
@@ -504,6 +527,19 @@
     <string name="speech_math_mode">Matematik</string>
     <string name="speech_math_mode_description">Læs matematiske udtryk i almindelig tekst med Azures matematikudtale</string>
     <string name="ui_settings_accessibility_title">Tilgængelighed</string>
+    <string name="ui_settings_interaction">Interaktion</string>
+    <string name="interaction_rest_mode">Hviletilstand</string>
+    <string name="interaction_resume">Genoptag input</string>
+    <string name="interaction_paused_status">Hviletilstand — valg ved markør og valgtasten er sat på pause</string>
+    <string name="ui_settings_select_key">Valgtast</string>
+    <string name="ui_settings_select_key_desc">Tryk én gang på denne tast for at bruge kommunikationsmålet under markøren eller tastaturfokus.</string>
+    <string name="ui_settings_rest_key">Tast til hviletilstand</string>
+    <string name="ui_settings_rest_key_desc">Sæt valg ved markør og valgtasten på pause eller genoptag dem uden præcis pegning.</string>
+    <string name="ui_settings_pointer_emphasis">Fremhævelse af markør</string>
+    <string name="ui_settings_pointer_style">Markørtype</string>
+    <string name="ui_settings_pointer_style_desc">Behold systemmarkøren, eller tilføj en målmarkør med høj kontrast.</string>
+    <string name="ui_settings_pointer_size">Markørstørrelse</string>
+    <string name="ui_settings_pointer_size_desc">Vælg, hvor tydelig målmarkøren skal være.</string>
     <string name="ui_settings_show_labels_title">Vis knaptekst</string>
     <string name="ui_settings_show_symbols_title">Vis knapsymboler</string>
     <string name="ui_settings_label_at_top_title">Placer tekst øverst på knappen</string>
@@ -550,6 +586,7 @@
     <string name="ui_settings_board_cache_empty">Opret en skærm for at konfigurere sætningscache.</string>
     <string name="ui_settings_privacy_collection_title">Dataindsamling</string>
     <string name="common_selected">Valgt</string>
+    <string name="common_off">Fra</string>
     <string name="common_current">Aktuel</string>
     <string name="common_unknown">Ukendt</string>
     <string name="category_all">Alle</string>

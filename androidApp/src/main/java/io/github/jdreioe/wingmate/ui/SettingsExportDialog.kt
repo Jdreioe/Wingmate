@@ -109,7 +109,7 @@ fun SettingsExportDialog(
                 Text(stringResource(R.string.data_management_import), style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                val showKeyboard = rememberShowKeyboardOnFocus()
+                val showKeyboard = Modifier.showKeyboardOnFocus()
                 OutlinedTextField(
                     value = importText,
                     onValueChange = { importText = it },

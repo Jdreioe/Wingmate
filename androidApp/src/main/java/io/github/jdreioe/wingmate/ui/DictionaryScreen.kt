@@ -29,10 +29,10 @@ fun DictionaryScreen(
     onAddEntry: (String, String, String) -> Unit,
     onDeleteEntry: (PronunciationEntry) -> Unit,
     onTestEntry: (String, String, String) -> Unit,
+    modifier: Modifier = Modifier,
     onGuessPronunciation: suspend (String) -> String? = { null },
     onBack: (() -> Unit)? = null,
-    showTopBar: Boolean = true,
-    modifier: Modifier = Modifier
+    showTopBar: Boolean = true
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -227,7 +227,7 @@ private fun AddDictionaryEntryDialog(
                     )
                 }
 
-                val showKeyboard = rememberShowKeyboardOnFocus()
+                val showKeyboard = Modifier.showKeyboardOnFocus()
                 OutlinedTextField(
                     value = word,
                     onValueChange = { word = it },

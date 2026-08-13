@@ -952,7 +952,7 @@ fun PhraseScreen(
                                 fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
                             )) },
                             text = {
-                                val showKeyboard = rememberShowKeyboardOnFocus()
+                                val showKeyboard = Modifier.showKeyboardOnFocus()
                                 OutlinedTextField(
                                     value = categoryName,
                                     onValueChange = { categoryName = it },
@@ -1267,7 +1267,7 @@ fun PhraseScreen(
                             }
                             
                             // Textfield showing accumulated text
-                            val boardShowKeyboard = rememberShowKeyboardOnFocus()
+                            val boardShowKeyboard = Modifier.showKeyboardOnFocus()
                             OutlinedTextField(
                                 value = input,
                                 onValueChange = { newValue ->
@@ -1534,7 +1534,7 @@ private fun SecondaryLanguageTextField(
                 placeholder?.invoke()
             }
 
-            val showKeyboardMod = rememberShowKeyboardOnFocus()
+            val showKeyboardMod = Modifier.showKeyboardOnFocus()
             val inputModifier = if (focusRequester != null) {
                 Modifier
                     .fillMaxWidth()

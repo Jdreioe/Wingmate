@@ -64,6 +64,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
 
@@ -1967,8 +1968,16 @@ private fun GeneralSection(
         Text(
             when {
                 !arasaacAvailable -> stringResource(R.string.ui_settings_symbols_unavailable)
-                arasaacDownloadError -> stringResource(R.string.ui_settings_symbols_failed, arasaacFailedCount)
-                cachedArasaacSymbols > 0 -> stringResource(R.string.ui_settings_symbols_cached, cachedArasaacSymbols)
+                arasaacDownloadError -> pluralStringResource(
+                    R.plurals.ui_settings_symbols_failed,
+                    arasaacFailedCount,
+                    arasaacFailedCount,
+                )
+                cachedArasaacSymbols > 0 -> pluralStringResource(
+                    R.plurals.ui_settings_symbols_cached,
+                    cachedArasaacSymbols,
+                    cachedArasaacSymbols,
+                )
                 else -> stringResource(R.string.ui_settings_symbols_download_title)
             },
             style = MaterialTheme.typography.bodySmall,
@@ -2016,8 +2025,8 @@ private fun GeneralSection(
 @Composable
 internal fun VoiceSelectionPage(
     onBack: () -> Unit,
-    onVoiceSelected: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onVoiceSelected: (() -> Unit)? = null
 ) {
     val koin = getKoin()
     val useCase = koinInject<VoiceUseCase>()
@@ -2177,7 +2186,12 @@ internal fun VoiceSelectionPage(
         )
 
         Text(
-            stringResource(R.string.voice_showing_count, visibleVoiceCount, totalVoiceCount),
+            pluralStringResource(
+                R.plurals.voice_showing_count,
+                totalVoiceCount,
+                visibleVoiceCount,
+                totalVoiceCount,
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -2368,8 +2382,8 @@ private fun VoiceFilterChips(
 @Composable
 internal fun LanguageSelectionPage(
     onBack: () -> Unit,
-    onContinue: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onContinue: (() -> Unit)? = null
 ) {
     val voiceUseCase = koinInject<VoiceUseCase>()
     val settingsUseCase = koinInject<SettingsUseCase>()

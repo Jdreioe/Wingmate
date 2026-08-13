@@ -22,6 +22,7 @@ import androidx.window.area.WindowAreaCapability
 import androidx.window.area.WindowAreaSessionCallback
 import kotlinx.coroutines.launch
 import android.util.Log
+import android.view.KeyEvent
 import java.util.concurrent.Executor
 import io.github.jdreioe.wingmate.display.ExternalDisplayPresentation
 import androidx.activity.ComponentActivity
@@ -37,8 +38,12 @@ import io.github.jdreioe.wingmate.ui.AndroidAccessInputBus
 import io.github.jdreioe.wingmate.ui.FullScreenDisplay
 @OptIn(ExperimentalWindowApi::class)
 class MainActivity : ComponentActivity() {
-    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
-        AndroidAccessInputBus.dispatch(event) || super.dispatchKeyEvent(event)
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
+        AndroidAccessInputBus.dispatch(event) || super.onKeyDown(keyCode, event)
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean =
+        AndroidAccessInputBus.dispatch(event) || super.onKeyUp(keyCode, event)
+
     private var presentation: ExternalDisplayPresentation? = null
     private var isFoldableUnfolded = false
     

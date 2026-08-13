@@ -9,7 +9,6 @@
     <string name="filter_languages">Filter languages</string>
     <string name="all_languages">All languages</string>
     <string name="gender">Gender</string>
-    <string name="showing_voices">Showing %1$d of %2$d voices</string>
     <string name="no_system_voices_match">No system voices match the current filters</string>
     <string name="no_azure_voices_match">No Azure voices match the current filters</string>
     <string name="close">Close</string>
@@ -306,7 +305,10 @@
     <string name="voice_filter_languages_content_desc">Filter languages</string>
     <string name="voice_all_languages">All languages</string>
     <string name="voice_gender_label">Gender: %1$s</string>
-    <string name="voice_showing_count">Showing %1$d of %2$d voices</string>
+    <plurals name="voice_showing_count">
+        <item quantity="one">Showing %1$d of %2$d voice</item>
+        <item quantity="other">Showing %1$d of %2$d voices</item>
+    </plurals>
     <string name="voice_error">Error: %1$s</string>
     <string name="voice_system_title">System TTS Voices</string>
     <string name="voice_system_title_with_lang">System TTS Voices (%1$s)</string>
@@ -449,9 +451,14 @@
     <string name="ui_settings_symbols_download_desc">Keep the complete 500 px ARASAAC library on this device for offline use. Requires roughly 300 MB; Wi-Fi is recommended.</string>
     <string name="ui_settings_symbols_download">Download symbols</string>
     <string name="ui_settings_symbols_downloading">Downloading %1$d of %2$d…</string>
-    <string name="ui_settings_symbols_cached">%1$d symbols available offline</string>
-    <string name="ui_settings_symbols_complete">All %1$d symbols are available offline</string>
-    <string name="ui_settings_symbols_failed">Download finished; %1$d symbols could not be downloaded. Tap to retry.</string>
+    <plurals name="ui_settings_symbols_cached">
+        <item quantity="one">%1$d symbol available offline</item>
+        <item quantity="other">%1$d symbols available offline</item>
+    </plurals>
+    <plurals name="ui_settings_symbols_failed">
+        <item quantity="one">Download finished; %1$d symbol could not be downloaded. Tap to retry.</item>
+        <item quantity="other">Download finished; %1$d symbols could not be downloaded. Tap to retry.</item>
+    </plurals>
     <string name="ui_settings_symbols_unavailable">Offline symbol storage is unavailable on this device.</string>
 
     <string name="test_voice_default_text">Hello! This is how I sound. Welcome to Wingmate!</string>
