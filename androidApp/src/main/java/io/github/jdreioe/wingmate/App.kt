@@ -10,7 +10,7 @@ import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.ui.WelcomeScreen
 import io.github.jdreioe.wingmate.ui.PhraseScreen
-import io.github.jdreioe.wingmate.ui.BoardSetManagerScreen
+import io.github.jdreioe.wingmate.ui.BoardSetManagerRoot
 import io.github.jdreioe.wingmate.ui.AppTheme
 import io.github.jdreioe.wingmate.ui.PlatformBackHandler
 import io.github.jdreioe.wingmate.ui.InteractionInputRoot
@@ -220,7 +220,7 @@ fun App() {
                                 )
                             }
                             Screen.BoardSets -> {
-                                BoardSetManagerScreen(
+                                BoardSetManagerRoot(
                                     onBackToWelcome = ::showWelcomeFlow,
                                     onBack = {
                                         createBoardSetOnLaunch = false
