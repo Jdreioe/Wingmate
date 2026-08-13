@@ -1,8 +1,10 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import android.content.Context
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceRepository
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -21,7 +23,7 @@ class AndroidVoiceRepository(private val context: Context) : VoiceRepository {
                 json.decodeFromString(ListSerializer(Voice.serializer()), text)
             }
         } catch (t: Throwable) {
-            println("Failed to load voice catalog from SharedPreferences: $t")
+            OperationalLogger.warn("voice_catalog.load", "failed", exceptionClass = t.loggingClassName())
             emptyList()
         }
     }
@@ -30,37 +32,35 @@ class AndroidVoiceRepository(private val context: Context) : VoiceRepository {
         try {
             val text = json.encodeToString(ListSerializer(Voice.serializer()), list)
             prefs.edit().putString("voice_catalog", text).apply()
-            println("Saved voice catalog to SharedPreferences: ${list.size} voices")
+            OperationalLogger.debug("voice_catalog.save", "succeeded", count = list.size)
         } catch (t: Throwable) {
-            println("Failed to save voice catalog to SharedPreferences: $t")
+            OperationalLogger.warn("voice_catalog.save", "failed", exceptionClass = t.loggingClassName())
         }
     }
 
     override suspend fun saveSelected(voice: Voice) = withContext(Dispatchers.IO) {
-        // Removed SLF4J logger for cross-platform compatibility
         try {
             val text = json.encodeToString(Voice.serializer(), voice)
             prefs.edit().putString("selected_voice", text).apply()
-            println("Saved selected voice to SharedPreferences: {}: ${voice.name}")
+            OperationalLogger.debug("voice_selection.save", "succeeded")
         } catch (t: Throwable) {
-            println("Failed to save selected voice to SharedPreferences: ${t}")
+            OperationalLogger.warn("voice_selection.save", "failed", exceptionClass = t.loggingClassName())
             throw t
         }
     }
 
     override suspend fun getSelected(): Voice? = withContext(Dispatchers.IO) {
-        // Removed SLF4J logger for cross-platform compatibility
         val text = prefs.getString("selected_voice", null)
         if (text.isNullOrBlank()) {
-            println("No selected voice found in SharedPreferences")
+            OperationalLogger.debug("voice_selection.load", "not_found")
             return@withContext null
         }
         return@withContext try {
             val v = json.decodeFromString(Voice.serializer(), text)
-            println("Loaded selected voice from SharedPreferences: {}: ${v.name}")
+            OperationalLogger.debug("voice_selection.load", "succeeded")
             v
         } catch (t: Throwable) {
-            println("Failed to decode selected voice from SharedPreferences: ${t}")
+            OperationalLogger.warn("voice_selection.load", "failed", exceptionClass = t.loggingClassName())
             null
         }
     }

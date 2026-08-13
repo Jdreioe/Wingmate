@@ -13,6 +13,8 @@ import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import org.koin.compose.koinInject
@@ -177,7 +179,7 @@ fun UiLanguageDialog(
                                 val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
                                 val updated = current.copy(primaryLanguage = sel)
                                 settingsUseCase.update(updated)
-                                println("Saved primaryLanguage='$sel'")
+                                OperationalLogger.info("primary_language.save", "succeeded")
                                 featureUsageReporter.reportEvent(
                                     FeatureUsageEvents.LANGUAGE_UPDATED,
                                     "target" to "primary",
@@ -189,16 +191,16 @@ fun UiLanguageDialog(
                                     if (vuse != null) {
                                         val updatedVoice = vuse.copy(selectedLanguage = sel)
                                         runCatching { voiceUseCase.select(updatedVoice) }.onSuccess {
-                                            println("Updated selected voice '${vuse.name}' selectedLanguage='$sel'")
+                                            OperationalLogger.info("voice_language.save", "succeeded")
                                         }.onFailure { t ->
-                                            println("Failed to persist selected voice language: $t")
+                                            OperationalLogger.warn("voice_language.save", "failed", exceptionClass = t.loggingClassName())
                                         }
                                     }
                                 } catch (t: Throwable) {
-                                    println("Error while updating selected voice language: $t")
+                                    OperationalLogger.warn("voice_language.update", "failed", exceptionClass = t.loggingClassName())
                                 }
                             } catch (t: Throwable) {
-                                println("Failed saving primary language: $t")
+                                OperationalLogger.warn("primary_language.save", "failed", exceptionClass = t.loggingClassName())
                             }
                         }
                     }
@@ -270,13 +272,13 @@ fun UiLanguageDialog(
                             if (vuse != null) {
                                 val updatedVoice = vuse.copy(selectedLanguage = primary)
                                 runCatching { voiceUseCase.select(updatedVoice) }.onSuccess {
-                                    println("Updated selected voice '${vuse.name}' selectedLanguage='$primary'")
+                                    OperationalLogger.info("voice_language.save", "succeeded")
                                 }.onFailure { t ->
-                                    println("Failed to update selected voice language: $t")
+                                    OperationalLogger.warn("voice_language.save", "failed", exceptionClass = t.loggingClassName())
                                 }
                             }
                         } catch (t: Throwable) {
-                            println("Error while updating selected voice language: $t")
+                            OperationalLogger.warn("voice_language.update", "failed", exceptionClass = t.loggingClassName())
                         }
                     } catch (_: Throwable) {
                         // ignore

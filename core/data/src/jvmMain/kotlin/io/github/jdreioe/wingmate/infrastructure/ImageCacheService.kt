@@ -1,4 +1,6 @@
 package io.github.jdreioe.wingmate.infrastructure
+import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -39,7 +41,7 @@ object ImageCacheService {
             cacheFile.writeBytes(bytes)
             "file://${cacheFile.absolutePath}"
         } catch (e: Exception) {
-            e.printStackTrace()
+            OperationalLogger.warn("image_cache.download", "failed", exceptionClass = e.loggingClassName())
             url // Fallback to original URL on failure
         }
     }

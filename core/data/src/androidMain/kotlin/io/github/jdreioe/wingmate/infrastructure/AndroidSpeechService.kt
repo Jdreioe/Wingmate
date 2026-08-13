@@ -19,10 +19,12 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.infrastructure.AzureTtsClient
 import io.ktor.client.*
 import io.ktor.client.request.*
@@ -513,7 +515,11 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 recordHistory(combinedText, vForSsml, outFile.absolutePath.takeIf { cacheAudio })
                 startPlayback(outFile, vForSsml, deleteAfterPlayback = !cacheAudio)
             } catch (t: Throwable) {
-                println("Azure TTS failed (${t::class.simpleName}), falling back to platform TTS")
+                OperationalLogger.warn(
+                    operation = "speech.azure_synthesis",
+                    outcome = "platform_fallback",
+                    exceptionClass = t.loggingClassName(),
+                )
                 // Fallback to platform TTS on error
                 recordHistory(combinedText, voice)
                 speakWithPlatformTts(combinedText, voice, pitch, rate)
@@ -824,7 +830,11 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                     )
                 )
             }.onFailure { t ->
-                println("DEBUG: Failed to record history (${t::class.simpleName})")
+                OperationalLogger.warn(
+                    operation = "speech_history.record",
+                    outcome = "failed",
+                    exceptionClass = t.loggingClassName(),
+                )
             }
         }
     }

@@ -5,9 +5,11 @@ import io.github.jdreioe.wingmate.domain.AzureF0Resource
 import io.github.jdreioe.wingmate.domain.AzureSignInResult
 import io.github.jdreioe.wingmate.domain.AzureSubscription
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
@@ -28,7 +30,7 @@ class AutoF0FlowUseCase(
             } else {
                 "Sign-in was cancelled"
             }
-            println("AutoF0Flow: Sign-in failed: $msg")
+            OperationalLogger.warn("azure_f0.sign_in", "failed")
             return AutoF0FlowResult.SignInFailed(msg)
         }
 
@@ -165,7 +167,11 @@ class AutoF0FlowUseCase(
         return try {
             provisioner.getAccessToken()
         } catch (e: Exception) {
-            println("AutoF0Flow: Failed to get access token: ${e.message}")
+            OperationalLogger.warn(
+                operation = "azure_f0.access_token",
+                outcome = "failed",
+                exceptionClass = e.loggingClassName(),
+            )
             null
         }
     }

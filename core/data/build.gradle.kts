@@ -29,7 +29,6 @@ kotlin {
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.contentNegotiation)
                 implementation(libs.ktor.serialization.json)
-                implementation("io.github.oshai:kotlin-logging:7.0.0")
                 implementation("io.github.pdvrieze.xmlutil:core:0.91.3")
                 implementation(libs.okio)
                 implementation("app.cash.sqldelight:runtime:2.0.2")

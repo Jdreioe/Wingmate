@@ -22,6 +22,7 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 implementation(libs.kotlinx.serialization.json)
+                implementation("io.github.oshai:kotlin-logging:7.0.0")
             }
         }
         val commonTest by getting {

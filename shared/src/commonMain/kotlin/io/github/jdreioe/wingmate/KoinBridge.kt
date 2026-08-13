@@ -16,6 +16,7 @@ import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.di.appModule
 import io.github.jdreioe.wingmate.initKoin
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfigStatus
@@ -32,6 +33,7 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.TextEditResult
 import io.github.jdreioe.wingmate.domain.TextEditingPolicy
 import io.github.jdreioe.wingmate.domain.TextSpan
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
@@ -67,7 +69,6 @@ import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
-import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.time.Clock
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -126,7 +127,7 @@ class KoinBridge : KoinComponent {
         try {
             get<SpeechService>().speak(text)
         } catch (t: Throwable) {
-            logger.warn(t) { "speak() failed; swallowing to avoid Swift bridge crash" }
+            OperationalLogger.warn("swift_bridge.speak", "failed", exceptionClass = t.loggingClassName())
         }
     }
 
@@ -134,7 +135,7 @@ class KoinBridge : KoinComponent {
         try {
             get<SpeechService>().speakWithCachePolicy(text = text, cacheAudio = cacheAudio)
         } catch (t: Throwable) {
-            logger.warn(t) { "speakBoardSentence() failed; swallowing to avoid Swift bridge crash" }
+            OperationalLogger.warn("swift_bridge.speak_board_sentence", "failed", exceptionClass = t.loggingClassName())
         }
     }
 
@@ -142,7 +143,7 @@ class KoinBridge : KoinComponent {
         try {
             get<SpeechService>().pause()
         } catch (t: Throwable) {
-            logger.warn(t) { "pause() failed; swallowing to avoid Swift bridge crash" }
+            OperationalLogger.warn("swift_bridge.pause", "failed", exceptionClass = t.loggingClassName())
         }
     }
 
@@ -150,13 +151,13 @@ class KoinBridge : KoinComponent {
         try {
             get<SpeechService>().stop()
         } catch (t: Throwable) {
-            logger.warn(t) { "stop() failed; swallowing to avoid Swift bridge crash" }
+            OperationalLogger.warn("swift_bridge.stop", "failed", exceptionClass = t.loggingClassName())
         }
     }
 
     suspend fun selectVoiceAndMaybeUpdatePrimary(voice: Voice) {
         val voiceUseCase: VoiceUseCase = get()
-    try { println("DEBUG: KoinBridge.selectVoiceAndMaybeUpdatePrimary() called for '\${voice.name}' selectedLang='\${voice.selectedLanguage}'") } catch (_: Throwable) {}
+        OperationalLogger.debug("voice_selection.update", "started")
         voiceUseCase.select(voice)
 
         // Optionally align Settings.primaryLanguage with selected voice
@@ -369,7 +370,7 @@ class KoinBridge : KoinComponent {
         try {
             phraseListStore().accept(PhraseListStore.Intent.UpdatePhraseRecording(id = phraseId, recordingPath = recordingPath))
         } catch (t: Throwable) {
-            logger.warn(t) { "updatePhraseRecording() failed; swallowing to avoid Swift bridge crash" }
+            OperationalLogger.warn("swift_bridge.phrase_recording_update", "failed", exceptionClass = t.loggingClassName())
         }
     }
 
@@ -794,7 +795,7 @@ class KoinBridge : KoinComponent {
                 service.train(list)
             }
         } catch (t: Throwable) {
-            logger.warn(t) { "trainPredictionModel() failed" }
+            OperationalLogger.warn("prediction_model.train", "failed", exceptionClass = t.loggingClassName())
         }
     }
 
@@ -893,8 +894,6 @@ data class IosBoardSetExportResult(
     val fileName: String? = null,
     val message: String = "",
 )
-
-private val logger = KotlinLogging.logger {}
 
 private fun String.toBoardActivationBehavior(): BoardActivationBehavior =
     when (this) {

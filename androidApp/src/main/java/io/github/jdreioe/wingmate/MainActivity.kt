@@ -21,10 +21,11 @@ import androidx.window.area.WindowAreaInfo
 import androidx.window.area.WindowAreaCapability
 import androidx.window.area.WindowAreaSessionCallback
 import kotlinx.coroutines.launch
-import android.util.Log
 import android.view.KeyEvent
 import java.util.concurrent.Executor
 import io.github.jdreioe.wingmate.display.ExternalDisplayPresentation
+import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
@@ -105,7 +106,11 @@ class MainActivity : ComponentActivity() {
             try {
                 windowAreaController = WindowAreaController.getOrCreate()
             } catch (e: Throwable) {
-                Log.w("MainActivity", "WindowAreaController not compatible on this device, skipping rear display support", e)
+                OperationalLogger.warn(
+                    operation = "rear_display.controller",
+                    outcome = "unsupported",
+                    exceptionClass = e.loggingClassName(),
+                )
             }
             
             if (::windowAreaController.isInitialized) {
@@ -119,11 +124,15 @@ class MainActivity : ComponentActivity() {
                                 .distinctUntilChanged()
                                 .collect {
                                     capabilityStatus = it
-                                    Log.d("MainActivity", "Rear display capability status: $it")
+                                    OperationalLogger.debug("rear_display.capability", "changed")
                                 }
                         }
                     } catch (e: Throwable) {
-                        Log.w("MainActivity", "WindowAreaController error during observation, skipping rear display", e)
+                        OperationalLogger.warn(
+                            operation = "rear_display.capability_observation",
+                            outcome = "failed",
+                            exceptionClass = e.loggingClassName(),
+                        )
                     }
                 }
             }
@@ -235,12 +244,17 @@ class MainActivity : ComponentActivity() {
         val dm = getSystemService(DISPLAY_SERVICE) as? DisplayManager ?: return
         val externalDisplays = dm.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
         
-        Log.d("MainActivity", "Display check: external=${externalDisplays.size}, foldable=$isFoldableUnfolded")
+        OperationalLogger.debug(
+            operation = "display.check",
+            outcome = "completed",
+            count = externalDisplays.size,
+            enabled = isFoldableUnfolded,
+        )
         
         // Auto-open only for external displays or foldable unfolded
         
         if (externalDisplays.isNotEmpty()) {
-            Log.d("MainActivity", "Auto-opening fullscreen display")
+            OperationalLogger.info("display.fullscreen", "auto_opened")
             io.github.jdreioe.wingmate.presentation.DisplayWindowBus.open()
         }
     }
@@ -280,17 +294,21 @@ class MainActivity : ComponentActivity() {
                 windowAreaSessionCallback = object : WindowAreaSessionCallback {
                     override fun onSessionStarted(session: WindowAreaSession) {
                         windowAreaSession = session
-                        Log.d("MainActivity", "Rear display session started - content mirrored to rear")
+                        OperationalLogger.info("rear_display.session", "started")
                     }
                     
                     override fun onSessionEnded(t: Throwable?) {
                         windowAreaSession = null
-                        Log.d("MainActivity", "Rear display session ended: ${t?.message}")
+                        OperationalLogger.info(
+                            operation = "rear_display.session",
+                            outcome = "ended",
+                            exceptionClass = t?.loggingClassName(),
+                        )
                     }
                 }
             )
         } else {
-            Log.d("MainActivity", "Rear display not available, status: $capabilityStatus")
+            OperationalLogger.debug("rear_display.session", "unavailable")
         }
     }
     

@@ -2,14 +2,11 @@ package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.*
 import io.ktor.client.*
-import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.time.Clock
 
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import kotlinx.serialization.json.*
-
-private val logger = KotlinLogging.logger {}
 
 /**
  * Secure Azure Speech Service using Token Exchange.
@@ -59,7 +56,11 @@ class SecureAzureSpeechService(
                 voiceName = effectiveVoice.name
             ))
         } catch (e: Exception) {
-            logger.error(e) { "Secure TTS failed, attempting fallback" }
+            OperationalLogger.warn(
+                operation = "speech.secure_synthesis",
+                outcome = "platform_fallback",
+                exceptionClass = e.loggingClassName(),
+            )
             
             // Fall back to system TTS if available
             systemTtsFallback?.speak(text, effectiveVoice, pitch, rate)
@@ -84,7 +85,11 @@ class SecureAzureSpeechService(
         try {
             speakSegmentsWithToken(segments, effectiveVoice)
         } catch (e: Exception) {
-            logger.error(e) { "Secure TTS segments failed, attempting fallback" }
+            OperationalLogger.warn(
+                operation = "speech.secure_segment_synthesis",
+                outcome = "platform_fallback",
+                exceptionClass = e.loggingClassName(),
+            )
             
             // Fall back to speaking combined text
             val combinedText = segments.joinToString(" ") { it.text }
@@ -114,7 +119,7 @@ class SecureAzureSpeechService(
                     
                 } catch (e: TokenExpiredException) {
                     // Token expired mid-request, invalidate and retry once
-                    logger.warn { "Token expired, refreshing and retrying" }
+                    OperationalLogger.warn("speech_token.refresh", "retrying")
                     tokenExchangeClient.invalidateToken()
                     
                     val newTokenResult = tokenExchangeClient.getToken()
@@ -184,7 +189,7 @@ class SecureAzureSpeechService(
     private suspend fun playAudio(audioBytes: ByteArray) {
         // Default implementation logs a warning
         // Platform implementations should override this
-        logger.warn { "playAudio not implemented - ${audioBytes.size} bytes received" }
+        OperationalLogger.warn("speech_audio.play", "not_implemented", count = audioBytes.size)
     }
     
     override suspend fun pause() {
@@ -243,7 +248,7 @@ class SecureAzureSpeechService(
             }
             lookup(langCode, requireLanguageTag = false) ?: if (langCode != "en") lookup("en", requireLanguageTag = true) else null
         } catch (e: Exception) {
-            logger.warn { "Failed to guess pronunciation" }
+            OperationalLogger.warn("pronunciation.lookup", "failed")
             null
         }
     }

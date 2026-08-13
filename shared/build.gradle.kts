@@ -54,8 +54,6 @@ kotlin {
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.contentNegotiation)
                 implementation(libs.ktor.serialization.json)
-                // Add logging for Kotlin Multiplatform
-                implementation("io.github.oshai:kotlin-logging:7.0.0")
                 implementation(libs.okio)
 
                 // MVIKotlin for BLoC pattern

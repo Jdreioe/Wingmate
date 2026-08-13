@@ -11,7 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +41,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                 voiceUseCase.selected()
             }
         } catch (e: Exception) {
-            println("Failed to load selected voice (${e::class.simpleName})")
+            OperationalLogger.warn("voice_selection.load", "failed", exceptionClass = e.loggingClassName())
         } finally {
             loading = false
         }
@@ -116,7 +118,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                             try {
                                     speechService.stop()
                             } catch (e: Exception) {
-                                println("Failed to stop speech (${e::class.simpleName})")
+                                OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
                             } finally {
                                 isPlaying = false
                             }
@@ -135,7 +137,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                                     )
                                 }
                             } catch (e: Exception) {
-                                println("Failed to speak (${e::class.simpleName})")
+                                OperationalLogger.warn("speech.test", "failed", exceptionClass = e.loggingClassName())
                             } finally {
                                 isPlaying = false
                             }
@@ -190,7 +192,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                             try {
                                     speechService.stop()
                             } catch (e: Exception) {
-                                println("Failed to stop speech (${e::class.simpleName})")
+                                OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
                             }
                             onBack()
                         }
@@ -207,7 +209,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                             try {
                                     speechService.stop()
                             } catch (e: Exception) {
-                                println("Failed to stop speech (${e::class.simpleName})")
+                                OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
                             }
                             onNext()
                         }
