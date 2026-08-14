@@ -1,0 +1,4 @@
+• Find symbols from OpenSymbols, Mulberry, and ARASAAC in one search.
+• Choose whether buttons speak immediately or build a sentence, with clearer pause and access controls.
+• New boards use square buttons and can apply word-type colours automatically.
+• Improved error recovery, Danish text, keyboard and switch input, and board editing reliability.

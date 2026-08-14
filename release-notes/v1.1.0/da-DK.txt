@@ -1,0 +1,4 @@
+• Find symboler fra OpenSymbols, Mulberry og ARASAAC i én søgning.
+• Vælg, om knapper skal tale med det samme eller opbygge en sætning, med tydeligere pause- og adgangskontrol.
+• Nye tavler bruger firkantede knapper og kan automatisk anvende ordklassefarver.
+• Bedre fejlhåndtering, danske tekster, tastatur- og kontaktstyring samt mere pålidelig tavleredigering.
