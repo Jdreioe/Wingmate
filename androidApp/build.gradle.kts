@@ -187,6 +187,9 @@ dependencies {
     implementation(composeBom)
     androidTestImplementation(composeBom)
     androidTestImplementation(libs.androidx.testExt.junit)
+    // Compose UI Test still brings Espresso 3.5 transitively. That release
+    // reflects on InputManager.getInstance(), which no longer exists on API 36.
+    androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
     // Common AndroidX helpers

@@ -31,6 +31,21 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Compile, lint, and test Android
         run: bash ci_scripts/verify_android.sh
+      - name: Enable KVM for the Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run critical Android UI tests
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: ./gradlew :androidApp:connectedDebugAndroidTest --console=plain
 
   deploy:
     name: Deploy ${{ github.ref_name }}
