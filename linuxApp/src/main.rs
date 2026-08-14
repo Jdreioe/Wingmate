@@ -683,6 +683,35 @@ enum AccessTarget {
     Insert(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AccessVisualState {
+    Default,
+    Emphasized,
+    Scanning,
+    Selected,
+}
+
+fn selection_highlight_duration(millis: i64) -> Option<Duration> {
+    (millis > 0).then(|| Duration::from_millis(millis as u64))
+}
+
+fn access_visual_state(
+    target: &AccessTarget,
+    selected: Option<&AccessTarget>,
+    scanned: Option<&AccessTarget>,
+    emphasized: bool,
+) -> AccessVisualState {
+    if selected == Some(target) {
+        AccessVisualState::Selected
+    } else if scanned == Some(target) {
+        AccessVisualState::Scanning
+    } else if emphasized {
+        AccessVisualState::Emphasized
+    } else {
+        AccessVisualState::Default
+    }
+}
+
 fn access_target_id(target: &AccessTarget) -> String {
     let mut hasher = DefaultHasher::new();
     target.hash(&mut hasher);
@@ -808,7 +837,8 @@ struct Wingmate {
     pending_images: HashSet<String>,
     access_press: Option<(AccessTarget, Instant)>,
     last_access_activation: Option<Instant>,
-    highlighted_access: Option<(AccessTarget, Instant)>,
+    selection_highlighted_access: Option<(AccessTarget, Instant)>,
+    scanned_access: Option<AccessTarget>,
     scan_index: usize,
     last_scan_advance: Instant,
     input_is_paused: bool,
@@ -1166,7 +1196,8 @@ impl cosmic::Application for Wingmate {
             pending_images: HashSet::new(),
             access_press: None,
             last_access_activation: None,
-            highlighted_access: None,
+            selection_highlighted_access: None,
+            scanned_access: None,
             scan_index: 0,
             last_scan_advance: Instant::now(),
             input_is_paused: false,
@@ -1196,7 +1227,7 @@ impl cosmic::Application for Wingmate {
         );
         let access_timer_active = self.settings.scanning_enabled
             || (self.settings.dwell_to_select_millis > 0 && self.current_access_target_id.is_some())
-            || self.highlighted_access.is_some();
+            || self.selection_highlighted_access.is_some();
         let mut subscriptions = vec![event::listen().map(Message::InputEvent)];
         if self.editing_access.enabled && self.editing_access.unlocked {
             subscriptions.push(
@@ -1771,20 +1802,20 @@ impl cosmic::Application for Wingmate {
                         let targets = self.current_access_targets();
                         if !targets.is_empty() {
                             self.scan_index = (self.scan_index + 1) % targets.len();
-                            self.highlighted_access =
-                                Some((targets[self.scan_index].clone(), Instant::now()));
+                            self.scanned_access = Some(targets[self.scan_index].clone());
                         }
                         self.last_scan_advance = Instant::now();
                     }
                 }
-                if self.highlighted_access.as_ref().is_some_and(|(_, since)| {
-                    since.elapsed()
-                        > Duration::from_millis(
-                            self.settings.selection_highlight_millis.max(250) as u64
-                        )
-                        && !self.settings.scanning_enabled
-                }) {
-                    self.highlighted_access = None;
+                if self
+                    .selection_highlighted_access
+                    .as_ref()
+                    .is_some_and(|(_, since)| {
+                        selection_highlight_duration(self.settings.selection_highlight_millis)
+                            .is_none_or(|duration| since.elapsed() >= duration)
+                    })
+                {
+                    self.selection_highlighted_access = None;
                 }
                 if self.settings.high_contrast_mode
                     && self.settings.force_dark_theme.is_none()
@@ -2213,7 +2244,12 @@ impl cosmic::Application for Wingmate {
                 match key {
                     "holdToSelectMillis" => self.settings.hold_to_select_millis = value,
                     "dwellToSelectMillis" => self.settings.dwell_to_select_millis = value,
-                    "selectionHighlightMillis" => self.settings.selection_highlight_millis = value,
+                    "selectionHighlightMillis" => {
+                        self.settings.selection_highlight_millis = value;
+                        if value == 0 {
+                            self.selection_highlighted_access = None;
+                        }
+                    }
                     "selectionDebounceMillis" => self.settings.selection_debounce_millis = value,
                     _ => {}
                 }
@@ -3164,7 +3200,9 @@ impl Wingmate {
             return Task::none();
         }
         self.last_access_activation = Some(Instant::now());
-        self.highlighted_access = Some((target.clone(), Instant::now()));
+        self.selection_highlighted_access =
+            selection_highlight_duration(self.settings.selection_highlight_millis)
+                .map(|_| (target.clone(), Instant::now()));
         if self.settings.selection_sound_enabled {
             play_selection_sound();
         }
@@ -3266,13 +3304,20 @@ impl Wingmate {
         }
     }
 
-    fn access_highlighted(&self, target: &AccessTarget) -> bool {
-        let selected = self.highlighted_access
-            .as_ref()
-            .is_some_and(|(current, _)| current == target);
+    fn access_visual_state(&self, target: &AccessTarget) -> AccessVisualState {
         let emphasized = self.settings.pointer_emphasis_style != "System"
             && self.current_access_target_id.as_deref() == Some(access_target_id(target).as_str());
-        selected || emphasized
+        access_visual_state(
+            target,
+            self.selection_highlighted_access
+                .as_ref()
+                .map(|(current, _)| current),
+            self.settings
+                .scanning_enabled
+                .then_some(self.scanned_access.as_ref())
+                .flatten(),
+            emphasized,
+        )
     }
 
     fn navigate(&mut self, page: Page) -> Task<cosmic::Action<Message>> {
@@ -3464,8 +3509,8 @@ impl Wingmate {
         if self.settings.hold_to_select_millis == 0 {
             all_button = all_button.on_press(Message::AccessActivate(all_target.clone()));
         }
-        if self.access_highlighted(&all_target) {
-            all_button = all_button.class(cosmic::theme::iced::Button::Positive);
+        if let Some(class) = access_button_class(self.access_visual_state(&all_target)) {
+            all_button = all_button.class(class);
         }
         let mut categories = row![self.access_widget(all_button.into(), all_target)].spacing(8);
         for category in &self.categories {
@@ -3479,8 +3524,8 @@ impl Wingmate {
             if self.settings.hold_to_select_millis == 0 {
                 category_button = category_button.on_press(Message::AccessActivate(target.clone()));
             }
-            if self.access_highlighted(&target) {
-                category_button = category_button.class(cosmic::theme::iced::Button::Positive);
+            if let Some(class) = access_button_class(self.access_visual_state(&target)) {
+                category_button = category_button.class(class);
             }
             let category_activation = self.access_widget(category_button.into(), target);
             let category_content: Element<'_, Message> = if self.manage_phrases {
@@ -3587,8 +3632,8 @@ impl Wingmate {
                     phrase_button =
                         phrase_button.on_press(Message::AccessActivate(access_target.clone()));
                 }
-                if self.access_highlighted(&access_target) {
-                    phrase_button = phrase_button.class(cosmic::theme::iced::Button::Positive);
+                if let Some(class) = access_button_class(self.access_visual_state(&access_target)) {
+                    phrase_button = phrase_button.class(class);
                 }
                 let phrase_activation = self.access_widget(phrase_button.into(), access_target);
                 let mut card = column![phrase_activation].spacing(4).width(Fill);
@@ -4426,7 +4471,11 @@ impl Wingmate {
                     .on_press(action)
                     .width(cosmic::iced::Length::Fixed(field_width))
                     .height(field_height)
-                    .class(board_button_class(field_color, field_radius, false))
+                    .class(board_button_class(
+                        field_color,
+                        field_radius,
+                        AccessVisualState::Default,
+                    ))
                     .into()
             } else if button_data.is_none() {
                 button(centered_content)
@@ -4437,11 +4486,11 @@ impl Wingmate {
             } else {
                 let button_data = button_data.expect("checked above");
                 let target = AccessTarget::BoardButton(board.id.clone(), button_data.id.clone());
-                let highlighted = self.access_highlighted(&target);
+                let visual_state = self.access_visual_state(&target);
                 let mut field_button = button(centered_content)
                     .width(cosmic::iced::Length::Fixed(field_width))
                     .height(field_height)
-                    .class(board_button_class(field_color, field_radius, highlighted));
+                    .class(board_button_class(field_color, field_radius, visual_state));
                 if self.settings.hold_to_select_millis == 0 {
                     field_button = field_button.on_press(Message::AccessActivate(target.clone()));
                 }
@@ -6744,20 +6793,22 @@ fn board_button_radius(button: &BoardButton) -> f32 {
 fn board_button_class(
     color: Option<cosmic::iced::Color>,
     radius: f32,
-    highlighted: bool,
+    visual_state: AccessVisualState,
 ) -> cosmic::theme::iced::Button {
     cosmic::theme::iced::Button::Custom(Box::new(move |theme, status| {
-        let base_class = if highlighted {
-            cosmic::theme::iced::Button::Positive
-        } else {
-            cosmic::theme::iced::Button::Secondary
+        let base_class = match visual_state {
+            AccessVisualState::Selected => cosmic::theme::iced::Button::Positive,
+            AccessVisualState::Scanning | AccessVisualState::Emphasized => {
+                cosmic::theme::iced::Button::Primary
+            }
+            AccessVisualState::Default => cosmic::theme::iced::Button::Secondary,
         };
         let mut style = <cosmic::Theme as cosmic::iced::widget::button::Catalog>::style(
             theme,
             &base_class,
             status,
         );
-        if let Some(color) = color.filter(|_| !highlighted) {
+        if let Some(color) = color.filter(|_| visual_state == AccessVisualState::Default) {
             let foreground = contrasting_foreground(color);
             style.background = Some(color.into());
             style.text_color = foreground;
@@ -6767,6 +6818,16 @@ fn board_button_class(
         style.border.radius = radius.into();
         style
     }))
+}
+
+fn access_button_class(visual_state: AccessVisualState) -> Option<cosmic::theme::iced::Button> {
+    match visual_state {
+        AccessVisualState::Selected => Some(cosmic::theme::iced::Button::Positive),
+        AccessVisualState::Scanning | AccessVisualState::Emphasized => {
+            Some(cosmic::theme::iced::Button::Secondary)
+        }
+        AccessVisualState::Default => None,
+    }
 }
 
 fn contrasting_foreground(color: cosmic::iced::Color) -> cosmic::iced::Color {
@@ -7087,5 +7148,37 @@ mod tests {
         assert_eq!(scaled_px(20.0, 10.0, 10.0, 96.0), 40.0);
         assert_eq!(scaled_px(20.0, f32::NAN, 10.0, 96.0), 20.0);
         assert_eq!(scaled_px(8.0, 0.5, 10.0, 96.0), 10.0);
+    }
+
+    #[test]
+    fn zero_disables_selection_highlighting_without_a_minimum_flash() {
+        assert_eq!(selection_highlight_duration(0), None);
+        assert_eq!(selection_highlight_duration(-100), None);
+        assert_eq!(
+            selection_highlight_duration(250),
+            Some(Duration::from_millis(250))
+        );
+    }
+
+    #[test]
+    fn selection_confirmation_stays_distinct_when_access_states_overlap() {
+        let target = AccessTarget::Speak("Hello".into());
+
+        assert_eq!(
+            access_visual_state(&target, Some(&target), Some(&target), true),
+            AccessVisualState::Selected
+        );
+        assert_eq!(
+            access_visual_state(&target, None, Some(&target), true),
+            AccessVisualState::Scanning
+        );
+        assert_eq!(
+            access_visual_state(&target, None, None, true),
+            AccessVisualState::Emphasized
+        );
+        assert_eq!(
+            access_visual_state(&target, None, None, false),
+            AccessVisualState::Default
+        );
     }
 }
