@@ -83,6 +83,9 @@ kotlin {
                     // runtime dependency. Its retained dialogs call Android 15-deprecated
                     // system-bar color APIs even though Wingmate never uses those dialogs.
                     exclude(group = "com.google.android.material", module = "material")
+                    // This production SDK also declares AndroidX Test Monitor at runtime,
+                    // which conflicts with the newer monitor used by instrumentation tests.
+                    exclude(group = "androidx.test", module = "monitor")
                 }
                 // Required for FileProvider and core Android helpers used in androidMain
                 implementation("androidx.core:core-ktx:1.13.1")
