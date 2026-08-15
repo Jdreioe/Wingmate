@@ -42,7 +42,10 @@ class BoardSetManagerScreenTest {
 
         composeRule.onNodeWithText("Core words").assertIsDisplayed()
         composeRule
-            .onNodeWithTag("${BOARD_SET_CARD_TEST_TAG_PREFIX}core-words")
+            .onNodeWithTag(
+                testTag = "${BOARD_SET_CARD_TEST_TAG_PREFIX}core-words",
+                useUnmergedTree = true,
+            )
             .performClick()
 
         assertEquals(BoardSetManagerAction.OpenClicked("core-words"), receivedAction)
