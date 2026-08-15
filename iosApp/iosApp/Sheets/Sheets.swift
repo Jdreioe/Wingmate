@@ -1164,11 +1164,16 @@ struct AzureSettingsSheet: View {
                     Section {
                         Button(saving ? "common.saving" : "common.save") {
                             Task {
+                                let trimmedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard bridge.isValidAzureSpeechEndpoint(endpoint: trimmedEndpoint) else {
+                                    self.error = NSLocalizedString("azure_setup.error.endpoint", comment: "")
+                                    return
+                                }
                                 saving = true
                                 defer { saving = false }
 
                                 do {
-                                    let cfg = Shared.SpeechServiceConfig(endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
+                                    let cfg = Shared.SpeechServiceConfig(endpoint: trimmedEndpoint,
                                                                          subscriptionKey: key.trimmingCharacters(in: .whitespacesAndNewlines))
                                     try await bridge.saveSpeechConfig(config: cfg)
                                     _ = try? await bridge.listVoices()

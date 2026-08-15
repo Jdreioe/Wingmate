@@ -24,7 +24,7 @@ class AndroidSqlConfigRepository(private val context: Context) : ConfigRepositor
     private val json = Json { ignoreUnknownKeys = true }
 
     override suspend fun getSpeechConfig(): SpeechServiceConfig? = withContext(Dispatchers.IO) {
-        readSecure()?.also {
+        readSecure()?.normalizedIfValid()?.also {
             // Also completes cleanup after a process died between secure write and legacy deletion.
             deleteLegacyPlaintext()
             return@withContext it
@@ -33,9 +33,9 @@ class AndroidSqlConfigRepository(private val context: Context) : ConfigRepositor
     }
 
     override suspend fun saveSpeechConfig(config: SpeechServiceConfig) = withContext(Dispatchers.IO) {
-        require(config.subscriptionKey.isNotBlank()) { "Azure subscription key must not be blank" }
-        writeSecure(config)
-        check(readSecure() == config) { "Secure Azure credential write could not be verified" }
+        val normalized = config.validatedForStorage()
+        writeSecure(normalized)
+        check(readSecure() == normalized) { "Secure Azure credential write could not be verified" }
         deleteLegacyPlaintext()
         OperationalLogger.info("speech_config.save", "succeeded", enabled = true)
     }
@@ -47,7 +47,7 @@ class AndroidSqlConfigRepository(private val context: Context) : ConfigRepositor
     }
 
     private fun migrateLegacy(): SpeechServiceConfig? {
-        val legacy = readLegacySqlite() ?: readLegacyPreferences() ?: return null
+        val legacy = (readLegacySqlite() ?: readLegacyPreferences() ?: return null).normalizedIfValid()
         migrateLegacySpeechConfig(legacy, ::writeSecure, ::readSecure, ::deleteLegacyPlaintext)
         OperationalLogger.info("speech_config.migrate", "succeeded")
         return legacy

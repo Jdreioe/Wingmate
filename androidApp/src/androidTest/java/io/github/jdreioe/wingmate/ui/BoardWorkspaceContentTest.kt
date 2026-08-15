@@ -5,6 +5,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.platform.app.InstrumentationRegistry
+import com.hojmoseit.wingmate.R
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -39,6 +41,9 @@ class BoardWorkspaceContentTest {
     fun recoverableFailureWithoutBoardCanReturnToLibrary() {
         var returnedToLibrary = false
         var retried = false
+        val backToLibraryLabel = InstrumentationRegistry.getInstrumentation()
+            .targetContext
+            .getString(R.string.board_workspace_back_to_library)
         composeRule.setContent {
             AppTheme {
                 BoardWorkspaceContent(
@@ -56,7 +61,7 @@ class BoardWorkspaceContentTest {
 
         composeRule.onNodeWithText("Could not load board").assertIsDisplayed()
         composeRule.onNodeWithText("Retry").performClick()
-        composeRule.onNodeWithText("Back to library").performClick()
+        composeRule.onNodeWithText(backToLibraryLabel).performClick()
 
         assertTrue(retried)
         assertTrue(returnedToLibrary)

@@ -329,7 +329,7 @@
 "azure_setup.save_continue" = "Gem og fortsæt";
 "azure_setup.complete.title" = "Sådan!";
 "azure_setup.complete.desc" = "Dine Azure Speech-oplysninger er gemt sikkert på denne enhed.";
-"azure_setup.error.endpoint" = "Indtast Speech-endpointet eller regionen.";
+"azure_setup.error.endpoint" = "Indtast en gyldig Azure Speech-region eller et officielt HTTPS-endpoint.";
 "azure_setup.error.key" = "Indtast en Speech-abonnementsnøgle.";
 "azure_setup.error.save" = "Azure-oplysningerne kunne ikke gemmes: %@";
 

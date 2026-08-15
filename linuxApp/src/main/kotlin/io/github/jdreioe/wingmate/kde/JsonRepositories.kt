@@ -3,6 +3,8 @@ package io.github.jdreioe.wingmate.kde
 import io.github.jdreioe.wingmate.domain.*
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.infrastructure.normalizedIfValid
+import io.github.jdreioe.wingmate.infrastructure.validatedForStorage
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.Dispatchers
@@ -73,7 +75,7 @@ class JsonFileConfigRepository : ConfigRepository {
             // secure storage. This avoids silently selecting an older keyring
             // value if an earlier migration was interrupted or mismatched.
             if (file.exists()) {
-                val legacy = decode(file.readText())
+                val legacy = decode(file.readText()).normalizedIfValid()
                 secureStore.write(json.encodeToString(legacy))
                 val stored = secureStore.readAfterWrite()?.let(::decode)
                 check(stored == legacy) {
@@ -86,19 +88,19 @@ class JsonFileConfigRepository : ConfigRepository {
                 println("[PERSISTENCE] Migrated Azure speech configuration to the desktop keyring.")
                 return@withContext legacy
             }
-            secureStore.read()?.let(::decode)
+            secureStore.read()?.let(::decode)?.normalizedIfValid()
         }
     }
 
     override suspend fun saveSpeechConfig(config: SpeechServiceConfig) = mutex.withLock {
         withContext(Dispatchers.IO) {
-            require(config.subscriptionKey.isNotBlank()) { "Azure subscription key must not be blank" }
-            secureStore.write(json.encodeToString(config))
+            val normalized = config.validatedForStorage()
+            secureStore.write(json.encodeToString(normalized))
             val stored = secureStore.readAfterWrite()?.let(::decode)
-            check(stored == config) {
+            check(stored == normalized) {
                 "Secure Azure credential write could not be verified " +
-                    "(stored=${stored != null}, endpointMatches=${stored?.endpoint == config.endpoint}, " +
-                    "credentialMatches=${stored?.subscriptionKey == config.subscriptionKey})"
+                    "(stored=${stored != null}, endpointMatches=${stored?.endpoint == normalized.endpoint}, " +
+                    "credentialMatches=${stored?.subscriptionKey == normalized.subscriptionKey})"
             }
             check(file.delete() || !file.exists()) { "Could not delete legacy plaintext Azure configuration" }
             println("[PERSISTENCE] Saved Azure speech configuration securely; credentialConfigured=true")

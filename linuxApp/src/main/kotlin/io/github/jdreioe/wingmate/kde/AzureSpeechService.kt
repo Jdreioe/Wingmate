@@ -17,7 +17,9 @@ class AzureSpeechService(
 ) : SpeechService {
     
     // Uses default engine (should be OkHttp from shared dependency)
-    private val client = HttpClient()
+    private val client = HttpClient {
+        followRedirects = false
+    }
     @Volatile
     private var currentProcess: Process? = null
     @Volatile

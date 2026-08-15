@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -74,6 +75,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -164,6 +166,8 @@ import kotlin.random.Random
 import kotlin.time.Clock
 
 import com.hojmoseit.wingmate.R
+
+internal const val BOARD_SET_OPEN_TEST_TAG_PREFIX = "board-set-open-"
 
 private data class WorkspaceCellTarget(
     val row: Int,
@@ -519,41 +523,48 @@ private fun BoardSetLibraryCard(
     onDelete: () -> Unit
 ) {
     Card(
-        onClick = onOpen,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
-        ListItem(
-            headlineContent = { Text(boardSet.name, fontWeight = FontWeight.SemiBold) },
-            supportingContent = {
-                Text(pluralStringResource(R.plurals.board_sets_board_count, boardSet.boardIds.size, boardSet.boardIds.size))
-            },
-            leadingContent = {
-                Icon(
-                    if (boardSet.isLocked) Icons.Default.Lock else Icons.Default.Home,
-                    contentDescription = if (boardSet.isLocked) stringResource(R.string.board_sets_locked) else null
-                )
-            },
-            trailingContent = {
-                Row {
-                    IconButton(onClick = onEdit, enabled = !boardSet.isLocked) {
-                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.board_sets_edit))
-                    }
-                    IconButton(onClick = onDuplicate) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.board_sets_duplicate))
-                    }
-                    IconButton(onClick = onToggleLock) {
-                        Icon(
-                            if (boardSet.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
-                            contentDescription = stringResource(if (boardSet.isLocked) R.string.board_sets_unlock else R.string.board_sets_lock)
-                        )
-                    }
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.common_delete), tint = MaterialTheme.colorScheme.error)
-                    }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val openLabel = stringResource(R.string.board_sets_open)
+            ListItem(
+                headlineContent = { Text(boardSet.name, fontWeight = FontWeight.SemiBold) },
+                supportingContent = {
+                    Text(pluralStringResource(R.plurals.board_sets_board_count, boardSet.boardIds.size, boardSet.boardIds.size))
+                },
+                leadingContent = {
+                    Icon(
+                        if (boardSet.isLocked) Icons.Default.Lock else Icons.Default.Home,
+                        contentDescription = if (boardSet.isLocked) stringResource(R.string.board_sets_locked) else null
+                    )
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClickLabel = openLabel, onClick = onOpen)
+                    .testTag("$BOARD_SET_OPEN_TEST_TAG_PREFIX${boardSet.id}"),
+            )
+            Row {
+                IconButton(onClick = onEdit, enabled = !boardSet.isLocked) {
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.board_sets_edit))
+                }
+                IconButton(onClick = onDuplicate) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.board_sets_duplicate))
+                }
+                IconButton(onClick = onToggleLock) {
+                    Icon(
+                        if (boardSet.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                        contentDescription = stringResource(if (boardSet.isLocked) R.string.board_sets_unlock else R.string.board_sets_lock)
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.common_delete), tint = MaterialTheme.colorScheme.error)
                 }
             }
-        )
+        }
     }
 }
 

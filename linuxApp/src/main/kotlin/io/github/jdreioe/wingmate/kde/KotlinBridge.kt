@@ -530,16 +530,21 @@ class KotlinBridge(private val port: Int = 8765) {
                 val params = call.receive<Map<String, String>>()
                 val endpoint = params["endpoint"] ?: ""
                 val key = params["key"] ?: ""
-                azureConfigManager.updateConfig(endpoint, key)
-                
                 try {
-                    // Sync fetch voices
-                    azureConfigManager.fetchAndSaveVoices(SpeechServiceConfig(endpoint, key))
-                } catch (e: Exception) {
-                    println("Failed to fetch voices: ${e.message}")
+                    val normalizedConfig = azureConfigManager.updateConfig(endpoint, key)
+                    try {
+                        // Voice refresh is best-effort after the validated credential is saved.
+                        azureConfigManager.fetchAndSaveVoices(normalizedConfig)
+                    } catch (e: Exception) {
+                        println("Failed to fetch voices (${e::class.simpleName})")
+                    }
+                    call.respond(HttpStatusCode.OK)
+                } catch (_: IllegalArgumentException) {
+                    call.respondText(
+                        text = "Enter a valid Azure Speech region or official HTTPS endpoint.",
+                        status = HttpStatusCode.BadRequest,
+                    )
                 }
-                
-                call.respond(HttpStatusCode.OK)
             }
 
             delete("/api/azure-config") {

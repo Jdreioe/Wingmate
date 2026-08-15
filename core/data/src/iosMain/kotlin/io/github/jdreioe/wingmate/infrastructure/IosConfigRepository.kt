@@ -50,7 +50,7 @@ class IosConfigRepository : ConfigRepository {
     private val json = Json { ignoreUnknownKeys = true }
 
     override suspend fun getSpeechConfig(): SpeechServiceConfig? = withContext(Dispatchers.Default) {
-        readKeychain()?.also {
+        readKeychain()?.normalizedIfValid()?.also {
             // Also completes cleanup after a process died between secure write and legacy deletion.
             defaults.removeObjectForKey(LEGACY_KEY)
             defaults.synchronize()
@@ -63,18 +63,19 @@ class IosConfigRepository : ConfigRepository {
             OperationalLogger.warn("speech_config.legacy_decode", "failed")
             return@withContext null
         }
-        migrateLegacySpeechConfig(legacy, ::writeKeychain, ::readKeychain) {
+        val normalizedLegacy = legacy.normalizedIfValid()
+        migrateLegacySpeechConfig(normalizedLegacy, ::writeKeychain, ::readKeychain) {
             defaults.removeObjectForKey(LEGACY_KEY)
             defaults.synchronize()
         }
         OperationalLogger.info("speech_config.migrate", "succeeded")
-        legacy
+        normalizedLegacy
     }
 
     override suspend fun saveSpeechConfig(config: SpeechServiceConfig) = withContext(Dispatchers.Default) {
-        require(config.subscriptionKey.isNotBlank()) { "Azure subscription key must not be blank" }
-        writeKeychain(config)
-        check(readKeychain() == config) { "Secure Azure credential write could not be verified" }
+        val normalized = config.validatedForStorage()
+        writeKeychain(normalized)
+        check(readKeychain() == normalized) { "Secure Azure credential write could not be verified" }
         defaults.removeObjectForKey(LEGACY_KEY)
         defaults.synchronize()
         OperationalLogger.info("speech_config.save", "succeeded", enabled = true)

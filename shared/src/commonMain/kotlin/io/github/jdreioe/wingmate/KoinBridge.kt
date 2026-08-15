@@ -69,6 +69,8 @@ import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
+import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpoint
+import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpointResult
 import kotlin.time.Clock
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -353,6 +355,9 @@ class KoinBridge : KoinComponent {
     suspend fun saveSpeechConfig(config: SpeechServiceConfig) {
         get<ConfigRepository>().saveSpeechConfig(config)
     }
+
+    fun isValidAzureSpeechEndpoint(endpoint: String): Boolean =
+        AzureSpeechEndpoint.parse(endpoint) is AzureSpeechEndpointResult.Valid
 
     suspend fun clearSpeechConfig() {
         get<ConfigRepository>().clearSpeechConfig()

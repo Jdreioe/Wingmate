@@ -55,6 +55,7 @@ fun overrideIosSpeechService() {
             // Ktor client for iOS (Darwin engine)
             single<HttpClient> {
                 HttpClient(Darwin) {
+                    followRedirects = false
                     install(ContentNegotiation) {
                         json(Json { ignoreUnknownKeys = true })
                     }

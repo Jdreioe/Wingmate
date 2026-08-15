@@ -58,7 +58,9 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         const val DEFAULT_AZURE_LANGUAGE = "en-US"
     }
 
-    private val client = HttpClient(OkHttp) {}
+    private val client = HttpClient(OkHttp) {
+        followRedirects = false
+    }
     // Removed SLF4J logger for cross-platform compatibility
 
     // Platform TTS (fallback)
