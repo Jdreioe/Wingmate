@@ -318,6 +318,10 @@ struct F0SetupView: View {
             saveError = NSLocalizedString("azure_setup.error.endpoint", comment: "")
             return
         }
+        guard bridge.isValidAzureSpeechEndpoint(endpoint: ep) else {
+            saveError = NSLocalizedString("azure_setup.error.endpoint", comment: "")
+            return
+        }
         guard !key.isEmpty else {
             saveError = NSLocalizedString("azure_setup.error.key", comment: "")
             return

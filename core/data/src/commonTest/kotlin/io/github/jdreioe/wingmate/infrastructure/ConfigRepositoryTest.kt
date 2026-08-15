@@ -28,6 +28,41 @@ class ConfigRepositoryTest {
     }
 
     @Test
+    fun saveCanonicalizesEndpointAndCredential() = runBlocking {
+        val repository = InMemoryConfigRepository()
+
+        repository.saveSpeechConfig(
+            SpeechServiceConfig(
+                endpoint = "  HTTPS://NorthEurope.api.cognitive.microsoft.com/  ",
+                subscriptionKey = "  azure-secret  ",
+            )
+        )
+
+        assertEquals(
+            SpeechServiceConfig(
+                endpoint = "northeurope",
+                subscriptionKey = "azure-secret",
+            ),
+            repository.getSpeechConfig(),
+        )
+    }
+
+    @Test
+    fun saveRejectsUntrustedEndpointWithoutReplacingExistingConfig() = runBlocking {
+        val repository = InMemoryConfigRepository()
+        val existing = SpeechServiceConfig("northeurope", "existing-secret")
+        repository.saveSpeechConfig(existing)
+
+        assertFailsWith<IllegalArgumentException> {
+            repository.saveSpeechConfig(
+                SpeechServiceConfig("https://attacker.example", "new-secret")
+            )
+        }
+
+        assertEquals(existing, repository.getSpeechConfig())
+    }
+
+    @Test
     fun configStringRepresentationRedactsCredential() {
         val rendered = SpeechServiceConfig("northeurope", "azure-secret").toString()
 

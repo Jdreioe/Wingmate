@@ -101,7 +101,7 @@ class InMemoryConfigRepository : ConfigRepository {
     }
     override suspend fun saveSpeechConfig(config: SpeechServiceConfig) {
         delay(10)
-        cfg = config
+        cfg = config.validatedForStorage()
     }
     override suspend fun clearSpeechConfig() {
         delay(10)

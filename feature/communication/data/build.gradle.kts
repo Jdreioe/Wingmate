@@ -22,6 +22,7 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 implementation(project(":core:domain"))
+                implementation(project(":core:data"))
                 implementation(project(":feature:communication:domain"))
                 implementation(libs.koin.core)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")

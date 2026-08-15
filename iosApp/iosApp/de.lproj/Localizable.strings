@@ -326,7 +326,7 @@
 "azure_setup.save_continue" = "Speichern und weiter";
 "azure_setup.complete.title" = "Alles eingerichtet!";
 "azure_setup.complete.desc" = "Deine Azure Speech-Zugangsdaten wurden sicher auf diesem Gerät gespeichert.";
-"azure_setup.error.endpoint" = "Gib den Speech-Endpunkt oder die Region ein.";
+"azure_setup.error.endpoint" = "Gib eine gültige Azure-Speech-Region oder einen offiziellen HTTPS-Endpunkt ein.";
 "azure_setup.error.key" = "Gib einen Speech-Abonnementschlüssel ein.";
 "azure_setup.error.save" = "Azure-Zugangsdaten konnten nicht gespeichert werden: %@";
 

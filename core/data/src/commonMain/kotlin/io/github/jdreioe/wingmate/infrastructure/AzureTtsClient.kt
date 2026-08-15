@@ -8,6 +8,8 @@ import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.plugins.HttpRedirect
+import io.ktor.client.plugins.pluginOrNull
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -38,15 +40,9 @@ object AzureTtsClient {
         config: SpeechServiceConfig,
         audioFormat: AudioFormat = AudioFormat.MP3_24KHZ_160KBPS
     ): ByteArray {
-        // The stored config.endpoint may be either a short region (e.g. "westus")
-        // or a full host/URL. Support both forms:
-        val baseUrl = when {
-            config.endpoint.startsWith("http", ignoreCase = true) -> config.endpoint.trimEnd('/')
-            config.endpoint.contains("tts.speech.microsoft.com", ignoreCase = true) || 
-            config.endpoint.contains("cognitiveservices", ignoreCase = true) -> "https://${config.endpoint.trimEnd('/') }"
-            else -> "https://${config.endpoint}.tts.speech.microsoft.com"
-        }
-        val url = "$baseUrl/cognitiveservices/v1"
+        val endpoint = requireAzureSpeechEndpoint(config.endpoint)
+        requireCredentialSafeClient(client)
+        val url = endpoint.synthesisUrl
 
         OperationalLogger.info("azure_tts.synthesize", "started")
 
@@ -567,7 +563,9 @@ object AzureTtsClient {
         region: String,
         audioFormat: AudioFormat = AudioFormat.MP3_24KHZ_160KBPS
     ): ByteArray {
-        val url = "https://$region.tts.speech.microsoft.com/cognitiveservices/v1"
+        val endpoint = requireAzureSpeechEndpoint(region)
+        requireCredentialSafeClient(client)
+        val url = endpoint.synthesisUrl
         
         OperationalLogger.info("azure_tts.token_synthesize", "started")
         
@@ -632,15 +630,9 @@ object AzureTtsClient {
         client: HttpClient, 
         config: SpeechServiceConfig
     ): List<Voice> {
-        // The stored config.endpoint may be either a short region (e.g. "westus")
-        // or a full host/URL. Support both forms:
-        val baseUrl = when {
-            config.endpoint.startsWith("http", ignoreCase = true) -> config.endpoint.trimEnd('/')
-            config.endpoint.contains("tts.speech.microsoft.com", ignoreCase = true) || 
-            config.endpoint.contains("cognitiveservices", ignoreCase = true) -> "https://${config.endpoint.trimEnd('/') }"
-            else -> "https://${config.endpoint}.tts.speech.microsoft.com"
-        }
-        val url = "$baseUrl/cognitiveservices/voices/list"
+        val endpoint = requireAzureSpeechEndpoint(config.endpoint)
+        requireCredentialSafeClient(client)
+        val url = endpoint.voicesUrl
         
         OperationalLogger.info("azure_voice_catalog.fetch", "started")
         
@@ -700,6 +692,17 @@ object AzureTtsClient {
                 pitch = 1.0, 
                 rate = 1.0
             )
+        }
+    }
+
+    /**
+     * Ktor follows GET redirects by default and only strips its standard
+     * Authorization header when the authority changes. Azure's subscription-key
+     * header would otherwise be forwarded to the redirect target.
+     */
+    private fun requireCredentialSafeClient(client: HttpClient) {
+        check(client.pluginOrNull(HttpRedirect) == null) {
+            "Azure credential requests require an HTTP client with redirects disabled"
         }
     }
 }

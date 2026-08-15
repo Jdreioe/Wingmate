@@ -54,6 +54,8 @@ import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.SpeechPolicy
 import io.github.jdreioe.wingmate.infrastructure.ArasaacDownloadProgress
 import io.github.jdreioe.wingmate.infrastructure.ArasaacSymbolDownloadService
+import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpoint
+import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpointResult
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -107,6 +109,7 @@ fun SettingsScreen(
     var subscriptionKey by remember { mutableStateOf("") }
     var credentialConfigured by remember { mutableStateOf(false) }
     var replacingAzureCredentials by remember { mutableStateOf(false) }
+    var azureEndpointError by remember { mutableStateOf<String?>(null) }
     var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var virtualMic by remember { mutableStateOf(false) }
 
@@ -167,6 +170,7 @@ fun SettingsScreen(
     val settingsLoadFailed = stringResource(R.string.settings_load_failed)
     val settingsSaveFailed = stringResource(R.string.settings_save_failed)
     val voiceReadFailed = stringResource(R.string.voice_load_failed)
+    val invalidAzureEndpoint = stringResource(R.string.azure_setup_error_endpoint)
     val scope = rememberCoroutineScope()
     val settingsUpdateMutex = remember { Mutex() }
 
@@ -290,6 +294,10 @@ fun SettingsScreen(
             endpoint.isNotBlank() && subscriptionKey.isNotBlank()
         ) {
             delay(400)
+            if (AzureSpeechEndpoint.parse(endpoint) is AzureSpeechEndpointResult.Invalid) {
+                azureEndpointError = invalidAzureEndpoint
+                return@LaunchedEffect
+            }
             val repository = configRepo ?: return@LaunchedEffect
             val saved = runCatching {
                 repository.saveSpeechConfig(
@@ -297,6 +305,7 @@ fun SettingsScreen(
                 )
             }.isSuccess
             if (saved) {
+                azureEndpointError = null
                 credentialConfigured = true
                 replacingAzureCredentials = false
                 subscriptionKey = ""
@@ -484,9 +493,13 @@ fun SettingsScreen(
                                     updateSettings { it.copy(ttsEngine = engine) }
                                 },
                                 endpoint = endpoint,
-                                onEndpointChange = { endpoint = it },
+                                onEndpointChange = {
+                                    endpoint = it
+                                    azureEndpointError = null
+                                },
                                 subscriptionKey = subscriptionKey,
                                 onSubscriptionKeyChange = { subscriptionKey = it },
+                                endpointError = azureEndpointError,
                                 credentialConfigured = credentialConfigured,
                                 replacingCredentials = replacingAzureCredentials,
                                 onReplaceCredentials = {
@@ -1248,6 +1261,7 @@ private fun SpeechSection(
     onEndpointChange: (String) -> Unit,
     subscriptionKey: String,
     onSubscriptionKeyChange: (String) -> Unit,
+    endpointError: String?,
     credentialConfigured: Boolean,
     replacingCredentials: Boolean,
     onReplaceCredentials: () -> Unit,
@@ -1284,6 +1298,7 @@ private fun SpeechSection(
                 onEndpointChange = onEndpointChange,
                 subscriptionKey = subscriptionKey,
                 onSubscriptionKeyChange = onSubscriptionKeyChange,
+                endpointError = endpointError,
                 onReplaceCredentials = onReplaceCredentials,
                 modifier = Modifier.padding(vertical = 12.dp)
             )

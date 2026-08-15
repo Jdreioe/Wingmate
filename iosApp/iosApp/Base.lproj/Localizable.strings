@@ -396,7 +396,7 @@
 "azure_setup.save_continue" = "Save & Continue";
 "azure_setup.complete.title" = "Azure Connected!";
 "azure_setup.complete.desc" = "Your Azure Speech credentials have been saved securely on this device.";
-"azure_setup.error.endpoint" = "Please enter the Speech endpoint or region.";
+"azure_setup.error.endpoint" = "Enter a valid Azure Speech region or official HTTPS endpoint.";
 "azure_setup.error.key" = "Please enter a Speech subscription key.";
 "azure_setup.error.save" = "Failed to save Azure credentials: %@";
 

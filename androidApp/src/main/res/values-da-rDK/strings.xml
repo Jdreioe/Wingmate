@@ -284,7 +284,7 @@
     <string name="azure_setup_complete_description">Dine Azure Speech-oplysninger er gemt sikkert på denne enhed.</string>
     <string name="azure_credentials_configured">Azure Speech-oplysningerne er konfigureret sikkert på denne enhed.</string>
     <string name="azure_credentials_replace">Erstat Azure-oplysninger</string>
-    <string name="azure_setup_error_endpoint">Indtast Speech-endpointet eller regionen.</string>
+    <string name="azure_setup_error_endpoint">Indtast en gyldig Azure Speech-region eller et officielt HTTPS-endpoint.</string>
     <string name="azure_setup_error_key">Indtast en Speech-abonnementsnøgle.</string>
     <string name="azure_setup_error_save">Azure-oplysningerne kunne ikke gemmes: %1$s</string>
     <string name="welcome_analytics_title">Hjælp med at forbedre Wingmate</string>
