@@ -74,6 +74,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -164,6 +165,8 @@ import kotlin.random.Random
 import kotlin.time.Clock
 
 import com.hojmoseit.wingmate.R
+
+internal const val BOARD_SET_CARD_TEST_TAG_PREFIX = "board-set-card-"
 
 private data class WorkspaceCellTarget(
     val row: Int,
@@ -520,7 +523,9 @@ private fun BoardSetLibraryCard(
 ) {
     Card(
         onClick = onOpen,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("$BOARD_SET_CARD_TEST_TAG_PREFIX${boardSet.id}"),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         ListItem(

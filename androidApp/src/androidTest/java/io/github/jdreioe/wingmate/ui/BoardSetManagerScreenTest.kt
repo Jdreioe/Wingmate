@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
@@ -39,7 +40,10 @@ class BoardSetManagerScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Core words").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Core words").assertIsDisplayed()
+        composeRule
+            .onNodeWithTag("${BOARD_SET_CARD_TEST_TAG_PREFIX}core-words")
+            .performClick()
 
         assertEquals(BoardSetManagerAction.OpenClicked("core-words"), receivedAction)
     }
