@@ -1,6 +1,8 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.FileStorage
+import io.github.jdreioe.wingmate.domain.FileStorageWriteException
+import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
@@ -11,26 +13,16 @@ import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.NSUserDomainMask
 import platform.Foundation.create
-import platform.Foundation.dataUsingEncoding
 import platform.Foundation.dataWithContentsOfFile
 import platform.Foundation.writeToFile
 import platform.posix.memcpy
 
-@OptIn(ExperimentalForeignApi::class)
-class IosFileStorage : FileStorage {
-    private val root: String by lazy {
-        val urls = NSFileManager.defaultManager.URLsForDirectory(
-            directory = NSDocumentDirectory,
-            inDomains = NSUserDomainMask
-        )
-        (urls.firstOrNull() as? platform.Foundation.NSURL)?.path ?: ""
-    }
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
+class IosFileStorage internal constructor(private val root: String) : FileStorage {
+    constructor() : this(documentsDirectory())
 
     override suspend fun save(fileName: String, content: String) {
-        val path = resolve(fileName)
-        ensureParent(path)
-        val data = (content as NSString).dataUsingEncoding(NSUTF8StringEncoding) ?: return
-        data.writeToFile(path, atomically = true)
+        saveBytes(fileName, content.encodeToByteArray())
     }
 
     override suspend fun load(fileName: String): String? {
@@ -42,10 +34,16 @@ class IosFileStorage : FileStorage {
     override suspend fun saveBytes(fileName: String, content: ByteArray) {
         val path = resolve(fileName)
         ensureParent(path)
-        val data = content.usePinned { pinned ->
-            NSData.create(bytes = pinned.addressOf(0), length = content.size.toULong())
+        val data = if (content.isEmpty()) {
+            NSData.create(bytes = null, length = 0u)
+        } else {
+            content.usePinned { pinned ->
+                NSData.create(bytes = pinned.addressOf(0), length = content.size.toULong())
+            }
         }
-        data.writeToFile(path, atomically = true)
+        if (!data.writeToFile(path, atomically = true)) {
+            throw FileStorageWriteException()
+        }
     }
 
     override suspend fun loadBytes(fileName: String): ByteArray? {
@@ -78,13 +76,25 @@ class IosFileStorage : FileStorage {
 
     private fun ensureParent(path: String) {
         val parent = path.substringBeforeLast('/', missingDelimiterValue = "")
-        if (parent.isNotBlank()) {
-            NSFileManager.defaultManager.createDirectoryAtPath(
-                path = parent,
-                withIntermediateDirectories = true,
-                attributes = null,
-                error = null
+        if (parent.isBlank()) return
+        val created = NSFileManager.defaultManager.createDirectoryAtPath(
+            path = parent,
+            withIntermediateDirectories = true,
+            attributes = null,
+            error = null
+        )
+        if (!created) {
+            throw FileStorageWriteException()
+        }
+    }
+
+    companion object {
+        private fun documentsDirectory(): String {
+            val urls = NSFileManager.defaultManager.URLsForDirectory(
+                directory = NSDocumentDirectory,
+                inDomains = NSUserDomainMask
             )
+            return (urls.firstOrNull() as? platform.Foundation.NSURL)?.path ?: ""
         }
     }
 }
