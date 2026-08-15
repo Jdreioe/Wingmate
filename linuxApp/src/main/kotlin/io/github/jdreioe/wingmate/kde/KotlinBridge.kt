@@ -81,19 +81,29 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
+import okhttp3.Dns
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.Closeable
 import java.io.File
+import java.io.InputStream
+import java.net.Proxy
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.URI
 import java.net.UnknownHostException
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFilePermission
+import java.nio.file.attribute.PosixFilePermissions
+import java.nio.file.attribute.UserPrincipal
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -179,7 +189,7 @@ class KotlinBridge(private val port: Int = 8765) {
             // runtime file when an earlier bridge is being reused).
             intercept(ApplicationCallPipeline.Call) {
                 val presented = call.request.headers[TOKEN_HEADER_NAME]
-                if (presented.isNullOrBlank() || presented != authToken) {
+                if (presented == null || !bridgeTokensEqual(authToken, presented)) {
                     call.respond(
                         HttpStatusCode.Unauthorized,
                         mapOf("error" to "invalid bridge token"),
@@ -1847,51 +1857,110 @@ fun requireSelectedPath(value: String): File {
     return file
 }
 
-private val bridgeHttpClient: HttpClient = HttpClient.newBuilder()
-    .connectTimeout(java.time.Duration.ofSeconds(10))
-    .followRedirects(HttpClient.Redirect.NEVER)
-    .build()
+fun interface ImageHostResolver {
+    fun resolve(host: String): List<InetAddress>
+}
+
+data class ValidatedImageTarget(
+    val uri: URI,
+    val addresses: List<InetAddress>,
+)
+
+class RemoteImageResponse(
+    val status: Int,
+    val location: String?,
+    val contentType: String?,
+    val body: InputStream,
+    private val closeAction: () -> Unit = { body.close() },
+) : Closeable {
+    override fun close() = closeAction()
+}
+
+fun interface RemoteImageTransport {
+    fun execute(target: ValidatedImageTarget): RemoteImageResponse
+}
+
+private val systemImageHostResolver = ImageHostResolver { host ->
+    InetAddress.getAllByName(host).toList()
+}
+
+/** OkHttp sees only the address snapshot that passed policy validation. */
+class PinnedImageDns(
+    private val host: String,
+    private val addresses: List<InetAddress>,
+) : Dns {
+    override fun lookup(hostname: String): List<InetAddress> {
+        if (!hostname.equals(host, ignoreCase = true)) {
+            throw UnknownHostException("Unexpected image host")
+        }
+        return addresses
+    }
+}
+
+private val pinnedImageTransport = RemoteImageTransport { target ->
+    // A new pool prevents a connection approved for an earlier DNS snapshot
+    // from being reused. NO_PROXY keeps the peer under this resolver's control.
+    val client = OkHttpClient.Builder()
+        .dns(PinnedImageDns(target.uri.host, target.addresses))
+        .proxy(Proxy.NO_PROXY)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(IMAGE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+        .callTimeout(IMAGE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build()
+    val request = Request.Builder()
+        .url(target.uri.toString())
+        .header("User-Agent", "Wingmate/1.0 (Linux)")
+        .get()
+        .build()
+    val response = client.newCall(request).execute()
+    val body = response.body
+    RemoteImageResponse(
+        status = response.code,
+        location = response.header("Location"),
+        contentType = response.header("Content-Type"),
+        body = body.byteStream(),
+        closeAction = response::close,
+    )
+}
 
 /**
  * Fetch remote image bytes with SSRF-safe target validation, a manually
  * re-validated redirect loop, timeouts, a hard byte limit, and content-type
  * / magic-byte validation. Returns (bytes, content-type).
  */
-private fun fetchRemoteImageBytes(source: String): Pair<ByteArray, String> {
-    var current: URI = validatedImageUri(source)
+fun fetchRemoteImageBytes(
+    source: String,
+    resolver: ImageHostResolver = systemImageHostResolver,
+    transport: RemoteImageTransport = pinnedImageTransport,
+): Pair<ByteArray, String> {
+    var current = validatedImageTarget(source, resolver)
         ?: throw IllegalArgumentException("Image target is not allowed to be fetched")
     var hops = 0
     while (true) {
         require(hops <= MAX_REDIRECT_HOPS) { "Image target redirect limit exceeded" }
-        val request = HttpRequest.newBuilder(current)
-            .timeout(IMAGE_TIMEOUT)
-            .header("User-Agent", "Wingmate/1.0 (Linux)")
-            .GET()
-            .build()
-        val response = bridgeHttpClient.send(request, HttpResponse.BodyHandlers.ofInputStream())
-        val status = response.statusCode()
-        if (status in 300..399) {
-            val location = response.headers().firstValue("Location").orElse(null)
-            response.body().close()
-            if (location.isNullOrBlank()) {
-                throw IllegalArgumentException("Image target redirected without a Location")
+        transport.execute(current).use { response ->
+            if (response.status in 300..399) {
+                val location = response.location
+                if (location.isNullOrBlank()) {
+                    throw IllegalArgumentException("Image target redirected without a Location")
+                }
+                hops += 1
+                current = validatedRedirectTarget(current.uri, location, resolver)
+                    ?: throw IllegalArgumentException("Image redirect target is not allowed: $location")
+                return@use
             }
-            hops += 1
-            val redirected = validatedRedirectUri(current, location)
-                ?: throw IllegalArgumentException("Image redirect target is not allowed: $location")
-            current = redirected
-            continue
+            if (response.status !in 200..299) {
+                throw IllegalArgumentException("Image target returned HTTP ${response.status}")
+            }
+            val body = response.body.readNBytes(MAX_IMAGE_BYTES.toInt() + 1)
+            if (body.size > MAX_IMAGE_BYTES) throw IllegalArgumentException("Image is too large")
+            val declaredType = response.contentType.orEmpty()
+                .substringBefore(';').trim().lowercase()
+            validateImageContent(body, declaredType)
+            return body to (declaredType.takeIf { it.isNotBlank() } ?: contentTypeForBytes(body))
         }
-        if (status !in 200..299) {
-            response.body().close()
-            throw IllegalArgumentException("Image target returned HTTP $status")
-        }
-        val body = response.body().readNBytes(MAX_IMAGE_BYTES.toInt() + 1)
-        if (body.size > MAX_IMAGE_BYTES) throw IllegalArgumentException("Image is too large")
-        val declaredType = response.headers().firstValue("Content-Type").orElse("")
-            .substringBefore(';').trim().lowercase()
-        validateImageContent(body, declaredType)
-        return body to (declaredType.takeIf { it.isNotBlank() } ?: contentTypeForBytes(body))
     }
 }
 
@@ -1905,26 +1974,52 @@ fun validatedImageUri(source: String): URI? {
     return if (isAllowedRemoteTarget(uri)) uri else null
 }
 
+fun validatedImageTarget(
+    source: String,
+    resolver: ImageHostResolver = systemImageHostResolver,
+): ValidatedImageTarget? {
+    val uri = runCatching { URI(source.trim()) }.getOrNull() ?: return null
+    return validatedImageTarget(uri, resolver)
+}
+
 fun validatedRedirectUri(base: URI, location: String): URI? {
     val resolved = runCatching { base.resolve(location) }.getOrNull() ?: return null
     return if (isAllowedRemoteTarget(resolved)) resolved else null
 }
 
-fun isAllowedRemoteTarget(uri: URI): Boolean {
-    val scheme = uri.scheme?.lowercase() ?: return false
-    if (scheme != "http" && scheme != "https") return false
-    val host = uri.host?.lowercase() ?: return false
-    if (host.isBlank()) return false
-    if (uri.rawUserInfo != null) return false
+fun validatedRedirectTarget(
+    base: URI,
+    location: String,
+    resolver: ImageHostResolver = systemImageHostResolver,
+): ValidatedImageTarget? {
+    val resolved = runCatching { base.resolve(location) }.getOrNull() ?: return null
+    return validatedImageTarget(resolved, resolver)
+}
+
+fun isAllowedRemoteTarget(
+    uri: URI,
+    resolver: ImageHostResolver = systemImageHostResolver,
+): Boolean = validatedImageTarget(uri, resolver) != null
+
+private fun validatedImageTarget(
+    uri: URI,
+    resolver: ImageHostResolver,
+): ValidatedImageTarget? {
+    val scheme = uri.scheme?.lowercase() ?: return null
+    if (scheme != "http" && scheme != "https") return null
+    val host = uri.host?.lowercase() ?: return null
+    if (host.isBlank() || host == "localhost" || host.endsWith(".localhost")) return null
+    if (uri.rawUserInfo != null) return null
     val addresses = try {
-        if (host == "localhost") listOf(InetAddress.getByName("127.0.0.1"))
-        else InetAddress.getAllByName(host).toList()
+        resolver.resolve(host)
     } catch (error: UnknownHostException) {
-        return false
+        return null
     } catch (error: SecurityException) {
-        return false
+        return null
     }
-    return addresses.isNotEmpty() && addresses.all { !isDangerousAddress(it) }
+    return addresses
+        .takeIf { it.isNotEmpty() && it.all { address -> !isDangerousAddress(address) } }
+        ?.let { ValidatedImageTarget(uri, it.toList()) }
 }
 
 fun isDangerousAddress(address: InetAddress): Boolean =
@@ -1932,15 +2027,19 @@ fun isDangerousAddress(address: InetAddress): Boolean =
         is Inet4Address -> {
             val octets = address.address.map { it.toInt() and 0xFF }
             val (a, b, c, d) = octets
-            a == 0 || d == 0 || d == 255 ||                       // unspecified, network, broadcast
-                a == 127 ||                                        // loopback
-                a == 10 ||                                         // private-10/8
-                (a == 172 && b in 16..31) ||                       // private-172.16/12
-                (a == 192 && b == 168) ||                          // private-192.168/16
-                (a == 169 && b == 254) ||                          // link-local
-                (a == 192 && b == 0 && c == 0) ||                  // IETF protocol assignment
-                (a == 198 && b == 18) ||                           // benchmarking-198.18/15
-                a >= 224                                           // multicast + reserved
+            a == 0 || d == 0 || d == 255 ||                  // unspecified, network, broadcast
+                a == 10 ||                                    // private-10/8
+                (a == 100 && b in 64..127) ||                 // carrier-grade NAT-100.64/10
+                a == 127 ||                                   // loopback
+                (a == 169 && b == 254) ||                     // link-local
+                (a == 172 && b in 16..31) ||                  // private-172.16/12
+                (a == 192 && b == 0 && c == 0) ||             // IETF protocol assignment
+                (a == 192 && b == 0 && c == 2) ||             // documentation-192.0.2/24
+                (a == 192 && b == 168) ||                     // private-192.168/16
+                (a == 198 && b in 18..19) ||                  // benchmarking-198.18/15
+                (a == 198 && b == 51 && c == 100) ||          // documentation-198.51.100/24
+                (a == 203 && b == 0 && c == 113) ||           // documentation-203.0.113/24
+                a >= 224                                      // multicast + reserved
         }
 is Inet6Address -> {
             val bytes = address.address
@@ -1952,7 +2051,7 @@ is Inet6Address -> {
                 return true // reject IPv4-mapped IPv6 outright
             }
             first == 0xFC || first == 0xFD ||             // ULA fc00::/7
-                (first and 0xC0) == 0x80 ||               // link-local fe80::/10
+                (first == 0xFE && (bytes[1].toInt() and 0xC0) == 0x80) || // link-local fe80::/10
                 first == 0xFF ||                           // multicast ff00::/8
                 bytes.all { it == 0.toByte() } ||         // unspecified ::
                 isLoopback
@@ -2030,7 +2129,15 @@ private fun looksLikeSvg(bytes: ByteArray): Boolean {
     return indexOfIgnoreCase(bytes.take(1024).map { it.toInt() and 0xFF }, needle) >= 0
 }
 
-private fun bridgeTokenFile(): File {
+private val TOKEN_FILE_PERMISSIONS = PosixFilePermissions.fromString("rw-------")
+private val TOKEN_DIRECTORY_PERMISSIONS = PosixFilePermissions.fromString("rwx------")
+
+fun bridgeTokensEqual(expected: String, presented: String): Boolean = MessageDigest.isEqual(
+    expected.encodeToByteArray(),
+    presented.encodeToByteArray(),
+)
+
+fun bridgeTokenFile(): File {
     val stateHome = System.getenv("XDG_STATE_HOME")?.takeIf { it.isNotBlank() }
         ?: File(System.getProperty("user.home"), ".local/state").path
     return File(File(stateHome, "wingmate"), "bridge-token")
@@ -2038,14 +2145,16 @@ private fun bridgeTokenFile(): File {
 
 /**
  * Per-process bridge capability token: prefer the token the Rust driver
- * injected into the child environment, then reuse the token persisted by the
- * already-running backend (reuse case), otherwise generate a fresh one.
- * The resolved token is persisted owner-only for reuse by later processes.
+ * injected into the child environment, then reuse a securely persisted token
+ * from an already-running backend. Standalone bridge launches generate and
+ * atomically persist a fresh owner-only token.
  */
 private fun resolveBridgeToken(): String {
     val file = bridgeTokenFile()
-    val envToken = System.getenv("WINGMATE_BRIDGE_TOKEN")?.trim()?.takeIf { it.length >= 16 }
-    val persisted = runCatching { file.readText().trim() }.getOrNull()?.takeIf { it.length >= 16 }
+    val envToken = System.getenv("WINGMATE_BRIDGE_TOKEN")?.trim()?.also {
+        require(isValidBridgeToken(it)) { "WINGMATE_BRIDGE_TOKEN is invalid" }
+    }
+    val persisted = readSecureBridgeTokenFile(file)
     if (envToken != null) {
         if (persisted != envToken) writeBridgeTokenFile(file, envToken)
         return envToken
@@ -2056,15 +2165,83 @@ private fun resolveBridgeToken(): String {
     return generated
 }
 
-private fun writeBridgeTokenFile(file: File, token: String) {
-    runCatching {
-        file.parentFile.mkdirs()
-        val temporary = File(file.parentFile, "${file.name}.tmp")
-        temporary.writeText(token)
-        temporary.setReadable(true, true)
-        temporary.setWritable(true, true)
-        Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
-    }.onFailure { println("[TOKEN] Could not persist bridge token: ${it.message}") }
+fun isValidBridgeToken(token: String): Boolean =
+    token.length == 64 && token.all { it in '0'..'9' || it in 'a'..'f' }
+
+fun readSecureBridgeTokenFile(file: File): String? {
+    val path = file.toPath()
+    if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return null
+    val directory = path.parent ?: throw IllegalArgumentException("Bridge token path has no parent")
+    require(!Files.isSymbolicLink(directory)) { "Bridge token directory must not be a symbolic link" }
+    require(Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) { "Bridge token parent is not a directory" }
+    requireSecureOwnerAndPermissions(directory, TOKEN_DIRECTORY_PERMISSIONS, "Bridge token directory")
+    require(!Files.isSymbolicLink(path)) { "Bridge token file must not be a symbolic link" }
+    require(Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) { "Bridge token path is not a file" }
+    requireSecureOwnerAndPermissions(path, TOKEN_FILE_PERMISSIONS, "Bridge token file")
+    val token = Files.readString(path).trim()
+    require(isValidBridgeToken(token)) { "Bridge token file is invalid" }
+    return token
+}
+
+fun writeBridgeTokenFile(file: File, token: String) {
+    require(isValidBridgeToken(token)) { "Bridge token is invalid" }
+    val directory = file.parentFile.toPath()
+    ensureSecureTokenDirectory(directory)
+    val temporary = Files.createTempFile(
+        directory,
+        ".bridge-token-",
+        ".tmp",
+        PosixFilePermissions.asFileAttribute(TOKEN_FILE_PERMISSIONS),
+    )
+    try {
+        Files.writeString(
+            temporary,
+            "$token\n",
+            StandardOpenOption.TRUNCATE_EXISTING,
+            StandardOpenOption.WRITE,
+        )
+        Files.move(
+            temporary,
+            file.toPath(),
+            StandardCopyOption.ATOMIC_MOVE,
+            StandardCopyOption.REPLACE_EXISTING,
+        )
+        Files.setPosixFilePermissions(file.toPath(), TOKEN_FILE_PERMISSIONS)
+        requireSecureOwnerAndPermissions(file.toPath(), TOKEN_FILE_PERMISSIONS, "Bridge token file")
+    } finally {
+        Files.deleteIfExists(temporary)
+    }
+}
+
+private fun ensureSecureTokenDirectory(directory: Path) {
+    Files.createDirectories(directory)
+    require(!Files.isSymbolicLink(directory)) { "Bridge token directory must not be a symbolic link" }
+    require(Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) { "Bridge token parent is not a directory" }
+    requireCurrentUserOwns(directory, "Bridge token directory")
+    Files.setPosixFilePermissions(directory, TOKEN_DIRECTORY_PERMISSIONS)
+    requireSecureOwnerAndPermissions(directory, TOKEN_DIRECTORY_PERMISSIONS, "Bridge token directory")
+}
+
+private fun requireSecureOwnerAndPermissions(
+    path: Path,
+    ownerPermissions: Set<PosixFilePermission>,
+    description: String,
+) {
+    requireCurrentUserOwns(path, description)
+    val actual = Files.getPosixFilePermissions(path, LinkOption.NOFOLLOW_LINKS)
+    val unsafe = actual.any {
+        it.name.startsWith("GROUP_") || it.name.startsWith("OTHERS_")
+    }
+    require(!unsafe && actual.containsAll(ownerPermissions)) {
+        "$description must be accessible only to its owner"
+    }
+}
+
+private fun requireCurrentUserOwns(path: Path, description: String) {
+    val home = Path.of(System.getProperty("user.home"))
+    val currentOwner: UserPrincipal = Files.getOwner(home, LinkOption.NOFOLLOW_LINKS)
+    val owner = Files.getOwner(path, LinkOption.NOFOLLOW_LINKS)
+    require(owner == currentOwner) { "$description is not owned by the current user" }
 }
 
 fun secureRandomToken(): String {

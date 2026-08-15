@@ -13,10 +13,9 @@ use std::hash::{Hash, Hasher};
 use std::env;
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
-use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use wingmate::partner_window_bridge::{self, PartnerWindowController};
 
@@ -744,13 +743,19 @@ struct AccessInputResponse {
     dwell_progress: f32,
 }
 
-struct BackendProcess(Option<Child>);
+struct BackendProcess {
+    child: Option<Child>,
+    owned_token: Option<String>,
+}
 
 impl Drop for BackendProcess {
     fn drop(&mut self) {
-        if let Some(child) = &mut self.0 {
+        if let Some(child) = &mut self.child {
             let _ = child.kill();
             let _ = child.wait();
+        }
+        if let Some(token) = &self.owned_token {
+            remove_owned_bridge_token(token);
         }
     }
 }
@@ -1109,8 +1114,8 @@ impl cosmic::Application for Wingmate {
             .main_window_id()
             .and_then(|id| wingmate_window_icon().map(|icon| window::set_icon(id, icon)))
             .unwrap_or_else(Task::none);
-        let api = Api::new();
-        let backend = BackendProcess(start_bridge_server());
+        let (api, backend) = prepare_bridge_session()
+            .unwrap_or_else(|error| panic!("Wingmate bridge setup failed: {error}"));
         let mut partner = PartnerWindowController::default();
         partner.start();
 
@@ -5763,11 +5768,16 @@ struct Api {
 }
 
 impl Api {
-    fn new() -> Self {
+    fn new(base: String, token: String) -> Self {
         Self {
-            base: env::var("WINGMATE_API_URL").unwrap_or_else(|_| DEFAULT_API_URL.into()),
-            client: Client::new(),
-            token: current_bridge_token(),
+            base,
+            // The capability is valid only for the vetted loopback authority;
+            // never let an HTTP redirect forward it elsewhere.
+            client: Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .expect("valid bridge HTTP client configuration"),
+            token,
         }
     }
 
@@ -6973,55 +6983,177 @@ fn bridge_token_file() -> PathBuf {
     state_home().join("wingmate").join("bridge-token")
 }
 
-/// Per-process bridge capability token, shared between the Rust client and the
-/// Kotlin bridge it spawns. Preference order matches the Kotlin side:
-/// 1. token injected into the child environment when we spawn the bridge,
-/// 2. token the already-running bridge persisted for the reuse case,
-/// 3. a freshly generated random token (also persisted and passed on spawn).
-fn current_bridge_token() -> String {
-    static TOKEN: OnceLock<String> = OnceLock::new();
-    TOKEN.get_or_init(|| {
-        if let Some(token) = env::var("WINGMATE_BRIDGE_TOKEN").ok() {
-            let trimmed = token.trim().to_string();
-            if trimmed.len() >= 16 {
-                return trimmed;
-            }
-        }
-        if let Ok(token) = std::fs::read_to_string(bridge_token_file()) {
-            let trimmed = token.trim().to_string();
-            if trimmed.len() >= 16 {
-                return trimmed;
-            }
-        }
-        let token = generate_bridge_token();
-        persist_bridge_token(&token);
-        token
+fn valid_bridge_token(token: &str) -> bool {
+    token.len() == 64
+        && token
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn generate_bridge_token() -> Result<String, String> {
+    generate_bridge_token_with(|bytes| {
+        getrandom::fill(bytes).map_err(|error| format!("OS randomness unavailable: {error}"))
     })
-    .clone()
 }
 
-fn generate_bridge_token() -> String {
-    use std::io::Read;
+fn generate_bridge_token_with(
+    fill: impl FnOnce(&mut [u8]) -> Result<(), String>,
+) -> Result<String, String> {
     let mut bytes = [0u8; 32];
-    if let Ok(mut from) = std::fs::File::open("/dev/urandom") {
-        let _ = from.read_exact(&mut bytes);
-    } else {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0) as u64;
-        bytes[..8].copy_from_slice(&now.to_le_bytes());
-        bytes[8..16].copy_from_slice(&(std::process::id().to_le_bytes()));
-    }
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    fill(&mut bytes)?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
-fn persist_bridge_token(token: &str) {
-    let path = bridge_token_file();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
+#[cfg(unix)]
+fn current_effective_uid() -> u32 {
+    // SAFETY: geteuid has no preconditions and does not dereference pointers.
+    unsafe { libc::geteuid() }
+}
+
+#[cfg(unix)]
+fn validate_secure_path(path: &Path, expected_directory: bool) -> Result<(), String> {
+    use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
+
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("Cannot inspect {}: {error}", path.display()))?;
+    if metadata.file_type().is_symlink() {
+        return Err(format!("{} must not be a symbolic link", path.display()));
     }
-    let _ = std::fs::write(&path, format!("{token}\n"));
+    let correct_type = if expected_directory {
+        metadata.is_dir()
+    } else {
+        metadata.is_file() && !metadata.file_type().is_socket()
+    };
+    if !correct_type {
+        return Err(format!("{} has an unsafe file type", path.display()));
+    }
+    if metadata.uid() != current_effective_uid() {
+        return Err(format!(
+            "{} is not owned by the current user",
+            path.display()
+        ));
+    }
+    if metadata.permissions().mode() & 0o077 != 0 {
+        return Err(format!("{} is accessible by other users", path.display()));
+    }
+    Ok(())
+}
+
+fn read_secure_bridge_token(path: &Path) -> Result<String, String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Bridge token path has no parent".to_string())?;
+    validate_secure_path(parent, true)?;
+    validate_secure_path(path, false)?;
+    let token = fs::read_to_string(path)
+        .map_err(|error| format!("Cannot read {}: {error}", path.display()))?
+        .trim()
+        .to_string();
+    if !valid_bridge_token(&token) {
+        return Err(format!("{} contains an invalid token", path.display()));
+    }
+    Ok(token)
+}
+
+#[cfg(unix)]
+fn persist_bridge_token_at(path: &Path, token: &str) -> Result<(), String> {
+    use std::fs::OpenOptions;
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+
+    if !valid_bridge_token(token) {
+        return Err("Refusing to persist an invalid bridge token".into());
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Cannot create {}: {error}", parent.display()))?;
+        let metadata = fs::symlink_metadata(parent)
+            .map_err(|error| format!("Cannot inspect {}: {error}", parent.display()))?;
+        if metadata.file_type().is_symlink()
+            || !metadata.is_dir()
+            || metadata.uid() != current_effective_uid()
+        {
+            return Err(format!(
+                "{} is not a safe owned directory",
+                parent.display()
+            ));
+        }
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o700))
+            .map_err(|error| format!("Cannot secure {}: {error}", parent.display()))?;
+        validate_secure_path(parent, true)?;
+    }
+    let temporary = path.with_file_name(format!(".bridge-token-{}.tmp", std::process::id()));
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temporary)
+            .map_err(|error| format!("Cannot create {}: {error}", temporary.display()))?;
+        file.write_all(format!("{token}\n").as_bytes())
+            .and_then(|_| file.sync_all())
+            .map_err(|error| format!("Cannot write {}: {error}", temporary.display()))?;
+        fs::rename(&temporary, path)
+            .map_err(|error| format!("Cannot install {}: {error}", path.display()))?;
+        validate_secure_path(path, false)
+    })();
+    if temporary.exists() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+fn persist_bridge_token(token: &str) -> Result<(), String> {
+    persist_bridge_token_at(&bridge_token_file(), token)
+}
+
+fn explicit_bridge_token() -> Result<String, String> {
+    if let Ok(value) = env::var("WINGMATE_BRIDGE_TOKEN") {
+        let token = value.trim().to_string();
+        return valid_bridge_token(&token)
+            .then_some(token)
+            .ok_or_else(|| "WINGMATE_BRIDGE_TOKEN is invalid".into());
+    }
+    read_secure_bridge_token(&bridge_token_file())
+}
+
+fn validated_api_base(value: &str) -> Result<String, String> {
+    let parsed = url::Url::parse(value.trim())
+        .map_err(|error| format!("WINGMATE_API_URL is invalid: {error}"))?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("WINGMATE_API_URL must use HTTP or HTTPS".into());
+    }
+    let is_loopback = match parsed.host() {
+        Some(url::Host::Ipv4(address)) => address.is_loopback(),
+        Some(url::Host::Ipv6(address)) => address.is_loopback(),
+        _ => false,
+    };
+    if !is_loopback {
+        return Err("WINGMATE_API_URL must use a literal loopback address".into());
+    }
+    if !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+        || parsed.path() != "/"
+    {
+        return Err("WINGMATE_API_URL must contain only a loopback authority".into());
+    }
+    Ok(value.trim().trim_end_matches('/').to_string())
+}
+
+fn configured_api_base() -> Result<(String, bool), String> {
+    match env::var("WINGMATE_API_URL") {
+        Ok(value) => validated_api_base(&value).map(|base| (base, true)),
+        Err(env::VarError::NotPresent) => Ok((DEFAULT_API_URL.into(), false)),
+        Err(error) => Err(format!("Cannot read WINGMATE_API_URL: {error}")),
+    }
+}
+
+fn remove_owned_bridge_token(token: &str) {
+    let path = bridge_token_file();
+    if read_secure_bridge_token(&path).as_deref() == Ok(token) {
+        let _ = fs::remove_file(path);
+    }
 }
 
 fn bridge_already_running() -> bool {
@@ -7033,38 +7165,67 @@ fn bridge_already_running() -> bool {
     .is_ok()
 }
 
-fn start_bridge_server() -> Option<Child> {
-    if env::var_os("WINGMATE_API_URL").is_some() {
-        return None;
+fn start_bridge_server(token: &str) -> Result<Child, String> {
+    let jar = find_fat_jar();
+    Command::new("java")
+        .arg("-jar")
+        .arg(&jar)
+        .arg("--no-partner-window")
+        .env("WINGMATE_BRIDGE_TOKEN", token)
+        .spawn()
+        .map_err(|error| {
+            format!(
+                "Wingmate backend could not start from {}: {error}",
+                jar.display()
+            )
+        })
+}
+
+fn prepare_bridge_session() -> Result<(Api, BackendProcess), String> {
+    let (base, explicitly_configured) = configured_api_base()?;
+    if explicitly_configured {
+        let token = explicit_bridge_token()?;
+        return Ok((
+            Api::new(base, token),
+            BackendProcess {
+                child: None,
+                owned_token: None,
+            },
+        ));
     }
+
     if bridge_already_running() {
         eprintln!(
             "Wingmate backend already running on {DEFAULT_API_URL}; reusing existing backend"
         );
-        return None;
+        let token = read_secure_bridge_token(&bridge_token_file())?;
+        return Ok((
+            Api::new(base, token),
+            BackendProcess {
+                child: None,
+                owned_token: None,
+            },
+        ));
     }
-    let jar = find_fat_jar();
-    match Command::new("java")
-        .arg("-jar")
-        .arg(&jar)
-        .arg("--no-partner-window")
-        .env("WINGMATE_BRIDGE_TOKEN", current_bridge_token())
-        .spawn()
-    {
-        Ok(child) => Some(child),
-        Err(error) => {
-            eprintln!(
-                "Wingmate backend could not start from {}: {error}",
-                jar.display()
-            );
-            None
-        }
-    }
+
+    // A newly owned backend always receives a freshly generated capability;
+    // any safe-but-stale file from an earlier process is atomically replaced.
+    let token = generate_bridge_token()?;
+    persist_bridge_token(&token)?;
+    let child = start_bridge_server(&token).inspect_err(|_| remove_owned_bridge_token(&token))?;
+    Ok((
+        Api::new(base, token.clone()),
+        BackendProcess {
+            child: Some(child),
+            owned_token: Some(token),
+        },
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn board_image_resolve_payload_includes_required_obf_id() {
@@ -7084,6 +7245,73 @@ mod tests {
     #[test]
     fn bridge_token_header_matches_the_kotlin_bridge_contract() {
         assert_eq!(TOKEN_HEADER, "x-wingmate-token");
+    }
+
+    #[test]
+    fn bridge_token_generation_fails_closed_without_os_randomness() {
+        let error = generate_bridge_token_with(|_| Err("randomness failed".into()))
+            .expect_err("weak fallback must not be used");
+        assert_eq!(error, "randomness failed");
+    }
+
+    #[test]
+    fn bridge_token_generation_encodes_all_random_bytes() {
+        let token = generate_bridge_token_with(|bytes| {
+            bytes.fill(0xab);
+            Ok(())
+        })
+        .expect("deterministic random source");
+        assert_eq!(token, "ab".repeat(32));
+    }
+
+    #[test]
+    fn bridge_token_file_is_owner_only_and_unsafe_reuse_is_rejected() {
+        let root = tempfile::tempdir().expect("temporary state directory");
+        let path = root.path().join("wingmate/bridge-token");
+        let token = "a".repeat(64);
+
+        persist_bridge_token_at(&path, &token).expect("secure token persistence");
+
+        let directory_mode = fs::metadata(path.parent().unwrap())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        let file_mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(directory_mode, 0o700);
+        assert_eq!(file_mode, 0o600);
+        assert_eq!(read_secure_bridge_token(&path).unwrap(), token);
+
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(read_secure_bridge_token(&path).is_err());
+
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        fs::set_permissions(path.parent().unwrap(), fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(read_secure_bridge_token(&path).is_err());
+    }
+
+    #[test]
+    fn api_url_accepts_only_literal_loopback_authorities() {
+        assert_eq!(
+            validated_api_base("http://127.0.0.1:8765/").unwrap(),
+            "http://127.0.0.1:8765"
+        );
+        assert_eq!(
+            validated_api_base("https://[::1]:8765").unwrap(),
+            "https://[::1]:8765"
+        );
+
+        for hostile in [
+            "https://example.com",
+            "http://localhost:8765",
+            "http://10.0.0.4:8765",
+            "file:///tmp/bridge",
+            "http://127.0.0.1:8765/api",
+            "http://127.0.0.1:8765/?next=https://example.com",
+            "http://user@127.0.0.1:8765",
+        ] {
+            assert!(validated_api_base(hostile).is_err(), "accepted {hostile}");
+        }
     }
 
     #[test]
