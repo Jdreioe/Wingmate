@@ -115,6 +115,7 @@ final class IosViewModel: ObservableObject {
     private lazy var backupFacade = IosDiBridge().backupFacade()
     private lazy var speechFacade = IosDiBridge().speechFacade()
     private lazy var settingsFacade = IosDiBridge().settingsFacade()
+    private lazy var boardsFacade = IosDiBridge().boardsFacade()
 
     // UI state
     @Published var input: String = ""
@@ -335,7 +336,7 @@ final class IosViewModel: ObservableObject {
 
     func availableFieldSpanOptions(row: Int, col: Int) async -> [GridFieldSpanInfo] {
         guard let boardId = selectedBoardId else { return [] }
-        let spans = (try? await bridge.availableFieldSpans(
+        let spans = (try? await boardsFacade.availableFieldSpans(
             boardId: boardId,
             row: Int32(row),
             col: Int32(col)
@@ -345,7 +346,7 @@ final class IosViewModel: ObservableObject {
 
     func resizeSelectedBoardField(row: Int, col: Int, rows: Int, columns: Int) async {
         guard let boardId = selectedBoardId else { return }
-        let ok = (try? await bridge.resizeBoardField(
+        let ok = (try? await boardsFacade.resizeBoardField(
             boardId: boardId,
             row: Int32(row),
             col: Int32(col),
@@ -414,11 +415,11 @@ final class IosViewModel: ObservableObject {
         ConnectivityMonitor.shared.onChange { [weak self] online in
             guard let self = self else { return }
             self.isOnline = online
-            self.bridge.updateBoardSetSpeechCacheOnline(online: online)
+            self.boardsFacade.updateBoardSetSpeechCacheOnline(online: online)
             if online {
                 Task {
-                    try? await self.bridge.cacheAllBoardSetFields()
-                    try? await self.bridge.retryBoardSetSpeechCaching()
+                    try? await self.boardsFacade.cacheAllBoardSetFields()
+                    try? await self.boardsFacade.retryBoardSetSpeechCaching()
                 }
             }
             if !online && !self.hasShownOfflineBanner {
@@ -437,7 +438,7 @@ final class IosViewModel: ObservableObject {
     await loadPronunciations()
     // Load boardsets and selected board for symbol mode
     await loadBoardSets()
-    _ = try? await bridge.cacheAllBoardSetFields()
+    _ = try? await boardsFacade.cacheAllBoardSetFields()
     }
 
     func retryPhraseLoad() {
@@ -1518,7 +1519,7 @@ final class IosViewModel: ObservableObject {
         set.cacheWholeSentences = enabled
         updateBoardSet(set)
         Task {
-            if let updated = try? await bridge.updateBoardSetSentenceCaching(id: id, enabled: enabled) {
+            if let updated = try? await boardsFacade.updateBoardSetSentenceCaching(id: id, enabled: enabled) {
                 updateBoardSet(boardSetInfo(from: updated))
             }
         }
@@ -1559,7 +1560,7 @@ final class IosViewModel: ObservableObject {
             }
 
             do {
-                if let board = try await bridge.getBoard(id: boardId) {
+                if let board = try await boardsFacade.getBoard(id: boardId) {
                     let name = board.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                     if !name.isEmpty {
                         cache[boardId] = name
@@ -1575,7 +1576,7 @@ final class IosViewModel: ObservableObject {
 
     func loadBoardSets() async {
         do {
-            let sharedSets = try await bridge.listBoardSets()
+            let sharedSets = try await boardsFacade.listBoardSets()
             boardSets = sharedSets
                 .map { boardSetInfo(from: $0) }
                 .sorted { $0.updatedAt > $1.updatedAt }
@@ -1611,7 +1612,7 @@ final class IosViewModel: ObservableObject {
         let safeColumns = min(max(columns, 1), 12)
 
         do {
-            let sharedSet = try await bridge.createBoardSet(
+            let sharedSet = try await boardsFacade.createBoardSet(
                 name: boardsetName,
                 rows: Int32(safeRows),
                 columns: Int32(safeColumns)
@@ -1632,7 +1633,7 @@ final class IosViewModel: ObservableObject {
         defer { isCreatingBoardSet = false }
         let boardsetName = normalizedBoardsetName(name)
         do {
-            let sharedSet = try await bridge.createKeyboardBoardSet(name: boardsetName, preset: preset)
+            let sharedSet = try await boardsFacade.createKeyboardBoardSet(name: boardsetName, preset: preset)
             let set = boardSetInfo(from: sharedSet)
             await loadBoardSets()
             selectedBoardSetId = set.id
@@ -1651,7 +1652,7 @@ final class IosViewModel: ObservableObject {
         quickCoreDownloadProgress = 0
         let monitor = Task { @MainActor in
             while !Task.isCancelled {
-                let progress = bridge.quickCoreProgress()
+                let progress = boardsFacade.quickCoreProgress()
                 quickCoreDownloadProgress = progress.fraction?.doubleValue
                 try? await Task.sleep(nanoseconds: 150_000_000)
             }
@@ -1661,7 +1662,7 @@ final class IosViewModel: ObservableObject {
             isImportingQuickCore = false
         }
         do {
-            guard let sharedSet = try await bridge.importQuickCorePreset(slug: slug, name: normalizedBoardsetName(name)) else {
+            guard let sharedSet = try await boardsFacade.importQuickCorePreset(slug: slug, name: normalizedBoardsetName(name)) else {
                 boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
                 return
             }
@@ -1689,7 +1690,7 @@ final class IosViewModel: ObservableObject {
         let safeColumns = min(max(columns, 1), 12)
 
         do {
-            guard let board = try await bridge.createBoard(
+            guard let board = try await boardsFacade.createBoard(
                 boardSetId: set.id,
                 name: boardName,
                 rows: Int32(safeRows),
@@ -1716,7 +1717,7 @@ final class IosViewModel: ObservableObject {
             return
         }
         do {
-            guard let board = try await bridge.createKeyboardBoard(
+            guard let board = try await boardsFacade.createKeyboardBoard(
                 boardSetId: set.id,
                 name: normalizedBoardsetName(name),
                 rows: Int32(min(max(rows, 1), 12)),
@@ -1766,7 +1767,7 @@ final class IosViewModel: ObservableObject {
 
     func applyBoardReturnBehavior() async {
         let behavior = boardReturnBehavior
-        let result = bridge.boardReturnBehavior(
+        let result = boardsFacade.boardReturnBehavior(
             behavior: behavior,
             currentBoardId: selectedBoardId,
             boardStack: boardStack,
@@ -1781,23 +1782,23 @@ final class IosViewModel: ObservableObject {
     }
 
     func nGramPredictionInsertion(sentence: String, suggestion: String) -> String {
-        bridge.nGramPredictionInsertion(sentence: sentence, suggestion: suggestion)
+        boardsFacade.nGramPredictionInsertion(sentence: sentence, suggestion: suggestion)
     }
 
     func boardBackspaceSentence(texts: [String], spellingMode: Bool) -> [String] {
-        bridge.boardBackspaceSentence(texts: texts, spellingMode: spellingMode)
+        boardsFacade.boardBackspaceSentence(texts: texts, spellingMode: spellingMode)
     }
 
     func boardButtonIsVisible(hidden: Bool, isEditMode: Bool, showHiddenButtons: Bool) -> Bool {
-        bridge.boardButtonIsVisible(hidden: hidden, isEditMode: isEditMode, showHiddenButtons: showHiddenButtons)
+        boardsFacade.boardButtonIsVisible(hidden: hidden, isEditMode: isEditMode, showHiddenButtons: showHiddenButtons)
     }
 
     func boardFieldFontScale(rowSpan: Int, columnSpan: Int) -> CGFloat {
-        CGFloat(bridge.boardFieldFontScale(rowSpan: Int32(rowSpan), columnSpan: Int32(columnSpan)))
+        CGFloat(boardsFacade.boardFieldFontScale(rowSpan: Int32(rowSpan), columnSpan: Int32(columnSpan)))
     }
 
     func boardJoinSentenceText(tokens: [String], spellingMode: Bool) -> String {
-        bridge.boardJoinSentenceText(tokens: tokens, spellingMode: spellingMode)
+        boardsFacade.boardJoinSentenceText(tokens: tokens, spellingMode: spellingMode)
     }
 
     func loadSelectedBoard() async {
@@ -1817,9 +1818,9 @@ final class IosViewModel: ObservableObject {
             return
         }
         do {
-            selectedBoard = try await bridge.getBoard(id: id)
+            selectedBoard = try await boardsFacade.getBoard(id: id)
             await refreshSelectedBoardMetadata()
-            let resolved = try? await bridge.resolveBoardSettings(boardId: id)
+            let resolved = try? await boardsFacade.resolveBoardSettings(boardId: id)
             resolvedBoardShowLabels = resolved?.showLabels
             resolvedBoardShowSymbols = resolved?.showSymbols
             resolvedBoardLabelAtTop = resolved?.labelAtTop
@@ -1853,8 +1854,8 @@ final class IosViewModel: ObservableObject {
             selectedBoardUsesSpellingMode = false
             return
         }
-        selectedBoardKeyboardLayout = bridge.boardKeyboardLayout(board: board)
-        selectedBoardUsesSpellingMode = bridge.boardUsesSpellingMode(board: board)
+        selectedBoardKeyboardLayout = boardsFacade.boardKeyboardLayout(board: board)
+        selectedBoardUsesSpellingMode = boardsFacade.boardUsesSpellingMode(board: board)
         if selectedBoardKeyboardLayout != nil {
             _ = try? await bridge.trainPredictionModel()
         }
@@ -1868,8 +1869,8 @@ final class IosViewModel: ObservableObject {
         }
 
         do {
-            let cells = try await bridge.listBoardCells(boardId: boardId)
-            let fields = try await bridge.listBoardFieldItems(boardId: boardId)
+            let cells = try await boardsFacade.listBoardCells(boardId: boardId)
+            let fields = try await boardsFacade.listBoardFieldItems(boardId: boardId)
             boardCells = cells.map { cell in
                 BoardCellInfo(
                     row: Int(cell.row),
@@ -1936,7 +1937,7 @@ final class IosViewModel: ObservableObject {
         let normalizedImageUrl = normalizedOptionalText(imageUrl)
 
         do {
-            guard let updatedBoard = try await bridge.upsertBoardCellButton(
+            guard let updatedBoard = try await boardsFacade.upsertBoardCellButton(
                 boardId: boardId,
                 row: Int32(row),
                 col: Int32(col),
@@ -1956,7 +1957,7 @@ final class IosViewModel: ObservableObject {
 
             selectedBoard = updatedBoard
             await refreshBoardCells()
-            if let setId = selectedBoardSetId { _ = try? await bridge.touchBoardSet(id: setId) }
+            if let setId = selectedBoardSetId { _ = try? await boardsFacade.touchBoardSet(id: setId) }
             touchSelectedBoardSet(statusKey: "boardset.status.cell_saved")
         } catch {
             boardStatusMessage = NSLocalizedString("boardset.error.cell_update_failed", comment: "")
@@ -1974,7 +1975,7 @@ final class IosViewModel: ObservableObject {
         }
 
         do {
-            guard let updatedBoard = try await bridge.clearBoardCellButton(
+            guard let updatedBoard = try await boardsFacade.clearBoardCellButton(
                 boardId: boardId,
                 row: Int32(row),
                 col: Int32(col)
@@ -1985,7 +1986,7 @@ final class IosViewModel: ObservableObject {
 
             selectedBoard = updatedBoard
             await refreshBoardCells()
-            if let setId = selectedBoardSetId { _ = try? await bridge.touchBoardSet(id: setId) }
+            if let setId = selectedBoardSetId { _ = try? await boardsFacade.touchBoardSet(id: setId) }
             touchSelectedBoardSet(statusKey: "boardset.status.cell_cleared")
         } catch {
             boardStatusMessage = NSLocalizedString("boardset.error.cell_clear_failed", comment: "")
@@ -2080,9 +2081,9 @@ final class IosViewModel: ObservableObject {
         }
 
         do {
-            let saved = try await bridge.saveBoard(board: board)
+            let saved = try await boardsFacade.saveBoard(board: board)
             if saved.boolValue {
-                if let setId = selectedBoardSetId { _ = try? await bridge.touchBoardSet(id: setId) }
+                if let setId = selectedBoardSetId { _ = try? await boardsFacade.touchBoardSet(id: setId) }
                 touchSelectedBoardSet(statusKey: "boardset.status.saved")
             } else {
                 boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
@@ -2096,7 +2097,7 @@ final class IosViewModel: ObservableObject {
         guard let set = selectedBoardSet, canEditSelectedBoardSet else { return }
         let normalized = normalizedBoardsetName(name)
         do {
-            guard let updated = try await bridge.renameBoardSet(boardSetId: set.id, name: normalized) else { return }
+            guard let updated = try await boardsFacade.renameBoardSet(boardSetId: set.id, name: normalized) else { return }
             await loadBoardSets()
             selectedBoardSetId = updated.id
             boardStatusMessage = NSLocalizedString("boardset.status.saved", comment: "")
@@ -2109,7 +2110,7 @@ final class IosViewModel: ObservableObject {
         guard let set = selectedBoardSet, let boardId = selectedBoardId, canEditSelectedBoardSet else { return }
         let normalized = normalizedBoardsetName(name)
         do {
-            guard let board = try await bridge.renameBoard(boardSetId: set.id, boardId: boardId, name: normalized) else { return }
+            guard let board = try await boardsFacade.renameBoard(boardSetId: set.id, boardId: boardId, name: normalized) else { return }
             selectedBoard = board
             boardNamesById[boardId] = normalized
             await loadBoardSets()
@@ -2122,7 +2123,7 @@ final class IosViewModel: ObservableObject {
     func resizeSelectedBoard(rows: Int, columns: Int) async {
         guard let set = selectedBoardSet, let boardId = selectedBoardId, canEditSelectedBoardSet else { return }
         do {
-            guard let board = try await bridge.resizeBoard(
+            guard let board = try await boardsFacade.resizeBoard(
                 boardSetId: set.id,
                 boardId: boardId,
                 rows: Int32(min(max(rows, 1), 12)),
@@ -2141,7 +2142,7 @@ final class IosViewModel: ObservableObject {
     func setSelectedBoardBackgroundColor(_ color: String?) async {
         guard let set = selectedBoardSet, let boardId = selectedBoardId, canEditSelectedBoardSet else { return }
         do {
-            guard let board = try await bridge.setBoardBackgroundColor(
+            guard let board = try await boardsFacade.setBoardBackgroundColor(
                 boardSetId: set.id,
                 boardId: boardId,
                 backgroundColor: normalizedOptionalText(color)
@@ -2158,7 +2159,7 @@ final class IosViewModel: ObservableObject {
     func makeSelectedBoardRoot() async {
         guard let set = selectedBoardSet, let boardId = selectedBoardId, boardId != set.rootBoardId else { return }
         do {
-            guard let updated = try await bridge.setRootBoard(boardSetId: set.id, boardId: boardId) else { return }
+            guard let updated = try await boardsFacade.setRootBoard(boardSetId: set.id, boardId: boardId) else { return }
             await loadBoardSets()
             selectedBoardSetId = updated.id
             selectedBoardId = boardId
@@ -2171,7 +2172,7 @@ final class IosViewModel: ObservableObject {
         guard let set = selectedBoardSet, let boardId = selectedBoardId,
               boardId != set.rootBoardId, set.boardIds.count > 1 else { return }
         do {
-            guard let updated = try await bridge.deleteBoard(boardSetId: set.id, boardId: boardId) else { return }
+            guard let updated = try await boardsFacade.deleteBoard(boardSetId: set.id, boardId: boardId) else { return }
             await loadBoardSets()
             selectedBoardSetId = updated.id
             selectedBoardId = updated.rootBoardId
@@ -2185,7 +2186,7 @@ final class IosViewModel: ObservableObject {
         guard let set = selectedBoardSet, set.isLocked != locked else { return }
         Task {
             do {
-                _ = try await bridge.toggleBoardSetLocked(id: set.id)
+                _ = try await boardsFacade.toggleBoardSetLocked(id: set.id)
                 await loadBoardSets()
                 selectedBoardSetId = set.id
                 boardStatusMessage = locked
@@ -2199,7 +2200,7 @@ final class IosViewModel: ObservableObject {
 
     func deleteBoardSet(id: String) async {
         do {
-            try await bridge.deleteBoardSet(id: id)
+            try await boardsFacade.deleteBoardSet(id: id)
             await loadBoardSets()
             if selectedBoardSetId == id {
                 selectedBoardSetId = boardSets.first?.id
@@ -2221,7 +2222,7 @@ final class IosViewModel: ObservableObject {
 
     func duplicateBoardSet(id: String) async {
         do {
-            if let dup = try await bridge.duplicateBoardSet(id: id) {
+            if let dup = try await boardsFacade.duplicateBoardSet(id: id) {
                 let info = boardSetInfo(from: dup)
                 await loadBoardSets()
                 selectedBoardSetId = info.id

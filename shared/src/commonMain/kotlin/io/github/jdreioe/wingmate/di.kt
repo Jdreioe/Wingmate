@@ -24,6 +24,7 @@ import io.github.jdreioe.wingmate.application.BackupFacade
 import io.github.jdreioe.wingmate.application.BackupManager
 import io.github.jdreioe.wingmate.application.SpeechFacade
 import io.github.jdreioe.wingmate.application.SettingsFacade
+import io.github.jdreioe.wingmate.application.BoardsFacade
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.application.UnavailableBackupMediaAccess
 import io.github.jdreioe.wingmate.domain.FileStorage
@@ -111,6 +112,7 @@ internal fun createCoreDataModule(): Module = module {
         singleOf(::BackupFacade)
         singleOf(::SpeechFacade)
         singleOf(::SettingsFacade)
+        singleOf(::BoardsFacade)
         singleOf(::SettingsStateManager)
         singleOf(::VoiceUseCase)
         factory { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>(), get<CategoryUseCase>()) }
