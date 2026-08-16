@@ -35,6 +35,7 @@ import io.github.jdreioe.wingmate.infrastructure.IosSecureEditingCredentialStora
 import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
 import io.github.jdreioe.wingmate.application.BackupMediaAccess
 import io.github.jdreioe.wingmate.application.BackupSharingFacade
+import io.github.jdreioe.wingmate.application.SpeechFacade
 import io.github.jdreioe.wingmate.infrastructure.IosBackupMediaAccess
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
@@ -111,4 +112,5 @@ class IosDiBridge {
     // Alternative explicit bridge name for Swift binding
     fun startKoinWithOverridesBridge() = startKoinWithOverrides()
     fun backupFacade(): BackupSharingFacade = KoinPlatform.getKoin().get()
+    fun speechFacade(): SpeechFacade = KoinPlatform.getKoin().get()
 }

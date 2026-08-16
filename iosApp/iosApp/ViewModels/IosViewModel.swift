@@ -84,7 +84,7 @@ final class IosViewModel: ObservableObject {
             speak: { [weak self] text in
                 guard let self = self else { return }
                 do {
-                    try await self.bridge.speak(text: text)
+                    try await self.speechFacade.speak(text: text)
                 } catch {
                     self.setSpeechFailure(retry: .text(text))
                 }
@@ -92,7 +92,7 @@ final class IosViewModel: ObservableObject {
             pause: { [weak self] in
                 guard let self = self else { return }
                 do {
-                    try await self.bridge.pause()
+                    try await self.speechFacade.pause()
                 } catch {
                     self.setSpeechFailure()
                 }
@@ -100,7 +100,7 @@ final class IosViewModel: ObservableObject {
             stop: { [weak self] in
                 guard let self = self else { return }
                 do {
-                    try await self.bridge.stop()
+                    try await self.speechFacade.stop()
                 } catch {
                     self.setSpeechFailure()
                 }
@@ -113,6 +113,7 @@ final class IosViewModel: ObservableObject {
     // Bridge to shared KMP use-cases
     private let bridge = KoinBridge()
     private lazy var backupFacade = IosDiBridge().backupFacade()
+    private lazy var speechFacade = IosDiBridge().speechFacade()
 
     // UI state
     @Published var input: String = ""
@@ -444,7 +445,7 @@ final class IosViewModel: ObservableObject {
 
     func refreshAzureConfiguration() async {
         do {
-            let cfg = try await bridge.getSpeechConfig()
+            let cfg = try await speechFacade.getSpeechConfig()
             let ep = cfg.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
             azureConfigured = !ep.isEmpty && cfg.credentialConfigured
         } catch {
@@ -698,7 +699,7 @@ final class IosViewModel: ObservableObject {
         }
         Task {
             do {
-                try await bridge.speak(text: t)
+                try await speechFacade.speak(text: t)
                 clearSpeechFailure()
             } catch {
                 setSpeechFailure(retry: .text(t))
@@ -710,7 +711,7 @@ final class IosViewModel: ObservableObject {
     /// SpeechTextProcessor when no secondary-language splitting is required.
     private func speakSystemText(_ text: String, isInputText: Bool) {
         if !isInputText || secondaryLanguageRanges.isEmpty {
-            let segments = bridge.processSpeechText(text: text)
+            let segments = speechFacade.processSpeechText(text: text)
             SystemTtsManager.shared.speak(segments: segments, language: primaryLanguage)
         } else {
             SystemTtsManager.shared.speak(
@@ -727,13 +728,13 @@ final class IosViewModel: ObservableObject {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         AudioSessionHelper.activatePlayback()
         if useSystemTts || !azureConfigured || (!isOnline && useSystemTtsWhenOffline) {
-            let segments = bridge.processSpeechText(text: text)
+            let segments = speechFacade.processSpeechText(text: text)
             SystemTtsManager.shared.speak(segments: segments, language: primaryLanguage)
             return
         }
         Task {
             do {
-                try await bridge.speakBoardSentence(text: text, cacheAudio: cacheAudio)
+                try await speechFacade.speakBoardSentence(text: text, cacheAudio: cacheAudio)
                 clearSpeechFailure()
             } catch {
                 setSpeechFailure(retry: .boardSentence(text, boardSetId))
@@ -901,7 +902,7 @@ final class IosViewModel: ObservableObject {
         } else {
             Task {
                 do {
-                    try await bridge.pause()
+                    try await speechFacade.pause()
                 } catch {
                     setSpeechFailure()
                 }
@@ -925,7 +926,7 @@ final class IosViewModel: ObservableObject {
         } else {
             Task {
                 do {
-                    try await bridge.stop()
+                    try await speechFacade.stop()
                 } catch {
                     setSpeechFailure()
                 }
@@ -936,7 +937,7 @@ final class IosViewModel: ObservableObject {
     func setUseSystemTts(_ enabled: Bool) {
         self.useSystemTts = enabled
         UserDefaults.standard.set(enabled, forKey: "use_system_tts")
-        Task { _ = try? await bridge.updateUseSystemTts(enabled: enabled) }
+        Task { _ = try? await speechFacade.updateUseSystemTts(enabled: enabled) }
     }
 
     func setUseSystemTtsWhenOffline(_ enabled: Bool) {
@@ -1184,13 +1185,13 @@ final class IosViewModel: ObservableObject {
 
     func chooseVoice(_ v: Shared.Voice) async {
         do {
-            try await bridge.selectVoiceAndMaybeUpdatePrimary(voice: v)
+            try await speechFacade.selectVoiceAndMaybeUpdatePrimary(voice: v)
             await MainActor.run {
                 self.selectedVoice = v
                 if let langs = v.supportedLanguages { self.availableLanguages = langs } else { self.availableLanguages = [] }
                 self.primaryLanguage = effectiveLanguage(for: v)
             }
-            let persisted = try? await bridge.selectedVoice()
+            let persisted = try? await speechFacade.selectedVoice()
             if let pv = persisted {
                 self.selectedVoice = pv
                 if let langs = pv.supportedLanguages { self.availableLanguages = langs } else { self.availableLanguages = [] }
@@ -1198,11 +1199,11 @@ final class IosViewModel: ObservableObject {
                 #if DEBUG
                 let name = (pv.displayName ?? pv.name) ?? "—"
                 let lang = effectiveLanguage(for: pv)
-                print("DEBUG: bridge.selectedVoice() => \(name) [\(lang)]")
+                print("DEBUG: speechFacade.selectedVoice() => \(name) [\(lang)]")
                 #endif
             } else {
                 #if DEBUG
-                print("DEBUG: bridge.selectedVoice() => (none)")
+                print("DEBUG: speechFacade.selectedVoice() => (none)")
                 #endif
             }
         } catch {
@@ -1212,7 +1213,7 @@ final class IosViewModel: ObservableObject {
 
     func updateLanguage(_ lang: String) {
         Task {
-            _ = try? await bridge.updateSelectedVoiceLanguage(lang: lang)
+            _ = try? await speechFacade.updateSelectedVoiceLanguage(lang: lang)
             self.primaryLanguage = lang
             if lang == self.secondaryLanguage {
                 self.secondaryLanguageRanges = []
@@ -1310,7 +1311,7 @@ final class IosViewModel: ObservableObject {
 
     func refreshVoiceAndLanguages() {
         Task {
-            let v = try? await bridge.selectedVoice()
+            let v = try? await speechFacade.selectedVoice()
             self.selectedVoice = v
             if let langs = v?.supportedLanguages { self.availableLanguages = langs } else { self.availableLanguages = [] }
             if let v = v { self.primaryLanguage = effectiveLanguage(for: v) }

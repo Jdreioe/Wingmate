@@ -20,7 +20,7 @@ struct F0SetupView: View {
     @State private var subscriptionKey: String = ""
     @State private var saveError: String? = nil
     @State private var saving: Bool = false
-    private let bridge = KoinBridge()
+    private let speechFacade = IosDiBridge().speechFacade()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -318,7 +318,7 @@ struct F0SetupView: View {
             saveError = NSLocalizedString("azure_setup.error.endpoint", comment: "")
             return
         }
-        guard bridge.isValidAzureSpeechEndpoint(endpoint: ep) else {
+        guard speechFacade.isValidAzureSpeechEndpoint(endpoint: ep) else {
             saveError = NSLocalizedString("azure_setup.error.endpoint", comment: "")
             return
         }
@@ -332,7 +332,7 @@ struct F0SetupView: View {
 
         Task {
             do {
-                try await bridge.saveAzureSpeechConfig(endpoint: ep, subscriptionKey: key)
+                try await speechFacade.saveAzureSpeechConfig(endpoint: ep, subscriptionKey: key)
                 await MainActor.run {
                     saving = false
                     step = .success

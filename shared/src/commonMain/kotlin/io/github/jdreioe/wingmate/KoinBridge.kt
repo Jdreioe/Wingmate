@@ -4,7 +4,6 @@ import io.github.jdreioe.wingmate.application.SelectionHighlight
 import io.github.jdreioe.wingmate.application.AccessInputController
 import io.github.jdreioe.wingmate.application.AccessInputEffect
 import io.github.jdreioe.wingmate.application.SettingsUseCase
-import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.application.EditingAccessController
@@ -12,19 +11,12 @@ import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.di.appModule
 import io.github.jdreioe.wingmate.initKoin
-import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.OperationalLogger
-import io.github.jdreioe.wingmate.domain.SpeechService
-import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
-import io.github.jdreioe.wingmate.domain.SpeechServiceConfigStatus
-import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
-import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechPolicy
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
 import io.github.jdreioe.wingmate.domain.WordTypeColorScheme
-import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.TextEditResult
@@ -66,8 +58,6 @@ import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
-import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpoint
-import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpointResult
 import kotlin.time.Clock
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -122,50 +112,6 @@ class KoinBridge : KoinComponent {
     }
 
     // --- Simple bridging helpers for Swift UI ---
-    /** Split text into speech segments honoring shorthand SSML pauses and language tags. */
-    fun processSpeechText(text: String): List<SpeechSegment> = SpeechTextProcessor.processText(text)
-
-    suspend fun speak(text: String) {
-        get<SpeechService>().speak(text)
-    }
-
-    suspend fun speakBoardSentence(text: String, cacheAudio: Boolean) {
-        get<SpeechService>().speakWithCachePolicy(text = text, cacheAudio = cacheAudio)
-    }
-
-    suspend fun pause() {
-        get<SpeechService>().pause()
-    }
-
-    suspend fun stop() {
-        get<SpeechService>().stop()
-    }
-
-    suspend fun selectVoiceAndMaybeUpdatePrimary(voice: Voice) {
-        val voiceUseCase: VoiceUseCase = get()
-        OperationalLogger.debug("voice_selection.update", "started")
-        voiceUseCase.select(voice)
-
-        // Optionally align Settings.primaryLanguage with selected voice
-        val settingsUseCase: SettingsUseCase = get()
-        val current = settingsUseCase.get()
-        val candidate = voice.selectedLanguage
-            .takeIf { it.isNotEmpty() }
-            ?: voice.primaryLanguage?.takeIf { it.isNotEmpty() }
-            ?: current.primaryLanguage
-        if (candidate != current.primaryLanguage) {
-            settingsUseCase.update(current.copy(primaryLanguage = candidate))
-        }
-    }
-
-    suspend fun updatePrimaryLanguage(lang: String) {
-        val settingsUseCase: SettingsUseCase = get()
-        val current = settingsUseCase.get()
-        if (lang != current.primaryLanguage) {
-            settingsUseCase.update(current.copy(primaryLanguage = lang))
-        }
-    }
-
     suspend fun getSettings(): Settings = get<SettingsUseCase>().get()
 
     private suspend fun updateSettings(transform: (Settings) -> Settings) {
@@ -183,10 +129,6 @@ class KoinBridge : KoinComponent {
     suspend fun updateScanPhraseGridOrder(order: String) = updateSettings { it.copy(scanPhraseGridOrder = order) }
     suspend fun updateScanDwellTimeSeconds(seconds: Float) = updateSettings { it.copy(scanDwellTimeSeconds = seconds) }
     suspend fun updateScanAutoAdvanceSeconds(seconds: Float) = updateSettings { it.copy(scanAutoAdvanceSeconds = seconds) }
-    suspend fun usesSystemTts(): Boolean = get<SettingsUseCase>().get().ttsEngine == TtsEngine.SYSTEM
-    suspend fun updateUseSystemTts(enabled: Boolean) = updateSettings {
-        it.copy(ttsEngine = if (enabled) TtsEngine.SYSTEM else TtsEngine.AZURE_USER_RESOURCE)
-    }
     suspend fun updateShowLabels(enabled: Boolean) = updateSettings { it.copy(showLabels = enabled) }
     suspend fun updateShowSymbols(enabled: Boolean) = updateSettings { it.copy(showSymbols = enabled) }
     suspend fun updateLabelAtTop(enabled: Boolean) = updateSettings { it.copy(labelAtTop = enabled) }
@@ -307,52 +249,8 @@ class KoinBridge : KoinComponent {
     }
     suspend fun updateStartupBoardSetId(id: String?) = updateSettings { it.copy(startupBoardSetId = id) }
 
-    // Update both the selected voice's selectedLanguage and the app Settings.primaryLanguage
-    suspend fun updateSelectedVoiceLanguage(lang: String) {
-        val voiceUseCase: VoiceUseCase = get()
-        val settingsUseCase: SettingsUseCase = get()
-
-        // Update selected voice, if any
-        val selected = voiceUseCase.selected()
-        if (selected != null && selected.selectedLanguage != lang) {
-            voiceUseCase.select(selected.copy(selectedLanguage = lang))
-        }
-        // Align settings primary language
-        val current = settingsUseCase.get()
-        if (lang != current.primaryLanguage) {
-            settingsUseCase.update(current.copy(primaryLanguage = lang))
-        }
-    }
-
-    suspend fun selectedVoice(): Voice? = get<VoiceUseCase>().selected()
-
     // Debug helper: return the runtime class name of the bound VoiceRepository
     fun debugVoiceRepositoryName(): String = try { get<io.github.jdreioe.wingmate.domain.VoiceRepository>()::class.simpleName ?: "unknown" } catch (_: Throwable) { "error" }
-
-    suspend fun listVoices(): List<Voice> = get<VoiceUseCase>().list()
-
-    suspend fun refreshVoicesFromAzure(): List<Voice> = get<VoiceUseCase>().refreshFromAzure()
-
-    /** Safe for native UI: deliberately never returns the saved subscription key. */
-    suspend fun getSpeechConfig(): SpeechServiceConfigStatus = get<ConfigRepository>().getSpeechConfigStatus()
-
-    suspend fun saveSpeechConfig(config: SpeechServiceConfig) {
-        get<ConfigRepository>().saveSpeechConfig(config)
-    }
-
-    fun isValidAzureSpeechEndpoint(endpoint: String): Boolean =
-        AzureSpeechEndpoint.parse(endpoint) is AzureSpeechEndpointResult.Valid
-
-    suspend fun clearSpeechConfig() {
-        get<ConfigRepository>().clearSpeechConfig()
-    }
-
-    suspend fun saveAzureSpeechConfig(endpoint: String, subscriptionKey: String) {
-        get<ConfigRepository>().saveSpeechConfig(SpeechServiceConfig(endpoint.trim(), subscriptionKey.trim()))
-        val settingsUseCase: SettingsUseCase = get()
-        val settings = runCatching { settingsUseCase.get() }.getOrDefault(Settings())
-        settingsUseCase.update(settings.copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE))
-    }
 
     // Swift-friendly bridge to update phrase recording path
     fun updatePhraseRecording(phraseId: String, recordingPath: String?) {

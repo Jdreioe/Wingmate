@@ -1139,7 +1139,7 @@ struct AzureSettingsSheet: View {
     @State private var loading = true
     @State private var saving = false
     @State private var error: String? = nil
-    private let bridge = KoinBridge()
+    private let speechFacade = IosDiBridge().speechFacade()
     let onClose: () -> Void
 
     var body: some View {
@@ -1165,7 +1165,7 @@ struct AzureSettingsSheet: View {
                         Button(saving ? "common.saving" : "common.save") {
                             Task {
                                 let trimmedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-                                guard bridge.isValidAzureSpeechEndpoint(endpoint: trimmedEndpoint) else {
+                                guard speechFacade.isValidAzureSpeechEndpoint(endpoint: trimmedEndpoint) else {
                                     self.error = NSLocalizedString("azure_setup.error.endpoint", comment: "")
                                     return
                                 }
@@ -1175,8 +1175,8 @@ struct AzureSettingsSheet: View {
                                 do {
                                     let cfg = Shared.SpeechServiceConfig(endpoint: trimmedEndpoint,
                                                                          subscriptionKey: key.trimmingCharacters(in: .whitespacesAndNewlines))
-                                    try await bridge.saveSpeechConfig(config: cfg)
-                                    _ = try? await bridge.listVoices()
+                                    try await speechFacade.saveSpeechConfig(config: cfg)
+                                    _ = try? await speechFacade.listVoices()
                                     credentialConfigured = true
                                     replacingCredentials = false
                                     endpoint = ""
@@ -1199,7 +1199,7 @@ struct AzureSettingsSheet: View {
                     loading = true
                     defer { loading = false }
                     do {
-                        let cfg = try await bridge.getSpeechConfig()
+                        let cfg = try await speechFacade.getSpeechConfig()
                         endpoint = cfg.endpoint
                         key = ""
                         credentialConfigured = cfg.credentialConfigured
@@ -1222,7 +1222,7 @@ struct VoiceSelectionSheet: View {
     @State private var selected: Shared.Voice?
     @State private var query: String = ""
     @State private var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
-    private let bridge = KoinBridge()
+    private let speechFacade = IosDiBridge().speechFacade()
 
     let current: Shared.Voice?
     let onClose: () -> Void
@@ -1338,10 +1338,10 @@ struct VoiceSelectionSheet: View {
         loading = true
         defer { loading = false }
         do {
-            let list = try await bridge.listVoices()
+            let list = try await speechFacade.listVoices()
             voices = list
             if list.isEmpty {
-                let cloud = try await bridge.refreshVoicesFromAzure()
+                let cloud = try await speechFacade.refreshVoicesFromAzure()
                 voices = cloud
             }
         } catch { self.error = error.localizedDescription }
@@ -1351,7 +1351,7 @@ struct VoiceSelectionSheet: View {
         loading = true
         defer { loading = false }
         do {
-            let cloud = try await bridge.refreshVoicesFromAzure()
+            let cloud = try await speechFacade.refreshVoicesFromAzure()
             voices = cloud
         } catch { self.error = error.localizedDescription }
     }
