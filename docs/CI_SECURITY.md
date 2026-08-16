@@ -27,12 +27,12 @@ storage identifiers, Open Board Format `library_key` fields in retired public
 starter fixtures, and Firebase client project identifiers. It does not ignore
 whole commits or disable generic credential rules for source directories.
 
-The first full-history baseline scan also finds a legacy subscription key and
-keystore password. They are intentionally not allowlisted: their owners must
-confirm rotation before their redacted fingerprints can be added to a narrow
-`.gitleaksignore`. Until then, the scheduled history scan correctly remains a
-failing security signal while pull requests still reject newly introduced
-credentials.
+The first full-history baseline scan also found a legacy subscription key and
+keystore password in the retired Java client history. The Azure credential was
+confirmed invalid and the old keystore password does not match either active
+signing password. Their exact finding fingerprints are recorded in the narrow
+`.gitleaksignore`; new credentials and the same values in any other location
+still fail the scan.
 
 ## Required repository rule
 
