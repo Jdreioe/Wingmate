@@ -16,5 +16,4 @@ exec xcodebuild test \
   -scheme iosApp \
   -configuration Debug \
   -destination "platform=iOS Simulator,id=$simulator_id" \
-  -parallel-testing-enabled NO \
-  CODE_SIGNING_ALLOWED=NO
+  -parallel-testing-enabled NO
