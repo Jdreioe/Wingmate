@@ -152,7 +152,10 @@ struct MainContentView: View {
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(.separator)))
             }
             if let err = model.state.error {
-                HStack(spacing: 4) { Text("common.error"); Text(err) }.foregroundStyle(.red)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 4) { Text("common.error"); Text(err) }.foregroundStyle(.red)
+                    Button("common.retry") { model.retryPhraseLoad() }
+                }
             }
             if model.state.isLoading { ProgressView().frame(maxWidth: .infinity, alignment: .center) }
 

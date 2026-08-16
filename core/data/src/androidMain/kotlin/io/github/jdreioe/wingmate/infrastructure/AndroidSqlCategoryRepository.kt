@@ -11,8 +11,9 @@ import java.util.UUID
 
 class AndroidSqlCategoryRepository(private val context: Context) : CategoryRepository {
     private val helper by lazy { AndroidSqlOpenHelper(context) }
+    private val repositoryDispatcher = Dispatchers.IO.limitedParallelism(1)
 
-    override suspend fun getAll(): List<CategoryItem> = withContext(Dispatchers.IO) {
+    override suspend fun getAll(): List<CategoryItem> = withContext(repositoryDispatcher) {
         val db = helper.readableDatabase
         // Removed SLF4J logger for cross-platform compatibility
         val cursor = db.query("categories", null, null, null, null, null, "ordering ASC")
@@ -28,7 +29,7 @@ class AndroidSqlCategoryRepository(private val context: Context) : CategoryRepos
         return@withContext list
     }
 
-    override suspend fun add(category: CategoryItem): CategoryItem = withContext(Dispatchers.IO) {
+    override suspend fun add(category: CategoryItem): CategoryItem = withContext(repositoryDispatcher) {
         val db = helper.writableDatabase
         val id = category.id.ifBlank { UUID.randomUUID().toString() }
         // Determine next ordering as max + 1
@@ -42,11 +43,11 @@ class AndroidSqlCategoryRepository(private val context: Context) : CategoryRepos
             put("selectedLanguage", category.selectedLanguage)
             put("ordering", next + 1)
         }
-        db.insert("categories", null, values)
+        db.insertOrThrow("categories", null, values)
         return@withContext category.copy(id = id)
     }
 
-    override suspend fun update(category: CategoryItem): CategoryItem = withContext(Dispatchers.IO) {
+    override suspend fun update(category: CategoryItem): CategoryItem = withContext(repositoryDispatcher) {
         val db = helper.writableDatabase
         val values = ContentValues().apply {
             put("name", category.name)
@@ -56,13 +57,13 @@ class AndroidSqlCategoryRepository(private val context: Context) : CategoryRepos
         return@withContext category
     }
 
-    override suspend fun delete(id: String) = withContext(Dispatchers.IO) {
+    override suspend fun delete(id: String) = withContext(repositoryDispatcher) {
         val db = helper.writableDatabase
         db.delete("categories", "id = ?", arrayOf(id))
         Unit
     }
 
-    override suspend fun move(fromIndex: Int, toIndex: Int) = withContext(Dispatchers.IO) {
+    override suspend fun move(fromIndex: Int, toIndex: Int) = withContext(repositoryDispatcher) {
         val db = helper.writableDatabase
         val cursor = db.query("categories", arrayOf("id"), null, null, null, null, "ordering ASC")
         val ids = mutableListOf<String>()

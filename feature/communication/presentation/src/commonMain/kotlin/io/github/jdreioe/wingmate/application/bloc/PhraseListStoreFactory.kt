@@ -36,6 +36,7 @@ class PhraseListStoreFactory(
         ) {}
 
     private sealed class Msg {
+        data object Loading : Msg()
         data class PhrasesAndCategoriesLoaded(val phrases: List<Phrase>, val categories: List<Phrase>) : Msg()
         data class CategorySelected(val categoryId: String?) : Msg()
         data class ErrorOccurred(val error: String) : Msg()
@@ -65,6 +66,7 @@ class PhraseListStoreFactory(
         }
 
         private fun loadPhrasesAndCategories() {
+            dispatch(Msg.Loading)
             scope.launch {
                 try {
                     val (phrases, categories) = getPhrasesAndCategoriesUseCase()
@@ -197,7 +199,13 @@ class PhraseListStoreFactory(
     private object ReducerImpl : Reducer<PhraseListStore.State, Msg> {
         override fun PhraseListStore.State.reduce(msg: Msg): PhraseListStore.State =
             when (msg) {
-                is Msg.PhrasesAndCategoriesLoaded -> copy(phrases = msg.phrases, categories = msg.categories, isLoading = false)
+                Msg.Loading -> copy(isLoading = true, error = null)
+                is Msg.PhrasesAndCategoriesLoaded -> copy(
+                    phrases = msg.phrases,
+                    categories = msg.categories,
+                    isLoading = false,
+                    error = null,
+                )
                 is Msg.CategorySelected -> copy(selectedCategoryId = msg.categoryId)
                 is Msg.ErrorOccurred -> copy(error = msg.error, isLoading = false)
                 is Msg.PhraseUpdated -> copy(phrases = phrases.map { if (it.id == msg.phrase.id) msg.phrase else it })

@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 
 class AndroidSqlSettingsRepository(private val context: Context) : SettingsRepository {
     private val helper by lazy { AndroidSqlOpenHelper(context) }
+    private val repositoryDispatcher = Dispatchers.IO.limitedParallelism(1)
     private val json = Json {
         prettyPrint = true
         ignoreUnknownKeys = true
@@ -25,7 +26,7 @@ class AndroidSqlSettingsRepository(private val context: Context) : SettingsRepos
         """.trimIndent())
     }
 
-    override suspend fun get(): Settings = withContext(Dispatchers.IO) {
+    override suspend fun get(): Settings = withContext(repositoryDispatcher) {
         val db = helper.readableDatabase
         // Removed SLF4J logger for cross-platform compatibility
         val cursor = db.query("ui_settings", arrayOf("data"), "id = 1", null, null, null, null)
@@ -38,7 +39,7 @@ class AndroidSqlSettingsRepository(private val context: Context) : SettingsRepos
         return@withContext Settings()
     }
 
-    override suspend fun update(settings: Settings): Settings = withContext(Dispatchers.IO) {
+    override suspend fun update(settings: Settings): Settings = withContext(repositoryDispatcher) {
         val db = helper.writableDatabase
         // Removed SLF4J logger for cross-platform compatibility
         val text = json.encodeToString(Settings.serializer(), settings)

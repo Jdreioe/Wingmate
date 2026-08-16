@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 
 class AndroidSqlSaidTextRepository(private val context: Context) : SaidTextRepository {
     private val helper by lazy { AndroidSqlOpenHelper(context) }
+    private val repositoryDispatcher = Dispatchers.IO.limitedParallelism(1)
     private val json = Json { prettyPrint = true }
 
     init {
@@ -33,7 +34,7 @@ class AndroidSqlSaidTextRepository(private val context: Context) : SaidTextRepos
         runCatching { db.execSQL("ALTER TABLE said_texts ADD COLUMN visible_in_history INTEGER NOT NULL DEFAULT 1") }
     }
 
-    override suspend fun add(item: SaidText): SaidText = withContext(Dispatchers.IO) {
+    override suspend fun add(item: SaidText): SaidText = withContext(repositoryDispatcher) {
         val db = helper.writableDatabase
         val values = ContentValues().apply {
             put("date", item.date)
@@ -47,11 +48,11 @@ class AndroidSqlSaidTextRepository(private val context: Context) : SaidTextRepos
             put("primary_language", item.primaryLanguage)
             put("visible_in_history", if (item.visibleInHistory) 1 else 0)
         }
-        val id = db.insert("said_texts", null, values)
+        val id = db.insertOrThrow("said_texts", null, values)
         return@withContext item.copy(id = id.toInt())
     }
 
-    override suspend fun list(): List<SaidText> = withContext(Dispatchers.IO) {
+    override suspend fun list(): List<SaidText> = withContext(repositoryDispatcher) {
         val db = helper.readableDatabase
         val cursor = db.query("said_texts", null, null, null, null, null, "date DESC")
         val list = mutableListOf<SaidText>()
@@ -73,13 +74,13 @@ class AndroidSqlSaidTextRepository(private val context: Context) : SaidTextRepos
         return@withContext list
     }
 
-    override suspend fun deleteAll() = withContext(Dispatchers.IO) {
+    override suspend fun deleteAll() = withContext(repositoryDispatcher) {
         val db = helper.writableDatabase
         db.delete("said_texts", null, null)
         Unit
     }
 
-    override suspend fun addAll(items: List<SaidText>) = withContext(Dispatchers.IO) {
+    override suspend fun addAll(items: List<SaidText>) = withContext(repositoryDispatcher) {
         val db = helper.writableDatabase
         db.beginTransaction()
         try {
@@ -96,7 +97,7 @@ class AndroidSqlSaidTextRepository(private val context: Context) : SaidTextRepos
                     put("primary_language", item.primaryLanguage)
                     put("visible_in_history", if (item.visibleInHistory) 1 else 0)
                 }
-                db.insert("said_texts", null, values)
+                db.insertOrThrow("said_texts", null, values)
             }
             db.setTransactionSuccessful()
         } finally {

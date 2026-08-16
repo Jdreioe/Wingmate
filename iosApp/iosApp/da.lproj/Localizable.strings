@@ -85,6 +85,7 @@
 "azure.credentials.replace" = "Erstat Azure-legitimationsoplysninger";
 
 "common.error" = "FEJL";
+"common.retry" = "Prøv igen";
 "common.ok" = "OK";
 "common.saving" = "Gemmmer";
 "common.save" = "Gem";

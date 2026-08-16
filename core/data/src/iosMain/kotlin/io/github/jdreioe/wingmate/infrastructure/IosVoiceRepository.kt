@@ -2,11 +2,8 @@ package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import platform.Foundation.NSUserDefaults
 
 /**
  * iOS implementation that persists the selected voice using NSUserDefaults.
@@ -14,31 +11,27 @@ import platform.Foundation.NSUserDefaults
  */
 class IosVoiceRepository : VoiceRepository {
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
-    private val prefs by lazy { NSUserDefaults.standardUserDefaults() }
-    private val keySelected = "selected_voice"
-    private val keyList = "voice_list"
+    private val listSerializer = ListSerializer(Voice.serializer())
+    private val voices = IosPreferencesJsonStore(
+        key = "voice_list",
+        encode = { json.encodeToString(listSerializer, it) },
+        decode = { json.decodeFromString(listSerializer, it) },
+    )
+    private val selected = IosPreferencesJsonStore(
+        key = "selected_voice",
+        encode = { json.encodeToString(Voice.serializer(), it) },
+        decode = { json.decodeFromString(Voice.serializer(), it) },
+    )
 
-    override suspend fun getVoices(): List<Voice> = withContext(Dispatchers.Default) {
-        val text = prefs.stringForKey(keyList) ?: return@withContext emptyList()
-        return@withContext runCatching { json.decodeFromString(ListSerializer(Voice.serializer()), text) }.getOrNull() ?: emptyList()
+    override suspend fun getVoices(): List<Voice> = voices.read(::emptyList)
+
+    override suspend fun saveVoices(list: List<Voice>) {
+        voices.replace(list, ::emptyList)
     }
 
-    override suspend fun saveVoices(list: List<Voice>) = withContext(Dispatchers.Default) {
-        val text = json.encodeToString(ListSerializer(Voice.serializer()), list)
-        prefs.setObject(text, forKey = keyList)
-        prefs.synchronize()
-        Unit
+    override suspend fun saveSelected(voice: Voice) {
+        selected.replace(voice) { voice }
     }
 
-    override suspend fun saveSelected(voice: Voice) = withContext(Dispatchers.Default) {
-        val text = json.encodeToString(Voice.serializer(), voice)
-        prefs.setObject(text, forKey = keySelected)
-        prefs.synchronize()
-        Unit
-    }
-
-    override suspend fun getSelected(): Voice? = withContext(Dispatchers.Default) {
-        val text = prefs.stringForKey(keySelected) ?: return@withContext null
-        return@withContext runCatching { json.decodeFromString(Voice.serializer(), text) }.getOrNull()
-    }
+    override suspend fun getSelected(): Voice? = selected.readNullable()
 }

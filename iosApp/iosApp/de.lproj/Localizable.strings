@@ -83,6 +83,7 @@
 "azure.credentials.configured" = "Die Azure Speech-Anmeldedaten sind auf diesem Gerät sicher konfiguriert.";
 "azure.credentials.replace" = "Azure-Anmeldedaten ersetzen";
 "common.error" = "Fehler";
+"common.retry" = "Erneut versuchen";
 "common.ok" = "OK";
 "common.saving" = "Speichern…";
 "common.save" = "Speichern";

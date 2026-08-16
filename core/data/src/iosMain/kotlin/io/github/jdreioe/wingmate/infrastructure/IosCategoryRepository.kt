@@ -2,63 +2,42 @@ package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.CategoryRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import platform.Foundation.NSUserDefaults
 import kotlin.random.Random
 
 class IosCategoryRepository : CategoryRepository {
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
-    private val prefs by lazy { NSUserDefaults.standardUserDefaults() }
-    private val key = "categories_v1"
+    private val serializer = ListSerializer(CategoryItem.serializer())
+    private val store = IosPreferencesJsonStore(
+        key = "categories_v1",
+        encode = { json.encodeToString(serializer, it) },
+        decode = { json.decodeFromString(serializer, it) },
+    )
 
-    private suspend fun loadAll(): MutableList<CategoryItem> = withContext(Dispatchers.Default) {
-        val text = prefs.stringForKey(key) ?: return@withContext mutableListOf()
-        runCatching { json.decodeFromString(ListSerializer(CategoryItem.serializer()), text) }
-            .getOrNull()?.toMutableList() ?: mutableListOf()
-    }
-
-    private suspend fun saveAll(list: List<CategoryItem>) = withContext(Dispatchers.Default) {
-        val text = json.encodeToString(ListSerializer(CategoryItem.serializer()), list)
-        prefs.setObject(text, forKey = key)
-        prefs.synchronize()
-        Unit
-    }
-
-    override suspend fun getAll(): List<CategoryItem> = loadAll()
+    override suspend fun getAll(): List<CategoryItem> = store.read(::emptyList)
 
     override suspend fun add(category: CategoryItem): CategoryItem {
-        val list = loadAll()
         val c = category.copy(id = category.id.ifBlank { Random.nextInt().toString() })
-        list.add(c)
-        saveAll(list)
+        store.update(::emptyList) { it + c }
         return c
     }
 
     override suspend fun update(category: CategoryItem): CategoryItem {
-        val list = loadAll()
-        val idx = list.indexOfFirst { it.id == category.id }
-        if (idx >= 0) {
-            list[idx] = category
-            saveAll(list)
+        store.update(::emptyList) { existing ->
+            existing.map { if (it.id == category.id) category else it }
         }
         return category
     }
 
     override suspend fun delete(id: String) {
-        val list = loadAll()
-        val newList = list.filterNot { it.id == id }
-        saveAll(newList)
-        Unit
+        store.update(::emptyList) { it.filterNot { category -> category.id == id } }
     }
 
     override suspend fun move(fromIndex: Int, toIndex: Int) {
-        val list = loadAll().toMutableList()
-        if (fromIndex !in list.indices || toIndex !in list.indices) return
-        val item = list.removeAt(fromIndex)
-        list.add(toIndex, item)
-        saveAll(list)
+        store.update(::emptyList) { existing ->
+            if (fromIndex !in existing.indices || toIndex !in existing.indices) return@update existing
+            existing.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+        }
     }
 }

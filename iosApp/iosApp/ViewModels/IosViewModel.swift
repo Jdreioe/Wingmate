@@ -414,6 +414,10 @@ final class IosViewModel: ObservableObject {
     _ = try? await bridge.cacheAllBoardSetFields()
     }
 
+    func retryPhraseLoad() {
+        bridge.refreshPhrases()
+    }
+
     func refreshAzureConfiguration() async {
         do {
             let cfg = try await bridge.getSpeechConfig()
