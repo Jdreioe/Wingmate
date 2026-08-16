@@ -41,6 +41,28 @@ in `.github/workflows/security.yml` and `.github/workflows/secret-scan.yml`
 before merge. Workflow files can define and fail checks, but GitHub repository
 rules are what make those checks mandatory.
 
+## Dependency advisories
+
+Gradle dependencies resolve to patched Netty (4.2.16.Final) via Ktor 3.5, and
+the build/plugin classpath pins patched transitive builds for BouncyCastle
+(1.84), jose4j (0.9.6), jdom2 (2.0.6.1), and commons-lang3 (3.18.0) via a
+`resolutionStrategy` in `build.gradle.kts`. This keeps Dependabot clean for the
+dependencies the project can influence.
+
+Two remaining advisories are accepted risks because they are pinned by the
+Kotlin toolchain itself and have no safe upstream fix short of moving to a Kotlin
+beta:
+
+- `kotlin-gradle-plugin` GHSA-r937-wjx7-w2jp (medium): patched in Kotlin
+  `2.4.20-Beta1`; the project builds on stable Kotlin 2.3.10. Revisit on the next
+  stable Kotlin release.
+- `io.opentelemetry:opentelemetry-api` GHSA-rcgg-9c38-7xpx (medium): pulled
+  transitively by `swift-export-embeddable` (Kotlin 2.3.10) for iOS tooling;
+  patched in opentelemetry-api 1.62.0. Tracked with the Kotlin upgrade above.
+
+The `Dependency vulnerability review` job rejects newly introduced high-or-critical
+advisories, so these two cannot silently regrow past the accepted list above.
+
 ## Deliberate hardware exclusions
 
 CI does not exercise physical gaze trackers, USB/FTDI partner-window hardware,
