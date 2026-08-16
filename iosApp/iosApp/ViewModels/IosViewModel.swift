@@ -116,6 +116,7 @@ final class IosViewModel: ObservableObject {
     private lazy var speechFacade = IosDiBridge().speechFacade()
     private lazy var settingsFacade = IosDiBridge().settingsFacade()
     private lazy var boardsFacade = IosDiBridge().boardsFacade()
+    private lazy var communicationFacade = IosDiBridge().communicationFacade()
 
     // UI state
     @Published var input: String = ""
@@ -308,7 +309,7 @@ final class IosViewModel: ObservableObject {
     func restoreCompleteBackup(path: String) async throws -> Shared.BackupOperationResult {
         let result = try await backupFacade.restoreBackup(path: path)
         if result.isSuccess {
-            bridge.refreshPhrases()
+            communicationFacade.refreshPhrases()
         }
         return result
     }
@@ -379,7 +380,7 @@ final class IosViewModel: ObservableObject {
         await MainActor.run { IosDiBridge().startKoinWithOverridesBridge() }
         let repoNameBefore = KoinBridge().debugVoiceRepositoryName()
         print("DEBUG: After startKoinWithOverrides: Bound VoiceRepository = \(repoNameBefore)")
-        if let phraseStore = KoinBridge().phraseListStoreOrNull() {
+        if let phraseStore = communicationFacade.phraseListStoreOrNull() {
             self.store = phraseStore
             let observer = StoreObserver(onNext: { [weak self] newState in self?.state = newState }, onComplete: { [weak self] in
                 self?.disposable = nil
@@ -389,7 +390,7 @@ final class IosViewModel: ObservableObject {
         } else {
             print("DEBUG: phraseListStoreOrNull() returned nil — Koin not ready or store not bound")
             try? await Task.sleep(nanoseconds: 150_000_000)
-            if let retryStore = KoinBridge().phraseListStoreOrNull() {
+            if let retryStore = communicationFacade.phraseListStoreOrNull() {
                 self.store = retryStore
                 let observer = StoreObserver(onNext: { [weak self] newState in self?.state = newState }, onComplete: { [weak self] in
                     self?.disposable = nil
@@ -442,7 +443,7 @@ final class IosViewModel: ObservableObject {
     }
 
     func retryPhraseLoad() {
-        bridge.refreshPhrases()
+        communicationFacade.refreshPhrases()
     }
 
     func refreshAzureConfiguration() async {
@@ -828,7 +829,7 @@ final class IosViewModel: ObservableObject {
             return
         }
         do {
-            let items = try await bridge.listHistoryAsPhrases()
+            let items = try await communicationFacade.listHistoryAsPhrases()
             await MainActor.run { self.historyPhrases = items.reversed() }
         } catch {
             await MainActor.run { self.historyPhrases = [] }
@@ -1182,7 +1183,7 @@ final class IosViewModel: ObservableObject {
         state.phrases.first(where: { $0.id == phraseId })?.recordingPath
     }
     func setRecordingPath(_ path: String?, for phraseId: String) {
-        bridge.updatePhraseRecording(phraseId: phraseId, recordingPath: path)
+        communicationFacade.updatePhraseRecording(phraseId: phraseId, recordingPath: path)
     }
 
     func chooseVoice(_ v: Shared.Voice) async {

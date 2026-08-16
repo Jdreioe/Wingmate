@@ -38,6 +38,7 @@ import io.github.jdreioe.wingmate.application.BackupSharingFacade
 import io.github.jdreioe.wingmate.application.SpeechFacade
 import io.github.jdreioe.wingmate.application.SettingsFacade
 import io.github.jdreioe.wingmate.application.BoardsFacade
+import io.github.jdreioe.wingmate.application.CommunicationFacade
 import io.github.jdreioe.wingmate.infrastructure.IosBackupMediaAccess
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
@@ -117,4 +118,5 @@ class IosDiBridge {
     fun speechFacade(): SpeechFacade = KoinPlatform.getKoin().get()
     fun settingsFacade(): SettingsFacade = KoinPlatform.getKoin().get()
     fun boardsFacade(): BoardsFacade = KoinPlatform.getKoin().get()
+    fun communicationFacade(): CommunicationFacade = KoinPlatform.getKoin().get()
 }

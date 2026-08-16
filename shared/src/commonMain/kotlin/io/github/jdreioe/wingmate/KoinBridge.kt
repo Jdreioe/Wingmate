@@ -4,12 +4,9 @@ import io.github.jdreioe.wingmate.application.SelectionHighlight
 import io.github.jdreioe.wingmate.application.AccessInputController
 import io.github.jdreioe.wingmate.application.AccessInputEffect
 import io.github.jdreioe.wingmate.application.SettingsUseCase
-import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.di.appModule
 import io.github.jdreioe.wingmate.initKoin
 import io.github.jdreioe.wingmate.domain.OperationalLogger
-import io.github.jdreioe.wingmate.domain.Phrase
-import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.TextEditResult
 import io.github.jdreioe.wingmate.domain.TextEditingPolicy
 import io.github.jdreioe.wingmate.domain.TextSpan
@@ -29,12 +26,6 @@ data class IosAccessInputResult(
 
 class KoinBridge : KoinComponent {
     private val accessInput = AccessInputController()
-    fun phraseListStore(): PhraseListStore = get()
-    // Safe variant to avoid throwing across Swift bridge
-    fun phraseListStoreOrNull(): PhraseListStore? = try { get<PhraseListStore>() } catch (_: Throwable) { null }
-    fun refreshPhrases() {
-        phraseListStoreOrNull()?.accept(PhraseListStore.Intent.Refresh)
-    }
 
     // --- Shared native text-editing policy ---
     fun mergeTextSpans(spans: List<TextSpan>, textLength: Int): List<TextSpan> =
@@ -133,15 +124,6 @@ class KoinBridge : KoinComponent {
     // Debug helper: return the runtime class name of the bound VoiceRepository
     fun debugVoiceRepositoryName(): String = try { get<io.github.jdreioe.wingmate.domain.VoiceRepository>()::class.simpleName ?: "unknown" } catch (_: Throwable) { "error" }
 
-    // Swift-friendly bridge to update phrase recording path
-    fun updatePhraseRecording(phraseId: String, recordingPath: String?) {
-        try {
-            phraseListStore().accept(PhraseListStore.Intent.UpdatePhraseRecording(id = phraseId, recordingPath = recordingPath))
-        } catch (t: Throwable) {
-            OperationalLogger.warn("swift_bridge.phrase_recording_update", "failed", exceptionClass = t.loggingClassName())
-        }
-    }
-
     companion object {
         private var started: Boolean = false
     fun start() {
@@ -153,28 +135,6 @@ class KoinBridge : KoinComponent {
             } finally {
                 started = true
             }
-        }
-    }
-
-    // --- History helpers ---
-    // Returns the list of said items mapped as Phrase objects for easy Swift UI rendering
-    suspend fun listHistoryAsPhrases(): List<Phrase> {
-        return try {
-            val said = get<SaidTextRepository>().list().filter { it.visibleInHistory }
-            val now = 0L
-            said.map { s ->
-                Phrase(
-                    id = "history-" + (s.id?.toString() ?: (s.createdAt ?: s.date ?: now).toString()),
-                    text = s.saidText ?: "",
-                    name = null,
-                    backgroundColor = "#00000000",
-                    parentId = null,
-                    createdAt = (s.createdAt ?: s.date ?: now),
-                    recordingPath = s.audioFilePath
-                )
-            }
-        } catch (_: Throwable) {
-            emptyList()
         }
     }
 
