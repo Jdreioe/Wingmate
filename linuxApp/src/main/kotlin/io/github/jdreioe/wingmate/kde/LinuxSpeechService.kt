@@ -2,32 +2,50 @@ package io.github.jdreioe.wingmate.kde
 
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.SpeechPlaybackState
+import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
 import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Linux speech service using system TTS (espeak-ng, festival, or similar).
  */
 class LinuxSpeechService : SpeechService {
-    private var currentProcess: Process? = null
-    private var _isPaused = false
+    @Volatile private var currentProcess: Process? = null
+    @Volatile private var _isPaused = false
+    private val generation = AtomicLong(0)
+    @Volatile private var state = SpeechPlaybackState()
+    private val ownershipLock = Any()
     
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
         withContext(Dispatchers.IO) {
-            // Stop any current speech
-            stop()
+            val requestId = generation.incrementAndGet()
+            stopNative()
+            state = SpeechPlaybackState(requestId, SpeechPlaybackStatus.PREPARING)
             
             // Try different TTS engines in order of preference
             val ttsCommand = findTtsCommand()
             if (ttsCommand != null) {
                 val args = buildCommandArgs(ttsCommand, text, voice, pitch, rate)
                 println("[SPEECH] Executing TTS engine: ${File(ttsCommand).name}")
-                val process = ProcessBuilder(args)
-                    .redirectErrorStream(true)
-                    .start()
-                currentProcess = process
+                val process = try {
+                    synchronized(ownershipLock) {
+                        check(generation.get() == requestId) { "Speech request was replaced" }
+                        ProcessBuilder(args)
+                            .redirectErrorStream(true)
+                            .start()
+                            .also {
+                                currentProcess = it
+                                state = SpeechPlaybackState(requestId, SpeechPlaybackStatus.PLAYING)
+                            }
+                        }
+                } catch (error: Throwable) {
+                    failRequest(requestId)
+                    throw error
+                }
                 
                 // Drain process output without logging it; engines may echo the spoken text.
                 val reader = process.inputStream.bufferedReader()
@@ -37,10 +55,12 @@ class LinuxSpeechService : SpeechService {
                 if (currentProcess === process) {
                     currentProcess = null
                     _isPaused = false
+                    state = SpeechPlaybackState(requestId, SpeechPlaybackStatus.IDLE)
                 }
                 check(exitCode == 0) { "System TTS exited with code $exitCode" }
                 println("[SPEECH] TTS command finished.")
             } else {
+                failRequest(requestId)
                 throw IllegalStateException("No Linux TTS engine found; install espeak-ng, festival, or Piper")
             }
         }
@@ -64,19 +84,28 @@ class LinuxSpeechService : SpeechService {
         if (process?.isAlive == true) {
             Runtime.getRuntime().exec(arrayOf("kill", "-STOP", process.pid().toString())).waitFor()
             _isPaused = true
+            state = SpeechPlaybackState(generation.get(), SpeechPlaybackStatus.PAUSED)
         } else {
             _isPaused = false
         }
     }
     
     override suspend fun stop() {
-        _isPaused = false
-        currentProcess?.let {
-            if (it.isAlive) {
-                it.destroyForcibly()
+        val requestId = generation.incrementAndGet()
+        stopNative()
+        state = SpeechPlaybackState(requestId, SpeechPlaybackStatus.IDLE)
+    }
+
+    private fun stopNative() {
+        synchronized(ownershipLock) {
+            _isPaused = false
+            currentProcess?.let {
+                if (it.isAlive) {
+                    it.destroyForcibly()
+                }
             }
+            currentProcess = null
         }
-        currentProcess = null
     }
     
     override suspend fun resume() {
@@ -85,6 +114,7 @@ class LinuxSpeechService : SpeechService {
             currentProcess?.let {
                 if (it.isAlive) {
                     Runtime.getRuntime().exec(arrayOf("kill", "-CONT", it.pid().toString()))
+                    state = SpeechPlaybackState(generation.get(), SpeechPlaybackStatus.PLAYING)
                 }
             }
         }
@@ -96,6 +126,14 @@ class LinuxSpeechService : SpeechService {
     
     override fun isPaused(): Boolean {
         return currentProcess?.isAlive == true && _isPaused
+    }
+
+    override fun playbackState(): SpeechPlaybackState = state
+
+    private fun failRequest(requestId: Long) {
+        if (generation.get() == requestId) {
+            state = SpeechPlaybackState(requestId, SpeechPlaybackStatus.FAILED, "Speech could not be played")
+        }
     }
     
     private fun findTtsCommand(): String? {

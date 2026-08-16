@@ -54,6 +54,10 @@ struct SentencePhraseToken: Identifiable, Equatable {    var id: String = UUID()
 
 @MainActor
 final class IosViewModel: ObservableObject {
+    private enum PendingSpeechRetry {
+        case text(String)
+        case boardSentence(String, String)
+    }
     private final class StoreObserver: NSObject, Shared.RxObserver {
         private let onNextState: (Shared.PhraseListStoreState) -> Void
         private let onCompleteState: () -> Void
@@ -79,15 +83,27 @@ final class IosViewModel: ObservableObject {
         AzureHybridSequencer(
             speak: { [weak self] text in
                 guard let self = self else { return }
-                _ = try? await self.bridge.speak(text: text)
+                do {
+                    try await self.bridge.speak(text: text)
+                } catch {
+                    self.setSpeechFailure(retry: .text(text))
+                }
             },
             pause: { [weak self] in
                 guard let self = self else { return }
-                _ = try? await self.bridge.pause()
+                do {
+                    try await self.bridge.pause()
+                } catch {
+                    self.setSpeechFailure()
+                }
             },
             stop: { [weak self] in
                 guard let self = self else { return }
-                _ = try? await self.bridge.stop()
+                do {
+                    try await self.bridge.stop()
+                } catch {
+                    self.setSpeechFailure()
+                }
             }
         )
     }()
@@ -158,6 +174,9 @@ final class IosViewModel: ObservableObject {
     @Published var usageLoggingEnabled: Bool = false
     @Published var featureUsageReportingEnabled: Bool = false
     @Published var historyVisible: Bool = true
+    @Published private(set) var speechErrorMessage: String? = nil
+    private var pendingSpeechRetry: PendingSpeechRetry? = nil
+    var canRetryFailedSpeech: Bool { pendingSpeechRetry != nil }
     @Published var startupUsesScreens: Bool = false
     @Published var startupBoardSetId: String? = nil
     private var hasShownOfflineBanner: Bool = UserDefaults.standard.bool(forKey: "offline_banner_shown")
@@ -672,7 +691,14 @@ final class IosViewModel: ObservableObject {
             speakSystemText(plain, isInputText: isInputText)
             return
         }
-        Task { _ = try? await bridge.speak(text: t) }
+        Task {
+            do {
+                try await bridge.speak(text: t)
+                clearSpeechFailure()
+            } catch {
+                setSpeechFailure(retry: .text(t))
+            }
+        }
     }
 
     /// Speak on-device, honoring shorthand SSML (pauses + language tags) via shared
@@ -700,7 +726,35 @@ final class IosViewModel: ObservableObject {
             SystemTtsManager.shared.speak(segments: segments, language: primaryLanguage)
             return
         }
-        Task { _ = try? await bridge.speakBoardSentence(text: text, cacheAudio: cacheAudio) }
+        Task {
+            do {
+                try await bridge.speakBoardSentence(text: text, cacheAudio: cacheAudio)
+                clearSpeechFailure()
+            } catch {
+                setSpeechFailure(retry: .boardSentence(text, boardSetId))
+            }
+        }
+    }
+
+    private func setSpeechFailure(retry: PendingSpeechRetry? = nil) {
+        pendingSpeechRetry = retry
+        speechErrorMessage = NSLocalizedString("speech.playback_failed", comment: "")
+    }
+
+    private func clearSpeechFailure() {
+        speechErrorMessage = nil
+        pendingSpeechRetry = nil
+    }
+
+    func retryFailedSpeech() {
+        guard let retry = pendingSpeechRetry else { return }
+        clearSpeechFailure()
+        switch retry {
+        case .text(let text):
+            speak(text)
+        case .boardSentence(let text, let boardSetId):
+            speakBoardSentence(text, boardSetId: boardSetId)
+        }
     }
 
     func playBoardButtonSound(_ dataUrl: String) {
@@ -840,7 +894,13 @@ final class IosViewModel: ObservableObject {
         } else if !isOnline && useSystemTtsWhenOffline {
             SystemTtsManager.shared.pause()
         } else {
-            Task { _ = try? await bridge.pause() }
+            Task {
+                do {
+                    try await bridge.pause()
+                } catch {
+                    setSpeechFailure()
+                }
+            }
         }
     }
 
@@ -858,7 +918,13 @@ final class IosViewModel: ObservableObject {
         } else if !isOnline && useSystemTtsWhenOffline {
             SystemTtsManager.shared.stop()
         } else {
-            Task { _ = try? await bridge.stop() }
+            Task {
+                do {
+                    try await bridge.stop()
+                } catch {
+                    setSpeechFailure()
+                }
+            }
         }
     }
 

@@ -84,6 +84,7 @@
 "azure.credentials.replace" = "Azure-Anmeldedaten ersetzen";
 "common.error" = "Fehler";
 "common.retry" = "Erneut versuchen";
+"speech.playback_failed" = "Die Sprachausgabe konnte nicht abgespielt werden. Bitte versuche es erneut.";
 "common.ok" = "OK";
 "common.saving" = "Speichern…";
 "common.save" = "Speichern";
