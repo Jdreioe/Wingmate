@@ -1,0 +1,47 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+    [[rules.allowlists]]
+    description = "Fixed NSUserDefaults identifiers, not credentials."
+    regexes = [
+      '''^categories_v1$''',
+      '''^phrase_recordings_v1$''',
+      '''^pronunciation_dictionary_v1$''',
+    ]
+
+    [[rules.allowlists]]
+    description = "Open Board Format library keys in retired public starter fixtures."
+    condition = "AND"
+    regexTarget = "line"
+    regexes = ['''"library_key"\s*:''']
+    paths = ['''^composeApp/src/commonMain/composeResources/files/starter_[^/]+\.obf$''']
+
+    [[rules.allowlists]]
+    description = "Firebase client project identifiers caught by the generic fallback rule."
+    condition = "AND"
+    regexTarget = "line"
+    regexes = [
+      '''current_key"\s*:''',
+      '''apiKey\s*:''',
+    ]
+    paths = [
+      '''^android/app/google-services\.json$''',
+      '''^androidApp/google-services\.json$''',
+      '''^google-services\.json$''',
+      '''^lib/firebase_options\.dart$''',
+    ]
+
+[[rules]]
+id = "gcp-api-key"
+
+    [[rules.allowlists]]
+    description = "Retired Firebase client configuration contains public project identifiers."
+    paths = [
+      '''^android/app/google-services\.json$''',
+      '''^androidApp/google-services\.json$''',
+      '''^google-services\.json$''',
+      '''^lib/firebase_options\.dart$''',
+    ]
