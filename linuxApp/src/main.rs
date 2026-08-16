@@ -2435,19 +2435,38 @@ impl cosmic::Application for Wingmate {
                                 None,
                             )
                             .await
-                            .map(|json| {
+                            .and_then(|json| {
+                                let status = json
+                                    .get("status")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("PersistenceFailure");
+                                if status != "Success" {
+                                    let message = json
+                                        .get("message")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("Backup could not be created");
+                                    let retryable = json
+                                        .get("retryable")
+                                        .and_then(|v| v.as_bool())
+                                        .unwrap_or(false);
+                                    return Err(if retryable {
+                                        format!("{message} (you can retry)")
+                                    } else {
+                                        message.to_string()
+                                    });
+                                }
                                 let file_name = json
                                     .get("fileName")
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("wingmate-backup.wingmate-backup")
                                     .to_string();
-                                (
+                                Ok((
                                     file_name,
                                     json.get("data")
                                         .and_then(|v| v.as_str())
                                         .unwrap_or("")
                                         .to_string(),
-                                )
+                                ))
                             })
                             .and_then(|(name, data)| {
                                 use base64::Engine as _;
@@ -2483,11 +2502,28 @@ impl cosmic::Application for Wingmate {
                                 ),
                             )
                             .await
-                            .map(|json| {
-                                json.get("status")
+                            .and_then(|json| {
+                                let status = json
+                                    .get("status")
                                     .and_then(|v| v.as_str())
-                                    .unwrap_or("ok")
-                                    .to_string()
+                                    .unwrap_or("PersistenceFailure");
+                                if status == "Success" {
+                                    Ok("ok".to_string())
+                                } else {
+                                    let message = json
+                                        .get("message")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("Backup could not be restored");
+                                    let retryable = json
+                                        .get("retryable")
+                                        .and_then(|v| v.as_bool())
+                                        .unwrap_or(false);
+                                    Err(if retryable {
+                                        format!("{message} (you can retry)")
+                                    } else {
+                                        message.to_string()
+                                    })
+                                }
                             })
                         },
                         Message::BackupImported,

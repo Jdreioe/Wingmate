@@ -147,16 +147,24 @@ struct WelcomeFlow: View {
                 Task {
                     let accessed = url.startAccessingSecurityScopedResource()
                     defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                    if let error = await model.restoreCompleteBackup(path: url.path) {
-                        restoreStatus = error
-                        isRestoring = false
-                    } else {
+                    do {
+                        let result = try await model.restoreCompleteBackup(path: url.path)
+                        if !result.isSuccess {
+                            restoreStatus = result.message ?? NSLocalizedString("backup.failed", comment: "")
+                            isRestoring = false
+                            return
+                        }
                         await model.refreshParitySettings()
                         await model.refreshAzureConfiguration()
                         model.refreshVoiceAndLanguages()
                         await model.loadBoardSets()
                         isRestoring = false
                         onRestoreComplete()
+                    } catch is CancellationError {
+                        isRestoring = false
+                    } catch {
+                        restoreStatus = NSLocalizedString("backup.failed", comment: "")
+                        isRestoring = false
                     }
                 }
             }

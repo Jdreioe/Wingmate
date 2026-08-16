@@ -1,4 +1,5 @@
 import io.github.jdreioe.wingmate.application.BackupMediaAccess
+import io.github.jdreioe.wingmate.application.BackupFailureKind
 import io.github.jdreioe.wingmate.application.BackupRestoreResult
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.domain.Phrase
@@ -123,6 +124,8 @@ class CompleteBackupManagerTest {
             .restoreBackup("corrupt.wingmate-backup")
 
         assertIs<BackupRestoreResult.Failure>(result)
+        assertEquals(BackupFailureKind.Validation, result.kind)
+        assertFalse(result.isRetryable)
         assertEquals(listOf("existing"), repositories.boards.listBoards().map { it.id })
     }
 

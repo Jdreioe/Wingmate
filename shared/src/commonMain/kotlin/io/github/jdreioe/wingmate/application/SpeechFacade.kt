@@ -1,0 +1,104 @@
+package io.github.jdreioe.wingmate.application
+
+import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.SpeechSegment
+import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.SpeechServiceConfigStatus
+import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
+import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpoint
+import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpointResult
+
+/**
+ * A feature-scoped native boundary around speech playback, voice selection,
+ * and Azure speech configuration.
+ *
+ * Keep Koin out of this file: the constructor receives exactly the use cases
+ * and services this feature needs. Failures propagate as suspend exceptions
+ * (including coroutine cancellation) instead of being swallowed or converted.
+ */
+class SpeechFacade(
+    private val speechService: SpeechService,
+    private val voiceUseCase: VoiceUseCase,
+    private val settingsUseCase: SettingsUseCase,
+    private val configRepository: ConfigRepository,
+) {
+    /** Split text into speech segments honoring shorthand SSML pauses and language tags. */
+    fun processSpeechText(text: String): List<SpeechSegment> = SpeechTextProcessor.processText(text)
+
+    suspend fun speak(text: String) {
+        speechService.speak(text)
+    }
+
+    suspend fun speakBoardSentence(text: String, cacheAudio: Boolean) {
+        speechService.speakWithCachePolicy(text = text, cacheAudio = cacheAudio)
+    }
+
+    suspend fun pause() {
+        speechService.pause()
+    }
+
+    suspend fun stop() {
+        speechService.stop()
+    }
+
+    /** Select a voice and align the app's primary language with its language when it changes. */
+    suspend fun selectVoiceAndMaybeUpdatePrimary(voice: Voice) {
+        voiceUseCase.select(voice)
+        val current = settingsUseCase.get()
+        val candidate = voice.selectedLanguage
+            .takeIf { it.isNotEmpty() }
+            ?: voice.primaryLanguage?.takeIf { it.isNotEmpty() }
+            ?: current.primaryLanguage
+        if (candidate != current.primaryLanguage) {
+            settingsUseCase.update(current.copy(primaryLanguage = candidate))
+        }
+    }
+
+    suspend fun selectedVoice(): Voice? = voiceUseCase.selected()
+
+    suspend fun listVoices(): List<Voice> = voiceUseCase.list()
+
+    suspend fun refreshVoicesFromAzure(): List<Voice> = voiceUseCase.refreshFromAzure()
+
+    /** Update the selected voice's language and align the app's primary language. */
+    suspend fun updateSelectedVoiceLanguage(lang: String) {
+        val selected = voiceUseCase.selected()
+        if (selected != null && selected.selectedLanguage != lang) {
+            voiceUseCase.select(selected.copy(selectedLanguage = lang))
+        }
+        val current = settingsUseCase.get()
+        if (lang != current.primaryLanguage) {
+            settingsUseCase.update(current.copy(primaryLanguage = lang))
+        }
+    }
+
+    suspend fun usesSystemTts(): Boolean = settingsUseCase.get().ttsEngine == TtsEngine.SYSTEM
+
+    suspend fun updateUseSystemTts(enabled: Boolean) {
+        settingsUseCase.update(
+            settingsUseCase.get().copy(ttsEngine = if (enabled) TtsEngine.SYSTEM else TtsEngine.AZURE_USER_RESOURCE),
+        )
+    }
+
+    /** Safe for native UI: deliberately never returns the saved subscription key. */
+    suspend fun getSpeechConfig(): SpeechServiceConfigStatus = configRepository.getSpeechConfigStatus()
+
+    suspend fun saveSpeechConfig(config: SpeechServiceConfig) {
+        configRepository.saveSpeechConfig(config)
+    }
+
+    suspend fun saveAzureSpeechConfig(endpoint: String, subscriptionKey: String) {
+        configRepository.saveSpeechConfig(SpeechServiceConfig(endpoint.trim(), subscriptionKey.trim()))
+        settingsUseCase.update(settingsUseCase.get().copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE))
+    }
+
+    suspend fun clearSpeechConfig() {
+        configRepository.clearSpeechConfig()
+    }
+
+    fun isValidAzureSpeechEndpoint(endpoint: String): Boolean =
+        AzureSpeechEndpoint.parse(endpoint) is AzureSpeechEndpointResult.Valid
+}

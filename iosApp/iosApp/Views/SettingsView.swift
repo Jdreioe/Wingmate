@@ -540,9 +540,16 @@ private struct PrivacySettingsView: View {
             Section {
                 Button("backup.create") {
                     Task {
-                        backupStatus = await model.shareCompleteBackup()
-                            ? NSLocalizedString("backup.exported", comment: "")
-                            : NSLocalizedString("backup.failed", comment: "")
+                        do {
+                            let result = try await model.shareCompleteBackup()
+                            backupStatus = result.isSuccess
+                                ? NSLocalizedString("backup.exported", comment: "")
+                                : result.message ?? NSLocalizedString("backup.failed", comment: "")
+                        } catch is CancellationError {
+                            return
+                        } catch {
+                            backupStatus = NSLocalizedString("backup.failed", comment: "")
+                        }
                     }
                 }
                 Button("backup.restore") { importingBackup = true }
@@ -608,14 +615,21 @@ private struct PrivacySettingsView: View {
                 Task {
                     let accessed = url.startAccessingSecurityScopedResource()
                     defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                    if let error = await model.restoreCompleteBackup(path: url.path) {
-                        backupStatus = error
-                    } else {
-                        backupStatus = NSLocalizedString("backup.restored", comment: "")
-                        await model.refreshParitySettings()
-                        await model.refreshAzureConfiguration()
-                        model.refreshVoiceAndLanguages()
-                        await model.loadBoardSets()
+                    do {
+                        let result = try await model.restoreCompleteBackup(path: url.path)
+                        if result.isSuccess {
+                            backupStatus = NSLocalizedString("backup.restored", comment: "")
+                            await model.refreshParitySettings()
+                            await model.refreshAzureConfiguration()
+                            model.refreshVoiceAndLanguages()
+                            await model.loadBoardSets()
+                        } else {
+                            backupStatus = result.message ?? NSLocalizedString("backup.failed", comment: "")
+                        }
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        backupStatus = NSLocalizedString("backup.failed", comment: "")
                     }
                 }
             }

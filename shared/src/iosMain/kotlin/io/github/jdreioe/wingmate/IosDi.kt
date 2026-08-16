@@ -34,6 +34,11 @@ import io.github.jdreioe.wingmate.infrastructure.IosSystemVoiceProvider
 import io.github.jdreioe.wingmate.infrastructure.IosSecureEditingCredentialStorage
 import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
 import io.github.jdreioe.wingmate.application.BackupMediaAccess
+import io.github.jdreioe.wingmate.application.BackupSharingFacade
+import io.github.jdreioe.wingmate.application.SpeechFacade
+import io.github.jdreioe.wingmate.application.SettingsFacade
+import io.github.jdreioe.wingmate.application.BoardsFacade
+import io.github.jdreioe.wingmate.application.CommunicationFacade
 import io.github.jdreioe.wingmate.infrastructure.IosBackupMediaAccess
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
@@ -41,9 +46,11 @@ import io.github.jdreioe.wingmate.platform.AudioClipboard
 import io.github.jdreioe.wingmate.platform.ShareService
 import io.github.jdreioe.wingmate.platform.FilePicker
 import io.github.jdreioe.wingmate.platform.IosFilePicker
+import okio.FileSystem
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.koin.core.context.loadKoinModules
+import org.koin.mp.KoinPlatform
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
@@ -61,6 +68,8 @@ fun overrideIosSpeechService() {
                     }
                 }
             }
+            // OS-backed file system (needed by AacLogger and other common code)
+            single { FileSystem.SYSTEM }
             // Persist speech config and selected voice on iOS
             singleOf(::IosSettingsRepository) { bind<SettingsRepository>() }
             singleOf(::IosConfigRepository) { bind<ConfigRepository>() }
@@ -78,6 +87,7 @@ fun overrideIosSpeechService() {
             
             // Share service
             singleOf(::IosShareService) { bind<ShareService>() }
+            singleOf(::BackupSharingFacade)
             // Clipboard
             singleOf(::IosAudioClipboard) { bind<AudioClipboard>() }
             
@@ -107,4 +117,9 @@ class IosDiBridge {
     fun start() = startKoinWithOverrides()
     // Alternative explicit bridge name for Swift binding
     fun startKoinWithOverridesBridge() = startKoinWithOverrides()
+    fun backupFacade(): BackupSharingFacade = KoinPlatform.getKoin().get()
+    fun speechFacade(): SpeechFacade = KoinPlatform.getKoin().get()
+    fun settingsFacade(): SettingsFacade = KoinPlatform.getKoin().get()
+    fun boardsFacade(): BoardsFacade = KoinPlatform.getKoin().get()
+    fun communicationFacade(): CommunicationFacade = KoinPlatform.getKoin().get()
 }
