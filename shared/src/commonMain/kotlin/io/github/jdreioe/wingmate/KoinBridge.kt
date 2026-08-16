@@ -6,17 +6,11 @@ import io.github.jdreioe.wingmate.application.AccessInputEffect
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.KeyboardPreset
-import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.di.appModule
 import io.github.jdreioe.wingmate.initKoin
 import io.github.jdreioe.wingmate.domain.OperationalLogger
-import io.github.jdreioe.wingmate.domain.Settings
-import io.github.jdreioe.wingmate.domain.SpeechPolicy
-import io.github.jdreioe.wingmate.domain.TtsEngine
-import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
-import io.github.jdreioe.wingmate.domain.WordTypeColorScheme
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.TextEditResult
@@ -48,7 +42,6 @@ import io.github.jdreioe.wingmate.domain.obf.joinSentenceText
 import io.github.jdreioe.wingmate.domain.obf.buttonSpeechPart
 import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
 import io.github.jdreioe.wingmate.domain.obf.shouldSpeakBoardSelection
-import io.github.jdreioe.wingmate.domain.obf.shouldSpeakSelectionImmediately
 import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.buildResolvedSentence
 import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
@@ -111,61 +104,6 @@ class KoinBridge : KoinComponent {
         } catch (_: Throwable) {}
     }
 
-    // --- Simple bridging helpers for Swift UI ---
-    suspend fun getSettings(): Settings = get<SettingsUseCase>().get()
-
-    private suspend fun updateSettings(transform: (Settings) -> Settings) {
-        val useCase = get<SettingsUseCase>()
-        useCase.update(transform(useCase.get()))
-    }
-
-    suspend fun updateSecondaryLanguage(lang: String) = updateSettings { it.copy(secondaryLanguage = lang) }
-    suspend fun updateScanningEnabled(enabled: Boolean) = updateSettings { it.copy(scanningEnabled = enabled) }
-    suspend fun updateScanPlaybackAreaEnabled(enabled: Boolean) = updateSettings { it.copy(scanPlaybackAreaEnabled = enabled) }
-    suspend fun updateScanInputFieldEnabled(enabled: Boolean) = updateSettings { it.copy(scanInputFieldEnabled = enabled) }
-    suspend fun updateScanPhraseGridEnabled(enabled: Boolean) = updateSettings { it.copy(scanPhraseGridEnabled = enabled) }
-    suspend fun updateScanCategoryItemsEnabled(enabled: Boolean) = updateSettings { it.copy(scanCategoryItemsEnabled = enabled) }
-    suspend fun updateScanTopBarEnabled(enabled: Boolean) = updateSettings { it.copy(scanTopBarEnabled = enabled) }
-    suspend fun updateScanPhraseGridOrder(order: String) = updateSettings { it.copy(scanPhraseGridOrder = order) }
-    suspend fun updateScanDwellTimeSeconds(seconds: Float) = updateSettings { it.copy(scanDwellTimeSeconds = seconds) }
-    suspend fun updateScanAutoAdvanceSeconds(seconds: Float) = updateSettings { it.copy(scanAutoAdvanceSeconds = seconds) }
-    suspend fun updateShowLabels(enabled: Boolean) = updateSettings { it.copy(showLabels = enabled) }
-    suspend fun updateShowSymbols(enabled: Boolean) = updateSettings { it.copy(showSymbols = enabled) }
-    suspend fun updateLabelAtTop(enabled: Boolean) = updateSettings { it.copy(labelAtTop = enabled) }
-    suspend fun updateGridColumns(columns: Int) = updateSettings { it.copy(gridColumns = columns.coerceIn(1, 6)) }
-    suspend fun updateHighContrastMode(enabled: Boolean) = updateSettings { it.copy(highContrastMode = enabled) }
-    suspend fun updateWordTypeColorScheme(scheme: String) = updateSettings {
-        it.copy(wordTypeColorScheme = runCatching { WordTypeColorScheme.valueOf(scheme) }
-            .getOrDefault(WordTypeColorScheme.None))
-    }
-    suspend fun updateHoldToSelectMillis(millis: Long) = updateSettings { it.copy(holdToSelectMillis = millis.coerceIn(0, 2_000)) }
-    suspend fun updateDwellToSelectMillis(millis: Long) = updateSettings { it.copy(dwellToSelectMillis = millis.coerceIn(0, 5_000)) }
-    suspend fun updateSelectKeyBinding(binding: String) = updateSettings { it.copy(selectKeyBinding = binding) }
-    suspend fun updateRestModeKeyBinding(binding: String) = updateSettings { it.copy(restModeKeyBinding = binding) }
-    suspend fun updatePointerEmphasis(style: String, scale: Float) = updateSettings {
-        it.copy(
-            pointerEmphasisStyle = runCatching { PointerEmphasisStyle.valueOf(style) }.getOrDefault(PointerEmphasisStyle.System),
-            pointerEmphasisScale = scale.coerceIn(1f, 3f),
-        )
-    }
-    suspend fun updateSelectionDebounceMillis(millis: Long) = updateSettings { it.copy(selectionDebounceMillis = millis.coerceIn(0, 1_000)) }
-    suspend fun updateSelectionSoundEnabled(enabled: Boolean) = updateSettings { it.copy(selectionSoundEnabled = enabled) }
-    suspend fun updateAuditoryFishingEnabled(enabled: Boolean) = updateSettings { it.copy(auditoryFishingEnabled = enabled) }
-    suspend fun updateSelectionHighlightMillis(millis: Long) = updateSettings { it.copy(selectionHighlightMillis = millis.coerceIn(0, 5_000)) }
-    suspend fun updateSpeechPolicy(policy: String) = updateSettings {
-        it.copy(speechPolicy = runCatching { SpeechPolicy.valueOf(policy) }.getOrDefault(SpeechPolicy.Immediate))
-    }
-    /**
-     * Whether a single selection should speak immediately, given the global
-     * speech policy and the resolved board activation behavior. Sentence-only
-     * never speaks during composition.
-     */
-    fun speechPolicySpeaksSelection(policy: String, behavior: String): Boolean =
-        shouldSpeakSelectionImmediately(
-            policy = runCatching { SpeechPolicy.valueOf(policy) }.getOrDefault(SpeechPolicy.Immediate),
-            behavior = behavior.toBoardActivationBehavior()
-        )
-
     fun accessInputEnter(targetId: String): IosAccessInputResult {
         accessInput.targetEntered(targetId, nowMillis())
         return accessResult(null)
@@ -205,7 +143,6 @@ class KoinBridge : KoinComponent {
         currentTargetId = accessInput.state.currentTargetId,
         dwellProgress = accessInput.state.dwellProgress,
     )
-    suspend fun updateBoardShowMessageBar(enabled: Boolean) = updateSettings { it.copy(boardShowMessageBar = enabled) }
 
     private val selectionHighlight = SelectionHighlight()
 
@@ -227,27 +164,6 @@ class KoinBridge : KoinComponent {
         selectionHighlight.highlightedTarget(nowMillis(), durationMillis)
 
     private fun nowMillis(): Long = Clock.System.now().toEpochMilliseconds()
-    suspend fun updateUsageLoggingEnabled(enabled: Boolean) {
-        updateSettings { it.copy(usageLoggingEnabled = enabled) }
-        runCatching { get<io.github.jdreioe.wingmate.domain.AacLogger>().setEnabled(enabled) }
-    }
-    suspend fun updateHistoryVisible(visible: Boolean) = updateSettings { it.copy(historyVisible = visible) }
-    suspend fun updateFeatureUsageReportingEnabled(enabled: Boolean) {
-        updateSettings { it.copy(featureUsageReportingEnabled = enabled) }
-        runCatching { get<io.github.jdreioe.wingmate.application.FeatureUsageReporter>().setEnabled(enabled) }
-    }
-    suspend fun startupUsesScreens(): Boolean = get<SettingsUseCase>().get().startupMode == io.github.jdreioe.wingmate.domain.StartupMode.Screens
-    suspend fun iosSettingsFlags(): IosSettingsFlags {
-        val settings = get<SettingsUseCase>().get()
-        return IosSettingsFlags(
-            usesSystemTts = settings.ttsEngine == TtsEngine.SYSTEM,
-            startupUsesScreens = settings.startupMode == io.github.jdreioe.wingmate.domain.StartupMode.Screens
-        )
-    }
-    suspend fun updateStartupUsesScreens(enabled: Boolean) = updateSettings {
-        it.copy(startupMode = if (enabled) io.github.jdreioe.wingmate.domain.StartupMode.Screens else io.github.jdreioe.wingmate.domain.StartupMode.Keyboard)
-    }
-    suspend fun updateStartupBoardSetId(id: String?) = updateSettings { it.copy(startupBoardSetId = id) }
 
     // Debug helper: return the runtime class name of the bound VoiceRepository
     fun debugVoiceRepositoryName(): String = try { get<io.github.jdreioe.wingmate.domain.VoiceRepository>()::class.simpleName ?: "unknown" } catch (_: Throwable) { "error" }
@@ -580,19 +496,6 @@ class KoinBridge : KoinComponent {
         updated
     }.getOrNull()
 
-    suspend fun editingAccessState(): io.github.jdreioe.wingmate.application.EditingAccessState =
-        get<EditingAccessController>().refresh()
-
-    suspend fun configureEditingAccess(code: String) = get<EditingAccessController>().configure(code)
-
-    suspend fun unlockEditing(code: String): Boolean = get<EditingAccessController>().unlock(code)
-
-    suspend fun disableEditingAccess(code: String): Boolean = get<EditingAccessController>().disable(code)
-
-    fun lockEditingAccess() = get<EditingAccessController>().lock()
-
-    suspend fun recoverEditingAccess() = get<EditingAccessController>().recover()
-
     companion object {
         private var started: Boolean = false
     fun start() {
@@ -800,11 +703,6 @@ data class IosBoardCell(
     val soundId: String? = null,
     val soundDataUrl: String? = null,
     val shape: String = "square",
-)
-
-data class IosSettingsFlags(
-    val usesSystemTts: Boolean,
-    val startupUsesScreens: Boolean
 )
 
 data class IosBoardFieldItem(

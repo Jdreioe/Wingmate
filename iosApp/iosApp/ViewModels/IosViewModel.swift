@@ -114,6 +114,7 @@ final class IosViewModel: ObservableObject {
     private let bridge = KoinBridge()
     private lazy var backupFacade = IosDiBridge().backupFacade()
     private lazy var speechFacade = IosDiBridge().speechFacade()
+    private lazy var settingsFacade = IosDiBridge().settingsFacade()
 
     // UI state
     @Published var input: String = ""
@@ -256,21 +257,21 @@ final class IosViewModel: ObservableObject {
     }
 
     func refreshEditingAccess() async {
-        guard let state = try? await bridge.editingAccessState() else { return }
+        guard let state = try? await settingsFacade.editingAccessState() else { return }
         editingAccessEnabled = state.enabled
         editingAccessUnlocked = state.unlocked
         editingAccessSupported = state.supported
     }
 
     func unlockEditingAccess(_ code: String) async -> Bool {
-        let success = (try? await bridge.unlockEditing(code: code))?.boolValue ?? false
+        let success = (try? await settingsFacade.unlockEditing(code: code))?.boolValue ?? false
         await refreshEditingAccess()
         return success
     }
 
     func configureEditingAccess(_ code: String) async -> Bool {
         do {
-            try await bridge.configureEditingAccess(code: code)
+            try await settingsFacade.configureEditingAccess(code: code)
             await refreshEditingAccess()
             return true
         } catch {
@@ -279,18 +280,18 @@ final class IosViewModel: ObservableObject {
     }
 
     func disableEditingAccess(_ code: String) async -> Bool {
-        let success = (try? await bridge.disableEditingAccess(code: code))?.boolValue ?? false
+        let success = (try? await settingsFacade.disableEditingAccess(code: code))?.boolValue ?? false
         await refreshEditingAccess()
         return success
     }
 
     func recoverEditingAccess() async {
-        try? await bridge.recoverEditingAccess()
+        try? await settingsFacade.recoverEditingAccess()
         await refreshEditingAccess()
     }
 
     func lockEditingAccess() {
-        bridge.lockEditingAccess()
+        settingsFacade.lockEditingAccess()
         editingAccessUnlocked = !editingAccessEnabled
     }
 
@@ -455,7 +456,7 @@ final class IosViewModel: ObservableObject {
 
     func refreshLanguagePreferences() async {
         do {
-            let settings = try await bridge.getSettings()
+            let settings = try await settingsFacade.getSettings()
             await MainActor.run {
                 self.primaryLanguage = settings.primaryLanguage
                 self.secondaryLanguage = settings.secondaryLanguage
@@ -470,7 +471,7 @@ final class IosViewModel: ObservableObject {
 
     func refreshScanningSettings() async {
         do {
-            let settings = try await bridge.getSettings()
+            let settings = try await settingsFacade.getSettings()
             await MainActor.run {
                 self.scanningEnabled = settings.scanningEnabled
                 self.scanPlaybackAreaEnabled = settings.scanPlaybackAreaEnabled
@@ -493,8 +494,8 @@ final class IosViewModel: ObservableObject {
 
     func refreshParitySettings() async {
         do {
-            let settings = try await bridge.getSettings()
-            let flags = try? await bridge.iosSettingsFlags()
+            let settings = try await settingsFacade.getSettings()
+            let flags = try? await settingsFacade.iosSettingsFlags()
             let systemTts = flags?.usesSystemTts ?? useSystemTts
             let opensScreens = flags?.startupUsesScreens ?? false
             await MainActor.run {
@@ -952,109 +953,109 @@ final class IosViewModel: ObservableObject {
 
     func setScanningEnabled(_ enabled: Bool) {
         self.scanningEnabled = enabled
-        Task { _ = try? await bridge.updateScanningEnabled(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateScanningEnabled(enabled: enabled) }
     }
 
     func setScanPlaybackAreaEnabled(_ enabled: Bool) {
         self.scanPlaybackAreaEnabled = enabled
-        Task { _ = try? await bridge.updateScanPlaybackAreaEnabled(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateScanPlaybackAreaEnabled(enabled: enabled) }
     }
 
     func setScanInputFieldEnabled(_ enabled: Bool) {
         self.scanInputFieldEnabled = enabled
-        Task { _ = try? await bridge.updateScanInputFieldEnabled(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateScanInputFieldEnabled(enabled: enabled) }
     }
 
     func setScanPhraseGridEnabled(_ enabled: Bool) {
         self.scanPhraseGridEnabled = enabled
-        Task { _ = try? await bridge.updateScanPhraseGridEnabled(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateScanPhraseGridEnabled(enabled: enabled) }
     }
 
     func setScanCategoryItemsEnabled(_ enabled: Bool) {
         self.scanCategoryItemsEnabled = enabled
-        Task { _ = try? await bridge.updateScanCategoryItemsEnabled(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateScanCategoryItemsEnabled(enabled: enabled) }
     }
 
     func setScanTopBarEnabled(_ enabled: Bool) {
         self.scanTopBarEnabled = enabled
-        Task { _ = try? await bridge.updateScanTopBarEnabled(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateScanTopBarEnabled(enabled: enabled) }
     }
 
     func setScanPhraseGridOrder(_ order: String) {
         let normalized = normalizedScanGridOrder(order)
         self.scanPhraseGridOrder = normalized
-        Task { _ = try? await bridge.updateScanPhraseGridOrder(order: normalized) }
+        Task { _ = try? await settingsFacade.updateScanPhraseGridOrder(order: normalized) }
     }
 
     func setScanDwellTimeSeconds(_ value: Double) {
         let clamped = Double(clampedDwellSeconds(Float(value)))
         self.scanDwellTimeSeconds = clamped
-        Task { _ = try? await bridge.updateScanDwellTimeSeconds(seconds: Float(clamped)) }
+        Task { _ = try? await settingsFacade.updateScanDwellTimeSeconds(seconds: Float(clamped)) }
     }
 
     func setScanAutoAdvanceSeconds(_ value: Double) {
         let clamped = Double(clampedAutoAdvanceSeconds(Float(value)))
         self.scanAutoAdvanceSeconds = clamped
-        Task { _ = try? await bridge.updateScanAutoAdvanceSeconds(seconds: Float(clamped)) }
+        Task { _ = try? await settingsFacade.updateScanAutoAdvanceSeconds(seconds: Float(clamped)) }
     }
 
     func setShowButtonLabels(_ enabled: Bool) {
         showButtonLabels = enabled
-        Task { _ = try? await bridge.updateShowLabels(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateShowLabels(enabled: enabled) }
     }
 
     func setShowButtonSymbols(_ enabled: Bool) {
         showButtonSymbols = enabled
-        Task { _ = try? await bridge.updateShowSymbols(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateShowSymbols(enabled: enabled) }
     }
 
     func setLabelAtTop(_ enabled: Bool) {
         labelAtTop = enabled
-        Task { _ = try? await bridge.updateLabelAtTop(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateLabelAtTop(enabled: enabled) }
     }
 
     func setPreferredGridColumns(_ columns: Int) {
         preferredGridColumns = min(max(columns, 1), 6)
-        Task { _ = try? await bridge.updateGridColumns(columns: Int32(preferredGridColumns)) }
+        Task { _ = try? await settingsFacade.updateGridColumns(columns: Int32(preferredGridColumns)) }
     }
 
     func setHighContrastMode(_ enabled: Bool) {
         highContrastMode = enabled
-        Task { _ = try? await bridge.updateHighContrastMode(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateHighContrastMode(enabled: enabled) }
     }
 
     func setWordTypeColorsEnabled(_ enabled: Bool) {
         wordTypeColorScheme = enabled ? "Fitzgerald" : "None"
         Task {
-            _ = try? await bridge.updateWordTypeColorScheme(scheme: wordTypeColorScheme)
+            _ = try? await settingsFacade.updateWordTypeColorScheme(scheme: wordTypeColorScheme)
             await refreshBoardCells()
         }
     }
 
     func setHoldToSelectMillis(_ value: Double) {
         holdToSelectMillis = min(max(value, 0), 2_000)
-        Task { _ = try? await bridge.updateHoldToSelectMillis(millis: Int64(holdToSelectMillis)) }
+        Task { _ = try? await settingsFacade.updateHoldToSelectMillis(millis: Int64(holdToSelectMillis)) }
     }
 
     func setDwellToSelectMillis(_ value: Double) {
         dwellToSelectMillis = min(max(value, 0), 5_000)
-        Task { _ = try? await bridge.updateDwellToSelectMillis(millis: Int64(dwellToSelectMillis)) }
+        Task { _ = try? await settingsFacade.updateDwellToSelectMillis(millis: Int64(dwellToSelectMillis)) }
     }
 
     func setSelectKeyBinding(_ value: String) {
         selectKeyBinding = value
-        Task { _ = try? await bridge.updateSelectKeyBinding(binding: value) }
+        Task { _ = try? await settingsFacade.updateSelectKeyBinding(binding: value) }
     }
 
     func setRestModeKeyBinding(_ value: String) {
         restModeKeyBinding = value
-        Task { _ = try? await bridge.updateRestModeKeyBinding(binding: value) }
+        Task { _ = try? await settingsFacade.updateRestModeKeyBinding(binding: value) }
     }
 
     func setPointerEmphasis(style: String? = nil, scale: Double? = nil) {
         if let style { pointerEmphasisStyle = style }
         if let scale { pointerEmphasisScale = min(max(scale, 1), 3) }
-        Task { _ = try? await bridge.updatePointerEmphasis(style: pointerEmphasisStyle, scale: Float(pointerEmphasisScale)) }
+        Task { _ = try? await settingsFacade.updatePointerEmphasis(style: pointerEmphasisStyle, scale: Float(pointerEmphasisScale)) }
     }
 
     func registerAccessTarget(_ targetId: String, action: @escaping () -> Void) {
@@ -1096,39 +1097,39 @@ final class IosViewModel: ObservableObject {
 
     func setSelectionDebounceMillis(_ value: Double) {
         selectionDebounceMillis = min(max(value, 0), 1_000)
-        Task { _ = try? await bridge.updateSelectionDebounceMillis(millis: Int64(selectionDebounceMillis)) }
+        Task { _ = try? await settingsFacade.updateSelectionDebounceMillis(millis: Int64(selectionDebounceMillis)) }
     }
 
     func setSelectionSoundEnabled(_ enabled: Bool) {
         selectionSoundEnabled = enabled
-        Task { _ = try? await bridge.updateSelectionSoundEnabled(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateSelectionSoundEnabled(enabled: enabled) }
     }
 
     func setAuditoryFishingEnabled(_ enabled: Bool) {
         auditoryFishingEnabled = enabled
-        Task { _ = try? await bridge.updateAuditoryFishingEnabled(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateAuditoryFishingEnabled(enabled: enabled) }
     }
 
     func setSpeechPolicy(_ policy: String) {
         guard policy == "Immediate" || policy == "SentenceOnly" else { return }
         speechPolicy = policy
-        Task { _ = try? await bridge.updateSpeechPolicy(policy: policy) }
+        Task { _ = try? await settingsFacade.updateSpeechPolicy(policy: policy) }
     }
 
     /// Whether a single board/button selection speaks immediately, honoring the
     /// global speech policy and the resolved board activation behavior.
     var shouldSpeakSelectionImmediately: Bool {
-        bridge.speechPolicySpeaksSelection(policy: speechPolicy, behavior: boardActivationBehavior)
+        settingsFacade.speechPolicySpeaksSelection(policy: speechPolicy, behavior: boardActivationBehavior)
     }
 
     func setBoardShowMessageBar(_ enabled: Bool) {
         boardShowMessageBar = enabled
-        Task { _ = try? await bridge.updateBoardShowMessageBar(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateBoardShowMessageBar(enabled: enabled) }
     }
 
     func setUsageLoggingEnabled(_ enabled: Bool) {
         usageLoggingEnabled = enabled
-        Task { _ = try? await bridge.updateUsageLoggingEnabled(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateUsageLoggingEnabled(enabled: enabled) }
     }
 
     func setHistoryVisible(_ visible: Bool) {
@@ -1138,22 +1139,22 @@ final class IosViewModel: ObservableObject {
         } else {
             historyPhrases = []
         }
-        Task { _ = try? await bridge.updateHistoryVisible(visible: visible) }
+        Task { _ = try? await settingsFacade.updateHistoryVisible(visible: visible) }
     }
 
     func setFeatureUsageReportingEnabled(_ enabled: Bool) {
         featureUsageReportingEnabled = enabled
-        Task { _ = try? await bridge.updateFeatureUsageReportingEnabled(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateFeatureUsageReportingEnabled(enabled: enabled) }
     }
 
     func setStartupUsesScreens(_ enabled: Bool) {
         startupUsesScreens = enabled
-        Task { _ = try? await bridge.updateStartupUsesScreens(enabled: enabled) }
+        Task { _ = try? await settingsFacade.updateStartupUsesScreens(enabled: enabled) }
     }
 
     func setStartupBoardSetId(_ id: String?) {
         startupBoardSetId = id
-        Task { _ = try? await bridge.updateStartupBoardSetId(id: id) }
+        Task { _ = try? await settingsFacade.updateStartupBoardSetId(id: id) }
     }
 
     private func normalizedScanGridOrder(_ value: String) -> String {
@@ -1224,7 +1225,7 @@ final class IosViewModel: ObservableObject {
 
     func updateSecondaryLanguage(_ lang: String) {
         Task {
-            _ = try? await bridge.updateSecondaryLanguage(lang: lang)
+            _ = try? await settingsFacade.updateSecondaryLanguage(lang: lang)
             self.secondaryLanguage = lang
             if lang == self.primaryLanguage {
                 self.secondaryLanguageRanges = []
