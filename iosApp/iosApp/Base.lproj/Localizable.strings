@@ -74,6 +74,7 @@
 "azure.credentials.configured" = "Azure Speech credentials are securely configured on this device.";
 "azure.credentials.replace" = "Replace Azure credentials";
 "common.error" = "Error";
+"common.retry" = "Retry";
 "common.ok" = "OK";
 "common.saving" = "Saving…";
 "common.save" = "Save";

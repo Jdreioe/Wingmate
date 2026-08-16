@@ -675,9 +675,20 @@ fun PhraseScreen(
                     if (state.loading) Text(stringResource(R.string.phrase_screen_loading), style = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                     ))
-                    state.error?.let { Text(stringResource(R.string.phrase_screen_error, it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                    )) }
+                    state.error?.let {
+                        Column {
+                            Text(
+                                stringResource(R.string.phrase_screen_error, it),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                ),
+                            )
+                            Button(onClick = { bloc.dispatch(PhraseEvent.Load) }) {
+                                Text(stringResource(R.string.common_retry))
+                            }
+                        }
+                    }
 
                     // Dynamically resolve CategoryUseCase; it might be registered after initial composition (platform overrides)
                     val categoryUseCaseState = remember { mutableStateOf<io.github.jdreioe.wingmate.application.CategoryUseCase?>(null) }

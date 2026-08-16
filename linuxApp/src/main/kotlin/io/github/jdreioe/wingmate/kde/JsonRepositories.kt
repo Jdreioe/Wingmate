@@ -15,6 +15,10 @@ import org.freedesktop.dbus.annotations.DBusInterfaceName
 import org.freedesktop.dbus.connections.impl.DBusConnectionBuilder
 import org.freedesktop.dbus.interfaces.DBusInterface
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 private val configDir = File(System.getProperty("user.home"), ".config/wingmate").apply { mkdirs() }
 private val json = Json { 
@@ -23,43 +27,19 @@ private val json = Json {
     encodeDefaults = true
 }
 
-class JsonFileSettingsRepository : SettingsRepository {
-    private val file = File(configDir, "settings.json")
-    private var cached: Settings = Settings()
+class JsonFileSettingsRepository(
+    private val file: File = File(configDir, "settings.json"),
+    private val writer: suspend (File, String) -> Unit = ::writeTextAtomically,
+) : SettingsRepository {
+    private val mutex = Mutex()
 
-    init {
-        println("[PERSISTENCE] JsonFileSettingsRepository init. File: ${file.absolutePath}")
-        if (file.exists()) {
-            try {
-                val text = file.readText()
-                println("[PERSISTENCE] Read settings content: $text")
-                cached = json.decodeFromString<Settings>(text)
-                println("[PERSISTENCE] Decoded settings successfully.")
-            } catch (e: Exception) {
-                println("[PERSISTENCE] Error reading settings: ${e.message}")
-                e.printStackTrace()
-            }
-        } else {
-            println("[PERSISTENCE] Settings file does not exist, using defaults.")
-        }
+    override suspend fun get(): Settings = mutex.withLock {
+        readJson<Settings>(file).valueOr(::Settings)
     }
 
-    override suspend fun get(): Settings = withContext(Dispatchers.IO) {
-        println("[PERSISTENCE] getSettings called. Current value: $cached")
-        cached
-    }
-
-    override suspend fun update(settings: Settings): Settings = withContext(Dispatchers.IO) {
-        println("[PERSISTENCE] updateSettings called with: $settings")
-        cached = settings
-        try {
-            val text = json.encodeToString(settings)
-            file.writeText(text)
-            println("[PERSISTENCE] Saved settings to disk: $text")
-        } catch (e: Exception) {
-            println("[PERSISTENCE] Error saving settings: ${e.message}")
-            e.printStackTrace()
-        }
+    override suspend fun update(settings: Settings): Settings = mutex.withLock {
+        readJson<Settings>(file).valueOr(::Settings) // Never replace an unreadable store.
+        writeJson(file, settings, writer)
         settings
     }
 }
@@ -274,258 +254,286 @@ interface KWalletDbus : DBusInterface {
     fun removeEntry(handle: Int, folder: String, entry: String, appId: String): Int
 }
 
-class JsonFileVoiceRepository : VoiceRepository {
-    private val file = File(configDir, "voices.json")
-    private val selectedFile = File(configDir, "selected-voice.json")
-    private val voices = mutableListOf<Voice>()
-    private var selectedVoice: Voice? = null
+class JsonFileVoiceRepository(
+    private val file: File = File(configDir, "voices.json"),
+    private val selectedFile: File = File(configDir, "selected-voice.json"),
+    private val writer: suspend (File, String) -> Unit = ::writeTextAtomically,
+) : VoiceRepository {
+    private val mutex = Mutex()
 
-    init {
-        println("[PERSISTENCE] JsonFileVoiceRepository init. File: ${file.absolutePath}")
-        if (file.exists()) {
-            try {
-                val list = json.decodeFromString<List<Voice>>(file.readText())
-                voices.addAll(list)
-                println("[PERSISTENCE] Loaded ${voices.size} voices from disk.")
-            } catch (e: Exception) {
-                println("[PERSISTENCE] Error loading voices: ${e.message}")
-                e.printStackTrace()
-            }
-        }
-        if (selectedFile.exists()) {
-            try {
-                selectedVoice = json.decodeFromString<Voice>(selectedFile.readText())
-                println("[PERSISTENCE] Loaded selected voice: ${selectedVoice?.name}")
-            } catch (e: Exception) {
-                println("[PERSISTENCE] Error loading selected voice: ${e.message}")
-                e.printStackTrace()
-            }
-        }
+    override suspend fun getVoices(): List<Voice> = mutex.withLock {
+        readJson<List<Voice>>(file).valueOr(::emptyList)
     }
 
-    override suspend fun getVoices(): List<Voice> = withContext(Dispatchers.IO) {
-        println("[PERSISTENCE] getVoices called. Count: ${voices.size}")
-        voices.toList()
+    override suspend fun saveVoices(list: List<Voice>) = mutex.withLock {
+        readJson<List<Voice>>(file).valueOr(::emptyList)
+        writeJson(file, list, writer)
     }
 
-    override suspend fun saveVoices(list: List<Voice>) = withContext(Dispatchers.IO) {
-        println("[PERSISTENCE] saveVoices called with ${list.size} voices.")
-        voices.clear()
-        voices.addAll(list)
-        try {
-            file.writeText(json.encodeToString(voices))
-            println("[PERSISTENCE] Saved voices to disk.")
-        } catch (e: Exception) {
-            println("[PERSISTENCE] Error saving voices: ${e.message}")
-            e.printStackTrace()
-        }
+    override suspend fun saveSelected(voice: Voice) = mutex.withLock {
+        readJson<Voice>(selectedFile).nullableValue()
+        writeJson(selectedFile, voice, writer)
     }
 
-    override suspend fun saveSelected(voice: Voice) = withContext(Dispatchers.IO) {
-        println("[PERSISTENCE] saveSelected voice: ${voice.name}")
-        selectedVoice = voice
-        try {
-            selectedFile.writeText(json.encodeToString(voice))
-        } catch (e: Exception) {
-            println("[PERSISTENCE] Error saving selected voice: ${e.message}")
-        }
-    }
-
-    override suspend fun getSelected(): Voice? = withContext(Dispatchers.IO) {
-        selectedVoice
+    override suspend fun getSelected(): Voice? = mutex.withLock {
+        readJson<Voice>(selectedFile).nullableValue()
     }
 }
 
 class JsonFilePronunciationDictionaryRepository(
     private val file: File = File(configDir, "pronunciations.json"),
+    private val writer: suspend (File, String) -> Unit = ::writeTextAtomically,
 ) : PronunciationDictionaryRepository {
     private val mutex = Mutex()
-    private val entries = runCatching {
-        if (file.exists()) {
-            json.decodeFromString<List<PronunciationEntry>>(file.readText())
-                .associateBy { it.word.lowercase() }
-                .toMutableMap()
-        } else {
-            mutableMapOf()
-        }
-    }.getOrElse { error ->
-        System.err.println("[PERSISTENCE] Could not load pronunciation dictionary: ${error.message}")
-        mutableMapOf()
-    }
 
     override suspend fun getAll(): List<PronunciationEntry> = mutex.withLock {
-        entries.values.sortedBy { it.word.lowercase() }
+        readEntries().values.sortedBy { it.word.lowercase() }
     }
 
     override suspend fun add(entry: PronunciationEntry) = mutex.withLock {
+        val entries = readEntries().toMutableMap()
         entries[entry.word.lowercase()] = entry
-        save()
+        save(entries.values)
     }
 
     override suspend fun delete(word: String) = mutex.withLock {
-        if (entries.remove(word.lowercase()) != null) save()
+        val entries = readEntries().toMutableMap()
+        if (entries.remove(word.lowercase()) != null) save(entries.values)
     }
 
     override suspend fun clear() = mutex.withLock {
-        entries.clear()
-        save()
+        readEntries()
+        save(emptyList())
     }
 
-    private suspend fun save() = withContext(Dispatchers.IO) {
-        file.parentFile?.mkdirs()
-        val temporary = File(file.parentFile, "${file.name}.tmp")
-        temporary.writeText(json.encodeToString(entries.values.sortedBy { it.word.lowercase() }))
-        check(temporary.renameTo(file) || runCatching {
-            temporary.copyTo(file, overwrite = true)
-            temporary.delete()
-            true
-        }.getOrDefault(false)) {
-            "Could not save pronunciation dictionary"
-        }
-    }
+    private fun readEntries(): Map<String, PronunciationEntry> =
+        readJson<List<PronunciationEntry>>(file)
+            .valueOr(::emptyList)
+            .associateBy { it.word.lowercase() }
+
+    private suspend fun save(entries: Collection<PronunciationEntry>) =
+        writeJson(file, entries.sortedBy { it.word.lowercase() }, writer)
 }
 
 class JsonFilePhraseRepository(
     private val file: File = File(configDir, "phrases.json"),
+    private val writer: suspend (File, String) -> Unit = ::writeTextAtomically,
 ) : PhraseRepository {
     private val mutex = Mutex()
-    private val phrases = runCatching {
-        if (file.exists()) json.decodeFromString<List<Phrase>>(file.readText()).toMutableList()
-        else mutableListOf()
-    }.getOrElse { error ->
-        System.err.println("[PERSISTENCE] Could not load phrases: ${error.message}")
-        mutableListOf()
-    }
 
-    override suspend fun getAll(): List<Phrase> = mutex.withLock { phrases.toList() }
+    override suspend fun getAll(): List<Phrase> = mutex.withLock { readPhrases() }
 
     override suspend fun add(phrase: Phrase): Phrase = mutex.withLock {
+        val phrases = readPhrases().toMutableList()
         val stored = phrase.copy(
             id = phrase.id.ifBlank { "phrase-${java.util.UUID.randomUUID()}" },
             createdAt = phrase.createdAt.takeIf { it > 0 } ?: System.currentTimeMillis(),
         )
         phrases += stored
-        save()
+        save(phrases)
         stored
     }
 
     override suspend fun update(phrase: Phrase): Phrase = mutex.withLock {
+        val phrases = readPhrases().toMutableList()
         val index = phrases.indexOfFirst { it.id == phrase.id }
         if (index >= 0) phrases[index] = phrase else phrases += phrase
-        save()
+        save(phrases)
         phrase
     }
 
     override suspend fun delete(id: String) = mutex.withLock {
-        if (phrases.removeAll { it.id == id }) save()
+        val phrases = readPhrases().toMutableList()
+        if (phrases.removeAll { it.id == id }) save(phrases)
     }
 
     override suspend fun move(fromIndex: Int, toIndex: Int) = mutex.withLock {
+        val phrases = readPhrases().toMutableList()
         if (fromIndex !in phrases.indices) return@withLock
         val item = phrases.removeAt(fromIndex)
         phrases.add(toIndex.coerceIn(0, phrases.size), item)
-        save()
+        save(phrases)
     }
 
-    private suspend fun save() = writeJsonAtomically(file, phrases)
+    private fun readPhrases() = readJson<List<Phrase>>(file).valueOr(::emptyList)
+    private suspend fun save(phrases: List<Phrase>) = writeJson(file, phrases, writer)
 }
 
 class JsonFileCategoryRepository(
     private val file: File = File(configDir, "categories.json"),
+    private val writer: suspend (File, String) -> Unit = ::writeTextAtomically,
 ) : CategoryRepository {
     private val mutex = Mutex()
-    private val categories = runCatching {
-        if (file.exists()) json.decodeFromString<List<CategoryItem>>(file.readText()).toMutableList()
-        else mutableListOf()
-    }.getOrElse { error ->
-        System.err.println("[PERSISTENCE] Could not load categories: ${error.message}")
-        mutableListOf()
-    }
 
-    override suspend fun getAll(): List<CategoryItem> = mutex.withLock { categories.toList() }
+    override suspend fun getAll(): List<CategoryItem> = mutex.withLock { readCategories() }
 
     override suspend fun add(category: CategoryItem): CategoryItem = mutex.withLock {
+        val categories = readCategories().toMutableList()
         val stored = category.copy(id = category.id.ifBlank { "category-${java.util.UUID.randomUUID()}" })
         categories += stored
-        save()
+        save(categories)
         stored
     }
 
     override suspend fun update(category: CategoryItem): CategoryItem = mutex.withLock {
+        val categories = readCategories().toMutableList()
         val index = categories.indexOfFirst { it.id == category.id }
         if (index >= 0) categories[index] = category else categories += category
-        save()
+        save(categories)
         category
     }
 
     override suspend fun delete(id: String) = mutex.withLock {
-        if (categories.removeAll { it.id == id }) save()
+        val categories = readCategories().toMutableList()
+        if (categories.removeAll { it.id == id }) save(categories)
     }
 
     override suspend fun move(fromIndex: Int, toIndex: Int) = mutex.withLock {
+        val categories = readCategories().toMutableList()
         if (fromIndex !in categories.indices) return@withLock
         val item = categories.removeAt(fromIndex)
         categories.add(toIndex.coerceIn(0, categories.size), item)
-        save()
+        save(categories)
     }
 
-    private suspend fun save() = writeJsonAtomically(file, categories)
+    private fun readCategories() = readJson<List<CategoryItem>>(file).valueOr(::emptyList)
+    private suspend fun save(categories: List<CategoryItem>) = writeJson(file, categories, writer)
 }
 
-private suspend inline fun <reified T> writeJsonAtomically(file: File, value: T) =
-    withContext(Dispatchers.IO) {
-        file.parentFile?.mkdirs()
-        val temporary = File(file.parentFile, "${file.name}.tmp")
-        temporary.writeText(json.encodeToString(value))
-        check(temporary.renameTo(file) || runCatching {
-            temporary.copyTo(file, overwrite = true)
-            temporary.delete()
-            true
-        }.getOrDefault(false)) { "Could not save ${file.name}" }
-    }
+class JsonFileBoardRepository(
+    private val file: File = File(configDir, "boards.json"),
+    private val writer: suspend (File, String) -> Unit = ::writeTextAtomically,
+) : BoardRepository {
+    private val mutex = Mutex()
 
-class JsonFileBoardRepository : BoardRepository {
-    private val file = File(configDir, "boards.json")
-    private val boards = runCatching {
-        if (file.exists()) json.decodeFromString<List<ObfBoard>>(file.readText()).associateBy { it.id }.toMutableMap()
-        else mutableMapOf()
-    }.getOrElse { mutableMapOf() }
+    override suspend fun getBoard(id: String): ObfBoard? = mutex.withLock { readBoards()[id] }
 
-    override suspend fun getBoard(id: String): ObfBoard? = withContext(Dispatchers.IO) { boards[id] }
-
-    override suspend fun saveBoard(board: ObfBoard) = withContext(Dispatchers.IO) {
+    override suspend fun saveBoard(board: ObfBoard) = mutex.withLock {
+        val boards = readBoards().toMutableMap()
         boards[board.id] = board
-        file.writeText(json.encodeToString(boards.values.toList()))
+        save(boards.values)
     }
 
-    override suspend fun listBoards(): List<ObfBoard> = withContext(Dispatchers.IO) { boards.values.toList() }
+    override suspend fun saveBoards(boards: List<ObfBoard>) = mutex.withLock {
+        if (boards.isEmpty()) return@withLock
+        val updated = readBoards().toMutableMap()
+        boards.forEach { updated[it.id] = it }
+        save(updated.values)
+    }
 
-    override suspend fun deleteBoard(id: String) = withContext(Dispatchers.IO) {
-        boards.remove(id)
-        file.writeText(json.encodeToString(boards.values.toList()))
+    override suspend fun listBoards(): List<ObfBoard> = mutex.withLock { readBoards().values.toList() }
+
+    override suspend fun deleteBoard(id: String) = mutex.withLock {
+        val boards = readBoards().toMutableMap()
+        if (boards.remove(id) != null) save(boards.values)
+    }
+
+    private fun readBoards() = readJson<List<ObfBoard>>(file).valueOr(::emptyList).associateBy { it.id }
+    private suspend fun save(boards: Collection<ObfBoard>) = writeJson(file, boards.toList(), writer)
+}
+
+class JsonFileBoardSetRepository(
+    private val file: File = File(configDir, "board-sets.json"),
+    private val writer: suspend (File, String) -> Unit = ::writeTextAtomically,
+) : BoardSetRepository {
+    private val mutex = Mutex()
+
+    override suspend fun getBoardSet(id: String): ObfBoardSet? = mutex.withLock { readBoardSets()[id] }
+
+    override suspend fun saveBoardSet(boardSet: ObfBoardSet) = mutex.withLock {
+        val boardSets = readBoardSets().toMutableMap()
+        boardSets[boardSet.id] = boardSet
+        save(boardSets.values)
+    }
+
+    override suspend fun listBoardSets(): List<ObfBoardSet> = mutex.withLock {
+        readBoardSets().values.sortedByDescending { it.updatedAt }
+    }
+
+    override suspend fun deleteBoardSet(id: String) = mutex.withLock {
+        val boardSets = readBoardSets().toMutableMap()
+        if (boardSets.remove(id) != null) save(boardSets.values)
+    }
+
+    private fun readBoardSets() =
+        readJson<List<ObfBoardSet>>(file).valueOr(::emptyList).associateBy { it.id }
+
+    private suspend fun save(boardSets: Collection<ObfBoardSet>) = writeJson(file, boardSets.toList(), writer)
+}
+
+private inline fun <reified T> readJson(file: File): PersistenceRead<T> {
+    if (!file.exists()) return PersistenceRead.Absent
+    val text = try {
+        file.readText()
+    } catch (error: Exception) {
+        return PersistenceRead.Failed(PersistenceError.Io, error)
+    }
+    return try {
+        PersistenceRead.Loaded(json.decodeFromString<T>(text))
+    } catch (error: Exception) {
+        quarantineCorruptFile(file)
+        PersistenceRead.Failed(PersistenceError.CorruptOrUnsupported, error)
     }
 }
 
-class JsonFileBoardSetRepository : BoardSetRepository {
-    private val file = File(configDir, "board-sets.json")
-    private val boardSets = runCatching {
-        if (file.exists()) json.decodeFromString<List<ObfBoardSet>>(file.readText()).associateBy { it.id }.toMutableMap()
-        else mutableMapOf()
-    }.getOrElse { mutableMapOf() }
+private fun <T> PersistenceRead<T>.nullableValue(): T? = when (this) {
+    PersistenceRead.Absent -> null
+    is PersistenceRead.Loaded -> value
+    is PersistenceRead.Failed -> throw PersistenceException(error, cause)
+}
 
-    override suspend fun getBoardSet(id: String): ObfBoardSet? = withContext(Dispatchers.IO) { boardSets[id] }
-
-    override suspend fun saveBoardSet(boardSet: ObfBoardSet) = withContext(Dispatchers.IO) {
-        boardSets[boardSet.id] = boardSet
-        file.writeText(json.encodeToString(boardSets.values.toList()))
+private fun quarantineCorruptFile(file: File) {
+    runCatching {
+        val prefix = "${file.name}.corrupt-"
+        if (file.parentFile?.listFiles().orEmpty().any { it.name.startsWith(prefix) }) return
+        val quarantine = File(file.parentFile, "${file.name}.corrupt-${System.currentTimeMillis()}")
+        Files.copy(file.toPath(), quarantine.toPath())
     }
+}
 
-    override suspend fun listBoardSets(): List<ObfBoardSet> = withContext(Dispatchers.IO) {
-        boardSets.values.sortedByDescending { it.updatedAt }
+private suspend inline fun <reified T> writeJson(
+    file: File,
+    value: T,
+    noinline writer: suspend (File, String) -> Unit,
+) {
+    val encoded = try {
+        json.encodeToString(value)
+    } catch (error: Exception) {
+        throw PersistenceException(PersistenceError.Io, error)
     }
+    try {
+        writer(file, encoded)
+    } catch (error: PersistenceException) {
+        throw error
+    } catch (error: Exception) {
+        throw PersistenceException(PersistenceError.Io, error)
+    }
+}
 
-    override suspend fun deleteBoardSet(id: String) = withContext(Dispatchers.IO) {
-        boardSets.remove(id)
-        file.writeText(json.encodeToString(boardSets.values.toList()))
+private suspend fun writeTextAtomically(file: File, text: String) = withContext(Dispatchers.IO) {
+    val parent = file.absoluteFile.parentFile
+    try {
+        check(parent.mkdirs() || parent.isDirectory) { "Could not create persistence directory" }
+        val temporary = Files.createTempFile(parent.toPath(), ".${file.name}.", ".tmp").toFile()
+        try {
+            FileOutputStream(temporary).use { output ->
+                output.write(text.encodeToByteArray())
+                output.fd.sync()
+            }
+            Files.move(
+                temporary.toPath(),
+                file.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+        } finally {
+            temporary.delete()
+        }
+    } catch (error: AtomicMoveNotSupportedException) {
+        throw PersistenceException(PersistenceError.Io, error)
+    } catch (error: PersistenceException) {
+        throw error
+    } catch (error: Exception) {
+        throw PersistenceException(PersistenceError.Io, error)
     }
 }

@@ -2,72 +2,33 @@ package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
-import io.github.jdreioe.wingmate.domain.OperationalLogger
-import io.github.jdreioe.wingmate.domain.loggingClassName
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import platform.Foundation.NSUserDefaults
 
 class IosPronunciationDictionaryRepository : PronunciationDictionaryRepository {
-    private val defaults by lazy { NSUserDefaults.standardUserDefaults() }
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
-    private val storageKey = "pronunciation_dictionary_v1"
+    private val serializer = ListSerializer(PronunciationEntry.serializer())
+    private val store = IosPreferencesJsonStore(
+        key = "pronunciation_dictionary_v1",
+        encode = { json.encodeToString(serializer, it) },
+        decode = { json.decodeFromString(serializer, it) },
+    )
 
-    override suspend fun getAll(): List<PronunciationEntry> = withContext(Dispatchers.Default) {
-        loadAll()
-    }
+    override suspend fun getAll(): List<PronunciationEntry> = store.read(::emptyList)
 
     override suspend fun add(entry: PronunciationEntry) {
-        withContext(Dispatchers.Default) {
-            val list = loadAll().toMutableList()
-            // Remove existing for same word to overwrite
-            list.removeAll { it.word.equals(entry.word, ignoreCase = true) }
-            list.add(entry)
-            saveAll(list)
+        store.update(::emptyList) { existing ->
+            existing.filterNot { it.word.equals(entry.word, ignoreCase = true) } + entry
         }
     }
 
     override suspend fun delete(word: String) {
-        withContext(Dispatchers.Default) {
-            val list = loadAll().toMutableList()
-            list.removeAll { it.word.equals(word, ignoreCase = true) }
-            saveAll(list)
+        store.update(::emptyList) { existing ->
+            existing.filterNot { it.word.equals(word, ignoreCase = true) }
         }
     }
 
     override suspend fun clear() {
-        withContext(Dispatchers.Default) {
-            saveAll(emptyList())
-        }
-    }
-
-    private fun loadAll(): List<PronunciationEntry> {
-        val text = defaults.stringForKey(storageKey) ?: return emptyList()
-        return try {
-            json.decodeFromString(ListSerializer(PronunciationEntry.serializer()), text)
-        } catch (t: Throwable) {
-            OperationalLogger.warn(
-                operation = "pronunciation_dictionary.load",
-                outcome = "failed",
-                exceptionClass = t.loggingClassName(),
-            )
-            emptyList()
-        }
-    }
-
-    private fun saveAll(list: List<PronunciationEntry>) {
-        try {
-            val text = json.encodeToString(ListSerializer(PronunciationEntry.serializer()), list)
-            defaults.setObject(text, storageKey)
-            // defaults.synchronize() is deprecated and often unnecessary, but can call if needed
-        } catch (t: Throwable) {
-            OperationalLogger.warn(
-                operation = "pronunciation_dictionary.save",
-                outcome = "failed",
-                exceptionClass = t.loggingClassName(),
-            )
-        }
+        store.replace(emptyList(), ::emptyList)
     }
 }

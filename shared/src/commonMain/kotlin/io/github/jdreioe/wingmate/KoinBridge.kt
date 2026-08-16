@@ -87,6 +87,9 @@ class KoinBridge : KoinComponent {
     fun phraseListStore(): PhraseListStore = get()
     // Safe variant to avoid throwing across Swift bridge
     fun phraseListStoreOrNull(): PhraseListStore? = try { get<PhraseListStore>() } catch (_: Throwable) { null }
+    fun refreshPhrases() {
+        phraseListStoreOrNull()?.accept(PhraseListStore.Intent.Refresh)
+    }
 
     // --- Shared native text-editing policy ---
     fun mergeTextSpans(spans: List<TextSpan>, textLength: Int): List<TextSpan> =
