@@ -1933,8 +1933,7 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private func exportBoardSet(id: String) async {
-        let bridge = KoinBridge()
-        let result = try? await bridge.shareBoardSetAsObz(id: id)
+        let result = try? await IosDiBridge().boardsFacade().shareBoardSetAsObz(id: id)
         let message: String
         if let result, result.success {
             message = result.message
