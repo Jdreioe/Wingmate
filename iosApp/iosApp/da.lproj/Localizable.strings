@@ -86,6 +86,7 @@
 
 "common.error" = "FEJL";
 "common.retry" = "Prøv igen";
+"speech.playback_failed" = "Talen kunne ikke afspilles. Prøv igen.";
 "common.ok" = "OK";
 "common.saving" = "Gemmmer";
 "common.save" = "Gem";

@@ -20,6 +20,7 @@ import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
+import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SaidText
@@ -519,7 +520,7 @@ class KotlinBridge(private val port: Int = 8765) {
 
                     val generation = speechGeneration.incrementAndGet()
                     speechJob?.cancel()
-                    speechState = SpeechStateResponse(state = "playing", playing = true)
+                    speechState = SpeechStateResponse(state = "preparing", requestId = generation)
                     speechJob = scope.launch {
                         performSpeech(generation, text)
                     }
@@ -587,7 +588,7 @@ class KotlinBridge(private val port: Int = 8765) {
                 }
                 val generation = speechGeneration.incrementAndGet()
                 speechJob?.cancel()
-                speechState = SpeechStateResponse(state = "playing", playing = true)
+                speechState = SpeechStateResponse(state = "preparing", requestId = generation)
                 speechJob = scope.launch {
                     performSpeech(generation, text, voiceName, recordHistory = false)
                 }
@@ -599,7 +600,7 @@ class KotlinBridge(private val port: Int = 8765) {
                 speechJob = null
                 speechService.stop()
                 azureSpeechService.stop()
-                speechState = SpeechStateResponse(state = "cancelled")
+                speechState = SpeechStateResponse(state = "cancelled", requestId = speechGeneration.get())
                 call.respond(HttpStatusCode.OK)
             }
 
@@ -626,7 +627,25 @@ class KotlinBridge(private val port: Int = 8765) {
             }
             
             get("/api/speak/status") {
-                call.respond(speechState)
+                val nativeState = listOf(speechService.playbackState(), azureSpeechService.playbackState())
+                    .firstOrNull { it.status != SpeechPlaybackStatus.IDLE }
+                val response = when (nativeState?.status) {
+                    SpeechPlaybackStatus.PREPARING -> speechState.copy(
+                        state = "preparing", playing = false, paused = false, requestId = speechGeneration.get(),
+                    )
+                    SpeechPlaybackStatus.PLAYING -> speechState.copy(
+                        state = "playing", playing = true, paused = false, requestId = speechGeneration.get(),
+                    )
+                    SpeechPlaybackStatus.PAUSED -> speechState.copy(
+                        state = "paused", playing = false, paused = true, requestId = speechGeneration.get(),
+                    )
+                    SpeechPlaybackStatus.FAILED -> speechState.copy(
+                        state = "error", playing = false, paused = false,
+                        error = nativeState.error ?: "Speech failed", requestId = speechGeneration.get(),
+                    )
+                    else -> speechState
+                }
+                call.respond(response)
             }
             
             // Pronunciation Dictionary
@@ -1482,13 +1501,13 @@ class KotlinBridge(private val port: Int = 8765) {
                     (predictionService as SimpleNGramPredictionService).learnPhrase(text)
                 }
             }
-            speechState = SpeechStateResponse(state = "completed")
+            speechState = SpeechStateResponse(state = "completed", requestId = generation)
             speechJob = null
         } catch (error: Throwable) {
             if (speechGeneration.get() == generation) {
                 val message = error.message ?: "Speech failed"
                 println("[SPEECH] Speech failed (${error::class.simpleName})")
-                speechState = SpeechStateResponse(state = "error", error = message)
+                speechState = SpeechStateResponse(state = "error", error = message, requestId = generation)
                 speechJob = null
             }
         }
@@ -1538,6 +1557,7 @@ data class SpeechStateResponse(
     val playing: Boolean = false,
     val paused: Boolean = false,
     val error: String? = null,
+    val requestId: Long = 0,
 )
 
 @Serializable

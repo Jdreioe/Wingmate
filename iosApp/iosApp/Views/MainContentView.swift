@@ -157,6 +157,22 @@ struct MainContentView: View {
                     Button("common.retry") { model.retryPhraseLoad() }
                 }
             }
+            if let speechError = model.speechErrorMessage {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Text(speechError)
+                        .accessibilityLabel(speechError)
+                    Spacer()
+                    if model.canRetryFailedSpeech {
+                        Button("common.retry") { model.retryFailedSpeech() }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.red.opacity(0.1)))
+                .accessibilityElement(children: .contain)
+            }
             if model.state.isLoading { ProgressView().frame(maxWidth: .infinity, alignment: .center) }
 
             #if DEBUG

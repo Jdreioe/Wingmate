@@ -77,6 +77,20 @@ interface ConfigRepository {
     }
 }
 
+enum class SpeechPlaybackStatus {
+    IDLE,
+    PREPARING,
+    PLAYING,
+    PAUSED,
+    FAILED,
+}
+
+data class SpeechPlaybackState(
+    val requestId: Long = 0,
+    val status: SpeechPlaybackStatus = SpeechPlaybackStatus.IDLE,
+    val error: String? = null,
+)
+
 interface SpeechService {
     suspend fun speak(text: String, voice: Voice? = null, pitch: Double? = null, rate: Double? = null)
     suspend fun speakWithCachePolicy(
@@ -109,6 +123,11 @@ interface SpeechService {
     suspend fun resume()
     fun isPlaying(): Boolean
     fun isPaused(): Boolean
+    fun playbackState(): SpeechPlaybackState = when {
+        isPaused() -> SpeechPlaybackState(status = SpeechPlaybackStatus.PAUSED)
+        isPlaying() -> SpeechPlaybackState(status = SpeechPlaybackStatus.PLAYING)
+        else -> SpeechPlaybackState()
+    }
     suspend fun guessPronunciation(text: String, language: String = "en"): String? = null
 }
 

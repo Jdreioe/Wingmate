@@ -129,35 +129,19 @@ class KoinBridge : KoinComponent {
     fun processSpeechText(text: String): List<SpeechSegment> = SpeechTextProcessor.processText(text)
 
     suspend fun speak(text: String) {
-        try {
-            get<SpeechService>().speak(text)
-        } catch (t: Throwable) {
-            OperationalLogger.warn("swift_bridge.speak", "failed", exceptionClass = t.loggingClassName())
-        }
+        get<SpeechService>().speak(text)
     }
 
     suspend fun speakBoardSentence(text: String, cacheAudio: Boolean) {
-        try {
-            get<SpeechService>().speakWithCachePolicy(text = text, cacheAudio = cacheAudio)
-        } catch (t: Throwable) {
-            OperationalLogger.warn("swift_bridge.speak_board_sentence", "failed", exceptionClass = t.loggingClassName())
-        }
+        get<SpeechService>().speakWithCachePolicy(text = text, cacheAudio = cacheAudio)
     }
 
     suspend fun pause() {
-        try {
-            get<SpeechService>().pause()
-        } catch (t: Throwable) {
-            OperationalLogger.warn("swift_bridge.pause", "failed", exceptionClass = t.loggingClassName())
-        }
+        get<SpeechService>().pause()
     }
 
     suspend fun stop() {
-        try {
-            get<SpeechService>().stop()
-        } catch (t: Throwable) {
-            OperationalLogger.warn("swift_bridge.stop", "failed", exceptionClass = t.loggingClassName())
-        }
+        get<SpeechService>().stop()
     }
 
     suspend fun selectVoiceAndMaybeUpdatePrimary(voice: Voice) {
