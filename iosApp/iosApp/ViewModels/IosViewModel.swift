@@ -112,6 +112,7 @@ final class IosViewModel: ObservableObject {
 
     // Bridge to shared KMP use-cases
     private let bridge = KoinBridge()
+    private lazy var backupFacade = IosDiBridge().backupFacade()
 
     // UI state
     @Published var input: String = ""
@@ -297,12 +298,16 @@ final class IosViewModel: ObservableObject {
         return !editingAccessEnabled || editingAccessUnlocked
     }
 
-    func shareCompleteBackup() async -> Bool {
-        (try? await bridge.shareCompleteBackup())?.boolValue ?? false
+    func shareCompleteBackup() async throws -> Shared.BackupOperationResult {
+        try await backupFacade.shareBackup()
     }
 
-    func restoreCompleteBackup(path: String) async -> String? {
-        try? await bridge.restoreCompleteBackup(path: path)
+    func restoreCompleteBackup(path: String) async throws -> Shared.BackupOperationResult {
+        let result = try await backupFacade.restoreBackup(path: path)
+        if result.isSuccess {
+            bridge.refreshPhrases()
+        }
+        return result
     }
 
     func boardDisplayName(id: String) -> String {

@@ -8,9 +8,6 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.application.EditingAccessController
-import io.github.jdreioe.wingmate.application.CompleteBackupManager
-import io.github.jdreioe.wingmate.application.BackupRestoreResult
-import io.github.jdreioe.wingmate.platform.ShareService
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.di.appModule
@@ -697,20 +694,6 @@ class KoinBridge : KoinComponent {
     fun lockEditingAccess() = get<EditingAccessController>().lock()
 
     suspend fun recoverEditingAccess() = get<EditingAccessController>().recover()
-
-    suspend fun shareCompleteBackup(): Boolean {
-        val bytes = get<CompleteBackupManager>().exportBackup()
-        return get<ShareService>().shareFile("wingmate-backup.wingmate-backup", bytes)
-    }
-
-    suspend fun restoreCompleteBackup(path: String): String? =
-        when (val result = get<CompleteBackupManager>().restoreBackup(path)) {
-            is BackupRestoreResult.Success -> {
-                phraseListStoreOrNull()?.accept(PhraseListStore.Intent.Refresh)
-                null
-            }
-            is BackupRestoreResult.Failure -> result.message
-        }
 
     companion object {
         private var started: Boolean = false

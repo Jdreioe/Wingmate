@@ -76,10 +76,29 @@ data class WingmateBackupManifest(
     val media: List<WingmateBackupFile>
 )
 
+enum class BackupFailureKind {
+    Unavailable,
+    NotFound,
+    Validation,
+    Persistence,
+    Network,
+}
+
 sealed class BackupRestoreResult {
     data class Success(val payload: WingmateBackupPayload) : BackupRestoreResult()
-    data class Failure(val message: String) : BackupRestoreResult()
+    data class Failure(
+        val kind: BackupFailureKind,
+        val message: String,
+        val isRetryable: Boolean,
+    ) : BackupRestoreResult()
 }
+
+interface BackupManager {
+    suspend fun exportBackup(): ByteArray
+    suspend fun restoreBackup(path: String): BackupRestoreResult
+}
+
+internal class BackupMediaNotFoundException : Exception()
 
 class CompleteBackupManager(
     private val boardRepository: BoardRepository,
@@ -93,13 +112,13 @@ class CompleteBackupManager(
     private val configRepository: ConfigRepository,
     private val filePicker: FilePicker?,
     private val mediaAccess: BackupMediaAccess
-) {
+) : BackupManager {
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true; prettyPrint = true }
     private val restoreMutex = Mutex()
     private val mutableRestoreRevision = MutableStateFlow(0L)
     val restoreRevision = mutableRestoreRevision.asStateFlow()
 
-    suspend fun exportBackup(): ByteArray {
+    override suspend fun exportBackup(): ByteArray {
         val original = snapshot()
         val sourcePaths = linkedMapOf<String, String>()
         fun archivePath(path: String?): String? {
@@ -130,7 +149,7 @@ class CompleteBackupManager(
         val payloadBytes = json.encodeToString(portable).encodeToByteArray()
         val mediaEntries = sourcePaths.map { (archiveName, sourcePath) ->
             archiveName to (mediaAccess.read(sourcePath)
-                ?: error("Missing media file: $sourcePath"))
+                ?: throw BackupMediaNotFoundException())
         }
         val manifest = WingmateBackupManifest(
             createdAt = Clock.System.now().toEpochMilliseconds(),
@@ -144,8 +163,12 @@ class CompleteBackupManager(
         return ZipBuilder.build(entries).getOrThrow()
     }
 
-    suspend fun restoreBackup(path: String): BackupRestoreResult = restoreMutex.withLock {
-        val picker = filePicker ?: return@withLock BackupRestoreResult.Failure("File import is unavailable")
+    override suspend fun restoreBackup(path: String): BackupRestoreResult = restoreMutex.withLock {
+        val picker = filePicker ?: return@withLock BackupRestoreResult.Failure(
+            kind = BackupFailureKind.Unavailable,
+            message = "File import is unavailable",
+            isRetryable = false,
+        )
         val archive = try {
             picker.openArchive(path)
         } catch (failure: CancellationException) {
@@ -153,8 +176,13 @@ class CompleteBackupManager(
         } catch (_: Exception) {
             null
         }
-            ?: return@withLock BackupRestoreResult.Failure("Could not open backup archive")
+            ?: return@withLock BackupRestoreResult.Failure(
+                kind = BackupFailureKind.NotFound,
+                message = "Could not open backup archive",
+                isRetryable = false,
+            )
         val restoredMedia = mutableListOf<String>()
+        var failureKind = BackupFailureKind.Validation
         try {
             val entries = archive.entries()
             validateEntries(entries)
@@ -178,9 +206,11 @@ class CompleteBackupManager(
             manifest.media.forEach { file ->
                 val bytes = archive.readEntryBytes(file.path, MAX_MEDIA_BYTES)
                 require(bytes.matches(file)) { "Media checksum does not match: ${file.path}" }
+                failureKind = BackupFailureKind.Persistence
                 val restored = mediaAccess.restore(file.path, bytes)
                 restoredMedia += restored
                 restoredPaths[file.path] = restored
+                failureKind = BackupFailureKind.Validation
             }
             fun restored(path: String?): String? = path?.let { restoredPaths[it] ?: error("Missing media: $it") }
             fun restoredLocalUrl(url: String?): String? = url?.let { value ->
@@ -199,6 +229,7 @@ class CompleteBackupManager(
                 history = payload.history.map { it.copy(audioFilePath = restored(it.audioFilePath)) }
             )
             validatePayload(payload)
+            failureKind = BackupFailureKind.Persistence
             val previous = snapshot()
             try {
                 replaceAll(payload)
@@ -213,7 +244,15 @@ class CompleteBackupManager(
             throw failure
         } catch (_: Exception) {
             restoredMedia.forEach { runCatching { mediaAccess.deleteRestored(it) } }
-            BackupRestoreResult.Failure("Backup could not be restored safely")
+            BackupRestoreResult.Failure(
+                kind = failureKind,
+                message = if (failureKind == BackupFailureKind.Validation) {
+                    "Backup is invalid or unsupported"
+                } else {
+                    "Backup could not be restored safely"
+                },
+                isRetryable = failureKind == BackupFailureKind.Persistence || failureKind == BackupFailureKind.Network,
+            )
         } finally {
             archive.close()
         }

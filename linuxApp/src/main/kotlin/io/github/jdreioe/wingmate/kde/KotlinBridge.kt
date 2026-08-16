@@ -58,6 +58,8 @@ import io.github.jdreioe.wingmate.domain.obf.resolvedBackgroundColor
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.BackupFacade
+import io.github.jdreioe.wingmate.application.BackupOperationStatus
 import io.github.jdreioe.wingmate.application.AccessInputController
 import io.github.jdreioe.wingmate.application.AccessInputEffect
 import io.github.jdreioe.wingmate.application.EditingAccessController
@@ -77,6 +79,7 @@ import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -122,7 +125,19 @@ data class AccessInputResponse(
     val dwellProgress: Float = 0f,
 )
 
-class KotlinBridge(private val port: Int = 8765) {
+@Serializable
+data class BackupBridgeResponse(
+    val status: String,
+    val retryable: Boolean,
+    val message: String? = null,
+    val fileName: String? = null,
+    val data: String? = null,
+)
+
+class KotlinBridge(
+    private val port: Int = 8765,
+    private val backupFacade: BackupFacade,
+) {
     @Volatile private var presetDownloadStage: String = "idle"
     @Volatile private var presetDownloadedBytes: Long = 0
     @Volatile private var presetTotalBytes: Long? = null
@@ -717,16 +732,17 @@ class KotlinBridge(private val port: Int = 8765) {
 
             // Full backup/restore (settings, phrases, boards, categories, voices, history)
             get("/api/backup/export") {
-                try {
-                    val bytes = GlobalContext.get().get<io.github.jdreioe.wingmate.application.CompleteBackupManager>().exportBackup()
-                    call.respond(
-                        HttpStatusCode.OK,
-                        mapOf("fileName" to "wingmate-backup.wingmate-backup", "data" to java.util.Base64.getEncoder().encodeToString(bytes))
-                    )
-                } catch (error: Throwable) {
-                    error.printStackTrace()
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (error.message ?: "export failed")))
-                }
+                val result = backupFacade.exportBackup()
+                call.respond(
+                    HttpStatusCode.OK,
+                    BackupBridgeResponse(
+                        status = result.status.name,
+                        retryable = result.isRetryable,
+                        message = result.message,
+                        fileName = if (result.isSuccess) "wingmate-backup.wingmate-backup" else null,
+                        data = result.content?.let(java.util.Base64.getEncoder()::encodeToString),
+                    ),
+                )
             }
 
             post("/api/backup/import") {
@@ -734,20 +750,29 @@ class KotlinBridge(private val port: Int = 8765) {
                     val body = json.parseToJsonElement(call.receiveText()).jsonObject
                     val path = body["path"]?.jsonPrimitive?.contentOrNull.orEmpty()
                     val file = requireSelectedPath(path)
-                    val result = GlobalContext.get()
-                        .get<io.github.jdreioe.wingmate.application.CompleteBackupManager>()
-                        .restoreBackup(file.path)
-                    val message = when (result) {
-                        is io.github.jdreioe.wingmate.application.BackupRestoreResult.Success -> {
-                            trainPredictionModel()
-                            "ok"
-                        }
-                        is io.github.jdreioe.wingmate.application.BackupRestoreResult.Failure -> result.message
+                    val result = backupFacade.restoreBackup(file.path)
+                    if (result.status == BackupOperationStatus.Success) {
+                        trainPredictionModel()
                     }
-                    call.respond(HttpStatusCode.OK, mapOf("status" to message))
-                } catch (error: Throwable) {
-                    error.printStackTrace()
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (error.message ?: "import failed")))
+                    call.respond(
+                        HttpStatusCode.OK,
+                        BackupBridgeResponse(
+                            status = result.status.name,
+                            retryable = result.isRetryable,
+                            message = result.message,
+                        ),
+                    )
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (_: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        BackupBridgeResponse(
+                            status = BackupOperationStatus.ValidationFailure.name,
+                            retryable = false,
+                            message = "Selected backup path is invalid",
+                        ),
+                    )
                 }
             }
 
@@ -2365,7 +2390,10 @@ fun main(args: Array<String>) {
         ?.toIntOrNull()
         ?.takeIf { it in 1..65535 }
         ?: 8765
-    val bridge = KotlinBridge(bridgePort)
+    val bridge = KotlinBridge(
+        port = bridgePort,
+        backupFacade = GlobalContext.get().get(),
+    )
     bridge.start(skipPartnerWindow = noPartnerWindow)
     
     // Keep running
