@@ -46,6 +46,7 @@ import io.github.jdreioe.wingmate.platform.AudioClipboard
 import io.github.jdreioe.wingmate.platform.ShareService
 import io.github.jdreioe.wingmate.platform.FilePicker
 import io.github.jdreioe.wingmate.platform.IosFilePicker
+import okio.FileSystem
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.koin.core.context.loadKoinModules
@@ -67,6 +68,8 @@ fun overrideIosSpeechService() {
                     }
                 }
             }
+            // OS-backed file system (needed by AacLogger and other common code)
+            single { FileSystem.SYSTEM }
             // Persist speech config and selected voice on iOS
             singleOf(::IosSettingsRepository) { bind<SettingsRepository>() }
             singleOf(::IosConfigRepository) { bind<ConfigRepository>() }
