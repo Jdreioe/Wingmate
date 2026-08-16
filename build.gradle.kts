@@ -27,9 +27,8 @@ tasks.register("assembleRelease") {
     dependsOn(":androidApp:assembleRelease")
 }
 
-// Task to build desktop app with Conveyor
-tasks.register<Exec>("packageDesktop") {
-    dependsOn(":desktopApp:build")
-    commandLine("conveyor", "make", "site")
-    workingDir = rootDir
+tasks.register("packageLinux") {
+    group = "build"
+    description = "Builds the standalone Linux Kotlin bridge fat JAR."
+    dependsOn(":linuxApp:fatJar")
 }

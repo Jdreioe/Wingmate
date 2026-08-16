@@ -9,9 +9,9 @@ use reqwest::{Client, Method};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::{hash_map::DefaultHasher, HashMap, HashSet, VecDeque};
-use std::hash::{Hash, Hasher};
 use std::env;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -561,6 +561,7 @@ struct Board {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct BoardImage {
     id: String,
     #[serde(default)]
@@ -587,10 +588,16 @@ struct BoardSymbol {
     library_key: Option<String>,
 }
 
+#[allow(dead_code)]
 impl BoardImage {
     fn has_source(&self) -> bool {
         !self.data.as_deref().unwrap_or_default().trim().is_empty()
-            || !self.data_url.as_deref().unwrap_or_default().trim().is_empty()
+            || !self
+                .data_url
+                .as_deref()
+                .unwrap_or_default()
+                .trim()
+                .is_empty()
             || !self.path.as_deref().unwrap_or_default().trim().is_empty()
             || !self.url.as_deref().unwrap_or_default().trim().is_empty()
             || self.symbol.is_some()
@@ -722,7 +729,9 @@ fn access_key_token(key: &keyboard::Key) -> Option<String> {
         keyboard::Key::Named(keyboard::key::Named::Enter) => Some("Enter".into()),
         keyboard::Key::Named(named) => {
             let value = format!("{named:?}");
-            value.strip_prefix('F').and_then(|number| number.parse::<u8>().ok())
+            value
+                .strip_prefix('F')
+                .and_then(|number| number.parse::<u8>().ok())
                 .filter(|number| (1..=12).contains(number))
                 .map(|number| format!("F{number}"))
         }
@@ -1231,7 +1240,8 @@ impl cosmic::Application for Wingmate {
             "starting" | "playing" | "paused"
         );
         let access_timer_active = self.settings.scanning_enabled
-            || (self.settings.dwell_to_select_millis > 0 && self.current_access_target_id.is_some())
+            || (self.settings.dwell_to_select_millis > 0
+                && self.current_access_target_id.is_some())
             || self.selection_highlighted_access.is_some();
         let mut subscriptions = vec![event::listen().map(Message::InputEvent)];
         if self.editing_access.enabled && self.editing_access.unlocked {
@@ -1343,13 +1353,12 @@ impl cosmic::Application for Wingmate {
                 Ok(v) => self.voices = v,
                 Err(e) => self.status = e,
             },
-            Message::LoadedSelectedVoice(result) => match result {
-                Ok(v) => {
+            Message::LoadedSelectedVoice(result) => {
+                if let Ok(v) = result {
                     self.preview_voice_name = v.name.clone();
                     self.selected_voice_name = v.name;
                 }
-                Err(_) => {}
-            },
+            }
             Message::LoadedEditingAccess(result) => match result {
                 Ok(state) => {
                     if state.enabled && !state.unlocked {
@@ -1678,7 +1687,10 @@ impl cosmic::Application for Wingmate {
                 }
                 let target_id = access_target_id(&target);
                 self.known_access_targets.insert(target_id.clone(), target);
-                return self.api.access_input("enter", Some(target_id), None).map(cosmic::Action::App);
+                return self
+                    .api
+                    .access_input("enter", Some(target_id), None)
+                    .map(cosmic::Action::App);
             }
             Message::AccessExit(target) => {
                 let target_id = access_target_id(&target);
@@ -1690,7 +1702,10 @@ impl cosmic::Application for Wingmate {
                 {
                     self.access_press = None;
                 }
-                return self.api.access_input("exit", Some(target_id), None).map(cosmic::Action::App);
+                return self
+                    .api
+                    .access_input("exit", Some(target_id), None)
+                    .map(cosmic::Action::App);
             }
             Message::AccessPress(target) => self.access_press = Some((target, Instant::now())),
             Message::AccessRelease(target) => {
@@ -1757,9 +1772,14 @@ impl cosmic::Application for Wingmate {
                         }
                     }
                 }
-                if let cosmic::iced::Event::Keyboard(keyboard::Event::KeyReleased { key, .. }) = &event {
+                if let cosmic::iced::Event::Keyboard(keyboard::Event::KeyReleased { key, .. }) =
+                    &event
+                {
                     if let Some(token) = access_key_token(key) {
-                        return self.api.access_input("keyup", None, Some(token)).map(cosmic::Action::App);
+                        return self
+                            .api
+                            .access_input("keyup", None, Some(token))
+                            .map(cosmic::Action::App);
                     }
                 }
                 let is_switch = match &event {
@@ -1769,12 +1789,17 @@ impl cosmic::Application for Wingmate {
                     }
                     _ => false,
                 };
-                if let cosmic::iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = &event {
+                if let cosmic::iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) =
+                    &event
+                {
                     if let Some(token) = access_key_token(key) {
                         if !self.settings.rest_mode_key_binding.is_empty()
                             && token.eq_ignore_ascii_case(&self.settings.rest_mode_key_binding)
                         {
-                            return self.api.access_input("keydown", None, Some(token)).map(cosmic::Action::App);
+                            return self
+                                .api
+                                .access_input("keydown", None, Some(token))
+                                .map(cosmic::Action::App);
                         }
                     }
                 }
@@ -1786,9 +1811,14 @@ impl cosmic::Application for Wingmate {
                         return self.activate_access(target);
                     }
                 }
-                if let cosmic::iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = &event {
+                if let cosmic::iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) =
+                    &event
+                {
                     if let Some(token) = access_key_token(key) {
-                        return self.api.access_input("keydown", None, Some(token)).map(cosmic::Action::App);
+                        return self
+                            .api
+                            .access_input("keydown", None, Some(token))
+                            .map(cosmic::Action::App);
                     }
                 }
             }
@@ -1799,7 +1829,10 @@ impl cosmic::Application for Wingmate {
                     self.settings_category = SettingsCategory::Speech;
                 }
                 let speech_status = self.api.load_speech_state().map(cosmic::Action::App);
-                let access_tick = self.api.access_input("tick", None, None).map(cosmic::Action::App);
+                let access_tick = self
+                    .api
+                    .access_input("tick", None, None)
+                    .map(cosmic::Action::App);
                 if self.settings.scanning_enabled {
                     let interval =
                         Duration::from_secs_f32(self.settings.scan_auto_advance_seconds.max(0.2));
@@ -2212,13 +2245,14 @@ impl cosmic::Application for Wingmate {
                 };
                 let save = if matches!(
                     key,
-                    "showLabels" | "showSymbols" | "labelAtTop" | "boardShowMessageBar" | "wordTypeColorScheme"
+                    "showLabels"
+                        | "showSymbols"
+                        | "labelAtTop"
+                        | "boardShowMessageBar"
+                        | "wordTypeColorScheme"
                 ) {
                     self.board_graph.as_ref().map_or_else(
-                        || {
-                            self.api
-                                .patch_setting(key, setting_value.clone())
-                        },
+                        || self.api.patch_setting(key, setting_value.clone()),
                         |graph| {
                             self.api.patch_setting_and_reload_board(
                                 key,
@@ -2228,8 +2262,7 @@ impl cosmic::Application for Wingmate {
                         },
                     )
                 } else {
-                    self.api
-                        .patch_setting(key, setting_value)
+                    self.api.patch_setting(key, setting_value)
                 };
                 if key == "highContrastMode" {
                     let theme = theme_for_preference(
@@ -2286,10 +2319,16 @@ impl cosmic::Application for Wingmate {
                     "speechPolicy" => self.settings.speech_policy = value.clone(),
                     _ => {}
                 }
-                return self.api.patch_setting(key, serde_json::json!(value)).map(cosmic::Action::App);
+                return self
+                    .api
+                    .patch_setting(key, serde_json::json!(value))
+                    .map(cosmic::Action::App);
             }
             Message::ToggleInputPause => {
-                return self.api.access_input("togglePause", None, None).map(cosmic::Action::App);
+                return self
+                    .api
+                    .access_input("togglePause", None, None)
+                    .map(cosmic::Action::App);
             }
             Message::HideRestNotice => {
                 self.rest_notice_visible = false;
@@ -2765,9 +2804,12 @@ impl cosmic::Application for Wingmate {
                         button.vocalization.clone().unwrap_or_default(),
                         image_url,
                         button.background_color.clone().unwrap_or_default(),
-                        button.extensions.get("ext_wingmate_word_type")
+                        button
+                            .extensions
+                            .get("ext_wingmate_word_type")
                             .and_then(serde_json::Value::as_str)
-                            .unwrap_or("Automatic").to_string(),
+                            .unwrap_or("Automatic")
+                            .to_string(),
                         button.hidden,
                         button.load_board.as_ref().map(|target| target.id.clone()),
                         if button.actions.is_empty() {
@@ -2981,13 +3023,21 @@ impl cosmic::Application for Wingmate {
 impl Wingmate {
     fn interaction_bottom_control(&self) -> Element<'_, Message> {
         let enabled = matches!(self.page, Page::Communicate | Page::Screens)
-            && (self.settings.dwell_to_select_millis > 0 || !self.settings.select_key_binding.is_empty());
+            && (self.settings.dwell_to_select_millis > 0
+                || !self.settings.select_key_binding.is_empty());
         if !enabled {
             return Space::new().height(0).into();
         }
-        let toggle = button(text(if self.input_is_paused { "Resume input" } else { "Rest mode" }).size(14))
-            .on_press(Message::ToggleInputPause)
-            .padding([8, 14]);
+        let toggle = button(
+            text(if self.input_is_paused {
+                "Resume input"
+            } else {
+                "Rest mode"
+            })
+            .size(14),
+        )
+        .on_press(Message::ToggleInputPause)
+        .padding([8, 14]);
         let notice: Element<'_, Message> = if self.rest_notice_visible && self.input_is_paused {
             container(
                 row![
@@ -3258,9 +3308,12 @@ impl Wingmate {
                     );
                 }
                 if self.settings.scan_phrase_grid_enabled {
-                    targets.extend(self.phrases.iter().filter(|phrase| !phrase.is_hidden).map(
-                        |phrase| self.phrase_access_target(phrase),
-                    ));
+                    targets.extend(
+                        self.phrases
+                            .iter()
+                            .filter(|phrase| !phrase.is_hidden)
+                            .map(|phrase| self.phrase_access_target(phrase)),
+                    );
                 }
                 targets
             }
@@ -4166,7 +4219,8 @@ impl Wingmate {
                 editor = editor.push(text(fl!("status-searching")).size(15));
             }
             if !self.symbols.is_empty() {
-                let results = row(self
+                let results =
+                    row(self
                         .symbols
                         .iter()
                         .enumerate()
@@ -4185,11 +4239,14 @@ impl Wingmate {
                                     .clone()
                                     .unwrap_or_else(|| format!("#{}", symbol.id)),
                             ));
-                            content = content.push(text(match symbol.source.as_str() {
-                                "mulberry" => "Mulberry",
-                                "arasaac" => "ARASAAC",
-                                _ => "OpenSymbols",
-                            }).size(11));
+                            content = content.push(
+                                text(match symbol.source.as_str() {
+                                    "mulberry" => "Mulberry",
+                                    "arasaac" => "ARASAAC",
+                                    _ => "OpenSymbols",
+                                })
+                                .size(11),
+                            );
                             button(content)
                                 .on_press(Message::CellSymbolPicked(index))
                                 .width(124)
@@ -5179,7 +5236,7 @@ impl Wingmate {
                     slider(0.75..=1.5, self.settings.font_size_scale, |value| {
                         Message::SettingFloat("fontSizeScale", value)
                     })
-                    .step(0.05)
+                    .step(0.05_f32)
                     .into(),
                 ),
                 settings_row(
@@ -5187,7 +5244,7 @@ impl Wingmate {
                     slider(0.75..=1.5, self.settings.button_scale, |value| {
                         Message::SettingFloat("buttonScale", value)
                     })
-                    .step(0.05)
+                    .step(0.05_f32)
                     .into(),
                 ),
                 settings_row(
@@ -5195,7 +5252,7 @@ impl Wingmate {
                     slider(0.75..=1.5, self.settings.input_field_scale, |value| {
                         Message::SettingFloat("inputFieldScale", value)
                     })
-                    .step(0.05)
+                    .step(0.05_f32)
                     .into(),
                 ),
                 checkbox(self.settings.high_contrast_mode)
@@ -5310,31 +5367,73 @@ impl Wingmate {
                 settings_row(
                     "Select key",
                     pick_list(
-                        vec!["Off".to_string(), "Space".to_string(), "Enter".to_string(), "F8".to_string(), "F9".to_string()],
-                        Some(if self.settings.select_key_binding.is_empty() { "Off".to_string() } else { self.settings.select_key_binding.clone() }),
-                        |value| Message::SettingString("selectKeyBinding", if value == "Off" { String::new() } else { value })
-                    ).into(),
+                        vec![
+                            "Off".to_string(),
+                            "Space".to_string(),
+                            "Enter".to_string(),
+                            "F8".to_string(),
+                            "F9".to_string()
+                        ],
+                        Some(if self.settings.select_key_binding.is_empty() {
+                            "Off".to_string()
+                        } else {
+                            self.settings.select_key_binding.clone()
+                        }),
+                        |value| Message::SettingString(
+                            "selectKeyBinding",
+                            if value == "Off" { String::new() } else { value }
+                        )
+                    )
+                    .into(),
                 ),
                 settings_row(
                     "Rest mode key",
                     pick_list(
-                        vec!["Off".to_string(), "Space".to_string(), "Enter".to_string(), "F8".to_string(), "F9".to_string()],
-                        Some(if self.settings.rest_mode_key_binding.is_empty() { "Off".to_string() } else { self.settings.rest_mode_key_binding.clone() }),
-                        |value| Message::SettingString("restModeKeyBinding", if value == "Off" { String::new() } else { value })
-                    ).into(),
+                        vec![
+                            "Off".to_string(),
+                            "Space".to_string(),
+                            "Enter".to_string(),
+                            "F8".to_string(),
+                            "F9".to_string()
+                        ],
+                        Some(if self.settings.rest_mode_key_binding.is_empty() {
+                            "Off".to_string()
+                        } else {
+                            self.settings.rest_mode_key_binding.clone()
+                        }),
+                        |value| Message::SettingString(
+                            "restModeKeyBinding",
+                            if value == "Off" { String::new() } else { value }
+                        )
+                    )
+                    .into(),
                 ),
                 settings_row(
                     "Pointer emphasis",
                     pick_list(
-                        vec!["System".to_string(), "Ring".to_string(), "Outline".to_string()],
+                        vec![
+                            "System".to_string(),
+                            "Ring".to_string(),
+                            "Outline".to_string()
+                        ],
                         Some(self.settings.pointer_emphasis_style.clone()),
                         |value| Message::SettingString("pointerEmphasisStyle", value)
-                    ).into(),
+                    )
+                    .into(),
                 ),
                 row![
-                    text(format!("Marker size: {:.1}×", self.settings.pointer_emphasis_scale)).width(Fill),
-                    slider(1.0..=3.0, self.settings.pointer_emphasis_scale, |value| Message::SettingFloat("pointerEmphasisScale", value)).step(0.25).width(240)
-                ].spacing(10),
+                    text(format!(
+                        "Marker size: {:.1}×",
+                        self.settings.pointer_emphasis_scale
+                    ))
+                    .width(Fill),
+                    slider(1.0..=3.0, self.settings.pointer_emphasis_scale, |value| {
+                        Message::SettingFloat("pointerEmphasisScale", value)
+                    })
+                    .step(0.25_f32)
+                    .width(240)
+                ]
+                .spacing(10),
                 Space::new().height(8),
                 text(fl!("access-selection-timing")).size(24),
                 row![
@@ -5607,9 +5706,9 @@ fn settings_row<'a>(
 
 fn board_template_options() -> Vec<String> {
     ["Blank", "Calculator"]
-    .into_iter()
-    .map(str::to_string)
-    .collect()
+        .into_iter()
+        .map(str::to_string)
+        .collect()
 }
 
 fn uses_regular_board_grid(fields: &[BoardField], rows: usize, columns: usize) -> bool {
@@ -5810,7 +5909,12 @@ impl Api {
     fn load_settings(&self) -> Task<Message> {
         self.get("/api/settings", Message::LoadedSettings)
     }
-    fn access_input(&self, event: &'static str, target_id: Option<String>, key: Option<String>) -> Task<Message> {
+    fn access_input(
+        &self,
+        event: &'static str,
+        target_id: Option<String>,
+        key: Option<String>,
+    ) -> Task<Message> {
         let api = self.clone();
         Task::perform(
             async move {
@@ -5976,6 +6080,7 @@ impl Api {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn update_phrase(
         &self,
         id: String,
@@ -6589,6 +6694,7 @@ impl Api {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn save_board_cell(
         &self,
         set_id: String,
@@ -6973,10 +7079,7 @@ fn state_home() -> PathBuf {
             return PathBuf::from(state);
         }
     }
-    PathBuf::from(
-        env::var("HOME").unwrap_or_else(|_| ".".into()),
-    )
-    .join(".local/state")
+    PathBuf::from(env::var("HOME").unwrap_or_else(|_| ".".into())).join(".local/state")
 }
 
 fn bridge_token_file() -> PathBuf {
