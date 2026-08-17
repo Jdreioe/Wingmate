@@ -62,6 +62,9 @@ clap = { version = "4", features = ["derive"] }
 # Signal handling for graceful shutdown
 ctrlc = "3.4"
 
+# zune-core 0.5.2 is yanked; pin the patched 0.5.3 for the image pipeline.
+zune-core = "0.5.3"
+
 [dev-dependencies]
 tempfile = "3"
 
