@@ -24,12 +24,12 @@ kotlin {
                 implementation(project(":core:domain"))
                 implementation(libs.koin.core)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.8.0")
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.contentNegotiation)
                 implementation(libs.ktor.serialization.json)
-                implementation("io.github.pdvrieze.xmlutil:core:0.91.3")
+                implementation("io.github.pdvrieze.xmlutil:core:1.0.2")
                 implementation(libs.okio)
                 implementation("app.cash.sqldelight:runtime:2.0.2")
                 implementation("app.cash.sqldelight:coroutines-extensions:2.0.2")
@@ -39,9 +39,9 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
-                implementation("androidx.core:core-ktx:1.13.1")
+                implementation("androidx.core:core-ktx:1.19.0")
                 implementation("app.cash.sqldelight:android-driver:2.0.2")
-                implementation("org.apache.commons:commons-compress:1.27.1")
+                implementation("org.apache.commons:commons-compress:1.28.0")
             }
         }
 
@@ -65,7 +65,7 @@ kotlin {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
                 implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
-                implementation("org.apache.commons:commons-compress:1.27.1")
+                implementation("org.apache.commons:commons-compress:1.28.0")
             }
         }
     }
