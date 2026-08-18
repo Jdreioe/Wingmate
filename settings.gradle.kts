@@ -13,6 +13,7 @@ plugins {
 
 rootProject.name = "WingmateKMP"
 include(":shared")
+include(":apps:flow:shared")
 include(":androidApp")
 include(":linuxApp")
 include(":core:domain")
