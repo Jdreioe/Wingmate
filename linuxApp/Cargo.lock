@@ -2672,7 +2672,7 @@ dependencies = [
  "moxcms",
  "num-traits",
  "png 0.18.1",
- "zune-core 0.5.2",
+ "zune-core 0.5.3",
  "zune-jpeg 0.5.15",
 ]
 
@@ -6578,6 +6578,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "url",
+ "zune-core 0.5.3",
 ]
 
 [[package]]
@@ -7151,9 +7152,9 @@ checksum = "3f423a2c17029964870cfaabb1f13dfab7d092a62a29a89264f4d36990ca414a"
 
 [[package]]
 name = "zune-core"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98651bd6fa7814a351eb5e988ee9feadfc6aeb5fdbebfa4ad63ed5000c0bd97d"
+checksum = "d56377fd46368984a170bc5aac5567e52ca5da874caa60bea39fcbca78fb658b"
 
 [[package]]
 name = "zune-jpeg"
@@ -7168,7 +7169,7 @@ dependencies = [
 name = "zune-jpeg"
 version = "0.5.15"
 dependencies = [
- "zune-core 0.5.2",
+ "zune-core 0.5.3",
 ]
 
 [[package]]

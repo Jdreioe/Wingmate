@@ -6,9 +6,11 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    open-pull-requests-limit: 5
     groups:
       github-actions:
         patterns: ["*"]
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
 
   - package-ecosystem: gradle
     directory: /
@@ -16,24 +18,106 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: "org.bouncycastle:bcprov-jdk18on"
+        versions: [">= 1.85"]
+      - dependency-name: "org.bouncycastle:bcpkix-jdk18on"
+        versions: [">= 1.85"]
+      - dependency-name: "org.bouncycastle:bcutil-jdk18on"
+        versions: [">= 1.85"]
+      - dependency-name: "org.bitbucket.b_c:jose4j"
+        versions: [">= 0.9.7"]
+      - dependency-name: "org.jdom:jdom2"
+        versions: [">= 2.0.7"]
+      - dependency-name: "org.apache.commons:commons-lang3"
+        versions: [">= 3.19"]
     groups:
-      gradle:
+      kotlin:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "org.jetbrains.kotlinx*"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      android-gradle-plugin:
+        patterns:
+          - "com.android*"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      compose:
+        patterns:
+          - "org.jetbrains.compose*"
+          - "androidx.compose*"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      androidx:
+        patterns:
+          - "androidx*"
+        exclude-patterns:
+          - "androidx.compose*"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      ktor:
+        patterns:
+          - "io.ktor*"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      koin:
+        patterns:
+          - "io.insert-koin*"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      sqldelight:
+        patterns:
+          - "app.cash.sqldelight*"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      okio-okhttp:
+        patterns:
+          - "com.squareup.okio*"
+          - "com.squareup.okhttp3*"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      gradle-wrapper:
+        patterns:
+          - "gradle-wrapper"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      play-publisher:
+        patterns:
+          - "com.github.triplet.play"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      other-gradle:
         patterns: ["*"]
+        exclude-patterns:
+          - "org.jetbrains.kotlin*"
+          - "org.jetbrains.kotlinx*"
+          - "com.android*"
+          - "org.jetbrains.compose*"
+          - "androidx*"
+          - "io.ktor*"
+          - "io.insert-koin*"
+          - "app.cash.sqldelight*"
+          - "com.squareup.okio*"
+          - "com.squareup.okhttp3*"
+          - "gradle-wrapper"
+          - "com.github.triplet.play"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
 
   - package-ecosystem: cargo
     directory: /linuxApp
     schedule:
       interval: weekly
       day: monday
+    open-pull-requests-limit: 5
     groups:
-      cargo:
+      cargo-minor-patch:
         patterns: ["*"]
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      cargo-major:
+        patterns: ["*"]
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /infra/opensymbols-proxy
     schedule:
       interval: weekly
       day: monday
+    open-pull-requests-limit: 5
     groups:
-      opensymbols-proxy:
+      npm-minor-patch:
         patterns: ["*"]
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+      npm-major:
+        patterns: ["*"]
+        update-types: ["version-update:semver-major"]
