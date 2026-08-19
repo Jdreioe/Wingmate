@@ -44,6 +44,10 @@ either your Azure Speech region (for example `westeurope`) or its HTTPS speech
 endpoint and its subscription key. Flow stores that key in this Mac's Keychain,
 separately from Wingmate. It never reads or reuses Wingmate's configuration.
 
+The setup screen links to Wingmate's existing free (F0) Azure Speech resource
+template and to the Azure Portal page listing the person's existing Speech
+resources.
+
 When Azure is selected, the text you ask Flow to read is sent to your Azure
 Speech resource for synthesis. System voices remain on-device. Use **Play test
 voice** in Settings to confirm an Azure configuration without capturing text

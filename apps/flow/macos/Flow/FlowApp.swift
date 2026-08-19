@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import AVFoundation
 import Carbon
+import NaturalLanguage
 import Security
 import SwiftUI
 
@@ -67,6 +68,7 @@ final class FlowModel: ObservableObject {
         case preparing
         case playing
         case paused
+        case languageCheck
         case finished
         case message(String)
     }
@@ -75,6 +77,8 @@ final class FlowModel: ObservableObject {
     @Published private(set) var selectedText = ""
     @Published private(set) var accessibilityTrusted: Bool
     @Published private(set) var azureEndpoint: String?
+    @Published private(set) var languagePlan: LanguageFlow.Plan?
+    @Published private(set) var pendingLanguagePlan: LanguageFlow.Plan?
     @Published var settings: FlowSettings {
         didSet {
             saveSettings()
@@ -134,12 +138,14 @@ final class FlowModel: ObservableObject {
     func playTestVoice() {
         dismissTask?.cancel()
         selectedText = "Flow is ready to read selected text."
+        let plan = LanguageFlow.singleSentence(selectedText, settings: settings)
         guard let speech = selectedSpeechEngine() else { return }
         activeSpeech?.stop()
         activeSpeech = speech
+        languagePlan = plan
         state = .preparing
         onPopupVisibilityChanged?(true)
-        speech.read(selectedText, settings: settings)
+        speech.read(plan, settings: settings)
         state = .playing
     }
 
@@ -160,6 +166,8 @@ final class FlowModel: ObservableObject {
         dismissTask?.cancel()
         activeSpeech?.stop()
         selectedText = ""
+        languagePlan = nil
+        pendingLanguagePlan = nil
         state = .hidden
         onPopupVisibilityChanged?(false)
     }
@@ -188,19 +196,57 @@ final class FlowModel: ObservableObject {
                 pauseOrResume()
                 return
             }
-            guard let speech = selectedSpeechEngine() else { return }
-            activeSpeech?.stop()
-            activeSpeech = speech
-            selectedText = text
-            state = .preparing
-            onPopupVisibilityChanged?(true)
-            speech.read(text, settings: settings)
-            state = .playing
+            let plan = LanguageFlow.plan(text: text, settings: settings)
+            if plan.needsLanguageCheck {
+                selectedText = text
+                pendingLanguagePlan = plan
+                state = .languageCheck
+                onPopupVisibilityChanged?(true)
+                return
+            }
+            startReading(text: text, plan: plan)
         }
+    }
+
+    func chooseLanguageRoute(_ routeID: UUID, for sentenceID: UUID) {
+        guard var plan = pendingLanguagePlan,
+              let route = settings.allLanguageRoutes.first(where: { $0.id == routeID }),
+              let index = plan.sentences.firstIndex(where: { $0.id == sentenceID }) else { return }
+        plan.sentences[index].route = route
+        plan.sentences[index].needsReview = false
+        pendingLanguagePlan = plan
+    }
+
+    func enableDetectedLanguage(for sentenceID: UUID) {
+        guard let sentence = pendingLanguagePlan?.sentences.first(where: { $0.id == sentenceID }),
+              let languageTag = sentence.detectedLanguageTag,
+              !settings.languageRoutes.contains(where: { $0.languageTag == languageTag }) else { return }
+        settings.languageRoutes.append(.init(languageTag: languageTag))
+        openSettings()
+    }
+
+    func confirmLanguageCheck() {
+        guard let plan = pendingLanguagePlan else { return }
+        pendingLanguagePlan = nil
+        startReading(text: selectedText, plan: plan)
+    }
+
+    private func startReading(text: String, plan: LanguageFlow.Plan) {
+        guard let speech = selectedSpeechEngine() else { return }
+        activeSpeech?.stop()
+        activeSpeech = speech
+        selectedText = text
+        languagePlan = plan
+        state = .preparing
+        onPopupVisibilityChanged?(true)
+        speech.read(plan, settings: settings)
+        state = .playing
     }
 
     private func showMessage(_ message: String) {
         selectedText = ""
+        languagePlan = nil
+        pendingLanguagePlan = nil
         state = .message(message)
         onPopupVisibilityChanged?(true)
         dismissAfterDelay()
@@ -299,7 +345,7 @@ private enum AccessibilitySelectionReader {
 }
 
 private protocol FlowSpeechEngine: AnyObject {
-    func read(_ text: String, settings: FlowSettings)
+    func read(_ plan: LanguageFlow.Plan, settings: FlowSettings)
     func pause()
     func resume()
     func stop()
@@ -309,10 +355,12 @@ final class SystemSpeechEngine: NSObject, AVSpeechSynthesizerDelegate, FlowSpeec
     struct Voice: Identifiable, Hashable {
         let id: String
         let name: String
+        let language: String
     }
 
     var onFinished: (() -> Void)?
     private let synthesizer = AVSpeechSynthesizer()
+    private var queuedUtterances = 0
 
     override init() {
         super.init()
@@ -322,17 +370,20 @@ final class SystemSpeechEngine: NSObject, AVSpeechSynthesizerDelegate, FlowSpeec
     static var voices: [Voice] {
         AVSpeechSynthesisVoice.speechVoices()
             .map { voice in
-                Voice(id: voice.identifier, name: "\(voice.name) (\(voice.language))")
+                Voice(id: voice.identifier, name: "\(voice.name) (\(voice.language))", language: voice.language)
             }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    func read(_ text: String, settings: FlowSettings) {
+    func read(_ plan: LanguageFlow.Plan, settings: FlowSettings) {
         synthesizer.stopSpeaking(at: .immediate)
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = settings.voiceIdentifier.flatMap(AVSpeechSynthesisVoice.init(identifier:))
-        utterance.rate = settings.speechRate
-        synthesizer.speak(utterance)
+        queuedUtterances = plan.sentences.count
+        for sentence in plan.sentences {
+            let utterance = AVSpeechUtterance(string: sentence.text)
+            utterance.voice = sentence.route.systemVoiceIdentifier.flatMap(AVSpeechSynthesisVoice.init(identifier:))
+            utterance.rate = sentence.route.systemSpeechRate
+            synthesizer.speak(utterance)
+        }
     }
 
     func pause() {
@@ -344,11 +395,76 @@ final class SystemSpeechEngine: NSObject, AVSpeechSynthesizerDelegate, FlowSpeec
     }
 
     func stop() {
+        queuedUtterances = 0
         synthesizer.stopSpeaking(at: .immediate)
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        onFinished?()
+        queuedUtterances -= 1
+        if queuedUtterances == 0 { onFinished?() }
+    }
+}
+
+enum LanguageFlow {
+    static let uncertainConfidence = 0.75
+    static let uncertainLead = 0.15
+
+    struct Sentence: Identifiable {
+        let id = UUID()
+        let text: String
+        let detectedLanguageTag: String?
+        var route: FlowSettings.LanguageRoute
+        var needsReview: Bool
+        let detectedButUnconfigured: Bool
+    }
+
+    struct Plan {
+        var sentences: [Sentence]
+        var needsLanguageCheck: Bool { sentences.contains(where: \.needsReview) }
+    }
+
+    static func singleSentence(_ text: String, settings: FlowSettings) -> Plan {
+        Plan(sentences: [Sentence(
+            text: text,
+            detectedLanguageTag: settings.defaultLanguageTag,
+            route: settings.defaultLanguageRoute,
+            needsReview: false,
+            detectedButUnconfigured: false,
+        )])
+    }
+
+    static func plan(text: String, settings: FlowSettings) -> Plan {
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = text
+        var sentences: [Sentence] = []
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+            let sentence = String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !sentence.isEmpty else { return true }
+            let detection = detect(sentence)
+            let route = detection.tag.flatMap { settings.languageRoute(for: $0) }
+            let configured = route != nil
+            let uncertain = detection.confidence < uncertainConfidence || detection.lead < uncertainLead
+            let shouldCheck = settings.languageSwitchingEnabled && (uncertain || !configured)
+            sentences.append(Sentence(
+                text: sentence,
+                detectedLanguageTag: detection.tag,
+                route: route ?? settings.defaultLanguageRoute,
+                needsReview: shouldCheck,
+                detectedButUnconfigured: detection.tag != nil && !configured,
+            ))
+            return true
+        }
+        return Plan(sentences: sentences.isEmpty ? singleSentence(text, settings: settings).sentences : sentences)
+    }
+
+    private static func detect(_ text: String) -> (tag: String?, confidence: Double, lead: Double) {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(text)
+        let hypotheses = recognizer.languageHypotheses(withMaximum: 2)
+            .sorted { $0.value > $1.value }
+        guard let first = hypotheses.first else { return (nil, 0, 0) }
+        let second = hypotheses.dropFirst().first?.value ?? 0
+        return (first.key.rawValue, first.value, first.value - second)
     }
 }
 
@@ -453,13 +569,19 @@ private enum AzureCredentialsStore {
     }
 }
 
+private enum AzurePortalURLs {
+    // The same F0 ARM template Wingmate offers to people who need a free Speech resource.
+    static let createSpeechResource = URL(string: "https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjdreioe%2Fwingmate%2Fmain%2Finfra%2Fazure-user-f0%2Fazuredeploy.json")!
+    static let speechResources = URL(string: "https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.CognitiveServices%2Faccounts")!
+}
+
 final class AzureSpeechEngine: NSObject, AVAudioPlayerDelegate, FlowSpeechEngine {
     var onFinished: (() -> Void)?
     var onFailure: ((String) -> Void)?
     private var player: AVAudioPlayer?
     private var synthesisTask: Task<Void, Never>?
 
-    func read(_ text: String, settings: FlowSettings) {
+    func read(_ plan: LanguageFlow.Plan, settings: FlowSettings) {
         stop()
         guard let credentials = AzureCredentialsStore.load() else {
             onFailure?("Set up Azure Speech before choosing Azure voice.")
@@ -467,7 +589,7 @@ final class AzureSpeechEngine: NSObject, AVAudioPlayerDelegate, FlowSpeechEngine
         }
         synthesisTask = Task { [weak self] in
             do {
-                let audio = try await Self.synthesize(text: text, voiceName: settings.azureVoiceName, credentials: credentials)
+                let audio = try await Self.synthesize(plan: plan, settings: settings, credentials: credentials)
                 guard !Task.isCancelled else { return }
                 await MainActor.run { self?.play(audio) }
             } catch is CancellationError {
@@ -497,17 +619,20 @@ final class AzureSpeechEngine: NSObject, AVAudioPlayerDelegate, FlowSpeechEngine
         }
     }
 
-    private static func synthesize(text: String, voiceName: String, credentials: AzureSpeechCredentials) async throws -> Data {
-        let voice = voiceName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !voice.isEmpty, voice.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) else {
-            throw AzureConfigurationError.invalidVoice
-        }
-        let locale = voice.split(separator: "-").prefix(2).joined(separator: "-")
-        let escaped = text
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-        let ssml = "<speak version=\"1.0\" xml:lang=\"\(locale)\"><voice name=\"\(voice)\">\(escaped)</voice></speak>"
+    private static func synthesize(plan: LanguageFlow.Plan, settings: FlowSettings, credentials: AzureSpeechCredentials) async throws -> Data {
+        let body = try plan.sentences.map { sentence in
+            let voice = settings.azureVoiceName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !voice.isEmpty, voice.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) else {
+                throw AzureConfigurationError.invalidVoice
+            }
+            let languageTag = sentence.detectedLanguageTag ?? sentence.route.languageTag
+            let escaped = sentence.text
+                .replacingOccurrences(of: "&", with: "&amp;")
+                .replacingOccurrences(of: "<", with: "&lt;")
+                .replacingOccurrences(of: ">", with: "&gt;")
+            return "<voice name=\"\(voice)\"><lang xml:lang=\"\(languageTag)\">\(escaped)</lang></voice>"
+        }.joined()
+        let ssml = "<speak version=\"1.0\" xml:lang=\"\(settings.defaultLanguageTag)\">\(body)</speak>"
         var request = URLRequest(url: URL(string: credentials.endpoint + "/cognitiveservices/v1")!)
         request.httpMethod = "POST"
         request.setValue(credentials.subscriptionKey, forHTTPHeaderField: "Ocp-Apim-Subscription-Key")
@@ -552,6 +677,29 @@ struct FlowSettings: Codable, Equatable {
         var title: String { self == .system ? "System voice" : "Azure voice" }
     }
 
+    struct LanguageRoute: Codable, Equatable, Identifiable {
+        let id: UUID
+        var languageTag: String
+        var systemVoiceIdentifier: String?
+        var systemSpeechRate: Float
+
+        init(
+            id: UUID = UUID(),
+            languageTag: String,
+            systemVoiceIdentifier: String? = nil,
+            systemSpeechRate: Float = AVSpeechUtteranceDefaultSpeechRate,
+        ) {
+            self.id = id
+            self.languageTag = languageTag
+            self.systemVoiceIdentifier = systemVoiceIdentifier
+            self.systemSpeechRate = systemSpeechRate
+        }
+
+        var displayName: String {
+            Locale.current.localizedString(forIdentifier: languageTag) ?? languageTag
+        }
+    }
+
     var speechSource: SpeechSource = .system
     var hotKey: HotKeyPreset = .optionCommandR
     var voiceIdentifier: String?
@@ -559,6 +707,28 @@ struct FlowSettings: Codable, Equatable {
     var popupDismissSeconds: Double = 8
     var sameSelectionAction: SameSelectionAction = .pauseResume
     var azureVoiceName = "en-US-AvaMultilingualNeural"
+    var defaultLanguageTag = "en-US"
+    var languageSwitchingEnabled = true
+    var languageRoutes: [LanguageRoute] = []
+
+    var defaultLanguageRoute: LanguageRoute {
+        LanguageRoute(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            languageTag: defaultLanguageTag,
+            systemVoiceIdentifier: voiceIdentifier,
+            systemSpeechRate: speechRate,
+        )
+    }
+
+    var allLanguageRoutes: [LanguageRoute] { [defaultLanguageRoute] + languageRoutes }
+
+    func languageRoute(for detectedTag: String) -> LanguageRoute? {
+        let base = detectedTag.split(separator: "-").first?.lowercased()
+        return allLanguageRoutes.first { route in
+            route.languageTag.lowercased() == detectedTag.lowercased() ||
+                route.languageTag.split(separator: "-").first?.lowercased() == base
+        }
+    }
 
     static func load() -> FlowSettings {
         guard let data = UserDefaults.standard.data(forKey: storageKey),
@@ -728,27 +898,31 @@ private struct PlaybackPopupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text(title)
-                    .font(.headline)
-                Spacer()
-                Button("Stop", action: model.stop)
-                    .keyboardShortcut(.escape, modifiers: [])
-                    .accessibilityLabel("Stop reading")
-            }
-            if case let .message(message) = model.state {
-                Text(message)
-                    .fixedSize(horizontal: false, vertical: true)
+            if model.state == .languageCheck {
+                LanguageCheckView(model: model)
             } else {
-                Text(model.selectedText)
-                    .lineLimit(4)
-                    .textSelection(.enabled)
-                    .accessibilityLabel("Selected text being read")
-            }
-            if model.state == .playing || model.state == .paused {
-                Button(model.state == .paused ? "Resume" : "Pause", action: model.pauseOrResume)
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityLabel(model.state == .paused ? "Resume reading" : "Pause reading")
+                HStack {
+                    Text(title)
+                        .font(.headline)
+                    Spacer()
+                    Button("Stop", action: model.stop)
+                        .keyboardShortcut(.escape, modifiers: [])
+                        .accessibilityLabel("Stop reading")
+                }
+                if case let .message(message) = model.state {
+                    Text(message)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(model.selectedText)
+                        .lineLimit(4)
+                        .textSelection(.enabled)
+                        .accessibilityLabel("Selected text being read")
+                }
+                if model.state == .playing || model.state == .paused {
+                    Button(model.state == .paused ? "Resume" : "Pause", action: model.pauseOrResume)
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityLabel(model.state == .paused ? "Resume reading" : "Pause reading")
+                }
             }
         }
         .padding(20)
@@ -759,6 +933,7 @@ private struct PlaybackPopupView: View {
         case .preparing: "Preparing playback"
         case .playing: "Reading"
         case .paused: "Paused"
+        case .languageCheck: "Language check"
         case .finished: "Finished"
         case .message: "Flow"
         case .hidden: "Flow"
@@ -766,8 +941,51 @@ private struct PlaybackPopupView: View {
     }
 }
 
+private struct LanguageCheckView: View {
+    @ObservedObject var model: FlowModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Language check")
+                .font(.headline)
+            Text("Choose how Flow should read these sentences before playback starts.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ForEach(model.pendingLanguagePlan?.sentences.filter(\.needsReview) ?? []) { sentence in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(sentence.text)
+                        .lineLimit(2)
+                    if sentence.detectedButUnconfigured, let tag = sentence.detectedLanguageTag {
+                        Text("Flow detected \(Locale.current.localizedString(forIdentifier: tag) ?? tag), but it is not enabled.")
+                            .font(.caption)
+                        Button("Enable \(Locale.current.localizedString(forIdentifier: tag) ?? tag) in Settings") {
+                            model.enableDetectedLanguage(for: sentence.id)
+                        }
+                    }
+                    Picker("Read as", selection: Binding(
+                        get: { sentence.route.id },
+                        set: { model.chooseLanguageRoute($0, for: sentence.id) },
+                    )) {
+                        ForEach(model.settings.allLanguageRoutes) { route in
+                            Text(route.displayName).tag(route.id)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            HStack {
+                Button("Cancel", action: model.stop)
+                Spacer()
+                Button("Start reading", action: model.confirmLanguageCheck)
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+}
+
 private struct FlowSettingsView: View {
     @ObservedObject var model: FlowModel
+    @State private var languageToAdd = "da-DK"
 
     private var voices: [SystemSpeechEngine.Voice] { SystemSpeechEngine.voices }
 
@@ -817,6 +1035,35 @@ private struct FlowSettingsView: View {
                     model.playTestVoice()
                 }
             }
+            Section("Language Flow") {
+                Toggle("Let Flow switch languages", isOn: $model.settings.languageSwitchingEnabled)
+                Picker("Default language", selection: $model.settings.defaultLanguageTag) {
+                    ForEach(FlowLanguageOption.allCases) { language in
+                        Text(language.title).tag(language.tag)
+                    }
+                }
+                Text("Flow checks each sentence before playback when it is unsure, or when it detects a language you have not enabled.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach($model.settings.languageRoutes) { $route in
+                    LanguageRouteEditor(route: $route, voices: voices) {
+                        model.settings.languageRoutes.removeAll { $0.id == route.id }
+                    }
+                }
+                HStack {
+                    Picker("Language", selection: $languageToAdd) {
+                        ForEach(FlowLanguageOption.allCases.filter { option in
+                            option.tag != model.settings.defaultLanguageTag &&
+                                !model.settings.languageRoutes.contains(where: { $0.languageTag == option.tag })
+                        }) { language in
+                            Text(language.title).tag(language.tag)
+                        }
+                    }
+                    Button("Add language") {
+                        model.settings.languageRoutes.append(.init(languageTag: languageToAdd))
+                    }
+                }
+            }
             Section("Azure Speech") {
                 AzureConfigurationView(model: model)
             }
@@ -836,12 +1083,67 @@ private struct FlowSettingsView: View {
                     .foregroundStyle(.secondary)
             }
             Section("Privacy") {
-                Text("Flow keeps selected text only while the playback popup is visible. System voices are on-device. Azure voices are not part of this version.")
+                Text("Flow keeps selected text only while the playback popup is visible. System language detection and voices are on-device. Azure receives text only when Azure is selected.")
                     .font(.caption)
             }
         }
         .formStyle(.grouped)
         .padding()
+    }
+}
+
+private enum FlowLanguageOption: String, CaseIterable, Identifiable {
+    case english = "en-US"
+    case danish = "da-DK"
+    case swedish = "sv-SE"
+    case norwegian = "nb-NO"
+    case german = "de-DE"
+    case french = "fr-FR"
+    case spanish = "es-ES"
+    case italian = "it-IT"
+    case dutch = "nl-NL"
+    case portuguese = "pt-PT"
+
+    var id: String { rawValue }
+    var tag: String { rawValue }
+    var title: String { Locale.current.localizedString(forIdentifier: rawValue) ?? rawValue }
+}
+
+private struct LanguageRouteEditor: View {
+    @Binding var route: FlowSettings.LanguageRoute
+    let voices: [SystemSpeechEngine.Voice]
+    let remove: () -> Void
+
+    private var matchingVoices: [SystemSpeechEngine.Voice] {
+        let base = route.languageTag.split(separator: "-").first?.lowercased()
+        return voices.filter { $0.language.split(separator: "-").first?.lowercased() == base }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(route.displayName)
+                    .font(.headline)
+                Spacer()
+                Button("Remove", role: .destructive, action: remove)
+            }
+            Picker("Voice", selection: $route.systemVoiceIdentifier) {
+                Text("System default").tag(String?.none)
+                ForEach(matchingVoices) { voice in
+                    Text(voice.name).tag(String?.some(voice.id))
+                }
+            }
+            Slider(value: $route.systemSpeechRate, in: AVSpeechUtteranceMinimumSpeechRate...AVSpeechUtteranceMaximumSpeechRate) {
+                Text("Speech rate")
+            }
+            if matchingVoices.isEmpty {
+                Text("No installed \(route.displayName) voice was found.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                Link("Open macOS voice downloads", destination: URL(string: "x-apple.systempreferences:com.apple.Accessibility-Settings.extension")!)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 
@@ -857,6 +1159,7 @@ private struct AzureConfigurationView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             TextField("Azure neural voice", text: $model.settings.azureVoiceName)
+            Link("View your Azure Speech resources", destination: AzurePortalURLs.speechResources)
             Button("Remove Azure configuration", role: .destructive) {
                 model.clearAzureConfiguration()
             }
@@ -864,6 +1167,8 @@ private struct AzureConfigurationView: View {
             Text("Azure sends selected text to your Speech resource to synthesize it. The subscription key stays in this Mac's Keychain.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            Link("Create a free Azure Speech resource", destination: AzurePortalURLs.createSpeechResource)
+            Link("View your Azure Speech resources", destination: AzurePortalURLs.speechResources)
             TextField("Region or HTTPS endpoint", text: $endpoint)
             SecureField("Azure Speech subscription key", text: $subscriptionKey)
             if let error {

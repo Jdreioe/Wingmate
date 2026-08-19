@@ -101,6 +101,15 @@ Flow owns its Azure consent and secure credentials. It must not silently reuse
 Wingmate's Azure configuration or credentials, even if both products later
 share small authentication code.
 
+## Language Flow
+
+Flow identifies each selected sentence locally and can switch between the
+person's enabled system-language voices. Azure keeps one selected voice for the
+whole reading, but receives Flow's detected language tag for each sentence.
+The detailed decision and open questions are in
+[ADR 0001: Language Flow](adr/0001-language-flow.md). Defined terms are in the
+[Flow glossary](glossary.md).
+
 ## Settings
 
 Flow's settings should be visually familiar to Wingmate's settings, while using

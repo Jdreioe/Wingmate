@@ -11,6 +11,16 @@
 		B9DA98062DC9E10A00A4DA20 /* Shared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6633134E2E55CEF1005129F5 /* Shared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		C1880000000000000000000A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B9DA97A92DC1472C00A4DA20 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B9DA97B02DC1472C00A4DA20;
+			remoteInfo = iosApp;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		B9DA98052DC9E10000A4DA20 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -24,16 +34,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
-
-/* Begin PBXContainerItemProxy section */
-		C1880000000000000000000A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = B9DA97A92DC1472C00A4DA20 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = B9DA97B02DC1472C00A4DA20;
-			remoteInfo = iosApp;
-		};
-/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		6633134E2E55CEF1005129F5 /* Shared.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Shared.framework; path = "$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)/Shared.framework"; sourceTree = SOURCE_ROOT; };
@@ -52,11 +52,6 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		C18800000000000000000002 /* iosAppTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = iosAppTests;
-			sourceTree = "<group>";
-		};
 		B9DA97B32DC1472C00A4DA20 /* iosApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -70,21 +65,26 @@
 			path = Configuration;
 			sourceTree = "<group>";
 		};
+		C18800000000000000000002 /* iosAppTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = iosAppTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		C18800000000000000000003 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		B9DA97AE2DC1472C00A4DA20 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				6633134F2E55CEF1005129F5 /* Shared.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C18800000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -122,27 +122,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		C18800000000000000000006 /* iosAppTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = C18800000000000000000007 /* Build configuration list for PBXNativeTarget "iosAppTests" */;
-			buildPhases = (
-				C18800000000000000000005 /* Sources */,
-				C18800000000000000000003 /* Frameworks */,
-				C18800000000000000000004 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				C1880000000000000000000B /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				C18800000000000000000002 /* iosAppTests */,
-			);
-			name = iosAppTests;
-			productName = iosAppTests;
-			productReference = C18800000000000000000001 /* iosAppTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 		B9DA97B02DC1472C00A4DA20 /* iosApp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B9DA97BF2DC1472D00A4DA20 /* Build configuration list for PBXNativeTarget "iosApp" */;
@@ -165,6 +144,27 @@
 			productReference = B9DA97B12DC1472C00A4DA20 /* Wingmate.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C18800000000000000000006 /* iosAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C18800000000000000000007 /* Build configuration list for PBXNativeTarget "iosAppTests" */;
+			buildPhases = (
+				C18800000000000000000005 /* Sources */,
+				C18800000000000000000003 /* Frameworks */,
+				C18800000000000000000004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C1880000000000000000000B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C18800000000000000000002 /* iosAppTests */,
+			);
+			name = iosAppTests;
+			productName = iosAppTests;
+			productReference = C18800000000000000000001 /* iosAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -175,12 +175,12 @@
 				LastSwiftUpdateCheck = 1620;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
+					B9DA97B02DC1472C00A4DA20 = {
+						CreatedOnToolsVersion = 16.2;
+					};
 					C18800000000000000000006 = {
 						CreatedOnToolsVersion = 26.0;
 						TestTargetID = B9DA97B02DC1472C00A4DA20;
-					};
-					B9DA97B02DC1472C00A4DA20 = {
-						CreatedOnToolsVersion = 16.2;
 					};
 				};
 			};
@@ -208,14 +208,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		C18800000000000000000004 /* Resources */ = {
+		B9DA97AF2DC1472C00A4DA20 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B9DA97AF2DC1472C00A4DA20 /* Resources */ = {
+		C18800000000000000000004 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -244,19 +244,19 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\n\n# Find or install JDK 21\nfind_jdk() {\n  /usr/libexec/java_home -v 21 &>/dev/null && { JAVA_HOME=$(/usr/libexec/java_home -v 21); return 0; }\n  for p in \\\n    /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \\\n    /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \\\n    ~/Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home \\\n    /Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home; do\n    [ -x \"$p/bin/java\" ] && { JAVA_HOME=\"$p\"; return 0; }\n  done\n  return 1\n}\n\ninstall_jdk() {\n  if command -v brew &>/dev/null; then\n    echo \"Installing JDK 21 via Homebrew...\"\n    HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 brew install --quiet openjdk@21\n    brew link --overwrite --force openjdk@21\n    mkdir -p ~/Library/Java/JavaVirtualMachines\n    for f in /usr/local/opt/openjdk@21/libexec/openjdk.jdk /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk; do\n      [ -d \"$f\" ] && { ln -sfn \"$f\" ~/Library/Java/JavaVirtualMachines/openjdk-21.jdk; break; }\n    done\n  fi\n  find_jdk\n}\n\nif [ -z \"${JAVA_HOME:-}\" ] || [ ! -x \"$JAVA_HOME/bin/java\" ]; then\n  find_jdk || install_jdk || {\n    echo \"error: JDK 21 not found. Install with: brew install openjdk@21\"\n    echo \"       Or set JAVA_HOME to a JDK 21 installation.\"\n    exit 1\n  }\nfi\nexport JAVA_HOME PATH=\"$JAVA_HOME/bin:$PATH\"\necho \"Using JDK: $JAVA_HOME\"\ncd \"$SRCROOT/..\"\necho \"Building shared framework for $CONFIGURATION $SDK_NAME ($ARCHS)\"\n./gradlew :shared:embedAndSignAppleFrameworkForXcode\n\n# Mac Catalyst workaround (KT-40442): Kotlin/Native cannot emit MACCATALYST binaries.\n# Gradle produces an iOS-Simulator framework; rewrite the Mach-O build version so the\n# Catalyst linker accepts it. Xcode re-signs the embedded copy in a later build phase.\ncase \"$SDK_NAME\" in\n  macosx*)\n    echo \"Patching Shared.framework platform tag to MACCATALYST (KT-40442 workaround)\"\n    BIN=shared/build/xcode-frameworks/$CONFIGURATION/$SDK_NAME/Shared.framework/Shared\n    STAGE=$BIN.patched\n    if [ -f \"$BIN\" ]; then\n      vtool -remove-build-version iossim -output \"$STAGE\" \"$BIN\"\n      vtool -set-build-version maccatalyst 18.0 \"$(xcrun --sdk macosx --show-sdk-version)\" -output \"$BIN\" \"$STAGE\"\n      rm -f \"$STAGE\"\n    fi\n    ;;\nesac\n";
+			shellScript = "set -euo pipefail\n\n# Find or install JDK 21\nfind_jdk() {\n  /usr/libexec/java_home -v 21 &>/dev/null && { JAVA_HOME=$(/usr/libexec/java_home -v 21); return 0; }\n  for p in \\\n    /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \\\n    /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \\\n    ~/Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home \\\n    /Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home; do\n    [ -x \"$p/bin/java\" ] && { JAVA_HOME=\"$p\"; return 0; }\n  done\n  return 1\n}\n\ninstall_jdk() {\n  if command -v brew &>/dev/null; then\n    echo \"Installing JDK 21 via Homebrew...\"\n    HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 brew install --quiet openjdk@21\n    brew link --overwrite --force openjdk@21\n    mkdir -p ~/Library/Java/JavaVirtualMachines\n    for f in /usr/local/opt/openjdk@21/libexec/openjdk.jdk /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk; do\n      [ -d \"$f\" ] && { ln -sfn \"$f\" ~/Library/Java/JavaVirtualMachines/openjdk-21.jdk; break; }\n    done\n  fi\n  find_jdk\n}\n\nif [ -z \"${JAVA_HOME:-}\" ] || [ ! -x \"$JAVA_HOME/bin/java\" ]; then\n  find_jdk || install_jdk || {\n    echo \"error: JDK 21 not found. Install with: brew install openjdk@21\"\n    echo \"       Or set JAVA_HOME to a JDK 21 installation.\"\n    exit 1\n  }\nfi\nexport JAVA_HOME PATH=\"$JAVA_HOME/bin:$PATH\"\necho \"Using JDK: $JAVA_HOME\"\ncd \"$SRCROOT/..\"\necho \"Building shared framework for $CONFIGURATION $SDK_NAME ($ARCHS)\"\n./gradlew :shared:embedAndSignAppleFrameworkForXcode\n\n# Mac Catalyst workaround (KT-40442): Kotlin/Native cannot emit MACCATALYST binaries.\n# Gradle produces a flat iOS-Simulator framework. For Catalyst validation we rewrite\n# the Mach-O build version to MACCATALYST and restructure to the macOS \"Versions\"\n# layout. Xcode re-codesigns the embedded copy in a later build phase.\ncase \"$SDK_NAME\" in\n  macosx*)\n    echo \"Patching Shared.framework for Mac Catalyst (KT-40442 workaround)\"\n    BIN=shared/build/xcode-frameworks/$CONFIGURATION/$SDK_NAME/Shared.framework/Shared\n    STAGE=$BIN.patched\n    if [ -f \"$BIN\" ]; then\n      vtool -remove-build-version iossim -output \"$STAGE\" \"$BIN\"\n      vtool -set-build-version maccatalyst 18.0 \"$(xcrun --sdk macosx --show-sdk-version)\" -output \"$BIN\" \"$STAGE\"\n      rm -f \"$STAGE\"\n      FW=${BIN%/Shared}\n      ( cd \"$FW\" && \\\n        mkdir -p Versions/A/Headers Versions/A/Modules Versions/A/Resources && \\\n        mv Shared Versions/A/Shared && \\\n        mv Headers/* Versions/A/Headers/ && \\\n        mv Modules/* Versions/A/Modules/ && \\\n        plutil -replace CFBundleSupportedPlatforms -json '[\"macosx\"]' Info.plist && \\\n        plutil -replace MinimumOSVersion -string 18.0 Info.plist && \\\n        mv Info.plist Versions/A/Resources/ && \\\n        rm -rf _CodeSignature && \\\n        ln -s A Versions/Current && \\\n        ln -s Versions/Current/Shared Shared && \\\n        ln -s Versions/Current/Headers Headers && \\\n        ln -s Versions/Current/Modules Modules && \\\n        ln -s Versions/Current/Resources Resources )\n      rm -rf \"$BUILT_PRODUCTS_DIR/$FRAMEWORKS_FOLDER_PATH/Shared.framework\"\n      echo \"Removed stale Shared.framework from build products; Xcode re-embeds the patched copy\"\n    fi\n    ;;\nesac\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		C18800000000000000000005 /* Sources */ = {
+		B9DA97AD2DC1472C00A4DA20 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B9DA97AD2DC1472C00A4DA20 /* Sources */ = {
+		C18800000000000000000005 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -265,45 +265,15 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		C1880000000000000000000B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B9DA97B02DC1472C00A4DA20 /* iosApp */;
+			targetProxy = C1880000000000000000000A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
-		C18800000000000000000008 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9BB3E6JDX4;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.hojmoseit.wingmateTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wingmate.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wingmate";
-			};
-			name = Debug;
-		};
-		C18800000000000000000009 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9BB3E6JDX4;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.hojmoseit.wingmateTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wingmate.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wingmate";
-			};
-			name = Release;
-		};
 		B9DA97BD2DC1472D00A4DA20 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -475,8 +445,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hojmoseit.wingmate;
 				PRODUCT_NAME = Wingmate;
-				SUPPORTS_MACCATALYST = YES;
-				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,6";
@@ -527,26 +497,55 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hojmoseit.wingmate;
 				PRODUCT_NAME = Wingmate;
-				SUPPORTS_MACCATALYST = YES;
-				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,6";
 			};
 			name = Release;
 		};
+		C18800000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BB3E6JDX4;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hojmoseit.wingmateTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wingmate.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wingmate";
+			};
+			name = Debug;
+		};
+		C18800000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BB3E6JDX4;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hojmoseit.wingmateTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wingmate.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wingmate";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		C18800000000000000000007 /* Build configuration list for PBXNativeTarget "iosAppTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				C18800000000000000000008 /* Debug */,
-				C18800000000000000000009 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		B9DA97AC2DC1472C00A4DA20 /* Build configuration list for PBXProject "iosApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -565,15 +564,16 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-/* End XCConfigurationList section */
-
-/* Begin PBXTargetDependency section */
-		C1880000000000000000000B /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = B9DA97B02DC1472C00A4DA20 /* iosApp */;
-			targetProxy = C1880000000000000000000A /* PBXContainerItemProxy */;
+		C18800000000000000000007 /* Build configuration list for PBXNativeTarget "iosAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C18800000000000000000008 /* Debug */,
+				C18800000000000000000009 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
-/* End PBXTargetDependency section */
+/* End XCConfigurationList section */
 	};
 	rootObject = B9DA97A92DC1472C00A4DA20 /* Project object */;
 }
