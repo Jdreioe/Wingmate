@@ -17,6 +17,8 @@ kotlin {
     iosX64()
     iosArm64()
     iosSimulatorArm64()
+    macosX64()
+    macosArm64()
 
     sourceSets {
         val commonMain by getting {
@@ -59,6 +61,21 @@ kotlin {
                 implementation(libs.ktor.client.darwin)
                 implementation("app.cash.sqldelight:native-driver:2.0.2")
             }
+        }
+
+        // macOS shares all Foundation/AVFoundation-based iOS infrastructure; only the
+        // UIKit-dependent classes below are excluded and re-implemented with AppKit.
+        val macosMain by getting {
+            dependsOn(iosMain)
+        }
+
+        // UIKit-only implementations (pasteboard, share sheet) that must NOT be compiled
+        // into the macOS framework. Picked up by the iOS targets via dependsOn below.
+        val iosUiKitMain by creating {
+            dependsOn(iosMain)
+        }
+        listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
+            target.compilations.getByName("main").defaultSourceSet.dependsOn(iosUiKitMain)
         }
 
         val jvmMain by getting {

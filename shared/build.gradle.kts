@@ -21,10 +21,14 @@ kotlin {
     iosX64()
     iosArm64()
     iosSimulatorArm64()
+    macosX64()
+    macosArm64()
     
     // Configure iOS framework
     targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget> {
-        if (konanTarget.family == org.jetbrains.kotlin.konan.target.Family.IOS) {
+        if (konanTarget.family == org.jetbrains.kotlin.konan.target.Family.IOS ||
+            konanTarget.family == org.jetbrains.kotlin.konan.target.Family.OSX
+        ) {
             binaries.framework {
                 baseName = "Shared"
                 isStatic = false
@@ -110,6 +114,18 @@ kotlin {
                 
                 implementation("app.cash.sqldelight:native-driver:2.0.2")
             }
+        }
+        // macOS shares the Foundation-based iOS infrastructure, including the KMP DI
+        // facades. UIKit-only bindings live in iosMain and are mirrored by macosMain.
+        val macosMain by getting {
+            dependsOn(iosMain)
+        }
+        // UIKit-only DI + implementations excluded from the macOS framework.
+        val iosUiKitMain by creating {
+            dependsOn(iosMain)
+        }
+        listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
+            target.compilations.getByName("main").defaultSourceSet.dependsOn(iosUiKitMain)
         }
         val jvmMain by getting {
             dependencies {

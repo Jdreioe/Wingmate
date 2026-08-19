@@ -17,6 +17,8 @@ kotlin {
     iosX64()
     iosArm64()
     iosSimulatorArm64()
+    macosX64()
+    macosArm64()
 
     sourceSets {
         val commonMain by getting {
@@ -42,6 +44,12 @@ kotlin {
         applyDefaultHierarchyTemplate()
 
         val iosMain by getting {
+            dependencies {
+                implementation(libs.ktor.client.darwin)
+            }
+        }
+
+        val macosMain by getting {
             dependencies {
                 implementation(libs.ktor.client.darwin)
             }
