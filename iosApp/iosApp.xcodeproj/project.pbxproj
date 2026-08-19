@@ -244,7 +244,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\n\n# Find or install JDK 21\nfind_jdk() {\n  /usr/libexec/java_home -v 21 &>/dev/null && { JAVA_HOME=$(/usr/libexec/java_home -v 21); return 0; }\n  for p in \\\n    /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \\\n    /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \\\n    ~/Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home \\\n    /Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home; do\n    [ -x \"$p/bin/java\" ] && { JAVA_HOME=\"$p\"; return 0; }\n  done\n  return 1\n}\n\ninstall_jdk() {\n  if command -v brew &>/dev/null; then\n    echo \"Installing JDK 21 via Homebrew...\"\n    HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 brew install --quiet openjdk@21\n    brew link --overwrite --force openjdk@21\n    mkdir -p ~/Library/Java/JavaVirtualMachines\n    for f in /usr/local/opt/openjdk@21/libexec/openjdk.jdk /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk; do\n      [ -d \"$f\" ] && { ln -sfn \"$f\" ~/Library/Java/JavaVirtualMachines/openjdk-21.jdk; break; }\n    done\n  fi\n  find_jdk\n}\n\nif [ -z \"${JAVA_HOME:-}\" ] || [ ! -x \"$JAVA_HOME/bin/java\" ]; then\n  find_jdk || install_jdk || {\n    echo \"error: JDK 21 not found. Install with: brew install openjdk@21\"\n    echo \"       Or set JAVA_HOME to a JDK 21 installation.\"\n    exit 1\n  }\nfi\nexport JAVA_HOME PATH=\"$JAVA_HOME/bin:$PATH\"\necho \"Using JDK: $JAVA_HOME\"\ncd \"$SRCROOT/..\"\necho \"Building shared framework for $CONFIGURATION $SDK_NAME ($ARCHS)\"\n./gradlew :shared:embedAndSignAppleFrameworkForXcode\n\n# Mac Catalyst workaround (KT-40442): Kotlin/Native cannot emit MACCATALYST binaries.\n# Gradle produces a flat iOS-Simulator framework. For Catalyst validation we rewrite\n# the Mach-O build version to MACCATALYST and restructure to the macOS \"Versions\"\n# layout. Xcode re-codesigns the embedded copy in a later build phase.\ncase \"$SDK_NAME\" in\n  macosx*)\n    echo \"Patching Shared.framework for Mac Catalyst (KT-40442 workaround)\"\n    BIN=shared/build/xcode-frameworks/$CONFIGURATION/$SDK_NAME/Shared.framework/Shared\n    STAGE=$BIN.patched\n    if [ -f \"$BIN\" ]; then\n      vtool -remove-build-version iossim -output \"$STAGE\" \"$BIN\"\n      vtool -set-build-version maccatalyst 18.0 \"$(xcrun --sdk macosx --show-sdk-version)\" -output \"$BIN\" \"$STAGE\"\n      rm -f \"$STAGE\"\n      FW=${BIN%/Shared}\n      ( cd \"$FW\" && \\\n        mkdir -p Versions/A/Headers Versions/A/Modules Versions/A/Resources && \\\n        mv Shared Versions/A/Shared && \\\n        mv Headers/* Versions/A/Headers/ && \\\n        mv Modules/* Versions/A/Modules/ && \\\n        plutil -replace CFBundleSupportedPlatforms -json '[\"macosx\"]' Info.plist && \\\n        plutil -replace MinimumOSVersion -string 18.0 Info.plist && \\\n        mv Info.plist Versions/A/Resources/ && \\\n        rm -rf _CodeSignature && \\\n        ln -s A Versions/Current && \\\n        ln -s Versions/Current/Shared Shared && \\\n        ln -s Versions/Current/Headers Headers && \\\n        ln -s Versions/Current/Modules Modules && \\\n        ln -s Versions/Current/Resources Resources )\n      rm -rf \"$BUILT_PRODUCTS_DIR/$FRAMEWORKS_FOLDER_PATH/Shared.framework\"\n      echo \"Removed stale Shared.framework from build products; Xcode re-embeds the patched copy\"\n    fi\n    ;;\nesac\n";
+			shellScript = "set -euo pipefail\n\n# Find or install JDK 21\nfind_jdk() {\n  /usr/libexec/java_home -v 21 &>/dev/null && { JAVA_HOME=$(/usr/libexec/java_home -v 21); return 0; }\n  for p in \\\n    /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \\\n    /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \\\n    ~/Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home \\\n    /Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home; do\n    [ -x \"$p/bin/java\" ] && { JAVA_HOME=\"$p\"; return 0; }\n  done\n  return 1\n}\n\ninstall_jdk() {\n  if command -v brew &>/dev/null; then\n    echo \"Installing JDK 21 via Homebrew...\"\n    HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 brew install --quiet openjdk@21\n    brew link --overwrite --force openjdk@21\n    mkdir -p ~/Library/Java/JavaVirtualMachines\n    for f in /usr/local/opt/openjdk@21/libexec/openjdk.jdk /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk; do\n      [ -d \"$f\" ] && { ln -sfn \"$f\" ~/Library/Java/JavaVirtualMachines/openjdk-21.jdk; break; }\n    done\n  fi\n  find_jdk\n}\n\nif [ -z \"${JAVA_HOME:-}\" ] || [ ! -x \"$JAVA_HOME/bin/java\" ]; then\n  find_jdk || install_jdk || {\n    echo \"error: JDK 21 not found. Install with: brew install openjdk@21\"\n    echo \"       Or set JAVA_HOME to a JDK 21 installation.\"\n    exit 1\n  }\nfi\nexport JAVA_HOME PATH=\"$JAVA_HOME/bin:$PATH\"\necho \"Using JDK: $JAVA_HOME\"\ncd \"$SRCROOT/..\"\necho \"Building shared framework for $CONFIGURATION $SDK_NAME ($ARCHS)\"\n./gradlew :shared:embedAndSignAppleFrameworkForXcode\n\n# Mac Catalyst workaround (KT-40442): Kotlin/Native cannot emit MACCATALYST binaries.\n# Gradle produces a flat iOS-Simulator framework. For Catalyst validation we rewrite\n# the Mach-O build version to MACCATALYST and restructure to the macOS \"Versions\"\n# layout. Xcode re-codesigns the embedded copy in a later build phase.\ncase \"$SDK_NAME\" in\n  macosx*)\n    echo \"Catalyst patch: running ci_scripts/patch_shared_framework_for_catalyst.sh\"\n    \"$SRCROOT/../ci_scripts/patch_shared_framework_for_catalyst.sh\"\n    ;;\nesac\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -411,6 +411,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"iosApp/Preview Content\"";
+				CODE_SIGN_ENTITLEMENTS = "iosApp/iosApp.entitlements";
 				DEVELOPMENT_TEAM = 9BB3E6JDX4;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -445,8 +446,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hojmoseit.wingmate;
 				PRODUCT_NAME = Wingmate;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,6";
@@ -463,6 +464,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"iosApp/Preview Content\"";
+				CODE_SIGN_ENTITLEMENTS = "iosApp/iosApp.entitlements";
 				DEVELOPMENT_TEAM = 9BB3E6JDX4;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -497,8 +499,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hojmoseit.wingmate;
 				PRODUCT_NAME = Wingmate;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,6";

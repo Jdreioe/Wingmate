@@ -101,11 +101,20 @@ Flow owns its Azure consent and secure credentials. It must not silently reuse
 Wingmate's Azure configuration or credentials, even if both products later
 share small authentication code.
 
+After a person saves an Azure Speech resource, Flow loads that resource's Voice
+List. Voice selectors use Azure's `ShortName` value. A language route includes
+voices whose primary locale matches it and multilingual voices that list it as a
+secondary locale.
+
 ## Language Flow
 
 Flow identifies each selected sentence locally and can switch between the
-person's enabled system-language voices. Azure keeps one selected voice for the
-whole reading, but receives Flow's detected language tag for each sentence.
+person's enabled system-language voices. It asks before playback whenever the
+top detection confidence is below 75%, its lead is below 15 percentage points,
+or a confidently detected language is not configured. Azure multilingual mode
+keeps one selected voice for the whole reading but receives Flow's language tag
+for each sentence. Azure per-language mode uses only the person's configured
+Azure voices and rates.
 The detailed decision and open questions are in
 [ADR 0001: Language Flow](adr/0001-language-flow.md). Defined terms are in the
 [Flow glossary](glossary.md).

@@ -54,6 +54,10 @@ voice** in Settings to confirm an Azure configuration without capturing text
 from another application.
 
 Azure requests use the standard [Text to Speech REST API](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech).
+After saving an Azure resource, Flow loads that resource's current Voice List.
+The multilingual selector shows multilingual voices by Azure short name. Each
+per-language route shows voices whose primary or secondary locale supports that
+language.
 
 ## v1 behavior
 
@@ -61,6 +65,13 @@ Azure requests use the standard [Text to Speech REST API](https://learn.microsof
 - Uses a non-activating playback popup so the source application keeps focus.
 - Reads with selectable system voices through `AVSpeechSynthesizer`, or an
   opt-in Azure neural voice through Azure's Text to Speech REST API.
+- Includes **Language Flow**: add a language and voice in Settings, and Flow
+  detects each sentence locally before choosing the configured system voice.
+  It asks before playback when detection is uncertain or a detected language is
+  not enabled.
+- Azure multilingual mode retains one Azure voice and sends a language tag for
+  each sentence. Azure per-language mode uses the configured voice and rate for
+  each language route.
 - Keeps captured text in memory only while the popup is visible.
 - Limits selections to roughly ten minutes of speech.
 - Mixes with other applications' audio. macOS audio ducking is explicitly not
