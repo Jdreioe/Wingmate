@@ -388,6 +388,7 @@ struct WelcomeFlow: View {
             .padding(.vertical, 8)
         }
     }
+    }
 
     // MARK: - Step 3: Guided F0 Azure Setup
     @ViewBuilder

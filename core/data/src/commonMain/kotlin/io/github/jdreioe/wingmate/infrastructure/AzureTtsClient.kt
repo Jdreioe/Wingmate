@@ -675,7 +675,8 @@ object AzureTtsClient {
         val Gender: String,
         val Locale: String,
         val LocalName: String? = null,
-        val DisplayName: String? = null
+        val DisplayName: String? = null,
+        val SecondaryLocaleList: List<String> = emptyList(),
     ) {
         fun toDomain(): Voice {
             val display = if (LocalName != null && DisplayName != null) {
@@ -688,6 +689,7 @@ object AzureTtsClient {
                 name = ShortName,
                 displayName = display,
                 primaryLanguage = Locale,
+                supportedLanguages = (listOf(Locale) + SecondaryLocaleList).distinct(),
                 gender = Gender,
                 provider = VoiceProvider.AZURE,
                 // Assume 1.0 default pitch/rate
