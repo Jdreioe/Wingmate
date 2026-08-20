@@ -6,6 +6,7 @@ import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.VoiceProvider
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
@@ -95,6 +96,24 @@ class SpeechFacadeTest {
         facade.updateUseSystemTts(true)
 
         assertEquals(TtsEngine.SYSTEM, settings.get().ttsEngine)
+    }
+
+    @Test
+    fun listVoicesOnlyReturnsTheSelectedProvidersCatalog() = runBlocking {
+        val settings = InMemorySettingsRepository().apply {
+            update(get().copy(ttsEngine = TtsEngine.GOOGLE_CLOUD))
+        }
+        val voices = InMemoryVoiceRepository().apply {
+            saveVoices(
+                listOf(
+                    Voice(name = "azure", provider = VoiceProvider.AZURE),
+                    Voice(name = "google", provider = VoiceProvider.GOOGLE),
+                ),
+            )
+        }
+        val facade = facade(settings = settings, voices = voices)
+
+        assertEquals(listOf("google"), facade.listVoices().map { it.name })
     }
 
     @Test
@@ -188,9 +207,10 @@ class SpeechFacadeTest {
         speech: SpeechService = RecordingSpeechService(),
         settings: InMemorySettingsRepository = InMemorySettingsRepository(),
         config: InMemoryConfigRepository = InMemoryConfigRepository(),
+        voices: InMemoryVoiceRepository = InMemoryVoiceRepository(),
     ): SpeechFacade {
         val voiceUseCase = VoiceUseCase(
-            repo = InMemoryVoiceRepository(),
+            repo = voices,
             azure = AzureVoiceCatalog(config),
             google = GoogleVoiceCatalog(config),
             configRepo = config,

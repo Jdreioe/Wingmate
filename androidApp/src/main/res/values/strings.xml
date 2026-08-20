@@ -314,8 +314,22 @@
     <string name="voice_system_title_with_lang">System TTS Voices (%1$s)</string>
     <string name="voice_azure_title">Azure TTS Voices</string>
     <string name="voice_azure_title_with_lang">Azure TTS Voices (%1$s)</string>
+    <string name="voice_google_title">Google Cloud TTS Voices</string>
+    <string name="voice_google_title_with_lang">Google Cloud TTS Voices (%1$s)</string>
     <string name="voice_no_system_match">No system voices match the current filters</string>
     <string name="voice_no_azure_match">No Azure voices match the current filters</string>
+    <string name="voice_no_google_match">No Google voices match the current filters</string>
+    <string name="voice_model_all">All models</string>
+    <string name="voice_model_gemini_3_1_flash">Gemini 3.1 Flash</string>
+    <string name="voice_model_gemini_2_5_flash">Gemini 2.5 Flash</string>
+    <string name="voice_model_gemini_2_5_flash_lite">Gemini 2.5 Flash Lite</string>
+    <string name="voice_model_gemini_2_5_pro">Gemini 2.5 Pro</string>
+    <string name="voice_model_chirp_3_hd">Chirp 3 HD</string>
+    <string name="voice_model_studio">Studio</string>
+    <string name="voice_model_neural2">Neural2</string>
+    <string name="voice_model_wavenet">WaveNet</string>
+    <string name="voice_model_standard">Standard</string>
+    <string name="voice_model_other">Other</string>
     <string name="voice_selected">✓ Selected</string>
     <string name="voice_settings">Settings</string>
 
@@ -635,7 +649,7 @@
     <string name="google_setup_create_key">Create an API key</string>
     <string name="google_setup_have_key">I have created the key</string>
     <string name="google_setup_key_title">Restrict and add the key</string>
-    <string name="google_setup_key_description">In Google Cloud, restrict the key to the Cloud Text-to-Speech API. For stronger protection, also choose Android apps and add these values:</string>
+    <string name="google_setup_key_description">In Google Cloud, restrict the key to the Cloud Text-to-Speech API. Gemini models additionally need an authorization key bound to a service account with Vertex AI User. For stronger protection, also choose Android apps and add these values:</string>
     <string name="google_setup_android_restriction">Package name: %1$s\nSHA-1 certificate fingerprint: %2$s</string>
     <string name="google_setup_secure_storage_android">Wingmate encrypts the key with Android Keystore, excludes it from backups, and never displays it again.</string>
     <string name="google_setup_save_validate">Save securely and verify</string>

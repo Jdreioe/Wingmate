@@ -232,7 +232,7 @@
 "settings.speech.google.setup.create_key" = "Create an API key";
 "settings.speech.google.setup.have_created_key" = "I have created the key";
 "settings.speech.google.setup.key_title" = "Restrict and add the key";
-"settings.speech.google.setup.restrict_api" = "Restrict the key to the Cloud Text-to-Speech API. You may also apply the iOS app restriction with this bundle ID:";
+"settings.speech.google.setup.restrict_api" = "Restrict the key to the Cloud Text-to-Speech API. Gemini models additionally need an authorization key bound to a service account with Vertex AI User. You may also apply the iOS app restriction with this bundle ID:";
 "settings.speech.google.setup.ios_restriction" = "Bundle ID: %@";
 "settings.speech.google.setup.save_validate" = "Save securely and verify";
 "settings.speech.google.setup.validation_failed" = "Wingmate could not verify this key. Check the key, connection, billing, API access, and restrictions. Your previous setup was kept.";
@@ -566,3 +566,15 @@
 "settings.pointer_emphasis.outline" = "Outline";
 "settings.pointer_emphasis.size" = "Marker size";
 "settings.pointer_emphasis.ios_note" = "Wingmate keeps the iOS system pointer visible and emphasizes the current target.";
+"voice.model.label" = "Model";
+"voice.model.all" = "All models";
+"voice.model.gemini_3_1_flash" = "Gemini 3.1 Flash";
+"voice.model.gemini_2_5_flash" = "Gemini 2.5 Flash";
+"voice.model.gemini_2_5_flash_lite" = "Gemini 2.5 Flash Lite";
+"voice.model.gemini_2_5_pro" = "Gemini 2.5 Pro";
+"voice.model.chirp_3_hd" = "Chirp 3 HD";
+"voice.model.studio" = "Studio";
+"voice.model.neural2" = "Neural2";
+"voice.model.wavenet" = "WaveNet";
+"voice.model.standard" = "Standard";
+"voice.model.other" = "Other";

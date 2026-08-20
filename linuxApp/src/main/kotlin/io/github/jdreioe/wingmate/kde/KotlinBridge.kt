@@ -26,6 +26,7 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.forTtsEngine
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
@@ -630,7 +631,8 @@ class KotlinBridge(
             
             // Voices
             get("/api/voices") {
-                val voices = voiceRepository.getVoices()
+                val engine = settingsManager.settings.value?.ttsEngine ?: TtsEngine.SYSTEM
+                val voices = voiceRepository.getVoices().forTtsEngine(engine)
                 call.respond(voices)
             }
             get("/api/voices/selected") {
@@ -648,7 +650,8 @@ class KotlinBridge(
                 if (voiceName.isBlank() || text.isBlank()) {
                     return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "voice and text are required"))
                 }
-                if (voiceRepository.getVoices().none { it.name == voiceName }) {
+                val engine = settingsManager.settings.value?.ttsEngine ?: TtsEngine.SYSTEM
+                if (voiceRepository.getVoices().forTtsEngine(engine).none { it.name == voiceName }) {
                     return@post call.respond(HttpStatusCode.NotFound, mapOf("error" to "Voice is unavailable"))
                 }
                 val generation = speechGeneration.incrementAndGet()
@@ -1531,7 +1534,7 @@ class KotlinBridge(
             cloudSpeechService.stop()
 
             val settings = settingsManager.settings.value ?: Settings()
-            val voices = voiceRepository.getVoices()
+            val voices = voiceRepository.getVoices().forTtsEngine(settings.ttsEngine)
             val selectedName = voiceOverride?.takeIf { it.isNotBlank() }
                 ?: voiceRepository.getSelected()?.name?.takeIf { it.isNotBlank() }
                 ?: settings.voice.takeIf { it.isNotBlank() }

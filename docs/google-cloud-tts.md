@@ -20,6 +20,27 @@ Wingmate verifies the candidate by loading the Google voice catalog before it
 switches speech engines. If verification fails, the candidate is removed and
 the previous credential and engine selection are restored.
 
+## Voices and models
+
+The voice picker only shows the catalog for the selected cloud provider. When
+Google Cloud is selected, it also provides model filters for Gemini 3.1 Flash,
+the Gemini 2.5 TTS models, Chirp 3 HD, Studio, Neural2, WaveNet, Standard, and
+any remaining Google tiers.
+
+Google's locale-prefixed catalog rows are combined by model and speaker. For
+example, the picker shows `WaveNet F` instead of `da-DK-Wavenet-F`, and one
+`Achird` entry contains every locale in which Google offers Achird for that
+model. The Gemini and Chirp 3 entries remain separate even when their speaker
+names match.
+
+Gemini TTS additionally requires the authenticated principal to have
+`aiplatform.endpoints.predict` (for example through Vertex AI User). A regular
+API key does not represent an IAM principal; projects using Gemini TTS through
+key authentication therefore need a supported service-account-bound
+authorization key. This Google feature is Preview and may be unavailable to
+personal projects without an organization. Traditional Google TTS tiers do not
+require that additional Vertex AI permission.
+
 Google recommends both API and application restrictions. A locally installed
 Linux desktop application cannot strongly protect a client-side key with an
 application restriction, so Linux users should use a dedicated restricted key,
@@ -42,4 +63,6 @@ and availability remain governed by the user's Google Cloud project and terms.
 
 References: [Text-to-Speech synthesis API](https://cloud.google.com/text-to-speech/docs/reference/rest/v1/text/synthesize),
 [voice list API](https://cloud.google.com/text-to-speech/docs/reference/rest/v1/voices/list), and
-[Google API key best practices](https://cloud.google.com/docs/authentication/api-keys-best-practices).
+[Gemini TTS](https://cloud.google.com/text-to-speech/docs/gemini-tts),
+[Google API key best practices](https://cloud.google.com/docs/authentication/api-keys-best-practices), and
+[authorization keys](https://cloud.google.com/docs/authentication/api-keys).

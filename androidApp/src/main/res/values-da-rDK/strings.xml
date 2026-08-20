@@ -306,8 +306,22 @@
     <string name="voice_system_title_with_lang">System TTS-stemmer (%1$s)</string>
     <string name="voice_azure_title">Azure TTS-stemmer</string>
     <string name="voice_azure_title_with_lang">Azure TTS-stemmer (%1$s)</string>
+    <string name="voice_google_title">Google Cloud TTS-stemmer</string>
+    <string name="voice_google_title_with_lang">Google Cloud TTS-stemmer (%1$s)</string>
     <string name="voice_no_system_match">Ingen systemstemmer matcher de aktuelle filtre</string>
     <string name="voice_no_azure_match">Ingen Azure-stemmer matcher de aktuelle filtre</string>
+    <string name="voice_no_google_match">Ingen Google-stemmer matcher de aktuelle filtre</string>
+    <string name="voice_model_all">Alle modeller</string>
+    <string name="voice_model_gemini_3_1_flash">Gemini 3.1 Flash</string>
+    <string name="voice_model_gemini_2_5_flash">Gemini 2.5 Flash</string>
+    <string name="voice_model_gemini_2_5_flash_lite">Gemini 2.5 Flash Lite</string>
+    <string name="voice_model_gemini_2_5_pro">Gemini 2.5 Pro</string>
+    <string name="voice_model_chirp_3_hd">Chirp 3 HD</string>
+    <string name="voice_model_studio">Studio</string>
+    <string name="voice_model_neural2">Neural2</string>
+    <string name="voice_model_wavenet">WaveNet</string>
+    <string name="voice_model_standard">Standard</string>
+    <string name="voice_model_other">Andre</string>
     <string name="voice_selected">✓ Valgt</string>
     <string name="voice_settings">Indstillinger</string>
 
@@ -632,7 +646,7 @@
     <string name="google_setup_create_key">Opret en API-nøgle</string>
     <string name="google_setup_have_key">Jeg har oprettet nøglen</string>
     <string name="google_setup_key_title">Begræns og tilføj nøglen</string>
-    <string name="google_setup_key_description">Begræns nøglen til Cloud Text-to-Speech API i Google Cloud. Vælg også Android-apps, og tilføj disse værdier for stærkere beskyttelse:</string>
+    <string name="google_setup_key_description">Begræns nøglen til Cloud Text-to-Speech API i Google Cloud. Gemini-modeller kræver desuden en autorisationsnøgle, der er knyttet til en tjenestekonto med Vertex AI User. Vælg også Android-apps, og tilføj disse værdier for stærkere beskyttelse:</string>
     <string name="google_setup_android_restriction">Pakkenavn: %1$s\nSHA-1-certifikatfingeraftryk: %2$s</string>
     <string name="google_setup_secure_storage_android">Wingmate krypterer nøglen med Android Keystore, udelader den fra sikkerhedskopier og viser den aldrig igen.</string>
     <string name="google_setup_save_validate">Gem sikkert og bekræft</string>

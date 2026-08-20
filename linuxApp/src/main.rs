@@ -227,9 +227,60 @@ struct Voice {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
+    display_name: Option<String>,
+    #[serde(default)]
     primary_language: Option<String>,
     #[serde(default)]
     supported_languages: Option<Vec<String>>,
+    #[serde(default)]
+    google_model: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct VoiceChoice {
+    name: String,
+    label: String,
+}
+
+impl std::fmt::Display for VoiceChoice {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.label)
+    }
+}
+
+const GOOGLE_MODEL_ORDER: [&str; 10] = [
+    "GEMINI_3_1_FLASH",
+    "GEMINI_2_5_FLASH",
+    "GEMINI_2_5_FLASH_LITE",
+    "GEMINI_2_5_PRO",
+    "CHIRP_3_HD",
+    "STUDIO",
+    "NEURAL2",
+    "WAVENET",
+    "STANDARD",
+    "OTHER",
+];
+
+fn google_model_label(model: &str) -> &str {
+    match model {
+        "GEMINI_3_1_FLASH" => "Gemini 3.1 Flash",
+        "GEMINI_2_5_FLASH" => "Gemini 2.5 Flash",
+        "GEMINI_2_5_FLASH_LITE" => "Gemini 2.5 Flash Lite",
+        "GEMINI_2_5_PRO" => "Gemini 2.5 Pro",
+        "CHIRP_3_HD" => "Chirp 3 HD",
+        "STUDIO" => "Studio",
+        "NEURAL2" => "Neural2",
+        "WAVENET" => "WaveNet",
+        "STANDARD" => "Standard",
+        _ => "Other",
+    }
+}
+
+fn google_model_id_from_label(label: &str) -> Option<&'static str> {
+    GOOGLE_MODEL_ORDER
+        .iter()
+        .copied()
+        .find(|model| google_model_label(model) == label)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -804,6 +855,7 @@ struct Wingmate {
     settings: Settings,
     selected_voice_name: Option<String>,
     preview_voice_name: Option<String>,
+    google_model_filter: String,
     editing_access: EditingAccessState,
     editing_access_code: String,
     editing_access_new_code: String,
@@ -950,7 +1002,8 @@ enum Message {
     CancelCategoryEdit,
     MoveCategory(String, i32),
     ToggleManagePhrases,
-    VoicePreviewSelected(String),
+    VoicePreviewSelected(VoiceChoice),
+    GoogleModelFilterChanged(String),
     PreviewVoice,
     ApplyPreviewVoice,
     RateChanged(f32),
@@ -1174,6 +1227,7 @@ impl cosmic::Application for Wingmate {
             settings: Settings::default(),
             selected_voice_name: None,
             preview_voice_name: None,
+            google_model_filter: String::new(),
             editing_access: EditingAccessState::default(),
             editing_access_code: String::new(),
             editing_access_new_code: String::new(),
@@ -2059,7 +2113,17 @@ impl cosmic::Application for Wingmate {
             Message::ToggleManagePhrases => {
                 self.manage_phrases = !self.manage_phrases;
             }
-            Message::VoicePreviewSelected(voice) => self.preview_voice_name = Some(voice),
+            Message::VoicePreviewSelected(voice) => self.preview_voice_name = Some(voice.name),
+            Message::GoogleModelFilterChanged(model) => {
+                self.google_model_filter = if model == fl!("speech-google-model-all") {
+                    String::new()
+                } else {
+                    google_model_id_from_label(&model)
+                        .unwrap_or_default()
+                        .to_string()
+                };
+                self.preview_voice_name = None;
+            }
             Message::PreviewVoice => {
                 if let Some(voice) = self.preview_voice_name.clone() {
                     self.status = fl!("voice-preview-playing");
@@ -2088,6 +2152,8 @@ impl cosmic::Application for Wingmate {
             }
             Message::EngineChanged(engine) => {
                 self.settings.tts_engine = engine.clone();
+                self.google_model_filter.clear();
+                self.preview_voice_name = None;
                 return self.api.save_engine(engine).map(cosmic::Action::App);
             }
             Message::EngineChangedSaved(result) => match result {
@@ -5273,31 +5339,59 @@ impl Wingmate {
                     .as_deref()
                     .is_some_and(|name| name.starts_with(&language_prefix))
         };
-        let mut voice_names: Vec<String> = self
+        let voice_matches_model = |voice: &&Voice| {
+            self.settings.tts_engine != "GOOGLE_CLOUD"
+                || self.google_model_filter.is_empty()
+                || voice.google_model.as_deref() == Some(self.google_model_filter.as_str())
+        };
+        let mut voice_choices: Vec<VoiceChoice> = self
             .voices
             .iter()
+            .filter(voice_matches_model)
             .filter(voice_matches_language)
-            .filter_map(|voice| voice.name.clone())
+            .filter_map(|voice| {
+                voice.name.clone().map(|name| VoiceChoice {
+                    label: voice.display_name.clone().unwrap_or_else(|| name.clone()),
+                    name,
+                })
+            })
             .collect();
         // Older/system voice providers may not publish locale metadata. Avoid
         // hiding their voices if no match can be established.
-        if voice_names.is_empty() {
-            voice_names = self
+        if voice_choices.is_empty() {
+            voice_choices = self
                 .voices
                 .iter()
-                .filter_map(|voice| voice.name.clone())
+                .filter(voice_matches_model)
+                .filter_map(|voice| {
+                    voice.name.clone().map(|name| VoiceChoice {
+                        label: voice.display_name.clone().unwrap_or_else(|| name.clone()),
+                        name,
+                    })
+                })
                 .collect();
         }
-        voice_names.sort();
-        voice_names.dedup();
-        let active_voice = self
+        voice_choices.sort_by(|left, right| {
+            left.label
+                .cmp(&right.label)
+                .then(left.name.cmp(&right.name))
+        });
+        voice_choices.dedup_by(|left, right| left.name == right.name);
+        let active_voice_name = self
             .selected_voice_name
             .clone()
-            .filter(|name| voice_names.contains(name))
+            .filter(|name| voice_choices.iter().any(|voice| &voice.name == name))
             .or_else(|| {
-                Some(self.settings.voice.clone()).filter(|name| voice_names.contains(name))
+                Some(self.settings.voice.clone())
+                    .filter(|name| voice_choices.iter().any(|voice| &voice.name == name))
             });
-        let selected_voice = self.preview_voice_name.clone().or(active_voice);
+        let selected_voice_name = self.preview_voice_name.clone().or(active_voice_name);
+        let selected_voice = selected_voice_name.and_then(|name| {
+            voice_choices
+                .iter()
+                .find(|voice| voice.name == name)
+                .cloned()
+        });
         let mut languages: Vec<String> = self
             .voices
             .iter()
@@ -5351,13 +5445,39 @@ impl Wingmate {
                 .into()
             };
         let google_credentials = self.google_tts_setup_view(true);
+        let google_model_picker: Element<'_, Message> =
+            if self.settings.tts_engine == "GOOGLE_CLOUD" {
+                let available_ids: std::collections::HashSet<&str> = self
+                    .voices
+                    .iter()
+                    .filter_map(|voice| voice.google_model.as_deref())
+                    .collect();
+                let mut options = vec![fl!("speech-google-model-all")];
+                options.extend(
+                    GOOGLE_MODEL_ORDER
+                        .iter()
+                        .filter(|model| available_ids.contains(**model))
+                        .map(|model| google_model_label(model).to_string()),
+                );
+                let selected = if self.google_model_filter.is_empty() {
+                    fl!("speech-google-model-all")
+                } else {
+                    google_model_label(&self.google_model_filter).to_string()
+                };
+                settings_row(
+                    fl!("speech-google-model"),
+                    pick_list(options, Some(selected), Message::GoogleModelFilterChanged).into(),
+                )
+            } else {
+                Space::new().height(0).into()
+            };
 
         scrollable(
             column![
                 settings_row(
                     fl!("speech-voice"),
                     row![
-                        pick_list(voice_names, selected_voice, Message::VoicePreviewSelected)
+                        pick_list(voice_choices, selected_voice, Message::VoicePreviewSelected)
                             .width(Fill),
                         compact_icon_button(
                             "media-playback-start-symbolic",
@@ -5386,6 +5506,7 @@ impl Wingmate {
                     )
                     .into(),
                 ),
+                google_model_picker,
                 settings_row(
                     fl!("speech-speed"),
                     slider(0.5..=2.0, self.settings.speech_rate, Message::RateChanged)

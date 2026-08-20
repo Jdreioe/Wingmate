@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.VoiceProvider
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
@@ -688,6 +689,7 @@ object AzureTtsClient {
                 displayName = display,
                 primaryLanguage = Locale,
                 gender = Gender,
+                provider = VoiceProvider.AZURE,
                 // Assume 1.0 default pitch/rate
                 pitch = 1.0, 
                 rate = 1.0

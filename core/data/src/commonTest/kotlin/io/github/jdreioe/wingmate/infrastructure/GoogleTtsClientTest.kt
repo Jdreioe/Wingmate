@@ -1,8 +1,10 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
+import io.github.jdreioe.wingmate.domain.GoogleVoiceModel
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.VoiceProvider
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -56,6 +58,29 @@ class GoogleTtsClientTest {
     }
 
     @Test
+    fun groupedLegacyVoiceReconstructsTheNameForItsSelectedLocale() = runBlocking {
+        val client = testClient { request ->
+            val body = request.body.toByteArray().decodeToString()
+            assertContains(body, "\"name\":\"da-DK-Wavenet-F\"")
+            respondJson("""{"audioContent":"AQ=="}""")
+        }
+
+        GoogleTtsClient.synthesize(
+            client,
+            "Hej",
+            Voice(
+                name = "google|WAVENET|F",
+                selectedLanguage = "da-DK",
+                provider = VoiceProvider.GOOGLE,
+                googleModel = GoogleVoiceModel.WAVENET,
+                providerVoiceName = "F",
+            ),
+            GoogleSpeechConfig("key"),
+        )
+        client.close()
+    }
+
+    @Test
     fun segmentSynthesisEscapesTextAndPreservesLanguageAndPauses() = runBlocking {
         val client = testClient { request ->
             val body = request.body.toByteArray().decodeToString()
@@ -75,6 +100,34 @@ class GoogleTtsClientTest {
     }
 
     @Test
+    fun geminiSynthesisSendsModelAndSpeakerWithoutLegacySsmlControls() = runBlocking {
+        val client = testClient { request ->
+            val body = request.body.toByteArray().decodeToString()
+            assertContains(body, "\"text\":\"Hello world\"")
+            assertContains(body, "\"name\":\"Kore\"")
+            assertContains(body, "\"modelName\":\"gemini-3.1-flash-tts-preview\"")
+            assertFalse(body.contains("\"ssml\""))
+            assertFalse(body.contains("\"speakingRate\""))
+            assertFalse(body.contains("\"pitch\""))
+            respondJson("""{"audioContent":"AQ=="}""")
+        }
+
+        GoogleTtsClient.synthesizeSegments(
+            client,
+            listOf(SpeechSegment("Hello", 250), SpeechSegment("world", 0)),
+            Voice(
+                name = "gemini-3.1-flash-tts-preview|en-US|Kore",
+                primaryLanguage = "en-US",
+                provider = VoiceProvider.GOOGLE,
+                googleModel = GoogleVoiceModel.GEMINI_3_1_FLASH,
+                providerVoiceName = "Kore",
+            ),
+            GoogleSpeechConfig("key"),
+        )
+        client.close()
+    }
+
+    @Test
     fun voiceCatalogMapsLanguagesAndGender() = runBlocking {
         val client = testClient { request ->
             assertEquals(GoogleTtsClient.VOICES_URL, request.url.toString())
@@ -87,6 +140,8 @@ class GoogleTtsClientTest {
         assertEquals("en-US-Neural2-A", voice.name)
         assertEquals(listOf("en-US", "en-CA"), voice.supportedLanguages)
         assertEquals("FEMALE", voice.gender)
+        assertEquals(VoiceProvider.GOOGLE, voice.provider)
+        assertEquals(GoogleVoiceModel.NEURAL2, voice.googleModel)
         client.close()
     }
 

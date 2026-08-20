@@ -12,6 +12,8 @@ import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.VoiceProvider
+import io.github.jdreioe.wingmate.domain.resolvedProvider
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.loggingClassName
@@ -117,10 +119,10 @@ class IosSpeechService(
         val requestId = beginRequest()
 
         executeRequest(requestId) {
-            val effectiveVoice = (voice ?: defaultVoice()).let { base ->
+            val engine = settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE
+            val effectiveVoice = (voice ?: defaultVoice()).forCloudProvider(engine).let { base ->
                 base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
             }
-            val engine = settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE
             if (engine == TtsEngine.SYSTEM) error("System speech is handled by the iOS host")
             val cacheKey = "${engine.name}|text|$normalizedText|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
             val cached = if (cacheAudio) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] } else null
@@ -141,10 +143,10 @@ class IosSpeechService(
         val requestId = beginRequest()
         executeRequest(requestId) {
             val combinedText = segments.joinToString(separator = "") { it.text }
-            val effectiveVoice = (voice ?: defaultVoice()).let { base ->
+            val engine = settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE
+            val effectiveVoice = (voice ?: defaultVoice()).forCloudProvider(engine).let { base ->
                 base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
             }
-            val engine = settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE
             if (engine == TtsEngine.SYSTEM) error("System speech is handled by the iOS host")
             val cacheKey = "${engine.name}|segments|${segments.joinToString()}|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
             val cached = if (cacheAudio) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] } else null
@@ -160,10 +162,10 @@ class IosSpeechService(
         val normalizedText = SpeechTextProcessor.normalizeShorthandSsml(text).trim()
         if (normalizedText.isEmpty()) return true
         if (settingsRepository?.get()?.ttsEngine == TtsEngine.SYSTEM) return false
-        val effectiveVoice = (voice ?: defaultVoice()).let { base ->
+        val engine = settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE
+        val effectiveVoice = (voice ?: defaultVoice()).forCloudProvider(engine).let { base ->
             base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
         }
-        val engine = settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE
         val cacheKey = "${engine.name}|text|$normalizedText|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
         if (sentenceAudioCacheMutex.withLock { cacheKey in sentenceAudioCache }) return true
 
@@ -322,11 +324,32 @@ class IosSpeechService(
     }
 
     private fun Voice.forAzureProvider(): Voice =
-        if (name?.count { it == '-' }?.let { it >= 3 } == true) {
+        if (resolvedProvider() == VoiceProvider.GOOGLE || name == "system-default") {
             copy(name = "en-US-JennyNeural")
         } else {
             this
         }
+
+    private fun Voice.forCloudProvider(engine: TtsEngine): Voice {
+        val language = selectedLanguage.takeIf(String::isNotBlank)
+            ?: primaryLanguage?.takeIf(String::isNotBlank)
+            ?: "en-US"
+        return when (engine) {
+            TtsEngine.GOOGLE_CLOUD -> if (resolvedProvider() == VoiceProvider.GOOGLE) this else {
+                Voice(primaryLanguage = language, selectedLanguage = language)
+            }
+            TtsEngine.AZURE_USER_RESOURCE,
+            TtsEngine.AZURE_MANAGED,
+            -> if (isAzureCloudVoice()) this else {
+                Voice(name = "en-US-JennyNeural", primaryLanguage = language, selectedLanguage = language)
+            }
+            TtsEngine.SYSTEM -> this
+        }
+    }
+
+    private fun Voice.isAzureCloudVoice(): Boolean =
+        provider == VoiceProvider.AZURE ||
+            (provider == null && resolvedProvider() == VoiceProvider.AZURE && name?.contains("Neural") == true)
 
     private suspend fun playAudio(requestId: Long, audioBytes: ByteArray) = withContext(Dispatchers.Main) {
         require(audioBytes.isNotEmpty()) { "Speech synthesis returned no audio" }

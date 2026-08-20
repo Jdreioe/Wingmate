@@ -10,6 +10,7 @@ import io.github.jdreioe.wingmate.domain.SpeechServiceConfigStatus
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.withPreferredSupportedLanguage
 import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpoint
 import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpointResult
 import kotlinx.coroutines.NonCancellable
@@ -50,11 +51,12 @@ class SpeechFacade(
 
     /** Select a voice and align the app's primary language with its language when it changes. */
     suspend fun selectVoiceAndMaybeUpdatePrimary(voice: Voice) {
-        voiceUseCase.select(voice)
         val current = settingsUseCase.get()
-        val candidate = voice.selectedLanguage
+        val selectedVoice = voice.withPreferredSupportedLanguage(current.primaryLanguage)
+        voiceUseCase.select(selectedVoice)
+        val candidate = selectedVoice.selectedLanguage
             .takeIf { it.isNotEmpty() }
-            ?: voice.primaryLanguage?.takeIf { it.isNotEmpty() }
+            ?: selectedVoice.primaryLanguage?.takeIf { it.isNotEmpty() }
             ?: current.primaryLanguage
         if (candidate != current.primaryLanguage) {
             settingsUseCase.update(current.copy(primaryLanguage = candidate))
@@ -63,7 +65,7 @@ class SpeechFacade(
 
     suspend fun selectedVoice(): Voice? = voiceUseCase.selected()
 
-    suspend fun listVoices(): List<Voice> = voiceUseCase.list()
+    suspend fun listVoices(): List<Voice> = voiceUseCase.listForEngine(settingsUseCase.get().ttsEngine)
 
     suspend fun refreshVoicesFromAzure(): List<Voice> = voiceUseCase.refreshFromAzure()
 

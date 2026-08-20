@@ -9,6 +9,8 @@ import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.VoiceProvider
+import io.github.jdreioe.wingmate.domain.resolvedProvider
 import io.github.jdreioe.wingmate.infrastructure.AzureTtsClient
 import io.github.jdreioe.wingmate.infrastructure.GoogleTtsClient
 import io.ktor.client.HttpClient
@@ -43,7 +45,18 @@ class CloudSpeechService(
         check(engine != TtsEngine.SYSTEM) { "System speech must use the native Linux speech service" }
             
             // Create default voice if null
-        val voiceToUse = (voice ?: Voice(name = "en-US-JennyNeural", selectedLanguage = "en-US")).copy(
+        val providerVoice = voice?.takeIf {
+            when (engine) {
+                TtsEngine.GOOGLE_CLOUD -> it.resolvedProvider() == VoiceProvider.GOOGLE
+                TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> it.resolvedProvider() == VoiceProvider.AZURE
+                TtsEngine.SYSTEM -> false
+            }
+        }
+        val voiceToUse = (providerVoice ?: if (engine == TtsEngine.GOOGLE_CLOUD) {
+            Voice(selectedLanguage = "en-US", primaryLanguage = "en-US")
+        } else {
+            Voice(name = "en-US-JennyNeural", selectedLanguage = "en-US", primaryLanguage = "en-US")
+        }).copy(
             pitch = pitch ?: voice?.pitch,
             rate = rate ?: voice?.rate,
         )
@@ -69,7 +82,7 @@ class CloudSpeechService(
                     val config = configRepository.getSpeechConfig()
                         ?.takeIf { it.subscriptionKey.isNotBlank() && it.endpoint.isNotBlank() }
                         ?: error("Azure Speech configuration is missing or incomplete")
-                    val azureVoice = if (voiceToUse.name?.count { it == '-' }?.let { it >= 3 } == true) {
+                    val azureVoice = if (voiceToUse.resolvedProvider() == VoiceProvider.GOOGLE) {
                         voiceToUse.copy(name = "en-US-JennyNeural")
                     } else {
                         voiceToUse

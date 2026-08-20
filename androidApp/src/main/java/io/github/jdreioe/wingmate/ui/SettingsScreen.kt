@@ -45,6 +45,9 @@ import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.GoogleVoiceModel
+import io.github.jdreioe.wingmate.domain.resolvedGoogleModel
+import io.github.jdreioe.wingmate.domain.withPreferredSupportedLanguage
 import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
 import io.github.jdreioe.wingmate.domain.WordTypeColorScheme
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -2135,6 +2138,8 @@ internal fun VoiceSelectionPage(
     var availableLanguages by remember { mutableStateOf<List<String>>(emptyList()) }
     var voiceSearch by remember { mutableStateOf("") }
     var genderFilter by remember { mutableStateOf<String?>(null) }
+    var googleModelFilter by remember { mutableStateOf<GoogleVoiceModel?>(null) }
+    var preferredLanguage by remember { mutableStateOf<String?>(null) }
     var retryKey by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
@@ -2150,6 +2155,7 @@ internal fun VoiceSelectionPage(
             val settings = checkNotNull(settingsUseCase) { "Settings are unavailable" }
                 .let { withContext(Dispatchers.Default) { it.get() } }
             ttsEngine = settings.ttsEngine
+            preferredLanguage = settings.primaryLanguage
             if (ttsEngine == TtsEngine.SYSTEM) {
                 val allSystemVoices = systemVoiceProvider?.getSystemVoices() ?: listOf(
                     Voice(name = "system-default", displayName = "System Default", primaryLanguage = "en-US", gender = "Unknown")
@@ -2170,7 +2176,7 @@ internal fun VoiceSelectionPage(
                     cloudRefreshFailed = true
                     emptyList()
                 }
-                val local = withContext(Dispatchers.Default) { useCase.list() }
+                val local = withContext(Dispatchers.Default) { useCase.listForEngine(ttsEngine) }
                 val allVoices = (fromCloud + local).distinctBy { it.name }
                 if (allVoices.isEmpty() && cloudRefreshFailed) {
                     error("No cached voices were available after refresh failed")
@@ -2226,8 +2232,20 @@ internal fun VoiceSelectionPage(
         languageFilteredSystemVoices.filter { voice -> matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter) }
     }
 
-    val filteredAzureVoices = remember(languageFilteredAzureVoices, queryTerms, genderFilter) {
-        languageFilteredAzureVoices.filter { voice -> matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter) }
+    val availableGoogleModels = remember(voices, ttsEngine) {
+        if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+            GoogleVoiceModel.entries.filter { model -> voices.any { it.resolvedGoogleModel() == model } }
+        } else emptyList()
+    }
+    LaunchedEffect(availableGoogleModels, googleModelFilter) {
+        if (googleModelFilter != null && googleModelFilter !in availableGoogleModels) googleModelFilter = null
+    }
+
+    val filteredAzureVoices = remember(languageFilteredAzureVoices, queryTerms, genderFilter, googleModelFilter, ttsEngine) {
+        languageFilteredAzureVoices.filter { voice ->
+            matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter) &&
+                (ttsEngine != TtsEngine.GOOGLE_CLOUD || googleModelFilter == null || voice.resolvedGoogleModel() == googleModelFilter)
+        }
     }
 
     val visibleVoiceCount = if (ttsEngine == TtsEngine.SYSTEM) filteredSystemVoices.size else filteredAzureVoices.size
@@ -2278,6 +2296,14 @@ internal fun VoiceSelectionPage(
             }
         )
 
+        if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+            GoogleModelFilterChips(
+                models = availableGoogleModels,
+                selected = googleModelFilter,
+                onSelected = { googleModelFilter = it },
+            )
+        }
+
         Text(
             pluralStringResource(
                 R.plurals.voice_showing_count,
@@ -2302,12 +2328,16 @@ internal fun VoiceSelectionPage(
             }
         } else {
             val filteredVoices = if (ttsEngine == TtsEngine.SYSTEM) filteredSystemVoices else filteredAzureVoices
-            val titleRes = if (ttsEngine == TtsEngine.SYSTEM) {
-                if (selectedLanguage != null) R.string.voice_system_title_with_lang else R.string.voice_system_title
-            } else {
-                if (selectedLanguage != null) R.string.voice_azure_title_with_lang else R.string.voice_azure_title
+            val titleRes = when (ttsEngine) {
+                TtsEngine.SYSTEM -> if (selectedLanguage != null) R.string.voice_system_title_with_lang else R.string.voice_system_title
+                TtsEngine.GOOGLE_CLOUD -> if (selectedLanguage != null) R.string.voice_google_title_with_lang else R.string.voice_google_title
+                else -> if (selectedLanguage != null) R.string.voice_azure_title_with_lang else R.string.voice_azure_title
             }
-            val emptyRes = if (ttsEngine == TtsEngine.SYSTEM) R.string.voice_no_system_match else R.string.voice_no_azure_match
+            val emptyRes = when (ttsEngine) {
+                TtsEngine.SYSTEM -> R.string.voice_no_system_match
+                TtsEngine.GOOGLE_CLOUD -> R.string.voice_no_google_match
+                else -> R.string.voice_no_azure_match
+            }
 
             SettingsGroup(title = stringResource(titleRes, selectedLanguage ?: "")) {
                 if (filteredVoices.isEmpty()) {
@@ -2327,13 +2357,16 @@ internal fun VoiceSelectionPage(
                                 scope.launch {
                                     operationError = null
                                     try {
-                                        useCase.select(v)
-                                        val primary = if (ttsEngine == TtsEngine.SYSTEM) (v.primaryLanguage ?: "") else v.selectedLanguage.ifBlank { v.primaryLanguage ?: "" }
+                                        val voiceToSelect = if (ttsEngine == TtsEngine.SYSTEM) v else {
+                                            v.withPreferredSupportedLanguage(selectedLanguage ?: preferredLanguage)
+                                        }
+                                        useCase.select(voiceToSelect)
+                                        val primary = if (ttsEngine == TtsEngine.SYSTEM) (voiceToSelect.primaryLanguage ?: "") else voiceToSelect.selectedLanguage.ifBlank { voiceToSelect.primaryLanguage ?: "" }
                                         if (primary.isNotBlank() && settingsUseCase != null) {
                                             val current = settingsUseCase.get()
                                             settingsUseCase.update(current.copy(primaryLanguage = primary))
                                         }
-                                        selected = v
+                                        selected = voiceToSelect
                                         onVoiceSelected?.invoke() ?: onBack()
                                     } catch (failure: CancellationException) {
                                         throw failure
@@ -2377,7 +2410,7 @@ internal fun VoiceSelectionPage(
                         } else {
                             useCase.refreshFromAzure()
                         }
-                        voices = (refreshed + useCase.list()).distinctBy { it.name }
+                        voices = (refreshed + useCase.listForEngine(ttsEngine)).distinctBy { it.name }
                         selected = useCase.selected()
                     } catch (failure: CancellationException) {
                         throw failure

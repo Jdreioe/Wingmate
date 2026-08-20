@@ -73,17 +73,20 @@ class VoiceUseCase(
     private val boardSetSpeechCache: BoardSpeechCache? = null,
 ) {
     suspend fun list(): List<Voice> = repo.getVoices()
+    suspend fun listForEngine(engine: TtsEngine): List<Voice> = repo.getVoices().forTtsEngine(engine)
     suspend fun selected(): Voice? = repo.getSelected()
     suspend fun select(voice: Voice) {
         repo.saveSelected(voice)
+        val provider = voice.provider
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.VOICE_SELECTED,
             "provider" to when {
+                provider != null -> provider.name.lowercase()
                 voice.name?.contains("Neural2", ignoreCase = true) == true ||
                     voice.name?.contains("Wavenet", ignoreCase = true) == true ||
                     voice.name?.contains("Chirp", ignoreCase = true) == true ||
                     voice.name?.contains("Journey", ignoreCase = true) == true ||
-                    voice.name?.count { it == '-' }?.let { it >= 3 } == true -> "google"
+                    voice.name?.startsWith("google|") == true -> "google"
                 voice.name?.contains("Neural", ignoreCase = true) == true -> "azure"
                 else -> "system"
             },

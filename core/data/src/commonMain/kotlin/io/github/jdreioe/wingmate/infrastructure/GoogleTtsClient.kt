@@ -2,9 +2,12 @@ package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
+import io.github.jdreioe.wingmate.domain.GoogleVoiceModel
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.VoiceProvider
+import io.github.jdreioe.wingmate.domain.resolvedGoogleModel
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpRedirect
 import io.ktor.client.plugins.pluginOrNull
@@ -62,7 +65,11 @@ object GoogleTtsClient {
         applicationHeaders: GoogleApiRequestHeaders = NoGoogleApiRequestHeaders,
     ): ByteArray = synthesizeInput(
         client = client,
-        input = GoogleSynthesisInput(ssml = segments.toGoogleSsml()),
+        input = if (voice.resolvedGoogleModel()?.apiModelName != null) {
+            GoogleSynthesisInput(text = segments.joinToString(separator = " ") { it.text })
+        } else {
+            GoogleSynthesisInput(ssml = segments.toGoogleSsml())
+        },
         voice = voice,
         config = config,
         applicationHeaders = applicationHeaders,
@@ -109,17 +116,27 @@ object GoogleTtsClient {
         val language = voice.selectedLanguage.takeIf(String::isNotBlank)
             ?: voice.primaryLanguage?.takeIf(String::isNotBlank)
             ?: "en-US"
-        val name = voice.name?.takeIf {
-            it.isNotBlank() && it.startsWith("$language-") && it.count { character -> character == '-' } >= 3
+        val model = voice.resolvedGoogleModel()
+        val isGemini = model?.apiModelName != null
+        val name = if (isGemini) {
+            voice.providerVoiceName?.takeIf(String::isNotBlank)
+        } else {
+            voice.googleProviderVoiceName(language, model) ?: voice.name?.takeIf {
+                it.isNotBlank() && it.startsWith("$language-") && it.count { character -> character == '-' } >= 3
+            }
         }
         val request = GoogleSynthesisRequest(
             input = input,
-            voice = GoogleVoiceSelection(languageCode = language, name = name),
+            voice = GoogleVoiceSelection(
+                languageCode = language,
+                name = name,
+                modelName = model?.apiModelName,
+            ),
             audioConfig = GoogleAudioConfig(
                 audioEncoding = audioEncoding.name,
-                speakingRate = (rate ?: voice.rate ?: 1.0).coerceIn(0.25, 2.0),
+                speakingRate = if (isGemini) null else (rate ?: voice.rate ?: 1.0).coerceIn(0.25, 2.0),
                 // Wingmate stores pitch as a 0..2 multiplier centered at 1. Convert to semitones.
-                pitch = (((pitch ?: voice.pitch ?: 1.0) - 1.0) * 12.0).coerceIn(-20.0, 20.0),
+                pitch = if (isGemini) null else (((pitch ?: voice.pitch ?: 1.0) - 1.0) * 12.0).coerceIn(-20.0, 20.0),
             ),
         )
         val response: HttpResponse = client.post(SYNTHESIS_URL) {
@@ -156,11 +173,24 @@ object GoogleTtsClient {
     private fun googleFailure(operation: String, status: Int): IllegalStateException =
         IllegalStateException(
             when (status) {
-                400, 401, 403 -> "Google Cloud could not $operation. Check the API key, project, and Text-to-Speech API access."
+                400, 401, 403 -> "Google Cloud could not $operation. Check the API key, project, API access, and required IAM permissions."
                 429 -> "Google Cloud Text-to-Speech quota was exceeded. Try again later."
                 else -> "Google Cloud could not $operation (HTTP $status)."
             },
         )
+}
+
+private fun Voice.googleProviderVoiceName(language: String, model: GoogleVoiceModel?): String? {
+    val speaker = providerVoiceName?.takeIf(String::isNotBlank) ?: return null
+    return when (model) {
+        GoogleVoiceModel.CHIRP_3_HD -> "$language-Chirp3-HD-$speaker"
+        GoogleVoiceModel.STUDIO -> "$language-Studio-$speaker"
+        GoogleVoiceModel.NEURAL2 -> "$language-Neural2-$speaker"
+        GoogleVoiceModel.WAVENET -> "$language-Wavenet-$speaker"
+        GoogleVoiceModel.STANDARD -> "$language-Standard-$speaker"
+        GoogleVoiceModel.OTHER -> speaker
+        else -> speaker
+    }
 }
 
 /** Platform identity headers required by Google application-restricted API keys. */
@@ -183,13 +213,17 @@ private data class GoogleSynthesisRequest(
 private data class GoogleSynthesisInput(val text: String? = null, val ssml: String? = null)
 
 @Serializable
-private data class GoogleVoiceSelection(val languageCode: String, val name: String? = null)
+private data class GoogleVoiceSelection(
+    val languageCode: String,
+    val name: String? = null,
+    val modelName: String? = null,
+)
 
 @Serializable
 private data class GoogleAudioConfig(
     val audioEncoding: String,
-    val speakingRate: Double,
-    val pitch: Double,
+    val speakingRate: Double? = null,
+    val pitch: Double? = null,
 )
 
 @Serializable
@@ -213,6 +247,16 @@ private data class GoogleVoiceDto(
         gender = gender.removePrefix("SSML_VOICE_GENDER_"),
         pitch = 1.0,
         rate = 1.0,
+        provider = VoiceProvider.GOOGLE,
+        googleModel = when {
+            name.contains("-Chirp3-HD-", ignoreCase = true) -> GoogleVoiceModel.CHIRP_3_HD
+            name.contains("-Studio-", ignoreCase = true) -> GoogleVoiceModel.STUDIO
+            name.contains("-Neural2-", ignoreCase = true) -> GoogleVoiceModel.NEURAL2
+            name.contains("-Wavenet-", ignoreCase = true) -> GoogleVoiceModel.WAVENET
+            name.contains("-Standard-", ignoreCase = true) -> GoogleVoiceModel.STANDARD
+            else -> GoogleVoiceModel.OTHER
+        },
+        providerVoiceName = name,
     )
 }
 

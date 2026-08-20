@@ -424,7 +424,7 @@
 "settings.speech.google.setup.create_key" = "Opret en API-nøgle";
 "settings.speech.google.setup.have_created_key" = "Jeg har oprettet nøglen";
 "settings.speech.google.setup.key_title" = "Begræns og tilføj nøglen";
-"settings.speech.google.setup.restrict_api" = "Begræns nøglen til Cloud Text-to-Speech API. Du kan også anvende begrænsningen til iOS-apps med dette bundle-id:";
+"settings.speech.google.setup.restrict_api" = "Begræns nøglen til Cloud Text-to-Speech API. Gemini-modeller kræver desuden en autorisationsnøgle, der er knyttet til en tjenestekonto med Vertex AI User. Du kan også anvende begrænsningen til iOS-apps med dette bundle-id:";
 "settings.speech.google.setup.ios_restriction" = "Bundle-id: %@";
 "settings.speech.google.setup.save_validate" = "Gem sikkert og bekræft";
 "settings.speech.google.setup.validation_failed" = "Wingmate kunne ikke bekræfte nøglen. Kontrollér nøgle, forbindelse, fakturering, API-adgang og begrænsninger. Din tidligere opsætning er bevaret.";
@@ -542,3 +542,15 @@
 "boardset.cell.action.speak" = "Læs sætningen op";
 "boardset.cell.action.prediction" = "Ordforslag";
 "playback.fullscreen" = "Vis på fuld skærm";
+"voice.model.label" = "Model";
+"voice.model.all" = "Alle modeller";
+"voice.model.gemini_3_1_flash" = "Gemini 3.1 Flash";
+"voice.model.gemini_2_5_flash" = "Gemini 2.5 Flash";
+"voice.model.gemini_2_5_flash_lite" = "Gemini 2.5 Flash Lite";
+"voice.model.gemini_2_5_pro" = "Gemini 2.5 Pro";
+"voice.model.chirp_3_hd" = "Chirp 3 HD";
+"voice.model.studio" = "Studio";
+"voice.model.neural2" = "Neural2";
+"voice.model.wavenet" = "WaveNet";
+"voice.model.standard" = "Standard";
+"voice.model.other" = "Andre";

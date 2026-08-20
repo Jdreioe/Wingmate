@@ -4,6 +4,7 @@ import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.loggingClassName
+import io.github.jdreioe.wingmate.domain.toGoogleVoiceCatalog
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
@@ -20,7 +21,7 @@ class GoogleVoiceCatalog(
 
     suspend fun list(): List<Voice> = try {
         val config = configRepo.getGoogleSpeechConfig() ?: return emptyList()
-        GoogleTtsClient.getVoices(client, config, applicationHeaders)
+        GoogleTtsClient.getVoices(client, config, applicationHeaders).toGoogleVoiceCatalog()
     } catch (error: Throwable) {
         OperationalLogger.warn(
             operation = "google_voice_catalog.load",

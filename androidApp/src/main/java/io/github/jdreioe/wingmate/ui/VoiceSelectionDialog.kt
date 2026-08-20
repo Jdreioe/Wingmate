@@ -1,6 +1,8 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +17,9 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.GoogleVoiceModel
+import io.github.jdreioe.wingmate.domain.resolvedGoogleModel
+import io.github.jdreioe.wingmate.domain.withPreferredSupportedLanguage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
@@ -47,6 +52,8 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
     var showGenderFilter by remember { mutableStateOf(false) }
     var voiceSearch by remember { mutableStateOf("") }
     var genderFilter by remember { mutableStateOf<String?>(null) }
+    var googleModelFilter by remember { mutableStateOf<GoogleVoiceModel?>(null) }
+    var preferredLanguage by remember { mutableStateOf<String?>(null) }
     var retryKey by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     val voiceLoadFailed = stringResource(R.string.voice_load_failed)
@@ -61,6 +68,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
             val settings = checkNotNull(settingsUseCase) { "Settings are unavailable" }
                 .let { withContext(Dispatchers.Default) { it.get() } }
             ttsEngine = settings.ttsEngine
+            preferredLanguage = settings.primaryLanguage
             if (ttsEngine == TtsEngine.SYSTEM) {
                 // Load system voices
                 val allSystemVoices = systemVoiceProvider?.getSystemVoices() ?: listOf(
@@ -95,7 +103,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                     cloudRefreshFailed = true
                     emptyList()
                 }
-                val local = withContext(Dispatchers.Default) { useCase.list() }
+                val local = withContext(Dispatchers.Default) { useCase.listForEngine(ttsEngine) }
                 val allVoices = (fromCloud + local).distinctBy { it.name }
                 if (allVoices.isEmpty() && cloudRefreshFailed) {
                     error("No cached voices were available after refresh failed")
@@ -166,9 +174,19 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
         }
     }
 
-    val filteredAzureVoices = remember(languageFilteredAzureVoices, queryTerms, genderFilter) {
+    val availableGoogleModels = remember(voices, ttsEngine) {
+        if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+            GoogleVoiceModel.entries.filter { model -> voices.any { it.resolvedGoogleModel() == model } }
+        } else emptyList()
+    }
+    LaunchedEffect(availableGoogleModels, googleModelFilter) {
+        if (googleModelFilter != null && googleModelFilter !in availableGoogleModels) googleModelFilter = null
+    }
+
+    val filteredAzureVoices = remember(languageFilteredAzureVoices, queryTerms, genderFilter, googleModelFilter, ttsEngine) {
         languageFilteredAzureVoices.filter { voice ->
-            matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter)
+            matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter) &&
+                (ttsEngine != TtsEngine.GOOGLE_CLOUD || googleModelFilter == null || voice.resolvedGoogleModel() == googleModelFilter)
         }
     }
 
@@ -292,6 +310,15 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                         }
                     }
 
+                    if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+                        GoogleModelFilterChips(
+                            models = availableGoogleModels,
+                            selected = googleModelFilter,
+                            onSelected = { googleModelFilter = it },
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+
                     Text(
                         text = pluralStringResource(
                             R.plurals.voice_showing_count,
@@ -375,12 +402,19 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                         }
                     }
                 } else {
-                    // Show Azure voices
+                    // Show the active cloud provider's voices.
                     Text(
                         text = if (selectedLanguage != null) {
-                            stringResource(R.string.voice_azure_title_with_lang, selectedLanguage ?: "")
+                            stringResource(
+                                if (ttsEngine == TtsEngine.GOOGLE_CLOUD) R.string.voice_google_title_with_lang
+                                else R.string.voice_azure_title_with_lang,
+                                selectedLanguage ?: "",
+                            )
                         } else {
-                            stringResource(R.string.voice_azure_title)
+                            stringResource(
+                                if (ttsEngine == TtsEngine.GOOGLE_CLOUD) R.string.voice_google_title
+                                else R.string.voice_azure_title,
+                            )
                         },
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(bottom = 8.dp)
@@ -388,7 +422,10 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                     
                     if (filteredAzureVoices.isEmpty()) {
                         Text(
-                            stringResource(R.string.voice_no_azure_match),
+                            stringResource(
+                                if (ttsEngine == TtsEngine.GOOGLE_CLOUD) R.string.voice_no_google_match
+                                else R.string.voice_no_azure_match,
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(16.dp)
@@ -402,15 +439,18 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                                         scope.launch {
                                             operationError = null
                                             try {
-                                                useCase.select(v)
+                                                val voiceToSelect = v.withPreferredSupportedLanguage(
+                                                    selectedLanguage ?: preferredLanguage,
+                                                )
+                                                useCase.select(voiceToSelect)
                                                 // also persist UI primary language when selecting a voice
-                                                val primary = v.selectedLanguage.ifBlank { v.primaryLanguage ?: "" }
+                                                val primary = voiceToSelect.selectedLanguage.ifBlank { voiceToSelect.primaryLanguage ?: "" }
                                                 if (primary.isNotBlank() && settingsUseCase != null) {
                                                     val current = settingsUseCase.get()
                                                     val updated = current.copy(primaryLanguage = primary)
                                                     settingsUseCase.update(updated)
                                                 }
-                                                selected = v
+                                                selected = voiceToSelect
                                                 onDismiss()
                                             } catch (failure: CancellationException) {
                                                 throw failure
@@ -469,7 +509,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                         } else {
                             useCase.refreshFromAzure()
                         }
-                        voices = (refreshed + useCase.list()).distinctBy { it.name }
+                        voices = (refreshed + useCase.listForEngine(ttsEngine)).distinctBy { it.name }
                         selected = useCase.selected()
                     } catch (failure: CancellationException) {
                         throw failure
@@ -482,6 +522,47 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
         )
     }
 }
+
+@Composable
+internal fun GoogleModelFilterChips(
+    models: List<GoogleVoiceModel>,
+    selected: GoogleVoiceModel?,
+    onSelected: (GoogleVoiceModel?) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(
+            selected = selected == null,
+            onClick = { onSelected(null) },
+            label = { Text(stringResource(R.string.voice_model_all)) },
+        )
+        models.forEach { model ->
+            FilterChip(
+                selected = selected == model,
+                onClick = { onSelected(model) },
+                label = { Text(googleVoiceModelLabel(model)) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun googleVoiceModelLabel(model: GoogleVoiceModel): String = stringResource(
+    when (model) {
+        GoogleVoiceModel.GEMINI_3_1_FLASH -> R.string.voice_model_gemini_3_1_flash
+        GoogleVoiceModel.GEMINI_2_5_FLASH -> R.string.voice_model_gemini_2_5_flash
+        GoogleVoiceModel.GEMINI_2_5_FLASH_LITE -> R.string.voice_model_gemini_2_5_flash_lite
+        GoogleVoiceModel.GEMINI_2_5_PRO -> R.string.voice_model_gemini_2_5_pro
+        GoogleVoiceModel.CHIRP_3_HD -> R.string.voice_model_chirp_3_hd
+        GoogleVoiceModel.STUDIO -> R.string.voice_model_studio
+        GoogleVoiceModel.NEURAL2 -> R.string.voice_model_neural2
+        GoogleVoiceModel.WAVENET -> R.string.voice_model_wavenet
+        GoogleVoiceModel.STANDARD -> R.string.voice_model_standard
+        GoogleVoiceModel.OTHER -> R.string.voice_model_other
+    },
+)
 
 internal fun matchesVoiceFilters(
     voice: Voice,

@@ -21,6 +21,9 @@ import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.GoogleVoiceModel
+import io.github.jdreioe.wingmate.domain.resolvedGoogleModel
+import io.github.jdreioe.wingmate.domain.withPreferredSupportedLanguage
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -44,6 +47,8 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
     var selectedLanguageFilter by remember { mutableStateOf<String?>(null) }
     var supportedLanguages by remember { mutableStateOf<List<String>>(emptyList()) }
     var showLanguageFilter by remember { mutableStateOf(false) }
+    var googleModelFilter by remember { mutableStateOf<GoogleVoiceModel?>(null) }
+    var preferredLanguage by remember { mutableStateOf<String?>(null) }
     var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     val scope = rememberCoroutineScope()
 
@@ -54,6 +59,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                 runCatching { settingsUseCase.get() }.getOrNull()
             }
             ttsEngine = settings?.ttsEngine ?: TtsEngine.SYSTEM
+            preferredLanguage = settings?.primaryLanguage
         }
 
         // If using system TTS, skip voice loading and go straight to next
@@ -76,7 +82,7 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
             }
             
             val local = try {
-                withContext(Dispatchers.IO) { useCase.list() }
+                withContext(Dispatchers.IO) { useCase.listForEngine(ttsEngine) }
             } catch (e: Exception) {
                 OperationalLogger.warn("voice_catalog.load", "failed", exceptionClass = e.loggingClassName())
                 emptyList()
@@ -290,14 +296,20 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
         } else if (error != null) {
             Text(stringResource(R.string.voice_error, error ?: ""))
         } else {
-            // Filter Azure voices based on selected language
-            val filteredAzureVoices = if (selectedLanguageFilter != null) {
+            val availableGoogleModels = if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+                GoogleVoiceModel.entries.filter { model -> voices.any { it.resolvedGoogleModel() == model } }
+            } else emptyList()
+            val languageFilteredVoices = if (selectedLanguageFilter != null) {
                 voices.filter { voice ->
                     voice.primaryLanguage == selectedLanguageFilter || 
                     voice.supportedLanguages?.contains(selectedLanguageFilter) == true
                 }
             } else {
                 voices
+            }
+            val filteredAzureVoices = languageFilteredVoices.filter { voice ->
+                ttsEngine != TtsEngine.GOOGLE_CLOUD || googleModelFilter == null ||
+                    voice.resolvedGoogleModel() == googleModelFilter
             }
             
             // Language filter for Azure voices
@@ -360,11 +372,23 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
+
+            if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+                GoogleModelFilterChips(
+                    models = availableGoogleModels,
+                    selected = googleModelFilter,
+                    onSelected = { googleModelFilter = it },
+                )
+                Spacer(Modifier.height(8.dp))
+            }
             
             // Show filtered voices or empty message
-            if (filteredAzureVoices.isEmpty() && selectedLanguageFilter != null) {
+            if (filteredAzureVoices.isEmpty()) {
                 Text(
-                    stringResource(R.string.voice_no_azure_match),
+                    stringResource(
+                        if (ttsEngine == TtsEngine.GOOGLE_CLOUD) R.string.voice_no_google_match
+                        else R.string.voice_no_azure_match,
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp)
@@ -372,9 +396,16 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
             } else {
                 Text(
                     text = if (selectedLanguageFilter != null) {
-                        stringResource(R.string.voice_azure_title_with_lang, selectedLanguageFilter ?: "")
+                        stringResource(
+                            if (ttsEngine == TtsEngine.GOOGLE_CLOUD) R.string.voice_google_title_with_lang
+                            else R.string.voice_azure_title_with_lang,
+                            selectedLanguageFilter ?: "",
+                        )
                     } else {
-                        stringResource(R.string.voice_azure_title)
+                        stringResource(
+                            if (ttsEngine == TtsEngine.GOOGLE_CLOUD) R.string.voice_google_title
+                            else R.string.voice_azure_title,
+                        )
                     },
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -388,11 +419,9 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
                                     scope.launch {
                                         try {
                                             val currentFilter = selectedLanguageFilter
-                                            val voiceToSelect = if (voice.selectedLanguage != currentFilter && currentFilter != null && (voice.primaryLanguage == currentFilter || (voice.supportedLanguages?.contains(currentFilter) == true))) {
-                                                voice.copy(selectedLanguage = currentFilter)
-                                            } else {
-                                                voice
-                                            }
+                                            val voiceToSelect = voice.withPreferredSupportedLanguage(
+                                                currentFilter ?: preferredLanguage,
+                                            )
                                             withContext(Dispatchers.IO) { useCase.select(voiceToSelect) }
                                             OperationalLogger.info("voice_selection.save", "succeeded")
                                             selected = voiceToSelect

@@ -23,6 +23,8 @@ import io.github.jdreioe.wingmate.domain.SpeechPlaybackState
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.VoiceProvider
+import io.github.jdreioe.wingmate.domain.resolvedProvider
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.TtsEngine
@@ -1239,7 +1241,7 @@ class AndroidSpeechService(
         val voiceName = voice?.name
         if (voiceName.isNullOrBlank()) return true
         if (voiceName == "system-default") return true
-        if (voiceName.count { it == '-' } >= 3) return true // Google voice names include a family and variant.
+        if (voice.resolvedProvider() == VoiceProvider.GOOGLE) return true
 
         val parsedVoiceId = AndroidTtsVoiceId.parse(voiceName)
         return parsedVoiceId.enginePackageName != null
@@ -1301,7 +1303,7 @@ class AndroidSpeechService(
     }
 
     private fun normalizeVoiceForGoogle(voice: Voice?, primaryLanguage: String?): Voice {
-        val base = voice ?: Voice()
+        val base = voice?.takeIf { it.resolvedProvider() == VoiceProvider.GOOGLE } ?: Voice()
         val language = base.selectedLanguage.takeIf(String::isNotBlank)
             ?: primaryLanguage?.takeIf(String::isNotBlank)
             ?: base.primaryLanguage?.takeIf(String::isNotBlank)
