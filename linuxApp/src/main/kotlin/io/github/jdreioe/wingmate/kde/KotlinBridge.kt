@@ -19,7 +19,6 @@ import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
-import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
 import io.github.jdreioe.wingmate.domain.TextPredictionService
@@ -66,6 +65,7 @@ import io.github.jdreioe.wingmate.application.AccessInputEffect
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
+import io.github.jdreioe.wingmate.application.SpeechFacade
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.infrastructure.QuickCorePreset
@@ -149,6 +149,7 @@ class KotlinBridge(
     private val settingsManager = SettingsManager()
     private val accessInput = AccessInputController()
     private val configRepository: ConfigRepository by lazy { GlobalContext.get().get() }
+    private val speechFacade: SpeechFacade by lazy { GlobalContext.get().get() }
     private val azureConfigManager = AzureConfigManager()
     private val speechService = LinuxSpeechService()
     private val voiceRepository: VoiceRepository by lazy { GlobalContext.get().get() }
@@ -609,13 +610,17 @@ class KotlinBridge(
                 if (key.isEmpty()) {
                     return@post call.respondText("Enter a Google Cloud API key.", status = HttpStatusCode.BadRequest)
                 }
-                configRepository.saveGoogleSpeechConfig(GoogleSpeechConfig(key))
-                runCatching {
-                    GoogleVoiceCatalog(configRepository).list().takeIf { it.isNotEmpty() }?.let {
-                        voiceRepository.saveVoices(it)
-                    }
+                try {
+                    speechFacade.saveValidatedGoogleSpeechConfig(key)
+                    call.respond(HttpStatusCode.OK)
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (_: Exception) {
+                    call.respondText(
+                        "Wingmate could not verify this key. Check the key, connection, billing, API access, and restrictions. Your previous setup was kept.",
+                        status = HttpStatusCode.BadRequest,
+                    )
                 }
-                call.respond(HttpStatusCode.OK)
             }
 
             delete("/api/google-config") {

@@ -17,14 +17,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.BackupRestoreResult
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.application.SettingsUseCase
-import io.github.jdreioe.wingmate.application.SpeechFacade
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
@@ -379,7 +377,7 @@ fun WelcomeScreen(
             onBack = { step = 7 },
             onContinue = { onComplete(startupMode, createScreenOnComplete, analyticsEnabled) }
         )
-        9 -> GoogleTtsWelcomeSetupScreen(
+        9 -> GoogleTtsSetupScreen(
             onDone = {
                 voiceSelectorSetupStep = 9
                 step = 6
@@ -418,121 +416,6 @@ fun WelcomeScreen(
                 }
             }
         )
-    }
-}
-
-@Composable
-private fun GoogleTtsWelcomeSetupScreen(
-    onDone: () -> Unit,
-    onBack: () -> Unit,
-) {
-    val koin = getKoin()
-    val speechFacade = remember(koin) { koin.get<SpeechFacade>() }
-    val scope = rememberCoroutineScope()
-    var apiKey by remember { mutableStateOf("") }
-    var credentialConfigured by remember { mutableStateOf(false) }
-    var replacingCredential by remember { mutableStateOf(false) }
-    var loading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    val voiceLoadFailed = stringResource(R.string.google_tts_voice_load_failed)
-
-    LaunchedEffect(speechFacade) {
-        credentialConfigured = withContext(Dispatchers.Default) {
-            runCatching { speechFacade.getGoogleSpeechConfig().credentialConfigured }.getOrDefault(false)
-        }
-        loading = false
-    }
-
-    fun continueWithGoogle(saveKey: Boolean) {
-        scope.launch {
-            loading = true
-            errorMessage = null
-            try {
-                val voices = withContext(Dispatchers.Default) {
-                    if (saveKey) speechFacade.saveGoogleSpeechConfig(apiKey)
-                    speechFacade.refreshVoicesFromGoogle()
-                }
-                if (voices.isEmpty()) {
-                    errorMessage = voiceLoadFailed
-                } else {
-                    apiKey = ""
-                    credentialConfigured = true
-                    replacingCredential = false
-                    onDone()
-                }
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (_: Exception) {
-                errorMessage = voiceLoadFailed
-            } finally {
-                loading = false
-            }
-        }
-    }
-
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(stringResource(R.string.ui_settings_google_tts), style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(12.dp))
-            Text(
-                stringResource(R.string.google_tts_api_key_help),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(24.dp))
-
-            if (loading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-            } else if (credentialConfigured && !replacingCredential) {
-                Text(stringResource(R.string.google_tts_configured), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = { replacingCredential = true },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.google_tts_replace_key))
-                }
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = { continueWithGoogle(saveKey = false) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.common_continue))
-                }
-            } else {
-                OutlinedTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
-                    label = { Text(stringResource(R.string.google_tts_api_key)) },
-                    visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(12.dp))
-                Button(
-                    onClick = { continueWithGoogle(saveKey = true) },
-                    enabled = apiKey.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.common_save))
-                }
-            }
-
-            errorMessage?.let {
-                Spacer(Modifier.height(12.dp))
-                Text(it, color = MaterialTheme.colorScheme.error)
-            }
-            Spacer(Modifier.height(12.dp))
-            TextButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text(stringResource(R.string.common_back))
-            }
-        }
     }
 }
 

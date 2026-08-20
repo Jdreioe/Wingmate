@@ -470,7 +470,7 @@ final class IosViewModel: ObservableObject {
     }
 
     func saveGoogleApiKey(_ apiKey: String) async throws {
-        try await speechFacade.saveGoogleSpeechConfig(apiKey: apiKey)
+        _ = try await speechFacade.saveValidatedGoogleSpeechConfig(apiKey: apiKey)
         await refreshGoogleConfiguration()
         setTtsEngine("GOOGLE_CLOUD")
     }

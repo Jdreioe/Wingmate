@@ -23,6 +23,10 @@ mod i18n;
 
 const DEFAULT_API_URL: &str = "http://127.0.0.1:8765";
 const WINGMATE_APP_ID: &str = "com.hojmoseit.wingmate";
+const GOOGLE_CLOUD_BILLING_URL: &str = "https://console.cloud.google.com/billing";
+const GOOGLE_TTS_API_URL: &str =
+    "https://console.cloud.google.com/apis/library/texttospeech.googleapis.com";
+const GOOGLE_API_CREDENTIALS_URL: &str = "https://console.cloud.google.com/apis/credentials";
 const APP_ICON_PNG: &[u8] =
     include_bytes!("../icons/hicolor/192x192/apps/com.hojmoseit.wingmate.png");
 const DESKTOP_ENTRY: &str = include_str!("../com.hojmoseit.wingmate.desktop");
@@ -962,6 +966,7 @@ enum Message {
     ClearGoogleCredentials,
     SaveGoogleConfig,
     GoogleConfigSaved(Result<(), String>),
+    OpenGoogleSetupUrl(&'static str),
     PrimaryLanguageChanged(String),
     SecondaryLanguageChanged(String),
     AppearanceChanged(String),
@@ -2135,9 +2140,27 @@ impl cosmic::Application for Wingmate {
                     self.replacing_google_credentials = false;
                     self.google_key.clear();
                     self.status = fl!("status-ready");
+                    return Task::batch([
+                        self.api.load_settings().map(cosmic::Action::App),
+                        self.api.load_voices().map(cosmic::Action::App),
+                    ]);
                 }
                 Err(error) => self.status = error,
             },
+            Message::OpenGoogleSetupUrl(url) => {
+                return Task::perform(
+                    async move {
+                        let uri = url::Url::parse(url).map_err(|error| error.to_string())?;
+                        cosmic::dialog::ashpd::desktop::open_uri::OpenFileRequest::default()
+                            .send_uri(&uri)
+                            .await
+                            .map(|_| ())
+                            .map_err(|error| error.to_string())
+                    },
+                    Message::ActionFinished,
+                )
+                .map(cosmic::Action::App);
+            }
             Message::PrimaryLanguageChanged(language) => {
                 self.settings.primary_language = language.clone();
                 self.settings.language = language.clone();
@@ -3978,37 +4001,73 @@ impl Wingmate {
         .into()
     }
 
+    fn google_tts_setup_view(&self, allow_clear: bool) -> Element<'_, Message> {
+        if self.google_credential_configured && !self.replacing_google_credentials {
+            let clear: Element<'_, Message> = if allow_clear {
+                labeled_icon_button(
+                    "edit-delete-symbolic",
+                    fl!("speech-google-clear"),
+                    Message::ClearGoogleCredentials,
+                )
+            } else {
+                Space::new().into()
+            };
+            return column![
+                text(fl!("speech-google-configured")),
+                row![
+                    labeled_icon_button(
+                        "document-edit-symbolic",
+                        fl!("speech-google-replace"),
+                        Message::ReplaceGoogleCredentials,
+                    ),
+                    clear,
+                ]
+                .spacing(8),
+            ]
+            .spacing(8)
+            .into();
+        }
+
+        column![
+            text(fl!("speech-google-guide-title")).size(18),
+            text(fl!("speech-google-guide-steps")),
+            row![
+                labeled_icon_button(
+                    "applications-internet-symbolic",
+                    fl!("speech-google-open-billing"),
+                    Message::OpenGoogleSetupUrl(GOOGLE_CLOUD_BILLING_URL),
+                ),
+                labeled_icon_button(
+                    "emblem-default-symbolic",
+                    fl!("speech-google-enable-api"),
+                    Message::OpenGoogleSetupUrl(GOOGLE_TTS_API_URL),
+                ),
+            ]
+            .spacing(8),
+            labeled_icon_button(
+                "dialog-password-symbolic",
+                fl!("speech-google-create-key"),
+                Message::OpenGoogleSetupUrl(GOOGLE_API_CREDENTIALS_URL),
+            ),
+            text(fl!("speech-google-desktop-restriction")).size(13),
+            text_input(&fl!("speech-google-key"), &self.google_key)
+                .on_input(Message::GoogleKeyChanged)
+                .secure(true)
+                .padding(12),
+            text(fl!("speech-google-secure-storage")).size(13),
+            labeled_icon_button(
+                "document-save-symbolic",
+                fl!("speech-google-save-validate"),
+                Message::SaveGoogleConfig,
+            ),
+        ]
+        .spacing(8)
+        .into()
+    }
+
     fn welcome_view(&self) -> Element<'_, Message> {
         let speech_credentials: Element<'_, Message> = match self.settings.tts_engine.as_str() {
-            "GOOGLE_CLOUD" => {
-                if self.google_credential_configured && !self.replacing_google_credentials {
-                    column![
-                        text(fl!("speech-google-configured")),
-                        labeled_icon_button(
-                            "document-edit-symbolic",
-                            fl!("speech-google-replace"),
-                            Message::ReplaceGoogleCredentials,
-                        ),
-                    ]
-                    .spacing(8)
-                    .into()
-                } else {
-                    column![
-                        text_input(&fl!("speech-google-key"), &self.google_key)
-                            .on_input(Message::GoogleKeyChanged)
-                            .secure(true)
-                            .padding(12),
-                        text(fl!("speech-google-help")).size(13),
-                        labeled_icon_button(
-                            "document-save-symbolic",
-                            fl!("speech-google-save"),
-                            Message::SaveGoogleConfig,
-                        ),
-                    ]
-                    .spacing(8)
-                    .into()
-                }
-            }
+            "GOOGLE_CLOUD" => self.google_tts_setup_view(false),
             "AZURE_USER_RESOURCE" | "AZURE_MANAGED" => {
                 if self.azure_credential_configured && !self.replacing_azure_credentials {
                     column![
@@ -5291,42 +5350,7 @@ impl Wingmate {
                 .spacing(6)
                 .into()
             };
-        let google_credentials: Element<'_, Message> =
-            if self.google_credential_configured && !self.replacing_google_credentials {
-                column![
-                    text(fl!("speech-google-configured")),
-                    row![
-                        labeled_icon_button(
-                            "document-edit-symbolic",
-                            fl!("speech-google-replace"),
-                            Message::ReplaceGoogleCredentials,
-                        ),
-                        labeled_icon_button(
-                            "edit-delete-symbolic",
-                            fl!("speech-google-clear"),
-                            Message::ClearGoogleCredentials,
-                        ),
-                    ]
-                    .spacing(8),
-                ]
-                .spacing(6)
-                .into()
-            } else {
-                column![
-                    text_input(&fl!("speech-google-key"), &self.google_key)
-                        .on_input(Message::GoogleKeyChanged)
-                        .secure(true)
-                        .padding(12),
-                    text(fl!("speech-google-help")).size(13),
-                    labeled_icon_button(
-                        "document-save-symbolic",
-                        fl!("speech-google-save"),
-                        Message::SaveGoogleConfig,
-                    ),
-                ]
-                .spacing(6)
-                .into()
-            };
+        let google_credentials = self.google_tts_setup_view(true);
 
         scrollable(
             column![

@@ -300,13 +300,25 @@ private struct SpeechSettingsView: View {
     }
 }
 
+private enum GoogleTtsSetupStep {
+    case welcome
+    case cloudProject
+    case apiKey
+    case success
+}
+
 struct GoogleTtsSetupView: View {
     @ObservedObject var model: IosViewModel
     let onClose: () -> Void
     let onSaved: (() -> Void)?
+    @State private var step = GoogleTtsSetupStep.welcome
     @State private var apiKey = ""
     @State private var saving = false
     @State private var errorMessage: String?
+
+    private let billingURL = URL(string: "https://console.cloud.google.com/billing")!
+    private let apiURL = URL(string: "https://console.cloud.google.com/apis/library/texttospeech.googleapis.com")!
+    private let credentialsURL = URL(string: "https://console.cloud.google.com/apis/credentials")!
 
     init(model: IosViewModel, onClose: @escaping () -> Void, onSaved: (() -> Void)? = nil) {
         self.model = model
@@ -317,50 +329,125 @@ struct GoogleTtsSetupView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    if model.googleConfigured {
-                        Label("settings.speech.google.configured", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                switch step {
+                case .welcome:
+                    Section {
+                        Text("settings.speech.google.setup.welcome_description")
+                        Button {
+                            step = .cloudProject
+                        } label: {
+                            Label("settings.speech.google.setup.guided", systemImage: "list.number")
+                        }
+                        Button("settings.speech.google.setup.have_key") {
+                            step = .apiKey
+                        }
+                        if model.googleConfigured {
+                            Label("settings.speech.google.configured", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                            Button("common.continue", action: onClose)
+                        }
+                    } header: {
+                        Text("settings.speech.google.setup.welcome_title")
                     }
-                    SecureField("settings.speech.google.api_key", text: $apiKey)
-                        .textContentType(.password)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                    Text("settings.speech.google.help")
+
+                case .cloudProject:
+                    Section {
+                        Text("settings.speech.google.setup.cloud_steps")
+                        Link(destination: billingURL) {
+                            Label("settings.speech.google.setup.billing", systemImage: "creditcard")
+                        }
+                        Link(destination: apiURL) {
+                            Label("settings.speech.google.setup.enable_api", systemImage: "checkmark.circle")
+                        }
+                        Link(destination: credentialsURL) {
+                            Label("settings.speech.google.setup.create_key", systemImage: "key")
+                        }
+                        Button("settings.speech.google.setup.have_created_key") {
+                            step = .apiKey
+                        }
+                    } header: {
+                        Text("settings.speech.google.setup.cloud_title")
+                    }
+
+                case .apiKey:
+                    Section {
+                        Text("settings.speech.google.setup.restrict_api")
+                        Text(
+                            String(
+                                format: NSLocalizedString("settings.speech.google.setup.ios_restriction", comment: ""),
+                                Bundle.main.bundleIdentifier ?? "—"
+                            )
+                        )
+                        .textSelection(.enabled)
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
-                    Button("common.save") {
-                        Task {
-                            saving = true
-                            defer { saving = false }
-                            do {
-                                try await model.saveGoogleApiKey(apiKey)
-                                apiKey = ""
-                                onSaved?()
-                                onClose()
-                            } catch {
-                                errorMessage = NSLocalizedString("settings.speech.google.save_failed", comment: "")
+                        Text("settings.speech.google.help")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        SecureField("settings.speech.google.api_key", text: $apiKey)
+                            .textContentType(.password)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                        if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+                        Button("settings.speech.google.setup.save_validate") {
+                            Task {
+                                saving = true
+                                errorMessage = nil
+                                defer { saving = false }
+                                do {
+                                    try await model.saveGoogleApiKey(apiKey)
+                                    apiKey = ""
+                                    step = .success
+                                    onSaved?()
+                                } catch {
+                                    errorMessage = NSLocalizedString("settings.speech.google.setup.validation_failed", comment: "")
+                                }
                             }
                         }
+                        .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
+                    } header: {
+                        Text("settings.speech.google.setup.key_title")
                     }
-                    .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
 
                     if model.googleConfigured {
-                        Button("settings.speech.google.clear", role: .destructive) {
-                            Task {
-                                do {
-                                    try await model.clearGoogleApiKey()
-                                } catch {
-                                    errorMessage = NSLocalizedString("settings.speech.google.clear_failed", comment: "")
+                        Section {
+                            Button("settings.speech.google.clear", role: .destructive) {
+                                Task {
+                                    do {
+                                        try await model.clearGoogleApiKey()
+                                    } catch {
+                                        errorMessage = NSLocalizedString("settings.speech.google.clear_failed", comment: "")
+                                    }
                                 }
                             }
                         }
                     }
+
+                case .success:
+                    Section {
+                        Label("settings.speech.google.setup.complete_title", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text("settings.speech.google.setup.complete_description")
+                        Button("common.continue", action: onClose)
+                    }
                 }
             }
             .navigationTitle(Text("settings.speech.google.configure"))
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("category.close", action: onClose) } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        switch step {
+                        case .welcome:
+                            onClose()
+                        case .cloudProject, .apiKey:
+                            step = .welcome
+                        case .success:
+                            onClose()
+                        }
+                    } label: {
+                        Text(LocalizedStringKey(step == .welcome ? "common.cancel" : "common.back"))
+                    }
+                }
+            }
         }
     }
 }

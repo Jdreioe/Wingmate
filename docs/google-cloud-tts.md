@@ -6,13 +6,19 @@ through a Wingmate server.
 
 ## Setup
 
-1. Create or select a Google Cloud project with billing configured.
-2. Enable the Cloud Text-to-Speech API.
-3. Create an API key and restrict its API access to Cloud Text-to-Speech.
-4. On Android or iOS, add the matching Android application or iOS bundle
-   restriction. Wingmate supplies the required application identity headers.
-5. In Wingmate, open Settings → Speech, select Google, and enter the key.
-6. Open voice selection and refresh the catalog.
+Wingmate's Welcome flow and Settings → Speech both provide the same guided
+setup. It links directly to the relevant Google Cloud pages and walks through:
+
+1. Creating or selecting a Google Cloud project with billing configured.
+2. Enabling the Cloud Text-to-Speech API.
+3. Creating an API key and restricting its API access to Cloud Text-to-Speech.
+4. On Android or iOS, adding the application restriction shown by Wingmate.
+   Wingmate supplies the matching application identity headers on requests.
+5. Pasting the key into Wingmate and choosing **Save securely and verify**.
+
+Wingmate verifies the candidate by loading the Google voice catalog before it
+switches speech engines. If verification fails, the candidate is removed and
+the previous credential and engine selection are restored.
 
 Google recommends both API and application restrictions. A locally installed
 Linux desktop application cannot strongly protect a client-side key with an

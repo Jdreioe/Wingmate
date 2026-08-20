@@ -25,7 +25,6 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
@@ -43,7 +42,6 @@ import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
-import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.Voice
@@ -79,6 +77,7 @@ private sealed class SettingsSpeechSubPage {
     object VoiceSelection : SettingsSpeechSubPage()
     object LanguageSelection : SettingsSpeechSubPage()
     object F0Setup : SettingsSpeechSubPage()
+    object GoogleSetup : SettingsSpeechSubPage()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,9 +110,7 @@ fun SettingsScreen(
     var subscriptionKey by remember { mutableStateOf("") }
     var credentialConfigured by remember { mutableStateOf(false) }
     var replacingAzureCredentials by remember { mutableStateOf(false) }
-    var googleApiKey by remember { mutableStateOf("") }
     var googleCredentialConfigured by remember { mutableStateOf(false) }
-    var replacingGoogleCredentials by remember { mutableStateOf(false) }
     var azureEndpointError by remember { mutableStateOf<String?>(null) }
     var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var virtualMic by remember { mutableStateOf(false) }
@@ -321,21 +318,6 @@ fun SettingsScreen(
         }
     }
 
-    LaunchedEffect(googleApiKey, loading, replacingGoogleCredentials) {
-        if (!loading && (!googleCredentialConfigured || replacingGoogleCredentials) && googleApiKey.isNotBlank()) {
-            delay(400)
-            val repository = configRepo ?: return@LaunchedEffect
-            val saved = runCatching {
-                repository.saveGoogleSpeechConfig(GoogleSpeechConfig(googleApiKey))
-            }.isSuccess
-            if (saved) {
-                googleCredentialConfigured = true
-                replacingGoogleCredentials = false
-                googleApiKey = ""
-            }
-        }
-    }
-
     fun closeSettings() {
         onSaved?.invoke()
         onDismiss()
@@ -363,6 +345,7 @@ fun SettingsScreen(
                             showPronunciationDictionary -> stringResource(R.string.dictionary_title)
                             speechSubPage is SettingsSpeechSubPage.VoiceSelection -> stringResource(R.string.voice_select_title)
                             speechSubPage is SettingsSpeechSubPage.LanguageSelection -> stringResource(R.string.language_dialog_title)
+                            speechSubPage is SettingsSpeechSubPage.GoogleSetup -> stringResource(R.string.google_setup_title)
                             selectedTab != null -> settingsCategoryTitle(selectedTab!!)
                             else -> stringResource(R.string.ui_settings_title)
                         }
@@ -499,6 +482,20 @@ fun SettingsScreen(
                                             },
                                             onBack = { speechSubPage = null }
                                         )
+                                        SettingsSpeechSubPage.GoogleSetup -> GoogleTtsSetupScreen(
+                                            onDone = {
+                                                ttsEngine = TtsEngine.GOOGLE_CLOUD
+                                                updateSettings { it.copy(ttsEngine = TtsEngine.GOOGLE_CLOUD) }
+                                                scope.launch {
+                                                    googleCredentialConfigured = configRepo
+                                                        ?.getGoogleSpeechConfigStatus()
+                                                        ?.credentialConfigured == true
+                                                }
+                                                speechSubPage = null
+                                            },
+                                            onBack = { speechSubPage = null },
+                                            showNavigation = false,
+                                        )
                                     }
                                 } else {
                                 Column(
@@ -529,21 +526,19 @@ fun SettingsScreen(
                                     replacingAzureCredentials = true
                                     subscriptionKey = ""
                                 },
-                                googleApiKey = googleApiKey,
-                                onGoogleApiKeyChange = { googleApiKey = it },
                                 googleCredentialConfigured = googleCredentialConfigured,
-                                replacingGoogleCredentials = replacingGoogleCredentials,
-                                onReplaceGoogleCredentials = {
-                                    replacingGoogleCredentials = true
-                                    googleApiKey = ""
+                                onOpenGoogleSetup = {
+                                    speechSubPage = SettingsSpeechSubPage.GoogleSetup
+                                    featureUsageReporter?.reportEvent(
+                                        FeatureUsageEvents.SETTINGS_SECTION_OPENED,
+                                        "section" to "google_tts_setup",
+                                    )
                                 },
                                 onClearGoogleCredentials = {
                                     scope.launch {
                                         runCatching { configRepo?.clearGoogleSpeechConfig() }
                                             .onSuccess {
                                                 googleCredentialConfigured = false
-                                                replacingGoogleCredentials = false
-                                                googleApiKey = ""
                                             }
                                     }
                                 },
@@ -1306,11 +1301,8 @@ private fun SpeechSection(
     credentialConfigured: Boolean,
     replacingCredentials: Boolean,
     onReplaceCredentials: () -> Unit,
-    googleApiKey: String,
-    onGoogleApiKeyChange: (String) -> Unit,
     googleCredentialConfigured: Boolean,
-    replacingGoogleCredentials: Boolean,
-    onReplaceGoogleCredentials: () -> Unit,
+    onOpenGoogleSetup: () -> Unit,
     onClearGoogleCredentials: () -> Unit,
     virtualMic: Boolean,
     onVirtualMicChange: (Boolean) -> Unit,
@@ -1368,24 +1360,19 @@ private fun SpeechSection(
                 modifier = Modifier.padding(vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (googleCredentialConfigured && !replacingGoogleCredentials) {
+                if (googleCredentialConfigured) {
                     Text(stringResource(R.string.google_tts_configured))
-                    OutlinedButton(onClick = onReplaceGoogleCredentials) {
+                    OutlinedButton(onClick = onOpenGoogleSetup) {
                         Text(stringResource(R.string.google_tts_replace_key))
                     }
                     TextButton(onClick = onClearGoogleCredentials) {
                         Text(stringResource(R.string.google_tts_clear_key))
                     }
                 } else {
-                    OutlinedTextField(
-                        value = googleApiKey,
-                        onValueChange = onGoogleApiKeyChange,
-                        label = { Text(stringResource(R.string.google_tts_api_key)) },
-                        supportingText = { Text(stringResource(R.string.google_tts_api_key_help)) },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    Text(stringResource(R.string.google_tts_api_key_help))
+                    Button(onClick = onOpenGoogleSetup, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.google_setup_guided_title))
+                    }
                 }
             }
         }

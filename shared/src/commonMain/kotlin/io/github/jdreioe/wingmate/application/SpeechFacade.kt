@@ -12,6 +12,8 @@ import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpoint
 import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpointResult
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /**
  * A feature-scoped native boundary around speech playback, voice selection,
@@ -117,6 +119,42 @@ class SpeechFacade(
     suspend fun saveGoogleSpeechConfig(apiKey: String) {
         configRepository.saveGoogleSpeechConfig(GoogleSpeechConfig(apiKey.trim()))
         settingsUseCase.update(settingsUseCase.get().copy(ttsEngine = TtsEngine.GOOGLE_CLOUD))
+    }
+
+    /**
+     * Securely stores a candidate key only if Google accepts it for voice discovery.
+     * A failed replacement restores the previous credential and engine selection.
+     */
+    suspend fun saveValidatedGoogleSpeechConfig(apiKey: String): List<Voice> =
+        saveValidatedGoogleSpeechConfig(apiKey) { voiceUseCase.refreshFromGoogle() }
+
+    internal suspend fun saveValidatedGoogleSpeechConfig(
+        apiKey: String,
+        refreshVoices: suspend () -> List<Voice>,
+    ): List<Voice> {
+        val normalizedKey = apiKey.trim()
+        require(normalizedKey.isNotEmpty()) { "Google Cloud API key is required" }
+        val previousConfig = configRepository.getGoogleSpeechConfig()
+        val previousSettings = settingsUseCase.get()
+        configRepository.saveGoogleSpeechConfig(GoogleSpeechConfig(normalizedKey))
+        return try {
+            val voices = refreshVoices()
+            check(voices.isNotEmpty()) {
+                "Google Cloud could not load voices. Check the API key, billing, restrictions, and network connection."
+            }
+            settingsUseCase.update(previousSettings.copy(ttsEngine = TtsEngine.GOOGLE_CLOUD))
+            voices
+        } catch (failure: Exception) {
+            withContext(NonCancellable) {
+                if (previousConfig == null) {
+                    configRepository.clearGoogleSpeechConfig()
+                } else {
+                    configRepository.saveGoogleSpeechConfig(previousConfig)
+                }
+                settingsUseCase.update(previousSettings)
+            }
+            throw failure
+        }
     }
 
     suspend fun clearGoogleSpeechConfig() {

@@ -139,6 +139,38 @@ class SpeechFacadeTest {
     }
 
     @Test
+    fun validatedGoogleSetupStoresKeyAndSwitchesOnlyAfterVoicesLoad() = runBlocking {
+        val settings = InMemorySettingsRepository()
+        val config = InMemoryConfigRepository()
+        val facade = facade(settings = settings, config = config)
+        val voice = Voice(name = "en-US-Neural2-A", selectedLanguage = "en-US")
+
+        val voices = facade.saveValidatedGoogleSpeechConfig(" google-secret ") { listOf(voice) }
+
+        assertEquals(listOf(voice), voices)
+        assertEquals("google-secret", config.getGoogleSpeechConfig()?.apiKey)
+        assertEquals(TtsEngine.GOOGLE_CLOUD, settings.get().ttsEngine)
+    }
+
+    @Test
+    fun failedGoogleReplacementRestoresCredentialAndEngine() = runBlocking {
+        val settings = InMemorySettingsRepository().apply {
+            update(get().copy(ttsEngine = TtsEngine.SYSTEM))
+        }
+        val config = InMemoryConfigRepository().apply {
+            saveGoogleSpeechConfig(io.github.jdreioe.wingmate.domain.GoogleSpeechConfig("working-key"))
+        }
+        val facade = facade(settings = settings, config = config)
+
+        assertFailsWith<IllegalStateException> {
+            facade.saveValidatedGoogleSpeechConfig("bad-key") { emptyList() }
+        }
+
+        assertEquals("working-key", config.getGoogleSpeechConfig()?.apiKey)
+        assertEquals(TtsEngine.SYSTEM, settings.get().ttsEngine)
+    }
+
+    @Test
     fun cancellationFromSpeechServiceIsNotSwallowed() = runBlocking {
         val facade = facade(speech = CancellingSpeechService())
 

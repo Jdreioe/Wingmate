@@ -105,7 +105,8 @@ class VoiceUseCase(
 
     suspend fun refreshFromGoogle(): List<Voice> {
         val list = google.list()
-        repo.saveVoices(list)
+        // Keep the last working catalog if validation or refresh fails.
+        if (list.isNotEmpty()) repo.saveVoices(list)
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.VOICE_REFRESHED,
             "provider" to "google",
