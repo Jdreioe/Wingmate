@@ -55,4 +55,46 @@ class VoiceCatalogTest {
         assertEquals(listOf("da-DK", "en-US"), voices.single().supportedLanguages)
         assertEquals("en-US", voices.single().withPreferredSupportedLanguage("en-US").selectedLanguage)
     }
+
+    @Test
+    fun persistedVoiceIsBackfilledWithCatalogMetadata() {
+        val persisted = Voice(name = "en-US-BrianMultilingual", primaryLanguage = "en-US")
+        val catalog = listOf(
+            Voice(
+                name = "en-US-BrianMultilingual",
+                primaryLanguage = "en-US",
+                supportedLanguages = listOf("en-US", "da-DK", "de-DE"),
+                provider = VoiceProvider.AZURE,
+            ),
+        )
+
+        val enriched = persisted.withCatalogMetadata(catalog)
+
+        assertEquals(listOf("en-US", "da-DK", "de-DE"), enriched.supportedLanguages)
+        assertEquals(VoiceProvider.AZURE, enriched.provider)
+        assertEquals("en-US", enriched.primaryLanguage)
+    }
+
+    @Test
+    fun persistedVoiceKeepsOwnMetadataAndIsUntouchedWhenCatalogLacksIt() {
+        val persisted = Voice(
+            name = "en-US-BrianMultilingual",
+            supportedLanguages = listOf("fr-FR"),
+            provider = VoiceProvider.GOOGLE,
+        )
+
+        assertEquals(persisted, persisted.withCatalogMetadata(emptyList()))
+        assertEquals(
+            listOf("fr-FR"),
+            persisted.withCatalogMetadata(
+                listOf(Voice(name = "en-US-BrianMultilingual", supportedLanguages = listOf("da-DK"), provider = VoiceProvider.AZURE)),
+            ).supportedLanguages,
+        )
+        assertEquals(
+            VoiceProvider.GOOGLE,
+            persisted.withCatalogMetadata(
+                listOf(Voice(name = "en-US-BrianMultilingual", supportedLanguages = listOf("da-DK"), provider = VoiceProvider.AZURE)),
+            ).provider,
+        )
+    }
 }

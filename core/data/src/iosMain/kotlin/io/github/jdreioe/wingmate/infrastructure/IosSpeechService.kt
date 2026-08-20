@@ -124,7 +124,7 @@ class IosSpeechService(
                 base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
             }
             if (engine == TtsEngine.SYSTEM) error("System speech is handled by the iOS host")
-            val cacheKey = "${engine.name}|text|$normalizedText|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
+            val cacheKey = "${engine.name}|text|$normalizedText|${effectiveVoice.name}|${effectiveVoice.primaryLanguage}|${effectiveVoice.selectedLanguage}|$pitch|$rate|math=${effectiveVoice.mathMode}"
             val cached = if (cacheAudio) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] } else null
             val audioBytes = cached ?: synthesize(normalizedText, effectiveVoice)
                 ?: error("The selected cloud speech engine is not configured")
@@ -148,7 +148,7 @@ class IosSpeechService(
                 base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
             }
             if (engine == TtsEngine.SYSTEM) error("System speech is handled by the iOS host")
-            val cacheKey = "${engine.name}|segments|${segments.joinToString()}|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
+            val cacheKey = "${engine.name}|segments|${segments.joinToString()}|${effectiveVoice.name}|${effectiveVoice.primaryLanguage}|${effectiveVoice.selectedLanguage}|$pitch|$rate|math=${effectiveVoice.mathMode}"
             val cached = if (cacheAudio) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] } else null
             val audioBytes = cached ?: synthesizeSegments(segments, effectiveVoice)
                 ?: error("The selected cloud speech engine is not configured")
@@ -166,7 +166,7 @@ class IosSpeechService(
         val effectiveVoice = (voice ?: defaultVoice()).forCloudProvider(engine).let { base ->
             base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
         }
-        val cacheKey = "${engine.name}|text|$normalizedText|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
+        val cacheKey = "${engine.name}|text|$normalizedText|${effectiveVoice.name}|${effectiveVoice.primaryLanguage}|${effectiveVoice.selectedLanguage}|$pitch|$rate|math=${effectiveVoice.mathMode}"
         if (sentenceAudioCacheMutex.withLock { cacheKey in sentenceAudioCache }) return true
 
         val request = PendingCache(normalizedText, voice, pitch, rate)
