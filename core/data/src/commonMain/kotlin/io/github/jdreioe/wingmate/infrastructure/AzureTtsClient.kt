@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.VoiceProvider
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
@@ -674,7 +675,8 @@ object AzureTtsClient {
         val Gender: String,
         val Locale: String,
         val LocalName: String? = null,
-        val DisplayName: String? = null
+        val DisplayName: String? = null,
+        val SecondaryLocaleList: List<String> = emptyList(),
     ) {
         fun toDomain(): Voice {
             val display = if (LocalName != null && DisplayName != null) {
@@ -687,7 +689,9 @@ object AzureTtsClient {
                 name = ShortName,
                 displayName = display,
                 primaryLanguage = Locale,
+                supportedLanguages = (listOf(Locale) + SecondaryLocaleList).distinct(),
                 gender = Gender,
+                provider = VoiceProvider.AZURE,
                 // Assume 1.0 default pitch/rate
                 pitch = 1.0, 
                 rate = 1.0

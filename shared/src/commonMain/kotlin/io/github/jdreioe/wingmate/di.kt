@@ -38,6 +38,9 @@ import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.AutoF0FlowUseCase
 import io.github.jdreioe.wingmate.infrastructure.AzureArmClient
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
+import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
+import io.github.jdreioe.wingmate.infrastructure.GoogleApiRequestHeaders
+import io.github.jdreioe.wingmate.infrastructure.NoGoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.DictionaryLoader
 import io.github.jdreioe.wingmate.infrastructure.InMemoryAzureF0Provisioner
 import io.github.jdreioe.wingmate.infrastructure.InMemoryCategoryRepository
@@ -83,6 +86,8 @@ internal fun createCoreDataModule(): Module = module {
         singleOf(::NoopSpeechService) { bind<SpeechService>() } // Android overrides this
         singleOf(::NoopFeatureUsageReporter) { bind<FeatureUsageReporter>() }
         singleOf(::AzureVoiceCatalog)
+        single<GoogleApiRequestHeaders> { NoGoogleApiRequestHeaders }
+        singleOf(::GoogleVoiceCatalog)
         single { DictionaryLoader(getOrNull<io.github.jdreioe.wingmate.domain.FileStorage>()) } // For language dictionary pretraining and caching
         singleOf(::PhraseUseCase)
         singleOf(::CategoryUseCase)

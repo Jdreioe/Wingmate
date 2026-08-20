@@ -6,7 +6,9 @@ import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.VoiceProvider
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
+import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemorySettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryVoiceRepository
@@ -97,6 +99,24 @@ class SpeechFacadeTest {
     }
 
     @Test
+    fun listVoicesOnlyReturnsTheSelectedProvidersCatalog() = runBlocking {
+        val settings = InMemorySettingsRepository().apply {
+            update(get().copy(ttsEngine = TtsEngine.GOOGLE_CLOUD))
+        }
+        val voices = InMemoryVoiceRepository().apply {
+            saveVoices(
+                listOf(
+                    Voice(name = "azure", provider = VoiceProvider.AZURE),
+                    Voice(name = "google", provider = VoiceProvider.GOOGLE),
+                ),
+            )
+        }
+        val facade = facade(settings = settings, voices = voices)
+
+        assertEquals(listOf("google"), facade.listVoices().map { it.name })
+    }
+
+    @Test
     fun savingAzureSpeechConfigPersistsEndpointAndSwitchesToAzureEngine() = runBlocking {
         val settings = InMemorySettingsRepository()
         val config = InMemoryConfigRepository()
@@ -122,6 +142,54 @@ class SpeechFacadeTest {
     }
 
     @Test
+    fun savingGoogleConfigPersistsRedactedStatusAndSwitchesProvider() = runBlocking {
+        val settings = InMemorySettingsRepository()
+        val config = InMemoryConfigRepository()
+        val facade = facade(settings = settings, config = config)
+
+        facade.saveGoogleSpeechConfig(" google-secret ")
+
+        assertEquals("google-secret", config.getGoogleSpeechConfig()?.apiKey)
+        assertTrue(facade.getGoogleSpeechConfig().credentialConfigured)
+        assertEquals(TtsEngine.GOOGLE_CLOUD, settings.get().ttsEngine)
+
+        facade.clearGoogleSpeechConfig()
+        assertEquals(null, config.getGoogleSpeechConfig())
+    }
+
+    @Test
+    fun validatedGoogleSetupStoresKeyAndSwitchesOnlyAfterVoicesLoad() = runBlocking {
+        val settings = InMemorySettingsRepository()
+        val config = InMemoryConfigRepository()
+        val facade = facade(settings = settings, config = config)
+        val voice = Voice(name = "en-US-Neural2-A", selectedLanguage = "en-US")
+
+        val voices = facade.saveValidatedGoogleSpeechConfig(" google-secret ") { listOf(voice) }
+
+        assertEquals(listOf(voice), voices)
+        assertEquals("google-secret", config.getGoogleSpeechConfig()?.apiKey)
+        assertEquals(TtsEngine.GOOGLE_CLOUD, settings.get().ttsEngine)
+    }
+
+    @Test
+    fun failedGoogleReplacementRestoresCredentialAndEngine() = runBlocking {
+        val settings = InMemorySettingsRepository().apply {
+            update(get().copy(ttsEngine = TtsEngine.SYSTEM))
+        }
+        val config = InMemoryConfigRepository().apply {
+            saveGoogleSpeechConfig(io.github.jdreioe.wingmate.domain.GoogleSpeechConfig("working-key"))
+        }
+        val facade = facade(settings = settings, config = config)
+
+        assertFailsWith<IllegalStateException> {
+            facade.saveValidatedGoogleSpeechConfig("bad-key") { emptyList() }
+        }
+
+        assertEquals("working-key", config.getGoogleSpeechConfig()?.apiKey)
+        assertEquals(TtsEngine.SYSTEM, settings.get().ttsEngine)
+    }
+
+    @Test
     fun cancellationFromSpeechServiceIsNotSwallowed() = runBlocking {
         val facade = facade(speech = CancellingSpeechService())
 
@@ -139,10 +207,12 @@ class SpeechFacadeTest {
         speech: SpeechService = RecordingSpeechService(),
         settings: InMemorySettingsRepository = InMemorySettingsRepository(),
         config: InMemoryConfigRepository = InMemoryConfigRepository(),
+        voices: InMemoryVoiceRepository = InMemoryVoiceRepository(),
     ): SpeechFacade {
         val voiceUseCase = VoiceUseCase(
-            repo = InMemoryVoiceRepository(),
+            repo = voices,
             azure = AzureVoiceCatalog(config),
+            google = GoogleVoiceCatalog(config),
             configRepo = config,
             featureUsageReporter = NoopFeatureUsageReporter(),
         )

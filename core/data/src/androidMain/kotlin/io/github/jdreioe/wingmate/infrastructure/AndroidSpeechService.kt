@@ -23,7 +23,11 @@ import io.github.jdreioe.wingmate.domain.SpeechPlaybackState
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.VoiceProvider
+import io.github.jdreioe.wingmate.domain.resolvedProvider
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.loggingClassName
@@ -59,7 +63,10 @@ import kotlin.coroutines.resume
  * It synthesizes to memory, writes an MP3 temp file and plays it with MediaPlayer.
  * Falls back to platform TextToSpeech when no Azure config is available.
  */
-class AndroidSpeechService(private val context: Context) : SpeechService {
+class AndroidSpeechService(
+    private val context: Context,
+    private val googleApiRequestHeaders: GoogleApiRequestHeaders,
+) : SpeechService {
     private companion object {
         const val DEFAULT_AZURE_VOICE_NAME = "en-US-JennyNeural"
         const val DEFAULT_AZURE_LANGUAGE = "en-US"
@@ -424,15 +431,21 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull()
         }
         val settings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
-        if (settings?.ttsEngine == io.github.jdreioe.wingmate.domain.TtsEngine.SYSTEM) return false
+        val engine = settings?.ttsEngine ?: TtsEngine.SYSTEM
+        if (engine == TtsEngine.SYSTEM) return false
         if (!isOnline()) {
             pendingSpeechCache += request
             return false
         }
 
         val cached = runCatching {
-            val config = getConfig() ?: return@runCatching false
-            val effectiveVoice = normalizeVoiceForAzure(voice)
+            val azureConfig = if (engine == TtsEngine.GOOGLE_CLOUD) null else getConfig() ?: return@runCatching false
+            val googleConfig = if (engine == TtsEngine.GOOGLE_CLOUD) getGoogleConfig() ?: return@runCatching false else null
+            val effectiveVoice = if (engine == TtsEngine.GOOGLE_CLOUD) {
+                normalizeVoiceForGoogle(voice, settings?.primaryLanguage)
+            } else {
+                normalizeVoiceForAzure(voice)
+            }
             val language = effectiveVoice.selectedLanguage.takeIf(String::isNotBlank)
                 ?: settings?.primaryLanguage?.takeIf(String::isNotBlank)
                 ?: effectiveVoice.primaryLanguage?.takeIf(String::isNotBlank)
@@ -444,6 +457,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             val dictionaryIdentity = dictionary.joinToString("\u001f") { "${it.word}\u001e${it.phoneme}\u001e${it.alphabet}" }
             val cacheKey = SpeechCacheIdentity.digest(
                 normalizedText,
+                engine.name,
                 voiceForSsml.name,
                 voiceForSsml.primaryLanguage,
                 voiceForSsml.selectedLanguage,
@@ -457,12 +471,24 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             val file = File(directory, "tts_v2_$cacheKey.mp3")
                 if (!file.exists() || file.length() == 0L) {
                     val segments = SpeechTextProcessor.processText(normalizedText)
-                    val ssml = if (segments.any { !it.languageTag.isNullOrBlank() || it.pauseDurationMs > 0 }) {
-                        AzureTtsClient.generateSsml(segments, voiceForSsml, dictionary)
+                    val bytes = if (engine == TtsEngine.GOOGLE_CLOUD) {
+                        GoogleTtsClient.synthesizeSegments(
+                            client,
+                            segments,
+                            voiceForSsml,
+                            googleConfig!!,
+                            pitch,
+                            rate,
+                            applicationHeaders = googleApiRequestHeaders,
+                        )
                     } else {
-                        AzureTtsClient.generateSsml(normalizedText, voiceForSsml, dictionary)
+                        val ssml = if (segments.any { !it.languageTag.isNullOrBlank() || it.pauseDurationMs > 0 }) {
+                            AzureTtsClient.generateSsml(segments, voiceForSsml, dictionary)
+                        } else {
+                            AzureTtsClient.generateSsml(normalizedText, voiceForSsml, dictionary)
+                        }
+                        AzureTtsClient.synthesize(client, ssml, azureConfig!!)
                     }
-                    val bytes = AzureTtsClient.synthesize(client, ssml, config)
                     file.outputStream().use { it.write(bytes) }
                 }
             true
@@ -497,7 +523,8 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         val combinedText = segments.joinToString("") { it.text }
 
         // If user prefers system TTS, use it directly
-        if (uiSettings?.ttsEngine == io.github.jdreioe.wingmate.domain.TtsEngine.SYSTEM) {
+        val engine = uiSettings?.ttsEngine ?: TtsEngine.SYSTEM
+        if (engine == TtsEngine.SYSTEM) {
             playSegmentsWithPlatformTts(requestId, segments, voice, pitch, rate)
             recordHistory(combinedText, voice)
             return
@@ -508,17 +535,17 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             return
         }
 
-    // Try to obtain persisted Azure config; if present, prefer Azure TTS pipeline
-        val cfg = getConfig()
-        if (cfg == null) {
-            // No Azure configuration - fall back to system TTS with warning
+        val azureConfig = if (engine == TtsEngine.GOOGLE_CLOUD) null else getConfig()
+        val googleConfig = if (engine == TtsEngine.GOOGLE_CLOUD) getGoogleConfig() else null
+        if (azureConfig == null && googleConfig == null) {
+            // No credential for the selected provider - keep communication working via system TTS.
             showConfigWarning()
             speakWithPlatformTts(requestId, combinedText, voice, pitch, rate)
             recordHistory(combinedText, voice)
             return
         }
         
-        // Check if we're online before attempting Azure TTS
+        // Check if we're online before attempting cloud TTS
         if (!isOnline()) {
             showOfflineWarning()
             // Fall back to system TTS when offline
@@ -529,8 +556,12 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         
         withContext(Dispatchers.IO) {
             try {
-                val useDefaultAzureVoice = shouldUseDefaultAzureVoice(voice)
-                val v = normalizeVoiceForAzure(voice)
+                val useDefaultAzureVoice = engine != TtsEngine.GOOGLE_CLOUD && shouldUseDefaultAzureVoice(voice)
+                val v = if (engine == TtsEngine.GOOGLE_CLOUD) {
+                    normalizeVoiceForGoogle(voice, uiSettings?.primaryLanguage)
+                } else {
+                    normalizeVoiceForAzure(voice)
+                }
                 
                 // Show warning if no Azure voice was available and we had to fallback.
                 if (useDefaultAzureVoice) {
@@ -565,6 +596,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
                 val dictionaryIdentity = dict.joinToString("\u001f") { "${it.word}\u001e${it.phoneme}\u001e${it.alphabet}" }
                 val cacheKey = SpeechCacheIdentity.digest(
                     combinedText,
+                    engine.name,
                     vForSsml.name,
                     vForSsml.primaryLanguage,
                     vForSsml.selectedLanguage,
@@ -585,13 +617,25 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
 
                 // Cache Miss - Proceed to Synthesis
                 
-                // Use segments-based SSML generation if ANY segment has language override OR pause
-                val ssml = if (segments.any { !it.languageTag.isNullOrBlank() || it.pauseDurationMs > 0 }) {
-                    AzureTtsClient.generateSsml(segments, vForSsml, dict)
+                val bytes = if (engine == TtsEngine.GOOGLE_CLOUD) {
+                    GoogleTtsClient.synthesizeSegments(
+                        client,
+                        segments,
+                        vForSsml,
+                        googleConfig!!,
+                        pitch,
+                        rate,
+                        applicationHeaders = googleApiRequestHeaders,
+                    )
                 } else {
-                    AzureTtsClient.generateSsml(combinedText, vForSsml, dict)
+                    // Use segments-based SSML generation if ANY segment has language override OR pause
+                    val ssml = if (segments.any { !it.languageTag.isNullOrBlank() || it.pauseDurationMs > 0 }) {
+                        AzureTtsClient.generateSsml(segments, vForSsml, dict)
+                    } else {
+                        AzureTtsClient.generateSsml(combinedText, vForSsml, dict)
+                    }
+                    AzureTtsClient.synthesize(client, ssml, azureConfig!!)
                 }
-                val bytes = AzureTtsClient.synthesize(client, ssml, cfg)
 
                 // Persist to an app-private Music directory so history can reference it later
                 
@@ -607,11 +651,19 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (t: Throwable) {
-                OperationalLogger.warn(
-                    operation = "speech.azure_synthesis",
-                    outcome = "platform_fallback",
-                    exceptionClass = t.loggingClassName(),
-                )
+                if (engine == TtsEngine.GOOGLE_CLOUD) {
+                    OperationalLogger.warn(
+                        operation = "speech.google_synthesis",
+                        outcome = "platform_fallback",
+                        exceptionClass = t.loggingClassName(),
+                    )
+                } else {
+                    OperationalLogger.warn(
+                        operation = "speech.azure_synthesis",
+                        outcome = "platform_fallback",
+                        exceptionClass = t.loggingClassName(),
+                    )
+                }
                 // Fallback to platform TTS on error
                 if (requestGeneration.get() != requestId) throw CancellationException("Speech request was replaced")
                 speakWithPlatformTts(requestId, combinedText, voice, pitch, rate)
@@ -1189,6 +1241,7 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         val voiceName = voice?.name
         if (voiceName.isNullOrBlank()) return true
         if (voiceName == "system-default") return true
+        if (voice.resolvedProvider() == VoiceProvider.GOOGLE) return true
 
         val parsedVoiceId = AndroidTtsVoiceId.parse(voiceName)
         return parsedVoiceId.enginePackageName != null
@@ -1233,6 +1286,29 @@ class AndroidSpeechService(private val context: Context) : SpeechService {
         }
 
         return null
+    }
+
+    private suspend fun getGoogleConfig(): GoogleSpeechConfig? {
+        val repository = GlobalContext.getOrNull()?.let {
+            runCatching { it.get<io.github.jdreioe.wingmate.domain.ConfigRepository>() }.getOrNull()
+        } ?: return null
+        return try {
+            withContext(Dispatchers.IO) { repository.getGoogleSpeechConfig() }
+                ?.takeIf { it.apiKey.isNotBlank() }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun normalizeVoiceForGoogle(voice: Voice?, primaryLanguage: String?): Voice {
+        val base = voice?.takeIf { it.resolvedProvider() == VoiceProvider.GOOGLE } ?: Voice()
+        val language = base.selectedLanguage.takeIf(String::isNotBlank)
+            ?: primaryLanguage?.takeIf(String::isNotBlank)
+            ?: base.primaryLanguage?.takeIf(String::isNotBlank)
+            ?: "en-US"
+        return base.copy(primaryLanguage = language, selectedLanguage = language, mathMode = false)
     }
 
     private fun Voice?.applyLanguageOverride(languageTag: String?): Voice? {

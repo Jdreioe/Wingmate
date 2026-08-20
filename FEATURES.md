@@ -67,7 +67,7 @@ The following list is taken from the OpenAAC [AAC App Development](https://www.o
 - [x] 💡 **option to lock editing behind an access code** (#100)
   Editing can be protected by an optional access code backed by platform-secure credential storage, with explicit change, disable, timeout, and recovery flows. Communication remains available while editing is locked.
 - [x] 💡 **Backup Wingmate** (#101)
-  A versioned `.wingmate-backup` archive can be created and restored offline across supported platforms. It contains vocabulary, referenced local media, recordings, settings, history, voices, dictionaries, and Azure configuration; restore validates the archive before atomically replacing data and refreshes the live app without a restart. Archives are not encrypted, and editing access codes remain excluded.
+  A versioned `.wingmate-backup` archive can be created and restored offline across supported platforms. It contains vocabulary, referenced local media, recordings, settings, history, voices, and dictionaries; restore validates the archive before atomically replacing data and refreshes the live app without a restart. Archives are not encrypted, so editing access codes and Azure/Google Cloud credentials remain excluded.
 - [x] 💡 **sharing vocabulary sets across users**
   The amount of work it takes to create or modify an AAC vocabulary is significant. Once someone has worked to create a vocabulary, there is often value in sharing it, either with other known users, or publicly for others to use.
 - [ ] 💡 **different-sized buttons**
@@ -265,7 +265,7 @@ The following list is taken from the OpenAAC [AAC App Development](https://www.o
 - [x] ✅ **playback recorded audio**
   Even with synthesized speech, there are times when playing pre-recorded audio such as sound bytes, songs, etc. can be a meaningful communication tool.
 - [x] ✅ **premium voices**
-  Some companies provide premium synthesized voices which offer more language choices in more languages. Keep in mind that if you are implementing a cloud-based offering (Google, Amazon Polly, etc.), you will need some kind of fallback for when the person isn't in a location with a clear data signal.
+  Some companies provide premium synthesized voices which offer more language choices in more languages. Wingmate supports user-provided Azure and Google Cloud credentials and falls back to system speech when cloud synthesis is unavailable.
 - [ ] ⭐ **alternate scanning voice**
   When users enable scanning-based selection or auditory fishing, it can be difficult to tell what a user is selecting vs. what they're reading read to them. It can be useful if there is a distinction in voice style, volume, output, etc. to help separate prompts from words the person has actually selected.
 - [ ] ⭐ **alternate audio fishing voice**

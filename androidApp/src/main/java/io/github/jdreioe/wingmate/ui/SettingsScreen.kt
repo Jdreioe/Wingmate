@@ -45,6 +45,9 @@ import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.GoogleVoiceModel
+import io.github.jdreioe.wingmate.domain.resolvedGoogleModel
+import io.github.jdreioe.wingmate.domain.withPreferredSupportedLanguage
 import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
 import io.github.jdreioe.wingmate.domain.WordTypeColorScheme
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -77,6 +80,7 @@ private sealed class SettingsSpeechSubPage {
     object VoiceSelection : SettingsSpeechSubPage()
     object LanguageSelection : SettingsSpeechSubPage()
     object F0Setup : SettingsSpeechSubPage()
+    object GoogleSetup : SettingsSpeechSubPage()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,6 +113,7 @@ fun SettingsScreen(
     var subscriptionKey by remember { mutableStateOf("") }
     var credentialConfigured by remember { mutableStateOf(false) }
     var replacingAzureCredentials by remember { mutableStateOf(false) }
+    var googleCredentialConfigured by remember { mutableStateOf(false) }
     var azureEndpointError by remember { mutableStateOf<String?>(null) }
     var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var virtualMic by remember { mutableStateOf(false) }
@@ -228,6 +233,9 @@ fun SettingsScreen(
             endpoint = it.endpoint
             credentialConfigured = it.credentialConfigured
         }
+        googleCredentialConfigured = withContext(Dispatchers.Default) {
+            configRepo?.getGoogleSpeechConfigStatus()?.credentialConfigured == true
+        }
 
         val s = withContext(Dispatchers.Default) {
             checkNotNull(settingsUseCase) { "Settings are unavailable" }.get()
@@ -340,6 +348,7 @@ fun SettingsScreen(
                             showPronunciationDictionary -> stringResource(R.string.dictionary_title)
                             speechSubPage is SettingsSpeechSubPage.VoiceSelection -> stringResource(R.string.voice_select_title)
                             speechSubPage is SettingsSpeechSubPage.LanguageSelection -> stringResource(R.string.language_dialog_title)
+                            speechSubPage is SettingsSpeechSubPage.GoogleSetup -> stringResource(R.string.google_setup_title)
                             selectedTab != null -> settingsCategoryTitle(selectedTab!!)
                             else -> stringResource(R.string.ui_settings_title)
                         }
@@ -476,6 +485,20 @@ fun SettingsScreen(
                                             },
                                             onBack = { speechSubPage = null }
                                         )
+                                        SettingsSpeechSubPage.GoogleSetup -> GoogleTtsSetupScreen(
+                                            onDone = {
+                                                ttsEngine = TtsEngine.GOOGLE_CLOUD
+                                                updateSettings { it.copy(ttsEngine = TtsEngine.GOOGLE_CLOUD) }
+                                                scope.launch {
+                                                    googleCredentialConfigured = configRepo
+                                                        ?.getGoogleSpeechConfigStatus()
+                                                        ?.credentialConfigured == true
+                                                }
+                                                speechSubPage = null
+                                            },
+                                            onBack = { speechSubPage = null },
+                                            showNavigation = false,
+                                        )
                                     }
                                 } else {
                                 Column(
@@ -505,6 +528,22 @@ fun SettingsScreen(
                                 onReplaceCredentials = {
                                     replacingAzureCredentials = true
                                     subscriptionKey = ""
+                                },
+                                googleCredentialConfigured = googleCredentialConfigured,
+                                onOpenGoogleSetup = {
+                                    speechSubPage = SettingsSpeechSubPage.GoogleSetup
+                                    featureUsageReporter?.reportEvent(
+                                        FeatureUsageEvents.SETTINGS_SECTION_OPENED,
+                                        "section" to "google_tts_setup",
+                                    )
+                                },
+                                onClearGoogleCredentials = {
+                                    scope.launch {
+                                        runCatching { configRepo?.clearGoogleSpeechConfig() }
+                                            .onSuccess {
+                                                googleCredentialConfigured = false
+                                            }
+                                    }
                                 },
                                 virtualMic = virtualMic,
                                 onVirtualMicChange = { checked ->
@@ -1265,6 +1304,9 @@ private fun SpeechSection(
     credentialConfigured: Boolean,
     replacingCredentials: Boolean,
     onReplaceCredentials: () -> Unit,
+    googleCredentialConfigured: Boolean,
+    onOpenGoogleSetup: () -> Unit,
+    onClearGoogleCredentials: () -> Unit,
     virtualMic: Boolean,
     onVirtualMicChange: (Boolean) -> Unit,
     onOpenVoiceSelection: () -> Unit = {},
@@ -1274,13 +1316,24 @@ private fun SpeechSection(
     SettingsGroup(title = stringResource(R.string.ui_settings_tts_engine_group)) {
         SettingsPreferenceRow(
             title = stringResource(R.string.ui_settings_speech_engine),
-            subtitle = stringResource(if (ttsEngine == TtsEngine.SYSTEM) R.string.ui_settings_system_tts else R.string.ui_settings_azure_tts)
+            subtitle = stringResource(
+                when (ttsEngine) {
+                    TtsEngine.SYSTEM -> R.string.ui_settings_system_tts
+                    TtsEngine.GOOGLE_CLOUD -> R.string.ui_settings_google_tts
+                    TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> R.string.ui_settings_azure_tts
+                }
+            )
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
-                    selected = ttsEngine != TtsEngine.SYSTEM,
+                    selected = ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED,
                     onClick = { onTtsEngineChange(TtsEngine.AZURE_USER_RESOURCE) },
                     label = { Text(stringResource(R.string.ui_settings_azure)) }
+                )
+                FilterChip(
+                    selected = ttsEngine == TtsEngine.GOOGLE_CLOUD,
+                    onClick = { onTtsEngineChange(TtsEngine.GOOGLE_CLOUD) },
+                    label = { Text(stringResource(R.string.ui_settings_google)) },
                 )
                 FilterChip(
                     selected = ttsEngine == TtsEngine.SYSTEM,
@@ -1289,7 +1342,7 @@ private fun SpeechSection(
                 )
             }
         }
-        if (ttsEngine != TtsEngine.SYSTEM) {
+        if (ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED) {
             SettingsGroupDivider()
             AzureCredentialEditor(
                 credentialConfigured = credentialConfigured,
@@ -1304,12 +1357,37 @@ private fun SpeechSection(
             )
         }
 
+        if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+            SettingsGroupDivider()
+            Column(
+                modifier = Modifier.padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (googleCredentialConfigured) {
+                    Text(stringResource(R.string.google_tts_configured))
+                    OutlinedButton(onClick = onOpenGoogleSetup) {
+                        Text(stringResource(R.string.google_tts_replace_key))
+                    }
+                    TextButton(onClick = onClearGoogleCredentials) {
+                        Text(stringResource(R.string.google_tts_clear_key))
+                    }
+                } else {
+                    Text(stringResource(R.string.google_tts_api_key_help))
+                    Button(onClick = onOpenGoogleSetup, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.google_setup_guided_title))
+                    }
+                }
+            }
+        }
+
         Spacer(Modifier.height(12.dp))
-        OutlinedButton(
-            onClick = onOpenF0Setup,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(stringResource(R.string.ui_settings_azure_free_tier))
+        if (ttsEngine != TtsEngine.GOOGLE_CLOUD) {
+            OutlinedButton(
+                onClick = onOpenF0Setup,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.ui_settings_azure_free_tier))
+            }
         }
     }
 
@@ -2060,6 +2138,8 @@ internal fun VoiceSelectionPage(
     var availableLanguages by remember { mutableStateOf<List<String>>(emptyList()) }
     var voiceSearch by remember { mutableStateOf("") }
     var genderFilter by remember { mutableStateOf<String?>(null) }
+    var googleModelFilter by remember { mutableStateOf<GoogleVoiceModel?>(null) }
+    var preferredLanguage by remember { mutableStateOf<String?>(null) }
     var retryKey by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
@@ -2075,6 +2155,7 @@ internal fun VoiceSelectionPage(
             val settings = checkNotNull(settingsUseCase) { "Settings are unavailable" }
                 .let { withContext(Dispatchers.Default) { it.get() } }
             ttsEngine = settings.ttsEngine
+            preferredLanguage = settings.primaryLanguage
             if (ttsEngine == TtsEngine.SYSTEM) {
                 val allSystemVoices = systemVoiceProvider?.getSystemVoices() ?: listOf(
                     Voice(name = "system-default", displayName = "System Default", primaryLanguage = "en-US", gender = "Unknown")
@@ -2085,14 +2166,17 @@ internal fun VoiceSelectionPage(
             } else {
                 var cloudRefreshFailed = false
                 val fromCloud = try {
-                    withContext(Dispatchers.Default) { useCase.refreshFromAzure() }
+                    withContext(Dispatchers.Default) {
+                        if (ttsEngine == TtsEngine.GOOGLE_CLOUD) useCase.refreshFromGoogle()
+                        else useCase.refreshFromAzure()
+                    }
                 } catch (failure: CancellationException) {
                     throw failure
                 } catch (_: Exception) {
                     cloudRefreshFailed = true
                     emptyList()
                 }
-                val local = withContext(Dispatchers.Default) { useCase.list() }
+                val local = withContext(Dispatchers.Default) { useCase.listForEngine(ttsEngine) }
                 val allVoices = (fromCloud + local).distinctBy { it.name }
                 if (allVoices.isEmpty() && cloudRefreshFailed) {
                     error("No cached voices were available after refresh failed")
@@ -2148,8 +2232,20 @@ internal fun VoiceSelectionPage(
         languageFilteredSystemVoices.filter { voice -> matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter) }
     }
 
-    val filteredAzureVoices = remember(languageFilteredAzureVoices, queryTerms, genderFilter) {
-        languageFilteredAzureVoices.filter { voice -> matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter) }
+    val availableGoogleModels = remember(voices, ttsEngine) {
+        if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+            GoogleVoiceModel.entries.filter { model -> voices.any { it.resolvedGoogleModel() == model } }
+        } else emptyList()
+    }
+    LaunchedEffect(availableGoogleModels, googleModelFilter) {
+        if (googleModelFilter != null && googleModelFilter !in availableGoogleModels) googleModelFilter = null
+    }
+
+    val filteredAzureVoices = remember(languageFilteredAzureVoices, queryTerms, genderFilter, googleModelFilter, ttsEngine) {
+        languageFilteredAzureVoices.filter { voice ->
+            matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter) &&
+                (ttsEngine != TtsEngine.GOOGLE_CLOUD || googleModelFilter == null || voice.resolvedGoogleModel() == googleModelFilter)
+        }
     }
 
     val visibleVoiceCount = if (ttsEngine == TtsEngine.SYSTEM) filteredSystemVoices.size else filteredAzureVoices.size
@@ -2200,6 +2296,14 @@ internal fun VoiceSelectionPage(
             }
         )
 
+        if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+            GoogleModelFilterChips(
+                models = availableGoogleModels,
+                selected = googleModelFilter,
+                onSelected = { googleModelFilter = it },
+            )
+        }
+
         Text(
             pluralStringResource(
                 R.plurals.voice_showing_count,
@@ -2224,12 +2328,16 @@ internal fun VoiceSelectionPage(
             }
         } else {
             val filteredVoices = if (ttsEngine == TtsEngine.SYSTEM) filteredSystemVoices else filteredAzureVoices
-            val titleRes = if (ttsEngine == TtsEngine.SYSTEM) {
-                if (selectedLanguage != null) R.string.voice_system_title_with_lang else R.string.voice_system_title
-            } else {
-                if (selectedLanguage != null) R.string.voice_azure_title_with_lang else R.string.voice_azure_title
+            val titleRes = when (ttsEngine) {
+                TtsEngine.SYSTEM -> if (selectedLanguage != null) R.string.voice_system_title_with_lang else R.string.voice_system_title
+                TtsEngine.GOOGLE_CLOUD -> if (selectedLanguage != null) R.string.voice_google_title_with_lang else R.string.voice_google_title
+                else -> if (selectedLanguage != null) R.string.voice_azure_title_with_lang else R.string.voice_azure_title
             }
-            val emptyRes = if (ttsEngine == TtsEngine.SYSTEM) R.string.voice_no_system_match else R.string.voice_no_azure_match
+            val emptyRes = when (ttsEngine) {
+                TtsEngine.SYSTEM -> R.string.voice_no_system_match
+                TtsEngine.GOOGLE_CLOUD -> R.string.voice_no_google_match
+                else -> R.string.voice_no_azure_match
+            }
 
             SettingsGroup(title = stringResource(titleRes, selectedLanguage ?: "")) {
                 if (filteredVoices.isEmpty()) {
@@ -2249,13 +2357,16 @@ internal fun VoiceSelectionPage(
                                 scope.launch {
                                     operationError = null
                                     try {
-                                        useCase.select(v)
-                                        val primary = if (ttsEngine == TtsEngine.SYSTEM) (v.primaryLanguage ?: "") else v.selectedLanguage.ifBlank { v.primaryLanguage ?: "" }
+                                        val voiceToSelect = if (ttsEngine == TtsEngine.SYSTEM) v else {
+                                            v.withPreferredSupportedLanguage(selectedLanguage ?: preferredLanguage)
+                                        }
+                                        useCase.select(voiceToSelect)
+                                        val primary = if (ttsEngine == TtsEngine.SYSTEM) (voiceToSelect.primaryLanguage ?: "") else voiceToSelect.selectedLanguage.ifBlank { voiceToSelect.primaryLanguage ?: "" }
                                         if (primary.isNotBlank() && settingsUseCase != null) {
                                             val current = settingsUseCase.get()
                                             settingsUseCase.update(current.copy(primaryLanguage = primary))
                                         }
-                                        selected = v
+                                        selected = voiceToSelect
                                         onVoiceSelected?.invoke() ?: onBack()
                                     } catch (failure: CancellationException) {
                                         throw failure
@@ -2294,7 +2405,12 @@ internal fun VoiceSelectionPage(
                             settingsUseCase.update(current.copy(primaryLanguage = primary))
                         }
                         showVoiceSettings = false
-                        voices = (useCase.refreshFromAzure() + useCase.list()).distinctBy { it.name }
+                        val refreshed = if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+                            useCase.refreshFromGoogle()
+                        } else {
+                            useCase.refreshFromAzure()
+                        }
+                        voices = (refreshed + useCase.listForEngine(ttsEngine)).distinctBy { it.name }
                         selected = useCase.selected()
                     } catch (failure: CancellationException) {
                         throw failure

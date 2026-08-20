@@ -98,12 +98,28 @@ fun SsmlSidebar(
                     ) {
                         Column {
                             Text(stringResource(R.string.ssml_engine), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
-                            Text(stringResource(if (ttsEngine == TtsEngine.SYSTEM) R.string.ssml_system_offline else R.string.ssml_azure_premium), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                stringResource(
+                                    when (ttsEngine) {
+                                        TtsEngine.SYSTEM -> R.string.ssml_system_offline
+                                        TtsEngine.GOOGLE_CLOUD -> R.string.ssml_google_premium
+                                        TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> R.string.ssml_azure_premium
+                                    }
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
                         }
                         Switch(
                             checked = ttsEngine == TtsEngine.SYSTEM, 
                             onCheckedChange = { checked ->
-                                ttsEngine = if (checked) TtsEngine.SYSTEM else TtsEngine.AZURE_USER_RESOURCE
+                                ttsEngine = if (checked) {
+                                    TtsEngine.SYSTEM
+                                } else if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+                                    TtsEngine.GOOGLE_CLOUD
+                                } else {
+                                    TtsEngine.AZURE_USER_RESOURCE
+                                }
                                 scope.launch {
                                     val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
                                     settingsUseCase.updateWithNotification(current.copy(ttsEngine = ttsEngine))

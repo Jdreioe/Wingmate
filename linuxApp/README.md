@@ -10,7 +10,7 @@ The application supports both Wayland and X11 and follows the user's light/dark 
 - saved phrase editing, category filtering, speech history, and "hold that thought"
 - local-system and Azure voice selection with speech-rate control
 - pronunciation dictionary
-- first-run onboarding with Keyboard/Screens startup selection and a local-data privacy summary
+- first-run onboarding with workspace and speech-engine selection, optional Azure/Google BYOK setup, and a local-data privacy summary
 - persistent Screen library with blank/calculator templates, spanning OBF fields, shared OBF button actions, run/edit modes, linked-page navigation, cell editing, duplication, locking, and deletion
 - native OBF/OBZ import and OBZ export dialogs
 - configurable phrase-grid columns; light/dark mode follows the desktop appearance portal with explicit Light/Dark fallbacks, while accessibility scaling follows COSMIC

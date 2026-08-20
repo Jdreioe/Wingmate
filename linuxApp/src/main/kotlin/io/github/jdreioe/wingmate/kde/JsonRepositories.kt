@@ -46,7 +46,13 @@ class JsonFileSettingsRepository(
 
 class JsonFileConfigRepository : ConfigRepository {
     private val file = File(configDir, "config.json")
-    private val secureStore = LinuxAzureConfigStore()
+    private val secureStore = LinuxSpeechCredentialStore()
+    private val googleSecureStore = LinuxSpeechCredentialStore(
+        purpose = "google-speech",
+        entry = "google-speech-config-v1",
+        legacyEntry = null,
+        label = "Wingmate Google Cloud Speech configuration",
+    )
     private val mutex = Mutex()
 
     override suspend fun getSpeechConfig(): SpeechServiceConfig? = mutex.withLock {
@@ -95,6 +101,31 @@ class JsonFileConfigRepository : ConfigRepository {
         }
     }
 
+    override suspend fun getGoogleSpeechConfig(): GoogleSpeechConfig? = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            googleSecureStore.read()?.let { json.decodeFromString<GoogleSpeechConfig>(it) }
+        }
+    }
+
+    override suspend fun saveGoogleSpeechConfig(config: GoogleSpeechConfig) = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            val normalized = config.copy(apiKey = config.apiKey.trim())
+            require(normalized.apiKey.isNotEmpty()) { "Google Cloud API key is required" }
+            googleSecureStore.write(json.encodeToString(normalized))
+            val stored = googleSecureStore.readAfterWrite()
+                ?.let { json.decodeFromString<GoogleSpeechConfig>(it) }
+            check(stored == normalized) { "Secure Google credential write could not be verified" }
+            println("[PERSISTENCE] Saved Google speech configuration securely; credentialConfigured=true")
+        }
+    }
+
+    override suspend fun clearGoogleSpeechConfig() = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            googleSecureStore.delete()
+            println("[PERSISTENCE] Cleared Google speech configuration; credentialConfigured=false")
+        }
+    }
+
     private fun decode(value: String): SpeechServiceConfig =
         json.decodeFromString<SpeechServiceConfig>(value)
 }
@@ -103,7 +134,12 @@ class JsonFileConfigRepository : ConfigRepository {
  * Uses Secret Service when available, otherwise KWallet. There is intentionally
  * no file fallback: callers receive an error and can keep the key in memory.
  */
-private class LinuxAzureConfigStore {
+private class LinuxSpeechCredentialStore(
+    private val purpose: String = "azure-speech",
+    private val entry: String = "azure-speech-config-v2",
+    private val legacyEntry: String? = "azure-speech-config",
+    private val label: String = "Wingmate Azure Speech configuration",
+) {
     private enum class Backend { SecretService, KWallet }
     private val backend: Backend? by lazy {
         when {
@@ -117,7 +153,7 @@ private class LinuxAzureConfigStore {
         private set
 
     fun read(): String? = when (backend) {
-        Backend.SecretService -> run(listOf("secret-tool", "lookup", "application", APP_ID, "purpose", PURPOSE))
+        Backend.SecretService -> run(listOf("secret-tool", "lookup", "application", APP_ID, "purpose", purpose))
             .also { lastReadDiagnostic = "Secret Service lookup exit=${it.exitCode}" }
             .takeIf { it.exitCode == 0 }?.output?.trim()?.takeIf(String::isNotEmpty)
         Backend.KWallet -> readKWallet()
@@ -135,39 +171,40 @@ private class LinuxAzureConfigStore {
             // just written. The legacy plaintext file is retained until that
             // verification succeeds.
             Backend.SecretService -> {
-                val clear = run(listOf("secret-tool", "clear", "application", APP_ID, "purpose", PURPOSE))
-                check(clear.exitCode == 0) { clear.output.ifBlank { "Could not replace Azure configuration securely" } }
+                val clear = run(listOf("secret-tool", "clear", "application", APP_ID, "purpose", purpose))
+                check(clear.exitCode == 0) { clear.output.ifBlank { "Could not replace speech credentials securely" } }
                 run(
-                    listOf("secret-tool", "store", "--label=Wingmate Azure Speech configuration", "application", APP_ID, "purpose", PURPOSE),
+                    listOf("secret-tool", "store", "--label=$label", "application", APP_ID, "purpose", purpose),
                     value
                 )
             }
             Backend.KWallet -> writeKWallet(value)
             null -> error("Secure credential storage is unavailable; install Secret Service/libsecret or KWallet")
         }
-        check(result.exitCode == 0) { result.output.ifBlank { "Could not save Azure configuration securely" } }
+        check(result.exitCode == 0) { result.output.ifBlank { "Could not save speech credentials securely" } }
     }
 
     fun delete() {
         if (read() == null) return
         val result = when (backend) {
-            Backend.SecretService -> run(listOf("secret-tool", "clear", "application", APP_ID, "purpose", PURPOSE))
+            Backend.SecretService -> run(listOf("secret-tool", "clear", "application", APP_ID, "purpose", purpose))
             Backend.KWallet -> removeKWalletEntry()
             null -> return
         }
-        check(result.exitCode == 0) { result.output.ifBlank { "Could not clear Azure configuration" } }
-        check(read() == null) { "Secure Azure configuration deletion could not be verified" }
+        check(result.exitCode == 0) { result.output.ifBlank { "Could not clear speech credentials" } }
+        check(read() == null) { "Secure speech credential deletion could not be verified" }
     }
 
 private fun readKWallet(): String? =
-        runCatching { withKWallet { wallet, handle -> wallet.readPassword(handle, FOLDER, ENTRY, APP_ID) } }
+        runCatching { withKWallet { wallet, handle -> wallet.readPassword(handle, FOLDER, entry, APP_ID) } }
             .getOrNull()
             ?.trim()
             ?.takeIf(String::isNotEmpty)
             ?: readLegacyKWalletEntry()
 
     private fun readLegacyKWalletEntry(): String? {
-        val result = run(listOf("kwallet-query", "-r", LEGACY_ENTRY, "-f", FOLDER, walletName()))
+        val legacy = legacyEntry ?: return null
+        val result = run(listOf("kwallet-query", "-r", legacy, "-f", FOLDER, walletName()))
         lastReadDiagnostic = if (result.exitCode == 0) {
             "KWallet legacy entry read successfully"
         } else {
@@ -181,7 +218,7 @@ private fun readKWallet(): String? =
             if (!wallet.hasFolder(handle, FOLDER, APP_ID)) {
                 check(wallet.createFolder(handle, FOLDER, APP_ID)) { "Could not create the KWallet folder" }
             }
-            val result = wallet.writePassword(handle, FOLDER, ENTRY, value, APP_ID)
+            val result = wallet.writePassword(handle, FOLDER, entry, value, APP_ID)
             check(result == 0) { "KWallet write failed with code $result" }
         }
         Result(0, "")
@@ -189,9 +226,9 @@ private fun readKWallet(): String? =
 
     private fun removeKWalletEntry(): Result = runCatching {
         withKWallet { wallet, handle ->
-            for (entry in listOf(ENTRY, LEGACY_ENTRY)) {
-                if (wallet.hasEntry(handle, FOLDER, entry, APP_ID)) {
-                    val result = wallet.removeEntry(handle, FOLDER, entry, APP_ID)
+            for (candidate in listOfNotNull(entry, legacyEntry)) {
+                if (wallet.hasEntry(handle, FOLDER, candidate, APP_ID)) {
+                    val result = wallet.removeEntry(handle, FOLDER, candidate, APP_ID)
                     check(result == 0) { "KWallet removal failed with code $result" }
                 }
             }
@@ -231,10 +268,7 @@ private fun readKWallet(): String? =
 
     private companion object {
         const val APP_ID = "io.github.jdreioe.wingmate"
-        const val PURPOSE = "azure-speech"
         const val FOLDER = "Wingmate"
-const val ENTRY = "azure-speech-config-v2"
-        const val LEGACY_ENTRY = "azure-speech-config"
         val KWALLET_ENDPOINTS = listOf(
             "org.kde.kwalletd6" to "/modules/kwalletd6",
             "org.kde.kwalletd5" to "/modules/kwalletd5",

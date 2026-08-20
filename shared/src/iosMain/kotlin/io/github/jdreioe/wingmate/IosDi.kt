@@ -21,6 +21,8 @@ import io.github.jdreioe.wingmate.infrastructure.IosCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.IosBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.IosBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.IosConfigRepository
+import io.github.jdreioe.wingmate.infrastructure.GoogleApiRequestHeaders
+import io.github.jdreioe.wingmate.infrastructure.IosGoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.IosFileStorage
 import io.github.jdreioe.wingmate.infrastructure.IosPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.IosPronunciationDictionaryRepository
@@ -68,6 +70,7 @@ fun overrideIosSpeechService() {
                     }
                 }
             }
+            single<GoogleApiRequestHeaders> { IosGoogleApiRequestHeaders() }
             // OS-backed file system (needed by AacLogger and other common code)
             single { FileSystem.SYSTEM }
             // Persist speech config and selected voice on iOS
