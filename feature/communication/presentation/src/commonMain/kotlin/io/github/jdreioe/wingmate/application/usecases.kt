@@ -74,7 +74,12 @@ class VoiceUseCase(
 ) {
     suspend fun list(): List<Voice> = repo.getVoices()
     suspend fun listForEngine(engine: TtsEngine): List<Voice> = repo.getVoices().forTtsEngine(engine)
-    suspend fun selected(): Voice? = repo.getSelected()
+    suspend fun selected(): Voice? {
+        val persisted = repo.getSelected() ?: return null
+        val enriched = persisted.withCatalogMetadata(repo.getVoices())
+        if (enriched != persisted) repo.saveSelected(enriched)
+        return enriched
+    }
     suspend fun select(voice: Voice) {
         repo.saveSelected(voice)
         val provider = voice.provider
@@ -97,8 +102,12 @@ class VoiceUseCase(
     }
     suspend fun refreshFromAzure(): List<Voice> {
         val list = azure.list()
-        // Cache list for offline/next launch
-        repo.saveVoices(list)
+        // Keep the last working catalog if the refresh comes back empty, and backfill
+        // the saved selection with catalog-only metadata (secondary locales, provider).
+        if (list.isNotEmpty()) {
+            repo.saveVoices(list)
+            persistCatalogMetadataForSelected(list)
+        }
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.VOICE_REFRESHED,
             "count" to list.size.toString()
@@ -109,12 +118,21 @@ class VoiceUseCase(
     suspend fun refreshFromGoogle(): List<Voice> {
         val list = google.list()
         // Keep the last working catalog if validation or refresh fails.
-        if (list.isNotEmpty()) repo.saveVoices(list)
+        if (list.isNotEmpty()) {
+            repo.saveVoices(list)
+            persistCatalogMetadataForSelected(list)
+        }
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.VOICE_REFRESHED,
             "provider" to "google",
             "count" to list.size.toString(),
         )
         return list
+    }
+
+    private suspend fun persistCatalogMetadataForSelected(catalog: List<Voice>) {
+        val persisted = repo.getSelected() ?: return
+        val enriched = persisted.withCatalogMetadata(catalog)
+        if (enriched != persisted) repo.saveSelected(enriched)
     }
 }
