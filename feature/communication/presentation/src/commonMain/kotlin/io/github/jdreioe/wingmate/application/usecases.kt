@@ -53,14 +53,15 @@ class CategoryUseCase(
     }
 }
 
-class SettingsUseCase(private val repo: SettingsRepository) {
+class SettingsUseCase(
+    private val repo: SettingsRepository,
+    private val stateManager: SettingsStateManager? = null,
+) {
     suspend fun get(): Settings = repo.get()
-    suspend fun update(settings: Settings): Settings = repo.update(settings)
+    suspend fun update(settings: Settings): Settings =
+        stateManager?.updateSettings(settings) ?: repo.update(settings)
 
-    // Keep backward-compatible entry point, but rely on repository directly for KMP safety.
-    suspend fun updateWithNotification(settings: Settings): Settings {
-        return repo.update(settings)
-    }
+    suspend fun updateWithNotification(settings: Settings): Settings = update(settings)
 }
 
 class VoiceUseCase(
