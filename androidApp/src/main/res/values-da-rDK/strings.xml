@@ -617,6 +617,7 @@
     <string name="google_tts_configured">Google Cloud API-nøgle er konfigureret</string>
     <string name="google_tts_replace_key">Erstat API-nøgle</string>
     <string name="google_tts_clear_key">Slet API-nøgle</string>
+    <string name="google_tts_voice_load_failed">Google-stemmer kunne ikke indlæses. Kontrollér nøglen, internetforbindelsen, faktureringen og adgangen til Cloud Text-to-Speech API.</string>
     <string name="ui_settings_region_endpoint">Område/endpoint</string>
     <string name="ui_settings_region_example">f.eks. northeurope</string>
     <string name="ui_settings_subscription_key">Abonnementsnøgle</string>
@@ -634,15 +635,18 @@
     <string name="fullscreen_close">Luk fuldskærm</string>
     <string name="voice_engine_choose">Vælg talemotor</string>
     <string name="voice_engine_azure_title">🎙️ Azure TTS</string>
+    <string name="voice_engine_google_title">☁️ Google Cloud TTS</string>
     <string name="voice_engine_system_title">📱 System-TTS</string>
     <string name="voice_engine_pros">✅ Fordele:</string>
     <string name="voice_engine_cons">❌ Ulemper:</string>
     <string name="voice_engine_azure_pros">• Mere end 400 neurale stemmer i høj kvalitet\n• Mere end 140 sprog og varianter\n• Naturlig udtale og intonation\n• Ensartet kvalitet på tværs af enheder\n• Avanceret stemmestyring (SSML)</string>
     <string name="voice_engine_azure_cons">• Kræver internetforbindelse\n• Kræver opsætning af API-nøgle\n• Bruger en cloudtjeneste\n• Kan have en lille netværksforsinkelse</string>
+    <string name="voice_engine_google_pros">• Bredt udvalg af naturlige stemmer\n• Mange sprog og regionale varianter\n• Ensartet kvalitet på tværs af enheder\n• SSML-understøttelse af sprog og pauser</string>
+    <string name="voice_engine_google_cons">• Kræver internet og et Google Cloud-projekt\n• Kræver fakturering og opsætning af API-nøgle\n• Bruger en cloudtjeneste\n• Brug kan medføre omkostninger</string>
     <string name="voice_engine_system_pros">• Virker helt offline\n• Kræver ingen opsætning eller API-nøgler\n• Respekterer systemets tilgængelighedsindstillinger\n• Hurtig svartid\n• Fuld fortrolighed (ingen cloud)</string>
     <string name="voice_engine_system_cons">• Begrænset udvalg af stemmer\n• Kvaliteten varierer fra enhed til enhed\n• Færre sprogmuligheder\n• Mindre naturlig tale</string>
     <string name="voice_engine_recommendation_title">💡 Vores anbefaling:</string>
-    <string name="voice_engine_recommendation">Vælg Azure TTS for den bedste kvalitet og det største sprogudvalg. Vælg System-TTS for fortrolighed og offlinebrug.</string>
+    <string name="voice_engine_recommendation">Vælg den cloududbyder, hvis stemmer passer bedst til dig, eller System-TTS til offlinebrug og fortrolighed.</string>
     <string name="voice_settings_title">Stemmeindstillinger – %1$s</string>
     <string name="voice_settings_current_engine">Aktuel motor: %1$s</string>
     <string name="voice_settings_system_description">Bruger enhedens indbyggede tekst-til-tale</string>

@@ -300,12 +300,19 @@ private struct SpeechSettingsView: View {
     }
 }
 
-private struct GoogleTtsSetupView: View {
+struct GoogleTtsSetupView: View {
     @ObservedObject var model: IosViewModel
     let onClose: () -> Void
+    let onSaved: (() -> Void)?
     @State private var apiKey = ""
     @State private var saving = false
     @State private var errorMessage: String?
+
+    init(model: IosViewModel, onClose: @escaping () -> Void, onSaved: (() -> Void)? = nil) {
+        self.model = model
+        self.onClose = onClose
+        self.onSaved = onSaved
+    }
 
     var body: some View {
         NavigationStack {
@@ -330,6 +337,7 @@ private struct GoogleTtsSetupView: View {
                             do {
                                 try await model.saveGoogleApiKey(apiKey)
                                 apiKey = ""
+                                onSaved?()
                                 onClose()
                             } catch {
                                 errorMessage = NSLocalizedString("settings.speech.google.save_failed", comment: "")

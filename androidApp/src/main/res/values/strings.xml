@@ -620,6 +620,7 @@
     <string name="google_tts_configured">Google Cloud API key configured</string>
     <string name="google_tts_replace_key">Replace API key</string>
     <string name="google_tts_clear_key">Clear API key</string>
+    <string name="google_tts_voice_load_failed">Could not load Google voices. Check the key, internet connection, billing, and Cloud Text-to-Speech API access.</string>
     <string name="ui_settings_region_endpoint">Region / endpoint</string>
     <string name="ui_settings_region_example">e.g., eastus</string>
     <string name="ui_settings_subscription_key">Subscription key</string>
@@ -637,15 +638,18 @@
     <string name="fullscreen_close">Close full screen</string>
     <string name="voice_engine_choose">Choose voice engine</string>
     <string name="voice_engine_azure_title">🎙️ Azure TTS</string>
+    <string name="voice_engine_google_title">☁️ Google Cloud TTS</string>
     <string name="voice_engine_system_title">📱 System TTS</string>
     <string name="voice_engine_pros">✅ Pros:</string>
     <string name="voice_engine_cons">❌ Cons:</string>
     <string name="voice_engine_azure_pros">• 400+ high-quality neural voices\n• 140+ languages and variants\n• Natural pronunciation and intonation\n• Consistent quality across devices\n• Advanced voice controls (SSML)</string>
     <string name="voice_engine_azure_cons">• Requires an internet connection\n• API key setup is needed\n• Uses a cloud service\n• May have a slight network delay</string>
+    <string name="voice_engine_google_pros">• Broad selection of natural voices\n• Many languages and regional variants\n• Consistent quality across devices\n• SSML language and pause support</string>
+    <string name="voice_engine_google_cons">• Requires internet and a Google Cloud project\n• Billing and API key setup are required\n• Uses a cloud service\n• Usage may incur charges</string>
     <string name="voice_engine_system_pros">• Works completely offline\n• No setup or API keys required\n• Respects system accessibility settings\n• Fast response time\n• Complete privacy (no cloud)</string>
     <string name="voice_engine_system_cons">• Limited voice selection\n• Quality varies by device\n• Fewer language options\n• Less natural-sounding speech</string>
     <string name="voice_engine_recommendation_title">💡 Our recommendation:</string>
-    <string name="voice_engine_recommendation">Choose Azure TTS for the best quality and language variety. Choose System TTS for privacy and offline use.</string>
+    <string name="voice_engine_recommendation">Choose the cloud provider whose voices suit you best, or System TTS for offline use and privacy.</string>
     <string name="voice_settings_title">Voice settings – %1$s</string>
     <string name="voice_settings_current_engine">Current engine: %1$s</string>
     <string name="voice_settings_system_description">Using the device’s built-in text-to-speech</string>

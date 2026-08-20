@@ -2620,7 +2620,7 @@ impl cosmic::Application for Wingmate {
                 }
                 self.partner.update_text(self.draft.clone());
             }
-            Message::OnboardingNext => self.onboarding_step = (self.onboarding_step + 1).min(2),
+            Message::OnboardingNext => self.onboarding_step = (self.onboarding_step + 1).min(3),
             Message::OnboardingBack => {
                 self.onboarding_step = self.onboarding_step.saturating_sub(1)
             }
@@ -3979,6 +3979,69 @@ impl Wingmate {
     }
 
     fn welcome_view(&self) -> Element<'_, Message> {
+        let speech_credentials: Element<'_, Message> = match self.settings.tts_engine.as_str() {
+            "GOOGLE_CLOUD" => {
+                if self.google_credential_configured && !self.replacing_google_credentials {
+                    column![
+                        text(fl!("speech-google-configured")),
+                        labeled_icon_button(
+                            "document-edit-symbolic",
+                            fl!("speech-google-replace"),
+                            Message::ReplaceGoogleCredentials,
+                        ),
+                    ]
+                    .spacing(8)
+                    .into()
+                } else {
+                    column![
+                        text_input(&fl!("speech-google-key"), &self.google_key)
+                            .on_input(Message::GoogleKeyChanged)
+                            .secure(true)
+                            .padding(12),
+                        text(fl!("speech-google-help")).size(13),
+                        labeled_icon_button(
+                            "document-save-symbolic",
+                            fl!("speech-google-save"),
+                            Message::SaveGoogleConfig,
+                        ),
+                    ]
+                    .spacing(8)
+                    .into()
+                }
+            }
+            "AZURE_USER_RESOURCE" | "AZURE_MANAGED" => {
+                if self.azure_credential_configured && !self.replacing_azure_credentials {
+                    column![
+                        text(fl!("speech-azure-configured")),
+                        labeled_icon_button(
+                            "document-edit-symbolic",
+                            fl!("speech-azure-replace"),
+                            Message::ReplaceAzureCredentials,
+                        ),
+                    ]
+                    .spacing(8)
+                    .into()
+                } else {
+                    column![
+                        text_input(&fl!("speech-azure-endpoint"), &self.azure_endpoint)
+                            .on_input(Message::AzureEndpointChanged)
+                            .padding(12),
+                        text_input(&fl!("speech-azure-key"), &self.azure_key)
+                            .on_input(Message::AzureKeyChanged)
+                            .secure(true)
+                            .padding(12),
+                        labeled_icon_button(
+                            "document-save-symbolic",
+                            fl!("speech-azure-save"),
+                            Message::SaveAzureConfig,
+                        ),
+                    ]
+                    .spacing(8)
+                    .into()
+                }
+            }
+            _ => text(fl!("onboarding-speech-system-description")).into(),
+        };
         let body: Element<'_, Message> = match self.onboarding_step {
             0 => column![
                 text(fl!("onboarding-welcome-title")).size(40),
@@ -3996,6 +4059,28 @@ impl Wingmate {
                 checkbox(self.onboarding_screens)
                     .label(fl!("onboarding-screens"))
                     .on_toggle(Message::OnboardingMode),
+                row![
+                    labeled_icon_button("go-previous-symbolic", "Back", Message::OnboardingBack),
+                    labeled_icon_button("go-next-symbolic", "Next", Message::OnboardingNext)
+                ]
+                .spacing(10),
+            ]
+            .spacing(18)
+            .into(),
+            2 => column![
+                text(fl!("onboarding-speech-title")).size(32),
+                text(fl!("onboarding-speech-description")),
+                pick_list(
+                    vec![
+                        "SYSTEM".to_string(),
+                        "AZURE_USER_RESOURCE".to_string(),
+                        "GOOGLE_CLOUD".to_string(),
+                    ],
+                    Some(self.settings.tts_engine.clone()),
+                    Message::EngineChanged,
+                ),
+                speech_credentials,
+                text(fl!("onboarding-speech-later")).size(13),
                 row![
                     labeled_icon_button("go-previous-symbolic", "Back", Message::OnboardingBack),
                     labeled_icon_button("go-next-symbolic", "Next", Message::OnboardingNext)

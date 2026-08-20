@@ -26,6 +26,14 @@
 "welcome_flow.azure_tts.con1" = "Requires internet";
 "welcome_flow.azure_tts.con2" = "Setup required";
 "welcome_flow.azure_tts.con3" = "May cost money";
+"welcome_flow.google_tts.title" = "Google Cloud Text-to-Speech";
+"welcome_flow.google_tts.subtitle" = "Natural cloud voices with your own API key";
+"welcome_flow.google_tts.pro1" = "Broad voice and language selection";
+"welcome_flow.google_tts.pro2" = "Consistent quality across devices";
+"welcome_flow.google_tts.pro3" = "Your own project and quota";
+"welcome_flow.google_tts.con1" = "Requires internet";
+"welcome_flow.google_tts.con2" = "Google Cloud setup and billing required";
+"welcome_flow.google_tts.con3" = "Usage may cost money";
 "welcome_flow.voice_setup.title" = "Choose Your Voice";
 "welcome_flow.voice_setup.subtitle" = "Select a voice that sounds right to you";
 "welcome_flow.voice_test.placeholder" = "Hello, this is how I sound!";
@@ -106,6 +114,7 @@
 "welcome_flow.open_settings" = "Open iOS Settings";
 "welcome_flow.test_voice" = "Test Your Voice";
 "welcome_flow.azure_voices_subtitle" = "Choose from high-quality Azure voices";
+"welcome_flow.google_voices_subtitle" = "Choose from Google Cloud voices";
 "welcome_flow.choose_voice" = "Choose Voice";
 "welcome_flow.change_voice" = "Change Voice";
 

@@ -26,6 +26,14 @@
 "welcome_flow.azure_tts.con1" = "Kræver internet";
 "welcome_flow.azure_tts.con2" = "Kræver konfiguration";
 "welcome_flow.azure_tts.con3" = "Kan koste penge";
+"welcome_flow.google_tts.title" = "Google Cloud Tekst-til-tale";
+"welcome_flow.google_tts.subtitle" = "Naturlige cloudstemmer med din egen API-nøgle";
+"welcome_flow.google_tts.pro1" = "Bredt udvalg af stemmer og sprog";
+"welcome_flow.google_tts.pro2" = "Ensartet kvalitet på tværs af enheder";
+"welcome_flow.google_tts.pro3" = "Dit eget projekt og din egen kvote";
+"welcome_flow.google_tts.con1" = "Kræver internet";
+"welcome_flow.google_tts.con2" = "Kræver opsætning og fakturering i Google Cloud";
+"welcome_flow.google_tts.con3" = "Brug kan koste penge";
 "welcome_flow.voice_setup.title" = "Vælg din stemme";
 "welcome_flow.voice_setup.subtitle" = "Vælg en stemme der lyder rigtig for dig";
 "welcome_flow.voice_test.placeholder" = "Hej, sådan lyder jeg!";
@@ -45,6 +53,7 @@
 "welcome_flow.open_settings" = "Åbn iOS Indstillinger";
 "welcome_flow.test_voice" = "Test din stemme";
 "welcome_flow.azure_voices_subtitle" = "Vælg mellem høj-kvalitets Azure stemmer";
+"welcome_flow.google_voices_subtitle" = "Vælg mellem Google Cloud-stemmer";
 "welcome_flow.choose_voice" = "Vælg stemme";
 "welcome_flow.change_voice" = "Skift stemme";
 "welcome_flow.test_text" = "Hej, sådan lyder jeg!";
