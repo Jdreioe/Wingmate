@@ -23,6 +23,10 @@ mod i18n;
 
 const DEFAULT_API_URL: &str = "http://127.0.0.1:8765";
 const WINGMATE_APP_ID: &str = "com.hojmoseit.wingmate";
+const GOOGLE_CLOUD_BILLING_URL: &str = "https://console.cloud.google.com/billing";
+const GOOGLE_TTS_API_URL: &str =
+    "https://console.cloud.google.com/apis/library/texttospeech.googleapis.com";
+const GOOGLE_API_CREDENTIALS_URL: &str = "https://console.cloud.google.com/apis/credentials";
 const APP_ICON_PNG: &[u8] =
     include_bytes!("../icons/hicolor/192x192/apps/com.hojmoseit.wingmate.png");
 const DESKTOP_ENTRY: &str = include_str!("../com.hojmoseit.wingmate.desktop");
@@ -223,9 +227,60 @@ struct Voice {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
+    display_name: Option<String>,
+    #[serde(default)]
     primary_language: Option<String>,
     #[serde(default)]
     supported_languages: Option<Vec<String>>,
+    #[serde(default)]
+    google_model: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct VoiceChoice {
+    name: String,
+    label: String,
+}
+
+impl std::fmt::Display for VoiceChoice {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.label)
+    }
+}
+
+const GOOGLE_MODEL_ORDER: [&str; 10] = [
+    "GEMINI_3_1_FLASH",
+    "GEMINI_2_5_FLASH",
+    "GEMINI_2_5_FLASH_LITE",
+    "GEMINI_2_5_PRO",
+    "CHIRP_3_HD",
+    "STUDIO",
+    "NEURAL2",
+    "WAVENET",
+    "STANDARD",
+    "OTHER",
+];
+
+fn google_model_label(model: &str) -> &str {
+    match model {
+        "GEMINI_3_1_FLASH" => "Gemini 3.1 Flash",
+        "GEMINI_2_5_FLASH" => "Gemini 2.5 Flash",
+        "GEMINI_2_5_FLASH_LITE" => "Gemini 2.5 Flash Lite",
+        "GEMINI_2_5_PRO" => "Gemini 2.5 Pro",
+        "CHIRP_3_HD" => "Chirp 3 HD",
+        "STUDIO" => "Studio",
+        "NEURAL2" => "Neural2",
+        "WAVENET" => "WaveNet",
+        "STANDARD" => "Standard",
+        _ => "Other",
+    }
+}
+
+fn google_model_id_from_label(label: &str) -> Option<&'static str> {
+    GOOGLE_MODEL_ORDER
+        .iter()
+        .copied()
+        .find(|model| google_model_label(model) == label)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -462,6 +517,12 @@ struct InsertionResult {
 struct AzureConfig {
     endpoint: String,
     #[serde(rename = "credentialConfigured")]
+    credential_configured: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleConfig {
     credential_configured: bool,
 }
 
@@ -794,6 +855,7 @@ struct Wingmate {
     settings: Settings,
     selected_voice_name: Option<String>,
     preview_voice_name: Option<String>,
+    google_model_filter: String,
     editing_access: EditingAccessState,
     editing_access_code: String,
     editing_access_new_code: String,
@@ -841,6 +903,9 @@ struct Wingmate {
     azure_key: String,
     azure_credential_configured: bool,
     replacing_azure_credentials: bool,
+    google_key: String,
+    google_credential_configured: bool,
+    replacing_google_credentials: bool,
     status: String,
     speech_state: String,
     board_sentence_tokens: Vec<String>,
@@ -880,6 +945,7 @@ enum Message {
     LoadedImages(Vec<(String, Result<LoadedImageData, String>)>),
     LoadedPredictions(Result<Predictions, String>),
     LoadedAzureConfig(Result<AzureConfig, String>),
+    LoadedGoogleConfig(Result<GoogleConfig, String>),
     LoadedHistory(Result<Vec<HistoryEntry>, String>),
     LoadedBoardSets(Result<Vec<BoardSet>, String>),
     LoadedBoardGraph(Result<BoardGraph, String>),
@@ -936,16 +1002,24 @@ enum Message {
     CancelCategoryEdit,
     MoveCategory(String, i32),
     ToggleManagePhrases,
-    VoicePreviewSelected(String),
+    VoicePreviewSelected(VoiceChoice),
+    GoogleModelFilterChanged(String),
     PreviewVoice,
     ApplyPreviewVoice,
     RateChanged(f32),
     EngineChanged(String),
+    EngineChangedSaved(Result<Vec<Voice>, String>),
     AzureEndpointChanged(String),
     AzureKeyChanged(String),
     ReplaceAzureCredentials,
     SaveAzureConfig,
     AzureConfigSaved(Result<(), String>),
+    GoogleKeyChanged(String),
+    ReplaceGoogleCredentials,
+    ClearGoogleCredentials,
+    SaveGoogleConfig,
+    GoogleConfigSaved(Result<(), String>),
+    OpenGoogleSetupUrl(&'static str),
     PrimaryLanguageChanged(String),
     SecondaryLanguageChanged(String),
     AppearanceChanged(String),
@@ -1153,6 +1227,7 @@ impl cosmic::Application for Wingmate {
             settings: Settings::default(),
             selected_voice_name: None,
             preview_voice_name: None,
+            google_model_filter: String::new(),
             editing_access: EditingAccessState::default(),
             editing_access_code: String::new(),
             editing_access_new_code: String::new(),
@@ -1200,6 +1275,9 @@ impl cosmic::Application for Wingmate {
             azure_key: String::new(),
             azure_credential_configured: false,
             replacing_azure_credentials: false,
+            google_key: String::new(),
+            google_credential_configured: false,
+            replacing_google_credentials: false,
             status: fl!("status-starting"),
             speech_state: "idle".into(),
             board_sentence_tokens: Vec::new(),
@@ -1431,6 +1509,14 @@ impl cosmic::Application for Wingmate {
                     self.azure_key.clear();
                     self.azure_credential_configured = config.credential_configured;
                     self.replacing_azure_credentials = false;
+                }
+                Err(e) => self.status = e,
+            },
+            Message::LoadedGoogleConfig(result) => match result {
+                Ok(config) => {
+                    self.google_key.clear();
+                    self.google_credential_configured = config.credential_configured;
+                    self.replacing_google_credentials = false;
                 }
                 Err(e) => self.status = e,
             },
@@ -2027,7 +2113,17 @@ impl cosmic::Application for Wingmate {
             Message::ToggleManagePhrases => {
                 self.manage_phrases = !self.manage_phrases;
             }
-            Message::VoicePreviewSelected(voice) => self.preview_voice_name = Some(voice),
+            Message::VoicePreviewSelected(voice) => self.preview_voice_name = Some(voice.name),
+            Message::GoogleModelFilterChanged(model) => {
+                self.google_model_filter = if model == fl!("speech-google-model-all") {
+                    String::new()
+                } else {
+                    google_model_id_from_label(&model)
+                        .unwrap_or_default()
+                        .to_string()
+                };
+                self.preview_voice_name = None;
+            }
             Message::PreviewVoice => {
                 if let Some(voice) = self.preview_voice_name.clone() {
                     self.status = fl!("voice-preview-playing");
@@ -2056,14 +2152,14 @@ impl cosmic::Application for Wingmate {
             }
             Message::EngineChanged(engine) => {
                 self.settings.tts_engine = engine.clone();
-                return self
-                    .api
-                    .put_json(
-                        "/api/settings/systemtts",
-                        serde_json::json!({"ttsEngine": engine}),
-                    )
-                    .map(cosmic::Action::App);
+                self.google_model_filter.clear();
+                self.preview_voice_name = None;
+                return self.api.save_engine(engine).map(cosmic::Action::App);
             }
+            Message::EngineChangedSaved(result) => match result {
+                Ok(voices) => self.voices = voices,
+                Err(error) => self.status = error,
+            },
             Message::AzureEndpointChanged(value) => self.azure_endpoint = value,
             Message::AzureKeyChanged(value) => self.azure_key = value,
             Message::ReplaceAzureCredentials => {
@@ -2087,6 +2183,50 @@ impl cosmic::Application for Wingmate {
                 }
                 Err(error) => self.status = error,
             },
+            Message::GoogleKeyChanged(value) => self.google_key = value,
+            Message::ReplaceGoogleCredentials => {
+                self.google_key.clear();
+                self.replacing_google_credentials = true;
+            }
+            Message::ClearGoogleCredentials => {
+                self.google_key.clear();
+                self.google_credential_configured = false;
+                self.replacing_google_credentials = false;
+                return self.api.clear_google_config().map(cosmic::Action::App);
+            }
+            Message::SaveGoogleConfig => {
+                return self
+                    .api
+                    .save_google_config(self.google_key.clone())
+                    .map(cosmic::Action::App);
+            }
+            Message::GoogleConfigSaved(result) => match result {
+                Ok(()) => {
+                    self.google_credential_configured = true;
+                    self.replacing_google_credentials = false;
+                    self.google_key.clear();
+                    self.status = fl!("status-ready");
+                    return Task::batch([
+                        self.api.load_settings().map(cosmic::Action::App),
+                        self.api.load_voices().map(cosmic::Action::App),
+                    ]);
+                }
+                Err(error) => self.status = error,
+            },
+            Message::OpenGoogleSetupUrl(url) => {
+                return Task::perform(
+                    async move {
+                        let uri = url::Url::parse(url).map_err(|error| error.to_string())?;
+                        cosmic::dialog::ashpd::desktop::open_uri::OpenFileRequest::default()
+                            .send_uri(&uri)
+                            .await
+                            .map(|_| ())
+                            .map_err(|error| error.to_string())
+                    },
+                    Message::ActionFinished,
+                )
+                .map(cosmic::Action::App);
+            }
             Message::PrimaryLanguageChanged(language) => {
                 self.settings.primary_language = language.clone();
                 self.settings.language = language.clone();
@@ -2569,7 +2709,7 @@ impl cosmic::Application for Wingmate {
                 }
                 self.partner.update_text(self.draft.clone());
             }
-            Message::OnboardingNext => self.onboarding_step = (self.onboarding_step + 1).min(2),
+            Message::OnboardingNext => self.onboarding_step = (self.onboarding_step + 1).min(3),
             Message::OnboardingBack => {
                 self.onboarding_step = self.onboarding_step.saturating_sub(1)
             }
@@ -3927,7 +4067,106 @@ impl Wingmate {
         .into()
     }
 
+    fn google_tts_setup_view(&self, allow_clear: bool) -> Element<'_, Message> {
+        if self.google_credential_configured && !self.replacing_google_credentials {
+            let clear: Element<'_, Message> = if allow_clear {
+                labeled_icon_button(
+                    "edit-delete-symbolic",
+                    fl!("speech-google-clear"),
+                    Message::ClearGoogleCredentials,
+                )
+            } else {
+                Space::new().into()
+            };
+            return column![
+                text(fl!("speech-google-configured")),
+                row![
+                    labeled_icon_button(
+                        "document-edit-symbolic",
+                        fl!("speech-google-replace"),
+                        Message::ReplaceGoogleCredentials,
+                    ),
+                    clear,
+                ]
+                .spacing(8),
+            ]
+            .spacing(8)
+            .into();
+        }
+
+        column![
+            text(fl!("speech-google-guide-title")).size(18),
+            text(fl!("speech-google-guide-steps")),
+            row![
+                labeled_icon_button(
+                    "applications-internet-symbolic",
+                    fl!("speech-google-open-billing"),
+                    Message::OpenGoogleSetupUrl(GOOGLE_CLOUD_BILLING_URL),
+                ),
+                labeled_icon_button(
+                    "emblem-default-symbolic",
+                    fl!("speech-google-enable-api"),
+                    Message::OpenGoogleSetupUrl(GOOGLE_TTS_API_URL),
+                ),
+            ]
+            .spacing(8),
+            labeled_icon_button(
+                "dialog-password-symbolic",
+                fl!("speech-google-create-key"),
+                Message::OpenGoogleSetupUrl(GOOGLE_API_CREDENTIALS_URL),
+            ),
+            text(fl!("speech-google-desktop-restriction")).size(13),
+            text_input(&fl!("speech-google-key"), &self.google_key)
+                .on_input(Message::GoogleKeyChanged)
+                .secure(true)
+                .padding(12),
+            text(fl!("speech-google-secure-storage")).size(13),
+            labeled_icon_button(
+                "document-save-symbolic",
+                fl!("speech-google-save-validate"),
+                Message::SaveGoogleConfig,
+            ),
+        ]
+        .spacing(8)
+        .into()
+    }
+
     fn welcome_view(&self) -> Element<'_, Message> {
+        let speech_credentials: Element<'_, Message> = match self.settings.tts_engine.as_str() {
+            "GOOGLE_CLOUD" => self.google_tts_setup_view(false),
+            "AZURE_USER_RESOURCE" | "AZURE_MANAGED" => {
+                if self.azure_credential_configured && !self.replacing_azure_credentials {
+                    column![
+                        text(fl!("speech-azure-configured")),
+                        labeled_icon_button(
+                            "document-edit-symbolic",
+                            fl!("speech-azure-replace"),
+                            Message::ReplaceAzureCredentials,
+                        ),
+                    ]
+                    .spacing(8)
+                    .into()
+                } else {
+                    column![
+                        text_input(&fl!("speech-azure-endpoint"), &self.azure_endpoint)
+                            .on_input(Message::AzureEndpointChanged)
+                            .padding(12),
+                        text_input(&fl!("speech-azure-key"), &self.azure_key)
+                            .on_input(Message::AzureKeyChanged)
+                            .secure(true)
+                            .padding(12),
+                        labeled_icon_button(
+                            "document-save-symbolic",
+                            fl!("speech-azure-save"),
+                            Message::SaveAzureConfig,
+                        ),
+                    ]
+                    .spacing(8)
+                    .into()
+                }
+            }
+            _ => text(fl!("onboarding-speech-system-description")).into(),
+        };
         let body: Element<'_, Message> = match self.onboarding_step {
             0 => column![
                 text(fl!("onboarding-welcome-title")).size(40),
@@ -3945,6 +4184,28 @@ impl Wingmate {
                 checkbox(self.onboarding_screens)
                     .label(fl!("onboarding-screens"))
                     .on_toggle(Message::OnboardingMode),
+                row![
+                    labeled_icon_button("go-previous-symbolic", "Back", Message::OnboardingBack),
+                    labeled_icon_button("go-next-symbolic", "Next", Message::OnboardingNext)
+                ]
+                .spacing(10),
+            ]
+            .spacing(18)
+            .into(),
+            2 => column![
+                text(fl!("onboarding-speech-title")).size(32),
+                text(fl!("onboarding-speech-description")),
+                pick_list(
+                    vec![
+                        "SYSTEM".to_string(),
+                        "AZURE_USER_RESOURCE".to_string(),
+                        "GOOGLE_CLOUD".to_string(),
+                    ],
+                    Some(self.settings.tts_engine.clone()),
+                    Message::EngineChanged,
+                ),
+                speech_credentials,
+                text(fl!("onboarding-speech-later")).size(13),
                 row![
                     labeled_icon_button("go-previous-symbolic", "Back", Message::OnboardingBack),
                     labeled_icon_button("go-next-symbolic", "Next", Message::OnboardingNext)
@@ -5078,31 +5339,59 @@ impl Wingmate {
                     .as_deref()
                     .is_some_and(|name| name.starts_with(&language_prefix))
         };
-        let mut voice_names: Vec<String> = self
+        let voice_matches_model = |voice: &&Voice| {
+            self.settings.tts_engine != "GOOGLE_CLOUD"
+                || self.google_model_filter.is_empty()
+                || voice.google_model.as_deref() == Some(self.google_model_filter.as_str())
+        };
+        let mut voice_choices: Vec<VoiceChoice> = self
             .voices
             .iter()
+            .filter(voice_matches_model)
             .filter(voice_matches_language)
-            .filter_map(|voice| voice.name.clone())
+            .filter_map(|voice| {
+                voice.name.clone().map(|name| VoiceChoice {
+                    label: voice.display_name.clone().unwrap_or_else(|| name.clone()),
+                    name,
+                })
+            })
             .collect();
         // Older/system voice providers may not publish locale metadata. Avoid
         // hiding their voices if no match can be established.
-        if voice_names.is_empty() {
-            voice_names = self
+        if voice_choices.is_empty() {
+            voice_choices = self
                 .voices
                 .iter()
-                .filter_map(|voice| voice.name.clone())
+                .filter(voice_matches_model)
+                .filter_map(|voice| {
+                    voice.name.clone().map(|name| VoiceChoice {
+                        label: voice.display_name.clone().unwrap_or_else(|| name.clone()),
+                        name,
+                    })
+                })
                 .collect();
         }
-        voice_names.sort();
-        voice_names.dedup();
-        let active_voice = self
+        voice_choices.sort_by(|left, right| {
+            left.label
+                .cmp(&right.label)
+                .then(left.name.cmp(&right.name))
+        });
+        voice_choices.dedup_by(|left, right| left.name == right.name);
+        let active_voice_name = self
             .selected_voice_name
             .clone()
-            .filter(|name| voice_names.contains(name))
+            .filter(|name| voice_choices.iter().any(|voice| &voice.name == name))
             .or_else(|| {
-                Some(self.settings.voice.clone()).filter(|name| voice_names.contains(name))
+                Some(self.settings.voice.clone())
+                    .filter(|name| voice_choices.iter().any(|voice| &voice.name == name))
             });
-        let selected_voice = self.preview_voice_name.clone().or(active_voice);
+        let selected_voice_name = self.preview_voice_name.clone().or(active_voice_name);
+        let selected_voice = selected_voice_name.and_then(|name| {
+            voice_choices
+                .iter()
+                .find(|voice| voice.name == name)
+                .cloned()
+        });
         let mut languages: Vec<String> = self
             .voices
             .iter()
@@ -5155,13 +5444,40 @@ impl Wingmate {
                 .spacing(6)
                 .into()
             };
+        let google_credentials = self.google_tts_setup_view(true);
+        let google_model_picker: Element<'_, Message> =
+            if self.settings.tts_engine == "GOOGLE_CLOUD" {
+                let available_ids: std::collections::HashSet<&str> = self
+                    .voices
+                    .iter()
+                    .filter_map(|voice| voice.google_model.as_deref())
+                    .collect();
+                let mut options = vec![fl!("speech-google-model-all")];
+                options.extend(
+                    GOOGLE_MODEL_ORDER
+                        .iter()
+                        .filter(|model| available_ids.contains(**model))
+                        .map(|model| google_model_label(model).to_string()),
+                );
+                let selected = if self.google_model_filter.is_empty() {
+                    fl!("speech-google-model-all")
+                } else {
+                    google_model_label(&self.google_model_filter).to_string()
+                };
+                settings_row(
+                    fl!("speech-google-model"),
+                    pick_list(options, Some(selected), Message::GoogleModelFilterChanged).into(),
+                )
+            } else {
+                Space::new().height(0).into()
+            };
 
         scrollable(
             column![
                 settings_row(
                     fl!("speech-voice"),
                     row![
-                        pick_list(voice_names, selected_voice, Message::VoicePreviewSelected)
+                        pick_list(voice_choices, selected_voice, Message::VoicePreviewSelected)
                             .width(Fill),
                         compact_icon_button(
                             "media-playback-start-symbolic",
@@ -5180,12 +5496,17 @@ impl Wingmate {
                 settings_row(
                     fl!("speech-engine"),
                     pick_list(
-                        vec!["SYSTEM".to_string(), "AZURE_USER_RESOURCE".to_string()],
+                        vec![
+                            "SYSTEM".to_string(),
+                            "AZURE_USER_RESOURCE".to_string(),
+                            "GOOGLE_CLOUD".to_string(),
+                        ],
                         Some(self.settings.tts_engine.clone()),
                         Message::EngineChanged
                     )
                     .into(),
                 ),
+                google_model_picker,
                 settings_row(
                     fl!("speech-speed"),
                     slider(0.5..=2.0, self.settings.speech_rate, Message::RateChanged)
@@ -5211,6 +5532,11 @@ impl Wingmate {
                     .into(),
                 ),
                 column![text(fl!("speech-azure-title")).size(15), azure_credentials,].spacing(6),
+                column![
+                    text(fl!("speech-google-title")).size(15),
+                    google_credentials,
+                ]
+                .spacing(6),
             ]
             .spacing(14),
         )
@@ -5926,6 +6252,7 @@ impl Api {
             self.load_history(),
             self.load_board_sets(),
             self.load_azure_config(),
+            self.load_google_config(),
             self.load_editing_access(),
         ])
     }
@@ -5969,6 +6296,9 @@ impl Api {
     }
     fn load_azure_config(&self) -> Task<Message> {
         self.get("/api/azure-config", Message::LoadedAzureConfig)
+    }
+    fn load_google_config(&self) -> Task<Message> {
+        self.get("/api/google-config", Message::LoadedGoogleConfig)
     }
     fn load_history(&self) -> Task<Message> {
         self.get("/api/history", Message::LoadedHistory)
@@ -6327,6 +6657,48 @@ impl Api {
                 .await
             },
             Message::AzureConfigSaved,
+        )
+    }
+
+    fn save_google_config(&self, key: String) -> Task<Message> {
+        let api = self.clone();
+        Task::perform(
+            async move {
+                api.request_unit(
+                    Method::POST,
+                    "/api/google-config",
+                    Some(serde_json::json!({"key": key})),
+                )
+                .await
+            },
+            Message::GoogleConfigSaved,
+        )
+    }
+
+    fn save_engine(&self, engine: String) -> Task<Message> {
+        let api = self.clone();
+        Task::perform(
+            async move {
+                api.request_unit(
+                    Method::PUT,
+                    "/api/settings/systemtts",
+                    Some(serde_json::json!({"ttsEngine": engine})),
+                )
+                .await?;
+                api.request_json(Method::GET, "/api/voices", None).await
+            },
+            Message::EngineChangedSaved,
+        )
+    }
+
+    fn clear_google_config(&self) -> Task<Message> {
+        let api = self.clone();
+        Task::perform(
+            async move {
+                api.request_unit(Method::DELETE, "/api/google-config", None)
+                    .await
+            },
+            Message::ActionFinished,
         )
     }
 

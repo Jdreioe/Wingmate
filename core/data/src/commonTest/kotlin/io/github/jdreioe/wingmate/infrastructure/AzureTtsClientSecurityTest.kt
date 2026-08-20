@@ -121,6 +121,40 @@ class AzureTtsClientSecurityTest {
     }
 
     @Test
+    fun multilingualVoiceRetainsSecondaryLocalesFromAzureCatalog() = runBlocking {
+        val client = HttpClient(MockEngine {
+            respond(
+                content = """
+                    [{
+                      "Name": "Microsoft Server Speech Text to Speech Voice (en-US, AvaMultilingualNeural)",
+                      "ShortName": "en-US-AvaMultilingualNeural",
+                      "Gender": "Female",
+                      "Locale": "en-US",
+                      "LocalName": "Ava Multilingual",
+                      "DisplayName": "Ava Multilingual",
+                      "SecondaryLocaleList": ["da-DK", "de-DE"]
+                    }]
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        }) {
+            followRedirects = false
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true })
+            }
+        }
+
+        val voice = AzureTtsClient.getVoices(
+            client,
+            SpeechServiceConfig("northeurope", "azure-secret"),
+        ).single()
+
+        assertEquals(listOf("en-US", "da-DK", "de-DE"), voice.supportedLanguages)
+        client.close()
+    }
+
+    @Test
     fun redirectResponseIsNotFollowed() = runBlocking {
         var requests = 0
         val client = HttpClient(MockEngine {

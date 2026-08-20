@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.*
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
+import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 
 /**
  * Thin application-layer use-cases that encapsulate domain repository calls.
@@ -67,17 +68,29 @@ class SettingsUseCase(
 class VoiceUseCase(
     private val repo: VoiceRepository,
     private val azure: AzureVoiceCatalog,
+    private val google: GoogleVoiceCatalog,
     private val configRepo: ConfigRepository,
     private val featureUsageReporter: FeatureUsageReporter,
     private val boardSetSpeechCache: BoardSpeechCache? = null,
 ) {
     suspend fun list(): List<Voice> = repo.getVoices()
+    suspend fun listForEngine(engine: TtsEngine): List<Voice> = repo.getVoices().forTtsEngine(engine)
     suspend fun selected(): Voice? = repo.getSelected()
     suspend fun select(voice: Voice) {
         repo.saveSelected(voice)
+        val provider = voice.provider
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.VOICE_SELECTED,
-            "provider" to if (voice.name?.contains("Neural", ignoreCase = true) == true) "azure" else "system",
+            "provider" to when {
+                provider != null -> provider.name.lowercase()
+                voice.name?.contains("Neural2", ignoreCase = true) == true ||
+                    voice.name?.contains("Wavenet", ignoreCase = true) == true ||
+                    voice.name?.contains("Chirp", ignoreCase = true) == true ||
+                    voice.name?.contains("Journey", ignoreCase = true) == true ||
+                    voice.name?.startsWith("google|") == true -> "google"
+                voice.name?.contains("Neural", ignoreCase = true) == true -> "azure"
+                else -> "system"
+            },
             "primary_language" to voice.primaryLanguage,
             "selected_language" to voice.selectedLanguage
         )
@@ -90,6 +103,18 @@ class VoiceUseCase(
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.VOICE_REFRESHED,
             "count" to list.size.toString()
+        )
+        return list
+    }
+
+    suspend fun refreshFromGoogle(): List<Voice> {
+        val list = google.list()
+        // Keep the last working catalog if validation or refresh fails.
+        if (list.isNotEmpty()) repo.saveVoices(list)
+        featureUsageReporter.reportEvent(
+            FeatureUsageEvents.VOICE_REFRESHED,
+            "provider" to "google",
+            "count" to list.size.toString(),
         )
         return list
     }

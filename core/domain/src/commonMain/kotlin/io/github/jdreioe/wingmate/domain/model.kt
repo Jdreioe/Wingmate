@@ -62,7 +62,8 @@ enum class StartupMode {
 enum class TtsEngine {
     SYSTEM,
     AZURE_USER_RESOURCE,
-    AZURE_MANAGED
+    AZURE_MANAGED,
+    GOOGLE_CLOUD,
 }
 
 @Serializable

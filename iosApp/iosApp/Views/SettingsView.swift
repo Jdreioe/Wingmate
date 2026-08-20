@@ -177,6 +177,7 @@ private struct SpeechSettingsView: View {
     @ObservedObject var model: IosViewModel
     @State private var showVoicePicker = false
     @State private var showAzureSetup = false
+    @State private var showGoogleSetup = false
 
     private var languages: [String] {
         model.availableLanguages.isEmpty ? [model.primaryLanguage] : model.availableLanguages
@@ -202,11 +203,12 @@ private struct SpeechSettingsView: View {
 
             Section("settings.tts.title") {
                 Picker("settings.speech.engine", selection: Binding(
-                    get: { model.useSystemTts },
-                    set: { model.setUseSystemTts($0) }
+                    get: { model.ttsEngine },
+                    set: { model.setTtsEngine($0) }
                 )) {
-                    Text("settings.speech.engine.azure").tag(false)
-                    Text("settings.speech.engine.system").tag(true)
+                    Text("settings.speech.engine.system").tag("SYSTEM")
+                    Text("settings.speech.engine.azure").tag("AZURE_USER_RESOURCE")
+                    Text("settings.speech.engine.google").tag("GOOGLE_CLOUD")
                 }
                 .pickerStyle(.segmented)
 
@@ -216,13 +218,21 @@ private struct SpeechSettingsView: View {
                 ))
                 .disabled(model.useSystemTts)
 
-                if !model.useSystemTts {
+                if model.ttsEngine == "AZURE_USER_RESOURCE" || model.ttsEngine == "AZURE_MANAGED" {
                     Button {
                         showAzureSetup = true
                     } label: {
                         SettingsNavigationLabel(
                             title: "settings.speech.azure.configure",
                             value: model.azureConfigured ? "settings.speech.azure.configured" : "settings.speech.azure.not_configured"
+                        )
+                    }
+                }
+                if model.ttsEngine == "GOOGLE_CLOUD" {
+                    Button { showGoogleSetup = true } label: {
+                        SettingsNavigationLabel(
+                            title: "settings.speech.google.configure",
+                            value: model.googleConfigured ? "settings.speech.google.configured" : "settings.speech.google.not_configured"
                         )
                     }
                 }
@@ -283,6 +293,161 @@ private struct SpeechSettingsView: View {
                 },
                 onBack: { showAzureSetup = false }
             )
+        }
+        .sheet(isPresented: $showGoogleSetup) {
+            GoogleTtsSetupView(model: model, onClose: { showGoogleSetup = false })
+        }
+    }
+}
+
+private enum GoogleTtsSetupStep {
+    case welcome
+    case cloudProject
+    case apiKey
+    case success
+}
+
+struct GoogleTtsSetupView: View {
+    @ObservedObject var model: IosViewModel
+    let onClose: () -> Void
+    let onSaved: (() -> Void)?
+    @State private var step = GoogleTtsSetupStep.welcome
+    @State private var apiKey = ""
+    @State private var saving = false
+    @State private var errorMessage: String?
+
+    private let billingURL = URL(string: "https://console.cloud.google.com/billing")!
+    private let apiURL = URL(string: "https://console.cloud.google.com/apis/library/texttospeech.googleapis.com")!
+    private let credentialsURL = URL(string: "https://console.cloud.google.com/apis/credentials")!
+
+    init(model: IosViewModel, onClose: @escaping () -> Void, onSaved: (() -> Void)? = nil) {
+        self.model = model
+        self.onClose = onClose
+        self.onSaved = onSaved
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                switch step {
+                case .welcome:
+                    Section {
+                        Text("settings.speech.google.setup.welcome_description")
+                        Button {
+                            step = .cloudProject
+                        } label: {
+                            Label("settings.speech.google.setup.guided", systemImage: "list.number")
+                        }
+                        Button("settings.speech.google.setup.have_key") {
+                            step = .apiKey
+                        }
+                        if model.googleConfigured {
+                            Label("settings.speech.google.configured", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                            Button("common.continue", action: onClose)
+                        }
+                    } header: {
+                        Text("settings.speech.google.setup.welcome_title")
+                    }
+
+                case .cloudProject:
+                    Section {
+                        Text("settings.speech.google.setup.cloud_steps")
+                        Link(destination: billingURL) {
+                            Label("settings.speech.google.setup.billing", systemImage: "creditcard")
+                        }
+                        Link(destination: apiURL) {
+                            Label("settings.speech.google.setup.enable_api", systemImage: "checkmark.circle")
+                        }
+                        Link(destination: credentialsURL) {
+                            Label("settings.speech.google.setup.create_key", systemImage: "key")
+                        }
+                        Button("settings.speech.google.setup.have_created_key") {
+                            step = .apiKey
+                        }
+                    } header: {
+                        Text("settings.speech.google.setup.cloud_title")
+                    }
+
+                case .apiKey:
+                    Section {
+                        Text("settings.speech.google.setup.restrict_api")
+                        Text(
+                            String(
+                                format: NSLocalizedString("settings.speech.google.setup.ios_restriction", comment: ""),
+                                Bundle.main.bundleIdentifier ?? "—"
+                            )
+                        )
+                        .textSelection(.enabled)
+                        .font(.footnote)
+                        Text("settings.speech.google.help")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        SecureField("settings.speech.google.api_key", text: $apiKey)
+                            .textContentType(.password)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                        if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+                        Button("settings.speech.google.setup.save_validate") {
+                            Task {
+                                saving = true
+                                errorMessage = nil
+                                defer { saving = false }
+                                do {
+                                    try await model.saveGoogleApiKey(apiKey)
+                                    apiKey = ""
+                                    step = .success
+                                    onSaved?()
+                                } catch {
+                                    errorMessage = NSLocalizedString("settings.speech.google.setup.validation_failed", comment: "")
+                                }
+                            }
+                        }
+                        .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
+                    } header: {
+                        Text("settings.speech.google.setup.key_title")
+                    }
+
+                    if model.googleConfigured {
+                        Section {
+                            Button("settings.speech.google.clear", role: .destructive) {
+                                Task {
+                                    do {
+                                        try await model.clearGoogleApiKey()
+                                    } catch {
+                                        errorMessage = NSLocalizedString("settings.speech.google.clear_failed", comment: "")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                case .success:
+                    Section {
+                        Label("settings.speech.google.setup.complete_title", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text("settings.speech.google.setup.complete_description")
+                        Button("common.continue", action: onClose)
+                    }
+                }
+            }
+            .navigationTitle(Text("settings.speech.google.configure"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        switch step {
+                        case .welcome:
+                            onClose()
+                        case .cloudProject, .apiKey:
+                            step = .welcome
+                        case .success:
+                            onClose()
+                        }
+                    } label: {
+                        Text(LocalizedStringKey(step == .welcome ? "common.cancel" : "common.back"))
+                    }
+                }
+            }
         }
     }
 }

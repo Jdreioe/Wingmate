@@ -13,6 +13,7 @@ import io.github.jdreioe.wingmate.domain.obf.shouldSpeakSelectionImmediately
 /** Swift-friendly snapshot of the toggle-flag settings the iOS UI uses for parity. */
 data class IosSettingsFlags(
     val usesSystemTts: Boolean,
+    val ttsEngine: String,
     val startupUsesScreens: Boolean,
 )
 
@@ -103,6 +104,7 @@ class SettingsFacade(
         val settings = settingsUseCase.get()
         return IosSettingsFlags(
             usesSystemTts = settings.ttsEngine == TtsEngine.SYSTEM,
+            ttsEngine = settings.ttsEngine.name,
             startupUsesScreens = settings.startupMode == StartupMode.Screens,
         )
     }

@@ -26,6 +26,7 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.forTtsEngine
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
@@ -65,6 +66,7 @@ import io.github.jdreioe.wingmate.application.AccessInputEffect
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
+import io.github.jdreioe.wingmate.application.SpeechFacade
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.infrastructure.QuickCorePreset
@@ -75,6 +77,7 @@ import io.github.jdreioe.wingmate.domain.UserDataManager
 import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.DictionaryLoader
 import io.github.jdreioe.wingmate.infrastructure.JvmFileStorage
+import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -147,11 +150,18 @@ class KotlinBridge(
     private val settingsManager = SettingsManager()
     private val accessInput = AccessInputController()
     private val configRepository: ConfigRepository by lazy { GlobalContext.get().get() }
+    private val speechFacade: SpeechFacade by lazy { GlobalContext.get().get() }
     private val azureConfigManager = AzureConfigManager()
     private val speechService = LinuxSpeechService()
     private val voiceRepository: VoiceRepository by lazy { GlobalContext.get().get() }
     private val pronunciationRepository: PronunciationDictionaryRepository by lazy { GlobalContext.get().get() }
-    private val azureSpeechService by lazy { AzureSpeechService(configRepository, pronunciationRepository) }
+    private val cloudSpeechService by lazy {
+        CloudSpeechService(
+            configRepository,
+            pronunciationRepository,
+            GlobalContext.get().get(),
+        )
+    }
     private val predictionService: TextPredictionService by lazy { GlobalContext.get().get() }
     private val saidTextRepository: SaidTextRepository by lazy { GlobalContext.get().get() }
     private val dictionaryLoader: DictionaryLoader by lazy { GlobalContext.get().get() }
@@ -475,7 +485,21 @@ class KotlinBridge(
                 val params = call.receive<Map<String, String>>()
                 val engineStr = params["ttsEngine"] ?: "SYSTEM"
                 val current = settingsManager.settings.value ?: io.github.jdreioe.wingmate.domain.Settings()
-                settingsManager.updateSettings(current.copy(ttsEngine = if (engineStr == "SYSTEM") TtsEngine.SYSTEM else TtsEngine.AZURE_USER_RESOURCE))
+                val engine = runCatching { TtsEngine.valueOf(engineStr) }.getOrDefault(TtsEngine.SYSTEM)
+                settingsManager.updateSettings(current.copy(ttsEngine = engine))
+                runCatching {
+                    val refreshed = when (engine) {
+                        TtsEngine.GOOGLE_CLOUD -> GoogleVoiceCatalog(configRepository).list()
+                        TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> {
+                            configRepository.getSpeechConfig()?.let {
+                                azureConfigManager.fetchAndSaveVoices(it)
+                            }
+                            emptyList()
+                        }
+                        TtsEngine.SYSTEM -> emptyList()
+                    }
+                    if (refreshed.isNotEmpty()) voiceRepository.saveVoices(refreshed)
+                }
                 call.respond(HttpStatusCode.OK)
             }
 
@@ -577,10 +601,38 @@ class KotlinBridge(
                 configRepository.clearSpeechConfig()
                 call.respond(HttpStatusCode.OK)
             }
+
+            get("/api/google-config") {
+                call.respond(configRepository.getGoogleSpeechConfigStatus())
+            }
+
+            post("/api/google-config") {
+                val key = call.receive<Map<String, String>>()["key"].orEmpty().trim()
+                if (key.isEmpty()) {
+                    return@post call.respondText("Enter a Google Cloud API key.", status = HttpStatusCode.BadRequest)
+                }
+                try {
+                    speechFacade.saveValidatedGoogleSpeechConfig(key)
+                    call.respond(HttpStatusCode.OK)
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (_: Exception) {
+                    call.respondText(
+                        "Wingmate could not verify this key. Check the key, connection, billing, API access, and restrictions. Your previous setup was kept.",
+                        status = HttpStatusCode.BadRequest,
+                    )
+                }
+            }
+
+            delete("/api/google-config") {
+                configRepository.clearGoogleSpeechConfig()
+                call.respond(HttpStatusCode.OK)
+            }
             
             // Voices
             get("/api/voices") {
-                val voices = voiceRepository.getVoices()
+                val engine = settingsManager.settings.value?.ttsEngine ?: TtsEngine.SYSTEM
+                val voices = voiceRepository.getVoices().forTtsEngine(engine)
                 call.respond(voices)
             }
             get("/api/voices/selected") {
@@ -598,7 +650,8 @@ class KotlinBridge(
                 if (voiceName.isBlank() || text.isBlank()) {
                     return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "voice and text are required"))
                 }
-                if (voiceRepository.getVoices().none { it.name == voiceName }) {
+                val engine = settingsManager.settings.value?.ttsEngine ?: TtsEngine.SYSTEM
+                if (voiceRepository.getVoices().forTtsEngine(engine).none { it.name == voiceName }) {
                     return@post call.respond(HttpStatusCode.NotFound, mapOf("error" to "Voice is unavailable"))
                 }
                 val generation = speechGeneration.incrementAndGet()
@@ -614,15 +667,15 @@ class KotlinBridge(
                 speechJob?.cancel()
                 speechJob = null
                 speechService.stop()
-                azureSpeechService.stop()
+                cloudSpeechService.stop()
                 speechState = SpeechStateResponse(state = "cancelled", requestId = speechGeneration.get())
                 call.respond(HttpStatusCode.OK)
             }
 
             post("/api/speak/pause") {
                 speechService.pause()
-                azureSpeechService.pause()
-                val paused = speechService.isPaused() || azureSpeechService.isPaused()
+                cloudSpeechService.pause()
+                val paused = speechService.isPaused() || cloudSpeechService.isPaused()
                 if (!paused) {
                     return@post call.respond(HttpStatusCode.Conflict, mapOf("error" to "Playback is not ready to pause"))
                 }
@@ -632,8 +685,8 @@ class KotlinBridge(
 
             post("/api/speak/resume") {
                 speechService.resume()
-                azureSpeechService.resume()
-                val playing = speechService.isPlaying() || azureSpeechService.isPlaying()
+                cloudSpeechService.resume()
+                val playing = speechService.isPlaying() || cloudSpeechService.isPlaying()
                 if (!playing) {
                     return@post call.respond(HttpStatusCode.Conflict, mapOf("error" to "Playback is not paused"))
                 }
@@ -642,7 +695,7 @@ class KotlinBridge(
             }
             
             get("/api/speak/status") {
-                val nativeState = listOf(speechService.playbackState(), azureSpeechService.playbackState())
+                val nativeState = listOf(speechService.playbackState(), cloudSpeechService.playbackState())
                     .firstOrNull { it.status != SpeechPlaybackStatus.IDLE }
                 val response = when (nativeState?.status) {
                     SpeechPlaybackStatus.PREPARING -> speechState.copy(
@@ -1478,10 +1531,10 @@ class KotlinBridge(
     ) {
         try {
             speechService.stop()
-            azureSpeechService.stop()
+            cloudSpeechService.stop()
 
             val settings = settingsManager.settings.value ?: Settings()
-            val voices = voiceRepository.getVoices()
+            val voices = voiceRepository.getVoices().forTtsEngine(settings.ttsEngine)
             val selectedName = voiceOverride?.takeIf { it.isNotBlank() }
                 ?: voiceRepository.getSelected()?.name?.takeIf { it.isNotBlank() }
                 ?: settings.voice.takeIf { it.isNotBlank() }
@@ -1494,17 +1547,25 @@ class KotlinBridge(
             val rate = settings.speechRate.toDouble()
             val voice = selected.copy(selectedLanguage = language, rate = rate)
 
-            val azureStatus = if (settings.ttsEngine == TtsEngine.SYSTEM) {
-                null
-            } else {
-                configRepository.getSpeechConfigStatus()
+            val cloudReady = when (settings.ttsEngine) {
+                TtsEngine.SYSTEM -> false
+                TtsEngine.GOOGLE_CLOUD -> configRepository.getGoogleSpeechConfigStatus().credentialConfigured
+                TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> {
+                    val status = configRepository.getSpeechConfigStatus()
+                    status.credentialConfigured && status.endpoint.isNotBlank()
+                }
             }
-            val azureReady = azureStatus?.credentialConfigured == true &&
-                azureStatus.endpoint.isNotBlank()
-            if (!azureReady) {
-                speechService.speakSegments(SpeechTextProcessor.processText(text), voice, rate = rate)
+            if (cloudReady) {
+                try {
+                    cloudSpeechService.speak(text, voice, rate = rate)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    if (speechGeneration.get() != generation) return
+                    speechService.speakSegments(SpeechTextProcessor.processText(text), voice, rate = rate)
+                }
             } else {
-                azureSpeechService.speak(text, voice, rate = rate)
+                speechService.speakSegments(SpeechTextProcessor.processText(text), voice, rate = rate)
             }
 
             if (speechGeneration.get() != generation) return

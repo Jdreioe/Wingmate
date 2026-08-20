@@ -88,7 +88,7 @@ private data class ThoughtDraft(
 )
 
 internal fun supportsMathMode(ttsEngine: TtsEngine): Boolean =
-    ttsEngine != TtsEngine.SYSTEM
+    ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED
 
 @OptIn(
     ExperimentalMaterial3Api::class,

@@ -8,9 +8,9 @@ struct WelcomeFlow: View {
     @State private var modeTour: String? = nil // "keyboard" or "screens"
     @State private var showVoicePicker = false
     @State private var showLanguagePicker = false
+    @State private var showGoogleSetup = false
     @State private var selectedVoice: Shared.Voice? = nil
-    @State private var hasConfiguredTts = false
-    @State private var selectedUseSystemTts: Bool? = nil
+    @State private var selectedTtsEngine: String? = nil
     @State private var voiceSelectorFollowsAzureSetup = false
     @State private var pendingLanguageSelection = false
     @State private var languageOptions: [String] = []
@@ -123,10 +123,23 @@ struct WelcomeFlow: View {
                 }
             )
         }
+        .sheet(isPresented: $showGoogleSetup) {
+            GoogleTtsSetupView(
+                model: model,
+                onClose: { showGoogleSetup = false },
+                onSaved: {
+                    voiceSelectorFollowsAzureSetup = false
+                    selectedTtsEngine = "GOOGLE_CLOUD"
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        currentStep = 4
+                    }
+                }
+            )
+        }
         .onAppear {
             checkTtsConfiguration()
             selectedVoice = model.selectedVoice
-            selectedUseSystemTts = model.useSystemTts
+            selectedTtsEngine = model.ttsEngine
         }
         .fileImporter(isPresented: $importingBackup, allowedContentTypes: [.zip, .data]) { result in
             if case .success(let url) = result { confirmRestoreURL = url }
@@ -279,10 +292,11 @@ struct WelcomeFlow: View {
     // MARK: - Step 2: Voice Engine Selector
     @ViewBuilder
     private var ttsSetupStep: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "gear")
-                .font(.system(size: 50))
-                .foregroundColor(.blue)
+        ScrollView {
+            VStack(spacing: 20) {
+                Image(systemName: "gear")
+                    .font(.system(size: 50))
+                    .foregroundColor(.blue)
 
             Text(NSLocalizedString("welcome_flow.tts_setup.title", comment: ""))
                 .font(.title2)
@@ -307,10 +321,10 @@ struct WelcomeFlow: View {
                         NSLocalizedString("welcome_flow.system_tts.con1", comment: ""),
                         NSLocalizedString("welcome_flow.system_tts.con2", comment: "")
                     ],
-                    isSelected: model.useSystemTts,
+                    isSelected: selectedTtsEngine == "SYSTEM",
                     action: {
-                        model.setUseSystemTts(true)
-                        selectedUseSystemTts = true
+                        model.setTtsEngine("SYSTEM")
+                        selectedTtsEngine = "SYSTEM"
                         voiceSelectorFollowsAzureSetup = false
                         withAnimation(.easeInOut(duration: 0.4)) {
                             currentStep = 4 // Move to voice selection
@@ -332,17 +346,48 @@ struct WelcomeFlow: View {
                         NSLocalizedString("welcome_flow.azure_tts.con2", comment: ""),
                         NSLocalizedString("welcome_flow.azure_tts.con3", comment: "")
                     ],
-                    isSelected: !model.useSystemTts,
+                    isSelected: selectedTtsEngine == "AZURE_USER_RESOURCE" || selectedTtsEngine == "AZURE_MANAGED",
                     action: {
-                        model.setUseSystemTts(false)
-                        selectedUseSystemTts = false
+                        model.setTtsEngine("AZURE_USER_RESOURCE")
+                        selectedTtsEngine = "AZURE_USER_RESOURCE"
                         withAnimation(.easeInOut(duration: 0.4)) {
                             currentStep = 3 // Guided F0 setup
                         }
                     }
                 )
+
+                TtsOptionCard(
+                    title: NSLocalizedString("welcome_flow.google_tts.title", comment: ""),
+                    subtitle: NSLocalizedString("welcome_flow.google_tts.subtitle", comment: ""),
+                    icon: "cloud.sun.fill",
+                    pros: [
+                        NSLocalizedString("welcome_flow.google_tts.pro1", comment: ""),
+                        NSLocalizedString("welcome_flow.google_tts.pro2", comment: ""),
+                        NSLocalizedString("welcome_flow.google_tts.pro3", comment: "")
+                    ],
+                    cons: [
+                        NSLocalizedString("welcome_flow.google_tts.con1", comment: ""),
+                        NSLocalizedString("welcome_flow.google_tts.con2", comment: ""),
+                        NSLocalizedString("welcome_flow.google_tts.con3", comment: "")
+                    ],
+                    isSelected: selectedTtsEngine == "GOOGLE_CLOUD",
+                    action: {
+                        model.setTtsEngine("GOOGLE_CLOUD")
+                        selectedTtsEngine = "GOOGLE_CLOUD"
+                        voiceSelectorFollowsAzureSetup = false
+                        if model.googleConfigured {
+                            withAnimation(.easeInOut(duration: 0.4)) {
+                                currentStep = 4
+                            }
+                        } else {
+                            showGoogleSetup = true
+                        }
+                    }
+                )
             }
+            .padding(.vertical, 8)
         }
+    }
     }
 
     // MARK: - Step 3: Guided F0 Azure Setup
@@ -410,7 +455,12 @@ struct WelcomeFlow: View {
                 }
             } else {
                 VStack(spacing: 16) {
-                    Text(NSLocalizedString("welcome_flow.azure_voices_subtitle", comment: ""))
+                    Text(NSLocalizedString(
+                        model.ttsEngine == "GOOGLE_CLOUD"
+                            ? "welcome_flow.google_voices_subtitle"
+                            : "welcome_flow.azure_voices_subtitle",
+                        comment: ""
+                    ))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
 
@@ -631,7 +681,9 @@ struct WelcomeFlow: View {
                     withAnimation(.easeInOut(duration: 0.4)) {
                         switch currentStep {
                         case 2:
-                            if selectedUseSystemTts == true {
+                            if selectedTtsEngine == "GOOGLE_CLOUD" && !model.googleConfigured {
+                                showGoogleSetup = true
+                            } else if selectedTtsEngine == "SYSTEM" || selectedTtsEngine == "GOOGLE_CLOUD" {
                                 currentStep = 4
                             } else {
                                 currentStep = 3
@@ -661,7 +713,7 @@ struct WelcomeFlow: View {
         switch currentStep {
         case 0: return true
         case 1: return true
-        case 2: return selectedUseSystemTts != nil
+        case 2: return selectedTtsEngine != nil
         case 3: return true
         case 4: return model.useSystemTts || selectedVoice != nil
         case 5: return true
@@ -672,8 +724,7 @@ struct WelcomeFlow: View {
     }
 
     private func checkTtsConfiguration() {
-        hasConfiguredTts = model.useSystemTts || model.azureConfigured
-        selectedUseSystemTts = model.useSystemTts
+        selectedTtsEngine = model.ttsEngine
     }
 
     private func availablePrimaryLanguages(for voice: Shared.Voice) -> [String] {

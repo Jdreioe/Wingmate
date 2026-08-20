@@ -95,6 +95,7 @@ class InMemorySaidTextRepository : SaidTextRepository {
 
 class InMemoryConfigRepository : ConfigRepository {
     private var cfg: SpeechServiceConfig? = null
+    private var googleCfg: GoogleSpeechConfig? = null
     override suspend fun getSpeechConfig(): SpeechServiceConfig? {
         delay(10)
         return cfg
@@ -106,6 +107,20 @@ class InMemoryConfigRepository : ConfigRepository {
     override suspend fun clearSpeechConfig() {
         delay(10)
         cfg = null
+    }
+    override suspend fun getGoogleSpeechConfig(): GoogleSpeechConfig? {
+        delay(10)
+        return googleCfg
+    }
+    override suspend fun saveGoogleSpeechConfig(config: GoogleSpeechConfig) {
+        delay(10)
+        googleCfg = config.copy(apiKey = config.apiKey.trim()).also {
+            require(it.apiKey.isNotEmpty()) { "Google Cloud API key is required" }
+        }
+    }
+    override suspend fun clearGoogleSpeechConfig() {
+        delay(10)
+        googleCfg = null
     }
 }
 

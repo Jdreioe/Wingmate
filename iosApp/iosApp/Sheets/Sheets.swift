@@ -1221,7 +1221,9 @@ struct VoiceSelectionSheet: View {
     @State private var error: String? = nil
     @State private var selected: Shared.Voice?
     @State private var query: String = ""
+    @State private var googleModelFilter: String = ""
     @State private var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
+    @State private var ttsEngine: String = UserDefaults.standard.string(forKey: "tts_engine") ?? "SYSTEM"
     private let speechFacade = IosDiBridge().speechFacade()
 
     let current: Shared.Voice?
@@ -1261,6 +1263,22 @@ struct VoiceSelectionSheet: View {
                     }
                     .padding(8)
                     .background(Color(.secondarySystemBackground))
+
+                    if ttsEngine == "GOOGLE_CLOUD" {
+                        HStack {
+                            Text("voice.model.label")
+                            Spacer()
+                            Picker("voice.model.label", selection: $googleModelFilter) {
+                                Text("voice.model.all").tag("")
+                                ForEach(availableGoogleModels, id: \.self) { model in
+                                    Text(googleModelLabel(model)).tag(model)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 6)
+                    }
                 }
 
                 Group {
@@ -1310,13 +1328,14 @@ struct VoiceSelectionSheet: View {
                 ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) }
                 if !useSystemTts {
                     ToolbarItemGroup(placement: .topBarTrailing) {
-                        Button { Task { await refreshFromAzure() } } label: { Image(systemName: "arrow.clockwise") }
+                        Button { Task { await refreshFromCloud() } } label: { Image(systemName: "arrow.clockwise") }
                         Button("common.select") { if let v = selected { onSelect(v); onClose() } }
                     }
                 }
             }
             .onAppear { 
                 useSystemTts = UserDefaults.standard.bool(forKey: "use_system_tts")
+                ttsEngine = UserDefaults.standard.string(forKey: "tts_engine") ?? (useSystemTts ? "SYSTEM" : "AZURE_USER_RESOURCE")
                 if !useSystemTts {
                     Task { await loadInitial() } 
                 }
@@ -1326,12 +1345,43 @@ struct VoiceSelectionSheet: View {
 
     private var filteredVoices: [Shared.Voice] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return voices }
         return voices.filter { v in
+            if ttsEngine == "GOOGLE_CLOUD", !googleModelFilter.isEmpty,
+               v.googleModelId != googleModelFilter {
+                return false
+            }
+            guard !q.isEmpty else { return true }
             let name = (v.displayName ?? v.name ?? "").lowercased()
             let locale = (v.primaryLanguage ?? "").lowercased()
             return name.contains(q.lowercased()) || locale.contains(q.lowercased())
         }
+    }
+
+    private var availableGoogleModels: [String] {
+        let desiredOrder = [
+            "GEMINI_3_1_FLASH", "GEMINI_2_5_FLASH", "GEMINI_2_5_FLASH_LITE",
+            "GEMINI_2_5_PRO", "CHIRP_3_HD", "STUDIO", "NEURAL2", "WAVENET",
+            "STANDARD", "OTHER"
+        ]
+        let available = Set(voices.compactMap(\.googleModelId))
+        return desiredOrder.filter(available.contains)
+    }
+
+    private func googleModelLabel(_ model: String) -> String {
+        let key: String
+        switch model {
+        case "GEMINI_3_1_FLASH": key = "voice.model.gemini_3_1_flash"
+        case "GEMINI_2_5_FLASH": key = "voice.model.gemini_2_5_flash"
+        case "GEMINI_2_5_FLASH_LITE": key = "voice.model.gemini_2_5_flash_lite"
+        case "GEMINI_2_5_PRO": key = "voice.model.gemini_2_5_pro"
+        case "CHIRP_3_HD": key = "voice.model.chirp_3_hd"
+        case "STUDIO": key = "voice.model.studio"
+        case "NEURAL2": key = "voice.model.neural2"
+        case "WAVENET": key = "voice.model.wavenet"
+        case "STANDARD": key = "voice.model.standard"
+        default: key = "voice.model.other"
+        }
+        return NSLocalizedString(key, comment: "")
     }
 
     private func loadInitial() async {
@@ -1341,19 +1391,26 @@ struct VoiceSelectionSheet: View {
             let list = try await speechFacade.listVoices()
             voices = list
             if list.isEmpty {
-                let cloud = try await speechFacade.refreshVoicesFromAzure()
+                let cloud = try await refreshProviderVoices()
                 voices = cloud
             }
         } catch { self.error = error.localizedDescription }
     }
 
-    private func refreshFromAzure() async {
+    private func refreshFromCloud() async {
         loading = true
         defer { loading = false }
         do {
-            let cloud = try await speechFacade.refreshVoicesFromAzure()
+            let cloud = try await refreshProviderVoices()
             voices = cloud
         } catch { self.error = error.localizedDescription }
+    }
+
+    private func refreshProviderVoices() async throws -> [Shared.Voice] {
+        if ttsEngine == "GOOGLE_CLOUD" {
+            return try await speechFacade.refreshVoicesFromGoogle()
+        }
+        return try await speechFacade.refreshVoicesFromAzure()
     }
 }
 

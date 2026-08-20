@@ -10,6 +10,7 @@ public artifacts: values compiled into them can be extracted.
 | OpenSymbols proxy URL | Public configuration | Android BuildConfig, iOS Info.plist build setting, Linux environment |
 | Aptabase app key | Public client identifier | Android BuildConfig only |
 | Azure Speech subscription key | User-owned secret | Android Keystore, iOS Keychain, or Linux Secret Service/KWallet |
+| Google Cloud Text-to-Speech API key | User-owned secret | Android Keystore, iOS Keychain, or Linux Secret Service/KWallet |
 | Android keystore and passwords | Build secret | Android release CI process only |
 | Play service-account JSON | Deployment secret | Android release CI process only |
 | `INFISICAL_TOKEN` | CI control-plane secret | GitHub Actions secret only |

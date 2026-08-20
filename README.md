@@ -2,7 +2,8 @@
 
 Wingmate is a free and open-source AAC application for people who cannot rely
 on natural speech. It is developed by Jonas, who has cerebral palsy and draws
-on his own experience with communication devices.
+on his own experience with communication devices. It supports device voices
+plus bring-your-own-key Azure and Google Cloud Text-to-Speech.
 
 Wingmate has two peer communication workspaces. **Typing** supports free text,
 predictions, and saved phrases. **Screens** supports visual vocabulary arranged
