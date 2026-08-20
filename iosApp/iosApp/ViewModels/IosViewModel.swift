@@ -141,6 +141,7 @@ final class IosViewModel: ObservableObject {
     @Published var showOfflineInfoOnce: Bool = false
     // System TTS preference 
     @Published var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
+    @Published var ttsEngine: String = UserDefaults.standard.string(forKey: "tts_engine") ?? "SYSTEM"
     @Published var useSystemTtsWhenOffline: Bool = UserDefaults.standard.bool(forKey: "use_system_tts_when_offline")
     // Mix recorded phrases inside sentences
     @Published var mixRecordedPhrasesInSentences: Bool = UserDefaults.standard.bool(forKey: "mix_recorded_phrases")
@@ -195,6 +196,8 @@ final class IosViewModel: ObservableObject {
     @Published var debugPersistedVoiceName: String = ""
     // Azure availability (subscription configured)
     @Published var azureConfigured: Bool = false
+    @Published var googleConfigured: Bool = false
+    var cloudConfigured: Bool { ttsEngine == "GOOGLE_CLOUD" ? googleConfigured : azureConfigured }
 
     // Symbol-first boardset mode
     @Published var boardModeEnabled: Bool = false
@@ -411,6 +414,7 @@ final class IosViewModel: ObservableObject {
 
         // Determine if Azure is configured (endpoint + key)
         await refreshAzureConfiguration()
+        await refreshGoogleConfiguration()
 
         // Start connectivity monitoring
         ConnectivityMonitor.shared.onChange { [weak self] online in
@@ -456,6 +460,26 @@ final class IosViewModel: ObservableObject {
         }
     }
 
+    func refreshGoogleConfiguration() async {
+        do {
+            let status = try await speechFacade.getGoogleSpeechConfig()
+            googleConfigured = status.credentialConfigured
+        } catch {
+            googleConfigured = false
+        }
+    }
+
+    func saveGoogleApiKey(_ apiKey: String) async throws {
+        try await speechFacade.saveGoogleSpeechConfig(apiKey: apiKey)
+        await refreshGoogleConfiguration()
+        setTtsEngine("GOOGLE_CLOUD")
+    }
+
+    func clearGoogleApiKey() async throws {
+        try await speechFacade.clearGoogleSpeechConfig()
+        await refreshGoogleConfiguration()
+    }
+
     func refreshLanguagePreferences() async {
         do {
             let settings = try await settingsFacade.getSettings()
@@ -499,10 +523,13 @@ final class IosViewModel: ObservableObject {
             let settings = try await settingsFacade.getSettings()
             let flags = try? await settingsFacade.iosSettingsFlags()
             let systemTts = flags?.usesSystemTts ?? useSystemTts
+            let engine = flags?.ttsEngine ?? (systemTts ? "SYSTEM" : "AZURE_USER_RESOURCE")
             let opensScreens = flags?.startupUsesScreens ?? false
             await MainActor.run {
                 self.useSystemTts = systemTts
+                self.ttsEngine = engine
                 UserDefaults.standard.set(systemTts, forKey: "use_system_tts")
+                UserDefaults.standard.set(engine, forKey: "tts_engine")
                 self.showButtonLabels = settings.showLabels
                 self.showButtonSymbols = settings.showSymbols
                 self.labelAtTop = settings.labelAtTop
@@ -666,7 +693,7 @@ final class IosViewModel: ObservableObject {
             let segments = buildHybridSegments(for: plain)
             if !segments.isEmpty {
                 // Decide engine for TTS segments: Azure vs local
-                let shouldUseAzure = azureConfigured && isOnline || (azureConfigured && !useSystemTtsWhenOffline)
+                let shouldUseAzure = cloudConfigured && isOnline || (cloudConfigured && !useSystemTtsWhenOffline)
                 if !useSystemTts && shouldUseAzure {
                     let azSegments: [AzureHybridSequencer.Segment] = segments.map { seg in
                         switch seg {
@@ -690,8 +717,8 @@ final class IosViewModel: ObservableObject {
             return
         }
         
-        // If Azure is not configured, always use on-device TTS to keep the app working
-        if !azureConfigured {
+        // If the selected cloud provider is not configured, keep communication working on-device.
+        if !cloudConfigured {
             speakSystemText(plain, isInputText: isInputText)
             return
         }
@@ -705,7 +732,9 @@ final class IosViewModel: ObservableObject {
                 try await speechFacade.speak(text: t)
                 clearSpeechFailure()
             } catch {
-                setSpeechFailure(retry: .text(t))
+                guard !Task.isCancelled else { return }
+                speakSystemText(plain, isInputText: isInputText)
+                clearSpeechFailure()
             }
         }
     }
@@ -730,7 +759,7 @@ final class IosViewModel: ObservableObject {
         let cacheAudio = boardSets.first(where: { $0.id == boardSetId })?.cacheWholeSentences ?? true
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         AudioSessionHelper.activatePlayback()
-        if useSystemTts || !azureConfigured || (!isOnline && useSystemTtsWhenOffline) {
+        if useSystemTts || !cloudConfigured || (!isOnline && useSystemTtsWhenOffline) {
             let segments = speechFacade.processSpeechText(text: text)
             SystemTtsManager.shared.speak(segments: segments, language: primaryLanguage)
             return
@@ -740,7 +769,10 @@ final class IosViewModel: ObservableObject {
                 try await speechFacade.speakBoardSentence(text: text, cacheAudio: cacheAudio)
                 clearSpeechFailure()
             } catch {
-                setSpeechFailure(retry: .boardSentence(text, boardSetId))
+                guard !Task.isCancelled else { return }
+                let segments = speechFacade.processSpeechText(text: text)
+                SystemTtsManager.shared.speak(segments: segments, language: primaryLanguage)
+                clearSpeechFailure()
             }
         }
     }
@@ -898,7 +930,7 @@ final class IosViewModel: ObservableObject {
             hybrid.pause()
             return
         }
-        if useSystemTts || !azureConfigured {
+        if useSystemTts || !cloudConfigured {
             SystemTtsManager.shared.pause()
         } else if !isOnline && useSystemTtsWhenOffline {
             SystemTtsManager.shared.pause()
@@ -922,7 +954,7 @@ final class IosViewModel: ObservableObject {
             hybrid.stop()
             return
         }
-        if useSystemTts || !azureConfigured {
+        if useSystemTts || !cloudConfigured {
             SystemTtsManager.shared.stop()
         } else if !isOnline && useSystemTtsWhenOffline {
             SystemTtsManager.shared.stop()
@@ -941,6 +973,14 @@ final class IosViewModel: ObservableObject {
         self.useSystemTts = enabled
         UserDefaults.standard.set(enabled, forKey: "use_system_tts")
         Task { _ = try? await speechFacade.updateUseSystemTts(enabled: enabled) }
+    }
+
+    func setTtsEngine(_ engine: String) {
+        ttsEngine = engine
+        useSystemTts = engine == "SYSTEM"
+        UserDefaults.standard.set(engine, forKey: "tts_engine")
+        UserDefaults.standard.set(useSystemTts, forKey: "use_system_tts")
+        Task { try? await speechFacade.updateTtsEngineNamed(engine: engine) }
     }
 
     func setUseSystemTtsWhenOffline(_ enabled: Bool) {

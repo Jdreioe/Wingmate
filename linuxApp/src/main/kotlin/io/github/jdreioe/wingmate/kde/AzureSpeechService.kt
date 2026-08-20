@@ -2,21 +2,25 @@ package io.github.jdreioe.wingmate.kde
 
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
+import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackState
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.infrastructure.AzureTtsClient
+import io.github.jdreioe.wingmate.infrastructure.GoogleTtsClient
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.thread
 import java.util.concurrent.atomic.AtomicLong
 
-class AzureSpeechService(
+class CloudSpeechService(
     private val configRepository: ConfigRepository,
     private val pronunciationRepository: PronunciationDictionaryRepository,
+    private val settingsRepository: SettingsRepository,
 ) : SpeechService {
     
     // Uses default engine (should be OkHttp from shared dependency)
@@ -35,14 +39,8 @@ class AzureSpeechService(
         val requestId = generation.incrementAndGet()
         stopNative()
         state = SpeechPlaybackState(requestId, SpeechPlaybackStatus.PREPARING)
-        val config = configRepository.getSpeechConfig()
-        
-        if (config == null || config.subscriptionKey.isBlank() || config.endpoint.isBlank()) {
-            failRequest(requestId)
-            throw IllegalStateException("Azure Speech configuration is missing or incomplete")
-        }
-
-        println("[SPEECH] Synthesizing with Azure TTS... Voice: ${voice?.name}")
+        val engine = settingsRepository.get().ttsEngine
+        check(engine != TtsEngine.SYSTEM) { "System speech must use the native Linux speech service" }
             
             // Create default voice if null
         val voiceToUse = (voice ?: Voice(name = "en-US-JennyNeural", selectedLanguage = "en-US")).copy(
@@ -51,22 +49,46 @@ class AzureSpeechService(
         )
             
             // Generate SSML
-        val ssml = AzureTtsClient.generateSsml(text, voiceToUse, pronunciationRepository.getAll())
-            
-            // Use WAV format for easier playback with aplay
         val audioData = try {
-            AzureTtsClient.synthesize(
-                client,
-                ssml,
-                config,
-                AzureTtsClient.AudioFormat.WAV_24KHZ_16BIT
-            )
+            when (engine) {
+                TtsEngine.GOOGLE_CLOUD -> {
+                    val config = configRepository.getGoogleSpeechConfig()
+                        ?.takeIf { it.apiKey.isNotBlank() }
+                        ?: error("Google Cloud Text-to-Speech is not configured")
+                    GoogleTtsClient.synthesize(
+                        client = client,
+                        text = text,
+                        voice = voiceToUse.copy(mathMode = false),
+                        config = config,
+                        pitch = pitch,
+                        rate = rate,
+                        audioEncoding = GoogleTtsClient.AudioEncoding.LINEAR16,
+                    )
+                }
+                TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> {
+                    val config = configRepository.getSpeechConfig()
+                        ?.takeIf { it.subscriptionKey.isNotBlank() && it.endpoint.isNotBlank() }
+                        ?: error("Azure Speech configuration is missing or incomplete")
+                    val azureVoice = if (voiceToUse.name?.count { it == '-' }?.let { it >= 3 } == true) {
+                        voiceToUse.copy(name = "en-US-JennyNeural")
+                    } else {
+                        voiceToUse
+                    }
+                    val ssml = AzureTtsClient.generateSsml(text, azureVoice, pronunciationRepository.getAll())
+                    AzureTtsClient.synthesize(
+                        client,
+                        ssml,
+                        config,
+                        AzureTtsClient.AudioFormat.WAV_24KHZ_16BIT,
+                    )
+                }
+                TtsEngine.SYSTEM -> error("System speech must use the native Linux speech service")
+            }
         } catch (error: Throwable) {
             failRequest(requestId)
             throw error
         }
             
-        println("[SPEECH] Received ${audioData.size} bytes audio. Playing...")
         try {
             playAudio(requestId, audioData)
         } catch (error: Throwable) {
@@ -119,7 +141,6 @@ class AzureSpeechService(
             state = SpeechPlaybackState(requestId, SpeechPlaybackStatus.IDLE)
         }
         check(exitCode == 0) { "aplay exited with code $exitCode" }
-        println("[SPEECH] Audio playback finished.")
     }
 
     override suspend fun pause() {

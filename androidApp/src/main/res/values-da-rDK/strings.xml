@@ -607,9 +607,16 @@
     <string name="ui_settings_tts_engine_group">Tekst-til-tale-motor</string>
     <string name="ui_settings_speech_engine">Talemotor</string>
     <string name="ui_settings_azure">Azure</string>
+    <string name="ui_settings_google">Google</string>
     <string name="ui_settings_system">System</string>
     <string name="ui_settings_system_tts">System-TTS</string>
     <string name="ui_settings_azure_tts">Azure TTS</string>
+    <string name="ui_settings_google_tts">Google Cloud TTS</string>
+    <string name="google_tts_api_key">Google Cloud API-nøgle</string>
+    <string name="google_tts_api_key_help">Aktivér Cloud Text-to-Speech, og begræns nøglen til denne API. Nøglen forbliver på denne enhed.</string>
+    <string name="google_tts_configured">Google Cloud API-nøgle er konfigureret</string>
+    <string name="google_tts_replace_key">Erstat API-nøgle</string>
+    <string name="google_tts_clear_key">Slet API-nøgle</string>
     <string name="ui_settings_region_endpoint">Område/endpoint</string>
     <string name="ui_settings_region_example">f.eks. northeurope</string>
     <string name="ui_settings_subscription_key">Abonnementsnøgle</string>
@@ -640,6 +647,7 @@
     <string name="voice_settings_current_engine">Aktuel motor: %1$s</string>
     <string name="voice_settings_system_description">Bruger enhedens indbyggede tekst-til-tale</string>
     <string name="voice_settings_azure_description">Bruger Microsoft Azure Cognitive Services</string>
+    <string name="voice_settings_google_description">Bruger Google Cloud Tekst-til-tale</string>
     <string name="voice_settings_language">Valgt sprog: %1$s</string>
     <string name="voice_settings_pitch">Tonehøjde: %1$s</string>
     <string name="voice_settings_rate">Hastighed: %1$s</string>
@@ -657,6 +665,7 @@
     <string name="ssml_engine">Motor</string>
     <string name="ssml_system_offline">System (offline)</string>
     <string name="ssml_azure_premium">Azure (premium)</string>
+    <string name="ssml_google_premium">Google Cloud (premium)</string>
     <string name="ssml_voice">Stemme: %1$s</string>
     <string name="ssml_no_voice">(ingen)</string>
     <string name="ssml_tone_speed">Tone og hastighed</string>

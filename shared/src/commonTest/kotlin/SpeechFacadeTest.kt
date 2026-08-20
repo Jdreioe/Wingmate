@@ -7,6 +7,7 @@ import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
+import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemorySettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryVoiceRepository
@@ -122,6 +123,22 @@ class SpeechFacadeTest {
     }
 
     @Test
+    fun savingGoogleConfigPersistsRedactedStatusAndSwitchesProvider() = runBlocking {
+        val settings = InMemorySettingsRepository()
+        val config = InMemoryConfigRepository()
+        val facade = facade(settings = settings, config = config)
+
+        facade.saveGoogleSpeechConfig(" google-secret ")
+
+        assertEquals("google-secret", config.getGoogleSpeechConfig()?.apiKey)
+        assertTrue(facade.getGoogleSpeechConfig().credentialConfigured)
+        assertEquals(TtsEngine.GOOGLE_CLOUD, settings.get().ttsEngine)
+
+        facade.clearGoogleSpeechConfig()
+        assertEquals(null, config.getGoogleSpeechConfig())
+    }
+
+    @Test
     fun cancellationFromSpeechServiceIsNotSwallowed() = runBlocking {
         val facade = facade(speech = CancellingSpeechService())
 
@@ -143,6 +160,7 @@ class SpeechFacadeTest {
         val voiceUseCase = VoiceUseCase(
             repo = InMemoryVoiceRepository(),
             azure = AzureVoiceCatalog(config),
+            google = GoogleVoiceCatalog(config),
             configRepo = config,
             featureUsageReporter = NoopFeatureUsageReporter(),
         )

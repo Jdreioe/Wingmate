@@ -203,6 +203,15 @@
 "settings.category.pronunciation.subtitle" = "Teach Wingmate how to say names and words";
 "settings.speech.engine" = "Speech Engine";
 "settings.speech.engine.azure" = "Azure";
+"settings.speech.engine.google" = "Google";
+"settings.speech.google.configure" = "Google Cloud Text-to-Speech";
+"settings.speech.google.configured" = "API key configured";
+"settings.speech.google.not_configured" = "Not configured";
+"settings.speech.google.api_key" = "Google Cloud API key";
+"settings.speech.google.help" = "Enable Cloud Text-to-Speech and restrict this key to that API. The key stays in this device's Keychain and is not included in backups.";
+"settings.speech.google.clear" = "Clear API key";
+"settings.speech.google.save_failed" = "The Google Cloud API key could not be saved.";
+"settings.speech.google.clear_failed" = "The Google Cloud API key could not be cleared.";
 "settings.speech.engine.system" = "System";
 "settings.speech.azure.configure" = "Azure Speech Setup";
 "settings.speech.azure.configured" = "Configured";

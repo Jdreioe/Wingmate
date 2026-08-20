@@ -395,6 +395,15 @@
 "settings.category.pronunciation.subtitle" = "Lær Wingmate at udtale navne og ord";
 "settings.speech.engine" = "Talemotor";
 "settings.speech.engine.azure" = "Azure";
+"settings.speech.engine.google" = "Google";
+"settings.speech.google.configure" = "Google Cloud Tekst-til-tale";
+"settings.speech.google.configured" = "API-nøgle konfigureret";
+"settings.speech.google.not_configured" = "Ikke konfigureret";
+"settings.speech.google.api_key" = "Google Cloud API-nøgle";
+"settings.speech.google.help" = "Aktivér Cloud Text-to-Speech, og begræns nøglen til denne API. Nøglen gemmes i enhedens nøglering og medtages ikke i sikkerhedskopier.";
+"settings.speech.google.clear" = "Slet API-nøgle";
+"settings.speech.google.save_failed" = "Google Cloud API-nøglen kunne ikke gemmes.";
+"settings.speech.google.clear_failed" = "Google Cloud API-nøglen kunne ikke slettes.";
 "settings.speech.engine.system" = "System";
 "settings.speech.azure.configure" = "Opsæt Azure Speech";
 "settings.speech.azure.configured" = "Konfigureret";

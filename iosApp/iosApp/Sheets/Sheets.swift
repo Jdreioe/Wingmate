@@ -1222,6 +1222,7 @@ struct VoiceSelectionSheet: View {
     @State private var selected: Shared.Voice?
     @State private var query: String = ""
     @State private var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
+    @State private var ttsEngine: String = UserDefaults.standard.string(forKey: "tts_engine") ?? "SYSTEM"
     private let speechFacade = IosDiBridge().speechFacade()
 
     let current: Shared.Voice?
@@ -1310,13 +1311,14 @@ struct VoiceSelectionSheet: View {
                 ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) }
                 if !useSystemTts {
                     ToolbarItemGroup(placement: .topBarTrailing) {
-                        Button { Task { await refreshFromAzure() } } label: { Image(systemName: "arrow.clockwise") }
+                        Button { Task { await refreshFromCloud() } } label: { Image(systemName: "arrow.clockwise") }
                         Button("common.select") { if let v = selected { onSelect(v); onClose() } }
                     }
                 }
             }
             .onAppear { 
                 useSystemTts = UserDefaults.standard.bool(forKey: "use_system_tts")
+                ttsEngine = UserDefaults.standard.string(forKey: "tts_engine") ?? (useSystemTts ? "SYSTEM" : "AZURE_USER_RESOURCE")
                 if !useSystemTts {
                     Task { await loadInitial() } 
                 }
@@ -1341,19 +1343,26 @@ struct VoiceSelectionSheet: View {
             let list = try await speechFacade.listVoices()
             voices = list
             if list.isEmpty {
-                let cloud = try await speechFacade.refreshVoicesFromAzure()
+                let cloud = try await refreshProviderVoices()
                 voices = cloud
             }
         } catch { self.error = error.localizedDescription }
     }
 
-    private func refreshFromAzure() async {
+    private func refreshFromCloud() async {
         loading = true
         defer { loading = false }
         do {
-            let cloud = try await speechFacade.refreshVoicesFromAzure()
+            let cloud = try await refreshProviderVoices()
             voices = cloud
         } catch { self.error = error.localizedDescription }
+    }
+
+    private func refreshProviderVoices() async throws -> [Shared.Voice] {
+        if ttsEngine == "GOOGLE_CLOUD" {
+            return try await speechFacade.refreshVoicesFromGoogle()
+        }
+        return try await speechFacade.refreshVoicesFromAzure()
     }
 }
 

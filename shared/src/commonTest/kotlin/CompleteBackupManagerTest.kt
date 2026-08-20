@@ -5,6 +5,7 @@ import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
@@ -42,6 +43,7 @@ class CompleteBackupManagerTest {
         val dictionary = InMemoryPronunciationDictionaryRepository()
         val config = InMemoryConfigRepository()
         config.saveSpeechConfig(SpeechServiceConfig("northeurope", "azure-secret"))
+        config.saveGoogleSpeechConfig(GoogleSpeechConfig("google-secret"))
         boards.saveBoard(
             ObfBoard(
                 format = "open-board-0.1",
@@ -69,6 +71,7 @@ class CompleteBackupManagerTest {
         assertContains(archiveText, "Need water")
         assertContains(archiveText, "audio-content")
         assertFalse(archiveText.contains("azure-secret"))
+        assertFalse(archiveText.contains("google-secret"))
         assertFalse(archiveText.contains("editingAccessCredential"))
     }
 

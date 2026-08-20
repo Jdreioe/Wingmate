@@ -392,6 +392,15 @@
 "settings.category.pronunciation.subtitle" = "Wingmate die Aussprache von Namen und Wörtern beibringen";
 "settings.speech.engine" = "Sprachausgabe";
 "settings.speech.engine.azure" = "Azure";
+"settings.speech.engine.google" = "Google";
+"settings.speech.google.configure" = "Google Cloud Text-to-Speech";
+"settings.speech.google.configured" = "API-Schlüssel konfiguriert";
+"settings.speech.google.not_configured" = "Nicht konfiguriert";
+"settings.speech.google.api_key" = "Google Cloud API-Schlüssel";
+"settings.speech.google.help" = "Aktiviere Cloud Text-to-Speech und beschränke diesen Schlüssel auf diese API. Der Schlüssel bleibt im Schlüsselbund dieses Geräts und wird nicht gesichert.";
+"settings.speech.google.clear" = "API-Schlüssel löschen";
+"settings.speech.google.save_failed" = "Der Google Cloud API-Schlüssel konnte nicht gespeichert werden.";
+"settings.speech.google.clear_failed" = "Der Google Cloud API-Schlüssel konnte nicht gelöscht werden.";
 "settings.speech.engine.system" = "System";
 "settings.speech.azure.configure" = "Azure Speech einrichten";
 "settings.speech.azure.configured" = "Konfiguriert";

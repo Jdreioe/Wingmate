@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.*
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
+import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 
 /**
  * Thin application-layer use-cases that encapsulate domain repository calls.
@@ -66,6 +67,7 @@ class SettingsUseCase(private val repo: SettingsRepository) {
 class VoiceUseCase(
     private val repo: VoiceRepository,
     private val azure: AzureVoiceCatalog,
+    private val google: GoogleVoiceCatalog,
     private val configRepo: ConfigRepository,
     private val featureUsageReporter: FeatureUsageReporter,
     private val boardSetSpeechCache: BoardSpeechCache? = null,
@@ -76,7 +78,15 @@ class VoiceUseCase(
         repo.saveSelected(voice)
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.VOICE_SELECTED,
-            "provider" to if (voice.name?.contains("Neural", ignoreCase = true) == true) "azure" else "system",
+            "provider" to when {
+                voice.name?.contains("Neural2", ignoreCase = true) == true ||
+                    voice.name?.contains("Wavenet", ignoreCase = true) == true ||
+                    voice.name?.contains("Chirp", ignoreCase = true) == true ||
+                    voice.name?.contains("Journey", ignoreCase = true) == true ||
+                    voice.name?.count { it == '-' }?.let { it >= 3 } == true -> "google"
+                voice.name?.contains("Neural", ignoreCase = true) == true -> "azure"
+                else -> "system"
+            },
             "primary_language" to voice.primaryLanguage,
             "selected_language" to voice.selectedLanguage
         )
@@ -89,6 +99,17 @@ class VoiceUseCase(
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.VOICE_REFRESHED,
             "count" to list.size.toString()
+        )
+        return list
+    }
+
+    suspend fun refreshFromGoogle(): List<Voice> {
+        val list = google.list()
+        repo.saveVoices(list)
+        featureUsageReporter.reportEvent(
+            FeatureUsageEvents.VOICE_REFRESHED,
+            "provider" to "google",
+            "count" to list.size.toString(),
         )
         return list
     }

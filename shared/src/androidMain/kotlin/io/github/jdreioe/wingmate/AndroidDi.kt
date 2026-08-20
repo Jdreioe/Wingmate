@@ -22,6 +22,8 @@ import io.github.jdreioe.wingmate.infrastructure.AndroidBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidAptabaseFeatureUsageReporter
 import io.github.jdreioe.wingmate.infrastructure.AndroidSoundPlayer
 import io.github.jdreioe.wingmate.infrastructure.AndroidSpeechService
+import io.github.jdreioe.wingmate.infrastructure.AndroidGoogleApiRequestHeaders
+import io.github.jdreioe.wingmate.infrastructure.GoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.AndroidImageCacher
 import io.github.jdreioe.wingmate.infrastructure.AndroidPhraseRecordingService
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlConfigRepository
@@ -55,6 +57,7 @@ fun overrideAndroidSpeechService(context: Context, aptabaseAppKey: String) {
     loadKoinModules(
         module {
             single<Context> { context }
+            single<GoogleApiRequestHeaders> { AndroidGoogleApiRequestHeaders(context) }
             singleOf(::AndroidSpeechService) { bind<SpeechService>() }
             singleOf(::AndroidPhraseRecordingService) { bind<PhraseRecordingService>() }
             singleOf(::AndroidSystemVoiceProvider) { bind<SystemVoiceProvider>() }

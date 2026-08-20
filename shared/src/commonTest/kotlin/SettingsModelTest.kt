@@ -42,6 +42,12 @@ class SettingsModelTest {
     }
 
     @Test
+    fun googleCloudEngineRoundTrips() {
+        val original = Settings(ttsEngine = TtsEngine.GOOGLE_CLOUD)
+        assertEquals(original, json.decodeFromString<Settings>(json.encodeToString(original)))
+    }
+
+    @Test
     fun jsonRoundTripProducesNewFormat() {
         val original = Settings(ttsEngine = TtsEngine.AZURE_USER_RESOURCE)
         val encoded = json.encodeToString(original)

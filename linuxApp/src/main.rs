@@ -467,6 +467,12 @@ struct AzureConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct GoogleConfig {
+    credential_configured: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct HistoryEntry {
     #[serde(default)]
     said_text: Option<String>,
@@ -841,6 +847,9 @@ struct Wingmate {
     azure_key: String,
     azure_credential_configured: bool,
     replacing_azure_credentials: bool,
+    google_key: String,
+    google_credential_configured: bool,
+    replacing_google_credentials: bool,
     status: String,
     speech_state: String,
     board_sentence_tokens: Vec<String>,
@@ -880,6 +889,7 @@ enum Message {
     LoadedImages(Vec<(String, Result<LoadedImageData, String>)>),
     LoadedPredictions(Result<Predictions, String>),
     LoadedAzureConfig(Result<AzureConfig, String>),
+    LoadedGoogleConfig(Result<GoogleConfig, String>),
     LoadedHistory(Result<Vec<HistoryEntry>, String>),
     LoadedBoardSets(Result<Vec<BoardSet>, String>),
     LoadedBoardGraph(Result<BoardGraph, String>),
@@ -941,11 +951,17 @@ enum Message {
     ApplyPreviewVoice,
     RateChanged(f32),
     EngineChanged(String),
+    EngineChangedSaved(Result<Vec<Voice>, String>),
     AzureEndpointChanged(String),
     AzureKeyChanged(String),
     ReplaceAzureCredentials,
     SaveAzureConfig,
     AzureConfigSaved(Result<(), String>),
+    GoogleKeyChanged(String),
+    ReplaceGoogleCredentials,
+    ClearGoogleCredentials,
+    SaveGoogleConfig,
+    GoogleConfigSaved(Result<(), String>),
     PrimaryLanguageChanged(String),
     SecondaryLanguageChanged(String),
     AppearanceChanged(String),
@@ -1200,6 +1216,9 @@ impl cosmic::Application for Wingmate {
             azure_key: String::new(),
             azure_credential_configured: false,
             replacing_azure_credentials: false,
+            google_key: String::new(),
+            google_credential_configured: false,
+            replacing_google_credentials: false,
             status: fl!("status-starting"),
             speech_state: "idle".into(),
             board_sentence_tokens: Vec::new(),
@@ -1431,6 +1450,14 @@ impl cosmic::Application for Wingmate {
                     self.azure_key.clear();
                     self.azure_credential_configured = config.credential_configured;
                     self.replacing_azure_credentials = false;
+                }
+                Err(e) => self.status = e,
+            },
+            Message::LoadedGoogleConfig(result) => match result {
+                Ok(config) => {
+                    self.google_key.clear();
+                    self.google_credential_configured = config.credential_configured;
+                    self.replacing_google_credentials = false;
                 }
                 Err(e) => self.status = e,
             },
@@ -2056,14 +2083,12 @@ impl cosmic::Application for Wingmate {
             }
             Message::EngineChanged(engine) => {
                 self.settings.tts_engine = engine.clone();
-                return self
-                    .api
-                    .put_json(
-                        "/api/settings/systemtts",
-                        serde_json::json!({"ttsEngine": engine}),
-                    )
-                    .map(cosmic::Action::App);
+                return self.api.save_engine(engine).map(cosmic::Action::App);
             }
+            Message::EngineChangedSaved(result) => match result {
+                Ok(voices) => self.voices = voices,
+                Err(error) => self.status = error,
+            },
             Message::AzureEndpointChanged(value) => self.azure_endpoint = value,
             Message::AzureKeyChanged(value) => self.azure_key = value,
             Message::ReplaceAzureCredentials => {
@@ -2083,6 +2108,32 @@ impl cosmic::Application for Wingmate {
                     self.replacing_azure_credentials = false;
                     self.azure_endpoint.clear();
                     self.azure_key.clear();
+                    self.status = fl!("status-ready");
+                }
+                Err(error) => self.status = error,
+            },
+            Message::GoogleKeyChanged(value) => self.google_key = value,
+            Message::ReplaceGoogleCredentials => {
+                self.google_key.clear();
+                self.replacing_google_credentials = true;
+            }
+            Message::ClearGoogleCredentials => {
+                self.google_key.clear();
+                self.google_credential_configured = false;
+                self.replacing_google_credentials = false;
+                return self.api.clear_google_config().map(cosmic::Action::App);
+            }
+            Message::SaveGoogleConfig => {
+                return self
+                    .api
+                    .save_google_config(self.google_key.clone())
+                    .map(cosmic::Action::App);
+            }
+            Message::GoogleConfigSaved(result) => match result {
+                Ok(()) => {
+                    self.google_credential_configured = true;
+                    self.replacing_google_credentials = false;
+                    self.google_key.clear();
                     self.status = fl!("status-ready");
                 }
                 Err(error) => self.status = error,
@@ -5155,6 +5206,42 @@ impl Wingmate {
                 .spacing(6)
                 .into()
             };
+        let google_credentials: Element<'_, Message> =
+            if self.google_credential_configured && !self.replacing_google_credentials {
+                column![
+                    text(fl!("speech-google-configured")),
+                    row![
+                        labeled_icon_button(
+                            "document-edit-symbolic",
+                            fl!("speech-google-replace"),
+                            Message::ReplaceGoogleCredentials,
+                        ),
+                        labeled_icon_button(
+                            "edit-delete-symbolic",
+                            fl!("speech-google-clear"),
+                            Message::ClearGoogleCredentials,
+                        ),
+                    ]
+                    .spacing(8),
+                ]
+                .spacing(6)
+                .into()
+            } else {
+                column![
+                    text_input(&fl!("speech-google-key"), &self.google_key)
+                        .on_input(Message::GoogleKeyChanged)
+                        .secure(true)
+                        .padding(12),
+                    text(fl!("speech-google-help")).size(13),
+                    labeled_icon_button(
+                        "document-save-symbolic",
+                        fl!("speech-google-save"),
+                        Message::SaveGoogleConfig,
+                    ),
+                ]
+                .spacing(6)
+                .into()
+            };
 
         scrollable(
             column![
@@ -5180,7 +5267,11 @@ impl Wingmate {
                 settings_row(
                     fl!("speech-engine"),
                     pick_list(
-                        vec!["SYSTEM".to_string(), "AZURE_USER_RESOURCE".to_string()],
+                        vec![
+                            "SYSTEM".to_string(),
+                            "AZURE_USER_RESOURCE".to_string(),
+                            "GOOGLE_CLOUD".to_string(),
+                        ],
                         Some(self.settings.tts_engine.clone()),
                         Message::EngineChanged
                     )
@@ -5211,6 +5302,11 @@ impl Wingmate {
                     .into(),
                 ),
                 column![text(fl!("speech-azure-title")).size(15), azure_credentials,].spacing(6),
+                column![
+                    text(fl!("speech-google-title")).size(15),
+                    google_credentials,
+                ]
+                .spacing(6),
             ]
             .spacing(14),
         )
@@ -5926,6 +6022,7 @@ impl Api {
             self.load_history(),
             self.load_board_sets(),
             self.load_azure_config(),
+            self.load_google_config(),
             self.load_editing_access(),
         ])
     }
@@ -5969,6 +6066,9 @@ impl Api {
     }
     fn load_azure_config(&self) -> Task<Message> {
         self.get("/api/azure-config", Message::LoadedAzureConfig)
+    }
+    fn load_google_config(&self) -> Task<Message> {
+        self.get("/api/google-config", Message::LoadedGoogleConfig)
     }
     fn load_history(&self) -> Task<Message> {
         self.get("/api/history", Message::LoadedHistory)
@@ -6327,6 +6427,48 @@ impl Api {
                 .await
             },
             Message::AzureConfigSaved,
+        )
+    }
+
+    fn save_google_config(&self, key: String) -> Task<Message> {
+        let api = self.clone();
+        Task::perform(
+            async move {
+                api.request_unit(
+                    Method::POST,
+                    "/api/google-config",
+                    Some(serde_json::json!({"key": key})),
+                )
+                .await
+            },
+            Message::GoogleConfigSaved,
+        )
+    }
+
+    fn save_engine(&self, engine: String) -> Task<Message> {
+        let api = self.clone();
+        Task::perform(
+            async move {
+                api.request_unit(
+                    Method::PUT,
+                    "/api/settings/systemtts",
+                    Some(serde_json::json!({"ttsEngine": engine})),
+                )
+                .await?;
+                api.request_json(Method::GET, "/api/voices", None).await
+            },
+            Message::EngineChangedSaved,
+        )
+    }
+
+    fn clear_google_config(&self) -> Task<Message> {
+        let api = self.clone();
+        Task::perform(
+            async move {
+                api.request_unit(Method::DELETE, "/api/google-config", None)
+                    .await
+            },
+            Message::ActionFinished,
         )
     }
 

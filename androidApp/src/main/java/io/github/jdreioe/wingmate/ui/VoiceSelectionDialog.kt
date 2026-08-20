@@ -85,7 +85,10 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                 // Load Azure voices
                 var cloudRefreshFailed = false
                 val fromCloud = try {
-                    withContext(Dispatchers.Default) { useCase.refreshFromAzure() }
+                    withContext(Dispatchers.Default) {
+                        if (ttsEngine == TtsEngine.GOOGLE_CLOUD) useCase.refreshFromGoogle()
+                        else useCase.refreshFromAzure()
+                    }
                 } catch (failure: CancellationException) {
                     throw failure
                 } catch (_: Exception) {
@@ -461,7 +464,12 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                             settingsUseCase.update(updatedSettings)
                         }
                         showVoiceSettings = false
-                        voices = (useCase.refreshFromAzure() + useCase.list()).distinctBy { it.name }
+                        val refreshed = if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+                            useCase.refreshFromGoogle()
+                        } else {
+                            useCase.refreshFromAzure()
+                        }
+                        voices = (refreshed + useCase.list()).distinctBy { it.name }
                         selected = useCase.selected()
                     } catch (failure: CancellationException) {
                         throw failure

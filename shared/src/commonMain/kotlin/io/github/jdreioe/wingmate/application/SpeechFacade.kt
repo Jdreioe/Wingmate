@@ -1,6 +1,8 @@
 package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
+import io.github.jdreioe.wingmate.domain.GoogleSpeechConfigStatus
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
@@ -63,6 +65,8 @@ class SpeechFacade(
 
     suspend fun refreshVoicesFromAzure(): List<Voice> = voiceUseCase.refreshFromAzure()
 
+    suspend fun refreshVoicesFromGoogle(): List<Voice> = voiceUseCase.refreshFromGoogle()
+
     /** Update the selected voice's language and align the app's primary language. */
     suspend fun updateSelectedVoiceLanguage(lang: String) {
         val selected = voiceUseCase.selected()
@@ -83,6 +87,14 @@ class SpeechFacade(
         )
     }
 
+    suspend fun updateTtsEngine(engine: TtsEngine) {
+        settingsUseCase.update(settingsUseCase.get().copy(ttsEngine = engine))
+    }
+
+    suspend fun updateTtsEngineNamed(engine: String) {
+        updateTtsEngine(runCatching { TtsEngine.valueOf(engine) }.getOrDefault(TtsEngine.SYSTEM))
+    }
+
     /** Safe for native UI: deliberately never returns the saved subscription key. */
     suspend fun getSpeechConfig(): SpeechServiceConfigStatus = configRepository.getSpeechConfigStatus()
 
@@ -97,6 +109,18 @@ class SpeechFacade(
 
     suspend fun clearSpeechConfig() {
         configRepository.clearSpeechConfig()
+    }
+
+    suspend fun getGoogleSpeechConfig(): GoogleSpeechConfigStatus =
+        configRepository.getGoogleSpeechConfigStatus()
+
+    suspend fun saveGoogleSpeechConfig(apiKey: String) {
+        configRepository.saveGoogleSpeechConfig(GoogleSpeechConfig(apiKey.trim()))
+        settingsUseCase.update(settingsUseCase.get().copy(ttsEngine = TtsEngine.GOOGLE_CLOUD))
+    }
+
+    suspend fun clearGoogleSpeechConfig() {
+        configRepository.clearGoogleSpeechConfig()
     }
 
     fun isValidAzureSpeechEndpoint(endpoint: String): Boolean =

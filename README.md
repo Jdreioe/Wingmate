@@ -1,5 +1,5 @@
 # Wingmate
-Wingmate is a Free and Open Source Software (FOSS) project aimed at providing an exceptional voice for people who cannot speak, using Azure Neural Voices.
+Wingmate is a Free and Open Source Software (FOSS) project aimed at providing an exceptional voice for people who cannot speak. It supports device voices plus bring-your-own-key Azure and Google Cloud Text-to-Speech.
 
 
 ## About the project

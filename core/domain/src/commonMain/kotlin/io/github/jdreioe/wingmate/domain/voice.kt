@@ -42,6 +42,16 @@ data class SpeechServiceConfigStatus(
     val credentialConfigured: Boolean = false,
 )
 
+/** Device-local Google Cloud Text-to-Speech BYOK credential. */
+@Serializable
+data class GoogleSpeechConfig(val apiKey: String = "") {
+    override fun toString(): String = "GoogleSpeechConfig(apiKey=<redacted>)"
+}
+
+/** Safe representation for native settings screens. */
+@Serializable
+data class GoogleSpeechConfigStatus(val credentialConfigured: Boolean = false)
+
 @Serializable
 data class SaidText(
     val id: Int? = null,

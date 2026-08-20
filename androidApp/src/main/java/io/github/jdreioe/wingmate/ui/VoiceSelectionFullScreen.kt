@@ -66,7 +66,10 @@ fun VoiceSelectionFullScreen(onNext: () -> Unit, onCancel: () -> Unit, onBackToW
         try {
             // Sequential operations to avoid database concurrency issues
             val fromCloud = try {
-                withContext(Dispatchers.IO) { useCase.refreshFromAzure() }
+                withContext(Dispatchers.IO) {
+                    if (ttsEngine == TtsEngine.GOOGLE_CLOUD) useCase.refreshFromGoogle()
+                    else useCase.refreshFromAzure()
+                }
             } catch (e: Exception) {
                 OperationalLogger.warn("voice_catalog.refresh", "failed", exceptionClass = e.loggingClassName())
                 emptyList()

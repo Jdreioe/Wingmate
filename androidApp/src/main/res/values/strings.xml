@@ -610,9 +610,16 @@
     <string name="ui_settings_tts_engine_group">Text-to-Speech engine</string>
     <string name="ui_settings_speech_engine">Speech engine</string>
     <string name="ui_settings_azure">Azure</string>
+    <string name="ui_settings_google">Google</string>
     <string name="ui_settings_system">System</string>
     <string name="ui_settings_system_tts">System TTS</string>
     <string name="ui_settings_azure_tts">Azure TTS</string>
+    <string name="ui_settings_google_tts">Google Cloud TTS</string>
+    <string name="google_tts_api_key">Google Cloud API key</string>
+    <string name="google_tts_api_key_help">Enable Cloud Text-to-Speech and restrict this key to that API. The key stays on this device.</string>
+    <string name="google_tts_configured">Google Cloud API key configured</string>
+    <string name="google_tts_replace_key">Replace API key</string>
+    <string name="google_tts_clear_key">Clear API key</string>
     <string name="ui_settings_region_endpoint">Region / endpoint</string>
     <string name="ui_settings_region_example">e.g., eastus</string>
     <string name="ui_settings_subscription_key">Subscription key</string>
@@ -643,6 +650,7 @@
     <string name="voice_settings_current_engine">Current engine: %1$s</string>
     <string name="voice_settings_system_description">Using the device’s built-in text-to-speech</string>
     <string name="voice_settings_azure_description">Using Microsoft Azure Cognitive Services</string>
+    <string name="voice_settings_google_description">Using Google Cloud Text-to-Speech</string>
     <string name="voice_settings_language">Selected language: %1$s</string>
     <string name="voice_settings_pitch">Pitch: %1$s</string>
     <string name="voice_settings_rate">Rate: %1$s</string>
@@ -660,6 +668,7 @@
     <string name="ssml_engine">Engine</string>
     <string name="ssml_system_offline">System (offline)</string>
     <string name="ssml_azure_premium">Azure (premium)</string>
+    <string name="ssml_google_premium">Google Cloud (premium)</string>
     <string name="ssml_voice">Voice: %1$s</string>
     <string name="ssml_no_voice">(none)</string>
     <string name="ssml_tone_speed">Tone and speed</string>

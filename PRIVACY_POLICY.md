@@ -17,6 +17,7 @@ The majority of the data you create or store in Wingmate stays on your device. T
 ### 1.2 External Services (Text-to-Speech)
 Wingmate uses third-party services to convert text into speech:
 - **Microsoft Azure Speech Services**: When you use voices provided by Azure, the text you enter is sent to Microsoft's servers to be processed into audio. This data is handled according to Microsoft's privacy and data retention policies.
+- **Google Cloud Text-to-Speech**: When you select Google Cloud voices, the text you ask Wingmate to speak is sent directly to Google's Text-to-Speech API using the API key you provide. The key is stored in the device's secure credential store, is never included in Wingmate backups, and is sent only to Google's fixed Text-to-Speech HTTPS endpoint.
 - **System Voices**: If you use your device's built-in text-to-speech engine, data handling is subject to your operating system's privacy policy (e.g., Google's on Android, Apple's on iOS).
 
 ### 1.3 Optional Feature Usage Reporting (Android)
@@ -43,4 +44,3 @@ Since your data is stored locally, you have full control over it:
 
 ## 5. Contact Us
 If you have any questions about this Privacy Policy, please contact the developer.
-

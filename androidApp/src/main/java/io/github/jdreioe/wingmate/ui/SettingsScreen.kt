@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
@@ -42,6 +43,7 @@ import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.Voice
@@ -109,6 +111,9 @@ fun SettingsScreen(
     var subscriptionKey by remember { mutableStateOf("") }
     var credentialConfigured by remember { mutableStateOf(false) }
     var replacingAzureCredentials by remember { mutableStateOf(false) }
+    var googleApiKey by remember { mutableStateOf("") }
+    var googleCredentialConfigured by remember { mutableStateOf(false) }
+    var replacingGoogleCredentials by remember { mutableStateOf(false) }
     var azureEndpointError by remember { mutableStateOf<String?>(null) }
     var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var virtualMic by remember { mutableStateOf(false) }
@@ -228,6 +233,9 @@ fun SettingsScreen(
             endpoint = it.endpoint
             credentialConfigured = it.credentialConfigured
         }
+        googleCredentialConfigured = withContext(Dispatchers.Default) {
+            configRepo?.getGoogleSpeechConfigStatus()?.credentialConfigured == true
+        }
 
         val s = withContext(Dispatchers.Default) {
             checkNotNull(settingsUseCase) { "Settings are unavailable" }.get()
@@ -309,6 +317,21 @@ fun SettingsScreen(
                 credentialConfigured = true
                 replacingAzureCredentials = false
                 subscriptionKey = ""
+            }
+        }
+    }
+
+    LaunchedEffect(googleApiKey, loading, replacingGoogleCredentials) {
+        if (!loading && (!googleCredentialConfigured || replacingGoogleCredentials) && googleApiKey.isNotBlank()) {
+            delay(400)
+            val repository = configRepo ?: return@LaunchedEffect
+            val saved = runCatching {
+                repository.saveGoogleSpeechConfig(GoogleSpeechConfig(googleApiKey))
+            }.isSuccess
+            if (saved) {
+                googleCredentialConfigured = true
+                replacingGoogleCredentials = false
+                googleApiKey = ""
             }
         }
     }
@@ -505,6 +528,24 @@ fun SettingsScreen(
                                 onReplaceCredentials = {
                                     replacingAzureCredentials = true
                                     subscriptionKey = ""
+                                },
+                                googleApiKey = googleApiKey,
+                                onGoogleApiKeyChange = { googleApiKey = it },
+                                googleCredentialConfigured = googleCredentialConfigured,
+                                replacingGoogleCredentials = replacingGoogleCredentials,
+                                onReplaceGoogleCredentials = {
+                                    replacingGoogleCredentials = true
+                                    googleApiKey = ""
+                                },
+                                onClearGoogleCredentials = {
+                                    scope.launch {
+                                        runCatching { configRepo?.clearGoogleSpeechConfig() }
+                                            .onSuccess {
+                                                googleCredentialConfigured = false
+                                                replacingGoogleCredentials = false
+                                                googleApiKey = ""
+                                            }
+                                    }
                                 },
                                 virtualMic = virtualMic,
                                 onVirtualMicChange = { checked ->
@@ -1265,6 +1306,12 @@ private fun SpeechSection(
     credentialConfigured: Boolean,
     replacingCredentials: Boolean,
     onReplaceCredentials: () -> Unit,
+    googleApiKey: String,
+    onGoogleApiKeyChange: (String) -> Unit,
+    googleCredentialConfigured: Boolean,
+    replacingGoogleCredentials: Boolean,
+    onReplaceGoogleCredentials: () -> Unit,
+    onClearGoogleCredentials: () -> Unit,
     virtualMic: Boolean,
     onVirtualMicChange: (Boolean) -> Unit,
     onOpenVoiceSelection: () -> Unit = {},
@@ -1274,13 +1321,24 @@ private fun SpeechSection(
     SettingsGroup(title = stringResource(R.string.ui_settings_tts_engine_group)) {
         SettingsPreferenceRow(
             title = stringResource(R.string.ui_settings_speech_engine),
-            subtitle = stringResource(if (ttsEngine == TtsEngine.SYSTEM) R.string.ui_settings_system_tts else R.string.ui_settings_azure_tts)
+            subtitle = stringResource(
+                when (ttsEngine) {
+                    TtsEngine.SYSTEM -> R.string.ui_settings_system_tts
+                    TtsEngine.GOOGLE_CLOUD -> R.string.ui_settings_google_tts
+                    TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> R.string.ui_settings_azure_tts
+                }
+            )
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
-                    selected = ttsEngine != TtsEngine.SYSTEM,
+                    selected = ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED,
                     onClick = { onTtsEngineChange(TtsEngine.AZURE_USER_RESOURCE) },
                     label = { Text(stringResource(R.string.ui_settings_azure)) }
+                )
+                FilterChip(
+                    selected = ttsEngine == TtsEngine.GOOGLE_CLOUD,
+                    onClick = { onTtsEngineChange(TtsEngine.GOOGLE_CLOUD) },
+                    label = { Text(stringResource(R.string.ui_settings_google)) },
                 )
                 FilterChip(
                     selected = ttsEngine == TtsEngine.SYSTEM,
@@ -1289,7 +1347,7 @@ private fun SpeechSection(
                 )
             }
         }
-        if (ttsEngine != TtsEngine.SYSTEM) {
+        if (ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED) {
             SettingsGroupDivider()
             AzureCredentialEditor(
                 credentialConfigured = credentialConfigured,
@@ -1304,12 +1362,42 @@ private fun SpeechSection(
             )
         }
 
+        if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+            SettingsGroupDivider()
+            Column(
+                modifier = Modifier.padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (googleCredentialConfigured && !replacingGoogleCredentials) {
+                    Text(stringResource(R.string.google_tts_configured))
+                    OutlinedButton(onClick = onReplaceGoogleCredentials) {
+                        Text(stringResource(R.string.google_tts_replace_key))
+                    }
+                    TextButton(onClick = onClearGoogleCredentials) {
+                        Text(stringResource(R.string.google_tts_clear_key))
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = googleApiKey,
+                        onValueChange = onGoogleApiKeyChange,
+                        label = { Text(stringResource(R.string.google_tts_api_key)) },
+                        supportingText = { Text(stringResource(R.string.google_tts_api_key_help)) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+
         Spacer(Modifier.height(12.dp))
-        OutlinedButton(
-            onClick = onOpenF0Setup,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(stringResource(R.string.ui_settings_azure_free_tier))
+        if (ttsEngine != TtsEngine.GOOGLE_CLOUD) {
+            OutlinedButton(
+                onClick = onOpenF0Setup,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.ui_settings_azure_free_tier))
+            }
         }
     }
 
@@ -2085,7 +2173,10 @@ internal fun VoiceSelectionPage(
             } else {
                 var cloudRefreshFailed = false
                 val fromCloud = try {
-                    withContext(Dispatchers.Default) { useCase.refreshFromAzure() }
+                    withContext(Dispatchers.Default) {
+                        if (ttsEngine == TtsEngine.GOOGLE_CLOUD) useCase.refreshFromGoogle()
+                        else useCase.refreshFromAzure()
+                    }
                 } catch (failure: CancellationException) {
                     throw failure
                 } catch (_: Exception) {
@@ -2294,7 +2385,12 @@ internal fun VoiceSelectionPage(
                             settingsUseCase.update(current.copy(primaryLanguage = primary))
                         }
                         showVoiceSettings = false
-                        voices = (useCase.refreshFromAzure() + useCase.list()).distinctBy { it.name }
+                        val refreshed = if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+                            useCase.refreshFromGoogle()
+                        } else {
+                            useCase.refreshFromAzure()
+                        }
+                        voices = (refreshed + useCase.list()).distinctBy { it.name }
                         selected = useCase.selected()
                     } catch (failure: CancellationException) {
                         throw failure

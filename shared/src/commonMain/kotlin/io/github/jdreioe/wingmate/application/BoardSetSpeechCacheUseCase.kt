@@ -28,26 +28,26 @@ class BoardSetSpeechCacheUseCase(
     }
 
     override suspend fun cacheAll() {
-        if (!online || !usesAzure()) return
+        if (!online || !usesCloudTts()) return
         boardSetRepository.listBoardSets().forEach { cacheBoardSet(it.id) }
     }
 
     suspend fun cacheBoardSet(boardSetId: String) {
-        if (!online || !usesAzure()) return
+        if (!online || !usesCloudTts()) return
         val set = boardSetRepository.getBoardSet(boardSetId) ?: return
         val boards = set.boardIds.mapNotNull { boardRepository.getBoard(it) }
         cacheGraph(BoardSetGraph(set, boards))
     }
 
     suspend fun cacheGraph(graph: BoardSetGraph) {
-        if (!online || !usesAzure()) return
+        if (!online || !usesCloudTts()) return
         graph.boards.forEach { board ->
             board.buttons.forEach { button -> cacheField(board, button) }
         }
     }
 
     suspend fun cacheField(board: ObfBoard, button: ObfButton) {
-        if (!online || !usesAzure()) return
+        if (!online || !usesCloudTts()) return
         if (!button.soundId.isNullOrBlank()) return
         val settings = settingsRepository.get()
         val locale = button.locale ?: board.locale ?: settings.primaryLanguage
@@ -62,8 +62,8 @@ class BoardSetSpeechCacheUseCase(
     }
 
     suspend fun retryPending() {
-        if (online && usesAzure()) speechService.retryPendingSpeechCache()
+        if (online && usesCloudTts()) speechService.retryPendingSpeechCache()
     }
 
-    private suspend fun usesAzure(): Boolean = settingsRepository.get().ttsEngine != TtsEngine.SYSTEM
+    private suspend fun usesCloudTts(): Boolean = settingsRepository.get().ttsEngine != TtsEngine.SYSTEM
 }

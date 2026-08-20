@@ -50,6 +50,7 @@ class IosSpeechService(
     private val saidRepo: SaidTextRepository? = null,
     private val settingsRepository: SettingsRepository? = null,
     private val voiceRepository: VoiceRepository? = null,
+    private val googleApiRequestHeaders: GoogleApiRequestHeaders = NoGoogleApiRequestHeaders,
 ) : SpeechService {
 
     private val sentenceAudioCache = mutableMapOf<String, ByteArray>()
@@ -116,11 +117,15 @@ class IosSpeechService(
         val requestId = beginRequest()
 
         executeRequest(requestId) {
-            val effectiveVoice = voice ?: defaultVoice()
-            val cacheKey = "text|$normalizedText|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
+            val effectiveVoice = (voice ?: defaultVoice()).let { base ->
+                base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
+            }
+            val engine = settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE
+            if (engine == TtsEngine.SYSTEM) error("System speech is handled by the iOS host")
+            val cacheKey = "${engine.name}|text|$normalizedText|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
             val cached = if (cacheAudio) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] } else null
             val audioBytes = cached ?: synthesize(normalizedText, effectiveVoice)
-                ?: error("Azure Speech is not configured")
+                ?: error("The selected cloud speech engine is not configured")
             if (cacheAudio && cached == null) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] = audioBytes }
             playAudio(requestId, audioBytes)
             trySaveHistory(normalizedText, effectiveVoice, pitch, rate, null)
@@ -136,11 +141,15 @@ class IosSpeechService(
         val requestId = beginRequest()
         executeRequest(requestId) {
             val combinedText = segments.joinToString(separator = "") { it.text }
-            val effectiveVoice = voice ?: defaultVoice()
-            val cacheKey = "segments|${segments.joinToString()}|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
+            val effectiveVoice = (voice ?: defaultVoice()).let { base ->
+                base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
+            }
+            val engine = settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE
+            if (engine == TtsEngine.SYSTEM) error("System speech is handled by the iOS host")
+            val cacheKey = "${engine.name}|segments|${segments.joinToString()}|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
             val cached = if (cacheAudio) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] } else null
             val audioBytes = cached ?: synthesizeSegments(segments, effectiveVoice)
-                ?: error("Azure Speech is not configured")
+                ?: error("The selected cloud speech engine is not configured")
             if (cacheAudio && cached == null) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] = audioBytes }
             playAudio(requestId, audioBytes)
             trySaveHistory(combinedText, effectiveVoice, pitch, rate, null)
@@ -151,8 +160,11 @@ class IosSpeechService(
         val normalizedText = SpeechTextProcessor.normalizeShorthandSsml(text).trim()
         if (normalizedText.isEmpty()) return true
         if (settingsRepository?.get()?.ttsEngine == TtsEngine.SYSTEM) return false
-        val effectiveVoice = voice ?: defaultVoice()
-        val cacheKey = "text|$normalizedText|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
+        val effectiveVoice = (voice ?: defaultVoice()).let { base ->
+            base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
+        }
+        val engine = settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE
+        val cacheKey = "${engine.name}|text|$normalizedText|${effectiveVoice.name}|$pitch|$rate|math=${effectiveVoice.mathMode}"
         if (sentenceAudioCacheMutex.withLock { cacheKey in sentenceAudioCache }) return true
 
         val request = PendingCache(normalizedText, voice, pitch, rate)
@@ -259,17 +271,47 @@ class IosSpeechService(
     }
 
     private suspend fun synthesize(text: String, voice: Voice): ByteArray? = withContext(Dispatchers.Default) {
-        val config = configRepository.getSpeechConfig() ?: return@withContext null
-        val dict = pronunciationDictionaryRepository?.getAll().orEmpty()
-        val ssml = AzureTtsClient.generateSsml(text, voice, dict)
-        AzureTtsClient.synthesize(httpClient, ssml, config)
+        when (settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE) {
+            TtsEngine.GOOGLE_CLOUD -> {
+                val config = configRepository.getGoogleSpeechConfig() ?: return@withContext null
+                GoogleTtsClient.synthesize(
+                    httpClient,
+                    text,
+                    voice,
+                    config,
+                    applicationHeaders = googleApiRequestHeaders,
+                )
+            }
+            TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> {
+                val config = configRepository.getSpeechConfig() ?: return@withContext null
+                val dict = pronunciationDictionaryRepository?.getAll().orEmpty()
+                val ssml = AzureTtsClient.generateSsml(text, voice.forAzureProvider(), dict)
+                AzureTtsClient.synthesize(httpClient, ssml, config)
+            }
+            TtsEngine.SYSTEM -> null
+        }
     }
 
     private suspend fun synthesizeSegments(segments: List<SpeechSegment>, voice: Voice): ByteArray? = withContext(Dispatchers.Default) {
-        val config = configRepository.getSpeechConfig() ?: return@withContext null
-        val dict = pronunciationDictionaryRepository?.getAll().orEmpty()
-        val ssml = AzureTtsClient.generateSsml(segments, voice, dict)
-        AzureTtsClient.synthesize(httpClient, ssml, config)
+        when (settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE) {
+            TtsEngine.GOOGLE_CLOUD -> {
+                val config = configRepository.getGoogleSpeechConfig() ?: return@withContext null
+                GoogleTtsClient.synthesizeSegments(
+                    httpClient,
+                    segments,
+                    voice,
+                    config,
+                    applicationHeaders = googleApiRequestHeaders,
+                )
+            }
+            TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> {
+                val config = configRepository.getSpeechConfig() ?: return@withContext null
+                val dict = pronunciationDictionaryRepository?.getAll().orEmpty()
+                val ssml = AzureTtsClient.generateSsml(segments, voice.forAzureProvider(), dict)
+                AzureTtsClient.synthesize(httpClient, ssml, config)
+            }
+            TtsEngine.SYSTEM -> null
+        }
     }
 
     private suspend fun playFile(requestId: Long, path: String) = withContext(Dispatchers.Main) {
@@ -278,6 +320,13 @@ class IosSpeechService(
         val audioPlayer = AVAudioPlayer(contentsOfURL = url, error = null)
         startPlayer(requestId, audioPlayer)
     }
+
+    private fun Voice.forAzureProvider(): Voice =
+        if (name?.count { it == '-' }?.let { it >= 3 } == true) {
+            copy(name = "en-US-JennyNeural")
+        } else {
+            this
+        }
 
     private suspend fun playAudio(requestId: Long, audioBytes: ByteArray) = withContext(Dispatchers.Main) {
         require(audioBytes.isNotEmpty()) { "Speech synthesis returned no audio" }

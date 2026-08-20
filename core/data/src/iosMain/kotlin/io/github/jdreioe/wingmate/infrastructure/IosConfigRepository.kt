@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -88,6 +89,23 @@ class IosConfigRepository : ConfigRepository {
         OperationalLogger.info("speech_config.clear", "succeeded", enabled = false)
     }
 
+    override suspend fun getGoogleSpeechConfig(): GoogleSpeechConfig? = withContext(Dispatchers.Default) {
+        readGoogleKeychain()
+    }
+
+    override suspend fun saveGoogleSpeechConfig(config: GoogleSpeechConfig) = withContext(Dispatchers.Default) {
+        val normalized = config.copy(apiKey = config.apiKey.trim())
+        require(normalized.apiKey.isNotEmpty()) { "Google Cloud API key is required" }
+        writeGoogleKeychain(normalized)
+        check(readGoogleKeychain() == normalized) { "Secure Google credential write could not be verified" }
+        OperationalLogger.info("google_speech_config.save", "succeeded", enabled = true)
+    }
+
+    override suspend fun clearGoogleSpeechConfig() = withContext(Dispatchers.Default) {
+        deleteGoogleKeychain()
+        OperationalLogger.info("google_speech_config.clear", "succeeded", enabled = false)
+    }
+
     private fun readKeychain(): SpeechServiceConfig? = memScoped {
         val query = baseQuery()
         CFDictionarySetValue(query, kSecReturnData, kCFBooleanTrue)
@@ -126,10 +144,49 @@ class IosConfigRepository : ConfigRepository {
         check(status == errSecSuccess || status == errSecItemNotFound) { "Could not clear Azure Keychain item ($status)" }
     }
 
-    private fun baseQuery() = CFDictionaryCreateMutable(null, 0, null, null)!!.also { query ->
+    private fun readGoogleKeychain(): GoogleSpeechConfig? = memScoped {
+        val query = baseQuery(GOOGLE_SERVICE, ACCOUNT)
+        CFDictionarySetValue(query, kSecReturnData, kCFBooleanTrue)
+        CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitOne)
+        val result = alloc<CFTypeRefVar>()
+        val status = SecItemCopyMatching(query, result.ptr)
+        CFRelease(query)
+        if (status == errSecItemNotFound) return@memScoped null
+        check(status == errSecSuccess) { "Could not read Google configuration from Keychain ($status)" }
+        val value = result.value ?: return@memScoped null
+        val data = value.reinterpret<cnames.structs.__CFData>()
+        val length = CFDataGetLength(data).toInt()
+        val bytes = ByteArray(length)
+        if (length > 0) bytes.usePinned { memcpy(it.addressOf(0), CFDataGetBytePtr(data), length.convert()) }
+        CFRelease(value)
+        json.decodeFromString(GoogleSpeechConfig.serializer(), bytes.decodeToString())
+    }
+
+    private fun writeGoogleKeychain(config: GoogleSpeechConfig) {
+        deleteGoogleKeychain()
+        val query = baseQuery(GOOGLE_SERVICE, ACCOUNT)
+        val bytes = json.encodeToString(GoogleSpeechConfig.serializer(), config).encodeToByteArray()
+        val data = bytes.usePinned { CFDataCreate(null, it.addressOf(0).reinterpret(), bytes.size.convert()) }
+        CFDictionarySetValue(query, kSecValueData, data)
+        CFDictionarySetValue(query, kSecAttrAccessible, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+        val status = SecItemAdd(query, null)
+        CFRelease(data)
+        CFRelease(query)
+        check(status == errSecSuccess) { "Could not store Google configuration in Keychain ($status)" }
+    }
+
+    private fun deleteGoogleKeychain() {
+        val query = baseQuery(GOOGLE_SERVICE, ACCOUNT)
+        val status = SecItemDelete(query)
+        CFRelease(query)
+        check(status == errSecSuccess || status == errSecItemNotFound) { "Could not clear Google Keychain item ($status)" }
+    }
+
+    private fun baseQuery(service: String = SERVICE, account: String = ACCOUNT) =
+        CFDictionaryCreateMutable(null, 0, null, null)!!.also { query ->
         CFDictionarySetValue(query, kSecClass, kSecClassGenericPassword)
-        CFDictionarySetValue(query, kSecAttrService, cfString(SERVICE))
-        CFDictionarySetValue(query, kSecAttrAccount, cfString(ACCOUNT))
+        CFDictionarySetValue(query, kSecAttrService, cfString(service))
+        CFDictionarySetValue(query, kSecAttrAccount, cfString(account))
     }
 
     private fun cfString(value: String) = CFStringCreateWithCString(null, value, kCFStringEncodingUTF8)!!
@@ -137,6 +194,7 @@ class IosConfigRepository : ConfigRepository {
     private companion object {
         const val LEGACY_KEY = "speech_config"
         const val SERVICE = "io.github.jdreioe.wingmate.azure-speech"
+        const val GOOGLE_SERVICE = "io.github.jdreioe.wingmate.google-speech"
         const val ACCOUNT = "default"
     }
 }
