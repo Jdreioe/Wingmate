@@ -49,7 +49,7 @@ kotlin {
                 api(project(":feature:communication:presentation"))
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
                 implementation(libs.kotlinx.serialization.json)
-                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.8.0")
                 api(libs.koin.core)
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.contentNegotiation)
@@ -88,7 +88,7 @@ kotlin {
                     exclude(group = "androidx.test", module = "monitor")
                 }
                 // Required for FileProvider and core Android helpers used in androidMain
-                implementation("androidx.core:core-ktx:1.13.1")
+                implementation("androidx.core:core-ktx:1.19.0")
                 // Compose Multiplatform for Android UI
                 implementation(compose.runtime)
                 implementation(compose.foundation)

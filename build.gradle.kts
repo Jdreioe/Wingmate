@@ -19,24 +19,24 @@ buildscript {
     configurations.classpath {
         resolutionStrategy {
             force(
-                "org.bouncycastle:bcprov-jdk18on:1.84",
-                "org.bouncycastle:bcpkix-jdk18on:1.84",
-                "org.bouncycastle:bcutil-jdk18on:1.84",
+                "org.bouncycastle:bcprov-jdk18on:1.85.2",
+                "org.bouncycastle:bcpkix-jdk18on:1.85.2",
+                "org.bouncycastle:bcutil-jdk18on:1.85.2",
                 "org.bitbucket.b_c:jose4j:0.9.6",
                 "org.jdom:jdom2:2.0.6.1",
-                "org.apache.commons:commons-lang3:3.18.0"
+                "org.apache.commons:commons-lang3:3.20.0"
             )
         }
     }
 }
 
 val patchedTransitiveVersions = listOf(
-    "org.bouncycastle:bcprov-jdk18on:1.84",
-    "org.bouncycastle:bcpkix-jdk18on:1.84",
-    "org.bouncycastle:bcutil-jdk18on:1.84",
+    "org.bouncycastle:bcprov-jdk18on:1.85.2",
+    "org.bouncycastle:bcpkix-jdk18on:1.85.2",
+    "org.bouncycastle:bcutil-jdk18on:1.85.2",
     "org.bitbucket.b_c:jose4j:0.9.6",
     "org.jdom:jdom2:2.0.6.1",
-    "org.apache.commons:commons-lang3:3.18.0"
+    "org.apache.commons:commons-lang3:3.20.0"
 )
 
 allprojects {
