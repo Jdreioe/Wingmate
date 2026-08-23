@@ -143,6 +143,7 @@ fun SettingsScreen(
     var auditoryFishingEnabled by remember { mutableStateOf(false) }
     var speechPolicy by remember { mutableStateOf(SpeechPolicy.Immediate) }
     var selectionDebounceMillis by remember { mutableStateOf(0L) }
+    var dwellRearmDelayMillis by remember { mutableStateOf(120L) }
     var selectionHighlightMillis by remember { mutableStateOf(0L) }
     var selectKeyBinding by remember { mutableStateOf("") }
     var restModeKeyBinding by remember { mutableStateOf("") }
@@ -265,6 +266,7 @@ fun SettingsScreen(
         auditoryFishingEnabled = s.auditoryFishingEnabled
         speechPolicy = s.speechPolicy
         selectionDebounceMillis = s.selectionDebounceMillis
+        dwellRearmDelayMillis = s.dwellRearmDelayMillis
         selectionHighlightMillis = s.selectionHighlightMillis
         selectKeyBinding = s.selectKeyBinding
         restModeKeyBinding = s.restModeKeyBinding
@@ -635,6 +637,9 @@ fun SettingsScreen(
                                         selectionDebounceMillis = selectionDebounceMillis,
                                         onSelectionDebounceChange = { selectionDebounceMillis = it },
                                         onSelectionDebounceChangeFinished = { updateSettings { it.copy(selectionDebounceMillis = selectionDebounceMillis) } },
+                                        dwellRearmDelayMillis = dwellRearmDelayMillis,
+                                        onDwellRearmDelayChange = { dwellRearmDelayMillis = it },
+                                        onDwellRearmDelayChangeFinished = { updateSettings { it.copy(dwellRearmDelayMillis = dwellRearmDelayMillis) } },
                                         selectionHighlightMillis = selectionHighlightMillis,
                                         onSelectionHighlightChange = { selectionHighlightMillis = it },
                                         onSelectionHighlightChangeFinished = { updateSettings { it.copy(selectionHighlightMillis = selectionHighlightMillis) } },
@@ -1608,6 +1613,9 @@ private fun AccessibilitySection(
     selectionDebounceMillis: Long,
     onSelectionDebounceChange: (Long) -> Unit,
     onSelectionDebounceChangeFinished: () -> Unit,
+    dwellRearmDelayMillis: Long,
+    onDwellRearmDelayChange: (Long) -> Unit,
+    onDwellRearmDelayChangeFinished: () -> Unit,
     selectionHighlightMillis: Long,
     onSelectionHighlightChange: (Long) -> Unit,
     onSelectionHighlightChangeFinished: () -> Unit,
@@ -1673,6 +1681,17 @@ private fun AccessibilitySection(
             valueRange = 0f..1000f,
             steps = 19,
             valueLabel = "${selectionDebounceMillis.toInt()} ms"
+        )
+        SettingsGroupDivider()
+        SettingsSlider(
+            title = stringResource(R.string.ui_settings_dwell_rearm_title),
+            description = stringResource(R.string.ui_settings_dwell_rearm_desc),
+            value = dwellRearmDelayMillis.toFloat(),
+            onValueChange = { onDwellRearmDelayChange(it.toLong()) },
+            onValueChangeFinished = onDwellRearmDelayChangeFinished,
+            valueRange = 0f..500f,
+            steps = 9,
+            valueLabel = "${dwellRearmDelayMillis.toInt()} ms"
         )
     }
 

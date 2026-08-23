@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
@@ -35,6 +36,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -56,6 +60,9 @@ class AndroidAccessInputHost {
     var state by mutableStateOf(AccessInputState())
         private set
 
+    /** One-shot observer for access events (used for haptic/auditory feedback). */
+    var onAccessEvent: ((AccessInputEffect) -> Unit)? = null
+
     fun register(targetId: String, action: () -> Unit) { actions[targetId] = action }
     fun unregister(targetId: String) {
         actions.remove(targetId)
@@ -75,19 +82,22 @@ class AndroidAccessInputHost {
             normalized == normalizeKeyBinding(settings.restModeKeyBinding)
         if (!matches) return false
         if (down) handle(controller.keyDown(key, settings.selectKeyBinding, settings.restModeKeyBinding, now()))
-        else controller.keyUp(key)
+        else handle(controller.keyUp(key, now()))
         refresh()
         return true
     }
 
     fun tick(settings: Settings) {
+        controller.rearmDelayMillis = settings.dwellRearmDelayMillis
         handle(controller.tick(now(), settings.dwellToSelectMillis))
         refresh()
     }
 
     private fun update(block: AccessInputController.() -> Unit) { controller.block(); refresh() }
     private fun handle(effect: AccessInputEffect?) {
+        if (effect == null) return
         if (effect is AccessInputEffect.Activate) actions[effect.targetId]?.invoke()
+        onAccessEvent?.invoke(effect)
     }
     private fun refresh() { state = controller.state }
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
@@ -135,6 +145,7 @@ fun Modifier.accessTargetFocus(targetId: String, host: AndroidAccessInputHost?):
 @Composable
 fun InteractionInputRoot(settings: Settings, enabled: Boolean = true, content: @Composable () -> Unit) {
     val host = remember { AndroidAccessInputHost() }
+    val view = LocalView.current
     val resumeLabel = stringResource(R.string.interaction_resume)
     val restLabel = stringResource(R.string.interaction_rest_mode)
     val pausedStatus = stringResource(R.string.interaction_paused_status)
@@ -142,7 +153,15 @@ fun InteractionInputRoot(settings: Settings, enabled: Boolean = true, content: @
         AndroidAccessInputBus.attach(host)
         onDispose { AndroidAccessInputBus.detach(host) }
     }
-    SideEffect { AndroidAccessInputBus.update(settings, enabled) }
+    SideEffect {
+        AndroidAccessInputBus.update(settings, enabled)
+        host.onAccessEvent = { effect ->
+            when (effect) {
+                is AccessInputEffect.Activate -> view.performAccessHaptic(AccessHaptic.CONFIRM)
+                is AccessInputEffect.PauseChanged -> view.performAccessHaptic(AccessHaptic.TICK)
+            }
+        }
+    }
     LaunchedEffect(settings.dwellToSelectMillis, enabled) {
         if (!enabled || settings.dwellToSelectMillis <= 0) return@LaunchedEffect
         while (true) {
@@ -177,12 +196,27 @@ fun InteractionInputRoot(settings: Settings, enabled: Boolean = true, content: @
             }
             content()
             if (enabled && (settings.dwellToSelectMillis > 0 || settings.selectKeyBinding.isNotBlank())) {
+                // Rest toggle participates in dwell/focus selection so switch- and
+                // gaze-only users can always pause/resume without the touchscreen.
+                val restToggleTargetId = "access.restToggle"
                 FloatingActionButton(
                     onClick = host::togglePause,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(8.dp)
                         .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                        .accessTargetFocus(restToggleTargetId, host)
+                        .pointerInput(host) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    when (event.type) {
+                                        PointerEventType.Enter -> host.enter(restToggleTargetId)
+                                        PointerEventType.Exit -> host.exit(restToggleTargetId)
+                                    }
+                                }
+                            }
+                        }
                         .semantics { liveRegion = LiveRegionMode.Polite }
                 ) {
                     Icon(
@@ -191,6 +225,7 @@ fun InteractionInputRoot(settings: Settings, enabled: Boolean = true, content: @
                     )
                 }
                 if (inputPaused && showRestNotice) {
+                    val holdResumeLabel = stringResource(R.string.interaction_hold_select_resume)
                     Row(
                         Modifier
                             .align(Alignment.BottomCenter)
@@ -203,7 +238,16 @@ fun InteractionInputRoot(settings: Settings, enabled: Boolean = true, content: @
                             .semantics { liveRegion = LiveRegionMode.Assertive },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(pausedStatus, color = MaterialTheme.colorScheme.inverseOnSurface)
+                        Column {
+                            Text(pausedStatus, color = MaterialTheme.colorScheme.inverseOnSurface)
+                            if (settings.selectKeyBinding.isNotBlank()) {
+                                Text(
+                                    holdResumeLabel,
+                                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
                         Icon(
                             Icons.Default.PlayArrow,
                             contentDescription = null,

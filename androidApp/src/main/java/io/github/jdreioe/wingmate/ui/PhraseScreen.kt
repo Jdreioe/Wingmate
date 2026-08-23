@@ -214,6 +214,41 @@ fun PhraseScreen(
                 value = runCatching { voiceUseCase.selected() }.getOrNull()
             }
             val uiScope = rememberCoroutineScope()
+            val snackbarHostState = remember { SnackbarHostState() }
+            val deletedMessage = stringResource(R.string.phrase_deleted)
+            val undoLabel = stringResource(R.string.action_undo)
+
+            /**
+             * Delete a phrase (and any sub-items) with a snackbar undo. The removed
+             * subtree is captured up front so Undo re-adds the exact same nodes with
+             * their original ids — repositories preserve caller-supplied ids on add.
+             */
+            fun deleteWithUndo(phraseId: String?) {
+                if (phraseId.isNullOrBlank()) return
+                val all = bloc.state.value.items
+                val target = all.firstOrNull { it.id == phraseId } ?: return
+                val removed = mutableListOf(target)
+                val queue = ArrayDeque(listOf(target.id))
+                while (queue.isNotEmpty()) {
+                    val parent = queue.removeFirst()
+                    all.filter { it.parentId == parent }.forEach { child ->
+                        removed += child
+                        queue.addLast(child.id)
+                    }
+                }
+                bloc.dispatch(PhraseEvent.Delete(phraseId))
+                uiScope.launch {
+                    val result = snackbarHostState.showSnackbar(
+                        message = deletedMessage,
+                        actionLabel = undoLabel,
+                        duration = SnackbarDuration.Short,
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        // Parent-first order so restored sub-items find their parent id.
+                        removed.forEach { bloc.dispatch(PhraseEvent.Add(it)) }
+                    }
+                }
+            }
             var historyItems by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.SaidText>>(emptyList()) }
             
             // OBF Board State
@@ -364,6 +399,7 @@ fun PhraseScreen(
 
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
+                snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = {
                     BoxWithConstraints(Modifier.fillMaxWidth()) {
                         val useOverflowMenu = maxWidth <= 720.dp
@@ -1212,7 +1248,7 @@ fun PhraseScreen(
                         },
                         onMove = { from, to -> bloc.dispatch(PhraseEvent.Move(from, to)) },
                         onSavePhrase = { phrase -> bloc.dispatch(PhraseEvent.Add(phrase)) },
-                        onDeletePhrase = { phrase -> bloc.dispatch(PhraseEvent.Delete(phrase.id)) },
+                        onDeletePhrase = { phrase -> deleteWithUndo(phrase.id) },
                         categories = categories,
                         defaultCategoryId = selectedCategory?.id,
                         showAddTile = !isHistory,
@@ -1232,7 +1268,7 @@ fun PhraseScreen(
                             categories = categories,
                             initialPhrase = editingPhrase,
                             onSave = { p -> bloc.dispatch(PhraseEvent.Edit(p)); showEditDialog = false; editingPhrase = null },
-                            onDelete = { id -> bloc.dispatch(PhraseEvent.Delete(id)); showEditDialog = false; editingPhrase = null }
+                            onDelete = { id -> deleteWithUndo(id); showEditDialog = false; editingPhrase = null }
                         )
                     }
                 }

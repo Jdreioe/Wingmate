@@ -138,6 +138,10 @@ data class Settings(
     // author colors always take precedence.
     val wordTypeColorScheme: WordTypeColorScheme = WordTypeColorScheme.None,
     val dwellToSelectMillis: Long = 0,
+    // Tremor filter: after the pointer moves to a different target, the dwell timer
+    // only starts counting once this many ms have passed. Filters accidental dwell
+    // triggers on neighbors while moving between targets (CP tremor). 0 disables.
+    val dwellRearmDelayMillis: Long = 120,
     // Interaction shortcuts use portable tokens such as "Space", "Enter", or "F8".
     // Empty disables the shortcut so ordinary typing is never intercepted by default.
     val selectKeyBinding: String = "",

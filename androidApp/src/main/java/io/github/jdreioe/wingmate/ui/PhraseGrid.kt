@@ -33,6 +33,7 @@ import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.application.SelectionDebouncer
 import io.github.jdreioe.wingmate.application.SelectionHighlight
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.res.stringResource
@@ -108,11 +109,15 @@ fun PhraseGrid(
     }
 
     // #118: return true when the target may activate, and record the selection highlight.
+    val hapticView = LocalView.current
     fun tryActivate(phraseId: String): Boolean {
         val now = Clock.System.now().toEpochMilliseconds()
         if (!selectionDebouncer.tryActivate(phraseId, now, settings.selectionDebounceMillis)) {
+            // Rejected repeat activation inside the debounce window.
+            hapticView.performAccessHaptic(AccessHaptic.REJECT)
             return false
         }
+        hapticView.performAccessHaptic(AccessHaptic.CONFIRM)
         selectionHighlight.activate(phraseId, now)
         if (settings.selectionHighlightMillis > 0) {
             highlightedPhraseId = phraseId

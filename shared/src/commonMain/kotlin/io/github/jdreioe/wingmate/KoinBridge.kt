@@ -85,7 +85,7 @@ class KoinBridge : KoinComponent {
         accessResult(accessInput.keyDown(key, selectBinding, restBinding, nowMillis()))
 
     fun accessInputKeyUp(key: String): IosAccessInputResult {
-        accessInput.keyUp(key)
+        accessInput.keyUp(key, nowMillis())
         return accessResult(null)
     }
 
