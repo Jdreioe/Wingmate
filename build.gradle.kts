@@ -11,7 +11,7 @@ plugins {
 
 // Patched versions of transitive deps forced on the build/plugin classpath (in the
 // buildscript block) and on every project configuration (in allprojects) so Dependabot
-// stays clean without waiting on plugin upstream releases. BouncyCastle 1.84 closes the
+// stays clean without waiting on plugin upstream releases. BouncyCastle 1.85.x closes the
 // critical (GHSA-574f-3g2m-x479) and both medium (GHSA-c3fc-8qff-9hwx, GHSA-wg6q-6289-32hp)
 // advisories; the rest close jose4j (GHSA-3677-xxcr-wjqv), jdom2 (GHSA-2363-cqg2-863c),
 // and commons-lang3 (GHSA-j288-q9x7-2f5v).
@@ -20,8 +20,8 @@ buildscript {
         resolutionStrategy {
             force(
                 "org.bouncycastle:bcprov-jdk18on:1.85.2",
-                "org.bouncycastle:bcpkix-jdk18on:1.85.2",
-                "org.bouncycastle:bcutil-jdk18on:1.85.2",
+                "org.bouncycastle:bcpkix-jdk18on:1.85",
+                "org.bouncycastle:bcutil-jdk18on:1.85",
                 "org.bitbucket.b_c:jose4j:0.9.6",
                 "org.jdom:jdom2:2.0.6.1",
                 "org.apache.commons:commons-lang3:3.20.0"
@@ -32,8 +32,8 @@ buildscript {
 
 val patchedTransitiveVersions = listOf(
     "org.bouncycastle:bcprov-jdk18on:1.85.2",
-    "org.bouncycastle:bcpkix-jdk18on:1.85.2",
-    "org.bouncycastle:bcutil-jdk18on:1.85.2",
+    "org.bouncycastle:bcpkix-jdk18on:1.85",
+    "org.bouncycastle:bcutil-jdk18on:1.85",
     "org.bitbucket.b_c:jose4j:0.9.6",
     "org.jdom:jdom2:2.0.6.1",
     "org.apache.commons:commons-lang3:3.20.0"

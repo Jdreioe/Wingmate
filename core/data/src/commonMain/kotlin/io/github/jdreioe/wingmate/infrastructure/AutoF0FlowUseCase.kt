@@ -91,7 +91,7 @@ class AutoF0FlowUseCase(
             }
         }
 
-        val deploymentName = "wingmate-f0-deploy-${kotlinx.datetime.Clock.System.now().toEpochMilliseconds()}"
+        val deploymentName = "wingmate-f0-deploy-${kotlin.time.Clock.System.now().toEpochMilliseconds()}"
         try {
             armClient.startDeployment(
                 accessToken = accessToken,
