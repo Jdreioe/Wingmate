@@ -36,6 +36,10 @@ _Avoid_: Token, Segment
 A single Message set aside temporarily so the Communicator can compose another Message. Holding again swaps the active and held Messages without overwriting either.
 _Avoid_: Held thought, Pinned thought
 
+**Utterance**:
+The complete piece of language the Communicator sends to speech as one communication act. One Utterance may combine Phrases, Buttons, and typed text, and may be a fragment rather than a grammatical sentence. A Message becomes an Utterance when the Communicator commits it to speech.
+_Avoid_: Sentence, Composition, Speech event
+
 **History**:
 The private, local record of Messages the Communicator has asked Wingmate to speak. History recording is distinct from prediction learning, operational logging, and anonymous feature reporting.
 _Avoid_: Usage log, Analytics
