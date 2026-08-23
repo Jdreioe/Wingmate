@@ -8,6 +8,8 @@ kotlin {
 }
 
 dependencies {
+    implementation(platform(libs.netty.bom))
+
     implementation(project(":shared"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation(libs.kotlinx.serialization.json)

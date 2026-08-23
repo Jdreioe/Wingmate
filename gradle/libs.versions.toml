@@ -26,6 +26,7 @@ okio = "3.18.1"
 koin = "4.2.2"
 sqldelight = "2.2.1"
 ktor = "3.5.2"
+netty = "4.2.17.Final"
 kotlinx-datetime = "0.8.0"
 kotlinx-serialization = "1.11.0"
 
@@ -72,6 +73,7 @@ ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
 ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor" }
 ktor-server-contentNegotiation = { module = "io.ktor:ktor-server-content-negotiation", version.ref = "ktor" }
 ktor-server-cors = { module = "io.ktor:ktor-server-cors", version.ref = "ktor" }
+netty-bom = { module = "io.netty:netty-bom", version.ref = "netty" }
 
 # Kotlinx
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
