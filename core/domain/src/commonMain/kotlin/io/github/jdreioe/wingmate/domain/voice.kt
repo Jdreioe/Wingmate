@@ -102,6 +102,24 @@ fun Voice.withPreferredSupportedLanguage(preferredLanguage: String?): Voice {
 }
 
 /**
+ * Backfills catalog-only metadata (secondary locales, provider, model) onto a voice
+ * persisted by an older Wingmate version. Older builds saved the selected voice
+ * without the cloud catalog's fields, so multilingual voices only offered their
+ * primary locale. The persisted voice keeps any metadata it already carries.
+ */
+fun Voice.withCatalogMetadata(catalog: List<Voice>): Voice {
+    val fresh = catalog.firstOrNull { it.name == name } ?: return this
+    return copy(
+        supportedLanguages = supportedLanguages ?: fresh.supportedLanguages,
+        provider = provider ?: fresh.provider,
+        googleModel = googleModel ?: fresh.googleModel,
+        providerVoiceName = providerVoiceName ?: fresh.providerVoiceName,
+        displayName = displayName ?: fresh.displayName,
+        primaryLanguage = primaryLanguage ?: fresh.primaryLanguage,
+    )
+}
+
+/**
  * Collapse Google's locale-prefixed names into one entry per model and speaker.
  * The entry retains every locale in which that speaker is available.
  */
