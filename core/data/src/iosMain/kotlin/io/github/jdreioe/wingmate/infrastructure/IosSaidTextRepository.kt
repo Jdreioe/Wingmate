@@ -5,7 +5,7 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 class IosSaidTextRepository : SaidTextRepository {
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
