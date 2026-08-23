@@ -67,6 +67,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.tooling.preview.Preview
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
 
@@ -166,7 +167,46 @@ fun SettingsScreen(
         keyboardController?.hide()
     }
 
-    PlatformBackHandler(enabled = true, onBack = { viewModel.onAction(SettingsAction.BackClicked) })
+    Box(modifier = Modifier.fillMaxSize()) {
+        SettingsContent(
+            state = state,
+            editingAccessState = editingAccessState,
+            editingAccessAvailable = editingAccessController != null,
+            onBackToWelcome = onBackToWelcome,
+            onAction = viewModel::onAction,
+            onGuessPronunciation = viewModel::guessPronunciation,
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        val dialogMode = state.editingAccessDialog
+        if (editingAccessController != null && dialogMode != null) {
+            EditingAccessDialog(
+                controller = editingAccessController,
+                mode = dialogMode,
+                onDismiss = { viewModel.onAction(SettingsAction.EditingAccessDialogDismissed) },
+                onSuccess = { viewModel.onAction(SettingsAction.EditingAccessDialogDismissed) }
+            )
+        }
+    }
+}
+
+/**
+ * Stateless settings shell. It renders whatever [state] supplies and reports user intent
+ * through [onAction], so loading, failure, and route rendering can be exercised without
+ * the persistence-heavy root.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SettingsContent(
+    state: SettingsUiState,
+    editingAccessState: EditingAccessState,
+    editingAccessAvailable: Boolean,
+    onBackToWelcome: (() -> Unit)?,
+    onAction: (SettingsAction) -> Unit,
+    onGuessPronunciation: suspend (String) -> String?,
+    modifier: Modifier = Modifier,
+) {
+    PlatformBackHandler(enabled = true, onBack = { onAction(SettingsAction.BackClicked) })
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -177,7 +217,7 @@ fun SettingsScreen(
                     Text(settingsRouteTitle(state.route))
                 },
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.onAction(SettingsAction.BackClicked) }) {
+                    IconButton(onClick = { onAction(SettingsAction.BackClicked) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_close))
                     }
                 },
@@ -208,24 +248,24 @@ fun SettingsScreen(
                                 stringResource(R.string.settings_load_failed),
                                 color = MaterialTheme.colorScheme.error
                             )
-                            Button(onClick = { viewModel.onAction(SettingsAction.RetryLoad) }) {
+                            Button(onClick = { onAction(SettingsAction.RetryLoad) }) {
                                 Text(stringResource(R.string.common_retry))
                             }
                         }
                         else -> Column(modifier = Modifier.fillMaxSize()) {
                             if (state.saveFailed) {
                                 SaveFailureBanner(onRetry = {
-                                    viewModel.onAction(SettingsAction.RetrySave)
+                                    onAction(SettingsAction.RetrySave)
                                 })
                             }
                             Box(modifier = Modifier.fillMaxSize()) {
                                 SettingsRouteContent(
                                     state = state,
                                     editingAccessState = editingAccessState,
-                                    editingAccessAvailable = editingAccessController != null,
+                                    editingAccessAvailable = editingAccessAvailable,
                                     onBackToWelcome = onBackToWelcome,
-                                    onAction = viewModel::onAction,
-                                    onGuessPronunciation = viewModel::guessPronunciation,
+                                    onAction = onAction,
+                                    onGuessPronunciation = onGuessPronunciation,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -235,33 +275,42 @@ fun SettingsScreen(
                     val restorePath = state.pendingRestorePath
                     if (restorePath != null) {
                         AlertDialog(
-                            onDismissRequest = { viewModel.onAction(SettingsAction.RestoreDismissed) },
+                            onDismissRequest = { onAction(SettingsAction.RestoreDismissed) },
                             title = { Text(stringResource(R.string.backup_replace_title)) },
                             text = { Text(stringResource(R.string.backup_replace_warning)) },
                             confirmButton = {
-                                TextButton(onClick = {
-                                    viewModel.onAction(SettingsAction.RestoreConfirmed)
-                                }) { Text(stringResource(R.string.backup_replace_action)) }
+                                TextButton(onClick = { onAction(SettingsAction.RestoreConfirmed) }) {
+                                    Text(stringResource(R.string.backup_replace_action))
+                                }
                             },
                             dismissButton = {
-                                TextButton(onClick = {
-                                    viewModel.onAction(SettingsAction.RestoreDismissed)
-                                }) { Text(stringResource(R.string.common_cancel)) }
+                                TextButton(onClick = { onAction(SettingsAction.RestoreDismissed) }) {
+                                    Text(stringResource(R.string.common_cancel))
+                                }
                             }
-                        )
-                    }
-
-                    val dialogMode = state.editingAccessDialog
-                    if (editingAccessController != null && dialogMode != null) {
-                        EditingAccessDialog(
-                            controller = editingAccessController,
-                            mode = dialogMode,
-                            onDismiss = { viewModel.onAction(SettingsAction.EditingAccessDialogDismissed) },
-                            onSuccess = { viewModel.onAction(SettingsAction.EditingAccessDialogDismissed) }
                         )
                     }
                 }
             }
+}
+
+@Preview(showBackground = true, widthDp = 600, heightDp = 800)
+@Composable
+private fun SettingsContentPreview() {
+    AppTheme {
+        SettingsContent(
+            state = SettingsUiState(
+                route = SettingsRoute.Category(SettingsTab.Display),
+                isLoading = false,
+                settings = Settings(showLabels = true, showSymbols = true),
+            ),
+            editingAccessState = EditingAccessState(supported = false),
+            editingAccessAvailable = false,
+            onBackToWelcome = null,
+            onAction = {},
+            onGuessPronunciation = { null },
+        )
+    }
 }
 
 @Composable
