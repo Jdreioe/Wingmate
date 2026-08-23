@@ -7,6 +7,7 @@ import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.ktor.client.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.serialization.kotlinx.json.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 
 class AzureVoiceCatalog(private val configRepo: ConfigRepository) {
@@ -26,6 +27,8 @@ class AzureVoiceCatalog(private val configRepo: ConfigRepository) {
                 return emptyList()
             }
             AzureTtsClient.getVoices(client, cfg)
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (t: Throwable) {
             OperationalLogger.warn(
                 operation = "azure_voice_catalog.load",

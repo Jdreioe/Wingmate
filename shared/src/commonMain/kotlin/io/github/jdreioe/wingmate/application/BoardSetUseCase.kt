@@ -373,6 +373,10 @@ class BoardSetUseCase(
         linkedBoardId: String? = null,
         actions: List<String> = emptyList(),
         wordType: WordType? = null,
+        setBorderColor: Boolean = false,
+        borderColor: String? = null,
+        keepExistingImageWhenNoUrl: Boolean = false,
+        existingButtonFallback: ObfButton? = null,
     ): ObfBoard? {
         val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
         if (boardSet.isLocked) return null
@@ -384,12 +388,19 @@ class BoardSetUseCase(
 
         val existingButtonId = grid.order.getOrNull(row)?.getOrNull(column)
         val existingButton = existingButtonId?.let { id -> board.buttons.find { it.id == id } }
+            ?: existingButtonFallback
 
         val targetButtonId = existingButton?.id ?: generateId("btn")
         val normalizedLabel = label.trim()
         if (normalizedLabel.isEmpty()) return null
 
-        val normalizedImageUrl = imageUrl?.trim()?.ifBlank { null }
+        // When keeping the current image, resolve its URL so the image entry is refreshed.
+        val effectiveImageUrl = if (keepExistingImageWhenNoUrl && imageUrl.isNullOrBlank()) {
+            existingButton?.imageId?.let { id -> board.images.firstOrNull { it.id == id }?.url }
+        } else {
+            imageUrl
+        }
+        val normalizedImageUrl = effectiveImageUrl?.trim()?.ifBlank { null }
         var targetImageId = existingButton?.imageId
         val updatedImages = when {
             normalizedImageUrl == null -> {
@@ -422,6 +433,7 @@ class BoardSetUseCase(
             vocalization = vocalization?.trim()?.ifBlank { null },
             imageId = targetImageId,
             backgroundColor = backgroundColor?.trim()?.ifBlank { null },
+            borderColor = if (setBorderColor) borderColor?.trim()?.ifBlank { null } else existingButton?.borderColor,
             hidden = hidden,
             loadBoard = linkedBoardId?.takeIf { it in boardSet.boardIds }?.let { ObfLoadBoard(id = it) },
             action = actions.singleOrNull(),

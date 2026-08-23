@@ -14,6 +14,7 @@ import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import kotlin.time.Clock
+import kotlinx.coroutines.CancellationException
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 
@@ -130,10 +131,9 @@ class KoinBridge : KoinComponent {
             if (started) return
             try {
                 initKoin(appModule)
-            } catch (_: Throwable) {
-                // If already started, ignore
-            } finally {
                 started = true
+            } catch (_: Throwable) {
+                // Already started elsewhere, or init failed — retry on next call
             }
         }
     }
@@ -143,6 +143,8 @@ class KoinBridge : KoinComponent {
     suspend fun predict(context: String, maxWords: Int, maxLetters: Int): io.github.jdreioe.wingmate.domain.PredictionResult {
         return try {
             get<io.github.jdreioe.wingmate.domain.TextPredictionService>().predict(context, maxWords, maxLetters)
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (_: Throwable) {
             io.github.jdreioe.wingmate.domain.PredictionResult()
         }
@@ -170,12 +172,16 @@ class KoinBridge : KoinComponent {
                         service.train(list, false)
                         return
                     }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (_: Throwable) {}
                  // Fallback: train just history (clearing old)
                 service.train(list, true)
             } else {
                 service.train(list)
             }
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (t: Throwable) {
             OperationalLogger.warn("prediction_model.train", "failed", exceptionClass = t.loggingClassName())
         }
@@ -187,6 +193,8 @@ class KoinBridge : KoinComponent {
             if (service is io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService) {
                 service.learnPhrase(text)
             }
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (_: Throwable) {}
     }
 
@@ -194,6 +202,8 @@ class KoinBridge : KoinComponent {
     suspend fun listPronunciations(): List<io.github.jdreioe.wingmate.domain.PronunciationEntry> {
         return try {
             get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().getAll()
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (_: Throwable) {
             emptyList()
         }
@@ -204,12 +214,16 @@ class KoinBridge : KoinComponent {
             get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().add(
                 io.github.jdreioe.wingmate.domain.PronunciationEntry(word, phoneme, alphabet)
             )
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (_: Throwable) {}
     }
 
     suspend fun deletePronunciation(word: String) {
         try {
             get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().delete(word)
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (_: Throwable) {}
     }
 

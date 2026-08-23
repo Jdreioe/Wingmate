@@ -10,6 +10,7 @@ import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,6 +18,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 // Simple Bloc-style base
@@ -26,7 +28,7 @@ abstract class Bloc<E, S>(initial: S) {
     val state: StateFlow<S> = _state.asStateFlow()
 
     protected fun setState(reducer: (S) -> S) {
-        _state.value = reducer(_state.value)
+        _state.update(reducer)
     }
 
     fun dispatch(event: E) {
@@ -76,6 +78,8 @@ class PhraseBloc(
                 try {
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -91,6 +95,8 @@ class PhraseBloc(
                     )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -101,6 +107,8 @@ class PhraseBloc(
                     categoryUseCase.add(event.category)
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -116,6 +124,8 @@ class PhraseBloc(
                     )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -130,6 +140,8 @@ class PhraseBloc(
                     )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -145,6 +157,8 @@ class PhraseBloc(
                     )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -182,6 +196,8 @@ class SettingsBloc(private val useCase: SettingsUseCase) : Bloc<SettingsEvent, S
                 try {
                     val s = useCase.get()
                     setState { it.copy(loading = false, value = s) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -191,6 +207,8 @@ class SettingsBloc(private val useCase: SettingsUseCase) : Bloc<SettingsEvent, S
                 try {
                     val s = useCase.update(event.settings)
                     setState { it.copy(loading = false, value = s) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -225,6 +243,8 @@ class VoiceBloc(
                     val list = useCase.list()
                     val sel = useCase.selected()
                     setState { it.copy(loading = false, items = list, selected = sel) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -233,6 +253,8 @@ class VoiceBloc(
                 try {
                     useCase.select(event.voice)
                     setState { it.copy(selected = event.voice) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(error = t.message) }
                 }
@@ -242,6 +264,8 @@ class VoiceBloc(
                 try {
                     val fromCloud = useCase.refreshFromAzure()
                     setState { it.copy(loading = false, items = fromCloud) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }

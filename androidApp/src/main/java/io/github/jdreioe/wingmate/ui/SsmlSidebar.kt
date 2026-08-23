@@ -122,7 +122,7 @@ fun SsmlSidebar(
                                 }
                                 scope.launch {
                                     val current = runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                                    settingsUseCase.updateWithNotification(current.copy(ttsEngine = ttsEngine))
+                                    settingsUseCase.update(current.copy(ttsEngine = ttsEngine))
                                 }
                             },
                             thumbContent = {

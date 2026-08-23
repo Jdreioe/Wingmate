@@ -54,8 +54,6 @@ class BoardImportService(
     suspend fun importBoardSet(): ObfBoardSet? =
         (importBoardSetResult() as? BoardImportResult.Success)?.boardSet
 
-    suspend fun importBoards(isModern: Boolean = true): Boolean = importBoardSet() != null
-
     suspend fun importBoardSetFromPath(filePath: String): ObfBoardSet? =
         (importBoardSetFromPathResult(filePath) as? BoardImportResult.Success)?.boardSet
 

@@ -1589,6 +1589,10 @@ class KotlinBridge(
             }
             speechState = SpeechStateResponse(state = "completed", requestId = generation)
             speechJob = null
+        } catch (cancelled: CancellationException) {
+            speechState = SpeechStateResponse(state = "idle", requestId = generation)
+            speechJob = null
+            throw cancelled
         } catch (error: Throwable) {
             if (speechGeneration.get() == generation) {
                 val message = error.message ?: "Speech failed"

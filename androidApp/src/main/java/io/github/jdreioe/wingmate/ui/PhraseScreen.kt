@@ -1235,7 +1235,6 @@ fun PhraseScreen(
                             onDelete = { id -> bloc.dispatch(PhraseEvent.Delete(id)); showEditDialog = false; editingPhrase = null }
                         )
                     }
-                // Full screen handled by platform window on desktop; on mobile we could add a dedicated screen later.
                 }
 
                 if (currentBoard != null) {
@@ -1619,7 +1618,7 @@ private fun insertPredictedText(value: TextFieldValue, text: String): TextFieldV
     return TextFieldValue(result.text, selection = TextRange(result.cursor))
 }
 
-private val PauseTagRegex = Regex("""<(?:pause|break)(?:\\s+(?:duration|time)=["']([^"']+)["'])?[^>]*/>""", RegexOption.IGNORE_CASE)
+private val PauseTagRegex = Regex("""<(?:pause|break)(?:\s+(?:duration|time)=["']([^"']+)["'])?[^>]*/>""", RegexOption.IGNORE_CASE)
 
 private fun buildLanguageAwareSegments(
     rawText: String,

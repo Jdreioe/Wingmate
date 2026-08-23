@@ -15,7 +15,6 @@ class AndroidSqlCategoryRepository(private val context: Context) : CategoryRepos
 
     override suspend fun getAll(): List<CategoryItem> = withContext(repositoryDispatcher) {
         val db = helper.readableDatabase
-        // Removed SLF4J logger for cross-platform compatibility
         val cursor = db.query("categories", null, null, null, null, null, "ordering ASC")
         val list = mutableListOf<CategoryItem>()
         while (cursor.moveToNext()) {

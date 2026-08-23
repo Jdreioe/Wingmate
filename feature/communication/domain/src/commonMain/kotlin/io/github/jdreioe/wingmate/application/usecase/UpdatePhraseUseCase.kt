@@ -17,7 +17,7 @@ class UpdatePhraseUseCase(private val phraseRepository: PhraseRepository) {
         val updated = existing.copy(
             text = text?.let { SpeechTextProcessor.normalizeShorthandSsml(it) } ?: existing.text,
             name = name?.let { SpeechTextProcessor.normalizeShorthandSsml(it) } ?: existing.name,
-            imageUrl = imageUrl?.let { it.takeIf { value -> value.isNotBlank() } },
+            imageUrl = imageUrl?.let { it.takeIf { value -> value.isNotBlank() } } ?: existing.imageUrl,
             recordingPath = recordingPath ?: existing.recordingPath
         )
         return phraseRepository.update(updated)

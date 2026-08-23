@@ -57,11 +57,6 @@ class CategoryUseCase(
 class SettingsUseCase(private val repo: SettingsRepository) {
     suspend fun get(): Settings = repo.get()
     suspend fun update(settings: Settings): Settings = repo.update(settings)
-
-    // Keep backward-compatible entry point, but rely on repository directly for KMP safety.
-    suspend fun updateWithNotification(settings: Settings): Settings {
-        return repo.update(settings)
-    }
 }
 
 class VoiceUseCase(
@@ -112,7 +107,9 @@ class VoiceUseCase(
             FeatureUsageEvents.VOICE_REFRESHED,
             "count" to list.size.toString()
         )
-        return list
+        // A transient failure yields an empty catalog; keep serving the persisted one
+        // so the voice picker doesn't blank out.
+        return list.ifEmpty { repo.getVoices() }
     }
 
     suspend fun refreshFromGoogle(): List<Voice> {
@@ -127,7 +124,7 @@ class VoiceUseCase(
             "provider" to "google",
             "count" to list.size.toString(),
         )
-        return list
+        return list.ifEmpty { repo.getVoices() }
     }
 
     private suspend fun persistCatalogMetadataForSelected(catalog: List<Voice>) {

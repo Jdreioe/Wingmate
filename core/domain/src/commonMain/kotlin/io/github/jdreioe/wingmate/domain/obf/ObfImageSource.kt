@@ -2,7 +2,7 @@ package io.github.jdreioe.wingmate.domain.obf
 
 /**
  * Resolved image source following the OBF priority order:
- * **data → path → url → symbol**.
+ * **data → dataUrl → path → url → symbol**.
  */
 sealed class ObfImageSource {
     data class DataUri(val data: String) : ObfImageSource()

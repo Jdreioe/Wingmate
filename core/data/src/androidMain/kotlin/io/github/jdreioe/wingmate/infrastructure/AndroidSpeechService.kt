@@ -75,7 +75,6 @@ class AndroidSpeechService(
     private val client = HttpClient(OkHttp) {
         followRedirects = false
     }
-    // Removed SLF4J logger for cross-platform compatibility
 
     // Platform TTS (fallback)
     private var tts: TextToSpeech? = null
@@ -1165,44 +1164,19 @@ class AndroidSpeechService(
                 
                 // 2. Play silence for break (if any)
                 if (segment.pauseDurationMs > 0) {
-                    // playSilentUtterance is available API 21+ (Wingmate is min 24/26 usually)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        val silenceId = "wingmate-$requestId-silence-$index-${System.nanoTime()}"
-                        pendingTtsUtterances.incrementAndGet()
-                        val silenceResult = synchronized(playerLock) {
-                            check(requestGeneration.get() == requestId) { "Speech request was replaced" }
-                            t.playSilentUtterance(
-                                segment.pauseDurationMs,
-                                TextToSpeech.QUEUE_ADD,
-                                silenceId
-                            )
-                        }
-                        if (silenceResult != TextToSpeech.SUCCESS) {
-                            onTtsUtteranceFinished(silenceId)
-                            error("Device text-to-speech rejected a pause segment")
-                        }
-                    } else {
-                        // Fallback using Thread.sleep is NOT safe on main thread, but pre-Lollipop is ancient.
-                        // Just ignore or use playSilence (deprecated but works).
-                        @Suppress("DEPRECATION")
-                        run {
-                            pendingTtsUtterances.incrementAndGet()
-                            val silenceId = "wingmate-$requestId-silence-$index-${System.nanoTime()}"
-                            val silenceResult = synchronized(playerLock) {
-                                check(requestGeneration.get() == requestId) { "Speech request was replaced" }
-                                t.playSilence(
-                                    segment.pauseDurationMs,
-                                    TextToSpeech.QUEUE_ADD,
-                                    hashMapOf<String, String>().apply {
-                                        put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, silenceId)
-                                    }
-                                )
-                            }
-                            if (silenceResult != TextToSpeech.SUCCESS) {
-                                onTtsUtteranceFinished(silenceId)
-                                error("Device text-to-speech rejected a pause segment")
-                            }
-                        }
+                    val silenceId = "wingmate-$requestId-silence-$index-${System.nanoTime()}"
+                    pendingTtsUtterances.incrementAndGet()
+                    val silenceResult = synchronized(playerLock) {
+                        check(requestGeneration.get() == requestId) { "Speech request was replaced" }
+                        t.playSilentUtterance(
+                            segment.pauseDurationMs,
+                            TextToSpeech.QUEUE_ADD,
+                            silenceId
+                        )
+                    }
+                    if (silenceResult != TextToSpeech.SUCCESS) {
+                        onTtsUtteranceFinished(silenceId)
+                        error("Device text-to-speech rejected a pause segment")
                     }
                 }
                 

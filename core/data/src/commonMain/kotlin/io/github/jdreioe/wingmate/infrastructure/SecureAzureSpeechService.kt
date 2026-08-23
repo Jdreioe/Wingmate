@@ -10,13 +10,17 @@ import kotlinx.serialization.json.*
 
 /**
  * Secure Azure Speech Service using Token Exchange.
- * 
- * This implementation:
+ *
+ * WIP — part of the managed Azure TTS effort (#53 epic, I-08…I-17).
+ * Not wired into any DI graph yet; playback is a no-op until a platform
+ * audio sink is injected.
+ *
+ * When complete, this implementation:
  * 1. Never stores Azure subscription keys on the client
  * 2. Uses a backend token exchange service to get short-lived tokens
  * 3. Caches tokens locally (they're safe - only valid for 10 minutes)
  * 4. Falls back to system TTS if token exchange fails
- * 
+ *
  * Architecture:
  * ```
  * Client App → Token Exchange Backend → Azure Key Vault
