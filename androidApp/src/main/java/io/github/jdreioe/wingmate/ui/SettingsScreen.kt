@@ -37,6 +37,7 @@ import io.github.jdreioe.wingmate.application.BackupRestoreResult
 import io.github.jdreioe.wingmate.platform.FilePicker
 import io.github.jdreioe.wingmate.platform.ShareService
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.DEFAULT_DWELL_REARM_DELAY_MILLIS
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.Settings
@@ -143,7 +144,7 @@ fun SettingsScreen(
     var auditoryFishingEnabled by remember { mutableStateOf(false) }
     var speechPolicy by remember { mutableStateOf(SpeechPolicy.Immediate) }
     var selectionDebounceMillis by remember { mutableStateOf(0L) }
-    var dwellRearmDelayMillis by remember { mutableStateOf(120L) }
+    var dwellRearmDelayMillis by remember { mutableStateOf(DEFAULT_DWELL_REARM_DELAY_MILLIS) }
     var selectionHighlightMillis by remember { mutableStateOf(0L) }
     var selectKeyBinding by remember { mutableStateOf("") }
     var restModeKeyBinding by remember { mutableStateOf("") }

@@ -109,7 +109,7 @@ class VoiceUseCase(
         )
         // A transient failure yields an empty catalog; keep serving the persisted one
         // so the voice picker doesn't blank out.
-        return list.ifEmpty { repo.getVoices() }
+        return cachedVoicesWhenEmpty(list)
     }
 
     suspend fun refreshFromGoogle(): List<Voice> {
@@ -124,8 +124,11 @@ class VoiceUseCase(
             "provider" to "google",
             "count" to list.size.toString(),
         )
-        return list.ifEmpty { repo.getVoices() }
+        return cachedVoicesWhenEmpty(list)
     }
+
+    private suspend fun cachedVoicesWhenEmpty(voices: List<Voice>): List<Voice> =
+        if (voices.isEmpty()) repo.getVoices() else voices
 
     private suspend fun persistCatalogMetadataForSelected(catalog: List<Voice>) {
         val persisted = repo.getSelected() ?: return

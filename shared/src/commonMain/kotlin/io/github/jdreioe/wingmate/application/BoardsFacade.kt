@@ -7,7 +7,9 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
+import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
+import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.WordType
 import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
@@ -20,6 +22,7 @@ import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.obf.resolvedBackgroundColor
 import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
+import io.github.jdreioe.wingmate.domain.obf.withWordType
 import io.github.jdreioe.wingmate.domain.obf.wordType
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
@@ -319,63 +322,72 @@ class BoardsFacade(
     fun boardJoinSentenceText(tokens: List<String>, spellingMode: Boolean): String =
         joinSentenceText(tokens, spellingMode)
 
-    /**
-     * Resolve the id of the board set containing [boardId], or null when the board
-     * does not belong to any set (in which case edits are rejected by the use case).
-     */
-    private suspend fun owningBoardSetId(boardId: String): String? =
-        boardSetUseCase.listBoardSets().firstOrNull { it.boardIds.contains(boardId) }?.id
-
-    private suspend fun existingCellButton(boardId: String, row: Int, col: Int): ObfButton? {
-        val board = boardRepository.getBoard(boardId) ?: return null
-        val grid = board.grid ?: return null
-        val id = grid.order.getOrNull(row)?.getOrNull(col) ?: return null
-        return board.buttons.firstOrNull { it.id == id }
-    }
-
     suspend fun upsertBoardCellButton(
         boardId: String, row: Int, col: Int, label: String?, vocalization: String?,
         backgroundColor: String?, borderColor: String?, linkedBoardId: String?,
         imageUrl: String?, clearImage: Boolean, actions: List<String>, wordType: String?,
     ): ObfBoard? {
-        val boardSetId = owningBoardSetId(boardId) ?: return null
-        val existing = existingCellButton(boardId, row, col)
-        val effectiveLabel = label ?: existing?.label ?: ""
-        return boardSetUseCase.upsertBoardCellButton(
-            boardSetId = boardSetId,
-            boardId = boardId,
-            row = row,
-            column = col,
-            label = effectiveLabel,
-            vocalization = vocalization,
-            imageUrl = imageUrl,
-            backgroundColor = backgroundColor,
-            hidden = existing?.hidden ?: false,
-            linkedBoardId = linkedBoardId,
-            actions = actions,
-            wordType = wordType?.let { value -> WordType.entries.firstOrNull { it.wireValue == value } },
-            setBorderColor = true,
-            borderColor = borderColor,
-            keepExistingImageWhenNoUrl = !clearImage,
-        )
+        val board = boardRepository.getBoard(boardId) ?: return null
+        val grid = board.grid ?: return null
+        if (row !in 0 until grid.rows || col !in 0 until grid.columns) return null
+        val existingId = grid.order[row][col]
+        val existing = board.buttons.firstOrNull { it.id == existingId }
+        val buttonId = existingId ?: "btn-${kotlin.random.Random.nextLong().toString().replace('-', '0')}"
+        var imageId = if (clearImage) null else existing?.imageId
+        var images = board.images
+        if (!imageUrl.isNullOrBlank()) {
+            imageId = imageId ?: "img-${kotlin.random.Random.nextLong().toString().replace('-', '0')}"
+            val image = ObfImage(id = imageId, url = imageUrl)
+            images = images.filterNot { it.id == imageId } + image
+        }
+        val button = (existing ?: ObfButton(id = buttonId)).copy(
+            label = label, vocalization = vocalization,
+            imageId = imageId, backgroundColor = backgroundColor, borderColor = borderColor,
+            loadBoard = linkedBoardId?.let { ObfLoadBoard(id = it) },
+            action = actions.singleOrNull(),
+            actions = if (actions.size > 1) actions else emptyList(),
+        ).withWordType(wordType?.let { value -> WordType.entries.firstOrNull { it.wireValue == value } })
+        val buttons = board.buttons.filterNot { it.id == buttonId } + button
+        val order = grid.order.mapIndexed { r, columns ->
+            columns.mapIndexed { c, id -> if (r == row && c == col) buttonId else id }
+        }
+        val usedImageIds = buttons.mapNotNull { it.imageId }.toSet()
+        return board.copy(
+            buttons = buttons,
+            images = images.filter { it.id in usedImageIds },
+            grid = grid.copy(order = order),
+        ).also {
+            boardRepository.saveBoard(it)
+            boardSetSpeechCache.cacheField(it, button)
+        }
     }
 
     suspend fun clearBoardCellButton(boardId: String, row: Int, col: Int): ObfBoard? {
-        val boardSetId = owningBoardSetId(boardId) ?: return null
-        return boardSetUseCase.clearBoardCellButton(boardSetId, boardId, row, col)
+        val board = boardRepository.getBoard(boardId) ?: return null
+        val grid = board.grid ?: return null
+        if (row !in 0 until grid.rows || col !in 0 until grid.columns) return null
+        val removedId = grid.order[row][col]
+        val order = grid.order.mapIndexed { r, columns ->
+            columns.mapIndexed { c, id -> if (r == row && c == col) null else id }
+        }
+        val stillUsed = order.flatten().toSet()
+        val buttons = board.buttons.filter { it.id != removedId || it.id in stillUsed }
+        val usedImages = buttons.mapNotNull { it.imageId }.toSet()
+        return board.copy(buttons = buttons, images = board.images.filter { it.id in usedImages }, grid = grid.copy(order = order))
+            .also { boardRepository.saveBoard(it) }
     }
 
     suspend fun setBoardBackgroundColor(
         boardSetId: String,
         boardId: String,
         backgroundColor: String?,
-    ): ObfBoard? {
-        val board = boardRepository.getBoard(boardId) ?: return null
+    ): ObfBoard? = runCatching {
+        val board = boardRepository.getBoard(boardId) ?: return@runCatching null
         val updated = board.copy(backgroundColor = backgroundColor?.trim()?.takeIf(String::isNotEmpty))
         boardRepository.saveBoard(updated)
         boardSetUseCase.touchBoardSet(boardSetId)
-        return updated
-    }
+        updated
+    }.getOrNull()
 }
 
 private fun String.toBoardReturnBehavior(): BoardReturnBehavior =

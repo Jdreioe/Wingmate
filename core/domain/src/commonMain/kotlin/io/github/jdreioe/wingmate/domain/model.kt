@@ -79,6 +79,8 @@ enum class WordTypeColorScheme {
     Fitzgerald
 }
 
+const val DEFAULT_DWELL_REARM_DELAY_MILLIS: Long = 120L
+
 @Serializable
 data class Settings(
     val language: String = "en-US",
@@ -141,7 +143,7 @@ data class Settings(
     // Tremor filter: after the pointer moves to a different target, the dwell timer
     // only starts counting once this many ms have passed. Filters accidental dwell
     // triggers on neighbors while moving between targets (CP tremor). 0 disables.
-    val dwellRearmDelayMillis: Long = 120,
+    val dwellRearmDelayMillis: Long = DEFAULT_DWELL_REARM_DELAY_MILLIS,
     // Interaction shortcuts use portable tokens such as "Space", "Enter", or "F8".
     // Empty disables the shortcut so ordinary typing is never intercepted by default.
     val selectKeyBinding: String = "",

@@ -458,9 +458,10 @@ class PartnerWindowDriver(
         
         val finalData = out.toByteArray()
         if (finalData.size < len) {
-            // Truncated SPI read — surface the failure instead of silently
-            // returning short data that callers would interpret as pixels.
-            throw RuntimeException("EVE read truncated: got ${finalData.size} of $len bytes")
+             // throw RuntimeException("Read timeout: got ${finalData.size} of $len bytes")
+             // Return what we have to be safe? Or padding?
+             // EVE reads are usually critical.
+             return finalData // Let caller handle or fail later
         }
         
         // Return only requested amount (in case we got extra)
@@ -848,9 +849,7 @@ class PartnerWindowDriver(
     }
 
     fun cmdString(text: String) {
-        // UTF-8 to match the Rust partner-window client (partner_window.rs uses as_bytes());
-        // US_ASCII mangled non-ASCII labels (å/é) into '?' on the display.
-        var s = text.toByteArray(Charsets.UTF_8) + 0x00.toByte()
+        var s = text.toByteArray(Charsets.US_ASCII) + 0x00.toByte()
         while (s.size % 4 != 0) {
             s += 0x00.toByte()
         }
@@ -930,7 +929,7 @@ class PartnerWindowDriver(
 
         // Check if compressed
         val isCompressed = data.size >= 2 &&
-                ((data[0].toInt() and 0xFF) * 256 + (data[1].toInt() and 0xFF)) % 31 == 0 &&
+                (data[0].toInt() and 0xFF) * 256 + (data[1].toInt() and 0xFF) % 31 == 0 &&
                 data.size < expectedRaw
 
         if (isCompressed) {

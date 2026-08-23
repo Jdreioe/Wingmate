@@ -23,7 +23,7 @@ class SelectionDebouncer {
      */
     fun tryActivate(targetId: String, nowMillis: Long, debounceMillis: Long): Boolean {
         if (debounceMillis <= 0) {
-            lastActivationAtMillis.clear()
+            lastActivationAtMillis.remove(targetId)
             return true
         }
         val last = lastActivationAtMillis[targetId]

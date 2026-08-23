@@ -19,9 +19,6 @@ class CommunicationFacade(
 ) {
     fun phraseListStore(): PhraseListStore = phraseListStore
 
-    /** Optional variant for Swift bridge callers that handle absence explicitly. */
-    fun phraseListStoreOrNull(): PhraseListStore? = phraseListStore
-
     fun refreshPhrases() {
         phraseListStore.accept(PhraseListStore.Intent.Refresh)
     }

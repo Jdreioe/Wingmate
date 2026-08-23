@@ -10,8 +10,6 @@ import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Token Exchange Client for secure Azure TTS authentication.
@@ -31,13 +29,11 @@ class TokenExchangeClient(
     private var cachedToken: String? = null
     private var cachedRegion: String? = null
     private var tokenExpiry: Long = 0
-    private val tokenMutex = Mutex()
-
     /**
      * Get a valid Azure Speech token.
      * Returns cached token if still valid, otherwise fetches a new one.
      */
-    suspend fun getToken(): TokenResult = tokenMutex.withLock {
+    suspend fun getToken(): TokenResult {
         val now = Clock.System.now().toEpochMilliseconds()
         
         // Return cached token if valid (with 1 minute buffer)
@@ -104,7 +100,7 @@ class TokenExchangeClient(
      * Invalidate the cached token.
      * Call this if you receive a 401 from Azure TTS.
      */
-    suspend fun invalidateToken() = tokenMutex.withLock {
+    fun invalidateToken() {
         OperationalLogger.info("speech_token.cache", "invalidated")
         cachedToken = null
         cachedRegion = null

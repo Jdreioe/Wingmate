@@ -57,6 +57,7 @@ import io.github.jdreioe.wingmate.application.PhraseEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.phraseSubtree
 import io.github.jdreioe.wingmate.domain.PredictionResult
 import io.github.jdreioe.wingmate.domain.SpeechPolicy
 import io.github.jdreioe.wingmate.domain.SpeechSegment
@@ -226,16 +227,8 @@ fun PhraseScreen(
             fun deleteWithUndo(phraseId: String?) {
                 if (phraseId.isNullOrBlank()) return
                 val all = bloc.state.value.items
-                val target = all.firstOrNull { it.id == phraseId } ?: return
-                val removed = mutableListOf(target)
-                val queue = ArrayDeque(listOf(target.id))
-                while (queue.isNotEmpty()) {
-                    val parent = queue.removeFirst()
-                    all.filter { it.parentId == parent }.forEach { child ->
-                        removed += child
-                        queue.addLast(child.id)
-                    }
-                }
+                val removed = phraseSubtree(all, phraseId)
+                if (removed.isEmpty()) return
                 bloc.dispatch(PhraseEvent.Delete(phraseId))
                 uiScope.launch {
                     val result = snackbarHostState.showSnackbar(

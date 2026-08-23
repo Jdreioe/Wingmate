@@ -383,28 +383,12 @@ final class IosViewModel: ObservableObject {
         await MainActor.run { IosDiBridge().startKoinWithOverridesBridge() }
         let repoNameBefore = KoinBridge().debugVoiceRepositoryName()
         print("DEBUG: After startKoinWithOverrides: Bound VoiceRepository = \(repoNameBefore)")
-        if let phraseStore = communicationFacade.phraseListStoreOrNull() {
-            self.store = phraseStore
-            let observer = StoreObserver(onNext: { [weak self] newState in self?.state = newState }, onComplete: { [weak self] in
-                self?.disposable = nil
-                self?.store = nil
-            })
-            self.disposable = store?.states(observer: observer)
-        } else {
-            print("DEBUG: phraseListStoreOrNull() returned nil — Koin not ready or store not bound")
-            try? await Task.sleep(nanoseconds: 150_000_000)
-            if let retryStore = communicationFacade.phraseListStoreOrNull() {
-                self.store = retryStore
-                let observer = StoreObserver(onNext: { [weak self] newState in self?.state = newState }, onComplete: { [weak self] in
-                    self?.disposable = nil
-                    self?.store = nil
-                })
-                self.disposable = store?.states(observer: observer)
-                print("DEBUG: Store resolved on retry")
-            } else {
-                print("DEBUG: Store still nil after retry")
-            }
-        }
+        self.store = communicationFacade.phraseListStore()
+        let observer = StoreObserver(onNext: { [weak self] newState in self?.state = newState }, onComplete: { [weak self] in
+            self?.disposable = nil
+            self?.store = nil
+        })
+        self.disposable = store?.states(observer: observer)
     // Load selected voice and languages for welcome gating and UI
     refreshVoiceAndLanguages()
 

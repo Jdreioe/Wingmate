@@ -551,7 +551,7 @@
     <string name="phrase_deleted">Frase slettet (med underemner)</string>
     <string name="action_undo">Fortryd</string>
     <string name="ui_settings_select_key">Valgtast</string>
-    <string name="ui_settings_select_key_desc">Tryk én gang på denne tast for at bruge kommunikationsmålet under markøren eller tastaturfokus.</string>
+    <string name="ui_settings_select_key_desc">Tryk én gang på denne tast for at bruge kommunikationsmålet under markøren eller tastaturfokus. Hold den nede i 2 sekunder i hviletilstand for at genoptage input.</string>
     <string name="ui_settings_rest_key">Tast til hviletilstand</string>
     <string name="ui_settings_rest_key_desc">Sæt valg ved markør og valgtasten på pause eller genoptag dem uden præcis pegning.</string>
     <string name="ui_settings_pointer_emphasis">Fremhævelse af markør</string>

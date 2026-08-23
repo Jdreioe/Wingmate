@@ -36,8 +36,7 @@ class AccessInputController {
     var rearmDelayMillis: Long = 0
 
     /** While paused (rest mode), the select key held this long resumes input. */
-    private var pausedSelectPressAtMillis: Long? = null
-    private var pausedSelectPressToken: String? = null
+    private var pausedSelectPress: PausedSelectPress? = null
 
     val state: AccessInputState
         get() = AccessInputState(paused, currentTarget(), progress)
@@ -90,8 +89,7 @@ class AccessInputController {
         }
         if (paused && normalized == normalizeKeyBinding(selectBinding) && selectBinding.isNotBlank()) {
             // Rest-mode escape hatch: hold the select key to resume (see keyUp).
-            pausedSelectPressToken = normalized
-            pausedSelectPressAtMillis = nowMillis
+            pausedSelectPress = PausedSelectPress(normalized, nowMillis)
         }
         return null
     }
@@ -99,11 +97,10 @@ class AccessInputController {
     fun keyUp(key: String, nowMillis: Long): AccessInputEffect? {
         val normalized = normalizeKeyBinding(key)
         if (!pressedKeys.remove(normalized)) return null
-        if (pausedSelectPressToken == normalized) {
-            val downAt = pausedSelectPressAtMillis
-            pausedSelectPressToken = null
-            pausedSelectPressAtMillis = null
-            if (paused && downAt != null && nowMillis - downAt >= SELECT_HOLD_RESUME_MILLIS) {
+        val pausedPress = pausedSelectPress
+        if (pausedPress?.token == normalized) {
+            pausedSelectPress = null
+            if (paused && nowMillis - pausedPress.startedAtMillis >= SELECT_HOLD_RESUME_MILLIS) {
                 return setPaused(false, nowMillis)
             }
         }
@@ -137,8 +134,7 @@ class AccessInputController {
         hoveredTargetId = null
         focusedTargetId = null
         pressedKeys.clear()
-        pausedSelectPressToken = null
-        pausedSelectPressAtMillis = null
+        pausedSelectPress = null
         restartDwell(nowMillis)
     }
 
@@ -154,6 +150,11 @@ class AccessInputController {
         progress = 0f
     }
 }
+
+private data class PausedSelectPress(
+    val token: String,
+    val startedAtMillis: Long,
+)
 
 /** Hold the select key this long during rest mode to resume input. */
 const val SELECT_HOLD_RESUME_MILLIS: Long = 2_000L
