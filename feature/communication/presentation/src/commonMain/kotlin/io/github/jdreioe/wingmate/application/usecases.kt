@@ -54,9 +54,13 @@ class CategoryUseCase(
     }
 }
 
-class SettingsUseCase(private val repo: SettingsRepository) {
+class SettingsUseCase(
+    private val repo: SettingsRepository,
+    private val stateManager: SettingsStateManager? = null,
+) {
     suspend fun get(): Settings = repo.get()
-    suspend fun update(settings: Settings): Settings = repo.update(settings)
+    suspend fun update(settings: Settings): Settings =
+        stateManager?.updateSettings(settings) ?: repo.update(settings)
 }
 
 class VoiceUseCase(

@@ -14,6 +14,10 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -25,64 +29,48 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.BackupRestoreResult
+import io.github.jdreioe.wingmate.application.CompleteBackupManager
+import io.github.jdreioe.wingmate.application.EditingAccessController
+import io.github.jdreioe.wingmate.application.EditingAccessState
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
-import io.github.jdreioe.wingmate.application.BoardSetUseCase
-import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.SettingsStateManager
-import io.github.jdreioe.wingmate.application.EditingAccessController
-import io.github.jdreioe.wingmate.application.CompleteBackupManager
-import io.github.jdreioe.wingmate.application.BackupRestoreResult
-import io.github.jdreioe.wingmate.platform.FilePicker
-import io.github.jdreioe.wingmate.platform.ShareService
+import io.github.jdreioe.wingmate.application.SettingsUseCase
+import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.ConfigRepository
-import io.github.jdreioe.wingmate.domain.DEFAULT_DWELL_REARM_DELAY_MILLIS
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
-import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechService
-import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
-import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.SpeechPolicy
 import io.github.jdreioe.wingmate.domain.StartupMode
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.GoogleVoiceModel
 import io.github.jdreioe.wingmate.domain.resolvedGoogleModel
 import io.github.jdreioe.wingmate.domain.withPreferredSupportedLanguage
 import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
 import io.github.jdreioe.wingmate.domain.WordTypeColorScheme
-import io.github.jdreioe.wingmate.application.VoiceUseCase
-import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
-import io.github.jdreioe.wingmate.domain.SpeechPolicy
+import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.infrastructure.ArasaacDownloadProgress
 import io.github.jdreioe.wingmate.infrastructure.ArasaacSymbolDownloadService
-import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpoint
-import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpointResult
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
+import io.github.jdreioe.wingmate.platform.FilePicker
+import io.github.jdreioe.wingmate.platform.ShareService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlin.time.Clock
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
 
 import com.hojmoseit.wingmate.R
-private enum class SettingsTab { Speech, Display, Accessibility, Privacy, General }
-
-private sealed class SettingsSpeechSubPage {
-    object VoiceSelection : SettingsSpeechSubPage()
-    object LanguageSelection : SettingsSpeechSubPage()
-    object F0Setup : SettingsSpeechSubPage()
-    object GoogleSetup : SettingsSpeechSubPage()
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,85 +92,69 @@ fun SettingsScreen(
     val arasaacDownloader = remember(imageCacher) {
         imageCacher?.let(::ArasaacSymbolDownloadService)
     }
+    val backupManager = remember(koin) { koin.getOrNull<CompleteBackupManager>() }
+    val backupFilePicker = remember(koin) { koin.getOrNull<FilePicker>() }
+    val backupShareService = remember(koin) { koin.getOrNull<ShareService>() }
+    val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
 
-    // Null represents the Pixel-style settings index; categories open as child pages.
-    var selectedTab by remember { mutableStateOf<SettingsTab?>(null) }
-    var speechSubPage by remember { mutableStateOf<SettingsSpeechSubPage?>(null) }
-
-    // --- Speech section state ---
-    var endpoint by remember { mutableStateOf("") }
-    var subscriptionKey by remember { mutableStateOf("") }
-    var credentialConfigured by remember { mutableStateOf(false) }
-    var replacingAzureCredentials by remember { mutableStateOf(false) }
-    var googleCredentialConfigured by remember { mutableStateOf(false) }
-    var azureEndpointError by remember { mutableStateOf<String?>(null) }
-    var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
-    var virtualMic by remember { mutableStateOf(false) }
-
-    // --- Display section state ---
-    var fontSizeScale by remember { mutableStateOf(1.0f) }
-    var playbackIconScale by remember { mutableStateOf(1.0f) }
-    var categoryChipScale by remember { mutableStateOf(1.0f) }
-    var buttonScale by remember { mutableStateOf(1.0f) }
-    var inputFieldScale by remember { mutableStateOf(1.0f) }
-    var showLabels by remember { mutableStateOf(true) }
-    var showSymbols by remember { mutableStateOf(true) }
-    var labelAtTop by remember { mutableStateOf(false) }
-    var boardShowMessageBar by remember { mutableStateOf(true) }
-    var boardActivationBehavior by remember {
-        mutableStateOf(BoardActivationBehavior.SpeakAndAdd)
+    val operations = remember(
+        configRepo,
+        settingsUseCase,
+        settingsStateManager,
+        boardSetUseCase,
+        voiceUseCase,
+        speechService,
+        pronunciationRepo,
+        featureUsageReporter,
+        arasaacDownloader,
+        backupManager,
+        backupFilePicker,
+        backupShareService,
+        editingAccessController,
+    ) {
+        DefaultSettingsOperations(
+            configRepo = configRepo,
+            settingsUseCase = settingsUseCase,
+            settingsStateManager = settingsStateManager,
+            boardSetUseCase = boardSetUseCase,
+            voiceUseCase = voiceUseCase,
+            speechService = speechService,
+            pronunciationRepo = pronunciationRepo,
+            featureUsageReporter = featureUsageReporter,
+            arasaacDownloader = arasaacDownloader,
+            backupManager = backupManager,
+            filePicker = backupFilePicker,
+            shareService = backupShareService,
+            editingAccessController = editingAccessController,
+        )
     }
-    var boardReturnBehavior by remember { mutableStateOf(BoardReturnBehavior.Stay) }
-    var gridColumns by remember { mutableStateOf(3) }
-    var highContrastMode by remember { mutableStateOf(false) }
-    var wordTypeColorScheme by remember { mutableStateOf(WordTypeColorScheme.None) }
-
-    // --- Accessibility section state ---
-    var holdToSelectMillis by remember { mutableStateOf(0L) }
-    var dwellToSelectMillis by remember { mutableStateOf(0L) }
-    var selectionSoundEnabled by remember { mutableStateOf(false) }
-    var auditoryFishingEnabled by remember { mutableStateOf(false) }
-    var speechPolicy by remember { mutableStateOf(SpeechPolicy.Immediate) }
-    var selectionDebounceMillis by remember { mutableStateOf(0L) }
-    var dwellRearmDelayMillis by remember { mutableStateOf(DEFAULT_DWELL_REARM_DELAY_MILLIS) }
-    var selectionHighlightMillis by remember { mutableStateOf(0L) }
-    var selectKeyBinding by remember { mutableStateOf("") }
-    var restModeKeyBinding by remember { mutableStateOf("") }
-    var pointerEmphasisStyle by remember { mutableStateOf(PointerEmphasisStyle.System) }
-    var pointerEmphasisScale by remember { mutableStateOf(1.5f) }
-    var usageLoggingEnabled by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        featureUsageReporter?.reportEvent(FeatureUsageEvents.SETTINGS_OPENED)
+    val factory = remember(operations) {
+        viewModelFactory {
+            initializer {
+                SettingsViewModel(
+                    savedStateHandle = createSavedStateHandle(),
+                    operations = operations,
+                )
+            }
+        }
     }
-
-    // --- General section state ---
-    var featureUsageReportingEnabled by remember { mutableStateOf(false) }
-    var historyVisible by remember { mutableStateOf(true) }
-    var partnerWindowEnabled by remember { mutableStateOf(false) }
-    var startupMode by remember { mutableStateOf(StartupMode.Keyboard) }
-    var startupBoardSetId by remember { mutableStateOf<String?>(null) }
-    var availableBoardSets by remember { mutableStateOf<List<ObfBoardSet>>(emptyList()) }
-    var cachedArasaacSymbols by remember { mutableStateOf(0) }
-    var arasaacProgress by remember { mutableStateOf<ArasaacDownloadProgress?>(null) }
-    var arasaacDownloadError by remember { mutableStateOf(false) }
-    var arasaacFailedCount by remember { mutableStateOf(0) }
-
-    var showPronunciationDictionary by remember { mutableStateOf(false) }
-    var dictionaryEntries by remember { mutableStateOf<List<PronunciationEntry>>(emptyList()) }
-
-    var loading by remember { mutableStateOf(true) }
-    var settingsError by remember { mutableStateOf<String?>(null) }
-    var settingsRetryKey by remember { mutableIntStateOf(0) }
-    val settingsLoadFailed = stringResource(R.string.settings_load_failed)
-    val settingsSaveFailed = stringResource(R.string.settings_save_failed)
-    val voiceReadFailed = stringResource(R.string.voice_load_failed)
-    val invalidAzureEndpoint = stringResource(R.string.azure_setup_error_endpoint)
-    val scope = rememberCoroutineScope()
-    val settingsUpdateMutex = remember { Mutex() }
-
-    // Partner window device detection (desktop-only)
-    val partnerDeviceConnected by PartnerWindowAvailability.deviceConnected.collectAsStateWithLifecycle()
+    val viewModel: SettingsViewModel = viewModel(factory = factory)
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val editingAccessState by (
+        operations.editingAccessState?.collectAsStateWithLifecycle()
+            ?: remember { mutableStateOf(EditingAccessState(supported = false)) }
+        )
+    LaunchedEffect(viewModel) { viewModel.onAction(SettingsAction.Initialize) }
+    LaunchedEffect(viewModel, onSaved, onDismiss) {
+        viewModel.events.collect { event ->
+            when (event) {
+                SettingsEvent.Close -> {
+                    onSaved?.invoke()
+                    onDismiss()
+                }
+            }
+        }
+    }
 
     // When the settings screen opens it is layered on top of the previous screen, which may
     // still hold focus on a text field. Prevent the software keyboard from popping up by
@@ -194,151 +166,7 @@ fun SettingsScreen(
         keyboardController?.hide()
     }
 
-    // Helper to update settings reactively
-    fun updateSettings(update: (Settings) -> Settings) {
-        scope.launch {
-            try {
-                settingsUpdateMutex.withLock {
-                    if (settingsStateManager != null) {
-                        settingsStateManager.updateSettings(update)
-                    } else {
-                        val useCase = checkNotNull(settingsUseCase) { "Settings are unavailable" }
-                        withContext(Dispatchers.Default) {
-                            useCase.update(update(useCase.get()))
-                        }
-                    }
-                }
-            } catch (failure: CancellationException) {
-                throw failure
-            } catch (_: Exception) {
-                settingsError = settingsSaveFailed
-            }
-        }
-    }
-
-    suspend fun selectedVoiceOrReport(): Voice? = try {
-        voiceUseCase?.selected()
-    } catch (failure: CancellationException) {
-        throw failure
-    } catch (_: Exception) {
-        settingsError = voiceReadFailed
-        null
-    }
-
-    // Load all settings on first composition
-    LaunchedEffect(settingsRetryKey) {
-        loading = true
-        settingsError = null
-        try {
-        val cfg = withContext(Dispatchers.Default) { configRepo?.getSpeechConfigStatus() }
-        cfg?.let {
-            endpoint = it.endpoint
-            credentialConfigured = it.credentialConfigured
-        }
-        googleCredentialConfigured = withContext(Dispatchers.Default) {
-            configRepo?.getGoogleSpeechConfigStatus()?.credentialConfigured == true
-        }
-
-        val s = withContext(Dispatchers.Default) {
-            checkNotNull(settingsUseCase) { "Settings are unavailable" }.get()
-        }
-        ttsEngine = s.ttsEngine
-        virtualMic = s.virtualMicEnabled
-        featureUsageReportingEnabled = s.featureUsageReportingEnabled
-        historyVisible = s.historyVisible
-        partnerWindowEnabled = s.partnerWindowEnabled
-        startupMode = s.startupMode
-        startupBoardSetId = s.startupBoardSetId
-        availableBoardSets = withContext(Dispatchers.Default) {
-            checkNotNull(boardSetUseCase) { "Screen storage is unavailable" }.listBoardSets()
-        }
-        showLabels = s.showLabels
-        showSymbols = s.showSymbols
-        labelAtTop = s.labelAtTop
-        boardShowMessageBar = s.boardShowMessageBar
-        boardActivationBehavior = s.boardActivationBehavior
-        boardReturnBehavior = s.boardReturnBehavior
-        holdToSelectMillis = s.holdToSelectMillis
-        gridColumns = s.gridColumns
-        highContrastMode = s.highContrastMode
-        wordTypeColorScheme = s.wordTypeColorScheme
-        dwellToSelectMillis = s.dwellToSelectMillis
-        selectionSoundEnabled = s.selectionSoundEnabled
-        auditoryFishingEnabled = s.auditoryFishingEnabled
-        speechPolicy = s.speechPolicy
-        selectionDebounceMillis = s.selectionDebounceMillis
-        dwellRearmDelayMillis = s.dwellRearmDelayMillis
-        selectionHighlightMillis = s.selectionHighlightMillis
-        selectKeyBinding = s.selectKeyBinding
-        restModeKeyBinding = s.restModeKeyBinding
-        pointerEmphasisStyle = s.pointerEmphasisStyle
-        pointerEmphasisScale = s.pointerEmphasisScale
-        usageLoggingEnabled = s.usageLoggingEnabled
-        fontSizeScale = s.fontSizeScale
-        playbackIconScale = s.playbackIconScale
-        categoryChipScale = s.categoryChipScale
-        buttonScale = s.buttonScale
-        inputFieldScale = s.inputFieldScale
-        featureUsageReporter?.setEnabled(s.featureUsageReportingEnabled)
-        cachedArasaacSymbols = runCatching { arasaacDownloader?.cachedCount() ?: 0 }.getOrDefault(0)
-        } catch (failure: CancellationException) {
-            throw failure
-        } catch (_: Exception) {
-            settingsError = settingsLoadFailed
-        } finally {
-            loading = false
-        }
-    }
-
-    // Load pronunciation entries when opening the dictionary
-    LaunchedEffect(showPronunciationDictionary, pronunciationRepo) {
-        if (showPronunciationDictionary) {
-            dictionaryEntries = withContext(Dispatchers.Default) {
-                runCatching { pronunciationRepo?.getAll().orEmpty() }.getOrDefault(emptyList())
-            }
-        }
-    }
-
-    // Persist text input after the user pauses typing instead of waiting for a Save button.
-    LaunchedEffect(endpoint, subscriptionKey, loading, replacingAzureCredentials) {
-        if (!loading && (!credentialConfigured || replacingAzureCredentials) &&
-            endpoint.isNotBlank() && subscriptionKey.isNotBlank()
-        ) {
-            delay(400)
-            if (AzureSpeechEndpoint.parse(endpoint) is AzureSpeechEndpointResult.Invalid) {
-                azureEndpointError = invalidAzureEndpoint
-                return@LaunchedEffect
-            }
-            val repository = configRepo ?: return@LaunchedEffect
-            val saved = runCatching {
-                repository.saveSpeechConfig(
-                    SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey)
-                )
-            }.isSuccess
-            if (saved) {
-                azureEndpointError = null
-                credentialConfigured = true
-                replacingAzureCredentials = false
-                subscriptionKey = ""
-            }
-        }
-    }
-
-    fun closeSettings() {
-        onSaved?.invoke()
-        onDismiss()
-    }
-
-    fun handleBack() {
-        when {
-            showPronunciationDictionary -> showPronunciationDictionary = false
-            speechSubPage != null -> speechSubPage = null
-            selectedTab != null -> selectedTab = null
-            else -> closeSettings()
-        }
-    }
-
-    PlatformBackHandler(enabled = true, onBack = ::handleBack)
+    PlatformBackHandler(enabled = true, onBack = { viewModel.onAction(SettingsAction.BackClicked) })
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -346,19 +174,10 @@ fun SettingsScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(
-                        when {
-                            showPronunciationDictionary -> stringResource(R.string.dictionary_title)
-                            speechSubPage is SettingsSpeechSubPage.VoiceSelection -> stringResource(R.string.voice_select_title)
-                            speechSubPage is SettingsSpeechSubPage.LanguageSelection -> stringResource(R.string.language_dialog_title)
-                            speechSubPage is SettingsSpeechSubPage.GoogleSetup -> stringResource(R.string.google_setup_title)
-                            selectedTab != null -> settingsCategoryTitle(selectedTab!!)
-                            else -> stringResource(R.string.ui_settings_title)
-                        }
-                    )
+                    Text(settingsRouteTitle(state.route))
                 },
                 navigationIcon = {
-                    IconButton(onClick = ::handleBack) {
+                    IconButton(onClick = { viewModel.onAction(SettingsAction.BackClicked) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_close))
                     }
                 },
@@ -373,375 +192,346 @@ fun SettingsScreen(
                         .fillMaxSize()
                         .padding(contentPadding)
                 ) {
-                    if (loading) {
-                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    when {
+                        state.isLoading -> Box(
+                            Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
                             CircularProgressIndicator()
                         }
-                    } else if (settingsError != null) {
-                        Column(
+                        state.loadFailed -> Column(
                             modifier = Modifier.align(Alignment.Center).padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Text(settingsError.orEmpty(), color = MaterialTheme.colorScheme.error)
-                            Button(onClick = { settingsRetryKey++ }) {
+                            Text(
+                                stringResource(R.string.settings_load_failed),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Button(onClick = { viewModel.onAction(SettingsAction.RetryLoad) }) {
                                 Text(stringResource(R.string.common_retry))
                             }
                         }
-                    } else if (showPronunciationDictionary) {
-                        DictionaryScreen(
-                            entries = dictionaryEntries,
-                            showTopBar = false,
-                            onAddEntry = { word, phoneme, alphabet ->
-                                scope.launch {
-                                    val repo = pronunciationRepo ?: return@launch
-                                    withContext(Dispatchers.Default) {
-                                        repo.add(PronunciationEntry(word, phoneme, alphabet))
-                                    }
-                                    dictionaryEntries = withContext(Dispatchers.Default) {
-                                        repo.getAll()
-                                    }
-                                }
-                            },
-                            onDeleteEntry = { entry ->
-                                scope.launch {
-                                    val repo = pronunciationRepo ?: return@launch
-                                    withContext(Dispatchers.Default) {
-                                        repo.delete(entry.word)
-                                    }
-                                    dictionaryEntries = withContext(Dispatchers.Default) {
-                                        repo.getAll()
-                                    }
-                                }
-                            },
-                            onTestEntry = { word, phoneme, alphabet ->
-                                scope.launch {
-                                    val voice = selectedVoiceOrReport()
-                                    val pronunciationMarkup = if (alphabet == "text") {
-                                        "<sub alias=\"$phoneme\">$word</sub>"
-                                    } else {
-                                        "<phoneme alphabet=\"$alphabet\" ph=\"$phoneme\">$word</phoneme>"
-                                    }
-                                    speechService?.speak(
-                                        pronunciationMarkup,
-                                        voice,
-                                        voice?.pitch,
-                                        voice?.rate
-                                    )
-                                }
-                            },
-                            onGuessPronunciation = { word ->
-                                val voice = selectedVoiceOrReport()
-                                speechService?.guessPronunciation(
-                                    word,
-                                    voice?.selectedLanguage ?: voice?.primaryLanguage ?: "en"
-                                )
-                            },
-                            onBack = { showPronunciationDictionary = false },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .widthIn(max = 920.dp)
-                                .align(Alignment.TopCenter)
-                        ) {
-                            if (selectedTab == null) {
-                                SettingsHomePage(
-                                    onSelectCategory = {
-                                        selectedTab = it
-                                        featureUsageReporter?.reportEvent(
-                                            FeatureUsageEvents.SETTINGS_SECTION_OPENED,
-                                            "section" to it.name.lowercase()
-                                        )
-                                    },
-                                    onOpenPronunciation = { showPronunciationDictionary = true },
+                        else -> Column(modifier = Modifier.fillMaxSize()) {
+                            if (state.saveFailed) {
+                                SaveFailureBanner(onRetry = {
+                                    viewModel.onAction(SettingsAction.RetrySave)
+                                })
+                            }
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                SettingsRouteContent(
+                                    state = state,
+                                    editingAccessState = editingAccessState,
+                                    editingAccessAvailable = editingAccessController != null,
+                                    onBackToWelcome = onBackToWelcome,
+                                    onAction = viewModel::onAction,
+                                    onGuessPronunciation = viewModel::guessPronunciation,
                                     modifier = Modifier.fillMaxSize()
                                 )
-                            } else {
-                                val currentTab = checkNotNull(selectedTab)
-                                val subPage = speechSubPage
-                                if (subPage != null && currentTab == SettingsTab.Speech) {
-                                    // Sub-pages manage their own scrolling, so they must
-                                    // NOT be placed inside another verticalScroll container.
-                                    when (subPage) {
-                                        SettingsSpeechSubPage.VoiceSelection -> VoiceSelectionPage(
-                                            onBack = { speechSubPage = null }
-                                        )
-                                        SettingsSpeechSubPage.LanguageSelection -> LanguageSelectionPage(
-                                            onBack = { speechSubPage = null }
-                                        )
-                                        SettingsSpeechSubPage.F0Setup -> F0SetupScreen(
-                                            onDone = {
-                                                ttsEngine = TtsEngine.AZURE_USER_RESOURCE
-                                                updateSettings { it.copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE) }
-                                                scope.launch {
-                                                    configRepo?.getSpeechConfigStatus()?.let {
-                                                        endpoint = it.endpoint
-                                                        credentialConfigured = it.credentialConfigured
-                                                        replacingAzureCredentials = false
-                                                        subscriptionKey = ""
-                                                    }
-                                                }
-                                                speechSubPage = null
-                                            },
-                                            onBack = { speechSubPage = null }
-                                        )
-                                        SettingsSpeechSubPage.GoogleSetup -> GoogleTtsSetupScreen(
-                                            onDone = {
-                                                ttsEngine = TtsEngine.GOOGLE_CLOUD
-                                                updateSettings { it.copy(ttsEngine = TtsEngine.GOOGLE_CLOUD) }
-                                                scope.launch {
-                                                    googleCredentialConfigured = configRepo
-                                                        ?.getGoogleSpeechConfigStatus()
-                                                        ?.credentialConfigured == true
-                                                }
-                                                speechSubPage = null
-                                            },
-                                            onBack = { speechSubPage = null },
-                                            showNavigation = false,
-                                        )
-                                    }
-                                } else {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .verticalScroll(rememberScrollState())
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                when (currentTab) {
-                            SettingsTab.Speech -> SpeechSection(
-                                ttsEngine = ttsEngine,
-                                onTtsEngineChange = { engine ->
-                                    ttsEngine = engine
-                                    updateSettings { it.copy(ttsEngine = engine) }
-                                },
-                                endpoint = endpoint,
-                                onEndpointChange = {
-                                    endpoint = it
-                                    azureEndpointError = null
-                                },
-                                subscriptionKey = subscriptionKey,
-                                onSubscriptionKeyChange = { subscriptionKey = it },
-                                endpointError = azureEndpointError,
-                                credentialConfigured = credentialConfigured,
-                                replacingCredentials = replacingAzureCredentials,
-                                onReplaceCredentials = {
-                                    replacingAzureCredentials = true
-                                    subscriptionKey = ""
-                                },
-                                googleCredentialConfigured = googleCredentialConfigured,
-                                onOpenGoogleSetup = {
-                                    speechSubPage = SettingsSpeechSubPage.GoogleSetup
-                                    featureUsageReporter?.reportEvent(
-                                        FeatureUsageEvents.SETTINGS_SECTION_OPENED,
-                                        "section" to "google_tts_setup",
-                                    )
-                                },
-                                onClearGoogleCredentials = {
-                                    scope.launch {
-                                        runCatching { configRepo?.clearGoogleSpeechConfig() }
-                                            .onSuccess {
-                                                googleCredentialConfigured = false
-                                            }
-                                    }
-                                },
-                                virtualMic = virtualMic,
-                                onVirtualMicChange = { checked ->
-                                    virtualMic = checked
-                                    updateSettings { it.copy(virtualMicEnabled = checked) }
-                                },
-                                onOpenVoiceSelection = {
-                                    speechSubPage = SettingsSpeechSubPage.VoiceSelection
-                                    featureUsageReporter?.reportEvent(FeatureUsageEvents.SETTINGS_SECTION_OPENED, "section" to "voice_selection")
-                                },
-                                onOpenLanguageSelection = {
-                                    speechSubPage = SettingsSpeechSubPage.LanguageSelection
-                                    featureUsageReporter?.reportEvent(FeatureUsageEvents.SETTINGS_SECTION_OPENED, "section" to "language_selection")
-                                },
-                                onOpenF0Setup = {
-                                    speechSubPage = SettingsSpeechSubPage.F0Setup
-                                    featureUsageReporter?.reportEvent(FeatureUsageEvents.SETTINGS_SECTION_OPENED, "section" to "azure_f0_setup")
-                                }
-                            )
-                                    SettingsTab.Display -> DisplaySection(
-                                        fontSizeScale = fontSizeScale,
-                                        onFontSizeScaleChange = { fontSizeScale = it; updateSettings { s -> s.copy(fontSizeScale = it) } },
-                                        playbackIconScale = playbackIconScale,
-                                        onPlaybackIconScaleChange = { playbackIconScale = it; updateSettings { s -> s.copy(playbackIconScale = it) } },
-                                        categoryChipScale = categoryChipScale,
-                                        onCategoryChipScaleChange = { categoryChipScale = it; updateSettings { s -> s.copy(categoryChipScale = it) } },
-                                        buttonScale = buttonScale,
-                                        onButtonScaleChange = { buttonScale = it; updateSettings { s -> s.copy(buttonScale = it) } },
-                                        inputFieldScale = inputFieldScale,
-                                        onInputFieldScaleChange = { inputFieldScale = it; updateSettings { s -> s.copy(inputFieldScale = it) } },
-                                        showLabels = showLabels,
-                                        onShowLabelsChange = { checked ->
-                                            if (checked || showSymbols) {
-                                                showLabels = checked
-                                                updateSettings { it.copy(showLabels = checked) }
-                                            }
-                                        },
-                                        showSymbols = showSymbols,
-                                        onShowSymbolsChange = { checked ->
-                                            if (checked || showLabels) {
-                                                showSymbols = checked
-                                                updateSettings { it.copy(showSymbols = checked) }
-                                            }
-                                        },
-                                        labelAtTop = labelAtTop,
-                                        onLabelAtTopChange = { checked -> labelAtTop = checked; updateSettings { it.copy(labelAtTop = checked) } },
-                                        boardShowMessageBar = boardShowMessageBar,
-                                        onBoardShowMessageBarChange = { checked ->
-                                            boardShowMessageBar = checked
-                                            updateSettings { it.copy(boardShowMessageBar = checked) }
-                                        },
-                                        boardActivationBehavior = boardActivationBehavior,
-                                        onBoardActivationBehaviorChange = { behavior ->
-                                            boardActivationBehavior = behavior
-                                            updateSettings { it.copy(boardActivationBehavior = behavior) }
-                                        },
-                                        boardReturnBehavior = boardReturnBehavior,
-                                        onBoardReturnBehaviorChange = { behavior ->
-                                            boardReturnBehavior = behavior
-                                            updateSettings { it.copy(boardReturnBehavior = behavior) }
-                                        },
-                                        gridColumns = gridColumns,
-                                        onGridColumnsChange = { gridColumns = it },
-                                        onGridColumnsChangeFinished = { updateSettings { it.copy(gridColumns = gridColumns) } },
-                                        highContrastMode = highContrastMode,
-                                        onHighContrastModeChange = { checked -> highContrastMode = checked; updateSettings { it.copy(highContrastMode = checked) } },
-                                        wordTypeColorScheme = wordTypeColorScheme,
-                                        onWordTypeColorSchemeChange = { scheme ->
-                                            wordTypeColorScheme = scheme
-                                            updateSettings { it.copy(wordTypeColorScheme = scheme) }
-                                        }
-                                    )
-                                    SettingsTab.Accessibility -> AccessibilitySection(
-                                        holdToSelectMillis = holdToSelectMillis,
-                                        onHoldToSelectChange = { holdToSelectMillis = it },
-                                        onHoldToSelectChangeFinished = { updateSettings { it.copy(holdToSelectMillis = holdToSelectMillis) } },
-                                        dwellToSelectMillis = dwellToSelectMillis,
-                                        onDwellToSelectChange = { dwellToSelectMillis = it },
-                                        onDwellToSelectChangeFinished = { updateSettings { it.copy(dwellToSelectMillis = dwellToSelectMillis) } },
-                                        selectionSoundEnabled = selectionSoundEnabled,
-                                        onSelectionSoundChange = { checked -> selectionSoundEnabled = checked; updateSettings { it.copy(selectionSoundEnabled = checked) } },
-                                        auditoryFishingEnabled = auditoryFishingEnabled,
-                                        onAuditoryFishingChange = { checked -> auditoryFishingEnabled = checked; updateSettings { it.copy(auditoryFishingEnabled = checked) } },
-                                        speechPolicy = speechPolicy,
-                                        onSpeechPolicyChange = { policy ->
-                                            speechPolicy = policy
-                                            updateSettings { it.copy(speechPolicy = policy) }
-                                        },
-                                        selectionDebounceMillis = selectionDebounceMillis,
-                                        onSelectionDebounceChange = { selectionDebounceMillis = it },
-                                        onSelectionDebounceChangeFinished = { updateSettings { it.copy(selectionDebounceMillis = selectionDebounceMillis) } },
-                                        dwellRearmDelayMillis = dwellRearmDelayMillis,
-                                        onDwellRearmDelayChange = { dwellRearmDelayMillis = it },
-                                        onDwellRearmDelayChangeFinished = { updateSettings { it.copy(dwellRearmDelayMillis = dwellRearmDelayMillis) } },
-                                        selectionHighlightMillis = selectionHighlightMillis,
-                                        onSelectionHighlightChange = { selectionHighlightMillis = it },
-                                        onSelectionHighlightChangeFinished = { updateSettings { it.copy(selectionHighlightMillis = selectionHighlightMillis) } },
-                                        selectKeyBinding = selectKeyBinding,
-                                        onSelectKeyBindingChange = { value -> selectKeyBinding = value; updateSettings { it.copy(selectKeyBinding = value) } },
-                                        restModeKeyBinding = restModeKeyBinding,
-                                        onRestModeKeyBindingChange = { value -> restModeKeyBinding = value; updateSettings { it.copy(restModeKeyBinding = value) } },
-                                        pointerEmphasisStyle = pointerEmphasisStyle,
-                                        onPointerEmphasisStyleChange = { value -> pointerEmphasisStyle = value; updateSettings { it.copy(pointerEmphasisStyle = value) } },
-                                        pointerEmphasisScale = pointerEmphasisScale,
-                                        onPointerEmphasisScaleChange = { pointerEmphasisScale = it },
-                                        onPointerEmphasisScaleChangeFinished = { updateSettings { it.copy(pointerEmphasisScale = pointerEmphasisScale) } }
-                                    )
-                                    SettingsTab.Privacy -> PrivacySection(
-                                        historyVisible = historyVisible,
-                                        onHistoryVisibleChange = { checked ->
-                                            historyVisible = checked
-                                            updateSettings { it.copy(historyVisible = checked) }
-                                        },
-                                        boardSets = availableBoardSets,
-                                        onBoardSetSentenceCachingChange = { boardSet, enabled ->
-                                            scope.launch {
-                                                val updated = boardSetUseCase?.setSentenceCaching(boardSet.id, enabled)
-                                                if (updated != null) {
-                                                    availableBoardSets = availableBoardSets.map {
-                                                        if (it.id == updated.id) updated else it
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        usageLoggingEnabled = usageLoggingEnabled,
-                                        onUsageLoggingChange = { checked ->
-                                            usageLoggingEnabled = checked
-                                            updateSettings { it.copy(usageLoggingEnabled = checked) }
-                                        },
-                                        featureUsageReportingEnabled = featureUsageReportingEnabled,
-                                        onFeatureReportingChange = { checked ->
-                                            featureUsageReportingEnabled = checked
-                                            updateSettings { it.copy(featureUsageReportingEnabled = checked) }
-                                            featureUsageReporter?.setEnabled(checked)
-                                            featureUsageReporter?.reportEvent(
-                                                FeatureUsageEvents.ANALYTICS_CONSENT_CHANGED,
-                                                "enabled" to checked.toString(),
-                                                "source" to "privacy_settings"
-                                            )
-                                        }
-                                    )
-                                    SettingsTab.General -> GeneralSection(
-                                        onBackToWelcome = onBackToWelcome,
-                                        startupMode = startupMode,
-                                        startupBoardSetId = startupBoardSetId,
-                                        availableBoardSets = availableBoardSets,
-                                        onStartupModeChange = { mode ->
-                                            startupMode = mode
-                                            updateSettings { it.copy(startupMode = mode) }
-                                        },
-                                        onStartupBoardSetChange = { boardSetId ->
-                                            startupBoardSetId = boardSetId
-                                            updateSettings { it.copy(startupBoardSetId = boardSetId) }
-                                        },
-                                        partnerWindowEnabled = partnerWindowEnabled,
-                                        partnerDeviceConnected = partnerDeviceConnected,
-                                        onPartnerWindowChange = { checked -> partnerWindowEnabled = checked; updateSettings { it.copy(partnerWindowEnabled = checked) } },
-                                        arasaacAvailable = arasaacDownloader != null,
-                                        cachedArasaacSymbols = cachedArasaacSymbols,
-                                        arasaacProgress = arasaacProgress,
-                                        arasaacDownloadError = arasaacDownloadError,
-                                        arasaacFailedCount = arasaacFailedCount,
-                                        onDownloadArasaac = {
-                                            if (arasaacProgress == null) {
-                                                scope.launch {
-                                                    arasaacDownloadError = false
-                                                    runCatching {
-                                                        arasaacDownloader?.downloadAll(systemLanguageTag()) { progress ->
-                                                            arasaacProgress = progress
-                                                        } ?: error("ARASAAC storage unavailable")
-                                                    }.onSuccess { result ->
-                                                        cachedArasaacSymbols = result.total - result.failed
-                                                        arasaacDownloadError = result.failed > 0
-                                                        arasaacFailedCount = result.failed
-                                                    }.onFailure {
-                                                        arasaacDownloadError = true
-                                                        arasaacFailedCount = arasaacProgress?.failed ?: 0
-                                                        cachedArasaacSymbols = runCatching {
-                                                            arasaacDownloader?.cachedCount() ?: cachedArasaacSymbols
-                                                        }.getOrDefault(cachedArasaacSymbols)
-                                                    }
-                                                    arasaacProgress = null
-                                                }
-                                            }
-                                        }
-                                    )
-                                }
-                                Spacer(Modifier.height(16.dp))
-                                }
-                                }
                             }
                         }
                     }
+
+                    val restorePath = state.pendingRestorePath
+                    if (restorePath != null) {
+                        AlertDialog(
+                            onDismissRequest = { viewModel.onAction(SettingsAction.RestoreDismissed) },
+                            title = { Text(stringResource(R.string.backup_replace_title)) },
+                            text = { Text(stringResource(R.string.backup_replace_warning)) },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    viewModel.onAction(SettingsAction.RestoreConfirmed)
+                                }) { Text(stringResource(R.string.backup_replace_action)) }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = {
+                                    viewModel.onAction(SettingsAction.RestoreDismissed)
+                                }) { Text(stringResource(R.string.common_cancel)) }
+                            }
+                        )
+                    }
+
+                    val dialogMode = state.editingAccessDialog
+                    if (editingAccessController != null && dialogMode != null) {
+                        EditingAccessDialog(
+                            controller = editingAccessController,
+                            mode = dialogMode,
+                            onDismiss = { viewModel.onAction(SettingsAction.EditingAccessDialogDismissed) },
+                            onSuccess = { viewModel.onAction(SettingsAction.EditingAccessDialogDismissed) }
+                        )
+                    }
                 }
             }
+}
+
+@Composable
+private fun SaveFailureBanner(onRetry: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                stringResource(R.string.settings_save_failed),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onRetry) {
+                Text(stringResource(R.string.common_retry))
+            }
+        }
+    }
+}
+
+@Composable
+private fun settingsRouteTitle(route: SettingsRoute): String = when (route) {
+    SettingsRoute.Home -> stringResource(R.string.ui_settings_title)
+    SettingsRoute.PronunciationDictionary -> stringResource(R.string.dictionary_title)
+    is SettingsRoute.Category -> settingsCategoryTitle(route.tab)
+    SettingsRoute.VoiceSelection -> stringResource(R.string.voice_select_title)
+    SettingsRoute.LanguageSelection -> stringResource(R.string.language_dialog_title)
+    SettingsRoute.GoogleSetup -> stringResource(R.string.google_setup_title)
+    // F0 setup renders its own full-screen layout; the bar keeps a stable title.
+    SettingsRoute.F0Setup -> stringResource(R.string.ui_settings_speech_title)
+}
+
+@Composable
+private fun SettingsRouteContent(
+    state: SettingsUiState,
+    editingAccessState: EditingAccessState,
+    editingAccessAvailable: Boolean,
+    onBackToWelcome: (() -> Unit)?,
+    onAction: (SettingsAction) -> Unit,
+    onGuessPronunciation: suspend (String) -> String?,
+    modifier: Modifier = Modifier
+) {
+    val settings = state.settings
+    when (val route = state.route) {
+        SettingsRoute.PronunciationDictionary -> DictionaryScreen(
+            entries = state.dictionaryEntries,
+            showTopBar = false,
+            onAddEntry = { word, phoneme, alphabet ->
+                onAction(SettingsAction.DictionaryEntryAdded(word, phoneme, alphabet))
+            },
+            onDeleteEntry = { entry -> onAction(SettingsAction.DictionaryEntryDeleted(entry.word)) },
+            onTestEntry = { word, phoneme, alphabet ->
+                onAction(SettingsAction.DictionaryTestRequested(word, phoneme, alphabet))
+            },
+            onGuessPronunciation = onGuessPronunciation,
+            onBack = { onAction(SettingsAction.BackClicked) },
+            modifier = modifier
+        )
+        SettingsRoute.Home -> SettingsHomePage(
+            onSelectCategory = { onAction(SettingsAction.CategorySelected(it)) },
+            onOpenPronunciation = { onAction(SettingsAction.PronunciationOpened) },
+            modifier = modifier
+        )
+        SettingsRoute.VoiceSelection -> VoiceSelectionPage(
+            onBack = { onAction(SettingsAction.BackClicked) }
+        )
+        SettingsRoute.LanguageSelection -> LanguageSelectionPage(
+            onBack = { onAction(SettingsAction.BackClicked) }
+        )
+        SettingsRoute.F0Setup -> F0SetupScreen(
+            onDone = { onAction(SettingsAction.F0SetupCompleted) },
+            onBack = { onAction(SettingsAction.BackClicked) }
+        )
+        SettingsRoute.GoogleSetup -> GoogleTtsSetupScreen(
+            onDone = { onAction(SettingsAction.GoogleSetupCompleted) },
+            onBack = { onAction(SettingsAction.BackClicked) },
+            showNavigation = false,
+        )
+        is SettingsRoute.Category -> CategoryContent(
+            tab = route.tab,
+            state = state,
+            settings = settings,
+            editingAccessState = editingAccessState,
+            editingAccessAvailable = editingAccessAvailable,
+            onBackToWelcome = onBackToWelcome,
+            onAction = onAction,
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
+private fun CategoryContent(
+    tab: SettingsTab,
+    state: SettingsUiState,
+    settings: Settings,
+    editingAccessState: EditingAccessState,
+    editingAccessAvailable: Boolean,
+    onBackToWelcome: (() -> Unit)?,
+    onAction: (SettingsAction) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        when (tab) {
+            SettingsTab.Speech -> SpeechSection(
+                ttsEngine = settings.ttsEngine,
+                onTtsEngineChange = { engine -> onAction(SettingsAction.TtsEngineSelected(engine)) },
+                endpoint = state.azureEndpoint,
+                onEndpointChange = { onAction(SettingsAction.AzureEndpointChanged(it)) },
+                subscriptionKey = state.azureSubscriptionKey,
+                onSubscriptionKeyChange = { onAction(SettingsAction.AzureSubscriptionKeyChanged(it)) },
+                endpointError = if (state.azureEndpointInvalid) {
+                    stringResource(R.string.azure_setup_error_endpoint)
+                } else null,
+                credentialConfigured = state.azureCredentialConfigured,
+                replacingCredentials = state.replacingAzureCredentials,
+                onReplaceCredentials = { onAction(SettingsAction.ReplaceAzureCredentialsClicked) },
+                googleCredentialConfigured = state.googleCredentialConfigured,
+                onOpenGoogleSetup = { onAction(SettingsAction.GoogleSetupOpened) },
+                onClearGoogleCredentials = { onAction(SettingsAction.GoogleCredentialsCleared) },
+                virtualMic = settings.virtualMicEnabled,
+                onVirtualMicChange = { checked -> onAction(SettingsAction.VirtualMicChanged(checked)) },
+                onOpenVoiceSelection = { onAction(SettingsAction.VoiceSelectionOpened) },
+                onOpenLanguageSelection = { onAction(SettingsAction.LanguageSelectionOpened) },
+                onOpenF0Setup = { onAction(SettingsAction.F0SetupOpened) }
+            )
+            SettingsTab.Display -> DisplaySection(
+                fontSizeScale = settings.fontSizeScale,
+                onFontSizeScaleChange = { onAction(SettingsAction.FontSizeScaleChanged(it)) },
+                playbackIconScale = settings.playbackIconScale,
+                onPlaybackIconScaleChange = { onAction(SettingsAction.PlaybackIconScaleChanged(it)) },
+                categoryChipScale = settings.categoryChipScale,
+                onCategoryChipScaleChange = { onAction(SettingsAction.CategoryChipScaleChanged(it)) },
+                buttonScale = settings.buttonScale,
+                onButtonScaleChange = { onAction(SettingsAction.ButtonScaleChanged(it)) },
+                inputFieldScale = settings.inputFieldScale,
+                onInputFieldScaleChange = { onAction(SettingsAction.InputFieldScaleChanged(it)) },
+                showLabels = settings.showLabels,
+                onShowLabelsChange = { checked -> onAction(SettingsAction.ShowLabelsChanged(checked)) },
+                showSymbols = settings.showSymbols,
+                onShowSymbolsChange = { checked -> onAction(SettingsAction.ShowSymbolsChanged(checked)) },
+                labelAtTop = settings.labelAtTop,
+                onLabelAtTopChange = { checked -> onAction(SettingsAction.LabelAtTopChanged(checked)) },
+                boardShowMessageBar = settings.boardShowMessageBar,
+                onBoardShowMessageBarChange = { checked ->
+                    onAction(SettingsAction.BoardShowMessageBarChanged(checked))
+                },
+                boardActivationBehavior = settings.boardActivationBehavior,
+                onBoardActivationBehaviorChange = { behavior ->
+                    onAction(SettingsAction.BoardActivationBehaviorChanged(behavior))
+                },
+                boardReturnBehavior = settings.boardReturnBehavior,
+                onBoardReturnBehaviorChange = { behavior ->
+                    onAction(SettingsAction.BoardReturnBehaviorChanged(behavior))
+                },
+                gridColumns = settings.gridColumns,
+                onGridColumnsChange = { onAction(SettingsAction.GridColumnsChanged(it)) },
+                onGridColumnsChangeFinished = { onAction(SettingsAction.GridColumnsChangeFinished) },
+                highContrastMode = settings.highContrastMode,
+                onHighContrastModeChange = { checked ->
+                    onAction(SettingsAction.HighContrastModeChanged(checked))
+                },
+                wordTypeColorScheme = settings.wordTypeColorScheme,
+                onWordTypeColorSchemeChange = { scheme ->
+                    onAction(SettingsAction.WordTypeColorsChanged(scheme == WordTypeColorScheme.Fitzgerald))
+                }
+            )
+            SettingsTab.Accessibility -> AccessibilitySection(
+                holdToSelectMillis = settings.holdToSelectMillis,
+                onHoldToSelectChange = { onAction(SettingsAction.HoldToSelectChanged(it)) },
+                onHoldToSelectChangeFinished = { onAction(SettingsAction.HoldToSelectChangeFinished) },
+                dwellToSelectMillis = settings.dwellToSelectMillis,
+                onDwellToSelectChange = { onAction(SettingsAction.DwellToSelectChanged(it)) },
+                onDwellToSelectChangeFinished = { onAction(SettingsAction.DwellToSelectChangeFinished) },
+                selectionSoundEnabled = settings.selectionSoundEnabled,
+                onSelectionSoundChange = { checked -> onAction(SettingsAction.SelectionSoundChanged(checked)) },
+                auditoryFishingEnabled = settings.auditoryFishingEnabled,
+                onAuditoryFishingChange = { checked ->
+                    onAction(SettingsAction.AuditoryFishingChanged(checked))
+                },
+                speechPolicy = settings.speechPolicy,
+                onSpeechPolicyChange = { policy -> onAction(SettingsAction.SpeechPolicyChanged(policy)) },
+                selectionDebounceMillis = settings.selectionDebounceMillis,
+                onSelectionDebounceChange = { onAction(SettingsAction.SelectionDebounceChanged(it)) },
+                onSelectionDebounceChangeFinished = { onAction(SettingsAction.SelectionDebounceChangeFinished) },
+                dwellRearmDelayMillis = settings.dwellRearmDelayMillis,
+                onDwellRearmDelayChange = { onAction(SettingsAction.DwellRearmDelayChanged(it)) },
+                onDwellRearmDelayChangeFinished = { onAction(SettingsAction.DwellRearmDelayChangeFinished) },
+                selectionHighlightMillis = settings.selectionHighlightMillis,
+                onSelectionHighlightChange = { onAction(SettingsAction.SelectionHighlightChanged(it)) },
+                onSelectionHighlightChangeFinished = { onAction(SettingsAction.SelectionHighlightChangeFinished) },
+                selectKeyBinding = settings.selectKeyBinding,
+                onSelectKeyBindingChange = { onAction(SettingsAction.SelectKeyBindingChanged(it)) },
+                restModeKeyBinding = settings.restModeKeyBinding,
+                onRestModeKeyBindingChange = { onAction(SettingsAction.RestModeKeyBindingChanged(it)) },
+                pointerEmphasisStyle = settings.pointerEmphasisStyle,
+                onPointerEmphasisStyleChange = { value ->
+                    onAction(SettingsAction.PointerEmphasisStyleChanged(value))
+                },
+                pointerEmphasisScale = settings.pointerEmphasisScale,
+                onPointerEmphasisScaleChange = { onAction(SettingsAction.PointerEmphasisScaleChanged(it)) },
+                onPointerEmphasisScaleChangeFinished = {
+                    onAction(SettingsAction.PointerEmphasisScaleChangeFinished)
+                }
+            )
+            SettingsTab.Privacy -> PrivacySection(
+                historyVisible = settings.historyVisible,
+                onHistoryVisibleChange = { checked ->
+                    onAction(SettingsAction.HistoryVisibleChanged(checked))
+                },
+                boardSets = state.boardSets,
+                onBoardSetSentenceCachingChange = { boardSet, enabled ->
+                    onAction(SettingsAction.BoardSetSentenceCachingChanged(boardSet.id, enabled))
+                },
+                usageLoggingEnabled = settings.usageLoggingEnabled,
+                onUsageLoggingChange = { checked -> onAction(SettingsAction.UsageLoggingChanged(checked)) },
+                featureUsageReportingEnabled = settings.featureUsageReportingEnabled,
+                onFeatureReportingChange = { checked ->
+                    onAction(SettingsAction.FeatureReportingChanged(checked))
+                }
+            )
+            SettingsTab.General -> GeneralSection(
+                onBackToWelcome = onBackToWelcome,
+                startupMode = settings.startupMode,
+                startupBoardSetId = settings.startupBoardSetId,
+                availableBoardSets = state.boardSets,
+                partnerWindowEnabled = settings.partnerWindowEnabled,
+                partnerDeviceConnected = state.partnerDeviceConnected,
+                arasaacAvailable = state.arasaacAvailable,
+                cachedArasaacSymbols = state.cachedArasaacSymbols,
+                arasaacProgress = state.arasaacProgress,
+                arasaacDownloadError = state.arasaacDownloadFailed,
+                arasaacFailedCount = state.arasaacFailedCount,
+                editingAccessState = editingAccessState.takeIf { editingAccessAvailable },
+                backupWorking = state.backupWorking,
+                backupStatusMessage = state.backupStatus?.let { message ->
+                    when (message) {
+                        is SettingsMessage.Resource -> stringResource(message.id)
+                        is SettingsMessage.Dynamic -> message.value
+                    }
+                },
+                onStartupModeChange = { mode -> onAction(SettingsAction.StartupModeChanged(mode)) },
+                onStartupBoardSetChange = { boardSetId ->
+                    onAction(SettingsAction.StartupBoardSetChanged(boardSetId))
+                },
+                onPartnerWindowChange = { checked ->
+                    onAction(SettingsAction.PartnerWindowChanged(checked))
+                },
+                onDownloadArasaac = { onAction(SettingsAction.DownloadArasaacClicked) },
+                onCreateBackup = { onAction(SettingsAction.CreateBackupClicked) },
+                onRestoreBackup = { onAction(SettingsAction.RestoreBackupClicked) },
+                onEditingAccessConfigure = { onAction(SettingsAction.EditingAccessConfigureClicked) },
+                onEditingAccessUnlock = { onAction(SettingsAction.EditingAccessUnlockClicked) },
+                onEditingAccessDisable = { onAction(SettingsAction.EditingAccessDisableClicked) },
+                onEditingAccessLockNow = { onAction(SettingsAction.EditingAccessLockNowClicked) }
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+    }
 }
 
 @Composable
@@ -1764,21 +1554,12 @@ private fun AccessibilitySection(
 // ─── Privacy Tab ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun BackupSettingsGroup() {
-    val koin = getKoin()
-    val backupManager = remember(koin) { koin.getOrNull<CompleteBackupManager>() }
-    val backupFilePicker = remember(koin) { koin.getOrNull<FilePicker>() }
-    val backupShareService = remember(koin) { koin.getOrNull<ShareService>() }
-    val backupScope = rememberCoroutineScope()
-    var backupStatus by remember { mutableStateOf<String?>(null) }
-    var backupWorking by remember { mutableStateOf(false) }
-    var pendingRestorePath by remember { mutableStateOf<String?>(null) }
-    val exported = stringResource(R.string.backup_exported)
-    val restored = stringResource(R.string.backup_restored)
-    val cancelled = stringResource(R.string.backup_cancelled)
-    val backupPickerFailed = stringResource(R.string.backup_picker_failed)
-    val backupCreateFailed = stringResource(R.string.backup_create_failed)
-
+private fun BackupSettingsGroup(
+    working: Boolean,
+    statusMessage: String?,
+    onCreateBackup: () -> Unit,
+    onRestoreBackup: () -> Unit
+) {
     SettingsGroup(title = stringResource(R.string.backup_title)) {
         Text(
             stringResource(R.string.backup_description),
@@ -1788,73 +1569,15 @@ private fun BackupSettingsGroup() {
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
-                enabled = !backupWorking && backupManager != null && backupShareService != null,
-                onClick = {
-                    backupWorking = true
-                    backupScope.launch {
-                        try {
-                            val bytes = checkNotNull(backupManager).exportBackup()
-                            backupStatus = if (checkNotNull(backupShareService).shareFile("wingmate-${Clock.System.now().toEpochMilliseconds()}.wingmate-backup", bytes)) {
-                                exported
-                            } else {
-                                cancelled
-                            }
-                        } catch (failure: CancellationException) {
-                            throw failure
-                        } catch (_: Exception) {
-                            backupStatus = backupCreateFailed
-                        } finally {
-                            backupWorking = false
-                        }
-                    }
-                }
+                enabled = !working,
+                onClick = onCreateBackup,
             ) { Text(stringResource(R.string.backup_create)) }
             OutlinedButton(
-                enabled = !backupWorking && backupManager != null && backupFilePicker != null,
-                onClick = {
-                    backupScope.launch {
-                        backupStatus = null
-                        try {
-                            pendingRestorePath = backupFilePicker?.pickFile(
-                                title = "Restore Wingmate backup",
-                                extensions = listOf("wingmate-backup", "zip")
-                            )
-                        } catch (failure: CancellationException) {
-                            throw failure
-                        } catch (_: Exception) {
-                            backupStatus = backupPickerFailed
-                        }
-                    }
-                }
+                enabled = !working,
+                onClick = onRestoreBackup,
             ) { Text(stringResource(R.string.backup_restore)) }
         }
-        backupStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-    }
-
-    val restorePath = pendingRestorePath
-    if (restorePath != null) {
-        AlertDialog(
-            onDismissRequest = { pendingRestorePath = null },
-            title = { Text(stringResource(R.string.backup_replace_title)) },
-            text = { Text(stringResource(R.string.backup_replace_warning)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingRestorePath = null
-                    backupWorking = true
-                    backupScope.launch {
-                        backupStatus = when (val result = backupManager?.restoreBackup(restorePath)) {
-                            is BackupRestoreResult.Success -> restored
-                            is BackupRestoreResult.Failure -> result.message
-                            null -> "Backup restore unavailable"
-                        }
-                        backupWorking = false
-                    }
-                }) { Text(stringResource(R.string.backup_replace_action)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingRestorePath = null }) { Text(stringResource(R.string.common_cancel)) }
-            }
-        )
+        statusMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     }
 }
 
@@ -1931,25 +1654,33 @@ private fun GeneralSection(
     startupMode: StartupMode,
     startupBoardSetId: String?,
     availableBoardSets: List<ObfBoardSet>,
-    onStartupModeChange: (StartupMode) -> Unit,
-    onStartupBoardSetChange: (String?) -> Unit,
     partnerWindowEnabled: Boolean,
     partnerDeviceConnected: Boolean,
-    onPartnerWindowChange: (Boolean) -> Unit,
     arasaacAvailable: Boolean,
     cachedArasaacSymbols: Int,
     arasaacProgress: ArasaacDownloadProgress?,
     arasaacDownloadError: Boolean,
     arasaacFailedCount: Int,
-    onDownloadArasaac: () -> Unit
+    editingAccessState: EditingAccessState?,
+    backupWorking: Boolean,
+    backupStatusMessage: String?,
+    onStartupModeChange: (StartupMode) -> Unit,
+    onStartupBoardSetChange: (String?) -> Unit,
+    onPartnerWindowChange: (Boolean) -> Unit,
+    onDownloadArasaac: () -> Unit,
+    onCreateBackup: () -> Unit,
+    onRestoreBackup: () -> Unit,
+    onEditingAccessConfigure: () -> Unit,
+    onEditingAccessUnlock: () -> Unit,
+    onEditingAccessDisable: () -> Unit,
+    onEditingAccessLockNow: () -> Unit
 ) {
-    val editingAccessController = getKoin().getOrNull<EditingAccessController>()
-    val editingAccessState by editingAccessController?.state?.collectAsStateWithLifecycle()
-        ?: remember { mutableStateOf(io.github.jdreioe.wingmate.application.EditingAccessState(supported = false)) }
-    var editingAccessDialog by remember { mutableStateOf<EditingAccessDialogMode?>(null) }
-    LaunchedEffect(editingAccessController) { editingAccessController?.refresh() }
-
-    BackupSettingsGroup()
+    BackupSettingsGroup(
+        working = backupWorking,
+        statusMessage = backupStatusMessage,
+        onCreateBackup = onCreateBackup,
+        onRestoreBackup = onRestoreBackup
+    )
 
     SettingsGroup(title = stringResource(R.string.editing_access_title)) {
         Text(
@@ -1958,31 +1689,34 @@ private fun GeneralSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(12.dp))
-        if (!editingAccessState.supported) {
+        val access = editingAccessState
+        if (access == null) {
             Text(stringResource(R.string.editing_access_unavailable), color = MaterialTheme.colorScheme.error)
-        } else if (!editingAccessState.enabled) {
+        } else if (!access.supported) {
+            Text(stringResource(R.string.editing_access_unavailable), color = MaterialTheme.colorScheme.error)
+        } else if (!access.enabled) {
             OutlinedButton(
-                onClick = { editingAccessDialog = EditingAccessDialogMode.Configure },
+                onClick = onEditingAccessConfigure,
                 modifier = Modifier.fillMaxWidth()
             ) { Text(stringResource(R.string.editing_access_enable)) }
         } else {
-            if (!editingAccessState.unlocked) {
+            if (!access.unlocked) {
                 OutlinedButton(
-                    onClick = { editingAccessDialog = EditingAccessDialogMode.Unlock },
+                    onClick = onEditingAccessUnlock,
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(stringResource(R.string.editing_access_unlock_title)) }
             }
             OutlinedButton(
-                onClick = { editingAccessDialog = EditingAccessDialogMode.Configure },
-                enabled = editingAccessState.unlocked,
+                onClick = onEditingAccessConfigure,
+                enabled = access.unlocked,
                 modifier = Modifier.fillMaxWidth()
             ) { Text(stringResource(R.string.editing_access_change)) }
             OutlinedButton(
-                onClick = { editingAccessDialog = EditingAccessDialogMode.Disable },
+                onClick = onEditingAccessDisable,
                 modifier = Modifier.fillMaxWidth()
             ) { Text(stringResource(R.string.editing_access_disable)) }
             OutlinedButton(
-                onClick = { editingAccessController?.lock() },
+                onClick = onEditingAccessLockNow,
                 modifier = Modifier.fillMaxWidth()
             ) { Text(stringResource(R.string.editing_access_lock_now)) }
         }
@@ -2120,16 +1854,6 @@ private fun GeneralSection(
                 description = stringResource(R.string.ui_settings_partner_window_desc)
             )
         }
-    }
-
-    val dialogMode = editingAccessDialog
-    if (editingAccessController != null && dialogMode != null) {
-        EditingAccessDialog(
-            controller = editingAccessController,
-            mode = dialogMode,
-            onDismiss = { editingAccessDialog = null },
-            onSuccess = { editingAccessDialog = null }
-        )
     }
 }
 

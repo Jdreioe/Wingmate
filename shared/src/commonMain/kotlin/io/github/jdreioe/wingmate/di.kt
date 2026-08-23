@@ -91,7 +91,7 @@ internal fun createCoreDataModule(): Module = module {
         single { DictionaryLoader(getOrNull<io.github.jdreioe.wingmate.domain.FileStorage>()) } // For language dictionary pretraining and caching
         singleOf(::PhraseUseCase)
         singleOf(::CategoryUseCase)
-        singleOf(::SettingsUseCase)
+        single { SettingsUseCase(get(), getOrNull()) }
         singleOf(::UserDataManager)
         singleOf(::InMemorySecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
         // Use explicit constructors here: Koin's constructor-reference DSL attempts
