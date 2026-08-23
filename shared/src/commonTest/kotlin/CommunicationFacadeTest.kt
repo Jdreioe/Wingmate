@@ -13,7 +13,6 @@ import io.github.jdreioe.wingmate.infrastructure.InMemorySaidTextRepository
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertSame
 
 class CommunicationFacadeTest {
     @Test
@@ -31,13 +30,6 @@ class CommunicationFacadeTest {
         assertEquals("Hello", history[0].text)
         assertEquals("/tmp/hello.m4a", history[0].recordingPath)
         assertEquals(1000L, history[0].createdAt)
-    }
-
-    @Test
-    fun storeAccessorsReturnTheSameInstance() {
-        val facade = facade()
-
-        assertSame(facade.phraseListStore(), facade.phraseListStoreOrNull())
     }
 
     private fun facade(

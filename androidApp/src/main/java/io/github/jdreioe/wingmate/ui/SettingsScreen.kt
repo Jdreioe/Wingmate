@@ -458,6 +458,9 @@ private fun CategoryContent(
                 selectionDebounceMillis = settings.selectionDebounceMillis,
                 onSelectionDebounceChange = { onAction(SettingsAction.SelectionDebounceChanged(it)) },
                 onSelectionDebounceChangeFinished = { onAction(SettingsAction.SelectionDebounceChangeFinished) },
+                dwellRearmDelayMillis = settings.dwellRearmDelayMillis,
+                onDwellRearmDelayChange = { onAction(SettingsAction.DwellRearmDelayChanged(it)) },
+                onDwellRearmDelayChangeFinished = { onAction(SettingsAction.DwellRearmDelayChangeFinished) },
                 selectionHighlightMillis = settings.selectionHighlightMillis,
                 onSelectionHighlightChange = { onAction(SettingsAction.SelectionHighlightChanged(it)) },
                 onSelectionHighlightChangeFinished = { onAction(SettingsAction.SelectionHighlightChangeFinished) },
@@ -1401,6 +1404,9 @@ private fun AccessibilitySection(
     selectionDebounceMillis: Long,
     onSelectionDebounceChange: (Long) -> Unit,
     onSelectionDebounceChangeFinished: () -> Unit,
+    dwellRearmDelayMillis: Long,
+    onDwellRearmDelayChange: (Long) -> Unit,
+    onDwellRearmDelayChangeFinished: () -> Unit,
     selectionHighlightMillis: Long,
     onSelectionHighlightChange: (Long) -> Unit,
     onSelectionHighlightChangeFinished: () -> Unit,
@@ -1466,6 +1472,17 @@ private fun AccessibilitySection(
             valueRange = 0f..1000f,
             steps = 19,
             valueLabel = "${selectionDebounceMillis.toInt()} ms"
+        )
+        SettingsGroupDivider()
+        SettingsSlider(
+            title = stringResource(R.string.ui_settings_dwell_rearm_title),
+            description = stringResource(R.string.ui_settings_dwell_rearm_desc),
+            value = dwellRearmDelayMillis.toFloat(),
+            onValueChange = { onDwellRearmDelayChange(it.toLong()) },
+            onValueChangeFinished = onDwellRearmDelayChangeFinished,
+            valueRange = 0f..500f,
+            steps = 9,
+            valueLabel = "${dwellRearmDelayMillis.toInt()} ms"
         )
     }
 

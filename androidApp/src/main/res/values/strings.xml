@@ -567,8 +567,13 @@
     <string name="interaction_rest_mode">Rest mode</string>
     <string name="interaction_resume">Resume input</string>
     <string name="interaction_paused_status">Rest mode — hover selection and the Select key are paused</string>
+    <string name="interaction_hold_select_resume">Hold the Select key for 2 seconds to resume</string>
+    <string name="ui_settings_dwell_rearm_title">Dwell re-arm delay</string>
+    <string name="ui_settings_dwell_rearm_desc">After the pointer moves to a different target, wait this long before dwell timing starts. Higher values reject tremor jitter between targets.</string>
+    <string name="phrase_deleted">Phrase deleted (with sub-items)</string>
+    <string name="action_undo">Undo</string>
     <string name="ui_settings_select_key">Select key</string>
-    <string name="ui_settings_select_key_desc">Press this key once to use the communication target under the pointer or keyboard focus.</string>
+    <string name="ui_settings_select_key_desc">Press this key once to use the communication target under the pointer or keyboard focus. In Rest mode, hold it for 2 seconds to resume input.</string>
     <string name="ui_settings_rest_key">Rest mode key</string>
     <string name="ui_settings_rest_key_desc">Pause or resume hover selection and the Select key without precise pointing.</string>
     <string name="ui_settings_pointer_emphasis">Pointer emphasis</string>

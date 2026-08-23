@@ -57,6 +57,7 @@ import io.github.jdreioe.wingmate.application.PhraseEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.phraseSubtree
 import io.github.jdreioe.wingmate.domain.PredictionResult
 import io.github.jdreioe.wingmate.domain.SpeechPolicy
 import io.github.jdreioe.wingmate.domain.SpeechSegment
@@ -214,6 +215,33 @@ fun PhraseScreen(
                 value = runCatching { voiceUseCase.selected() }.getOrNull()
             }
             val uiScope = rememberCoroutineScope()
+            val snackbarHostState = remember { SnackbarHostState() }
+            val deletedMessage = stringResource(R.string.phrase_deleted)
+            val undoLabel = stringResource(R.string.action_undo)
+
+            /**
+             * Delete a phrase (and any sub-items) with a snackbar undo. The removed
+             * subtree is captured up front so Undo re-adds the exact same nodes with
+             * their original ids — repositories preserve caller-supplied ids on add.
+             */
+            fun deleteWithUndo(phraseId: String?) {
+                if (phraseId.isNullOrBlank()) return
+                val all = bloc.state.value.items
+                val removed = phraseSubtree(all, phraseId)
+                if (removed.isEmpty()) return
+                bloc.dispatch(PhraseEvent.Delete(phraseId))
+                uiScope.launch {
+                    val result = snackbarHostState.showSnackbar(
+                        message = deletedMessage,
+                        actionLabel = undoLabel,
+                        duration = SnackbarDuration.Short,
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        // Parent-first order so restored sub-items find their parent id.
+                        removed.forEach { bloc.dispatch(PhraseEvent.Add(it)) }
+                    }
+                }
+            }
             var historyItems by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.SaidText>>(emptyList()) }
             
             // OBF Board State
@@ -364,6 +392,7 @@ fun PhraseScreen(
 
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
+                snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = {
                     BoxWithConstraints(Modifier.fillMaxWidth()) {
                         val useOverflowMenu = maxWidth <= 720.dp
@@ -1212,7 +1241,7 @@ fun PhraseScreen(
                         },
                         onMove = { from, to -> bloc.dispatch(PhraseEvent.Move(from, to)) },
                         onSavePhrase = { phrase -> bloc.dispatch(PhraseEvent.Add(phrase)) },
-                        onDeletePhrase = { phrase -> bloc.dispatch(PhraseEvent.Delete(phrase.id)) },
+                        onDeletePhrase = { phrase -> deleteWithUndo(phrase.id) },
                         categories = categories,
                         defaultCategoryId = selectedCategory?.id,
                         showAddTile = !isHistory,
@@ -1232,10 +1261,9 @@ fun PhraseScreen(
                             categories = categories,
                             initialPhrase = editingPhrase,
                             onSave = { p -> bloc.dispatch(PhraseEvent.Edit(p)); showEditDialog = false; editingPhrase = null },
-                            onDelete = { id -> bloc.dispatch(PhraseEvent.Delete(id)); showEditDialog = false; editingPhrase = null }
+                            onDelete = { id -> deleteWithUndo(id); showEditDialog = false; editingPhrase = null }
                         )
                     }
-                // Full screen handled by platform window on desktop; on mobile we could add a dedicated screen later.
                 }
 
                 if (currentBoard != null) {
@@ -1619,7 +1647,7 @@ private fun insertPredictedText(value: TextFieldValue, text: String): TextFieldV
     return TextFieldValue(result.text, selection = TextRange(result.cursor))
 }
 
-private val PauseTagRegex = Regex("""<(?:pause|break)(?:\\s+(?:duration|time)=["']([^"']+)["'])?[^>]*/>""", RegexOption.IGNORE_CASE)
+private val PauseTagRegex = Regex("""<(?:pause|break)(?:\s+(?:duration|time)=["']([^"']+)["'])?[^>]*/>""", RegexOption.IGNORE_CASE)
 
 private fun buildLanguageAwareSegments(
     rawText: String,

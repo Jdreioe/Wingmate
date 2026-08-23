@@ -86,6 +86,35 @@ class BoardsFacadeTest {
     }
 
     @Test
+    fun cellUpsertKeepsOrClearsAnImageOnlyWhenRequested() = runBlocking {
+        val facade = facade()
+        val boardId = facade.createBoardSet("Test", rows = 1, columns = 1).rootBoardId
+
+        facade.upsertBoardCellButton(
+            boardId = boardId, row = 0, col = 0, label = "Hello", vocalization = null,
+            backgroundColor = null, borderColor = "#123456", linkedBoardId = null,
+            imageUrl = "https://example.com/hello.png", clearImage = false,
+            actions = emptyList(), wordType = null,
+        )
+        val kept = facade.upsertBoardCellButton(
+            boardId = boardId, row = 0, col = 0, label = "Hi", vocalization = null,
+            backgroundColor = null, borderColor = "#654321", linkedBoardId = null,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+        )
+        assertEquals("https://example.com/hello.png", kept?.images?.single()?.url)
+        assertEquals("#654321", kept?.buttons?.single()?.borderColor)
+
+        val cleared = facade.upsertBoardCellButton(
+            boardId = boardId, row = 0, col = 0, label = "Hi", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = null, clearImage = true, actions = emptyList(), wordType = null,
+        )
+        assertNotNull(cleared)
+        assertTrue(cleared.images.isEmpty())
+        assertNull(cleared.buttons.single().imageId)
+    }
+
+    @Test
     fun listBoardCellsRendersUpsertedButton() = runBlocking {
         val facade = facade()
         val boardSet = facade.createBoardSet("Test", rows = 2, columns = 2)

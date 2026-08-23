@@ -7,6 +7,7 @@ import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readAvailable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +72,8 @@ class QuickCorePresetService(
                     }
                 }
             }
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Throwable) {
             mutableProgress.value = QuickCoreDownloadProgress("failed")
             BoardImportResult.Failure(

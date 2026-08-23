@@ -83,7 +83,7 @@ internal fun createCoreDataModule(): Module = module {
         singleOf(::InMemoryAzureF0Provisioner) { bind<AzureF0Provisioner>() }
         single { AzureArmClient(HttpClient()) }
         singleOf(::AutoF0FlowUseCase)
-        singleOf(::NoopSpeechService) { bind<SpeechService>() } // Android overrides this
+        singleOf(::NoopSpeechService) { bind<SpeechService>() } // Overridden per platform (Android, iOS)
         singleOf(::NoopFeatureUsageReporter) { bind<FeatureUsageReporter>() }
         singleOf(::AzureVoiceCatalog)
         single<GoogleApiRequestHeaders> { NoGoogleApiRequestHeaders }

@@ -17,7 +17,12 @@ class UpdatePhraseUseCase(private val phraseRepository: PhraseRepository) {
         val updated = existing.copy(
             text = text?.let { SpeechTextProcessor.normalizeShorthandSsml(it) } ?: existing.text,
             name = name?.let { SpeechTextProcessor.normalizeShorthandSsml(it) } ?: existing.name,
-            imageUrl = imageUrl?.let { it.takeIf { value -> value.isNotBlank() } },
+            // A missing value leaves the symbol alone. The native editors send an
+            // explicit blank value when the user removes it.
+            imageUrl = when (imageUrl) {
+                null -> existing.imageUrl
+                else -> imageUrl.trim().ifBlank { null }
+            },
             recordingPath = recordingPath ?: existing.recordingPath
         )
         return phraseRepository.update(updated)

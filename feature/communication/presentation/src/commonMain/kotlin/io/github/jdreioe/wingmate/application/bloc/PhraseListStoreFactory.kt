@@ -13,6 +13,7 @@ import io.github.jdreioe.wingmate.application.usecase.MovePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PhraseRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
@@ -58,7 +59,7 @@ class PhraseListStoreFactory(
                 is PhraseListStore.Intent.SelectCategory -> dispatch(Msg.CategorySelected(intent.categoryId))
                 is PhraseListStore.Intent.DeletePhrase -> deletePhrase(intent.phraseId)
                 is PhraseListStore.Intent.DeleteCategory -> deleteCategory(intent.categoryId)
-                is PhraseListStore.Intent.UpdatePhrase -> updatePhrase(intent.id, intent.text, intent.name)
+                is PhraseListStore.Intent.UpdatePhrase -> updatePhrase(intent.id, intent.text, intent.name, intent.imageUrl)
                 is PhraseListStore.Intent.UpdatePhraseRecording -> updatePhraseRecording(intent.id, intent.recordingPath)
                 is PhraseListStore.Intent.MovePhrase -> movePhrase(intent.fromIndex, intent.toIndex)
                 is PhraseListStore.Intent.MoveCategory -> moveCategory(intent.fromIndex, intent.toIndex, getState().categories)
@@ -71,6 +72,8 @@ class PhraseListStoreFactory(
                 try {
                     val (phrases, categories) = getPhrasesAndCategoriesUseCase()
                     dispatch(Msg.PhrasesAndCategoriesLoaded(phrases, categories))
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to load data"))
                 }
@@ -82,6 +85,8 @@ class PhraseListStoreFactory(
                 try {
                     addPhraseUseCase(text, categoryId)
                     loadPhrasesAndCategories()
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to add phrase"))
                 }
@@ -109,6 +114,8 @@ class PhraseListStoreFactory(
                         )
                     )
                     loadPhrasesAndCategories()
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to add category"))
                 }
@@ -120,6 +127,8 @@ class PhraseListStoreFactory(
                 try {
                     deletePhraseUseCase(phraseId)
                     loadPhrasesAndCategories()
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to delete phrase"))
                 }
@@ -131,18 +140,22 @@ class PhraseListStoreFactory(
                 try {
                     deletePhraseUseCase(categoryId)
                     loadPhrasesAndCategories()
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to delete category"))
                 }
             }
         }
 
-        private fun updatePhrase(id: String, text: String?, name: String?) {
+        private fun updatePhrase(id: String, text: String?, name: String?, imageUrl: String?) {
             scope.launch {
                 try {
-                    val updated = updatePhraseUseCase(id, text, name, null, null)
+                    val updated = updatePhraseUseCase(id, text, name, imageUrl, null)
                     loadPhrasesAndCategories()
                     dispatch(Msg.PhraseUpdated(updated))
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to update phrase"))
                 }
@@ -155,6 +168,8 @@ class PhraseListStoreFactory(
                     val updated = updatePhraseUseCase(id, null, null, null, recordingPath)
                     loadPhrasesAndCategories()
                     dispatch(Msg.PhraseUpdated(updated))
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to update recording path"))
                 }
@@ -166,6 +181,8 @@ class PhraseListStoreFactory(
                 try {
                     movePhraseUseCase(fromIndex, toIndex)
                     loadPhrasesAndCategories()
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to move phrase"))
                 }
@@ -189,6 +206,8 @@ class PhraseListStoreFactory(
                         movePhraseUseCase(fromAbsolute, toAbsolute)
                     }
                     loadPhrasesAndCategories()
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to move category"))
                 }

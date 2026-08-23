@@ -351,7 +351,12 @@ class BoardsFacade(
         val order = grid.order.mapIndexed { r, columns ->
             columns.mapIndexed { c, id -> if (r == row && c == col) buttonId else id }
         }
-        return board.copy(buttons = buttons, images = images, grid = grid.copy(order = order)).also {
+        val usedImageIds = buttons.mapNotNull { it.imageId }.toSet()
+        return board.copy(
+            buttons = buttons,
+            images = images.filter { it.id in usedImageIds },
+            grid = grid.copy(order = order),
+        ).also {
             boardRepository.saveBoard(it)
             boardSetSpeechCache.cacheField(it, button)
         }

@@ -37,6 +37,7 @@ import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import kotlinx.serialization.json.Json
 
 val appModule = module {
     singleOf(::DefaultStoreFactory) { bind<StoreFactory>() }
@@ -59,7 +60,7 @@ val appModule = module {
     single<ObfMediaUrlLoader> { KtorObfMediaUrlLoader(getOrNull() ?: HttpClient()) }
     singleOf(::InMemoryBoardRepository) { bind<BoardRepository>() }
     singleOf(::InMemoryBoardSetRepository) { bind<BoardSetRepository>() }
-    single { ObzExporter(getOrNull() ?: kotlinx.serialization.json.Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }) }
+    single { ObzExporter(getOrNull<Json>() ?: kotlinx.serialization.json.Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }) }
     singleOf(::BoardSetSpeechCacheUseCase) { bind<BoardSpeechCache>() }
     singleOf(::BoardSetUseCase)
     // Platforms override with a real player; default is a no-op.

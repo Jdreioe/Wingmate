@@ -5,6 +5,7 @@ import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.loggingClassName
+import kotlinx.coroutines.CancellationException
 
 /**
  * A feature-scoped native boundary around the phrase list store and the spoken
@@ -17,13 +18,6 @@ class CommunicationFacade(
     private val saidTextRepository: SaidTextRepository,
 ) {
     fun phraseListStore(): PhraseListStore = phraseListStore
-
-    /** Safe variant to avoid throwing across Swift bridge. */
-    fun phraseListStoreOrNull(): PhraseListStore? = try {
-        phraseListStore
-    } catch (_: Throwable) {
-        null
-    }
 
     fun refreshPhrases() {
         phraseListStore.accept(PhraseListStore.Intent.Refresh)
@@ -53,6 +47,8 @@ class CommunicationFacade(
                     recordingPath = s.audioFilePath,
                 )
             }
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (_: Throwable) {
             emptyList()
         }

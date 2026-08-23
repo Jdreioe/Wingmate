@@ -10,6 +10,7 @@ import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.loggingClassName
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
@@ -128,12 +129,18 @@ class AutoF0FlowUseCase(
             try {
                 val status = armClient.getDeploymentStatus(accessToken, subscriptionId, resourceGroup, deploymentName)
                 if (status.isSucceeded) {
-                    val resourceId = extractOutputValue(status.outputs, "resourceId") ?: continue
-                    val name = extractOutputValue(status.outputs, "name") ?: continue
-                    val region = extractOutputValue(status.outputs, "region") ?: continue
-                    return AzureF0Resource(resourceId, name, region, resourceGroup)
+                    val resourceId = extractOutputValue(status.outputs, "resourceId")
+                    val name = extractOutputValue(status.outputs, "name")
+                    val region = extractOutputValue(status.outputs, "region")
+                    if (resourceId != null && name != null && region != null) {
+                        return AzureF0Resource(resourceId, name, region, resourceGroup)
+                    }
+                    // Deployment reported success but outputs are incomplete;
+                    // treat as a failed attempt and keep polling.
                 }
                 if (status.isFailed) return null
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) { }
             attempts++
             delay(5000)

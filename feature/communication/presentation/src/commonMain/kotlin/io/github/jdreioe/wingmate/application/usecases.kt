@@ -61,8 +61,6 @@ class SettingsUseCase(
     suspend fun get(): Settings = repo.get()
     suspend fun update(settings: Settings): Settings =
         stateManager?.updateSettings(settings) ?: repo.update(settings)
-
-    suspend fun updateWithNotification(settings: Settings): Settings = update(settings)
 }
 
 class VoiceUseCase(
@@ -113,7 +111,9 @@ class VoiceUseCase(
             FeatureUsageEvents.VOICE_REFRESHED,
             "count" to list.size.toString()
         )
-        return list
+        // A transient failure yields an empty catalog; keep serving the persisted one
+        // so the voice picker doesn't blank out.
+        return cachedVoicesWhenEmpty(list)
     }
 
     suspend fun refreshFromGoogle(): List<Voice> {
@@ -128,8 +128,11 @@ class VoiceUseCase(
             "provider" to "google",
             "count" to list.size.toString(),
         )
-        return list
+        return cachedVoicesWhenEmpty(list)
     }
+
+    private suspend fun cachedVoicesWhenEmpty(voices: List<Voice>): List<Voice> =
+        if (voices.isEmpty()) repo.getVoices() else voices
 
     private suspend fun persistCatalogMetadataForSelected(catalog: List<Voice>) {
         val persisted = repo.getSelected() ?: return

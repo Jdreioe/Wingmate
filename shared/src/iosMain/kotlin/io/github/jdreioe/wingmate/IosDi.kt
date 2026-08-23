@@ -52,6 +52,7 @@ import okio.FileSystem
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.koin.core.context.loadKoinModules
+import org.koin.core.qualifier.named
 import org.koin.mp.KoinPlatform
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
@@ -101,6 +102,8 @@ fun overrideIosSpeechService() {
             singleOf(::IosBackupMediaAccess) { bind<BackupMediaAccess>() }
             singleOf(::IosFilePicker) { bind<FilePicker>() }
             singleOf(::IosSoundPlayer) { bind<SoundPlayer>() }
+            // Usage-log destination for RealAacLogger (app documents dir)
+            single(named("logDir")) { IosFileStorage.documentsDirectory() }
         }
     )
 }

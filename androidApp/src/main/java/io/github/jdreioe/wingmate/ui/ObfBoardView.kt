@@ -93,6 +93,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import io.github.jdreioe.wingmate.domain.AacLogger
@@ -1031,12 +1032,22 @@ fun ObfButtonItem(
     val selectionDebouncer = remember(button.id) { SelectionDebouncer() }
     // #118: Edit-mode taps are deliberate field/dialog operations and must never be
     // blocked by the run-mode selection debounce.
-    fun tryActivate(): Boolean =
-        isEditMode || selectionDebouncer.tryActivate(
+    val hapticView = LocalView.current
+    fun tryActivate(): Boolean {
+        if (isEditMode) return true
+        val accepted = selectionDebouncer.tryActivate(
             button.id,
             Clock.System.now().toEpochMilliseconds(),
             settings.selectionDebounceMillis
         )
+        if (!accepted) {
+            // Rejected repeat activation inside the debounce window.
+            hapticView.performAccessHaptic(AccessHaptic.REJECT)
+        } else {
+            hapticView.performAccessHaptic(AccessHaptic.CONFIRM)
+        }
+        return accepted
+    }
     val effectiveBoardSettings = boardSettings ?: resolveBoardSettings(
         appShowLabels = settings.showLabels,
         appShowSymbols = settings.showSymbols,

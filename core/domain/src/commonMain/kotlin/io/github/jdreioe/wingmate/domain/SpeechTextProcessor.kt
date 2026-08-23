@@ -101,19 +101,23 @@ object SpeechTextProcessor {
         val pauseRegex = Regex("""<(?:pause|break)(?:\s+(?:duration|time)=["']([^"']+)["'])?[^>]*/>""", RegexOption.IGNORE_CASE)
 
         var currentIndex = 0
+        var pendingPauseMs = 0L
 
         pauseRegex.findAll(mergedText).forEach { match ->
             // Add text segment before the pause tag
             val textBeforePause = mergedText.substring(currentIndex, match.range.first).trim()
+            val pauseDuration = parseDuration(match.groupValues.getOrNull(1))
             if (textBeforePause.isNotEmpty()) {
-                val pauseDuration = parseDuration(match.groupValues.getOrNull(1))
-                segments.add(textWithLanguageTag(textBeforePause, pauseDuration))
-            } else if (segments.isNotEmpty()) {
-                // If there's no text before the pause, add the pause to the last segment
+                segments.add(textWithLanguageTag(textBeforePause, pendingPauseMs + pauseDuration))
+                pendingPauseMs = 0L
+            } else {
+                // If there's no text before the pause, add the pause to the last segment;
+                // when there is none yet (leading pause), hold it for the next segment.
                 val lastSegment = segments.removeLastOrNull()
                 if (lastSegment != null) {
-                    val pauseDuration = parseDuration(match.groupValues.getOrNull(1))
                     segments.add(lastSegment.copy(pauseDurationMs = lastSegment.pauseDurationMs + pauseDuration))
+                } else {
+                    pendingPauseMs += pauseDuration
                 }
             }
 
@@ -123,7 +127,7 @@ object SpeechTextProcessor {
         // Add remaining text after the last pause tag
         val remainingText = mergedText.substring(currentIndex).trim()
         if (remainingText.isNotEmpty()) {
-            segments.add(textWithLanguageTag(remainingText, 0))
+            segments.add(textWithLanguageTag(remainingText, pendingPauseMs))
         }
 
         // If no pause tags were found, return the entire text as a single segment

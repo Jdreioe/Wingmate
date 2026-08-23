@@ -9,6 +9,7 @@ import kotlinx.serialization.Serializable
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import kotlin.time.Clock
+import kotlinx.coroutines.CancellationException
 
 /**
  * Token Exchange Client for secure Azure TTS authentication.
@@ -28,7 +29,6 @@ class TokenExchangeClient(
     private var cachedToken: String? = null
     private var cachedRegion: String? = null
     private var tokenExpiry: Long = 0
-    
     /**
      * Get a valid Azure Speech token.
      * Returns cached token if still valid, otherwise fetches a new one.
@@ -84,6 +84,8 @@ class TokenExchangeClient(
                     TokenResult.Error("Token exchange failed: ${response.status}")
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             OperationalLogger.error(
                 operation = "speech_token.exchange",
@@ -93,7 +95,7 @@ class TokenExchangeClient(
             TokenResult.Error(e.message ?: "Network error during token exchange")
         }
     }
-    
+
     /**
      * Invalidate the cached token.
      * Call this if you receive a 401 from Azure TTS.

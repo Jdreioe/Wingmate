@@ -28,6 +28,16 @@ class AccessInputController {
     private var dwellConsumedTargetId: String? = null
     private var progress = 0f
 
+    /**
+     * Tremor filter: after a target change the dwell timer is armed this many ms in
+     * the future, so brief pointer contact with intermediate targets never accumulates
+     * toward activation. Callers sync this from settings; 0 disables the filter.
+     */
+    var rearmDelayMillis: Long = 0
+
+    /** While paused (rest mode), the select key held this long resumes input. */
+    private var pausedSelectPress: PausedSelectPress? = null
+
     val state: AccessInputState
         get() = AccessInputState(paused, currentTarget(), progress)
 
@@ -77,11 +87,24 @@ class AccessInputController {
                 AccessInputEffect.Activate(target)
             }
         }
+        if (paused && normalized == normalizeKeyBinding(selectBinding) && selectBinding.isNotBlank()) {
+            // Rest-mode escape hatch: hold the select key to resume (see keyUp).
+            pausedSelectPress = PausedSelectPress(normalized, nowMillis)
+        }
         return null
     }
 
-    fun keyUp(key: String) {
-        pressedKeys.remove(normalizeKeyBinding(key))
+    fun keyUp(key: String, nowMillis: Long): AccessInputEffect? {
+        val normalized = normalizeKeyBinding(key)
+        if (!pressedKeys.remove(normalized)) return null
+        val pausedPress = pausedSelectPress
+        if (pausedPress?.token == normalized) {
+            pausedSelectPress = null
+            if (paused && nowMillis - pausedPress.startedAtMillis >= SELECT_HOLD_RESUME_MILLIS) {
+                return setPaused(false, nowMillis)
+            }
+        }
+        return null
     }
 
     fun togglePaused(nowMillis: Long): AccessInputEffect.PauseChanged = setPaused(!paused, nowMillis)
@@ -111,6 +134,7 @@ class AccessInputController {
         hoveredTargetId = null
         focusedTargetId = null
         pressedKeys.clear()
+        pausedSelectPress = null
         restartDwell(nowMillis)
     }
 
@@ -119,11 +143,21 @@ class AccessInputController {
     private fun restartDwell(nowMillis: Long) {
         val target = currentTarget()
         dwellTargetId = target
-        dwellStartedAtMillis = if (!paused && target != null) nowMillis else null
+        // Arm in the future so transient hover contact (tremor jitter) never
+        // accumulates dwell time; tick() treats negative elapsed as no progress.
+        dwellStartedAtMillis = if (!paused && target != null) nowMillis + rearmDelayMillis else null
         dwellConsumedTargetId = null
         progress = 0f
     }
 }
+
+private data class PausedSelectPress(
+    val token: String,
+    val startedAtMillis: Long,
+)
+
+/** Hold the select key this long during rest mode to resume input. */
+const val SELECT_HOLD_RESUME_MILLIS: Long = 2_000L
 
 fun normalizeKeyBinding(value: String): String = when (if (value == " ") "space" else value.trim().lowercase()) {
     "space", "spacebar" -> "Space"

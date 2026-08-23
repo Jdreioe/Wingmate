@@ -415,8 +415,6 @@ class PartnerWindowDriver(
 
     // ──────────── Low-level SPI ────────────
 
-    // ──────────── Low-level SPI ────────────
-    
     private fun writeRaw(data: ByteArray) {
         if (handle == null) throw RuntimeException("Device not open")
         val txBuf = ByteBuffer.allocateDirect(data.size)
@@ -462,7 +460,7 @@ class PartnerWindowDriver(
         if (finalData.size < len) {
              // throw RuntimeException("Read timeout: got ${finalData.size} of $len bytes")
              // Return what we have to be safe? Or padding?
-             // EVE reads are usually critical. 
+             // EVE reads are usually critical.
              return finalData // Let caller handle or fail later
         }
         

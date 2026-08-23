@@ -51,6 +51,7 @@ import okio.FileSystem
 import org.koin.core.context.loadKoinModules
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 fun overrideAndroidSpeechService(context: Context, aptabaseAppKey: String) {
@@ -75,7 +76,6 @@ fun overrideAndroidSpeechService(context: Context, aptabaseAppKey: String) {
             singleOf(::AndroidSqlSaidTextRepository) { bind<SaidTextRepository>() }
             singleOf(::AndroidBoardRepository) { bind<BoardRepository>() }
             singleOf(::AndroidBoardSetRepository) { bind<BoardSetRepository>() }
-            // Text prediction service using n-grams trained on user's history
             singleOf(::AndroidFileStorage) { bind<FileStorage>() }
             singleOf(::AndroidSoundPlayer) { bind<SoundPlayer>() }
             singleOf(::AndroidFilePicker) { bind<FilePicker>() }
@@ -91,6 +91,8 @@ fun overrideAndroidSpeechService(context: Context, aptabaseAppKey: String) {
                 )
             }
             single { FileSystem.SYSTEM }
+            // Usage-log destination for RealAacLogger (app-private files dir)
+            single(named("logDir")) { context.filesDir.absolutePath }
         }
     )
 }

@@ -89,7 +89,7 @@ class IosFileStorage internal constructor(private val root: String) : FileStorag
     }
 
     companion object {
-        private fun documentsDirectory(): String {
+        fun documentsDirectory(): String {
             val urls = NSFileManager.defaultManager.URLsForDirectory(
                 directory = NSDocumentDirectory,
                 inDomains = NSUserDomainMask
