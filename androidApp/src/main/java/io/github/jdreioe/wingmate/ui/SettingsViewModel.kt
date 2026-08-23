@@ -146,6 +146,8 @@ internal sealed interface SettingsAction {
     data class SpeechPolicyChanged(val policy: SpeechPolicy) : SettingsAction
     data class SelectionDebounceChanged(val millis: Long) : SettingsAction
     data object SelectionDebounceChangeFinished : SettingsAction
+    data class DwellRearmDelayChanged(val millis: Long) : SettingsAction
+    data object DwellRearmDelayChangeFinished : SettingsAction
     data class SelectionHighlightChanged(val millis: Long) : SettingsAction
     data object SelectionHighlightChangeFinished : SettingsAction
     data class SelectKeyBindingChanged(val binding: String) : SettingsAction
@@ -521,6 +523,12 @@ internal class SettingsViewModel(
             }
             SettingsAction.SelectionDebounceChangeFinished -> commitLocal {
                 copy(selectionDebounceMillis = selectionDebounceMillis)
+            }
+            is SettingsAction.DwellRearmDelayChanged -> updateLocally {
+                it.copy(dwellRearmDelayMillis = action.millis)
+            }
+            SettingsAction.DwellRearmDelayChangeFinished -> commitLocal {
+                copy(dwellRearmDelayMillis = dwellRearmDelayMillis)
             }
             is SettingsAction.SelectionHighlightChanged -> updateLocally {
                 it.copy(selectionHighlightMillis = action.millis)
