@@ -16,7 +16,7 @@ composeHotReload = "1.2.0"
 # 1.11.x drops the iosX64 target, which the iOS app project still builds against
 composeMultiplatform = "1.10.1"
 junit = "4.13.2"
-kotlin = "2.4.10"
+kotlin = "2.4.20-RC"
 kotlinx-coroutines = "1.10.2"
 androidx-datastore-preferences = "1.2.0"
 androidx-compose-material-icons-extended = "1.7.8"
@@ -26,6 +26,7 @@ okio = "3.18.1"
 koin = "4.2.2"
 sqldelight = "2.2.1"
 ktor = "3.5.2"
+netty = "4.2.17.Final"
 kotlinx-datetime = "0.8.0"
 kotlinx-serialization = "1.11.0"
 
@@ -72,6 +73,7 @@ ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
 ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor" }
 ktor-server-contentNegotiation = { module = "io.ktor:ktor-server-content-negotiation", version.ref = "ktor" }
 ktor-server-cors = { module = "io.ktor:ktor-server-cors", version.ref = "ktor" }
+netty-bom = { module = "io.netty:netty-bom", version.ref = "netty" }
 
 # Kotlinx
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
