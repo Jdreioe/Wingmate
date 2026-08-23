@@ -545,6 +545,11 @@
     <string name="interaction_rest_mode">Hviletilstand</string>
     <string name="interaction_resume">Genoptag input</string>
     <string name="interaction_paused_status">Hviletilstand — valg ved markør og valgtasten er sat på pause</string>
+    <string name="interaction_hold_select_resume">Hold valgtasten nede i 2 sekunder for at genoptage</string>
+    <string name="ui_settings_dwell_rearm_title">Dwell-forsinkelse efter målskift (ms)</string>
+    <string name="ui_settings_dwell_rearm_desc">Vent så mange ms, efter markøren er flyttet til et nyt mål, før dwell-timing starter. Højere værdier afviser rystelser mellem mål.</string>
+    <string name="phrase_deleted">Frase slettet (med underemner)</string>
+    <string name="action_undo">Fortryd</string>
     <string name="ui_settings_select_key">Valgtast</string>
     <string name="ui_settings_select_key_desc">Tryk én gang på denne tast for at bruge kommunikationsmålet under markøren eller tastaturfokus.</string>
     <string name="ui_settings_rest_key">Tast til hviletilstand</string>
