@@ -430,7 +430,7 @@ class KotlinBridge(
                             settingsManager.settings.value?.restModeKeyBinding.orEmpty(),
                             now,
                         )
-                        "keyup" -> { accessInput.keyUp(request.key.orEmpty()); null }
+                        "keyup" -> accessInput.keyUp(request.key.orEmpty(), now)
                         "tick" -> accessInput.tick(now, settingsManager.settings.value?.dwellToSelectMillis ?: 0)
                         "togglePause" -> accessInput.togglePaused(now)
                         "clear" -> { accessInput.clearTransientInput(now); null }
