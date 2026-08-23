@@ -16,7 +16,7 @@ composeHotReload = "1.2.0"
 # 1.11.x drops the iosX64 target, which the iOS app project still builds against
 composeMultiplatform = "1.10.1"
 junit = "4.13.2"
-kotlin = "2.4.20-RC"
+kotlin = "2.4.10"
 kotlinx-coroutines = "1.10.2"
 androidx-datastore-preferences = "1.2.0"
 androidx-compose-material-icons-extended = "1.7.8"
