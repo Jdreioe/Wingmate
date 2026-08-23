@@ -1,0 +1,3 @@
+# Restore structured Message parts by edit provenance
+
+When the Communicator edits a structured Message part so its text no longer matches, then edits it back to exactly match the original text (for example `WC -> WCC -> WC`), Wingmate re-replaces the text with the original structured content so speaking again vocalizes the original. The exact-text match restores only the original edited Message part retained as edit provenance, not all saved Phrases and Buttons, because duplicate labels can carry different vocalizations and a label match is not a reliable source.

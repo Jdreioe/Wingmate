@@ -17,13 +17,13 @@ The application supports both Wayland and X11 and follows the user's light/dark 
 - history JSON import/export
 - external partner-window mirroring and display settings, shown only while supported FT232H hardware is connected
 - non-blocking communication with the shared Kotlin business-logic service
-- Android/iOS-style workspace navigation in the native COSMIC header: Keyboard,
+- Android/iOS-style workspace navigation in the native COSMIC header: Typing,
   Screens, and a Settings toggle that returns to the previous workspace
 - system symbolic icons, screen-reader names, and touch-sized primary controls
 
-Linux currently hides custom theme/scaling, hold/dwell, selection feedback,
-auditory fishing, switch scanning, usage logging, and analytics controls because
-the native Iced client does not implement those behaviors yet. See
+Linux exposes hold, dwell, selection feedback, auditory exploration, and switch
+scanning. Custom theme and per-control scaling remain platform-managed or
+hidden. Feature analytics and local usage logging are not exposed. See
 `../docs/LINUX_ACCESSIBILITY_MATRIX.md` for the support matrix.
 
 On desktops that do not publish their active icon theme, set
@@ -63,7 +63,7 @@ resolve the window's `com.hojmoseit.wingmate` application ID to that icon.
 
 ## Architecture
 
-- `src/main.rs` contains the complete Iced application, onboarding, Keyboard and Screens workspaces, native state/update/view loop, file dialogs, and typed HTTP client.
+- `src/main.rs` contains the complete Iced application, onboarding, Typing and Screens workspaces, native state/update/view loop, file dialogs, and typed HTTP client.
 - `src/partner_window_bridge.rs` owns the non-blocking UI-to-driver command channel.
 - `src/partner_window.rs` owns FTDI/EVE rendering and hardware access.
 - `src/main/kotlin/.../KotlinBridge.kt` exposes the existing shared repositories and speech services on localhost.
