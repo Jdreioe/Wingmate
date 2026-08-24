@@ -1,5 +1,5 @@
 [versions]
-agp = "9.3.1"
+agp = "9.3.2"
 android-compileSdk = "37"
 android-minSdk = "24"
 android-targetSdk = "36"
@@ -14,7 +14,7 @@ androidx-window = "1.5.1"
 aptabase = "0.0.8"
 composeHotReload = "1.2.0"
 # 1.11.x drops the iosX64 target, which the iOS app project still builds against
-composeMultiplatform = "1.10.1"
+composeMultiplatform = "1.11.1"
 junit = "4.13.2"
 kotlin = "2.4.10"
 kotlinx-coroutines = "1.10.2"

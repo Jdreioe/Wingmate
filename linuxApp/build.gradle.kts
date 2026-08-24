@@ -29,7 +29,7 @@ dependencies {
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.contentNegotiation)
-    implementation("com.squareup.okhttp3:okhttp:5.4.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.0")
     
     // USB4Java for Partner Window (FTDI FT232H / EVE display)
     implementation("org.usb4java:usb4java:1.3.0")
