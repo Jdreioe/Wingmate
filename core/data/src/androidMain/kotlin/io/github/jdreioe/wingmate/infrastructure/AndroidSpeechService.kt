@@ -49,6 +49,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.koin.core.context.GlobalContext
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import android.os.ParcelFileDescriptor
 import android.os.Environment
 import androidx.annotation.RequiresPermission
 import java.util.Locale
@@ -642,7 +645,13 @@ class AndroidSpeechService(
                 
                 // If file already exists and is valid, skip writing (unless 0 bytes)
                 if (!outFile.exists() || outFile.length() == 0L) {
-                    outFile.outputStream().use { it.write(bytes) }
+                    FileOutputStream(outFile).use { fos ->
+                        fos.write(bytes)
+                        fos.flush()
+                        // Force bytes to stable storage so MediaPlayer's decoder never
+                        // reads a partially visible file on first playback (#232).
+                        fos.fd.sync()
+                    }
                 }
 
                 startPlayback(requestId, outFile, vForSsml, deleteAfterPlayback = !cacheAudio)
@@ -730,7 +739,7 @@ class AndroidSpeechService(
                     try {
                         updateNowPlaying(textForHistory ?: file.nameWithoutExtension, voice)
                         try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
-                        player.setDataSource(file.absolutePath)
+                        player.setDataSourceFromFile(file)
                         player.prepare()
                         synchronized(playerLock) {
                             check(requestGeneration.get() == requestId) { "Speech request was replaced" }
@@ -759,6 +768,17 @@ class AndroidSpeechService(
         return played
     }
     
+    /**
+     * Opens [file] through a FileDescriptor instead of a raw path. Avoids
+     * stale/partial reads of freshly written files on some devices (#232).
+     * MediaPlayer dups the fd internally, so the PFD is closed right away.
+     */
+    private fun MediaPlayer.setDataSourceFromFile(file: File) {
+        ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+            setDataSource(pfd.fileDescriptor)
+        }
+    }
+
     private fun startPlayback(requestId: Long, file: File, voice: Voice, deleteAfterPlayback: Boolean = false) {
         check(requestGeneration.get() == requestId) { "Speech request was replaced" }
         val player = MediaPlayer()
@@ -784,7 +804,7 @@ class AndroidSpeechService(
             true
         }
         try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
-        player.setDataSource(file.absolutePath)
+        player.setDataSourceFromFile(file)
         player.prepare()
         synchronized(playerLock) {
             check(requestGeneration.get() == requestId) { "Speech request was replaced" }
@@ -881,7 +901,7 @@ class AndroidSpeechService(
             // Ensure proper routing for car/AA through media usage speech attributes.
             try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
             try {
-                player.setDataSource(file.absolutePath)
+                player.setDataSourceFromFile(file)
                 player.prepare()
                 synchronized(playerLock) {
                     check(requestGeneration.get() == requestId) { "Speech request was replaced" }
