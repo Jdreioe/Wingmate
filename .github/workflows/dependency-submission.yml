@@ -24,3 +24,8 @@ jobs:
         with:
           cache-provider: basic
           dependency-graph: generate-and-submit
+          # AGP (lint, UTP emulator control) and Kotlin toolchain (swift-export) resolve
+          # build-time-only dependencies in detached configurations, which ignore
+          # resolutionStrategy forces. They never ship in any client artifact, so they are
+          # excluded from the submitted graph instead of being forced or dismissed.
+          dependency-graph-exclude-configurations: 'detachedConfiguration.*'
