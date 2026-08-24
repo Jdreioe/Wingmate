@@ -70,10 +70,12 @@ def main() -> None:
     PASSWORD = str(secrets.randbelow(900000) + 100000)
 
     qr_text = f"WIFI:T:ADB;S:{name};P:{PASSWORD};;"
-    print(f"Service: {name}\nPassword: {PASSWORD}\n")
+    print(f"Service: {name}\n")
     qr = qrcode.QRCode(border=1)
     qr.add_data(qr_text)
     qr.print_ascii(invert=True)
+    # Pairing code intentionally lives only inside the QR payload above;
+    # never echoed as clear text (CodeQL python/clear-text-logging).
     print("\nOn phone: Settings -> Developer options -> Wireless debugging")
     print("          -> Pair device with QR code\n")
 
