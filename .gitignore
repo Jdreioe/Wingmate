@@ -95,3 +95,4 @@ iosApp/iosApp 20*/
 ## Node tooling
 **/node_modules/
 **/.wrangler/
+scripts/adb-wifi-qr.py
