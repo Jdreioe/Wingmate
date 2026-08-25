@@ -778,7 +778,9 @@ fun PhraseScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .shadow(2.dp, RoundedCornerShape(16.dp))
-                            .heightIn(min = (120.dp * settings.inputFieldScale), max = (180.dp * settings.inputFieldScale)),
+                            // Compact by default to match SymbolBar's 64dp resting height;
+                            // still grows via the input-field-scale setting.
+                            .heightIn(min = (64.dp * settings.inputFieldScale), max = (180.dp * settings.inputFieldScale)),
                         focusRequester = textFieldFocusRequester,
                         highlightRanges = secondaryLanguageRanges,
                         highlightColor = secondaryHighlightColor,
@@ -788,7 +790,7 @@ fun PhraseScreen(
                             fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale,
                             color = MaterialTheme.colorScheme.onSurface
                         ),
-                        minLines = 4,
+                        minLines = 2,
                         maxLines = 6,
                         placeholder = {
                             Text(
