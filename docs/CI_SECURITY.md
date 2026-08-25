@@ -43,25 +43,28 @@ rules are what make those checks mandatory.
 
 ## Dependency advisories
 
-Gradle dependencies resolve to patched Netty (4.2.16.Final) via Ktor 3.5, and
-the `resolutionStrategy` in `build.gradle.kts` pins patched transitive builds
-for BouncyCastle (1.84), jose4j (0.9.6), jdom2 (2.0.6.1), and commons-lang3
-(3.18.0). The force applies to both the build/plugin classpath and every project
-configuration, so project classpaths do not fall back to the still-vulnerable
-commons-lang3 3.16.0 pulled in by `usb4java`/`commons-compress` (linuxApp) and
-Compose tooling (androidApp). This keeps Dependabot clean for the dependencies
-the project can influence.
+The Linux client resolves app-runtime Netty to patched 4.2.17.Final via
+`libs.netty.bom` (linuxApp). Gradle dependencies also resolve patched transitive
+builds for BouncyCastle (1.85.x), jose4j (0.9.6), jdom2 (2.0.6.1), and
+commons-lang3 (3.20.0) through `resolutionStrategy` forces applied to both the
+build/plugin classpath and every project configuration, so project classpaths do
+not fall back to the still-vulnerable commons-lang3 3.16.0 pulled in by
+`usb4java`/`commons-compress` (linuxApp) and Compose tooling (androidApp).
 
-Two remaining advisories are accepted risks because they are pinned by the
-Kotlin toolchain itself and have no safe upstream fix short of moving to a Kotlin
-beta:
+The dependency-submission workflow excludes `detachedConfiguration.*` from the
+submitted graph. AGP tooling (lint, UTP emulator control → grpc-netty → old
+Netty 4.1.x) and Kotlin toolchain pieces (swift-export-embeddable →
+opentelemetry-api 1.41.0) resolve build-time-only dependencies in detached
+configurations that ignore `resolutionStrategy` forces. None of these are
+packaged into any shipped client artifact, so they are excluded from the graph
+Dependabot evaluates instead of being forced or individually dismissed.
 
-- `kotlin-gradle-plugin` GHSA-r937-wjx7-w2jp (medium): patched in Kotlin
-  `2.4.20-Beta1`; the project builds on stable Kotlin 2.3.10. Revisit on the next
-  stable Kotlin release.
-- `io.opentelemetry:opentelemetry-api` GHSA-rcgg-9c38-7xpx (medium): pulled
-  transitively by `swift-export-embeddable` (Kotlin 2.3.10) for iOS tooling;
-  patched in opentelemetry-api 1.62.0. Tracked with the Kotlin upgrade above.
+One remaining advisory is an accepted risk because it is pinned by the Kotlin
+toolchain itself and has no safe upstream fix short of moving to a Kotlin beta:
+
+- `kotlin-gradle-plugin` GHSA-r937-wjx7-w2jp (medium): unsafe deserialization in
+  the Kotlin build cache; patched in Kotlin `2.4.20-Beta1`, while the project
+  builds on stable Kotlin 2.4.10. Revisit on the next stable Kotlin release.
 
 The `Dependency vulnerability review` job rejects newly introduced high-or-critical
 advisories, so these two cannot silently regrow past the accepted list above.
