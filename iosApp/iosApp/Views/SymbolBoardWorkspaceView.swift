@@ -676,7 +676,7 @@ struct SymbolBoardWorkspaceView: View {
                                 activeSentenceAnimation = nil
                             }
                         },
-                        onSpeak: model.boardShowSpeakButton ? {
+                        onSpeak: model.boardSpeakButtonVisible ? {
                             let sentence = boardSentenceText
                             guard !sentence.isEmpty else { return }
                             model.speakBoardSentence(sentence, boardSetId: boardSetId)
@@ -705,7 +705,7 @@ struct SymbolBoardWorkspaceView: View {
                                 guard boardSentenceTokens.indices.contains(index) else { return }
                                 boardSentenceTokens.remove(at: index)
                             },
-                        onSpeak: model.boardShowSpeakButton ? {
+                        onSpeak: model.boardSpeakButtonVisible ? {
                             let sentence = boardSentenceText
                             guard !sentence.isEmpty else { return }
                             model.speakBoardSentence(sentence, boardSetId: boardSetId)

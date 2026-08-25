@@ -1253,6 +1253,7 @@ class KotlinBridge(
                     appShowSymbols = appSettings.showSymbols,
                     appLabelAtTop = appSettings.labelAtTop,
                     appShowMessageBar = appSettings.boardShowMessageBar,
+                    appShowSpeakButton = appSettings.boardShowSpeakButton,
                     appActivationBehavior = appSettings.boardActivationBehavior,
                     appReturnBehavior = appSettings.boardReturnBehavior,
                     screen = boardSet?.screenSettings
@@ -1359,6 +1360,7 @@ class KotlinBridge(
                             showSymbols = resolved.showSymbols,
                             labelAtTop = resolved.labelAtTop,
                             showMessageBar = resolved.showMessageBar,
+                            showSpeakButton = resolved.showSpeakButton,
                             activationBehavior = resolved.activationBehavior.name,
                             returnBehavior = resolved.returnBehavior.name,
                         ),
@@ -1683,6 +1685,7 @@ private fun resolvedBoardSettingsResponse(
         appShowSymbols = appSettings.showSymbols,
         appLabelAtTop = appSettings.labelAtTop,
         appShowMessageBar = appSettings.boardShowMessageBar,
+        appShowSpeakButton = appSettings.boardShowSpeakButton,
         appActivationBehavior = appSettings.boardActivationBehavior,
         appReturnBehavior = appSettings.boardReturnBehavior,
         screen = boardSet.screenSettings,
@@ -1693,6 +1696,7 @@ private fun resolvedBoardSettingsResponse(
         showSymbols = resolved.showSymbols,
         labelAtTop = resolved.labelAtTop,
         showMessageBar = resolved.showMessageBar,
+        showSpeakButton = resolved.showSpeakButton,
         activationBehavior = resolved.activationBehavior.name,
         returnBehavior = resolved.returnBehavior.name,
     )
@@ -1721,6 +1725,7 @@ data class ResolvedBoardSettingsResponse(
     val showSymbols: Boolean,
     val labelAtTop: Boolean,
     val showMessageBar: Boolean,
+    val showSpeakButton: Boolean,
     val activationBehavior: String,
     val returnBehavior: String,
 )

@@ -576,6 +576,8 @@ struct ResolvedBoardSettings {
     show_symbols: bool,
     label_at_top: bool,
     show_message_bar: bool,
+    #[serde(default = "default_true")]
+    show_speak_button: bool,
     #[serde(default)]
     activation_behavior: String,
     #[serde(default)]
@@ -4669,7 +4671,7 @@ impl Wingmate {
         let Some(board) = board else {
             return text(fl!("board-no-pages")).into();
         };
-        let (show_labels, show_symbols, label_at_top, show_message_bar) = graph
+        let (show_labels, show_symbols, label_at_top, show_message_bar, show_speak_button) = graph
             .resolved_settings
             .get(&board.id)
             .map(|settings| {
@@ -4678,6 +4680,7 @@ impl Wingmate {
                     settings.show_symbols,
                     settings.label_at_top,
                     settings.show_message_bar,
+                    settings.show_speak_button,
                 )
             })
             .unwrap_or((
@@ -4685,6 +4688,7 @@ impl Wingmate {
                 self.settings.show_symbols,
                 self.settings.label_at_top,
                 self.settings.board_show_message_bar,
+                self.settings.board_show_speak_button,
             ));
         // Position fields explicitly because libcosmic's implicit grid tracks
         // currently mis-measure Fill children: columns are positioned correctly
@@ -5047,7 +5051,7 @@ impl Wingmate {
                 .padding([10, 16]),
             ]
             .spacing(10);
-            if self.settings.board_show_speak_button {
+            if show_speak_button {
                 message_row = message_row.push(aac_toolbar_button(
                     "media-playback-start-symbolic",
                     fl!("board-speak-message"),

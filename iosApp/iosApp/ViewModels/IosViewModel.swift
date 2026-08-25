@@ -228,6 +228,7 @@ final class IosViewModel: ObservableObject {
     @Published var resolvedBoardShowSymbols: Bool? = nil
     @Published var resolvedBoardLabelAtTop: Bool? = nil
     @Published var resolvedBoardShowMessageBar: Bool? = nil
+    @Published var resolvedBoardShowSpeakButton: Bool? = nil
     @Published var resolvedBoardActivationBehavior: String? = nil
     @Published var resolvedBoardReturnBehavior: String? = nil
     @Published private(set) var boardStack: [String] = []
@@ -236,6 +237,7 @@ final class IosViewModel: ObservableObject {
     var boardShowSymbols: Bool { resolvedBoardShowSymbols ?? showButtonSymbols }
     var boardLabelAtTop: Bool { resolvedBoardLabelAtTop ?? labelAtTop }
     var boardMessageBarVisible: Bool { resolvedBoardShowMessageBar ?? boardShowMessageBar }
+    var boardSpeakButtonVisible: Bool { resolvedBoardShowSpeakButton ?? boardShowSpeakButton }
     var boardActivationBehavior: String { resolvedBoardActivationBehavior ?? "SpeakAndAdd" }
     var boardReturnBehavior: String { resolvedBoardReturnBehavior ?? "Stay" }
 
@@ -1845,6 +1847,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardShowSymbols = nil
             resolvedBoardLabelAtTop = nil
             resolvedBoardShowMessageBar = nil
+            resolvedBoardShowSpeakButton = nil
             resolvedBoardActivationBehavior = nil
             resolvedBoardReturnBehavior = nil
             return
@@ -1857,6 +1860,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardShowSymbols = resolved?.showSymbols
             resolvedBoardLabelAtTop = resolved?.labelAtTop
             resolvedBoardShowMessageBar = resolved?.showMessageBar
+            resolvedBoardShowSpeakButton = resolved?.showSpeakButton
             resolvedBoardActivationBehavior = resolved?.activationBehavior
             resolvedBoardReturnBehavior = resolved?.returnBehavior
             let boardName = selectedBoard?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -1875,6 +1879,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardShowSymbols = nil
             resolvedBoardLabelAtTop = nil
             resolvedBoardShowMessageBar = nil
+            resolvedBoardShowSpeakButton = nil
             resolvedBoardActivationBehavior = nil
             resolvedBoardReturnBehavior = nil
         }

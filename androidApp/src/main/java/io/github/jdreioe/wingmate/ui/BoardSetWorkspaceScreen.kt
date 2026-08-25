@@ -766,6 +766,7 @@ private fun BoardSetWorkspaceRoot(
         settings.showSymbols,
         settings.labelAtTop,
         settings.boardShowMessageBar,
+        settings.boardShowSpeakButton,
         settings.boardActivationBehavior,
         settings.boardReturnBehavior
     ) {
@@ -774,6 +775,7 @@ private fun BoardSetWorkspaceRoot(
             appShowSymbols = settings.showSymbols,
             appLabelAtTop = settings.labelAtTop,
             appShowMessageBar = settings.boardShowMessageBar,
+            appShowSpeakButton = settings.boardShowSpeakButton,
             appActivationBehavior = settings.boardActivationBehavior,
             appReturnBehavior = settings.boardReturnBehavior,
             screen = activeGraph?.boardSet?.screenSettings
@@ -951,6 +953,7 @@ private fun BoardSetWorkspaceRoot(
             appShowSymbols = settings.showSymbols,
             appLabelAtTop = settings.labelAtTop,
             appShowMessageBar = settings.boardShowMessageBar,
+            appShowSpeakButton = settings.boardShowSpeakButton,
             appActivationBehavior = settings.boardActivationBehavior,
             appReturnBehavior = settings.boardReturnBehavior,
             onCommit = { name, updatedSettings, updatedBackgroundColor ->
@@ -1352,7 +1355,7 @@ private fun BoardSetWorkspaceRoot(
                         } else {
                             SymbolBarPresentation.Normal
                         },
-                        showSpeakControl = settings.boardShowSpeakButton,
+                        showSpeakControl = resolvedBoardSettings.showSpeakButton,
                         showDeleteControl = !boardHasDeleteField,
                         showClearControl = !boardHasClearField,
                         boardSettings = resolvedBoardSettings,
