@@ -1353,7 +1353,7 @@ private fun BoardSetWorkspaceRoot(
                         } else {
                             SymbolBarPresentation.Normal
                         },
-                        showSpeakControl = !boardHasSpeakField,
+                        showSpeakControl = settings.boardShowSpeakButton && !boardHasSpeakField,
                         showDeleteControl = !boardHasDeleteField,
                         showClearControl = !boardHasClearField,
                         boardSettings = resolvedBoardSettings,

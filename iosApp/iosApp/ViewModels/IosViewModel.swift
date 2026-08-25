@@ -223,6 +223,7 @@ final class IosViewModel: ObservableObject {
     @Published var highlightedButtonId: String? = nil
     private var selectionHighlightGeneration: Int64 = 0
     @Published var boardShowMessageBar: Bool = true
+    @Published var boardShowSpeakButton: Bool = true
     @Published var resolvedBoardShowLabels: Bool? = nil
     @Published var resolvedBoardShowSymbols: Bool? = nil
     @Published var resolvedBoardLabelAtTop: Bool? = nil
@@ -532,6 +533,7 @@ final class IosViewModel: ObservableObject {
                 self.pointerEmphasisScale = Double(settings.pointerEmphasisScale)
                 self.selectionHighlightMillis = settings.selectionHighlightMillis
                 self.boardShowMessageBar = settings.boardShowMessageBar
+                self.boardShowSpeakButton = settings.boardShowSpeakButton
                 self.usageLoggingEnabled = settings.usageLoggingEnabled
                 self.featureUsageReportingEnabled = settings.featureUsageReportingEnabled
                 self.historyVisible = settings.historyVisible
@@ -1151,6 +1153,11 @@ final class IosViewModel: ObservableObject {
     func setBoardShowMessageBar(_ enabled: Bool) {
         boardShowMessageBar = enabled
         Task { _ = try? await settingsFacade.updateBoardShowMessageBar(enabled: enabled) }
+    }
+
+    func setBoardShowSpeakButton(_ enabled: Bool) {
+        boardShowSpeakButton = enabled
+        Task { _ = try? await settingsFacade.updateBoardShowSpeakButton(enabled: enabled) }
     }
 
     func setUsageLoggingEnabled(_ enabled: Bool) {

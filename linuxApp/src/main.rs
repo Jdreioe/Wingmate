@@ -332,6 +332,7 @@ struct Settings {
     usage_logging_enabled: bool,
     history_visible: bool,
     board_show_message_bar: bool,
+    board_show_speak_button: bool,
 }
 
 impl Default for Settings {
@@ -383,6 +384,7 @@ impl Default for Settings {
             usage_logging_enabled: false,
             history_visible: true,
             board_show_message_bar: true,
+            board_show_speak_button: true,
         }
     }
 }
@@ -2368,6 +2370,7 @@ impl cosmic::Application for Wingmate {
                     "usageLoggingEnabled" => self.settings.usage_logging_enabled = enabled,
                     "historyVisible" => self.settings.history_visible = enabled,
                     "boardShowMessageBar" => self.settings.board_show_message_bar = enabled,
+                    "boardShowSpeakButton" => self.settings.board_show_speak_button = enabled,
                     "scanningEnabled" => self.settings.scanning_enabled = enabled,
                     "scanPlaybackAreaEnabled" => self.settings.scan_playback_area_enabled = enabled,
                     "scanInputFieldEnabled" => self.settings.scan_input_field_enabled = enabled,
@@ -2389,6 +2392,7 @@ impl cosmic::Application for Wingmate {
                         | "showSymbols"
                         | "labelAtTop"
                         | "boardShowMessageBar"
+                        | "boardShowSpeakButton"
                         | "wordTypeColorScheme"
                 ) {
                     self.board_graph.as_ref().map_or_else(
@@ -5009,62 +5013,63 @@ impl Wingmate {
         };
 
         let message_bar: Element<'_, Message> = if !self.board_edit_mode && show_message_bar {
-            container(
-                row![
-                    aac_toolbar_button(
-                        "go-home-symbolic",
-                        fl!("board-home"),
-                        Message::BoardNavigateHome,
-                    ),
-                    aac_toolbar_button(
-                        "go-previous-symbolic",
-                        fl!("board-back"),
-                        Message::BoardNavigateBack,
-                    ),
-                    button(
-                        scrollable(
-                            text(if self.board_sentence.is_empty() {
-                                fl!("board-message-placeholder")
-                            } else {
-                                self.board_sentence.clone()
-                            })
-                            .size(22)
-                            .wrapping(cosmic::iced::widget::text::Wrapping::None),
-                        )
-                        .direction(scrollable::Direction::Horizontal(
-                            scrollable::Scrollbar::default(),
-                        ))
-                        .height(Fill)
-                        .width(Fill)
+            let mut message_row = row![
+                aac_toolbar_button(
+                    "go-home-symbolic",
+                    fl!("board-home"),
+                    Message::BoardNavigateHome,
+                ),
+                aac_toolbar_button(
+                    "go-previous-symbolic",
+                    fl!("board-back"),
+                    Message::BoardNavigateBack,
+                ),
+                button(
+                    scrollable(
+                        text(if self.board_sentence.is_empty() {
+                            fl!("board-message-placeholder")
+                        } else {
+                            self.board_sentence.clone()
+                        })
+                        .size(22)
+                        .wrapping(cosmic::iced::widget::text::Wrapping::None),
                     )
-                    .on_press(Message::Speak(self.board_sentence.clone()))
-                    .class(cosmic::theme::iced::Button::Secondary)
-                    .height(68)
+                    .direction(scrollable::Direction::Horizontal(
+                        scrollable::Scrollbar::default(),
+                    ))
+                    .height(Fill)
                     .width(Fill)
-                    .padding([10, 16]),
-                    aac_toolbar_button(
-                        "media-playback-start-symbolic",
-                        fl!("board-speak-message"),
-                        Message::Speak(self.board_sentence.clone()),
-                    ),
-                    aac_toolbar_button(
-                        "edit-undo-symbolic",
-                        fl!("board-backspace-message"),
-                        Message::BoardSentenceBackspace,
-                    ),
-                    aac_toolbar_button(
-                        "edit-clear-symbolic",
-                        fl!("board-clear-message"),
-                        Message::BoardSentenceClear,
-                    ),
-                ]
-                .spacing(10)
-                .align_y(cosmic::iced::alignment::Alignment::Center),
-            )
-            .class(cosmic::theme::iced::Container::Card)
-            .padding(8)
-            .width(Fill)
-            .into()
+                )
+                .on_press(Message::Speak(self.board_sentence.clone()))
+                .class(cosmic::theme::iced::Button::Secondary)
+                .height(68)
+                .width(Fill)
+                .padding([10, 16]),
+            ]
+            .spacing(10);
+            if self.settings.board_show_speak_button {
+                message_row = message_row.push(aac_toolbar_button(
+                    "media-playback-start-symbolic",
+                    fl!("board-speak-message"),
+                    Message::Speak(self.board_sentence.clone()),
+                ));
+            }
+            message_row = message_row
+                .push(aac_toolbar_button(
+                    "edit-undo-symbolic",
+                    fl!("board-backspace-message"),
+                    Message::BoardSentenceBackspace,
+                ))
+                .push(aac_toolbar_button(
+                    "edit-clear-symbolic",
+                    fl!("board-clear-message"),
+                    Message::BoardSentenceClear,
+                ));
+            container(message_row.align_y(cosmic::iced::alignment::Alignment::Center))
+                .class(cosmic::theme::iced::Container::Card)
+                .padding(8)
+                .width(Fill)
+                .into()
         } else {
             container(
                 row![
@@ -5626,6 +5631,9 @@ impl Wingmate {
                 checkbox(self.settings.board_show_message_bar)
                     .label(fl!("display-message-bar"))
                     .on_toggle(|enabled| Message::SettingBool("boardShowMessageBar", enabled)),
+                checkbox(self.settings.board_show_speak_button)
+                    .label(fl!("display-speak-button"))
+                    .on_toggle(|enabled| Message::SettingBool("boardShowSpeakButton", enabled)),
             ]
             .spacing(14),
         )
