@@ -1,6 +1,5 @@
 package io.github.jdreioe.wingmate.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -27,6 +26,10 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.ui.draw.shadow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar
@@ -390,6 +393,111 @@ fun PhraseScreen(
                 )
             }
 
+            // Transport actions shared by the message bar and the (transitional) bottom playback bar.
+            val playInput: () -> Unit = {
+                if (input.text.isBlank()) {
+                    refocusInput()
+                } else {
+                    featureUsageReporter.reportEvent(
+                        FeatureUsageEvents.PLAYBACK_PLAY,
+                        "source" to "input",
+                        "has_secondary_ranges" to secondaryLanguageRanges.isNotEmpty().toString()
+                    )
+                    isSpeechPaused = false
+                    uiScope.launch(Dispatchers.IO) {
+                        try {
+                            val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                                .withLanguageOverride(settings.primaryLanguage)
+                                ?.copy(mathMode = mathMode)
+                            val secondaryLang = settings.secondaryLanguage.takeIf { hasUsableSecondaryLanguage.value }
+                            val inputText = input.text
+
+                            val hasSSML = inputText.contains("<") && inputText.contains(">")
+                            val canUseRecordedMix = !mathMode && !hasSSML && secondaryLanguageRanges.isEmpty()
+                            val playedRecording = if (canUseRecordedMix) {
+                                runCatching {
+                                    trySpeakUsingRecordedPhrases(
+                                        inputText = inputText,
+                                        phrases = state.items,
+                                        speechService = speechService,
+                                        voice = selected
+                                    )
+                                }.getOrDefault(false)
+                            } else {
+                                false
+                            }
+
+                            if (!playedRecording) {
+                                // When SSML is present, bypass segmentation and speak directly
+                                if (hasSSML) {
+                                    speechService.speak(inputText, selected, selected?.pitch, selected?.rate)
+                                } else {
+                                    val segments = if (!mathMode && secondaryLanguageRanges.isNotEmpty() && secondaryLang != null) {
+                                        buildLanguageAwareSegments(inputText, secondaryLanguageRanges, secondaryLang)
+                                    } else emptyList()
+                                    if (segments.isNotEmpty()) {
+                                        speechService.speakSegments(segments, selected, selected?.pitch, selected?.rate)
+                                    } else {
+                                        speechService.speak(inputText, selected, selected?.pitch, selected?.rate)
+                                    }
+                                }
+                            }
+
+                            // Refresh history from repo so the History chip appears after first save
+                            // Also train prediction model incrementally with new phrase
+                            try {
+                                val list = saidRepo.list()
+                                uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
+                                // Incremental learning for immediate feedback
+                                if (predictionsEnabled) {
+                                    (predictionService as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService)?.learnPhrase(input.text)
+                                    predictionModelVersion++ // Trigger update after new entry
+                                }
+                            } catch (_: Throwable) {}
+                        } catch (t: Throwable) {
+                            // swallow for UI; diagnostics logged by service
+                        }
+                    }
+                    refocusInput()
+                }
+            }
+            val pauseSpeech: () -> Unit = {
+                featureUsageReporter.reportEvent(
+                    FeatureUsageEvents.PLAYBACK_PAUSE,
+                    "source" to "input"
+                )
+                isSpeechPaused = true
+                uiScope.launch {
+                    runCatching { speechService.pause() }
+                        .onFailure { isSpeechPaused = speechService.isPaused() }
+                }
+                refocusInput()
+            }
+            val stopSpeech: () -> Unit = {
+                featureUsageReporter.reportEvent(
+                    FeatureUsageEvents.PLAYBACK_STOP,
+                    "source" to "input"
+                )
+                isSpeechPaused = false
+                uiScope.launch {
+                    runCatching { speechService.stop() }
+                        .onFailure { isSpeechPaused = speechService.isPaused() }
+                }
+                refocusInput()
+            }
+            val resumeSpeech: () -> Unit = {
+                featureUsageReporter.reportEvent(
+                    FeatureUsageEvents.PLAYBACK_RESUME,
+                    "source" to "input"
+                )
+                isSpeechPaused = false
+                uiScope.launch {
+                    runCatching { speechService.resume() }
+                        .onFailure { isSpeechPaused = speechService.isPaused() }
+                }
+                refocusInput()
+            }
+
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -536,110 +644,11 @@ fun PhraseScreen(
                         val selectionHasLength = normalizedSelection.spanLength() > 0
                         val selectionAlreadySecondary = selectionHasLength && isRangeFullySecondary(normalizedSelection, secondaryLanguageRanges)
                         PlaybackControls(
-                            
-                            onPlay = {
-                                if (input.text.isBlank()) {
-                                    refocusInput()
-                                    return@PlaybackControls
-                                }
-                                featureUsageReporter.reportEvent(
-                                    FeatureUsageEvents.PLAYBACK_PLAY,
-                                    "source" to "input",
-                                    "has_secondary_ranges" to secondaryLanguageRanges.isNotEmpty().toString()
-                                )
-                                isSpeechPaused = false
-                                uiScope.launch(Dispatchers.IO) {
-                                    try {
-                                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                            .withLanguageOverride(settings.primaryLanguage)
-                                            ?.copy(mathMode = mathMode)
-                                        val secondaryLang = settings.secondaryLanguage.takeIf { hasUsableSecondaryLanguage.value }
-                                        val inputText = input.text
-                                        
-                                        val hasSSML = inputText.contains("<") && inputText.contains(">")
-                                        val canUseRecordedMix = !mathMode && !hasSSML && secondaryLanguageRanges.isEmpty()
-                                        val playedRecording = if (canUseRecordedMix) {
-                                            runCatching {
-                                                trySpeakUsingRecordedPhrases(
-                                                    inputText = inputText,
-                                                    phrases = state.items,
-                                                    speechService = speechService,
-                                                    voice = selected
-                                                )
-                                            }.getOrDefault(false)
-                                        } else {
-                                            false
-                                        }
-                                        
-                                        if (!playedRecording) {
-                                            // When SSML is present, bypass segmentation and speak directly
-                                            if (hasSSML) {
-                                                speechService.speak(inputText, selected, selected?.pitch, selected?.rate)
-                                            } else {
-                                                val segments = if (!mathMode && secondaryLanguageRanges.isNotEmpty() && secondaryLang != null) {
-                                                    buildLanguageAwareSegments(inputText, secondaryLanguageRanges, secondaryLang)
-                                                } else emptyList()
-                                                if (segments.isNotEmpty()) {
-                                                    speechService.speakSegments(segments, selected, selected?.pitch, selected?.rate)
-                                                } else {
-                                                    speechService.speak(inputText, selected, selected?.pitch, selected?.rate)
-                                                }
-                                            }
-                                        }
-                                        
-                                        // Refresh history from repo so the History chip appears after first save
-                                        // Also train prediction model incrementally with new phrase
-                                        try {
-                                            val list = saidRepo.list()
-                                            uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
-                                            // Incremental learning for immediate feedback
-                                            if (predictionsEnabled) {
-                                                (predictionService as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService)?.learnPhrase(input.text)
-                                                predictionModelVersion++ // Trigger update after new entry
-                                            }
-                                        } catch (_: Throwable) {}
-                                    } catch (t: Throwable) {
-                                        // swallow for UI; diagnostics logged by service
-                                    }
-                                }
-                                refocusInput()
-                            },
-                            onPause = {
-                                featureUsageReporter.reportEvent(
-                                    FeatureUsageEvents.PLAYBACK_PAUSE,
-                                    "source" to "input"
-                                )
-                                isSpeechPaused = true
-                                uiScope.launch {
-                                    runCatching { speechService.pause() }
-                                        .onFailure { isSpeechPaused = speechService.isPaused() }
-                                }
-                                refocusInput()
-                            },
-                            onStop = { 
-                                featureUsageReporter.reportEvent(
-                                    FeatureUsageEvents.PLAYBACK_STOP,
-                                    "source" to "input"
-                                )
-                                isSpeechPaused = false
-                                uiScope.launch {
-                                    runCatching { speechService.stop() }
-                                        .onFailure { isSpeechPaused = speechService.isPaused() }
-                                }
-                                refocusInput()
-                            },
-                            onResume = {
-                                featureUsageReporter.reportEvent(
-                                    FeatureUsageEvents.PLAYBACK_RESUME,
-                                    "source" to "input"
-                                )
-                                isSpeechPaused = false
-                                uiScope.launch {
-                                    runCatching { speechService.resume() }
-                                        .onFailure { isSpeechPaused = speechService.isPaused() }
-                                }
-                                refocusInput()
-                            },
+
+                            onPlay = playInput,
+                            onPause = pauseSpeech,
+                            onStop = stopSpeech,
+                            onResume = resumeSpeech,
                             isPaused = isSpeechPaused,
                             onPlaySecondary = if (hasUsableSecondaryLanguage.value) {
                                 {
@@ -768,6 +777,7 @@ fun PhraseScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
+                            .shadow(2.dp, RoundedCornerShape(16.dp))
                             .heightIn(min = (120.dp * settings.inputFieldScale), max = (180.dp * settings.inputFieldScale)),
                         focusRequester = textFieldFocusRequester,
                         highlightRanges = secondaryLanguageRanges,
@@ -788,6 +798,38 @@ fun PhraseScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             )
+                        },
+                        trailingContent = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                                if (isSpeechPaused) {
+                                    IconButton(onClick = resumeSpeech) {
+                                        Icon(
+                                            Icons.Rounded.SkipNext,
+                                            contentDescription = stringResource(R.string.playback_resume),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                } else {
+                                    IconButton(onClick = playInput) {
+                                        Icon(
+                                            Icons.Filled.PlayArrow,
+                                            contentDescription = stringResource(R.string.playback_play)
+                                        )
+                                    }
+                                }
+                                IconButton(onClick = pauseSpeech) {
+                                    Icon(
+                                        Icons.Filled.Pause,
+                                        contentDescription = stringResource(R.string.playback_pause)
+                                    )
+                                }
+                                IconButton(onClick = stopSpeech) {
+                                    Icon(
+                                        Icons.Filled.Stop,
+                                        contentDescription = stringResource(R.string.playback_stop)
+                                    )
+                                }
+                            }
                         }
                     )
                     
@@ -1537,7 +1579,9 @@ private fun SecondaryLanguageTextField(
     textStyle: TextStyle,
     placeholder: (@Composable () -> Unit)? = null,
     minLines: Int = 1,
-    maxLines: Int = Int.MAX_VALUE
+    maxLines: Int = Int.MAX_VALUE,
+    // Inline actions rendered inside the bar, to the right of the text (message-bar style).
+    trailingContent: (@Composable () -> Unit)? = null
 ) {
     val annotated: AnnotatedString = remember(value.text, highlightRanges, highlightColor, ssmlRanges, ssmlColor) {
         buildAnnotatedString {
@@ -1564,37 +1608,43 @@ private fun SecondaryLanguageTextField(
 
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
-        Box(modifier = Modifier.padding(16.dp)) {
-            if (value.text.isEmpty()) {
-                placeholder?.invoke()
+        Row(
+            modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                if (value.text.isEmpty()) {
+                    placeholder?.invoke()
+                }
+
+                val showKeyboardMod = Modifier.showKeyboardOnFocus()
+                val inputModifier = if (focusRequester != null) {
+                    Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .then(showKeyboardMod)
+                } else {
+                    Modifier.fillMaxWidth().then(showKeyboardMod)
+                }
+
+                BasicTextField(
+                    value = styledValue,
+                    onValueChange = {
+                        // Pass the plain text back to the parent to keep the logic simple there
+                        onValueChange(it.copy(annotatedString = AnnotatedString(it.text)))
+                    },
+                    textStyle = textStyle,
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = inputModifier,
+                    minLines = minLines,
+                    maxLines = maxLines
+                )
             }
 
-            val showKeyboardMod = Modifier.showKeyboardOnFocus()
-            val inputModifier = if (focusRequester != null) {
-                Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester)
-                    .then(showKeyboardMod)
-            } else {
-                Modifier.fillMaxWidth().then(showKeyboardMod)
-            }
-
-            BasicTextField(
-                value = styledValue,
-                onValueChange = { 
-                    // Pass the plain text back to the parent to keep the logic simple there
-                    onValueChange(it.copy(annotatedString = AnnotatedString(it.text)))
-                },
-                textStyle = textStyle,
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = inputModifier,
-                minLines = minLines,
-                maxLines = maxLines
-            )
+            trailingContent?.invoke()
         }
     }
 }
