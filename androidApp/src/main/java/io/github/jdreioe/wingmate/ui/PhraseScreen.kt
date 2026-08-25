@@ -800,17 +800,31 @@ fun PhraseScreen(
                             )
                         },
                         trailingContent = {
-                            Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                VerticalDivider(
+                                    modifier = Modifier
+                                        .padding(horizontal = 8.dp)
+                                        .height(40.dp)
+                                )
                                 if (isSpeechPaused) {
-                                    IconButton(onClick = resumeSpeech) {
+                                    FilledIconButton(
+                                        onClick = resumeSpeech,
+                                        colors = IconButtonDefaults.filledIconButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary
+                                        )
+                                    ) {
                                         Icon(
                                             Icons.Rounded.SkipNext,
-                                            contentDescription = stringResource(R.string.playback_resume),
-                                            tint = MaterialTheme.colorScheme.primary
+                                            contentDescription = stringResource(R.string.playback_resume)
                                         )
                                     }
                                 } else {
-                                    IconButton(onClick = playInput) {
+                                    FilledIconButton(
+                                        onClick = playInput,
+                                        colors = IconButtonDefaults.filledIconButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary
+                                        )
+                                    ) {
                                         Icon(
                                             Icons.Filled.PlayArrow,
                                             contentDescription = stringResource(R.string.playback_play)
