@@ -806,7 +806,6 @@ private fun BoardSetWorkspaceRoot(
             ?.toList()
             .orEmpty()
     }
-    val boardHasSpeakField = availableBoardActions.any { it == ObfButtonActionEffect.Speak }
     val boardHasDeleteField = availableBoardActions.any { it == ObfButtonActionEffect.Backspace }
     val boardHasClearField = availableBoardActions.any { it == ObfButtonActionEffect.Clear }
     val predictionButtonIds = remember(activeBoard?.id, activeBoard?.grid, activeBoard?.buttons, showHiddenButtons) {
@@ -1353,7 +1352,7 @@ private fun BoardSetWorkspaceRoot(
                         } else {
                             SymbolBarPresentation.Normal
                         },
-                        showSpeakControl = settings.boardShowSpeakButton && !boardHasSpeakField,
+                        showSpeakControl = settings.boardShowSpeakButton,
                         showDeleteControl = !boardHasDeleteField,
                         showClearControl = !boardHasClearField,
                         boardSettings = resolvedBoardSettings,
