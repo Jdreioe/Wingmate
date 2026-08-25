@@ -5,6 +5,11 @@ package io.github.jdreioe.wingmate.domain.obf
  */
 sealed class ObfButtonActionEffect {
     data class AppendText(val text: String) : ObfButtonActionEffect()
+    data class WrapSelection(
+        val prefix: String,
+        val suffix: String,
+        val fallback: String = DEFAULT_WRAP_FALLBACK,
+    ) : ObfButtonActionEffect()
     data object Backspace : ObfButtonActionEffect()
     data object Clear : ObfButtonActionEffect()
     data object Speak : ObfButtonActionEffect()
@@ -12,6 +17,10 @@ sealed class ObfButtonActionEffect {
     data object NativeKeyboard : ObfButtonActionEffect()
     data object Predictions : ObfButtonActionEffect()
     data class Unsupported(val action: String) : ObfButtonActionEffect()
+
+    companion object {
+        const val DEFAULT_WRAP_FALLBACK = "text"
+    }
 }
 
 /**
@@ -20,6 +29,8 @@ sealed class ObfButtonActionEffect {
  * Supported:
  * - `+…` append the following characters (including spaces after the `+`)
  * - `:space` append a single space
+ * - `:wrap=PREFIX|SUFFIX` wrap the current selection in PREFIX/SUFFIX; where no
+ *   selection exists (token-sentence surfaces) insert PREFIX + fallback + SUFFIX
  * - `:backspace` remove the last character of the composed sentence
  * - `:clear` clear the sentence
  * - `:speak` speak the current sentence
@@ -34,6 +45,19 @@ fun parseObfButtonAction(raw: String): ObfButtonActionEffect {
         val payload = raw.removePrefix("+")
         if (payload.isEmpty()) return ObfButtonActionEffect.Unsupported(raw)
         return ObfButtonActionEffect.AppendText(payload)
+    }
+
+    // Wrap payloads may end in meaningful whitespace (e.g. "</emphasis> "),
+    // so match before the colon-command trim.
+    if (raw.startsWith(":wrap=", ignoreCase = true)) {
+        val body = raw.substring(":wrap=".length)
+        val separator = body.indexOf('|')
+        val prefix = separator.takeIf { it > 0 }?.let { body.substring(0, it) }
+        val suffix = separator.takeIf { it != -1 && it < body.lastIndex }?.let { body.substring(it + 1) }
+        if (prefix != null && suffix != null) {
+            return ObfButtonActionEffect.WrapSelection(prefix = prefix, suffix = suffix)
+        }
+        return ObfButtonActionEffect.Unsupported(raw)
     }
 
     val action = raw.trim()

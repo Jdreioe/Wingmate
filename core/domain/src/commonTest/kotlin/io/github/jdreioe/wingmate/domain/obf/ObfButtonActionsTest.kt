@@ -79,6 +79,57 @@ class ObfButtonActionsTest {
     }
 
     @Test
+    fun parse_wrap_splitsOnFirstPipe() {
+        assertEquals(
+            ObfButtonActionEffect.WrapSelection(
+                prefix = "<emphasis level=\"strong\">",
+                suffix = "</emphasis>"
+            ),
+            parseObfButtonAction(":wrap=<emphasis level=\"strong\">|</emphasis>")
+        )
+        assertEquals(
+            ObfButtonActionEffect.WrapSelection(prefix = " ", suffix = " "),
+            parseObfButtonAction(":wrap= | ")
+        )
+    }
+
+    @Test
+    fun parse_wrap_preservesTrailingWhitespaceInSuffix() {
+        assertEquals(
+            ObfButtonActionEffect.WrapSelection(prefix = "<a>", suffix = "</a> "),
+            parseObfButtonAction(":wrap=<a>|</a> ")
+        )
+    }
+
+    @Test
+    fun parse_wrap_isCaseInsensitive() {
+        assertEquals(
+            ObfButtonActionEffect.WrapSelection(prefix = "<x>", suffix = "</x>"),
+            parseObfButtonAction(":WRAP=<x>|</x>")
+        )
+    }
+
+    @Test
+    fun parse_wrap_keepsPipeInSuffix() {
+        assertEquals(
+            ObfButtonActionEffect.WrapSelection(prefix = "<a>", suffix = "</a>|</b>"),
+            parseObfButtonAction(":wrap=<a>|</a>|</b>")
+        )
+    }
+
+    @Test
+    fun parse_wrap_withoutSeparator_isUnsupported() {
+        assertTrue(parseObfButtonAction(":wrap=onlyprefix") is ObfButtonActionEffect.Unsupported)
+    }
+
+    @Test
+    fun parse_wrap_withEmptyPrefixOrSuffix_isUnsupported() {
+        assertTrue(parseObfButtonAction(":wrap=|suffix") is ObfButtonActionEffect.Unsupported)
+        assertTrue(parseObfButtonAction(":wrap=prefix|") is ObfButtonActionEffect.Unsupported)
+        assertTrue(parseObfButtonAction(":wrap=") is ObfButtonActionEffect.Unsupported)
+    }
+
+    @Test
     fun parseObfButtonActions_mapsInOrder() {
         val button = ObfButton(
             id = "k",

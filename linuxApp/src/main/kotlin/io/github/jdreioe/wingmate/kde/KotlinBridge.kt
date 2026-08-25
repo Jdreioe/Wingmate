@@ -1279,6 +1279,11 @@ class KotlinBridge(
                                     is ObfButtonActionEffect.AppendText -> {
                                         if (effect.text.isNotEmpty()) tokens = tokens + effect.text
                                     }
+                                    is ObfButtonActionEffect.WrapSelection -> {
+                                        // Token sentences hold no selection, so wrap falls back
+                                        // to inserting prefix + fallback + suffix as one token.
+                                        tokens = tokens + (effect.prefix + effect.fallback + effect.suffix)
+                                    }
                                     ObfButtonActionEffect.Backspace -> {
                                         tokens = backspaceSentenceSelection(tokens, board.spellingMode)
                                     }

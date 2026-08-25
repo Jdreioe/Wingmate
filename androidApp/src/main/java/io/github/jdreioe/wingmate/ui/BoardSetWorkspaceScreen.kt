@@ -1386,6 +1386,19 @@ private fun BoardSetWorkspaceRoot(
                                                 )
                                             }
                                         }
+                                        is ObfButtonActionEffect.WrapSelection -> {
+                                            // Token sentences hold no selection, so wrap falls back
+                                            // to inserting prefix + fallback + suffix as one token.
+                                            val wrapped = effect.prefix + effect.fallback + effect.suffix
+                                            nextSelection = nextSelection + (
+                                                ObfButton(
+                                                    id = workspaceId("wrap"),
+                                                    label = wrapped,
+                                                    vocalization = wrapped,
+                                                    locale = button.locale
+                                                ).withMathMode(button.mathMode) to null
+                                            )
+                                        }
                                         ObfButtonActionEffect.Backspace -> {
                                             nextSelection = backspaceSentenceSelection(
                                                 nextSelection,
