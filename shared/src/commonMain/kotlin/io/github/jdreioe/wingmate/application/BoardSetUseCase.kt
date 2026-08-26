@@ -54,6 +54,9 @@ class BoardSetUseCase(
     /**
      * Validate and persist a complete editor draft. The domain serialization is
      * unchanged; this method is the single commit boundary used by the UI.
+     *
+     * Persistence never awaits speech-cache work; call [warmSpeechCache] from a
+     * background scope when audio should be pre-warmed.
      */
     suspend fun saveBoardSetGraph(graph: BoardSetGraph): Result<BoardSetGraph> = runCatching {
         val canonicalGraph = graph.canonicalizeBoardLinks()
@@ -78,7 +81,12 @@ class BoardSetUseCase(
                 .forEach { boardRepository.deleteBoard(it) }
             throw error
         }
-        canonicalGraph.copy(boardSet = updatedSet).also { speechCache?.cacheGraph(it) }
+        canonicalGraph.copy(boardSet = updatedSet)
+    }
+
+    /** Pre-warms the TTS audio cache for every button; safe to run in a background scope. */
+    suspend fun warmSpeechCache(graph: BoardSetGraph) {
+        speechCache?.cacheGraph(graph)
     }
 
     suspend fun deleteBoardSet(boardSetId: String) {

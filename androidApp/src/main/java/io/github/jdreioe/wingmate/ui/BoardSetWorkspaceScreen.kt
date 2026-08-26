@@ -1798,6 +1798,11 @@ private fun BoardSetWorkspaceRoot(
                         scope.launch {
                             result.onSuccess { saved ->
                                 workspaceViewModel.onAction(BoardWorkspaceAction.SaveSucceeded(saved))
+                                // Prewarm TTS audio off the critical path; persistence
+                                // must never wait on per-button synthesis.
+                                appScope.launch {
+                                    runCatching { useCase.warmSpeechCache(saved) }
+                                }
                             }.onFailure {
                                 // Persistence failed: drop back into editing with the draft intact
                                 // so the user does not lose their work.

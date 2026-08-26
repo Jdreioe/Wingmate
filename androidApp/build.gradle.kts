@@ -142,6 +142,10 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            // Install development builds alongside the signed release app.
+            applicationIdSuffix = ".dev"
+        }
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
             // Keep a mapping file for Google Play so R8-obfuscated crash reports
