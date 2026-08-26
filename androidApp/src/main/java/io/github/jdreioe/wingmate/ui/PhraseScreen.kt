@@ -830,10 +830,10 @@ fun PhraseScreen(
                                     )
                                 }
                                 IconButton(onClick = {
-                                    // Signal-style: "+" hides the keyboard and opens
-                                    // the phrase sheet over the content.
-                                    focusManager.clearFocus()
-                                    showPhraseSheet = true
+                                    // Signal-style: "+" hides the keyboard and toggles
+                                    // the phrase panel docked below the message bar.
+                                    if (!showPhraseSheet) focusManager.clearFocus()
+                                    showPhraseSheet = !showPhraseSheet
                                 }) {
                                     Icon(
                                         Icons.Filled.Add,
@@ -844,6 +844,142 @@ fun PhraseScreen(
                         }
                     )
                     
+
+                    // phrase grid below everything
+                    var showEditDialog by remember { mutableStateOf(false) }
+                    var editingPhrase by remember { mutableStateOf<Phrase?>(null) }
+                    // Show only actual phrase items (not category markers), filtered by selected category
+                    val isHistory = settings.historyVisible && selectedCategory?.id == HistoryCategoryId
+                    val selectedCategoryId = selectedCategory?.id
+                    val visiblePhrases by remember(isHistory, historyItems, state.items, selectedCategoryId) {
+                        derivedStateOf {
+                            if (isHistory) {
+                                // Map history items to ephemeral Phrase objects to reuse the grid UI; hide Add tile for this view
+                                historyItems.mapIndexed { idx, s ->
+                                    val stableHistoryId = s.id?.toString() ?: (s.date ?: s.createdAt ?: idx.toLong()).toString()
+                                    Phrase(
+                                        id = "history_$stableHistoryId",
+                                        text = s.saidText ?: "",
+                                        // History cards must represent what was said, not the voice that said it.
+                                        name = null,
+                                        backgroundColor = null,
+                                        parentId = HistoryCategoryId,
+                                        createdAt = s.date ?: s.createdAt ?: 0L,
+                                        recordingPath = s.audioFilePath
+                                    )
+                                }
+                            } else {
+                                state.items.filter { selectedCategoryId == null || it.parentId == selectedCategoryId }
+                            }
+                        }
+                    }
+                    // #119: unified phrase playback for the grid's explicit play affordance and
+                    // immediate-policy insertion. Plays the recording when present, else TTS.
+                    suspend fun speakPhraseFromGrid(phrase: Phrase) {
+                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                        val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
+                        val playedRecorded = phrase.recordingPath?.let { path ->
+                            runCatching {
+                                speechService.speakRecordedAudio(
+                                    audioFilePath = path,
+                                    textForHistory = textToSpeak,
+                                    voice = selected
+                                )
+                            }.getOrDefault(false)
+                        } ?: false
+                        if (!playedRecorded) {
+                            speechService.speak(textToSpeak, selected)
+                        }
+                        featureUsageReporter.reportEvent(
+                            FeatureUsageEvents.PHRASE_PLAYED,
+                            "source" to "grid",
+                            "used_recording" to playedRecorded.toString()
+                        )
+                        // Refresh history from repo
+                        try {
+                            val list = saidRepo.list()
+                            uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
+                        } catch (_: Throwable) {}
+                    }
+                    // Grid actions shared by the main grid and the "+" phrase sheet.
+                    val insertPhraseFromGrid: (Phrase) -> Unit = { phrase ->
+                        // insert phrase.name (vocalization) or phrase.text (label) at current cursor position
+                        val fv = input
+                        val pos = fv.selection.start.coerceIn(0, fv.text.length)
+                        val insertText = phrase.name?.ifBlank { null } ?: phrase.text
+                        val newText = fv.text.substring(0, pos) + insertText + fv.text.substring(pos)
+                        val newCursor = pos + insertText.length
+                        secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
+                        input = TextFieldValue(newText, selection = TextRange(newCursor))
+                        syncDisplayText(newText)
+                        featureUsageReporter.reportEvent(
+                            FeatureUsageEvents.PHRASE_INSERTED,
+                            "source" to if (phrase.parentId == HistoryCategoryId) "history" else "grid"
+                        )
+                        // #119: immediate speech policy also speaks the inserted phrase.
+                        if (settings.speechPolicy == SpeechPolicy.Immediate && phrase.linkedBoardId == null) {
+                            uiScope.launch(Dispatchers.IO) {
+                                runCatching { speakPhraseFromGrid(phrase) }
+                            }
+                        }
+                    }
+                    val playPhraseFromGrid: (Phrase) -> Unit = { phrase ->
+                        // Classic Folder Navigation: if item has a linked board, entering it updates the view
+                        if (phrase.linkedBoardId != null) {
+                            uiScope.launch {
+                                selectedCategory = io.github.jdreioe.wingmate.domain.CategoryItem(
+                                    id = phrase.id,
+                                    name = phrase.text,
+                                    isFolder = true
+                                )
+                            }
+                        } else {
+                            uiScope.launch(Dispatchers.IO) {
+                                try {
+                                    speakPhraseFromGrid(phrase)
+                                } catch (_: Throwable) {}
+                            }
+                        }
+                    }
+                    val playSecondaryPhraseFromGrid: ((Phrase) -> Unit)? =
+                        if (hasUsableSecondaryLanguage.value) {
+                            { phrase ->
+                                uiScope.launch(Dispatchers.IO) {
+                                    try {
+                                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                                        val secondaryLang = settings.secondaryLanguage.takeIf { hasUsableSecondaryLanguage.value }
+                                        val fallbackLang2 = selected?.selectedLanguage ?: ""
+                                        val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: fallbackLang2)
+                                        val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
+                                        val playedRecorded = phrase.recordingPath?.let { path ->
+                                            runCatching {
+                                                speechService.speakRecordedAudio(
+                                                    audioFilePath = path,
+                                                    textForHistory = textToSpeak,
+                                                    voice = vForSecondary
+                                                )
+                                            }.getOrDefault(false)
+                                        } ?: false
+                                        if (!playedRecorded) {
+                                            speechService.speak(textToSpeak, vForSecondary)
+                                        }
+                                        featureUsageReporter.reportEvent(
+                                            FeatureUsageEvents.PHRASE_PLAYED_SECONDARY,
+                                            "source" to "grid",
+                                            "used_recording" to playedRecorded.toString()
+                                        )
+                                        // Refresh history from repo
+                                        try {
+                                            val list = saidRepo.list()
+                                            uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
+                                        } catch (_: Throwable) {}
+                                    } catch (_: Throwable) {}
+                                }
+                            }
+                        } else null
+                    // Everything below the message bar docks under the "+" panel.
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    Column(modifier = Modifier.fillMaxSize()) {
                     // On narrow screens, if keyboard is active, show prediction bar instead of SSML button
                     val isKeyboardVisible = WindowInsets.ime.asPaddingValues().calculateBottomPadding() > 0.dp
                     
@@ -1155,138 +1291,6 @@ fun PhraseScreen(
                         )
                     }
 
-                    // phrase grid below everything
-                    var showEditDialog by remember { mutableStateOf(false) }
-                    var editingPhrase by remember { mutableStateOf<Phrase?>(null) }
-                    // Show only actual phrase items (not category markers), filtered by selected category
-                    val isHistory = settings.historyVisible && selectedCategory?.id == HistoryCategoryId
-                    val selectedCategoryId = selectedCategory?.id
-                    val visiblePhrases by remember(isHistory, historyItems, state.items, selectedCategoryId) {
-                        derivedStateOf {
-                            if (isHistory) {
-                                // Map history items to ephemeral Phrase objects to reuse the grid UI; hide Add tile for this view
-                                historyItems.mapIndexed { idx, s ->
-                                    val stableHistoryId = s.id?.toString() ?: (s.date ?: s.createdAt ?: idx.toLong()).toString()
-                                    Phrase(
-                                        id = "history_$stableHistoryId",
-                                        text = s.saidText ?: "",
-                                        // History cards must represent what was said, not the voice that said it.
-                                        name = null,
-                                        backgroundColor = null,
-                                        parentId = HistoryCategoryId,
-                                        createdAt = s.date ?: s.createdAt ?: 0L,
-                                        recordingPath = s.audioFilePath
-                                    )
-                                }
-                            } else {
-                                state.items.filter { selectedCategoryId == null || it.parentId == selectedCategoryId }
-                            }
-                        }
-                    }
-                    // #119: unified phrase playback for the grid's explicit play affordance and
-                    // immediate-policy insertion. Plays the recording when present, else TTS.
-                    suspend fun speakPhraseFromGrid(phrase: Phrase) {
-                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                        val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
-                        val playedRecorded = phrase.recordingPath?.let { path ->
-                            runCatching {
-                                speechService.speakRecordedAudio(
-                                    audioFilePath = path,
-                                    textForHistory = textToSpeak,
-                                    voice = selected
-                                )
-                            }.getOrDefault(false)
-                        } ?: false
-                        if (!playedRecorded) {
-                            speechService.speak(textToSpeak, selected)
-                        }
-                        featureUsageReporter.reportEvent(
-                            FeatureUsageEvents.PHRASE_PLAYED,
-                            "source" to "grid",
-                            "used_recording" to playedRecorded.toString()
-                        )
-                        // Refresh history from repo
-                        try {
-                            val list = saidRepo.list()
-                            uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
-                        } catch (_: Throwable) {}
-                    }
-                    // Grid actions shared by the main grid and the "+" phrase sheet.
-                    val insertPhraseFromGrid: (Phrase) -> Unit = { phrase ->
-                        // insert phrase.name (vocalization) or phrase.text (label) at current cursor position
-                        val fv = input
-                        val pos = fv.selection.start.coerceIn(0, fv.text.length)
-                        val insertText = phrase.name?.ifBlank { null } ?: phrase.text
-                        val newText = fv.text.substring(0, pos) + insertText + fv.text.substring(pos)
-                        val newCursor = pos + insertText.length
-                        secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
-                        input = TextFieldValue(newText, selection = TextRange(newCursor))
-                        syncDisplayText(newText)
-                        featureUsageReporter.reportEvent(
-                            FeatureUsageEvents.PHRASE_INSERTED,
-                            "source" to if (phrase.parentId == HistoryCategoryId) "history" else "grid"
-                        )
-                        // #119: immediate speech policy also speaks the inserted phrase.
-                        if (settings.speechPolicy == SpeechPolicy.Immediate && phrase.linkedBoardId == null) {
-                            uiScope.launch(Dispatchers.IO) {
-                                runCatching { speakPhraseFromGrid(phrase) }
-                            }
-                        }
-                    }
-                    val playPhraseFromGrid: (Phrase) -> Unit = { phrase ->
-                        // Classic Folder Navigation: if item has a linked board, entering it updates the view
-                        if (phrase.linkedBoardId != null) {
-                            uiScope.launch {
-                                selectedCategory = io.github.jdreioe.wingmate.domain.CategoryItem(
-                                    id = phrase.id,
-                                    name = phrase.text,
-                                    isFolder = true
-                                )
-                            }
-                        } else {
-                            uiScope.launch(Dispatchers.IO) {
-                                try {
-                                    speakPhraseFromGrid(phrase)
-                                } catch (_: Throwable) {}
-                            }
-                        }
-                    }
-                    val playSecondaryPhraseFromGrid: ((Phrase) -> Unit)? =
-                        if (hasUsableSecondaryLanguage.value) {
-                            { phrase ->
-                                uiScope.launch(Dispatchers.IO) {
-                                    try {
-                                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                        val secondaryLang = settings.secondaryLanguage.takeIf { hasUsableSecondaryLanguage.value }
-                                        val fallbackLang2 = selected?.selectedLanguage ?: ""
-                                        val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: fallbackLang2)
-                                        val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
-                                        val playedRecorded = phrase.recordingPath?.let { path ->
-                                            runCatching {
-                                                speechService.speakRecordedAudio(
-                                                    audioFilePath = path,
-                                                    textForHistory = textToSpeak,
-                                                    voice = vForSecondary
-                                                )
-                                            }.getOrDefault(false)
-                                        } ?: false
-                                        if (!playedRecorded) {
-                                            speechService.speak(textToSpeak, vForSecondary)
-                                        }
-                                        featureUsageReporter.reportEvent(
-                                            FeatureUsageEvents.PHRASE_PLAYED_SECONDARY,
-                                            "source" to "grid",
-                                            "used_recording" to playedRecorded.toString()
-                                        )
-                                        // Refresh history from repo
-                                        try {
-                                            val list = saidRepo.list()
-                                            uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
-                                        } catch (_: Throwable) {}
-                                    } catch (_: Throwable) {}
-                                }
-                            }
-                        } else null
                     PhraseGrid(
                         phrases = visiblePhrases,
                         onInsert = insertPhraseFromGrid,
@@ -1325,18 +1329,18 @@ fun PhraseScreen(
                         )
                     }
 
-                    // "+" phrase sheet: scrollable grid over the content with a
-                    // playback bar at the bottom (Signal-style attachment picker).
+                    }
+
+                    // Docked "+" panel: covers the content below the message bar
+                    // while the bar stays visible (Signal-style attachment picker).
                     if (showPhraseSheet) {
                         val sheetSelection = normalizeRange(input.selection, input.text.length)
                         val sheetSelectionHasLength = sheetSelection.spanLength() > 0
-                        ModalBottomSheet(onDismissRequest = { showPhraseSheet = false }) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .fillMaxHeight(0.75f)
-                                    .navigationBarsPadding()
-                            ) {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background
+                        ) {
+                            Column(modifier = Modifier.fillMaxSize()) {
                                 Box(modifier = Modifier.weight(1f)) {
                                     PhraseGrid(
                                         phrases = visiblePhrases,
@@ -1364,6 +1368,7 @@ fun PhraseScreen(
                                 )
                             }
                         }
+                    }
                     }
                 }
 
