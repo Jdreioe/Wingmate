@@ -687,34 +687,8 @@ fun PhraseScreen(
                         )
                     }
                 },
-                bottomBar = {
-                    // Make the playback bar less obvious by removing elevation and background
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .platformImePadding()
-                            .navigationBarsPadding()
-                            // omit imePadding in common to avoid ambiguity across targets
-                            .padding(16.dp)
-                    ) {
-                        val normalizedSelection = normalizeRange(input.selection, input.text.length)
-                        val selectionHasLength = normalizedSelection.spanLength() > 0
-                        val selectionAlreadySecondary = selectionHasLength && isRangeFullySecondary(normalizedSelection, secondaryLanguageRanges)
-                        PlaybackControls(
-
-                            onPlay = playInput,
-                            onPause = pauseSpeech,
-                            onStop = stopSpeech,
-                            onResume = resumeSpeech,
-                            isPaused = isSpeechPaused,
-                            onPlaySecondary = toggleSecondarySelection,
-                            onThatThought = toggleThatThought,
-                            isSecondarySelectionActive = selectionAlreadySecondary,
-                            isSecondaryActionEnabled = selectionHasLength,
-                            isOnThatThoughtActive = pinnedThoughtDraft != null
-                        )
-                    }
-                }
+                // Playback controls live in the message bar and the "+" phrase
+                // sheet; there is no bottom bar anymore (#243).
             ) { innerPadding ->
                 BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                     val isWide = maxWidth >= 900.dp
