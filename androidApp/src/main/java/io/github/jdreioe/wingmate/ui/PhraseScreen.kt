@@ -1172,6 +1172,36 @@ fun PhraseScreen(
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    // 1-row preview when not in "+" mode; full board lives in the docked panel.
+                    if (!showPhraseSheet && visiblePhrases.isNotEmpty()) {
+                        PhraseBoardProjection(
+                            phrases = visiblePhrases.take(settings.gridColumns.coerceAtLeast(1)),
+                            onPhraseActivated = playPhraseFromGrid,
+                            onPhraseLongPress = { phrase ->
+                                if (!isHistory) {
+                                    editingPhrase = phrase
+                                    showEditDialog = true
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        )
+                        // Add new phrase → Edit Screen (the "+" panel)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            TextButton(onClick = {
+                                focusManager.clearFocus()
+                                showPhraseSheet = true
+                            }) {
+                                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(stringResource(R.string.phrase_add_title))
+                            }
+                        }
+                    }
+
                     // Add category dialog
                     if (showAddCategoryDialog) {
                         var categoryName by remember { mutableStateOf("") }
