@@ -1,9 +1,21 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import com.hojmoseit.wingmate.R
+import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
@@ -45,6 +57,7 @@ fun buildPhraseBoard(phrases: List<Phrase>, columns: Int): ObfBoard {
 /**
  * A read-only OBF rendering of [phrases]. Activation and long-press are resolved
  * back to the originating [Phrase] via the button-id prefix.
+ * When categories are provided, a chip row is shown at the top.
  */
 @Composable
 fun PhraseBoardProjection(
@@ -52,6 +65,9 @@ fun PhraseBoardProjection(
     onPhraseActivated: (Phrase) -> Unit,
     onPhraseLongPress: (Phrase) -> Unit,
     modifier: Modifier = Modifier,
+    categories: List<CategoryItem> = emptyList(),
+    selectedCategory: CategoryItem? = null,
+    onCategorySelected: ((CategoryItem?) -> Unit)? = null,
 ) {
     val settings by rememberReactiveSettings()
     val board = remember(phrases, settings.gridColumns) {
@@ -59,20 +75,58 @@ fun PhraseBoardProjection(
     }
     val phrasesById = remember(phrases) { phrases.associateBy { PHRASE_BUTTON_PREFIX + it.id } }
 
-    ObfBoardView(
-        board = board,
-        extractedImages = emptyMap(),
-        showMessageBar = false,
-        sentenceText = "",
-        showSpeakControl = false,
-        showDeleteControl = false,
-        showClearControl = false,
-        onButtonClick = { button ->
-            phrasesById[button.id]?.let(onPhraseActivated)
-        },
-        onButtonLongClick = { button ->
-            phrasesById[button.id]?.let(onPhraseLongPress)
-        },
-        modifier = modifier
-    )
+    Column(modifier = modifier) {
+        if (onCategorySelected != null) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 0.dp)
+            ) {
+                item {
+                    FilterChip(
+                        selected = selectedCategory == null,
+                        onClick = { onCategorySelected(null) },
+                        label = {
+                            Text(
+                                stringResource(R.string.category_all),
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                )
+                            )
+                        }
+                    )
+                }
+                itemsIndexed(categories, key = { _, category -> category.id }) { _, category ->
+                    FilterChip(
+                        selected = selectedCategory?.id == category.id,
+                        onClick = { onCategorySelected(category) },
+                        label = {
+                            Text(
+                                category.name ?: stringResource(R.string.category_all),
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                )
+                            )
+                        }
+                    )
+                }
+            }
+        }
+
+        ObfBoardView(
+            board = board,
+            extractedImages = emptyMap(),
+            showMessageBar = false,
+            sentenceText = "",
+            showSpeakControl = false,
+            showDeleteControl = false,
+            showClearControl = false,
+            onButtonClick = { button ->
+                phrasesById[button.id]?.let(onPhraseActivated)
+            },
+            onButtonLongClick = { button ->
+                phrasesById[button.id]?.let(onPhraseLongPress)
+            },
+            modifier = Modifier.weight(1f)
+        )
+    }
 }
