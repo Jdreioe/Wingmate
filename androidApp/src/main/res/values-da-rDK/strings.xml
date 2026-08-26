@@ -163,6 +163,8 @@
     <string name="board_settings_label_position_disabled">Tilgængelig når både etiketter og symboler vises</string>
     <string name="board_settings_message_bar">Beskedlinje</string>
     <string name="board_settings_global_message_bar_desc">Vis beskedlinjen, medmindre en skærm eller side tilsidesætter den</string>
+    <string name="board_settings_speak_button">Oplæsningsknap i beskedlinjen</string>
+    <string name="board_settings_global_speak_button_desc">Vis oplæsningsknappen i beskedlinjen</string>
     <string name="board_settings_activation">Aktivering af knap</string>
     <string name="board_settings_global_activation_desc">Standardhandling for almindelige skærmknapper</string>
     <string name="board_settings_after_selection">Efter valg</string>

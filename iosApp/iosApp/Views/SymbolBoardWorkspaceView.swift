@@ -676,11 +676,11 @@ struct SymbolBoardWorkspaceView: View {
                                 activeSentenceAnimation = nil
                             }
                         },
-                        onSpeak: {
+                        onSpeak: model.boardSpeakButtonVisible ? {
                             let sentence = boardSentenceText
                             guard !sentence.isEmpty else { return }
                             model.speakBoardSentence(sentence, boardSetId: boardSetId)
-                        },
+                        } : nil,
                         animationNamespace: sentenceAnimationNamespace,
                         animatedTokenId: activeSentenceAnimation?.tokenId
                     )
@@ -705,12 +705,12 @@ struct SymbolBoardWorkspaceView: View {
                                 guard boardSentenceTokens.indices.contains(index) else { return }
                                 boardSentenceTokens.remove(at: index)
                             },
-                            onSpeak: {
-                                let sentence = boardSentenceText
-                                guard !sentence.isEmpty else { return }
-                                model.speakBoardSentence(sentence, boardSetId: boardSetId)
-                            }
-                        )
+                        onSpeak: model.boardSpeakButtonVisible ? {
+                            let sentence = boardSentenceText
+                            guard !sentence.isEmpty else { return }
+                            model.speakBoardSentence(sentence, boardSetId: boardSetId)
+                        } : nil
+                    )
                     }
                     Button("common.done") { isFullscreen = false }
                         .font(.headline)

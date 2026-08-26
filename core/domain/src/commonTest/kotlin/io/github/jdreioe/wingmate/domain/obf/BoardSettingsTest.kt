@@ -70,6 +70,36 @@ class BoardSettingsTest {
     }
 
     @Test
+    fun speakButtonOverridesPageScreenApp() {
+        val screenOnly = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = true,
+            appLabelAtTop = false,
+            appShowSpeakButton = true,
+            screen = BoardSettingsOverrides(showSpeakButton = false)
+        )
+        assertFalse(screenOnly.showSpeakButton)
+
+        val pageWins = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = true,
+            appLabelAtTop = false,
+            appShowSpeakButton = true,
+            screen = BoardSettingsOverrides(showSpeakButton = false),
+            page = BoardSettingsOverrides(showSpeakButton = true)
+        )
+        assertTrue(pageWins.showSpeakButton)
+
+        val appDefault = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = true,
+            appLabelAtTop = false,
+            appShowSpeakButton = false
+        )
+        assertFalse(appDefault.showSpeakButton)
+    }
+
+    @Test
     fun unusableImportedPresentationStillShowsALabel() {
         val resolved = resolveBoardSettings(
             appShowLabels = true,

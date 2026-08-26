@@ -86,6 +86,8 @@ class SettingsFacade(
 
     suspend fun updateBoardShowMessageBar(enabled: Boolean) = updateSettings { it.copy(boardShowMessageBar = enabled) }
 
+    suspend fun updateBoardShowSpeakButton(enabled: Boolean) = updateSettings { it.copy(boardShowSpeakButton = enabled) }
+
     suspend fun updateUsageLoggingEnabled(enabled: Boolean) {
         updateSettings { it.copy(usageLoggingEnabled = enabled) }
         aacLogger.setEnabled(enabled)

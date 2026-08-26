@@ -180,6 +180,7 @@ display-show-symbols = Vis symboler
 display-high-contrast = Høj kontrast
 display-word-type-colors = Automatiske Fitzgerald-ordtypefarver
 display-message-bar = Vis beskedlinje på kommunikationstavler
+display-speak-button = Vis oplæsningsknap i beskedlinjen
 display-font-scale = Tekststørrelse
 display-button-scale = Knapstørrelse
 display-input-scale = Størrelse på inputfelt

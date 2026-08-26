@@ -180,6 +180,7 @@ display-show-symbols = Show symbols
 display-high-contrast = High contrast
 display-word-type-colors = Automatic Fitzgerald word-type colors
 display-message-bar = Show message bar on communication boards
+display-speak-button = Show speak button in the message bar
 display-font-scale = Text size
 display-button-scale = Button size
 display-input-scale = Input field size
