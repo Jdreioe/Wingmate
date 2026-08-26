@@ -1432,8 +1432,10 @@ fun PhraseScreen(
                                 }
                             }
                             
-                            // Textfield showing accumulated text
+                            // Textfield showing accumulated text; hidden when the board's
+                            // own message bar is editable (one bar total).
                             val boardShowKeyboard = Modifier.showKeyboardOnFocus()
+                            if (!settings.boardMessageBarEditable) {
                             OutlinedTextField(
                                 value = input,
                                 onValueChange = { newValue ->
@@ -1469,12 +1471,17 @@ fun PhraseScreen(
                                 singleLine = false,
                                 maxLines = 3
                             )
-                            
                             Spacer(modifier = Modifier.height(8.dp))
-                            
+                            }
+
                             // Board grid
                             ObfBoardView(
                                 board = currentBoard!!,
+                                messageBarEditable = settings.boardMessageBarEditable,
+                                onSentenceChanged = { text ->
+                                    input = TextFieldValue(text, selection = TextRange(text.length))
+                                    syncDisplayText(text)
+                                },
                                 extractedImages = extractedImages,
                                 selectedButtons = selectedObfButtons,
                                 sentenceText = input.text,

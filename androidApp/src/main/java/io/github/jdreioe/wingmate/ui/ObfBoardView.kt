@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -19,6 +20,10 @@ import androidx.compose.ui.layout.Layout
 import coil3.compose.AsyncImage
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
@@ -150,6 +155,10 @@ fun ObfBoardView(
     showDeleteControl: Boolean = true,
     showClearControl: Boolean = true,
     showMessageBar: Boolean = !isEditMode,
+    // When true (and a sentence callback is provided) the message bar accepts
+    // typed text; resolved from BoardSettings.messageBarEditable by callers.
+    messageBarEditable: Boolean = false,
+    onSentenceChanged: ((String) -> Unit)? = null,
     sentenceText: String = "",
     symbolBarPresentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
     boardSettings: ResolvedBoardSettings? = null,
@@ -203,6 +212,8 @@ fun ObfBoardView(
                         showDelete = showDeleteControl,
                         showClear = showClearControl,
                         presentation = symbolBarPresentation,
+                        editable = messageBarEditable && onSentenceChanged != null,
+                        onTextChange = onSentenceChanged,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = symbolBarMaxHeight)
@@ -264,6 +275,8 @@ fun ObfBoardView(
                         showDelete = showDeleteControl,
                         showClear = showClearControl,
                         presentation = symbolBarPresentation,
+                        editable = messageBarEditable && onSentenceChanged != null,
+                        onTextChange = onSentenceChanged,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = symbolBarMaxHeight)
@@ -434,6 +447,8 @@ fun ObfBoardView(
                         showDelete = showDeleteControl,
                         showClear = showClearControl,
                         presentation = symbolBarPresentation,
+                        editable = messageBarEditable && onSentenceChanged != null,
+                        onTextChange = onSentenceChanged,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = symbolBarMaxHeight)
@@ -886,7 +901,11 @@ fun SymbolBar(
     showSpeak: Boolean = true,
     showDelete: Boolean = true,
     showClear: Boolean = true,
-    presentation: SymbolBarPresentation = SymbolBarPresentation.Normal
+    presentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
+    // When enabled (with onTextChange) the sentence area becomes an editable
+    // text field sharing the same bar; otherwise it renders read-only.
+    editable: Boolean = false,
+    onTextChange: ((String) -> Unit)? = null
 ) {
     val textScrollState = rememberScrollState()
     val textStyle = when (presentation) {
@@ -916,23 +935,52 @@ fun SymbolBar(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val canEdit = editable && onTextChange != null
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(max = maximumTextHeight)
-                    .verticalScroll(textScrollState)
-                    .clearAndSetSemantics {
-                        contentDescription = sentenceText
-                    },
+                    .heightIn(max = maximumTextHeight),
                 contentAlignment = Alignment.CenterStart
             ) {
-                Text(
-                    text = sentenceText,
-                    style = textStyle,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                )
+                if (canEdit) {
+                    var fieldValue by remember { mutableStateOf(TextFieldValue(sentenceText)) }
+                    LaunchedEffect(sentenceText) {
+                        // External updates (button taps, clear) win; typing echoes back
+                        // identical text so this branch is a no-op while composing.
+                        if (fieldValue.text != sentenceText) {
+                            fieldValue = TextFieldValue(sentenceText, selection = TextRange(sentenceText.length))
+                        }
+                    }
+                    BasicTextField(
+                        value = fieldValue,
+                        onValueChange = { newValue ->
+                            fieldValue = newValue
+                            onTextChange?.invoke(newValue.text)
+                        },
+                        textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .verticalScroll(textScrollState)
+                            .clearAndSetSemantics {
+                                contentDescription = sentenceText
+                            },
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(
+                            text = sentenceText,
+                            style = textStyle,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
 
             if (showSpeak || showDelete || showClear) {

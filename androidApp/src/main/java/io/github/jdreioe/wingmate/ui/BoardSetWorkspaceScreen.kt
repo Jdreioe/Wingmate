@@ -1350,6 +1350,26 @@ private fun BoardSetWorkspaceRoot(
                         isEditMode = mode == BoardWorkspaceMode.Edit,
                         showMessageBar = mode == BoardWorkspaceMode.Run &&
                             resolvedBoardSettings.showMessageBar,
+                        messageBarEditable = resolvedBoardSettings.messageBarEditable,
+                        onSentenceChanged = { text ->
+                            // Typed text replaces the sentence as a single free-hand token;
+                            // button taps keep composing tokens on top of it.
+                            workspaceViewModel.onAction(
+                                if (text.isBlank()) {
+                                    BoardWorkspaceAction.ClearSentence
+                                } else {
+                                    BoardWorkspaceAction.ReplaceSentence(
+                                        listOf(
+                                            ObfButton(
+                                                id = workspaceId("freehand"),
+                                                label = text,
+                                                vocalization = text
+                                            )
+                                        )
+                                    )
+                                }
+                            )
+                        },
                         sentenceText = sentenceText,
                         symbolBarPresentation = if (isFullscreen) {
                             SymbolBarPresentation.Fullscreen
