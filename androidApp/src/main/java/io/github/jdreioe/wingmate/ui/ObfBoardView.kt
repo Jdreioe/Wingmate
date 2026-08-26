@@ -144,6 +144,7 @@ enum class SymbolBarPresentation(val maxTextLines: Int, val maximumViewportFract
 fun ObfBoardView(
     board: ObfBoard,
     onButtonClick: (ObfButton) -> Unit,
+    onButtonLongClick: ((ObfButton) -> Unit)? = null,
     modifier: Modifier = Modifier,
     extractedImages: Map<String, ByteArray> = emptyMap(),
     isEditMode: Boolean = false,
@@ -230,7 +231,8 @@ fun ObfBoardView(
                             effectiveBoardSettings,
                             showHiddenButtons,
                             predictionLabels,
-                            highlightedButtonId
+                            highlightedButtonId,
+                            onButtonLongClick
                         )
                     }
                 }
@@ -247,7 +249,8 @@ fun ObfBoardView(
                     effectiveBoardSettings,
                     showHiddenButtons,
                     predictionLabels,
-                    highlightedButtonId
+                    highlightedButtonId,
+                    onButtonLongClick
                 )
             }
         }
@@ -473,6 +476,7 @@ fun ObfBoardView(
                                             image?.path?.let { path -> extractedImages[path] }
                                         },
                                         onClick = { onButtonClick(button) },
+                                        onLongClick = onButtonLongClick?.let { cb -> ({ cb(button) }) },
                                         isEditMode = isEditMode,
                                         isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
@@ -1070,7 +1074,8 @@ fun ObfButtonItem(
     boardSettings: ResolvedBoardSettings? = null,
     labelOverride: String? = null,
     isSelectionHighlighted: Boolean = false,
-    fieldFontScale: Float = 1f
+    fieldFontScale: Float = 1f,
+    onLongClick: (() -> Unit)? = null
 ) {
     val speechService: SpeechService = koinInject()
     val voiceUseCase: VoiceUseCase = koinInject()
@@ -1261,6 +1266,7 @@ fun ObfButtonItem(
                 if (settings.holdToSelectMillis > 0 && !isEditMode) {
                     baseModifier.pointerInput(settings.holdToSelectMillis) {
                         detectTapGestures(
+                            onLongPress = { onLongClick?.invoke() },
                             onPress = {
                                 val completed = withTimeoutOrNull(settings.holdToSelectMillis) {
                                     tryAwaitRelease()
@@ -1275,7 +1281,8 @@ fun ObfButtonItem(
                     }
                 } else {
                     baseModifier.combinedClickable(
-                        onClick = { primaryAction() }
+                        onClick = { primaryAction() },
+                        onLongClick = onLongClick
                     )
                 }
             }
@@ -1441,7 +1448,8 @@ private fun BoxWithConstraintsScope.RenderAbsoluteButtons(
     boardSettings: ResolvedBoardSettings,
     showHiddenButtons: Boolean,
     predictionLabels: Map<String, String>,
-    highlightedButtonId: String? = null
+    highlightedButtonId: String? = null,
+    onButtonLongClick: ((ObfButton) -> Unit)? = null
 ) {
     val containerWidth = maxWidth
     val containerHeight = maxHeight
@@ -1464,6 +1472,7 @@ private fun BoxWithConstraintsScope.RenderAbsoluteButtons(
                         image?.path?.let { path -> extractedImages[path] }
                     },
                     onClick = { onButtonClick(button) },
+                    onLongClick = onButtonLongClick?.let { cb -> ({ cb(button) }) },
                     isEditMode = isEditMode,
                     isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                     isHomeLink = button.isHomeNavigation(homeBoardId),

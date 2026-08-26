@@ -1291,30 +1291,14 @@ fun PhraseScreen(
                         )
                     }
 
-                    PhraseGrid(
+                    // Phrase Screen: phrases rendered as OBF buttons (#246).
+                    PhraseBoardProjection(
                         phrases = visiblePhrases,
-                        onInsert = insertPhraseFromGrid,
-                        onPlay = playPhraseFromGrid,
-                        onPlaySecondary = playSecondaryPhraseFromGrid,
-                        onLongPress = { phrase ->
+                        onPhraseActivated = playPhraseFromGrid,
+                        onPhraseLongPress = { phrase ->
                             if (!isHistory) {
-                                // open edit dialog for this phrase
                                 editingPhrase = phrase
                                 showEditDialog = true
-                            }
-                        },
-                        onMove = { from, to -> bloc.dispatch(PhraseEvent.Move(from, to)) },
-                        onSavePhrase = { phrase -> bloc.dispatch(PhraseEvent.Add(phrase)) },
-                        onDeletePhrase = { phrase -> deleteWithUndo(phrase.id) },
-                        categories = categories,
-                        defaultCategoryId = selectedCategory?.id,
-                        showAddTile = !isHistory,
-                        readOnly = isHistory,
-                        phraseFontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale,
-                        onCopyAudio = { filePath ->
-                            // Try to copy soundfile via platform clipboard
-                            runCatching {
-                                audioClipboard?.copyAudioFile(filePath)
                             }
                         }
                     )
@@ -1342,14 +1326,29 @@ fun PhraseScreen(
                         ) {
                             Column(modifier = Modifier.fillMaxSize()) {
                                 Box(modifier = Modifier.weight(1f)) {
+                                    // Edit mode: full phrase management, like Screens.
                                     PhraseGrid(
                                         phrases = visiblePhrases,
                                         onInsert = insertPhraseFromGrid,
                                         onPlay = playPhraseFromGrid,
                                         onPlaySecondary = playSecondaryPhraseFromGrid,
-                                        onLongPress = { },
-                                        readOnly = true,
-                                        showAddTile = false
+                                        onLongPress = { phrase ->
+                                            editingPhrase = phrase
+                                            showEditDialog = true
+                                        },
+                                        onMove = { from, to -> bloc.dispatch(PhraseEvent.Move(from, to)) },
+                                        onSavePhrase = { phrase -> bloc.dispatch(PhraseEvent.Add(phrase)) },
+                                        onDeletePhrase = { phrase -> deleteWithUndo(phrase.id) },
+                                        categories = categories,
+                                        defaultCategoryId = selectedCategory?.id,
+                                        showAddTile = !isHistory,
+                                        readOnly = isHistory,
+                                        phraseFontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale,
+                                        onCopyAudio = { filePath ->
+                                            runCatching {
+                                                audioClipboard?.copyAudioFile(filePath)
+                                            }
+                                        }
                                     )
                                 }
                                 HorizontalDivider()
