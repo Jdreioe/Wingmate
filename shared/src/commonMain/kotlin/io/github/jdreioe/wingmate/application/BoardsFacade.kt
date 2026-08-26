@@ -39,6 +39,7 @@ data class IosResolvedBoardSettings(
     val showSymbols: Boolean,
     val labelAtTop: Boolean,
     val showMessageBar: Boolean,
+    val messageBarEditable: Boolean,
     val activationBehavior: String,
     val returnBehavior: String,
 )
@@ -197,6 +198,7 @@ class BoardsFacade(
             appShowSymbols = settings.showSymbols,
             appLabelAtTop = settings.labelAtTop,
             appShowMessageBar = settings.boardShowMessageBar,
+            appMessageBarEditable = settings.boardMessageBarEditable,
             appActivationBehavior = settings.boardActivationBehavior,
             appReturnBehavior = settings.boardReturnBehavior,
             screen = screenOverrides,
@@ -207,6 +209,7 @@ class BoardsFacade(
             showSymbols = resolved.showSymbols,
             labelAtTop = resolved.labelAtTop,
             showMessageBar = resolved.showMessageBar,
+            messageBarEditable = resolved.messageBarEditable,
             activationBehavior = resolved.activationBehavior.name,
             returnBehavior = resolved.returnBehavior.name,
         )

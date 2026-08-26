@@ -420,6 +420,10 @@ private fun CategoryContent(
                 onBoardShowMessageBarChange = { checked ->
                     onAction(SettingsAction.BoardShowMessageBarChanged(checked))
                 },
+                boardMessageBarEditable = settings.boardMessageBarEditable,
+                onBoardMessageBarEditableChange = { checked ->
+                    onAction(SettingsAction.BoardMessageBarEditableChanged(checked))
+                },
                 boardActivationBehavior = settings.boardActivationBehavior,
                 onBoardActivationBehaviorChange = { behavior ->
                     onAction(SettingsAction.BoardActivationBehaviorChanged(behavior))
@@ -1235,6 +1239,8 @@ private fun DisplaySection(
     onLabelAtTopChange: (Boolean) -> Unit,
     boardShowMessageBar: Boolean,
     onBoardShowMessageBarChange: (Boolean) -> Unit,
+    boardMessageBarEditable: Boolean,
+    onBoardMessageBarEditableChange: (Boolean) -> Unit,
     boardActivationBehavior: BoardActivationBehavior,
     onBoardActivationBehaviorChange: (BoardActivationBehavior) -> Unit,
     boardReturnBehavior: BoardReturnBehavior,
@@ -1314,6 +1320,13 @@ private fun DisplaySection(
             onCheckedChange = onBoardShowMessageBarChange,
             title = stringResource(R.string.board_settings_message_bar),
             description = stringResource(R.string.board_settings_global_message_bar_desc)
+        )
+        SettingsGroupDivider()
+        SettingsSwitch(
+            checked = boardMessageBarEditable,
+            onCheckedChange = onBoardMessageBarEditableChange,
+            title = stringResource(R.string.board_settings_message_bar_editable),
+            description = stringResource(R.string.board_settings_global_message_bar_editable_desc)
         )
         SettingsGroupDivider()
         SettingsChoiceChips(

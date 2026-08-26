@@ -130,6 +130,7 @@ internal sealed interface SettingsAction {
     data class ShowSymbolsChanged(val checked: Boolean) : SettingsAction
     data class LabelAtTopChanged(val checked: Boolean) : SettingsAction
     data class BoardShowMessageBarChanged(val checked: Boolean) : SettingsAction
+    data class BoardMessageBarEditableChanged(val checked: Boolean) : SettingsAction
     data class BoardActivationBehaviorChanged(val behavior: BoardActivationBehavior) : SettingsAction
     data class BoardReturnBehaviorChanged(val behavior: BoardReturnBehavior) : SettingsAction
     data class GridColumnsChanged(val columns: Int) : SettingsAction
@@ -473,6 +474,9 @@ internal class SettingsViewModel(
             is SettingsAction.LabelAtTopChanged -> persist { it.copy(labelAtTop = action.checked) }
             is SettingsAction.BoardShowMessageBarChanged -> persist {
                 it.copy(boardShowMessageBar = action.checked)
+            }
+            is SettingsAction.BoardMessageBarEditableChanged -> persist {
+                it.copy(boardMessageBarEditable = action.checked)
             }
             is SettingsAction.BoardActivationBehaviorChanged -> persist {
                 it.copy(boardActivationBehavior = action.behavior)

@@ -70,6 +70,41 @@ class BoardSettingsTest {
     }
 
     @Test
+    fun messageBarEditableDefaultsToTrue() {
+        val resolved = resolveBoardSettings(appShowLabels = true, appShowSymbols = true, appLabelAtTop = false)
+        assertTrue(resolved.messageBarEditable)
+    }
+
+    @Test
+    fun messageBarEditablePageOverridesScreenOverridesApp() {
+        val fromApp = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = true,
+            appLabelAtTop = false,
+            appMessageBarEditable = false
+        )
+        assertFalse(fromApp.messageBarEditable)
+
+        val fromScreen = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = true,
+            appLabelAtTop = false,
+            appMessageBarEditable = false,
+            screen = BoardSettingsOverrides(messageBarEditable = true)
+        )
+        assertTrue(fromScreen.messageBarEditable)
+
+        val fromPage = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = true,
+            appLabelAtTop = false,
+            screen = BoardSettingsOverrides(messageBarEditable = false),
+            page = BoardSettingsOverrides(messageBarEditable = true)
+        )
+        assertTrue(fromPage.messageBarEditable)
+    }
+
+    @Test
     fun unusableImportedPresentationStillShowsALabel() {
         val resolved = resolveBoardSettings(
             appShowLabels = true,

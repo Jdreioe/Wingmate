@@ -766,6 +766,7 @@ private fun BoardSetWorkspaceRoot(
         settings.showSymbols,
         settings.labelAtTop,
         settings.boardShowMessageBar,
+        settings.boardMessageBarEditable,
         settings.boardActivationBehavior,
         settings.boardReturnBehavior
     ) {
@@ -774,6 +775,7 @@ private fun BoardSetWorkspaceRoot(
             appShowSymbols = settings.showSymbols,
             appLabelAtTop = settings.labelAtTop,
             appShowMessageBar = settings.boardShowMessageBar,
+            appMessageBarEditable = settings.boardMessageBarEditable,
             appActivationBehavior = settings.boardActivationBehavior,
             appReturnBehavior = settings.boardReturnBehavior,
             screen = activeGraph?.boardSet?.screenSettings
@@ -952,6 +954,7 @@ private fun BoardSetWorkspaceRoot(
             appShowSymbols = settings.showSymbols,
             appLabelAtTop = settings.labelAtTop,
             appShowMessageBar = settings.boardShowMessageBar,
+            appMessageBarEditable = settings.boardMessageBarEditable,
             appActivationBehavior = settings.boardActivationBehavior,
             appReturnBehavior = settings.boardReturnBehavior,
             onCommit = { name, updatedSettings, updatedBackgroundColor ->

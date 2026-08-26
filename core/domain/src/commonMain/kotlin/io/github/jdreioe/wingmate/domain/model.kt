@@ -131,6 +131,7 @@ data class Settings(
     val labelAtTop: Boolean = false,
     // Global defaults inherited by Screens and then Pages.
     val boardShowMessageBar: Boolean = true,
+    val boardMessageBarEditable: Boolean = true,
     val boardActivationBehavior: BoardActivationBehavior = BoardActivationBehavior.SpeakAndAdd,
     val boardReturnBehavior: BoardReturnBehavior = BoardReturnBehavior.Stay,
     val holdToSelectMillis: Long = 0,

@@ -389,6 +389,7 @@ class KotlinBridge(
                 jsonObj["usageLoggingEnabled"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(usageLoggingEnabled = it) }
                 jsonObj["historyVisible"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(historyVisible = it) }
                 jsonObj["boardShowMessageBar"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(boardShowMessageBar = it) }
+                jsonObj["boardMessageBarEditable"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(boardMessageBarEditable = it) }
                 jsonObj["fontSizeScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(fontSizeScale = it.coerceIn(0.5f, 2f)) }
                 jsonObj["buttonScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(buttonScale = it.coerceIn(0.5f, 2f)) }
                 jsonObj["inputFieldScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(inputFieldScale = it.coerceIn(0.5f, 2f)) }
@@ -1252,6 +1253,7 @@ class KotlinBridge(
                     appShowSymbols = appSettings.showSymbols,
                     appLabelAtTop = appSettings.labelAtTop,
                     appShowMessageBar = appSettings.boardShowMessageBar,
+                    appMessageBarEditable = appSettings.boardMessageBarEditable,
                     appActivationBehavior = appSettings.boardActivationBehavior,
                     appReturnBehavior = appSettings.boardReturnBehavior,
                     screen = boardSet?.screenSettings
@@ -1363,6 +1365,7 @@ class KotlinBridge(
                             showSymbols = resolved.showSymbols,
                             labelAtTop = resolved.labelAtTop,
                             showMessageBar = resolved.showMessageBar,
+                            messageBarEditable = resolved.messageBarEditable,
                             activationBehavior = resolved.activationBehavior.name,
                             returnBehavior = resolved.returnBehavior.name,
                         ),
@@ -1687,6 +1690,7 @@ private fun resolvedBoardSettingsResponse(
         appShowSymbols = appSettings.showSymbols,
         appLabelAtTop = appSettings.labelAtTop,
         appShowMessageBar = appSettings.boardShowMessageBar,
+        appMessageBarEditable = appSettings.boardMessageBarEditable,
         appActivationBehavior = appSettings.boardActivationBehavior,
         appReturnBehavior = appSettings.boardReturnBehavior,
         screen = boardSet.screenSettings,
@@ -1697,6 +1701,7 @@ private fun resolvedBoardSettingsResponse(
         showSymbols = resolved.showSymbols,
         labelAtTop = resolved.labelAtTop,
         showMessageBar = resolved.showMessageBar,
+        messageBarEditable = resolved.messageBarEditable,
         activationBehavior = resolved.activationBehavior.name,
         returnBehavior = resolved.returnBehavior.name,
     )
@@ -1725,6 +1730,7 @@ data class ResolvedBoardSettingsResponse(
     val showSymbols: Boolean,
     val labelAtTop: Boolean,
     val showMessageBar: Boolean,
+    val messageBarEditable: Boolean = true,
     val activationBehavior: String,
     val returnBehavior: String,
 )

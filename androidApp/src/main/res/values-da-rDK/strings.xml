@@ -163,6 +163,8 @@
     <string name="board_settings_label_position_disabled">Tilgængelig når både etiketter og symboler vises</string>
     <string name="board_settings_message_bar">Beskedlinje</string>
     <string name="board_settings_global_message_bar_desc">Vis beskedlinjen, medmindre en skærm eller side tilsidesætter den</string>
+    <string name="board_settings_message_bar_editable">Redigerbar beskedlinje</string>
+    <string name="board_settings_global_message_bar_editable_desc">Lad beskedlinjen modtage indtastet tekst, medmindre en skærm eller side tilsidesætter den</string>
     <string name="board_settings_activation">Aktivering af knap</string>
     <string name="board_settings_global_activation_desc">Standardhandling for almindelige skærmknapper</string>
     <string name="board_settings_after_selection">Efter valg</string>
@@ -171,6 +173,8 @@
     <string name="board_settings_use_screen">Brug skærmindstilling</string>
     <string name="board_settings_shown">Vist</string>
     <string name="board_settings_hidden">Skjult</string>
+    <string name="board_settings_editable">Redigerbar</string>
+    <string name="board_settings_read_only">Skrivebeskyttet</string>
     <string name="board_settings_top">Øverst</string>
     <string name="board_settings_bottom">Nederst</string>
     <string name="board_settings_activation_speak_add">Læs op og tilføj</string>
