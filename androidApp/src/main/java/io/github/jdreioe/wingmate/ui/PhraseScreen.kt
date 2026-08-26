@@ -1291,18 +1291,6 @@ fun PhraseScreen(
                         )
                     }
 
-                    // Phrase Screen: phrases rendered as OBF buttons (#246).
-                    PhraseBoardProjection(
-                        phrases = visiblePhrases,
-                        onPhraseActivated = playPhraseFromGrid,
-                        onPhraseLongPress = { phrase ->
-                            if (!isHistory) {
-                                editingPhrase = phrase
-                                showEditDialog = true
-                            }
-                        }
-                    )
-
                     if (showEditDialog && editingPhrase != null) {
                         AddPhraseDialog(
                             onDismiss = { showEditDialog = false; editingPhrase = null },
