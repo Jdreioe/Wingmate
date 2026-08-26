@@ -48,6 +48,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -497,6 +498,62 @@ fun PhraseScreen(
                 }
                 refocusInput()
             }
+            // Selection-dependent phrase actions shared by every playback bar.
+            val toggleSecondarySelection: (() -> Unit)? = if (hasUsableSecondaryLanguage.value) {
+                {
+                    val normalizedSelection = normalizeRange(input.selection, input.text.length)
+                    val selectionHasLength = normalizedSelection.spanLength() > 0
+                    val alreadySecondary = selectionHasLength &&
+                        isRangeFullySecondary(normalizedSelection, secondaryLanguageRanges)
+                    if (!selectionHasLength) {
+                        refocusInput()
+                    } else {
+                        secondaryLanguageRanges = toggleSecondaryRange(
+                            secondaryLanguageRanges,
+                            normalizedSelection,
+                            input.text.length
+                        )
+                        featureUsageReporter.reportEvent(
+                            FeatureUsageEvents.PLAYBACK_SECONDARY_TOGGLE,
+                            "enabled" to (!alreadySecondary).toString()
+                        )
+                        refocusInput()
+                    }
+                }
+            } else null
+            val toggleThatThought: () -> Unit = {
+                val activeDraft = ThoughtDraft(
+                    input = input,
+                    secondaryLanguageRanges = secondaryLanguageRanges
+                )
+
+                if (pinnedThoughtDraft == null) {
+                    pinnedThoughtDraft = activeDraft
+                    val draftToLoad = scratchThoughtDraft
+                        ?: ThoughtDraft(TextFieldValue(""), emptyList())
+                    input = draftToLoad.input
+                    secondaryLanguageRanges = draftToLoad.secondaryLanguageRanges
+                    featureUsageReporter.reportEvent(
+                        FeatureUsageEvents.PLAYBACK_ON_THAT_THOUGHT,
+                        "action" to "pin"
+                    )
+                } else {
+                    scratchThoughtDraft = activeDraft
+                    val restoredDraft = pinnedThoughtDraft ?: ThoughtDraft(TextFieldValue(""), emptyList())
+                    pinnedThoughtDraft = null
+                    input = restoredDraft.input
+                    secondaryLanguageRanges = restoredDraft.secondaryLanguageRanges
+                    featureUsageReporter.reportEvent(
+                        FeatureUsageEvents.PLAYBACK_ON_THAT_THOUGHT,
+                        "action" to "resume"
+                    )
+                }
+
+                syncDisplayText(input.text)
+                refocusInput()
+            }
+            var showPhraseSheet by remember { mutableStateOf(false) }
+            val focusManager = LocalFocusManager.current
 
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
@@ -650,55 +707,8 @@ fun PhraseScreen(
                             onStop = stopSpeech,
                             onResume = resumeSpeech,
                             isPaused = isSpeechPaused,
-                            onPlaySecondary = if (hasUsableSecondaryLanguage.value) {
-                                {
-                                if (!selectionHasLength) {
-                                    refocusInput()
-                                    return@PlaybackControls
-                                }
-                                secondaryLanguageRanges = toggleSecondaryRange(
-                                    secondaryLanguageRanges,
-                                    normalizedSelection,
-                                    input.text.length
-                                )
-                                featureUsageReporter.reportEvent(
-                                    FeatureUsageEvents.PLAYBACK_SECONDARY_TOGGLE,
-                                    "enabled" to (!selectionAlreadySecondary).toString()
-                                )
-                                refocusInput()
-                                }
-                            } else null,
-                            onThatThought = {
-                                val activeDraft = ThoughtDraft(
-                                    input = input,
-                                    secondaryLanguageRanges = secondaryLanguageRanges
-                                )
-
-                                if (pinnedThoughtDraft == null) {
-                                    pinnedThoughtDraft = activeDraft
-                                    val draftToLoad = scratchThoughtDraft
-                                        ?: ThoughtDraft(TextFieldValue(""), emptyList())
-                                    input = draftToLoad.input
-                                    secondaryLanguageRanges = draftToLoad.secondaryLanguageRanges
-                                    featureUsageReporter.reportEvent(
-                                        FeatureUsageEvents.PLAYBACK_ON_THAT_THOUGHT,
-                                        "action" to "pin"
-                                    )
-                                } else {
-                                    scratchThoughtDraft = activeDraft
-                                    val restoredDraft = pinnedThoughtDraft ?: ThoughtDraft(TextFieldValue(""), emptyList())
-                                    pinnedThoughtDraft = null
-                                    input = restoredDraft.input
-                                    secondaryLanguageRanges = restoredDraft.secondaryLanguageRanges
-                                    featureUsageReporter.reportEvent(
-                                        FeatureUsageEvents.PLAYBACK_ON_THAT_THOUGHT,
-                                        "action" to "resume"
-                                    )
-                                }
-
-                                syncDisplayText(input.text)
-                                refocusInput()
-                            },
+                            onPlaySecondary = toggleSecondarySelection,
+                            onThatThought = toggleThatThought,
                             isSecondarySelectionActive = selectionAlreadySecondary,
                             isSecondaryActionEnabled = selectionHasLength,
                             isOnThatThoughtActive = pinnedThoughtDraft != null
@@ -843,6 +853,17 @@ fun PhraseScreen(
                                     Icon(
                                         Icons.Filled.Stop,
                                         contentDescription = stringResource(R.string.playback_stop)
+                                    )
+                                }
+                                IconButton(onClick = {
+                                    // Signal-style: "+" hides the keyboard and opens
+                                    // the phrase sheet over the content.
+                                    focusManager.clearFocus()
+                                    showPhraseSheet = true
+                                }) {
+                                    Icon(
+                                        Icons.Filled.Add,
+                                        contentDescription = stringResource(R.string.common_more_actions)
                                     )
                                 }
                             }
@@ -1216,80 +1237,87 @@ fun PhraseScreen(
                             uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
                         } catch (_: Throwable) {}
                     }
-                    PhraseGrid(
-                        phrases = visiblePhrases,
-                        onInsert = { phrase ->
-                            // insert phrase.name (vocalization) or phrase.text (label) at current cursor position
-                            val fv = input
-                            val pos = fv.selection.start.coerceIn(0, fv.text.length)
-                            val insertText = phrase.name?.ifBlank { null } ?: phrase.text
-                            val newText = fv.text.substring(0, pos) + insertText + fv.text.substring(pos)
-                            val newCursor = pos + insertText.length
-                            secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
-                            input = TextFieldValue(newText, selection = TextRange(newCursor))
-                            syncDisplayText(newText)
-                            featureUsageReporter.reportEvent(
-                                FeatureUsageEvents.PHRASE_INSERTED,
-                                "source" to if (phrase.parentId == HistoryCategoryId) "history" else "grid"
-                            )
-                            // #119: immediate speech policy also speaks the inserted phrase.
-                            if (settings.speechPolicy == SpeechPolicy.Immediate && phrase.linkedBoardId == null) {
-                                uiScope.launch(Dispatchers.IO) {
-                                    runCatching { speakPhraseFromGrid(phrase) }
-                                }
+                    // Grid actions shared by the main grid and the "+" phrase sheet.
+                    val insertPhraseFromGrid: (Phrase) -> Unit = { phrase ->
+                        // insert phrase.name (vocalization) or phrase.text (label) at current cursor position
+                        val fv = input
+                        val pos = fv.selection.start.coerceIn(0, fv.text.length)
+                        val insertText = phrase.name?.ifBlank { null } ?: phrase.text
+                        val newText = fv.text.substring(0, pos) + insertText + fv.text.substring(pos)
+                        val newCursor = pos + insertText.length
+                        secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, newText, secondaryLanguageRanges)
+                        input = TextFieldValue(newText, selection = TextRange(newCursor))
+                        syncDisplayText(newText)
+                        featureUsageReporter.reportEvent(
+                            FeatureUsageEvents.PHRASE_INSERTED,
+                            "source" to if (phrase.parentId == HistoryCategoryId) "history" else "grid"
+                        )
+                        // #119: immediate speech policy also speaks the inserted phrase.
+                        if (settings.speechPolicy == SpeechPolicy.Immediate && phrase.linkedBoardId == null) {
+                            uiScope.launch(Dispatchers.IO) {
+                                runCatching { speakPhraseFromGrid(phrase) }
                             }
-                        },
-                        onPlay = { phrase ->
-                            // Classic Folder Navigation: if item has a linked board, entering it updates the view
-                            if (phrase.linkedBoardId != null) {
-                                uiScope.launch {
-                                    selectedCategory = io.github.jdreioe.wingmate.domain.CategoryItem(
-                                        id = phrase.id,
-                                        name = phrase.text,
-                                        isFolder = true
-                                    )
-                                }
-                            } else {
-                                uiScope.launch(Dispatchers.IO) {
-                                    try {
-                                        speakPhraseFromGrid(phrase)
-                                    } catch (_: Throwable) {}
-                                }
+                        }
+                    }
+                    val playPhraseFromGrid: (Phrase) -> Unit = { phrase ->
+                        // Classic Folder Navigation: if item has a linked board, entering it updates the view
+                        if (phrase.linkedBoardId != null) {
+                            uiScope.launch {
+                                selectedCategory = io.github.jdreioe.wingmate.domain.CategoryItem(
+                                    id = phrase.id,
+                                    name = phrase.text,
+                                    isFolder = true
+                                )
                             }
-                        },
-                        onPlaySecondary = if (hasUsableSecondaryLanguage.value) { { phrase ->
+                        } else {
                             uiScope.launch(Dispatchers.IO) {
                                 try {
-                                    val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                    val secondaryLang = settings.secondaryLanguage.takeIf { hasUsableSecondaryLanguage.value }
-                                    val fallbackLang2 = selected?.selectedLanguage ?: ""
-                                    val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: fallbackLang2)
-                                    val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
-                                    val playedRecorded = phrase.recordingPath?.let { path ->
-                                        runCatching {
-                                            speechService.speakRecordedAudio(
-                                                audioFilePath = path,
-                                                textForHistory = textToSpeak,
-                                                voice = vForSecondary
-                                            )
-                                        }.getOrDefault(false)
-                                    } ?: false
-                                    if (!playedRecorded) {
-                                        speechService.speak(textToSpeak, vForSecondary)
-                                    }
-                                    featureUsageReporter.reportEvent(
-                                        FeatureUsageEvents.PHRASE_PLAYED_SECONDARY,
-                                        "source" to "grid",
-                                        "used_recording" to playedRecorded.toString()
-                                    )
-                                    // Refresh history from repo
-                                    try {
-                                        val list = saidRepo.list()
-                                        uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
-                                    } catch (_: Throwable) {}
+                                    speakPhraseFromGrid(phrase)
                                 } catch (_: Throwable) {}
                             }
-                        } } else null,
+                        }
+                    }
+                    val playSecondaryPhraseFromGrid: ((Phrase) -> Unit)? =
+                        if (hasUsableSecondaryLanguage.value) {
+                            { phrase ->
+                                uiScope.launch(Dispatchers.IO) {
+                                    try {
+                                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                                        val secondaryLang = settings.secondaryLanguage.takeIf { hasUsableSecondaryLanguage.value }
+                                        val fallbackLang2 = selected?.selectedLanguage ?: ""
+                                        val vForSecondary = selected?.copy(selectedLanguage = secondaryLang ?: fallbackLang2)
+                                        val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
+                                        val playedRecorded = phrase.recordingPath?.let { path ->
+                                            runCatching {
+                                                speechService.speakRecordedAudio(
+                                                    audioFilePath = path,
+                                                    textForHistory = textToSpeak,
+                                                    voice = vForSecondary
+                                                )
+                                            }.getOrDefault(false)
+                                        } ?: false
+                                        if (!playedRecorded) {
+                                            speechService.speak(textToSpeak, vForSecondary)
+                                        }
+                                        featureUsageReporter.reportEvent(
+                                            FeatureUsageEvents.PHRASE_PLAYED_SECONDARY,
+                                            "source" to "grid",
+                                            "used_recording" to playedRecorded.toString()
+                                        )
+                                        // Refresh history from repo
+                                        try {
+                                            val list = saidRepo.list()
+                                            uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
+                                        } catch (_: Throwable) {}
+                                    } catch (_: Throwable) {}
+                                }
+                            }
+                        } else null
+                    PhraseGrid(
+                        phrases = visiblePhrases,
+                        onInsert = insertPhraseFromGrid,
+                        onPlay = playPhraseFromGrid,
+                        onPlaySecondary = playSecondaryPhraseFromGrid,
                         onLongPress = { phrase ->
                             if (!isHistory) {
                                 // open edit dialog for this phrase
@@ -1321,6 +1349,47 @@ fun PhraseScreen(
                             onSave = { p -> bloc.dispatch(PhraseEvent.Edit(p)); showEditDialog = false; editingPhrase = null },
                             onDelete = { id -> deleteWithUndo(id); showEditDialog = false; editingPhrase = null }
                         )
+                    }
+
+                    // "+" phrase sheet: scrollable grid over the content with a
+                    // playback bar at the bottom (Signal-style attachment picker).
+                    if (showPhraseSheet) {
+                        val sheetSelection = normalizeRange(input.selection, input.text.length)
+                        val sheetSelectionHasLength = sheetSelection.spanLength() > 0
+                        ModalBottomSheet(onDismissRequest = { showPhraseSheet = false }) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fillMaxHeight(0.75f)
+                                    .navigationBarsPadding()
+                            ) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    PhraseGrid(
+                                        phrases = visiblePhrases,
+                                        onInsert = insertPhraseFromGrid,
+                                        onPlay = playPhraseFromGrid,
+                                        onPlaySecondary = playSecondaryPhraseFromGrid,
+                                        onLongPress = { },
+                                        readOnly = true,
+                                        showAddTile = false
+                                    )
+                                }
+                                HorizontalDivider()
+                                PlaybackControls(
+                                    onPlay = playInput,
+                                    onPause = pauseSpeech,
+                                    onStop = stopSpeech,
+                                    onResume = resumeSpeech,
+                                    isPaused = isSpeechPaused,
+                                    onPlaySecondary = toggleSecondarySelection,
+                                    onThatThought = toggleThatThought,
+                                    isSecondarySelectionActive = sheetSelectionHasLength &&
+                                        isRangeFullySecondary(sheetSelection, secondaryLanguageRanges),
+                                    isSecondaryActionEnabled = sheetSelectionHasLength,
+                                    isOnThatThoughtActive = pinnedThoughtDraft != null
+                                )
+                            }
+                        }
                     }
                 }
 
