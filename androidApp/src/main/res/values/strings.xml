@@ -1,6 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <resources>
+    <string name="typing_screen_edit">Edit Typing Screen</string>
+    <string name="typing_screen_reset">Reset Typing Screen</string>
+    <string name="typing_screen_reset_description">Replace the Typing Screen layout and action buttons with the current defaults? Your phrases and categories will be kept.</string>
+    <string name="typing_screen_reset_failed">Could not reset the Typing Screen.</string>
+    <string name="typing_screen_content_unavailable">Typing Screen content is unavailable. Retry before editing.</string>
+    <string name="typing_screen_load_failed">Could not load Typing Screen content.</string>
+    <string name="typing_screen_unsupported_action">Unsupported action. This button is preserved and can be edited.</string>
+    <string name="typing_screen_unavailable_action">Action unavailable right now.</string>
+    <string name="phrase_move_earlier">Move earlier</string>
+    <string name="phrase_move_later">Move later</string>
+    <string name="typing_screen_phrase_collection">Phrase collection</string>
+    <string name="typing_screen_page_navigation">Page navigation</string>
+    <string name="typing_screen_action_strip">Action strip</string>
+    <string name="typing_screen_element_position">Row %1$d, column %2$d · size %3$d × %4$d</string>
+    <string name="typing_screen_unknown_element">Unknown element: %1$s. It is preserved and hidden when communicating.</string>
+    <string name="typing_screen_move_up">Move up</string>
+    <string name="typing_screen_move_down">Move down</string>
+    <string name="typing_screen_move_left">Move left</string>
+    <string name="typing_screen_move_right">Move right</string>
+    <string name="typing_screen_shorter">Shorter</string>
+    <string name="typing_screen_taller">Taller</string>
+    <string name="typing_screen_narrower">Narrower</string>
+    <string name="typing_screen_wider">Wider</string>
+    <string name="typing_screen_phrase_contents_hint">Phrase contents are edited from the Typing Screen and remain in the Phrase repository.</string>
+    <string name="typing_screen_category_contents_hint">Category contents and order are edited from the Typing Screen and remain in the Category repository.</string>
+    <string name="typing_screen_edit_contents">Edit contents</string>
+    <string name="typing_screen_new_action">New action</string>
     <string name="app_name">Wingmate</string>
 
     <string name="language">Language</string>

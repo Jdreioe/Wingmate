@@ -1314,6 +1314,11 @@ class KotlinBridge(
                                         }
                                         if (!insertion.isNullOrEmpty()) tokens = tokens + insertion
                                     }
+                                    ObfButtonActionEffect.Pause -> unsupportedActions += ":pause"
+                                    ObfButtonActionEffect.Resume -> unsupportedActions += ":resume"
+                                    ObfButtonActionEffect.Stop -> unsupportedActions += ":stop"
+                                    ObfButtonActionEffect.ToggleSecondaryLanguage -> unsupportedActions += ":secondary-language"
+                                    ObfButtonActionEffect.SwapHeldMessage -> unsupportedActions += ":hold-message"
                                     is ObfButtonActionEffect.Unsupported -> {
                                         unsupportedActions += effect.action
                                     }

@@ -32,6 +32,11 @@ class ObfButtonActionsTest {
         assertEquals(ObfButtonActionEffect.Home, parseObfButtonAction(":home"))
         assertEquals(ObfButtonActionEffect.NativeKeyboard, parseObfButtonAction(":native-keyboard"))
         assertEquals(ObfButtonActionEffect.Predictions, parseObfButtonAction(":prediction"))
+        assertEquals(ObfButtonActionEffect.Pause, parseObfButtonAction(":pause"))
+        assertEquals(ObfButtonActionEffect.Resume, parseObfButtonAction(":resume"))
+        assertEquals(ObfButtonActionEffect.Stop, parseObfButtonAction(":stop"))
+        assertEquals(ObfButtonActionEffect.ToggleSecondaryLanguage, parseObfButtonAction(":secondary-language"))
+        assertEquals(ObfButtonActionEffect.SwapHeldMessage, parseObfButtonAction(":hold-message"))
     }
 
     @Test

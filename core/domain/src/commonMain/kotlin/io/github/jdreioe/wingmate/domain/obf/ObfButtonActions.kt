@@ -16,6 +16,11 @@ sealed class ObfButtonActionEffect {
     data object Home : ObfButtonActionEffect()
     data object NativeKeyboard : ObfButtonActionEffect()
     data object Predictions : ObfButtonActionEffect()
+    data object Pause : ObfButtonActionEffect()
+    data object Resume : ObfButtonActionEffect()
+    data object Stop : ObfButtonActionEffect()
+    data object ToggleSecondaryLanguage : ObfButtonActionEffect()
+    data object SwapHeldMessage : ObfButtonActionEffect()
     data class Unsupported(val action: String) : ObfButtonActionEffect()
 
     companion object {
@@ -30,13 +35,16 @@ sealed class ObfButtonActionEffect {
  * - `+…` append the following characters (including spaces after the `+`)
  * - `:space` append a single space
  * - `:wrap=PREFIX|SUFFIX` wrap the current selection in PREFIX/SUFFIX; where no
- *   selection exists (token-sentence surfaces) insert PREFIX + fallback + SUFFIX
- * - `:backspace` remove the last character of the composed sentence
- * - `:clear` clear the sentence
- * - `:speak` speak the current sentence
+ *   selection exists (Message-part surfaces) insert PREFIX + fallback + SUFFIX
+ * - `:backspace` remove the last character of the composed Message
+ * - `:clear` clear the Message
+ * - `:speak` speak the current Message
  * - `:home` navigate to the board set root
  * - `:native-keyboard` open the platform's keyboard-based communication workspace
  * - `:prediction` (or `:predictions`) insert an n-gram word prediction
+ * - `:pause`, `:resume`, and `:stop` control playback
+ * - `:secondary-language` toggles the selected text's language
+ * - `:hold-message` swaps the active and held messages
  */
 fun parseObfButtonAction(raw: String): ObfButtonActionEffect {
     if (raw.isEmpty()) return ObfButtonActionEffect.Unsupported(raw)
@@ -70,6 +78,11 @@ fun parseObfButtonAction(raw: String): ObfButtonActionEffect {
         action.equals(":native-keyboard", ignoreCase = true) -> ObfButtonActionEffect.NativeKeyboard
         action.equals(":prediction", ignoreCase = true) -> ObfButtonActionEffect.Predictions
         action.equals(":predictions", ignoreCase = true) -> ObfButtonActionEffect.Predictions
+        action.equals(":pause", ignoreCase = true) -> ObfButtonActionEffect.Pause
+        action.equals(":resume", ignoreCase = true) -> ObfButtonActionEffect.Resume
+        action.equals(":stop", ignoreCase = true) -> ObfButtonActionEffect.Stop
+        action.equals(":secondary-language", ignoreCase = true) -> ObfButtonActionEffect.ToggleSecondaryLanguage
+        action.equals(":hold-message", ignoreCase = true) -> ObfButtonActionEffect.SwapHeldMessage
         else -> ObfButtonActionEffect.Unsupported(action)
     }
 }

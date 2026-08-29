@@ -73,6 +73,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
@@ -156,11 +157,11 @@ fun ObfBoardView(
     showDeleteControl: Boolean = true,
     showClearControl: Boolean = true,
     showMessageBar: Boolean = !isEditMode,
-    // When true (and a sentence callback is provided) the message bar accepts
+    // When true (and a Message callback is provided) the message bar accepts
     // typed text; resolved from BoardSettings.messageBarEditable by callers.
     messageBarEditable: Boolean = false,
     onSentenceChanged: ((String) -> Unit)? = null,
-    sentenceText: String = "",
+    messageText: String = "",
     symbolBarPresentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
     boardSettings: ResolvedBoardSettings? = null,
     showHiddenButtons: Boolean = false,
@@ -203,7 +204,7 @@ fun ObfBoardView(
                 Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                     SymbolBar(
                         selectedButtons = selectedButtons,
-                        sentenceText = sentenceText,
+                        messageText = messageText,
                         imagesById = imagesById,
                         extractedImages = extractedImages,
                         onSpeak = onSpeakSentence,
@@ -268,7 +269,7 @@ fun ObfBoardView(
                 if (showMessageBar) {
                     SymbolBar(
                         selectedButtons = selectedButtons,
-                        sentenceText = sentenceText,
+                        messageText = messageText,
                         imagesById = imagesById,
                         extractedImages = extractedImages,
                         onSpeak = onSpeakSentence,
@@ -440,7 +441,7 @@ fun ObfBoardView(
                 if (showMessageBar) {
                     SymbolBar(
                         selectedButtons = selectedButtons,
-                        sentenceText = sentenceText,
+                        messageText = messageText,
                         imagesById = imagesById,
                         extractedImages = extractedImages,
                         onSpeak = onSpeakSentence,
@@ -895,7 +896,7 @@ internal fun SpanningBoardGrid(
 @Composable
 fun SymbolBar(
     selectedButtons: List<Pair<ObfButton, ImageBitmap?>>,
-    sentenceText: String,
+    messageText: String,
     imagesById: Map<String, io.github.jdreioe.wingmate.domain.obf.ObfImage>,
     extractedImages: Map<String, ByteArray>,
     onSpeak: () -> Unit,
@@ -906,7 +907,7 @@ fun SymbolBar(
     showDelete: Boolean = true,
     showClear: Boolean = true,
     presentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
-    // When enabled (with onTextChange) the sentence area becomes an editable
+    // When enabled (with onTextChange) the Message area becomes an editable
     // text field sharing the same bar; otherwise it renders read-only.
     editable: Boolean = false,
     onTextChange: ((String) -> Unit)? = null
@@ -947,19 +948,19 @@ fun SymbolBar(
                 contentAlignment = Alignment.CenterStart
             ) {
                 if (canEdit) {
-                    var fieldValue by remember { mutableStateOf(TextFieldValue(sentenceText)) }
-                    LaunchedEffect(sentenceText) {
+                    var fieldValue by remember { mutableStateOf(TextFieldValue(messageText)) }
+                    LaunchedEffect(messageText) {
                         // External updates (button taps, clear) win; typing echoes back
                         // identical text so this branch is a no-op while composing.
-                        if (fieldValue.text != sentenceText) {
-                            fieldValue = TextFieldValue(sentenceText, selection = TextRange(sentenceText.length))
+                        if (fieldValue.text != messageText) {
+                            fieldValue = TextFieldValue(messageText, selection = TextRange(messageText.length))
                         }
                     }
                     BasicTextField(
                         value = fieldValue,
                         onValueChange = { newValue ->
                             fieldValue = newValue
-                            onTextChange?.invoke(newValue.text)
+                            onTextChange(newValue.text)
                         },
                         textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -972,12 +973,12 @@ fun SymbolBar(
                         modifier = Modifier
                             .verticalScroll(textScrollState)
                             .clearAndSetSemantics {
-                                contentDescription = sentenceText
+                                contentDescription = messageText
                             },
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Text(
-                            text = sentenceText,
+                            text = messageText,
                             style = textStyle,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1073,6 +1074,7 @@ fun ObfButtonItem(
     locale: String? = null,
     boardSettings: ResolvedBoardSettings? = null,
     labelOverride: String? = null,
+    enabled: Boolean = true,
     isSelectionHighlighted: Boolean = false,
     fieldFontScale: Float = 1f,
     onLongClick: (() -> Unit)? = null
@@ -1088,6 +1090,7 @@ fun ObfButtonItem(
     // blocked by the run-mode selection debounce.
     val hapticView = LocalView.current
     fun tryActivate(): Boolean {
+        if (!enabled) return false
         if (isEditMode) return true
         val accepted = selectionDebouncer.tryActivate(
             button.id,
@@ -1154,7 +1157,7 @@ fun ObfButtonItem(
             onClick()
         }
     }
-    if (!isEditMode) RegisterAccessTarget(accessTargetId, primaryAction)
+    if (!isEditMode && enabled) RegisterAccessTarget(accessTargetId, primaryAction)
     val dwellProgress = if (accessHost?.state?.currentTargetId == accessTargetId) accessHost.state.dwellProgress else 0f
 
     LaunchedEffect(isHovered, settings.auditoryFishingEnabled) {
@@ -1240,8 +1243,9 @@ fun ObfButtonItem(
             .fillMaxSize()
             .padding(if (settings.highContrastMode) 2.dp else 0.dp)
             .scale(scale)
-            .alpha(if (button.hidden && isEditMode) 0.5f else 1f)
+            .alpha(if (!enabled || (button.hidden && isEditMode)) 0.5f else 1f)
             .semantics {
+                if (!enabled) disabled()
                 if (isTemporarilyRevealed) {
                     contentDescription = listOfNotNull(
                         displayLabel,
@@ -1249,7 +1253,8 @@ fun ObfButtonItem(
                     ).joinToString(", ")
                 }
             }
-            .pointerInput(Unit) {
+            .let { baseModifier ->
+                if (!enabled) baseModifier else baseModifier.pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
@@ -1262,8 +1267,11 @@ fun ObfButtonItem(
                     }
                 }
             }
+            }
             .let { baseModifier ->
-                if (settings.holdToSelectMillis > 0 && !isEditMode) {
+                if (!enabled) {
+                    baseModifier
+                } else if (settings.holdToSelectMillis > 0 && !isEditMode) {
                     baseModifier.pointerInput(settings.holdToSelectMillis) {
                         detectTapGestures(
                             onLongPress = { onLongClick?.invoke() },
@@ -1286,7 +1294,7 @@ fun ObfButtonItem(
                     )
                 }
             }
-            .accessTargetFocus(accessTargetId, if (isEditMode) null else accessHost),
+            .accessTargetFocus(accessTargetId, if (isEditMode || !enabled) null else accessHost),
         shape = buttonShape,
         colors = CardDefaults.elevatedCardColors(containerColor = bgColor),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),

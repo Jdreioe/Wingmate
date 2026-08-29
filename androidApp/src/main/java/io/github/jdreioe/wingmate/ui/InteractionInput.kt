@@ -75,6 +75,10 @@ class AndroidAccessInputHost {
     fun focus(targetId: String) = update { targetFocused(targetId, now()) }
     fun blur(targetId: String) = update { targetBlurred(targetId, now()) }
     fun togglePause() { handle(controller.togglePaused(now())); refresh() }
+    fun restartScan() {
+        controller.clearTransientInput(now())
+        refresh()
+    }
 
     fun key(key: String, down: Boolean, settings: Settings): Boolean {
         val normalized = normalizeKeyBinding(key)
@@ -111,6 +115,7 @@ object AndroidAccessInputBus {
     fun attach(value: AndroidAccessInputHost) { host = value }
     fun detach(value: AndroidAccessInputHost) { if (host === value) host = null }
     fun update(settings: Settings, enabled: Boolean) { this.settings = settings; this.enabled = enabled }
+    fun restartScan() { host?.restartScan() }
 
     fun dispatch(event: AndroidKeyEvent): Boolean {
         if (!enabled) return false

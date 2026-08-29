@@ -2,6 +2,7 @@ import io.github.jdreioe.wingmate.application.BackupMediaAccess
 import io.github.jdreioe.wingmate.application.BackupFailureKind
 import io.github.jdreioe.wingmate.application.BackupRestoreResult
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
+import io.github.jdreioe.wingmate.application.TypingScreenUseCase
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
@@ -9,6 +10,9 @@ import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
+import io.github.jdreioe.wingmate.domain.obf.ScreenKind
+import io.github.jdreioe.wingmate.domain.obf.pageElements
+import io.github.jdreioe.wingmate.domain.obf.withPageElements
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryCategoryRepository
@@ -112,6 +116,31 @@ class CompleteBackupManagerTest {
         assertEquals("audio-content", restoringMedia.restored.single().second.decodeToString())
         assertContains(target.phrases.getAll().single().recordingPath.orEmpty(), "restored/")
         assertEquals(null, target.config.getSpeechConfig())
+    }
+
+    @Test
+    fun backupRoundTripIncludesTheTypingScreenTemplateWithoutGeneratedVocabulary() = runBlocking {
+        val source = Repositories()
+        val seeded = TypingScreenUseCase(source.sets, source.boards).getOrCreate(columns = 4)
+        val customized = seeded.rootBoard!!.let { board ->
+            board.withPageElements(
+                board.pageElements().mapIndexed { index, element -> element.copy(row = index + 10) }
+            )
+        }
+        source.boards.saveBoard(customized)
+        val exported = source.manager(filePicker = null, media = TestMediaAccess()).exportBackup()
+
+        val target = Repositories()
+        val result = target.manager(
+            MapArchivePicker(readStoredZip(exported)),
+            TestMediaAccess(),
+        ).restoreBackup("typing.wingmate-backup")
+
+        assertIs<BackupRestoreResult.Success>(result)
+        val restoredSet = target.sets.listBoardSets().single()
+        assertEquals(ScreenKind.Typing, restoredSet.kind)
+        assertEquals(customized.pageElements(), target.boards.getBoard(restoredSet.rootBoardId)?.pageElements())
+        assertEquals(customized.buttons.map { it.id }, target.boards.getBoard(restoredSet.rootBoardId)?.buttons?.map { it.id })
     }
 
     @Test

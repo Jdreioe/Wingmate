@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate.ui
 import androidx.lifecycle.SavedStateHandle
 import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.infrastructure.QuickCoreDownloadProgress
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +57,38 @@ class BoardSetManagerViewModelTest {
 
         viewModel.onAction(BoardSetManagerAction.WorkspaceExited)
         assertEquals(BoardSetManagerRoute.Library, viewModel.state.value.route)
+    }
+
+    @Test
+    fun `system typing screen can be opened for editing but never as a startup screen`() = runTest {
+        val operations = FakeBoardSetManagerOperations().apply {
+            boardSets += boardSet("typing", "Typing").copy(kind = ScreenKind.Typing)
+        }
+        val runViewModel = BoardSetManagerViewModel(SavedStateHandle(), operations)
+
+        runViewModel.onAction(
+            BoardSetManagerAction.Initialize(
+                createOnLaunch = false,
+                initialBoardSetId = "typing",
+                initialMode = BoardWorkspaceMode.Run,
+            )
+        )
+
+        assertEquals(BoardSetManagerRoute.Library, runViewModel.state.value.route)
+
+        val editViewModel = BoardSetManagerViewModel(SavedStateHandle(), operations)
+        editViewModel.onAction(
+            BoardSetManagerAction.Initialize(
+                createOnLaunch = false,
+                initialBoardSetId = "typing",
+                initialMode = BoardWorkspaceMode.Edit,
+            )
+        )
+
+        assertEquals(
+            BoardSetManagerRoute.Workspace("typing", BoardWorkspaceMode.Edit),
+            editViewModel.state.value.route,
+        )
     }
 
     @Test
