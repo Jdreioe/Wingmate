@@ -51,7 +51,7 @@ A reusable piece of communication in Typing. A Phrase may belong to one Category
 _Avoid_: Item, Grid item
 
 **Category**:
-A flat grouping of saved Phrases in Typing. Categories do not nest and are not represented as Phrases or folders.
+A flat grouping of saved Phrases in Typing. Categories do not nest.
 _Avoid_: Folder, Phrase category
 
 ### Screens vocabulary
