@@ -420,6 +420,10 @@ private fun CategoryContent(
                 onBoardShowMessageBarChange = { checked ->
                     onAction(SettingsAction.BoardShowMessageBarChanged(checked))
                 },
+                boardShowSpeakButton = settings.boardShowSpeakButton,
+                onBoardShowSpeakButtonChange = { checked ->
+                    onAction(SettingsAction.BoardShowSpeakButtonChanged(checked))
+                },
                 boardMessageBarEditable = settings.boardMessageBarEditable,
                 onBoardMessageBarEditableChange = { checked ->
                     onAction(SettingsAction.BoardMessageBarEditableChanged(checked))
@@ -1239,6 +1243,8 @@ private fun DisplaySection(
     onLabelAtTopChange: (Boolean) -> Unit,
     boardShowMessageBar: Boolean,
     onBoardShowMessageBarChange: (Boolean) -> Unit,
+    boardShowSpeakButton: Boolean,
+    onBoardShowSpeakButtonChange: (Boolean) -> Unit,
     boardMessageBarEditable: Boolean,
     onBoardMessageBarEditableChange: (Boolean) -> Unit,
     boardActivationBehavior: BoardActivationBehavior,
@@ -1320,6 +1326,13 @@ private fun DisplaySection(
             onCheckedChange = onBoardShowMessageBarChange,
             title = stringResource(R.string.board_settings_message_bar),
             description = stringResource(R.string.board_settings_global_message_bar_desc)
+        )
+        SettingsGroupDivider()
+        SettingsSwitch(
+            checked = boardShowSpeakButton,
+            onCheckedChange = onBoardShowSpeakButtonChange,
+            title = stringResource(R.string.board_settings_speak_button),
+            description = stringResource(R.string.board_settings_global_speak_button_desc)
         )
         SettingsGroupDivider()
         SettingsSwitch(

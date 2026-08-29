@@ -769,6 +769,7 @@ private fun BoardSetWorkspaceRoot(
         settings.showSymbols,
         settings.labelAtTop,
         settings.boardShowMessageBar,
+        settings.boardShowSpeakButton,
         settings.boardMessageBarEditable,
         settings.boardActivationBehavior,
         settings.boardReturnBehavior
@@ -778,6 +779,7 @@ private fun BoardSetWorkspaceRoot(
             appShowSymbols = settings.showSymbols,
             appLabelAtTop = settings.labelAtTop,
             appShowMessageBar = settings.boardShowMessageBar,
+            appShowSpeakButton = settings.boardShowSpeakButton,
             appMessageBarEditable = settings.boardMessageBarEditable,
             appActivationBehavior = settings.boardActivationBehavior,
             appReturnBehavior = settings.boardReturnBehavior,
@@ -811,7 +813,6 @@ private fun BoardSetWorkspaceRoot(
             ?.toList()
             .orEmpty()
     }
-    val boardHasSpeakField = availableBoardActions.any { it == ObfButtonActionEffect.Speak }
     val boardHasDeleteField = availableBoardActions.any { it == ObfButtonActionEffect.Backspace }
     val boardHasClearField = availableBoardActions.any { it == ObfButtonActionEffect.Clear }
     val predictionButtonIds = remember(activeBoard?.id, activeBoard?.grid, activeBoard?.buttons, showHiddenButtons) {
@@ -957,6 +958,7 @@ private fun BoardSetWorkspaceRoot(
             appShowSymbols = settings.showSymbols,
             appLabelAtTop = settings.labelAtTop,
             appShowMessageBar = settings.boardShowMessageBar,
+            appShowSpeakButton = settings.boardShowSpeakButton,
             appMessageBarEditable = settings.boardMessageBarEditable,
             appActivationBehavior = settings.boardActivationBehavior,
             appReturnBehavior = settings.boardReturnBehavior,
@@ -1389,7 +1391,7 @@ private fun BoardSetWorkspaceRoot(
                         } else {
                             SymbolBarPresentation.Normal
                         },
-                        showSpeakControl = !boardHasSpeakField,
+                        showSpeakControl = resolvedBoardSettings.showSpeakButton,
                         showDeleteControl = !boardHasDeleteField,
                         showClearControl = !boardHasClearField,
                         boardSettings = resolvedBoardSettings,

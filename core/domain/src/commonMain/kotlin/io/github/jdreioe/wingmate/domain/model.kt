@@ -131,6 +131,8 @@ data class Settings(
     val labelAtTop: Boolean = false,
     // Global defaults inherited by Screens and then Pages.
     val boardShowMessageBar: Boolean = true,
+    // Show the speak control in the Screens message bar (unless the page has its own speak button).
+    val boardShowSpeakButton: Boolean = true,
     val boardMessageBarEditable: Boolean = true,
     val boardActivationBehavior: BoardActivationBehavior = BoardActivationBehavior.SpeakAndAdd,
     val boardReturnBehavior: BoardReturnBehavior = BoardReturnBehavior.Stay,

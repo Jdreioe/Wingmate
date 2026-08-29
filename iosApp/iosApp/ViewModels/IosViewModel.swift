@@ -223,10 +223,12 @@ final class IosViewModel: ObservableObject {
     @Published var highlightedButtonId: String? = nil
     private var selectionHighlightGeneration: Int64 = 0
     @Published var boardShowMessageBar: Bool = true
+    @Published var boardShowSpeakButton: Bool = true
     @Published var resolvedBoardShowLabels: Bool? = nil
     @Published var resolvedBoardShowSymbols: Bool? = nil
     @Published var resolvedBoardLabelAtTop: Bool? = nil
     @Published var resolvedBoardShowMessageBar: Bool? = nil
+    @Published var resolvedBoardShowSpeakButton: Bool? = nil
     @Published var resolvedBoardActivationBehavior: String? = nil
     @Published var resolvedBoardReturnBehavior: String? = nil
     @Published private(set) var boardStack: [String] = []
@@ -235,6 +237,7 @@ final class IosViewModel: ObservableObject {
     var boardShowSymbols: Bool { resolvedBoardShowSymbols ?? showButtonSymbols }
     var boardLabelAtTop: Bool { resolvedBoardLabelAtTop ?? labelAtTop }
     var boardMessageBarVisible: Bool { resolvedBoardShowMessageBar ?? boardShowMessageBar }
+    var boardSpeakButtonVisible: Bool { resolvedBoardShowSpeakButton ?? boardShowSpeakButton }
     var boardActivationBehavior: String { resolvedBoardActivationBehavior ?? "SpeakAndAdd" }
     var boardReturnBehavior: String { resolvedBoardReturnBehavior ?? "Stay" }
 
@@ -532,6 +535,7 @@ final class IosViewModel: ObservableObject {
                 self.pointerEmphasisScale = Double(settings.pointerEmphasisScale)
                 self.selectionHighlightMillis = settings.selectionHighlightMillis
                 self.boardShowMessageBar = settings.boardShowMessageBar
+                self.boardShowSpeakButton = settings.boardShowSpeakButton
                 self.usageLoggingEnabled = settings.usageLoggingEnabled
                 self.featureUsageReportingEnabled = settings.featureUsageReportingEnabled
                 self.historyVisible = settings.historyVisible
@@ -1151,6 +1155,11 @@ final class IosViewModel: ObservableObject {
     func setBoardShowMessageBar(_ enabled: Bool) {
         boardShowMessageBar = enabled
         Task { _ = try? await settingsFacade.updateBoardShowMessageBar(enabled: enabled) }
+    }
+
+    func setBoardShowSpeakButton(_ enabled: Bool) {
+        boardShowSpeakButton = enabled
+        Task { _ = try? await settingsFacade.updateBoardShowSpeakButton(enabled: enabled) }
     }
 
     func setUsageLoggingEnabled(_ enabled: Bool) {
@@ -1838,6 +1847,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardShowSymbols = nil
             resolvedBoardLabelAtTop = nil
             resolvedBoardShowMessageBar = nil
+            resolvedBoardShowSpeakButton = nil
             resolvedBoardActivationBehavior = nil
             resolvedBoardReturnBehavior = nil
             return
@@ -1850,6 +1860,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardShowSymbols = resolved?.showSymbols
             resolvedBoardLabelAtTop = resolved?.labelAtTop
             resolvedBoardShowMessageBar = resolved?.showMessageBar
+            resolvedBoardShowSpeakButton = resolved?.showSpeakButton
             resolvedBoardActivationBehavior = resolved?.activationBehavior
             resolvedBoardReturnBehavior = resolved?.returnBehavior
             let boardName = selectedBoard?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -1868,6 +1879,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardShowSymbols = nil
             resolvedBoardLabelAtTop = nil
             resolvedBoardShowMessageBar = nil
+            resolvedBoardShowSpeakButton = nil
             resolvedBoardActivationBehavior = nil
             resolvedBoardReturnBehavior = nil
         }

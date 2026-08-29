@@ -186,6 +186,7 @@ fun ObfBoardView(
         appShowSymbols = settings.showSymbols,
         appLabelAtTop = settings.labelAtTop,
         appShowMessageBar = settings.boardShowMessageBar,
+        appShowSpeakButton = settings.boardShowSpeakButton,
         appMessageBarEditable = settings.boardMessageBarEditable,
         appActivationBehavior = settings.boardActivationBehavior,
         appReturnBehavior = settings.boardReturnBehavior
@@ -1110,6 +1111,7 @@ fun ObfButtonItem(
         appShowSymbols = settings.showSymbols,
         appLabelAtTop = settings.labelAtTop,
         appShowMessageBar = settings.boardShowMessageBar,
+        appShowSpeakButton = settings.boardShowSpeakButton,
         appMessageBarEditable = settings.boardMessageBarEditable,
         appActivationBehavior = settings.boardActivationBehavior,
         appReturnBehavior = settings.boardReturnBehavior

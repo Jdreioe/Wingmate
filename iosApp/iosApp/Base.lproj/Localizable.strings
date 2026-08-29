@@ -502,6 +502,7 @@
 "boardset.cell.merge_1x1" = "1 × 1";
 "boardset.cell.merge_footer" = "Grow a button to span multiple cells. Only free cells can be merged.";
 "settings.display.message_bar" = "Show message bar";
+"settings.display.speak_button" = "Show speak button in the message bar";
 "editing_access.title" = "Editing access";
 "editing_access.description" = "Optionally require a code for editing. Communication is always available.";
 "editing_access.unavailable" = "Secure storage is unavailable on this device.";

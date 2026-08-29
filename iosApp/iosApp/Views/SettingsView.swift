@@ -488,6 +488,9 @@ private struct DisplaySettingsView: View {
                 Toggle("settings.display.message_bar", isOn: Binding(
                     get: { model.boardShowMessageBar }, set: { model.setBoardShowMessageBar($0) }
                 ))
+                Toggle("settings.display.speak_button", isOn: Binding(
+                    get: { model.boardShowSpeakButton }, set: { model.setBoardShowSpeakButton($0) }
+                ))
             }
 
             Section("settings.display.interface_size") {

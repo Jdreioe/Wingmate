@@ -190,6 +190,8 @@
     <string name="board_settings_label_position_disabled">Available when labels and symbols are both shown</string>
     <string name="board_settings_message_bar">Message bar</string>
     <string name="board_settings_global_message_bar_desc">Show the message bar unless a Screen or Page overrides it</string>
+    <string name="board_settings_speak_button">Speak button in message bar</string>
+    <string name="board_settings_global_speak_button_desc">Show the speak control in the message bar</string>
     <string name="board_settings_message_bar_editable">Editable message bar</string>
     <string name="board_settings_global_message_bar_editable_desc">Let the message bar accept typed text unless a Screen or Page overrides it</string>
     <string name="board_settings_activation">Button activation</string>
