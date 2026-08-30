@@ -1,6 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <resources>
+    <string name="typing_screen_edit">Rediger skriveskærm</string>
+    <string name="typing_screen_reset">Nulstil skriveskærm</string>
+    <string name="typing_screen_reset_description">Erstat skriveskærmens layout og handlingsknapper med de nuværende standarder? Dine sætninger og kategorier bevares.</string>
+    <string name="typing_screen_reset_failed">Skriveskærmen kunne ikke nulstilles.</string>
+    <string name="typing_screen_content_unavailable">Skriveskærmens indhold er ikke tilgængeligt. Prøv igen, før du redigerer.</string>
+    <string name="typing_screen_load_failed">Skriveskærmens indhold kunne ikke indlæses.</string>
+    <string name="typing_screen_unsupported_action">Handlingen understøttes ikke. Knappen er bevaret og kan redigeres.</string>
+    <string name="typing_screen_unavailable_action">Handlingen er ikke tilgængelig lige nu.</string>
+    <string name="phrase_move_earlier">Flyt tidligere</string>
+    <string name="phrase_move_later">Flyt senere</string>
+    <string name="typing_screen_phrase_collection">Sætningssamling</string>
+    <string name="typing_screen_page_navigation">Sidenavigation</string>
+    <string name="typing_screen_action_strip">Handlingslinje</string>
+    <string name="typing_screen_element_position">Række %1$d, kolonne %2$d · størrelse %3$d × %4$d</string>
+    <string name="typing_screen_unknown_element">Ukendt element: %1$s. Det bevares og skjules under kommunikation.</string>
+    <string name="typing_screen_move_up">Flyt op</string>
+    <string name="typing_screen_move_down">Flyt ned</string>
+    <string name="typing_screen_move_left">Flyt til venstre</string>
+    <string name="typing_screen_move_right">Flyt til højre</string>
+    <string name="typing_screen_shorter">Lavere</string>
+    <string name="typing_screen_taller">Højere</string>
+    <string name="typing_screen_narrower">Smallere</string>
+    <string name="typing_screen_wider">Bredere</string>
+    <string name="typing_screen_phrase_contents_hint">Sætninger redigeres fra skriveskærmen og forbliver i sætningslageret.</string>
+    <string name="typing_screen_category_contents_hint">Kategorier og deres rækkefølge redigeres fra skriveskærmen og forbliver i kategorilageret.</string>
+    <string name="typing_screen_edit_contents">Rediger indhold</string>
+    <string name="typing_screen_new_action">Ny handling</string>
     <string name="app_name">Wingmate</string>
 
     <string name="language">Sprog</string>
@@ -165,6 +192,8 @@
     <string name="board_settings_global_message_bar_desc">Vis beskedlinjen, medmindre en skærm eller side tilsidesætter den</string>
     <string name="board_settings_speak_button">Oplæsningsknap i beskedlinjen</string>
     <string name="board_settings_global_speak_button_desc">Vis oplæsningsknappen i beskedlinjen</string>
+    <string name="board_settings_message_bar_editable">Redigerbar beskedlinje</string>
+    <string name="board_settings_global_message_bar_editable_desc">Lad beskedlinjen modtage indtastet tekst, medmindre en skærm eller side tilsidesætter den</string>
     <string name="board_settings_activation">Aktivering af knap</string>
     <string name="board_settings_global_activation_desc">Standardhandling for almindelige skærmknapper</string>
     <string name="board_settings_after_selection">Efter valg</string>
@@ -173,6 +202,8 @@
     <string name="board_settings_use_screen">Brug skærmindstilling</string>
     <string name="board_settings_shown">Vist</string>
     <string name="board_settings_hidden">Skjult</string>
+    <string name="board_settings_editable">Redigerbar</string>
+    <string name="board_settings_read_only">Skrivebeskyttet</string>
     <string name="board_settings_top">Øverst</string>
     <string name="board_settings_bottom">Nederst</string>
     <string name="board_settings_activation_speak_add">Læs op og tilføj</string>

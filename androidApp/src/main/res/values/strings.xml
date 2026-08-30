@@ -1,6 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <resources>
+    <string name="typing_screen_edit">Edit Typing Screen</string>
+    <string name="typing_screen_reset">Reset Typing Screen</string>
+    <string name="typing_screen_reset_description">Replace the Typing Screen layout and action buttons with the current defaults? Your phrases and categories will be kept.</string>
+    <string name="typing_screen_reset_failed">Could not reset the Typing Screen.</string>
+    <string name="typing_screen_content_unavailable">Typing Screen content is unavailable. Retry before editing.</string>
+    <string name="typing_screen_load_failed">Could not load Typing Screen content.</string>
+    <string name="typing_screen_unsupported_action">Unsupported action. This button is preserved and can be edited.</string>
+    <string name="typing_screen_unavailable_action">Action unavailable right now.</string>
+    <string name="phrase_move_earlier">Move earlier</string>
+    <string name="phrase_move_later">Move later</string>
+    <string name="typing_screen_phrase_collection">Phrase collection</string>
+    <string name="typing_screen_page_navigation">Page navigation</string>
+    <string name="typing_screen_action_strip">Action strip</string>
+    <string name="typing_screen_element_position">Row %1$d, column %2$d · size %3$d × %4$d</string>
+    <string name="typing_screen_unknown_element">Unknown element: %1$s. It is preserved and hidden when communicating.</string>
+    <string name="typing_screen_move_up">Move up</string>
+    <string name="typing_screen_move_down">Move down</string>
+    <string name="typing_screen_move_left">Move left</string>
+    <string name="typing_screen_move_right">Move right</string>
+    <string name="typing_screen_shorter">Shorter</string>
+    <string name="typing_screen_taller">Taller</string>
+    <string name="typing_screen_narrower">Narrower</string>
+    <string name="typing_screen_wider">Wider</string>
+    <string name="typing_screen_phrase_contents_hint">Phrase contents are edited from the Typing Screen and remain in the Phrase repository.</string>
+    <string name="typing_screen_category_contents_hint">Category contents and order are edited from the Typing Screen and remain in the Category repository.</string>
+    <string name="typing_screen_edit_contents">Edit contents</string>
+    <string name="typing_screen_new_action">New action</string>
     <string name="app_name">Wingmate</string>
 
     <string name="language">Language</string>
@@ -165,6 +192,8 @@
     <string name="board_settings_global_message_bar_desc">Show the message bar unless a Screen or Page overrides it</string>
     <string name="board_settings_speak_button">Speak button in message bar</string>
     <string name="board_settings_global_speak_button_desc">Show the speak control in the message bar</string>
+    <string name="board_settings_message_bar_editable">Editable message bar</string>
+    <string name="board_settings_global_message_bar_editable_desc">Let the message bar accept typed text unless a Screen or Page overrides it</string>
     <string name="board_settings_activation">Button activation</string>
     <string name="board_settings_global_activation_desc">Default behavior for ordinary Screen buttons</string>
     <string name="board_settings_after_selection">After selection</string>
@@ -173,6 +202,8 @@
     <string name="board_settings_use_screen">Use Screen setting</string>
     <string name="board_settings_shown">Shown</string>
     <string name="board_settings_hidden">Hidden</string>
+    <string name="board_settings_editable">Editable</string>
+    <string name="board_settings_read_only">Read-only</string>
     <string name="board_settings_top">Top</string>
     <string name="board_settings_bottom">Bottom</string>
     <string name="board_settings_activation_speak_add">Speak and add</string>

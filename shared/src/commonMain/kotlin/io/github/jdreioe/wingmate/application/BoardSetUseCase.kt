@@ -10,6 +10,8 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
+import io.github.jdreioe.wingmate.domain.obf.ScreenKind
+import io.github.jdreioe.wingmate.domain.obf.requireValid
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.WordType
 import io.github.jdreioe.wingmate.domain.obf.withWordType
@@ -34,7 +36,9 @@ class BoardSetUseCase(
         ignoreUnknownKeys = true
     }
 
-    suspend fun listBoardSets(): List<ObfBoardSet> = boardSetRepository.listBoardSets()
+    /** User-created Screens only. System Screens have dedicated entry points. */
+    suspend fun listBoardSets(): List<ObfBoardSet> =
+        boardSetRepository.listBoardSets().filter { it.kind == ScreenKind.User }
 
     suspend fun getBoardSet(boardSetId: String): ObfBoardSet? = boardSetRepository.getBoardSet(boardSetId)
 
@@ -54,10 +58,13 @@ class BoardSetUseCase(
     /**
      * Validate and persist a complete editor draft. The domain serialization is
      * unchanged; this method is the single commit boundary used by the UI.
+     *
+     * Persistence never awaits speech-cache work; call [warmSpeechCache] from a
+     * background scope when audio should be pre-warmed.
      */
     suspend fun saveBoardSetGraph(graph: BoardSetGraph): Result<BoardSetGraph> = runCatching {
         val canonicalGraph = graph.canonicalizeBoardLinks()
-        validateGraph(canonicalGraph)
+        canonicalGraph.requireValid()
         val now = Clock.System.now().toEpochMilliseconds()
         val updatedSet = canonicalGraph.boardSet.copy(updatedAt = now)
         val previousSet = boardSetRepository.getBoardSet(canonicalGraph.boardSet.id)
@@ -78,17 +85,24 @@ class BoardSetUseCase(
                 .forEach { boardRepository.deleteBoard(it) }
             throw error
         }
-        canonicalGraph.copy(boardSet = updatedSet).also { speechCache?.cacheGraph(it) }
+        canonicalGraph.copy(boardSet = updatedSet)
+    }
+
+    /** Pre-warms the TTS audio cache for every button; safe to run in a background scope. */
+    suspend fun warmSpeechCache(graph: BoardSetGraph) {
+        speechCache?.cacheGraph(graph)
     }
 
     suspend fun deleteBoardSet(boardSetId: String) {
         val graph = loadBoardSetGraph(boardSetId) ?: return
+        if (graph.boardSet.kind != ScreenKind.User) return
         graph.boards.forEach { boardRepository.deleteBoard(it.id) }
         boardSetRepository.deleteBoardSet(boardSetId)
     }
 
     suspend fun duplicateBoardSet(boardSetId: String): ObfBoardSet? {
         val source = loadBoardSetGraph(boardSetId) ?: return null
+        if (source.boardSet.kind != ScreenKind.User) return null
         val now = Clock.System.now().toEpochMilliseconds()
         val newSetId = generateId("set")
         val idMap = source.boards.associate { it.id to generateId("board") }
@@ -213,6 +227,7 @@ class BoardSetUseCase(
 
     suspend fun toggleLocked(boardSetId: String): ObfBoardSet? {
         val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
+        if (boardSet.kind != ScreenKind.User) return null
         val updated = boardSet.copy(
             isLocked = !boardSet.isLocked,
             updatedAt = Clock.System.now().toEpochMilliseconds()
@@ -536,6 +551,7 @@ class BoardSetUseCase(
 
     suspend fun exportRootBoardAsObf(boardSetId: String): String? {
         val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
+        if (boardSet.kind != ScreenKind.User) return null
         val rootBoard = boardRepository.getBoard(boardSet.rootBoardId) ?: return null
         return json.encodeToString(rootBoard)
     }
@@ -543,6 +559,12 @@ class BoardSetUseCase(
     suspend fun exportBoardSetAsObzResult(boardSetId: String): ObzExportResult {
         val boardSet = boardSetRepository.getBoardSet(boardSetId)
             ?: return ObzExportResult.Failure(ObzExportErrorCode.ROOT_NOT_FOUND, "Board set '$boardSetId' was not found")
+        if (boardSet.kind != ScreenKind.User) {
+            return ObzExportResult.Failure(
+                ObzExportErrorCode.ROOT_NOT_FOUND,
+                "System Screens cannot be exported as vocabulary packages",
+            )
+        }
         val allBoards = boardRepository.listBoards()
         val graph = BoardSetGraph(boardSet, allBoards.filter { it.id in boardSet.boardIds })
         if (graph.boards.isEmpty()) {
@@ -607,25 +629,4 @@ class BoardSetUseCase(
         return "${prefix}_${now}_${Random.nextInt(1000, 9999)}"
     }
 
-    private fun validateGraph(graph: BoardSetGraph) {
-        val boardIds = graph.boards.map { it.id }
-        require(boardIds.size == boardIds.toSet().size) { "Board IDs must be unique." }
-        require(graph.boardSet.rootBoardId in boardIds) { "The root board must belong to the board set." }
-        require(graph.boardSet.boardIds.toSet() == boardIds.toSet()) { "Board set membership is inconsistent." }
-
-        graph.boards.forEach { board ->
-            val grid = board.grid ?: return@forEach
-            require(grid.rows > 0 && grid.columns > 0) { "Board grids must have positive dimensions." }
-            require(grid.order.size == grid.rows) { "Board grid row count is inconsistent." }
-            require(grid.order.all { it.size == grid.columns }) { "Board grid column count is inconsistent." }
-            val buttonIds = board.buttons.map { it.id }.toSet()
-            require(grid.order.flatten().filterNotNull().all { it in buttonIds }) {
-                "Board grid references a missing button."
-            }
-            board.buttons.forEach { button ->
-                val targetId = button.loadBoard?.id
-                require(targetId == null || targetId in boardIds) { "A board link points outside the board set." }
-            }
-        }
-    }
 }
