@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -19,6 +20,10 @@ import androidx.compose.ui.layout.Layout
 import coil3.compose.AsyncImage
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
@@ -68,6 +73,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
@@ -139,6 +145,7 @@ enum class SymbolBarPresentation(val maxTextLines: Int, val maximumViewportFract
 fun ObfBoardView(
     board: ObfBoard,
     onButtonClick: (ObfButton) -> Unit,
+    onButtonLongClick: ((ObfButton) -> Unit)? = null,
     modifier: Modifier = Modifier,
     extractedImages: Map<String, ByteArray> = emptyMap(),
     isEditMode: Boolean = false,
@@ -150,7 +157,11 @@ fun ObfBoardView(
     showDeleteControl: Boolean = true,
     showClearControl: Boolean = true,
     showMessageBar: Boolean = !isEditMode,
-    sentenceText: String = "",
+    // When true (and a Message callback is provided) the message bar accepts
+    // typed text; resolved from BoardSettings.messageBarEditable by callers.
+    messageBarEditable: Boolean = false,
+    onSentenceChanged: ((String) -> Unit)? = null,
+    messageText: String = "",
     symbolBarPresentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
     boardSettings: ResolvedBoardSettings? = null,
     showHiddenButtons: Boolean = false,
@@ -176,6 +187,7 @@ fun ObfBoardView(
         appLabelAtTop = settings.labelAtTop,
         appShowMessageBar = settings.boardShowMessageBar,
         appShowSpeakButton = settings.boardShowSpeakButton,
+        appMessageBarEditable = settings.boardMessageBarEditable,
         appActivationBehavior = settings.boardActivationBehavior,
         appReturnBehavior = settings.boardReturnBehavior
     )
@@ -193,7 +205,7 @@ fun ObfBoardView(
                 Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                     SymbolBar(
                         selectedButtons = selectedButtons,
-                        sentenceText = sentenceText,
+                        messageText = messageText,
                         imagesById = imagesById,
                         extractedImages = extractedImages,
                         onSpeak = onSpeakSentence,
@@ -203,6 +215,8 @@ fun ObfBoardView(
                         showDelete = showDeleteControl,
                         showClear = showClearControl,
                         presentation = symbolBarPresentation,
+                        editable = messageBarEditable && onSentenceChanged != null,
+                        onTextChange = onSentenceChanged,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = symbolBarMaxHeight)
@@ -219,7 +233,8 @@ fun ObfBoardView(
                             effectiveBoardSettings,
                             showHiddenButtons,
                             predictionLabels,
-                            highlightedButtonId
+                            highlightedButtonId,
+                            onButtonLongClick
                         )
                     }
                 }
@@ -236,7 +251,8 @@ fun ObfBoardView(
                     effectiveBoardSettings,
                     showHiddenButtons,
                     predictionLabels,
-                    highlightedButtonId
+                    highlightedButtonId,
+                    onButtonLongClick
                 )
             }
         }
@@ -254,7 +270,7 @@ fun ObfBoardView(
                 if (showMessageBar) {
                     SymbolBar(
                         selectedButtons = selectedButtons,
-                        sentenceText = sentenceText,
+                        messageText = messageText,
                         imagesById = imagesById,
                         extractedImages = extractedImages,
                         onSpeak = onSpeakSentence,
@@ -264,6 +280,8 @@ fun ObfBoardView(
                         showDelete = showDeleteControl,
                         showClear = showClearControl,
                         presentation = symbolBarPresentation,
+                        editable = messageBarEditable && onSentenceChanged != null,
+                        onTextChange = onSentenceChanged,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = symbolBarMaxHeight)
@@ -424,7 +442,7 @@ fun ObfBoardView(
                 if (showMessageBar) {
                     SymbolBar(
                         selectedButtons = selectedButtons,
-                        sentenceText = sentenceText,
+                        messageText = messageText,
                         imagesById = imagesById,
                         extractedImages = extractedImages,
                         onSpeak = onSpeakSentence,
@@ -434,6 +452,8 @@ fun ObfBoardView(
                         showDelete = showDeleteControl,
                         showClear = showClearControl,
                         presentation = symbolBarPresentation,
+                        editable = messageBarEditable && onSentenceChanged != null,
+                        onTextChange = onSentenceChanged,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = symbolBarMaxHeight)
@@ -458,6 +478,7 @@ fun ObfBoardView(
                                             image?.path?.let { path -> extractedImages[path] }
                                         },
                                         onClick = { onButtonClick(button) },
+                                        onLongClick = onButtonLongClick?.let { cb -> ({ cb(button) }) },
                                         isEditMode = isEditMode,
                                         isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
@@ -876,7 +897,7 @@ internal fun SpanningBoardGrid(
 @Composable
 fun SymbolBar(
     selectedButtons: List<Pair<ObfButton, ImageBitmap?>>,
-    sentenceText: String,
+    messageText: String,
     imagesById: Map<String, io.github.jdreioe.wingmate.domain.obf.ObfImage>,
     extractedImages: Map<String, ByteArray>,
     onSpeak: () -> Unit,
@@ -886,7 +907,11 @@ fun SymbolBar(
     showSpeak: Boolean = true,
     showDelete: Boolean = true,
     showClear: Boolean = true,
-    presentation: SymbolBarPresentation = SymbolBarPresentation.Normal
+    presentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
+    // When enabled (with onTextChange) the Message area becomes an editable
+    // text field sharing the same bar; otherwise it renders read-only.
+    editable: Boolean = false,
+    onTextChange: ((String) -> Unit)? = null
 ) {
     val textScrollState = rememberScrollState()
     val textStyle = when (presentation) {
@@ -916,23 +941,52 @@ fun SymbolBar(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val canEdit = editable && onTextChange != null
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(max = maximumTextHeight)
-                    .verticalScroll(textScrollState)
-                    .clearAndSetSemantics {
-                        contentDescription = sentenceText
-                    },
+                    .heightIn(max = maximumTextHeight),
                 contentAlignment = Alignment.CenterStart
             ) {
-                Text(
-                    text = sentenceText,
-                    style = textStyle,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                )
+                if (canEdit) {
+                    var fieldValue by remember { mutableStateOf(TextFieldValue(messageText)) }
+                    LaunchedEffect(messageText) {
+                        // External updates (button taps, clear) win; typing echoes back
+                        // identical text so this branch is a no-op while composing.
+                        if (fieldValue.text != messageText) {
+                            fieldValue = TextFieldValue(messageText, selection = TextRange(messageText.length))
+                        }
+                    }
+                    BasicTextField(
+                        value = fieldValue,
+                        onValueChange = { newValue ->
+                            fieldValue = newValue
+                            onTextChange(newValue.text)
+                        },
+                        textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .verticalScroll(textScrollState)
+                            .clearAndSetSemantics {
+                                contentDescription = messageText
+                            },
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(
+                            text = messageText,
+                            style = textStyle,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
 
             if (showSpeak || showDelete || showClear) {
@@ -1021,8 +1075,10 @@ fun ObfButtonItem(
     locale: String? = null,
     boardSettings: ResolvedBoardSettings? = null,
     labelOverride: String? = null,
+    enabled: Boolean = true,
     isSelectionHighlighted: Boolean = false,
-    fieldFontScale: Float = 1f
+    fieldFontScale: Float = 1f,
+    onLongClick: (() -> Unit)? = null
 ) {
     val speechService: SpeechService = koinInject()
     val voiceUseCase: VoiceUseCase = koinInject()
@@ -1035,6 +1091,7 @@ fun ObfButtonItem(
     // blocked by the run-mode selection debounce.
     val hapticView = LocalView.current
     fun tryActivate(): Boolean {
+        if (!enabled) return false
         if (isEditMode) return true
         val accepted = selectionDebouncer.tryActivate(
             button.id,
@@ -1055,6 +1112,7 @@ fun ObfButtonItem(
         appLabelAtTop = settings.labelAtTop,
         appShowMessageBar = settings.boardShowMessageBar,
         appShowSpeakButton = settings.boardShowSpeakButton,
+        appMessageBarEditable = settings.boardMessageBarEditable,
         appActivationBehavior = settings.boardActivationBehavior,
         appReturnBehavior = settings.boardReturnBehavior
     )
@@ -1101,7 +1159,7 @@ fun ObfButtonItem(
             onClick()
         }
     }
-    if (!isEditMode) RegisterAccessTarget(accessTargetId, primaryAction)
+    if (!isEditMode && enabled) RegisterAccessTarget(accessTargetId, primaryAction)
     val dwellProgress = if (accessHost?.state?.currentTargetId == accessTargetId) accessHost.state.dwellProgress else 0f
 
     LaunchedEffect(isHovered, settings.auditoryFishingEnabled) {
@@ -1187,8 +1245,9 @@ fun ObfButtonItem(
             .fillMaxSize()
             .padding(if (settings.highContrastMode) 2.dp else 0.dp)
             .scale(scale)
-            .alpha(if (button.hidden && isEditMode) 0.5f else 1f)
+            .alpha(if (!enabled || (button.hidden && isEditMode)) 0.5f else 1f)
             .semantics {
+                if (!enabled) disabled()
                 if (isTemporarilyRevealed) {
                     contentDescription = listOfNotNull(
                         displayLabel,
@@ -1196,7 +1255,8 @@ fun ObfButtonItem(
                     ).joinToString(", ")
                 }
             }
-            .pointerInput(Unit) {
+            .let { baseModifier ->
+                if (!enabled) baseModifier else baseModifier.pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
@@ -1209,10 +1269,14 @@ fun ObfButtonItem(
                     }
                 }
             }
+            }
             .let { baseModifier ->
-                if (settings.holdToSelectMillis > 0 && !isEditMode) {
+                if (!enabled) {
+                    baseModifier
+                } else if (settings.holdToSelectMillis > 0 && !isEditMode) {
                     baseModifier.pointerInput(settings.holdToSelectMillis) {
                         detectTapGestures(
+                            onLongPress = { onLongClick?.invoke() },
                             onPress = {
                                 val completed = withTimeoutOrNull(settings.holdToSelectMillis) {
                                     tryAwaitRelease()
@@ -1227,11 +1291,12 @@ fun ObfButtonItem(
                     }
                 } else {
                     baseModifier.combinedClickable(
-                        onClick = { primaryAction() }
+                        onClick = { primaryAction() },
+                        onLongClick = onLongClick
                     )
                 }
             }
-            .accessTargetFocus(accessTargetId, if (isEditMode) null else accessHost),
+            .accessTargetFocus(accessTargetId, if (isEditMode || !enabled) null else accessHost),
         shape = buttonShape,
         colors = CardDefaults.elevatedCardColors(containerColor = bgColor),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
@@ -1393,7 +1458,8 @@ private fun BoxWithConstraintsScope.RenderAbsoluteButtons(
     boardSettings: ResolvedBoardSettings,
     showHiddenButtons: Boolean,
     predictionLabels: Map<String, String>,
-    highlightedButtonId: String? = null
+    highlightedButtonId: String? = null,
+    onButtonLongClick: ((ObfButton) -> Unit)? = null
 ) {
     val containerWidth = maxWidth
     val containerHeight = maxHeight
@@ -1416,6 +1482,7 @@ private fun BoxWithConstraintsScope.RenderAbsoluteButtons(
                         image?.path?.let { path -> extractedImages[path] }
                     },
                     onClick = { onButtonClick(button) },
+                    onLongClick = onButtonLongClick?.let { cb -> ({ cb(button) }) },
                     isEditMode = isEditMode,
                     isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                     isHomeLink = button.isHomeNavigation(homeBoardId),

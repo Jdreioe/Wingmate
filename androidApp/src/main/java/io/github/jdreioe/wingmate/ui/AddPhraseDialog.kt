@@ -30,6 +30,8 @@ import io.github.jdreioe.wingmate.ui.parseHexToColor
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.ui.res.stringResource
 import org.koin.compose.getKoin
 import io.github.jdreioe.wingmate.domain.PhraseRecordingService
@@ -46,7 +48,9 @@ fun AddPhraseDialog(
     defaultCategoryId: String? = null,
     initialPhrase: Phrase? = null,
     onSave: (Phrase) -> Unit,
-    onDelete: ((String) -> Unit)? = null
+    onDelete: ((String) -> Unit)? = null,
+    onMoveEarlier: (() -> Unit)? = null,
+    onMoveLater: (() -> Unit)? = null,
 ) {
     var text by remember { mutableStateOf(initialPhrase?.text ?: "") }
     var altText by remember { mutableStateOf(initialPhrase?.name ?: "") }
@@ -62,7 +66,6 @@ fun AddPhraseDialog(
     var selectedCategory by remember {
         mutableStateOf(
             categories.firstOrNull { it.id == (initialPhrase?.parentId ?: defaultCategoryId) }
-                ?: categories.firstOrNull()
         )
     }
     val koin = getKoin()
@@ -466,6 +469,20 @@ fun AddPhraseDialog(
                                     }
                                 )
                             }
+                        }
+                    }
+                }
+
+                if (initialPhrase != null && (onMoveEarlier != null || onMoveLater != null)) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { onMoveEarlier?.invoke() }, enabled = onMoveEarlier != null) {
+                            Icon(Icons.Default.ArrowUpward, contentDescription = null)
+                            Text(stringResource(R.string.phrase_move_earlier))
+                        }
+                        OutlinedButton(onClick = { onMoveLater?.invoke() }, enabled = onMoveLater != null) {
+                            Icon(Icons.Default.ArrowDownward, contentDescription = null)
+                            Text(stringResource(R.string.phrase_move_later))
                         }
                     }
                 }

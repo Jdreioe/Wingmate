@@ -20,6 +20,14 @@ _Avoid_: Mode
 The Communication workspace for free text, predictions, and saved phrases.
 _Avoid_: Keyboard, Phrase screen
 
+**Typing Screen**:
+The persistently customizable, built-in input surface of the Typing workspace that replaces the system keyboard when opened. It uses the shared Screen runtime with an All Phrases Page, one live Page per Category, and an optional History Page; it cannot be deleted or selected as a startup Screen and is not part of normal vocabulary-package export.
+_Avoid_: Phrase screen, OBZ Screen
+
+**All Phrases Page**:
+The starting system Page of the Typing Screen, presenting every Phrase in its authoritative repository order without representing a Category.
+_Avoid_: All Category
+
 **Screens workspace**:
 The Communication workspace for visual vocabulary arranged across linked Pages.
 _Avoid_: Boards workspace, Board library
@@ -40,6 +48,10 @@ _Avoid_: Held thought, Pinned thought
 The private, local record of Messages the Communicator has asked Wingmate to speak. History recording is distinct from prediction learning, operational logging, and anonymous feature reporting.
 _Avoid_: Usage log, Analytics
 
+**History Page**:
+The optional, read-only Page in the Typing Screen that presents History without treating its Messages as Phrases or a Category.
+_Avoid_: History Category
+
 **Editing access**:
 Optional device-level protection against accidental or unwanted vocabulary changes in Typing and Screens. It never blocks communication, does not identify a person or assign roles, and may be used by the Communicator or a trusted Supporter.
 _Avoid_: Authorization, Editor role
@@ -51,7 +63,7 @@ A reusable piece of communication in Typing. A Phrase may belong to one Category
 _Avoid_: Item, Grid item
 
 **Category**:
-A flat grouping of saved Phrases in Typing. Categories do not nest and are not represented as Phrases or folders.
+A flat grouping of saved Phrases in Typing. Each Category is projected as a live Page in the Typing Screen; Categories do not nest and are not represented as Phrases or folders.
 _Avoid_: Folder, Phrase category
 
 ### Screens vocabulary
@@ -63,6 +75,22 @@ _Avoid_: Board set, Board library
 **Page**:
 One visual communication layout within a Screen.
 _Avoid_: Board, Screen
+
+**Page element**:
+A typed, movable, and resizable component placed on a Page. A Button is one Page-element type; richer types can present live vocabulary or communication controls.
+_Avoid_: Custom element, Widget
+
+**Phrase collection**:
+A Page element that projects live Phrases into standard runtime Buttons within its layout region while leaving the Phrase repository authoritative. It has a compact, horizontally scrolling row and an expanded grid; both presentations share vocabulary state.
+_Avoid_: Phrase grid, Phrase buttons
+
+**Page navigation**:
+A Page element that presents the Typing Screen's All Phrases, Category, and optional History Pages as a horizontally scrolling row of chips. Category order comes from the Category repository rather than Page layout.
+_Avoid_: Category filter, Category chips
+
+**Action strip**:
+A Page element that arranges an ordered, horizontally scrolling set of ordinary Buttons for related communication controls. Its Buttons retain normal editing, access, styling, and action behavior.
+_Avoid_: Playback bar, Custom controls
 
 **Button**:
 A selectable piece of vocabulary or an action on a Page. A Button may occupy one or more Cells.

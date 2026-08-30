@@ -15,6 +15,7 @@ import io.github.jdreioe.wingmate.domain.BoardSpeechCache
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
+import io.github.jdreioe.wingmate.application.TypingScreenUseCase
 import io.github.jdreioe.wingmate.application.ObzExporter
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
@@ -63,6 +64,7 @@ val appModule = module {
     single { ObzExporter(getOrNull<Json>() ?: kotlinx.serialization.json.Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }) }
     singleOf(::BoardSetSpeechCacheUseCase) { bind<BoardSpeechCache>() }
     singleOf(::BoardSetUseCase)
+    singleOf(::TypingScreenUseCase)
     // Platforms override with a real player; default is a no-op.
     single<SoundPlayer> { NoopSoundPlayer() }
 

@@ -11,6 +11,7 @@ import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.QuickCoreDownloadProgress
@@ -26,7 +27,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
-internal enum class BoardWorkspaceMode { Run, Edit }
+enum class BoardWorkspaceMode { Run, Edit }
 
 internal sealed interface BoardSetManagerRoute {
     data object Library : BoardSetManagerRoute
@@ -76,6 +77,7 @@ internal sealed interface BoardSetManagerAction {
     data class Initialize(
         val createOnLaunch: Boolean,
         val initialBoardSetId: String?,
+        val initialMode: BoardWorkspaceMode = BoardWorkspaceMode.Run,
     ) : BoardSetManagerAction
 
     data object BackClicked : BoardSetManagerAction
@@ -309,7 +311,9 @@ internal class BoardSetManagerViewModel(
         if (restoredRoute == BoardSetManagerRoute.Library && action.initialBoardSetId != null) {
             viewModelScope.launch {
                 operations.getBoardSet(action.initialBoardSetId)?.let {
-                    openWorkspace(it.id, BoardWorkspaceMode.Run)
+                    if (action.initialMode == BoardWorkspaceMode.Edit || it.kind == ScreenKind.User) {
+                        openWorkspace(it.id, action.initialMode)
+                    }
                 }
             }
         }

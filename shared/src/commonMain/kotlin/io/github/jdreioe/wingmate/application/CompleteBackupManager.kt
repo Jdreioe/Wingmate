@@ -18,6 +18,9 @@ import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
+import io.github.jdreioe.wingmate.domain.obf.ScreenKind
+import io.github.jdreioe.wingmate.domain.obf.requireValid
 import io.github.jdreioe.wingmate.domain.obf.ZipBuilder
 import io.github.jdreioe.wingmate.platform.FilePicker
 import io.github.jdreioe.wingmate.platform.ArchiveEntry
@@ -293,10 +296,20 @@ class CompleteBackupManager(
     private fun validatePayload(payload: WingmateBackupPayload) {
         require(payload.boards.map { it.id }.distinct().size == payload.boards.size) { "Duplicate board IDs" }
         require(payload.boardSets.map { it.id }.distinct().size == payload.boardSets.size) { "Duplicate screen IDs" }
-        val boardIds = payload.boards.map { it.id }.toSet()
-        payload.boardSets.forEach { set ->
-            require(set.rootBoardId in boardIds && set.boardIds.all { it in boardIds }) {
-                "Screen '${set.name}' references a missing page"
+        val boardsById = payload.boards.associateBy { it.id }
+        payload.boardSets.forEach { screen ->
+            val pages = screen.boardIds.map { pageId ->
+                requireNotNull(boardsById[pageId]) { "Screen '${screen.name}' references a missing Page" }
+            }
+            BoardSetGraph(screen, pages).requireValid()
+        }
+        require(payload.boardSets.count { it.kind == ScreenKind.Typing } <= 1) {
+            "Backup contains more than one Typing Screen"
+        }
+        payload.boardSets.filter { it.kind == ScreenKind.Typing }.forEach { typingScreen ->
+            require(typingScreen.boardIds.size == 1) { "Typing Screen must contain one template page" }
+            require(typingScreen.rootBoardId == typingScreen.boardIds.single()) {
+                "Typing Screen template must be its starting Page"
             }
         }
     }

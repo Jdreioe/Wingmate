@@ -112,6 +112,7 @@ class SettingsModelTest {
     fun globalBoardDefaultsRoundTrip() {
         val original = Settings(
             boardShowMessageBar = false,
+            boardMessageBarEditable = false,
             boardActivationBehavior = BoardActivationBehavior.SpeakOnly,
             boardReturnBehavior = BoardReturnBehavior.StartPage
         )
@@ -119,6 +120,7 @@ class SettingsModelTest {
         val decoded = json.decodeFromString<Settings>(json.encodeToString(original))
 
         assertEquals(false, decoded.boardShowMessageBar)
+        assertEquals(false, decoded.boardMessageBarEditable)
         assertEquals(BoardActivationBehavior.SpeakOnly, decoded.boardActivationBehavior)
         assertEquals(BoardReturnBehavior.StartPage, decoded.boardReturnBehavior)
     }

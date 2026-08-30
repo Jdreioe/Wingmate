@@ -390,6 +390,7 @@ class KotlinBridge(
                 jsonObj["historyVisible"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(historyVisible = it) }
                 jsonObj["boardShowMessageBar"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(boardShowMessageBar = it) }
                 jsonObj["boardShowSpeakButton"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(boardShowSpeakButton = it) }
+                jsonObj["boardMessageBarEditable"]?.jsonPrimitive?.booleanOrNull?.let { newSettings = newSettings.copy(boardMessageBarEditable = it) }
                 jsonObj["fontSizeScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(fontSizeScale = it.coerceIn(0.5f, 2f)) }
                 jsonObj["buttonScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(buttonScale = it.coerceIn(0.5f, 2f)) }
                 jsonObj["inputFieldScale"]?.jsonPrimitive?.floatOrNull?.let { newSettings = newSettings.copy(inputFieldScale = it.coerceIn(0.5f, 2f)) }
@@ -1254,6 +1255,7 @@ class KotlinBridge(
                     appLabelAtTop = appSettings.labelAtTop,
                     appShowMessageBar = appSettings.boardShowMessageBar,
                     appShowSpeakButton = appSettings.boardShowSpeakButton,
+                    appMessageBarEditable = appSettings.boardMessageBarEditable,
                     appActivationBehavior = appSettings.boardActivationBehavior,
                     appReturnBehavior = appSettings.boardReturnBehavior,
                     screen = boardSet?.screenSettings
@@ -1280,6 +1282,11 @@ class KotlinBridge(
                                 when (effect) {
                                     is ObfButtonActionEffect.AppendText -> {
                                         if (effect.text.isNotEmpty()) tokens = tokens + effect.text
+                                    }
+                                    is ObfButtonActionEffect.WrapSelection -> {
+                                        // Token sentences hold no selection, so wrap falls back
+                                        // to inserting prefix + fallback + suffix as one token.
+                                        tokens = tokens + (effect.prefix + effect.fallback + effect.suffix)
                                     }
                                     ObfButtonActionEffect.Backspace -> {
                                         tokens = backspaceSentenceSelection(tokens, board.spellingMode)
@@ -1309,6 +1316,11 @@ class KotlinBridge(
                                         }
                                         if (!insertion.isNullOrEmpty()) tokens = tokens + insertion
                                     }
+                                    ObfButtonActionEffect.Pause -> unsupportedActions += ":pause"
+                                    ObfButtonActionEffect.Resume -> unsupportedActions += ":resume"
+                                    ObfButtonActionEffect.Stop -> unsupportedActions += ":stop"
+                                    ObfButtonActionEffect.ToggleSecondaryLanguage -> unsupportedActions += ":secondary-language"
+                                    ObfButtonActionEffect.SwapHeldMessage -> unsupportedActions += ":hold-message"
                                     is ObfButtonActionEffect.Unsupported -> {
                                         unsupportedActions += effect.action
                                     }
@@ -1361,6 +1373,7 @@ class KotlinBridge(
                             labelAtTop = resolved.labelAtTop,
                             showMessageBar = resolved.showMessageBar,
                             showSpeakButton = resolved.showSpeakButton,
+                            messageBarEditable = resolved.messageBarEditable,
                             activationBehavior = resolved.activationBehavior.name,
                             returnBehavior = resolved.returnBehavior.name,
                         ),
@@ -1686,6 +1699,7 @@ private fun resolvedBoardSettingsResponse(
         appLabelAtTop = appSettings.labelAtTop,
         appShowMessageBar = appSettings.boardShowMessageBar,
         appShowSpeakButton = appSettings.boardShowSpeakButton,
+        appMessageBarEditable = appSettings.boardMessageBarEditable,
         appActivationBehavior = appSettings.boardActivationBehavior,
         appReturnBehavior = appSettings.boardReturnBehavior,
         screen = boardSet.screenSettings,
@@ -1697,6 +1711,7 @@ private fun resolvedBoardSettingsResponse(
         labelAtTop = resolved.labelAtTop,
         showMessageBar = resolved.showMessageBar,
         showSpeakButton = resolved.showSpeakButton,
+        messageBarEditable = resolved.messageBarEditable,
         activationBehavior = resolved.activationBehavior.name,
         returnBehavior = resolved.returnBehavior.name,
     )
@@ -1726,6 +1741,7 @@ data class ResolvedBoardSettingsResponse(
     val labelAtTop: Boolean,
     val showMessageBar: Boolean,
     val showSpeakButton: Boolean,
+    val messageBarEditable: Boolean = true,
     val activationBehavior: String,
     val returnBehavior: String,
 )

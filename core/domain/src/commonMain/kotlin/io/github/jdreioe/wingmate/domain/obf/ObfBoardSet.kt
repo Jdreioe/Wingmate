@@ -1,6 +1,16 @@
 package io.github.jdreioe.wingmate.domain.obf
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+
+@Serializable
+enum class ScreenKind {
+    @SerialName("user")
+    User,
+
+    @SerialName("typing")
+    Typing,
+}
 
 @Serializable
 data class ObfBoardSet(
@@ -13,6 +23,8 @@ data class ObfBoardSet(
     val cacheWholeSentences: Boolean = true,
     /** Screen-level defaults inherited by Pages unless they provide an override. */
     val screenSettings: BoardSettingsOverrides = BoardSettingsOverrides(),
+    /** Distinguishes user vocabulary from built-in system Screens. */
+    val kind: ScreenKind = ScreenKind.User,
     val createdAt: Long,
     val updatedAt: Long
 )

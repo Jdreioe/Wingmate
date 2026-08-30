@@ -103,6 +103,7 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
+import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
@@ -183,7 +184,8 @@ fun BoardSetManagerRoot(
     onBack: () -> Unit,
     onBackToWelcome: () -> Unit,
     createOnLaunch: Boolean = false,
-    initialBoardSetId: String? = null
+    initialBoardSetId: String? = null,
+    initialMode: BoardWorkspaceMode = BoardWorkspaceMode.Run,
 ) {
     val koin = org.koin.compose.getKoin()
     val useCase = koinInject<BoardSetUseCase>()
@@ -220,11 +222,12 @@ fun BoardSetManagerRoot(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val defaultBoardName = stringResource(R.string.board_dialog_default_board_name)
 
-    LaunchedEffect(viewModel, createOnLaunch, initialBoardSetId) {
+    LaunchedEffect(viewModel, createOnLaunch, initialBoardSetId, initialMode) {
         viewModel.onAction(
             BoardSetManagerAction.Initialize(
                 createOnLaunch = createOnLaunch,
                 initialBoardSetId = initialBoardSetId,
+                initialMode = initialMode,
             )
         )
     }
@@ -767,6 +770,7 @@ private fun BoardSetWorkspaceRoot(
         settings.labelAtTop,
         settings.boardShowMessageBar,
         settings.boardShowSpeakButton,
+        settings.boardMessageBarEditable,
         settings.boardActivationBehavior,
         settings.boardReturnBehavior
     ) {
@@ -776,6 +780,7 @@ private fun BoardSetWorkspaceRoot(
             appLabelAtTop = settings.labelAtTop,
             appShowMessageBar = settings.boardShowMessageBar,
             appShowSpeakButton = settings.boardShowSpeakButton,
+            appMessageBarEditable = settings.boardMessageBarEditable,
             appActivationBehavior = settings.boardActivationBehavior,
             appReturnBehavior = settings.boardReturnBehavior,
             screen = activeGraph?.boardSet?.screenSettings
@@ -784,7 +789,7 @@ private fun BoardSetWorkspaceRoot(
                 ?: io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides()
         )
     }
-    val sentenceText = remember(selectedButtons, activeBoard?.strings, settings.primaryLanguage) {
+    val messageText = remember(selectedButtons, activeBoard?.strings, settings.primaryLanguage) {
         buildResolvedSentence(
             buttons = selectedButtons.map { it.first },
             strings = activeBoard?.strings.orEmpty(),
@@ -814,11 +819,11 @@ private fun BoardSetWorkspaceRoot(
         orderedPredictionButtonIds(activeBoard, showHiddenButtons)
     }
     var predictionsById by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    LaunchedEffect(sentenceText, predictionButtonIds, predictionService) {
+    LaunchedEffect(messageText, predictionButtonIds, predictionService) {
         predictionsById = emptyMap()
         val service = predictionService?.takeIf { it.isTrained() } ?: return@LaunchedEffect
         if (predictionButtonIds.isEmpty()) return@LaunchedEffect
-        val result = service.predict(sentenceText, maxWords = predictionButtonIds.size, maxLetters = 0)
+        val result = service.predict(messageText, maxWords = predictionButtonIds.size, maxLetters = 0)
         predictionsById = predictionButtonIds.withIndex().mapNotNull { (index, id) ->
             result.words.getOrNull(index)?.let { id to it }
         }.toMap()
@@ -954,6 +959,7 @@ private fun BoardSetWorkspaceRoot(
             appLabelAtTop = settings.labelAtTop,
             appShowMessageBar = settings.boardShowMessageBar,
             appShowSpeakButton = settings.boardShowSpeakButton,
+            appMessageBarEditable = settings.boardMessageBarEditable,
             appActivationBehavior = settings.boardActivationBehavior,
             appReturnBehavior = settings.boardReturnBehavior,
             onCommit = { name, updatedSettings, updatedBackgroundColor ->
@@ -1331,6 +1337,16 @@ private fun BoardSetWorkspaceRoot(
                 onRetry = { workspaceViewModel.onAction(BoardWorkspaceAction.RetryLoad) },
             ) {
                 if (activeGraph != null && activeBoard != null) {
+                    if (mode == BoardWorkspaceMode.Edit && activeGraph.boardSet.kind == ScreenKind.Typing) {
+                        TypingScreenEditor(
+                            graph = activeGraph,
+                            onGraphChange = {
+                                workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(it))
+                            },
+                            onEditVocabulary = onSwitchToKeyboard,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
                     if (!isFullscreen && mode == BoardWorkspaceMode.Edit) {
                         BoardStrip(
                             boards = activeGraph.boards,
@@ -1349,7 +1365,27 @@ private fun BoardSetWorkspaceRoot(
                         isEditMode = mode == BoardWorkspaceMode.Edit,
                         showMessageBar = mode == BoardWorkspaceMode.Run &&
                             resolvedBoardSettings.showMessageBar,
-                        sentenceText = sentenceText,
+                        messageBarEditable = resolvedBoardSettings.messageBarEditable,
+                        onSentenceChanged = { text ->
+                            // Typed text replaces the sentence as a single free-hand token;
+                            // button taps keep composing tokens on top of it.
+                            workspaceViewModel.onAction(
+                                if (text.isBlank()) {
+                                    BoardWorkspaceAction.ClearSentence
+                                } else {
+                                    BoardWorkspaceAction.ReplaceSentence(
+                                        listOf(
+                                            ObfButton(
+                                                id = workspaceId("freehand"),
+                                                label = text,
+                                                vocalization = text
+                                            )
+                                        )
+                                    )
+                                }
+                            )
+                        },
+                        messageText = messageText,
                         symbolBarPresentation = if (isFullscreen) {
                             SymbolBarPresentation.Fullscreen
                         } else {
@@ -1388,6 +1424,19 @@ private fun BoardSetWorkspaceRoot(
                                                 )
                                             }
                                         }
+                                        is ObfButtonActionEffect.WrapSelection -> {
+                                            // Token sentences hold no selection, so wrap falls back
+                                            // to inserting prefix + fallback + suffix as one token.
+                                            val wrapped = effect.prefix + effect.fallback + effect.suffix
+                                            nextSelection = nextSelection + (
+                                                ObfButton(
+                                                    id = workspaceId("wrap"),
+                                                    label = wrapped,
+                                                    vocalization = wrapped,
+                                                    locale = button.locale
+                                                ).withMathMode(button.mathMode) to null
+                                            )
+                                        }
                                         ObfButtonActionEffect.Backspace -> {
                                             nextSelection = backspaceSentenceSelection(
                                                 nextSelection,
@@ -1405,14 +1454,14 @@ private fun BoardSetWorkspaceRoot(
                                             navigateHome = true
                                         }
                                         ObfButtonActionEffect.NativeKeyboard -> {
-                                            nativeKeyboardDraft = sentenceText
+                                            nativeKeyboardDraft = messageText
                                         }
                                         ObfButtonActionEffect.Predictions -> {
                                             val insertion = predictionButtonIds
                                                 .indexOf(button.id)
                                                 .takeIf { it != -1 }
                                                 ?.let { index -> predictionsById[button.id] }
-                                                ?.let { nGramPredictionInsertion(sentenceText, it) }
+                                                ?.let { nGramPredictionInsertion(messageText, it) }
                                             if (!insertion.isNullOrEmpty()) {
                                                 nextSelection = nextSelection + (
                                                     ObfButton(
@@ -1423,6 +1472,23 @@ private fun BoardSetWorkspaceRoot(
                                                     ) to null
                                                 )
                                             }
+                                        }
+                                        ObfButtonActionEffect.Pause -> {
+                                            scope.launch { speechService.pause() }
+                                        }
+                                        ObfButtonActionEffect.Resume -> {
+                                            scope.launch { speechService.resume() }
+                                        }
+                                        ObfButtonActionEffect.Stop -> {
+                                            scope.launch { speechService.stop() }
+                                        }
+                                        ObfButtonActionEffect.ToggleSecondaryLanguage,
+                                        ObfButtonActionEffect.SwapHeldMessage -> {
+                                            workspaceViewModel.onAction(
+                                                BoardWorkspaceAction.StatusChanged(
+                                                    unsupportedActionTemplate.replace("%ACTION%", button.action.orEmpty())
+                                                )
+                                            )
                                         }
                                         is ObfButtonActionEffect.Unsupported -> {
                                             workspaceViewModel.onAction(
@@ -1567,9 +1633,9 @@ private fun BoardSetWorkspaceRoot(
                             }
                         } else null,
                         selectedFieldAnchor = selectedField,
-                        selectedFieldSpans = remember(activeBoard?.grid, selectedField) {
+                        selectedFieldSpans = remember(activeBoard.grid, selectedField) {
                             selectedField?.let { (row, column) ->
-                                activeBoard?.grid?.availableFieldSpansAt(row, column).orEmpty()
+                                activeBoard.grid?.availableFieldSpansAt(row, column).orEmpty()
                             }.orEmpty()
                         },
                         onResizeField = if (mode == BoardWorkspaceMode.Edit) {
@@ -1622,6 +1688,7 @@ private fun BoardSetWorkspaceRoot(
                         },
                         modifier = Modifier.weight(1f).fillMaxWidth()
                     )
+                    }
                 }
             }
             if (isFullscreen && mode == BoardWorkspaceMode.Run && activeGraph != null && activeBoard != null) {
@@ -1764,6 +1831,11 @@ private fun BoardSetWorkspaceRoot(
                         scope.launch {
                             result.onSuccess { saved ->
                                 workspaceViewModel.onAction(BoardWorkspaceAction.SaveSucceeded(saved))
+                                // Prewarm TTS audio off the critical path; persistence
+                                // must never wait on per-button synthesis.
+                                appScope.launch {
+                                    runCatching { useCase.warmSpeechCache(saved) }
+                                }
                             }.onFailure {
                                 // Persistence failed: drop back into editing with the draft intact
                                 // so the user does not lose their work.
