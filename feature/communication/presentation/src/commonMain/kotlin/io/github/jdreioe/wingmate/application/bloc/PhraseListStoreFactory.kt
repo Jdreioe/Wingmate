@@ -5,6 +5,7 @@ import com.arkivanov.mvikotlin.core.store.SimpleBootstrapper
 import com.arkivanov.mvikotlin.core.store.Store
 import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.arkivanov.mvikotlin.extensions.coroutines.CoroutineExecutor
+import com.arkivanov.mvikotlin.extensions.coroutines.states as coroutinesStates
 import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetAllItemsUseCase
@@ -14,6 +15,7 @@ import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
@@ -34,7 +36,10 @@ class PhraseListStoreFactory(
             bootstrapper = SimpleBootstrapper(Unit),
             executorFactory = ::ExecutorImpl,
             reducer = ReducerImpl
-        ) {}
+        ) {
+            override val states: Flow<PhraseListStore.State>
+                get() = coroutinesStates
+        }
 
     private sealed class Msg {
         data object Loading : Msg()
@@ -61,6 +66,7 @@ class PhraseListStoreFactory(
                 is PhraseListStore.Intent.DeleteCategory -> deleteCategory(intent.categoryId)
                 is PhraseListStore.Intent.UpdatePhrase -> updatePhrase(intent.id, intent.text, intent.name, intent.imageUrl)
                 is PhraseListStore.Intent.UpdatePhraseRecording -> updatePhraseRecording(intent.id, intent.recordingPath)
+                is PhraseListStore.Intent.UpdatePhraseDetails -> updatePhraseDetails(intent)
                 is PhraseListStore.Intent.MovePhrase -> movePhrase(intent.fromIndex, intent.toIndex)
                 is PhraseListStore.Intent.MoveCategory -> moveCategory(intent.fromIndex, intent.toIndex, getState().categories)
             }
@@ -172,6 +178,29 @@ class PhraseListStoreFactory(
                     throw ce
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to update recording path"))
+                }
+            }
+        }
+
+        private fun updatePhraseDetails(intent: PhraseListStore.Intent.UpdatePhraseDetails) {
+            scope.launch {
+                try {
+                    val updated = updatePhraseUseCase(
+                        id = intent.id,
+                        text = intent.text,
+                        name = intent.name,
+                        imageUrl = intent.imageUrl,
+                        recordingPath = intent.recordingPath,
+                        parentId = intent.parentId,
+                        linkedBoardId = intent.linkedBoardId,
+                        isHidden = intent.isHidden
+                    )
+                    loadPhrasesAndCategories()
+                    dispatch(Msg.PhraseUpdated(updated))
+                } catch (ce: CancellationException) {
+                    throw ce
+                } catch (e: Exception) {
+                    dispatch(Msg.ErrorOccurred(e.message ?: "Failed to update phrase"))
                 }
             }
         }
