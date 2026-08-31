@@ -24,33 +24,80 @@ class PhraseUseCase(private val repo: PhraseRepository) {
 }
 
 class CategoryUseCase(
-    private val repo: io.github.jdreioe.wingmate.domain.CategoryRepository,
+    private val phraseRepository: PhraseRepository,
     private val featureUsageReporter: FeatureUsageReporter
 ) {
-    suspend fun list(): List<io.github.jdreioe.wingmate.domain.CategoryItem> = repo.getAll()
-    suspend fun add(category: io.github.jdreioe.wingmate.domain.CategoryItem): io.github.jdreioe.wingmate.domain.CategoryItem {
-        val added = repo.add(category)
+    suspend fun list(): List<CategoryItem> {
+        val all = phraseRepository.getAll()
+        return all.mapNotNull { it.toFolderPhrase() }.map { it.toCategoryItem() }
+    }
+
+    suspend fun add(category: CategoryItem): CategoryItem {
+        val existingNames = phraseRepository.getAll()
+            .mapNotNull { it.toFolderPhrase()?.phrase?.text }
+            .toSet()
+        val baseName = category.name?.trim().orEmpty()
+        val uniqueName = generateUniqueName(baseName, existingNames)
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val folderId = category.id.ifBlank { "category-${now}-${kotlin.random.Random.nextInt(1000, 9999)}" }
+        val phrase = Phrase(
+            id = folderId,
+            text = uniqueName,
+            linkedBoardId = folderId,
+            isGridItem = false,
+            createdAt = now,
+        )
+        val stored = phraseRepository.add(phrase)
+        val result = stored.toFolderPhrase()?.toCategoryItem() ?: CategoryItem(id = stored.id, name = stored.text)
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.CATEGORY_ADDED,
-            "has_name" to (!added.name.isNullOrBlank()).toString()
+            "has_name" to (!result.name.isNullOrBlank()).toString()
         )
-        return added
+        return result
     }
-    suspend fun update(category: io.github.jdreioe.wingmate.domain.CategoryItem): io.github.jdreioe.wingmate.domain.CategoryItem = repo.update(category)
+
+    suspend fun update(category: CategoryItem): CategoryItem {
+        val all = phraseRepository.getAll()
+        val existing = all.firstOrNull { it.id == category.id } ?: return category
+        val updated = existing.copy(text = category.name?.trim().orEmpty())
+        phraseRepository.update(updated)
+        return category
+    }
+
     suspend fun delete(id: String) {
-        repo.delete(id)
+        phraseRepository.delete(id)
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.CATEGORY_DELETED,
             "source" to "category_use_case"
         )
     }
+
     suspend fun move(fromIndex: Int, toIndex: Int) {
-        repo.move(fromIndex, toIndex)
+        val all = phraseRepository.getAll()
+        val folderPhrases = all.mapNotNull { it.toFolderPhrase() }
+        if (fromIndex !in folderPhrases.indices || toIndex !in folderPhrases.indices) return
+        val fromId = folderPhrases[fromIndex].id
+        val toId = folderPhrases[toIndex].id
+        val fromAbsolute = all.indexOfFirst { it.id == fromId }
+        val toAbsolute = all.indexOfFirst { it.id == toId }
+        if (fromAbsolute >= 0 && toAbsolute >= 0) {
+            phraseRepository.move(fromAbsolute, toAbsolute)
+        }
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.CATEGORY_MOVED,
             "from_index" to fromIndex.toString(),
             "to_index" to toIndex.toString()
         )
+    }
+
+    private fun generateUniqueName(base: String, existing: Set<String>): String {
+        if (base.isEmpty() || base !in existing) return base
+        var suffix = 2
+        while (true) {
+            val candidate = "${base}_$suffix"
+            if (candidate !in existing) return candidate
+            suffix++
+        }
     }
 }
 

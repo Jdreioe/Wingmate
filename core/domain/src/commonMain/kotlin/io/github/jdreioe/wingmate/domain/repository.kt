@@ -36,14 +36,6 @@ interface PhraseRepository {
     suspend fun move(fromIndex: Int, toIndex: Int)
 }
 
-interface CategoryRepository {
-    suspend fun getAll(): List<CategoryItem>
-    suspend fun add(category: CategoryItem): CategoryItem
-    suspend fun update(category: CategoryItem): CategoryItem
-    suspend fun delete(id: String)
-    suspend fun move(fromIndex: Int, toIndex: Int)
-}
-
 interface SettingsRepository {
     suspend fun get(): Settings
     suspend fun update(settings: Settings): Settings

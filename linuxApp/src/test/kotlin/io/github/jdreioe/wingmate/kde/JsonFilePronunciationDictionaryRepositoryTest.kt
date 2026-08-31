@@ -2,7 +2,6 @@ package io.github.jdreioe.wingmate.kde
 
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.Phrase
-import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.PersistenceError
 import io.github.jdreioe.wingmate.domain.PersistenceException
 import io.github.jdreioe.wingmate.domain.Settings
@@ -63,21 +62,6 @@ class JsonFilePronunciationDictionaryRepositoryTest {
         assertEquals(true, restored.last().isHidden)
         assertEquals("folder", restored.last().parentId)
         assertEquals("/first.wav", restored.last().recordingPath)
-    }
-
-    @Test
-    fun `category rename and order survive repository restart`() = runBlocking {
-        val file = Files.createTempDirectory("wingmate-categories-").resolve("categories.json").toFile()
-        val repository = JsonFileCategoryRepository(file)
-        repository.add(CategoryItem("one", "First"))
-        repository.add(CategoryItem("two", "Second"))
-        repository.update(CategoryItem("one", "Renamed"))
-        repository.move(1, 0)
-
-        assertEquals(
-            listOf("Second", "Renamed"),
-            JsonFileCategoryRepository(file).getAll().map { it.name },
-        )
     }
 
     @Test
@@ -146,7 +130,6 @@ class JsonFilePronunciationDictionaryRepositoryTest {
         verify("pronunciations") {
             JsonFilePronunciationDictionaryRepository(it).add(PronunciationEntry("word", "wɜːd", "ipa"))
         }
-        verify("categories") { JsonFileCategoryRepository(it).add(CategoryItem("new", "New")) }
         verify("boards") {
             JsonFileBoardRepository(it).saveBoard(ObfBoard(format = "open-board-0.1", id = "new"))
         }

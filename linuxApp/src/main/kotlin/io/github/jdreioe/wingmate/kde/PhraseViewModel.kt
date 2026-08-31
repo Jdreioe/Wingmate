@@ -5,6 +5,7 @@ import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUse
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PhraseRepository
+import io.github.jdreioe.wingmate.domain.toCategoryItem
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.koin.core.context.GlobalContext
@@ -141,13 +142,7 @@ class PhraseViewModel {
     private suspend fun reloadData() {
         val (phrases, folders) = phrasesUseCase.invoke()
         _phrases.value = phrases.filter { it.parentId == _currentCategory.value }
-        _categories.value = folders.map { phrase ->
-            CategoryItem(
-                id = phrase.id,
-                name = phrase.text,
-                isFolder = phrase.linkedBoardId != null
-            )
-        }
+        _categories.value = folders.map { it.toCategoryItem() }
     }
 
     fun cleanup() {

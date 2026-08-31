@@ -393,47 +393,6 @@ class JsonFilePhraseRepository(
     private suspend fun save(phrases: List<Phrase>) = writeJson(file, phrases, writer)
 }
 
-class JsonFileCategoryRepository(
-    private val file: File = File(configDir, "categories.json"),
-    private val writer: suspend (File, String) -> Unit = ::writeTextAtomically,
-) : CategoryRepository {
-    private val mutex = Mutex()
-
-    override suspend fun getAll(): List<CategoryItem> = mutex.withLock { readCategories() }
-
-    override suspend fun add(category: CategoryItem): CategoryItem = mutex.withLock {
-        val categories = readCategories().toMutableList()
-        val stored = category.copy(id = category.id.ifBlank { "category-${java.util.UUID.randomUUID()}" })
-        categories += stored
-        save(categories)
-        stored
-    }
-
-    override suspend fun update(category: CategoryItem): CategoryItem = mutex.withLock {
-        val categories = readCategories().toMutableList()
-        val index = categories.indexOfFirst { it.id == category.id }
-        if (index >= 0) categories[index] = category else categories += category
-        save(categories)
-        category
-    }
-
-    override suspend fun delete(id: String) = mutex.withLock {
-        val categories = readCategories().toMutableList()
-        if (categories.removeAll { it.id == id }) save(categories)
-    }
-
-    override suspend fun move(fromIndex: Int, toIndex: Int) = mutex.withLock {
-        val categories = readCategories().toMutableList()
-        if (fromIndex !in categories.indices) return@withLock
-        val item = categories.removeAt(fromIndex)
-        categories.add(toIndex.coerceIn(0, categories.size), item)
-        save(categories)
-    }
-
-    private fun readCategories() = readJson<List<CategoryItem>>(file).valueOr(::emptyList)
-    private suspend fun save(categories: List<CategoryItem>) = writeJson(file, categories, writer)
-}
-
 class JsonFileBoardRepository(
     private val file: File = File(configDir, "boards.json"),
     private val writer: suspend (File, String) -> Unit = ::writeTextAtomically,

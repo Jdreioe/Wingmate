@@ -76,8 +76,9 @@ class PhraseListStoreFactory(
             dispatch(Msg.Loading)
             scope.launch {
                 try {
-                    val (phrases, categories) = getPhrasesAndCategoriesUseCase()
-                    dispatch(Msg.PhrasesAndCategoriesLoaded(phrases, categories))
+                    val (phrases, folderPhrases) = getPhrasesAndCategoriesUseCase()
+                    // Keep store state as List<Phrase> for now; folder wrapper is unwrapped here (Q7=a keeps CategoryItem as UiModel)
+                    dispatch(Msg.PhrasesAndCategoriesLoaded(phrases, folderPhrases.map { it.phrase }))
                 } catch (ce: CancellationException) {
                     throw ce
                 } catch (e: Exception) {
