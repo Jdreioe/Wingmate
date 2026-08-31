@@ -2460,7 +2460,6 @@ fun main(args: Array<String>) {
         single<io.github.jdreioe.wingmate.domain.ConfigRepository> { JsonFileConfigRepository() }
         single<io.github.jdreioe.wingmate.domain.VoiceRepository> { JsonFileVoiceRepository() }
         single<io.github.jdreioe.wingmate.domain.PhraseRepository> { JsonFilePhraseRepository() }
-        single<io.github.jdreioe.wingmate.domain.CategoryRepository> { JsonFileCategoryRepository() }
         single<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository> {
             JsonFilePronunciationDictionaryRepository()
         }

@@ -1,7 +1,6 @@
 package io.github.jdreioe.wingmate
 
 import android.content.Context
-import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
@@ -30,7 +29,6 @@ import io.github.jdreioe.wingmate.infrastructure.AndroidPhraseRecordingService
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidPreferencesCommunicationSessionDataSource
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlPhraseRepository
-import io.github.jdreioe.wingmate.infrastructure.AndroidSqlCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlPronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSettingsRepository
@@ -72,7 +70,6 @@ fun overrideAndroidSpeechService(context: Context, aptabaseAppKey: String) {
             // Share service for Android share sheet
             singleOf(::AndroidShareService) { bind<ShareService>() }
             singleOf(::AndroidSqlPhraseRepository) { bind<PhraseRepository>() }
-            singleOf(::AndroidSqlCategoryRepository) { bind<CategoryRepository>() }
             singleOf(::AndroidSqlVoiceRepository) { bind<VoiceRepository>() }
             singleOf(::AndroidSqlSettingsRepository) { bind<SettingsRepository>() }
             singleOf(::AndroidSqlPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }

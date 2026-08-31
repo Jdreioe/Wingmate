@@ -3,8 +3,9 @@ package io.github.jdreioe.wingmate.application
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.CategoryItem
-import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.FolderPhrase
+import io.github.jdreioe.wingmate.domain.isFolderPhrase
 import io.github.jdreioe.wingmate.domain.CommunicationSessionDataSource
 import io.github.jdreioe.wingmate.domain.CommunicationSessionSnapshot
 import io.github.jdreioe.wingmate.domain.CommunicationStorageResult
@@ -57,7 +58,7 @@ data class WingmateBackupPayload(
     val boards: List<ObfBoard>,
     val boardSets: List<ObfBoardSet>,
     val phrases: List<Phrase>,
-    val categories: List<CategoryItem>,
+    val categories: List<CategoryItem> = emptyList(),
     val settings: Settings,
     val voices: List<Voice>,
     val selectedVoice: Voice?,
@@ -112,7 +113,6 @@ class CompleteBackupManager(
     private val boardRepository: BoardRepository,
     private val boardSetRepository: BoardSetRepository,
     private val phraseRepository: PhraseRepository,
-    private val categoryRepository: CategoryRepository,
     private val settingsRepository: SettingsRepository,
     private val voiceRepository: VoiceRepository,
     private val saidTextRepository: SaidTextRepository,
@@ -299,7 +299,8 @@ class CompleteBackupManager(
         boards = boardRepository.listBoards(),
         boardSets = boardSetRepository.listBoardSets(),
         phrases = phraseRepository.getAll(),
-        categories = categoryRepository.getAll(),
+        // categories is read-compat only (Q2=a); new backups write empty list and phrases contain folder-Phrases
+        categories = emptyList(),
         settings = settingsRepository.get(),
         voices = voiceRepository.getVoices(),
         selectedVoice = voiceRepository.getSelected(),
@@ -313,14 +314,26 @@ class CompleteBackupManager(
         boardSetRepository.listBoardSets().forEach { boardSetRepository.deleteBoardSet(it.id) }
         boardRepository.listBoards().forEach { boardRepository.deleteBoard(it.id) }
         phraseRepository.getAll().forEach { phraseRepository.delete(it.id) }
-        categoryRepository.getAll().forEach { categoryRepository.delete(it.id) }
         saidTextRepository.deleteAll()
         dictionaryRepository.clear()
 
         boardRepository.saveBoards(payload.boards)
         payload.boardSets.forEach { boardSetRepository.saveBoardSet(it) }
-        payload.categories.forEach { categoryRepository.add(it) }
-        payload.phrases.forEach { phraseRepository.add(it) }
+        // Q2=a migration: old backups with flat categories → folder-Phrases
+        val migratedCategories = payload.categories.mapNotNull { cat ->
+            val id = cat.id.ifBlank { return@mapNotNull null }
+            // skip if a phrase with same id already exists (new backup or duplicate)
+            if (payload.phrases.any { it.id == id }) return@mapNotNull null
+            Phrase(
+                id = id,
+                text = cat.name?.trim().orEmpty().ifEmpty { "Category" },
+                linkedBoardId = id,
+                isGridItem = false,
+                createdAt = Clock.System.now().toEpochMilliseconds(),
+            )
+        }
+        val allPhrases = payload.phrases + migratedCategories
+        allPhrases.forEach { phraseRepository.add(it) }
         settingsRepository.update(payload.settings)
         voiceRepository.saveVoices(payload.voices)
         payload.selectedVoice?.let { voiceRepository.saveSelected(it) }

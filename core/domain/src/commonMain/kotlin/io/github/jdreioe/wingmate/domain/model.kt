@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.domain
 
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
+import kotlin.jvm.JvmInline
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -43,6 +44,34 @@ data class Phrase(
     val isHidden: Boolean = false
 )
 
+/**
+ * Typed folder-Phrase: a Phrase that acts as a Category (folder). Backed by the
+ * phrase repository; replaces the flat CategoryItem persistence. Q3=a.
+ * A Phrase is a folder iff `isGridItem == false` or (`isGridItem == null` and `linkedBoardId != null`).
+ */
+@JvmInline
+value class FolderPhrase(val phrase: Phrase) {
+    val id: String get() = phrase.id
+    val name: String? get() = phrase.text
+}
+
+fun Phrase.isFolderPhrase(): Boolean =
+    isGridItem == false || (isGridItem == null && linkedBoardId != null)
+
+fun Phrase.isGridPhrase(): Boolean =
+    isGridItem == true || (isGridItem == null && linkedBoardId == null)
+
+fun Phrase.toFolderPhrase(): FolderPhrase? =
+    if (isFolderPhrase()) FolderPhrase(this) else null
+
+fun FolderPhrase.toCategoryItem(): CategoryItem =
+    CategoryItem(id = phrase.id, name = phrase.text)
+
+/**
+ * UI-only view of a folder-Phrase. Persisted CategoryItem is replaced by
+ * FolderPhrase; this type remains only as a compose UiModel mapper (Q7=a).
+ * TODO: migrate screens to FolderPhrase directly and delete this alias.
+ */
 @Serializable
 data class CategoryItem(
     val id: String,

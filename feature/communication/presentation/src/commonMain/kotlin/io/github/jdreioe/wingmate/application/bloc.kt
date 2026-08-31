@@ -2,7 +2,6 @@ package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.CategoryItem
-import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SettingsRepository
@@ -68,7 +67,7 @@ class PhraseBloc(
     constructor(repo: PhraseRepository) : this(
         PhraseUseCase(repo),
         NoopFeatureUsageReporter(),
-        CategoryUseCase(NoopCategoryRepository(), NoopFeatureUsageReporter())
+        CategoryUseCase(repo, NoopFeatureUsageReporter())
     )
 
     override suspend fun handle(event: PhraseEvent) {
@@ -165,14 +164,6 @@ class PhraseBloc(
             }
         }
     }
-}
-
-private class NoopCategoryRepository : CategoryRepository {
-    override suspend fun getAll(): List<CategoryItem> = emptyList()
-    override suspend fun add(category: CategoryItem): CategoryItem = category
-    override suspend fun update(category: CategoryItem): CategoryItem = category
-    override suspend fun delete(id: String) = Unit
-    override suspend fun move(fromIndex: Int, toIndex: Int) = Unit
 }
 
 sealed class SettingsEvent {

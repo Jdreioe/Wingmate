@@ -19,7 +19,6 @@ import io.github.jdreioe.wingmate.domain.obf.pageElements
 import io.github.jdreioe.wingmate.domain.obf.withPageElements
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
-import io.github.jdreioe.wingmate.infrastructure.InMemoryCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryCommunicationSessionDataSource
 import io.github.jdreioe.wingmate.infrastructure.InMemoryPhraseRepository
@@ -45,7 +44,6 @@ class CompleteBackupManagerTest {
         val boards = InMemoryBoardRepository()
         val sets = InMemoryBoardSetRepository()
         val phrases = InMemoryPhraseRepository()
-        val categories = InMemoryCategoryRepository()
         val settings = InMemorySettingsRepository()
         val voices = InMemoryVoiceRepository()
         val history = InMemorySaidTextRepository()
@@ -70,7 +68,7 @@ class CompleteBackupManagerTest {
             override suspend fun deleteRestored(path: String) = Unit
         }
         val manager = CompleteBackupManager(
-            boards, sets, phrases, categories, settings, voices, history, communication, dictionary, config,
+            boards, sets, phrases, settings, voices, history, communication, dictionary, config,
             filePicker = null,
             mediaAccess = media
         )
@@ -193,7 +191,6 @@ class CompleteBackupManagerTest {
         val boards = InMemoryBoardRepository()
         val sets = InMemoryBoardSetRepository()
         val phrases = InMemoryPhraseRepository()
-        val categories = InMemoryCategoryRepository()
         val settings = InMemorySettingsRepository()
         val voices = InMemoryVoiceRepository()
         val history = InMemorySaidTextRepository()
@@ -202,7 +199,7 @@ class CompleteBackupManagerTest {
         val config = InMemoryConfigRepository()
 
         fun manager(filePicker: FilePicker?, media: BackupMediaAccess) = CompleteBackupManager(
-            boards, sets, phrases, categories, settings, voices, history, communication, dictionary, config, filePicker, media
+            boards, sets, phrases, settings, voices, history, communication, dictionary, config, filePicker, media
         )
     }
 

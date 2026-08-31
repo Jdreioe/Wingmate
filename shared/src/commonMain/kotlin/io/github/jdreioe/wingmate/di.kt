@@ -8,7 +8,6 @@ import io.github.jdreioe.wingmate.application.CategoryUseCase
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.NoopFeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SettingsStateManager
-import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.UserDataManager
 import io.github.jdreioe.wingmate.application.DefaultEditingAccessStore
@@ -40,7 +39,6 @@ import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.GoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.NoGoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.DictionaryLoader
-import io.github.jdreioe.wingmate.infrastructure.InMemoryCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryCommunicationSessionDataSource
 import io.github.jdreioe.wingmate.infrastructure.InMemoryPhraseRepository
@@ -75,7 +73,6 @@ fun initKoin(extra: Module? = null) {
 
 internal fun createCoreDataModule(): Module = module {
         singleOf(::InMemoryPhraseRepository) { bind<PhraseRepository>() }
-        singleOf(::InMemoryCategoryRepository) { bind<CategoryRepository>() }
         singleOf(::InMemorySettingsRepository) { bind<SettingsRepository>() }
         singleOf(::InMemoryVoiceRepository) { bind<VoiceRepository>() }
         singleOf(::InMemorySaidTextRepository) { bind<SaidTextRepository>() }
@@ -103,7 +100,6 @@ internal fun createCoreDataModule(): Module = module {
                 boardRepository = get(),
                 boardSetRepository = get(),
                 phraseRepository = get(),
-                categoryRepository = get(),
                 settingsRepository = get(),
                 voiceRepository = get(),
                 saidTextRepository = get(),
@@ -136,7 +132,7 @@ internal fun createCoreDataModule(): Module = module {
             )
         }
         singleOf(::VoiceUseCase)
-        factory { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>(), get<CategoryUseCase>()) }
+        single { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>(), get<CategoryUseCase>()) }
 }
 
 // Convenience no-arg for Swift where optional bridging might produce a different symbol name
