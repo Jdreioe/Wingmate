@@ -104,14 +104,13 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import io.github.jdreioe.wingmate.domain.AacLogger
 import io.github.jdreioe.wingmate.domain.Base64Decoder
-import io.github.jdreioe.wingmate.domain.SpeechService
-import io.github.jdreioe.wingmate.domain.withLanguageOverride
+import io.github.jdreioe.wingmate.domain.CommunicationAction
+import io.github.jdreioe.wingmate.domain.CommunicationSession
+import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.obf.resolvedBackgroundColor
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import org.koin.compose.koinInject
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
 
 import com.hojmoseit.wingmate.R
@@ -1080,7 +1079,7 @@ fun ObfButtonItem(
     fieldFontScale: Float = 1f,
     onLongClick: (() -> Unit)? = null
 ) {
-    val speechService: SpeechService = koinInject()
+    val communicationSession: CommunicationSession = koinInject()
     val voiceUseCase: VoiceUseCase = koinInject()
     val aacLogger: AacLogger = koinInject()
     val settings by rememberReactiveSettings()
@@ -1149,9 +1148,6 @@ fun ObfButtonItem(
     var isHovered by remember { mutableStateOf(false) }
     var isPointerDown by remember { mutableStateOf(false) }
     
-    // Stable scope for fire-and-forget speech (survives hover changes)
-    val fishingScope = rememberCoroutineScope()
-
     val primaryAction = {
         if (tryActivate()) {
             if (animateSelection) isSelected = true
@@ -1165,12 +1161,14 @@ fun ObfButtonItem(
     LaunchedEffect(isHovered, settings.auditoryFishingEnabled) {
         val label = displayLabel ?: displayVocalization ?: ""
         if (isHovered && accessHost?.state?.isPaused != true && settings.auditoryFishingEnabled && label.isNotBlank()) {
-            fishingScope.launch {
-                runCatching {
-                    val voice = voiceUseCase.selected().withLanguageOverride(button.locale)
-                    speechService.speak(label, voice, voice?.pitch, rate = 0.8)
-                }
-            }
+            val voice = runCatching { voiceUseCase.selected() }.getOrNull()
+            communicationSession.accept(
+                CommunicationAction.SpeakPart(
+                    part = MessagePart(label, languageTag = button.locale),
+                    voice = voice,
+                    rateOverride = 0.8,
+                )
+            )
         }
     }
 

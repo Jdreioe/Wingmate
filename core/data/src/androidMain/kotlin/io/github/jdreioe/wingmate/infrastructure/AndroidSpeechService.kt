@@ -411,6 +411,20 @@ class AndroidSpeechService(
         }
     }
 
+    override suspend fun speakWithoutHistory(
+        text: String,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+    ) {
+        val requestId = beginRequest()
+        executeRequest(requestId) {
+            val segments = SpeechTextProcessor.processText(text)
+            speakSegmentsInternal(requestId, segments, voice, pitch, rate, cacheAudio, recordInHistory = false)
+        }
+    }
+
     override suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
         val requestId = beginRequest()
         executeRequest(requestId) {
@@ -422,6 +436,19 @@ class AndroidSpeechService(
         val requestId = beginRequest()
         executeRequest(requestId) {
             speakSegmentsInternal(requestId, segments, voice, pitch, rate, cacheAudio)
+        }
+    }
+
+    override suspend fun speakSegmentsWithoutHistory(
+        segments: List<SpeechSegment>,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+    ) {
+        val requestId = beginRequest()
+        executeRequest(requestId) {
+            speakSegmentsInternal(requestId, segments, voice, pitch, rate, cacheAudio, recordInHistory = false)
         }
     }
 
@@ -505,7 +532,15 @@ class AndroidSpeechService(
         pendingSpeechCache.toList().forEach { cacheSpeech(it.text, it.voice, it.pitch, it.rate) }
     }
 
-    private suspend fun speakSegmentsInternal(requestId: Long, segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?, cacheAudio: Boolean) {
+    private suspend fun speakSegmentsInternal(
+        requestId: Long,
+        segments: List<SpeechSegment>,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        recordInHistory: Boolean = true,
+    ) {
         // Check user preference for TTS engine first
         val koin = GlobalContext.getOrNull()
         val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
@@ -528,7 +563,7 @@ class AndroidSpeechService(
         val engine = uiSettings?.ttsEngine ?: TtsEngine.SYSTEM
         if (engine == TtsEngine.SYSTEM) {
             playSegmentsWithPlatformTts(requestId, segments, voice, pitch, rate)
-            recordHistory(combinedText, voice)
+            if (recordInHistory) recordHistory(combinedText, voice)
             return
         }
 
@@ -543,7 +578,7 @@ class AndroidSpeechService(
             // No credential for the selected provider - keep communication working via system TTS.
             showConfigWarning()
             speakWithPlatformTts(requestId, combinedText, voice, pitch, rate)
-            recordHistory(combinedText, voice)
+            if (recordInHistory) recordHistory(combinedText, voice)
             return
         }
         
@@ -552,7 +587,7 @@ class AndroidSpeechService(
             showOfflineWarning()
             // Fall back to system TTS when offline
             speakWithPlatformTts(requestId, combinedText, voice, pitch, rate)
-            recordHistory(combinedText, voice)
+            if (recordInHistory) recordHistory(combinedText, voice)
             return
         }
         
@@ -613,7 +648,7 @@ class AndroidSpeechService(
                 if (cacheAudio && outFile.exists() && outFile.length() > 0) {
                     // Cache hit! reuse the file without calling Azure
                     startPlayback(requestId, outFile, vForSsml)
-                    recordHistory(combinedText, vForSsml, outFile.absolutePath)
+                    if (recordInHistory) recordHistory(combinedText, vForSsml, outFile.absolutePath)
                     return@withContext
                 }
 
@@ -655,7 +690,9 @@ class AndroidSpeechService(
                 }
 
                 startPlayback(requestId, outFile, vForSsml, deleteAfterPlayback = !cacheAudio)
-                recordHistory(combinedText, vForSsml, outFile.absolutePath.takeIf { cacheAudio })
+                if (recordInHistory) {
+                    recordHistory(combinedText, vForSsml, outFile.absolutePath.takeIf { cacheAudio })
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (t: Throwable) {
@@ -675,7 +712,7 @@ class AndroidSpeechService(
                 // Fallback to platform TTS on error
                 if (requestGeneration.get() != requestId) throw CancellationException("Speech request was replaced")
                 speakWithPlatformTts(requestId, combinedText, voice, pitch, rate)
-                recordHistory(combinedText, voice)
+                if (recordInHistory) recordHistory(combinedText, voice)
             }
         }
     }

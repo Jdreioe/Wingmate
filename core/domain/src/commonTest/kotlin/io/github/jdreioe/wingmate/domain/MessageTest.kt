@@ -50,4 +50,62 @@ class MessageTest {
         assertTrue(result.message.parts.isEmpty())
         assertFalse(result.shouldSpeak)
     }
+
+    @Test
+    fun `range replacement keeps language spans aligned`() {
+        val original = Message(parts = listOf(MessagePart("hello world")))
+            .toggleLanguage(TextSpan(6, 11), "da-DK")
+
+        val edited = original.replaceRange(0, 5, MessagePart("hi"))
+
+        assertEquals("hi world", edited.displayText)
+        assertEquals(
+            listOf(MessageLanguageSpan(TextSpan(3, 8), "da-DK")),
+            edited.languageSpans,
+        )
+    }
+
+    @Test
+    fun `appended screen part carries its separator and provenance`() {
+        val first = MessagePart(
+            displayText = "I",
+            source = MessagePartSource.ScreenButton("screen", "page", "i"),
+        )
+        val second = MessagePart(
+            displayText = "want",
+            source = MessagePartSource.ScreenButton("screen", "page", "want"),
+        )
+
+        val message = Message().appendPart(first, spellingMode = false).appendPart(second, spellingMode = false)
+
+        assertEquals("I want", message.displayText)
+        assertEquals(" want", message.parts.last().displayText)
+        assertIs<MessagePartSource.ScreenButton>(message.parts.last().source)
+    }
+
+    @Test
+    fun `adjacent typed parts with different speech modes stay distinct`() {
+        val message = Message(parts = listOf(MessagePart("two")))
+            .insertPart(3, MessagePart(" plus two", mathMode = true))
+
+        assertEquals(listOf(false, true), message.parts.map { it.mathMode })
+    }
+
+    @Test
+    fun `typing an edited structured part back exactly restores its vocalization`() {
+        val originalPart = MessagePart(
+            displayText = "WC",
+            spokenText = "toilet",
+            source = MessagePartSource.Phrase("wc"),
+        )
+
+        val edited = Message(parts = listOf(originalPart)).edit("Bathroom")
+        val restored = edited.edit("WC")
+
+        assertIs<MessagePartSource.Typed>(edited.parts.single().source)
+        assertEquals(listOf(MessageEditProvenance(TextSpan(0, 8), originalPart)), edited.editProvenance)
+        assertEquals(originalPart, restored.parts.single())
+        assertEquals("toilet", restored.spokenText)
+        assertTrue(restored.editProvenance.isEmpty())
+    }
 }

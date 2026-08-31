@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
@@ -29,7 +28,6 @@ internal data class BoardWorkspaceState(
     val mode: BoardWorkspaceMode = BoardWorkspaceMode.Run,
     val selectedBoardId: String? = null,
     val boardStack: List<String> = emptyList(),
-    val selectedButtons: List<ObfButton> = emptyList(),
     val showFinishDialog: Boolean = false,
     val showEditingAccessDialog: Boolean = false,
     val isSaving: Boolean = false,
@@ -86,9 +84,6 @@ internal sealed interface BoardWorkspaceAction {
         val selectedBoardId: String?,
         val boardStack: List<String>,
     ) : BoardWorkspaceAction
-    data class ReplaceSentence(val buttons: List<ObfButton>) : BoardWorkspaceAction
-    data object RemoveLastSentenceButton : BoardWorkspaceAction
-    data object ClearSentence : BoardWorkspaceAction
     data object StartEditing : BoardWorkspaceAction
     data object EditingAccessRequired : BoardWorkspaceAction
     data object EditingAccessDismissed : BoardWorkspaceAction
@@ -123,9 +118,6 @@ internal class BoardWorkspaceViewModel(
         BoardWorkspaceState(
             selectedBoardId = savedStateHandle[SELECTED_BOARD_ID],
             boardStack = savedStateHandle.get<ArrayList<String>>(BOARD_STACK)?.toList().orEmpty(),
-            selectedButtons = savedStateHandle.get<String>(SENTENCE_BUTTONS)
-                ?.let { encoded -> runCatching { json.decodeFromString<List<ObfButton>>(encoded) }.getOrNull() }
-                .orEmpty(),
         )
     )
     val state: StateFlow<BoardWorkspaceState> = _state.asStateFlow()
@@ -182,17 +174,11 @@ internal class BoardWorkspaceViewModel(
                 selectedBoardId = action.selectedBoardId,
                 boardStack = action.boardStack,
             )
-            is BoardWorkspaceAction.ReplaceSentence -> _state.value.copy(selectedButtons = action.buttons)
-            BoardWorkspaceAction.RemoveLastSentenceButton -> _state.value.copy(
-                selectedButtons = _state.value.selectedButtons.dropLast(1)
-            )
-            BoardWorkspaceAction.ClearSentence -> _state.value.copy(selectedButtons = emptyList())
             BoardWorkspaceAction.StartEditing -> {
                 val graph = _state.value.savedGraph ?: return
                 _state.value.goHome(graph.boardSet.rootBoardId).copy(
                     editSession = BoardSetEditSession(graph, graph),
                     mode = BoardWorkspaceMode.Edit,
-                    selectedButtons = emptyList(),
                     showEditingAccessDialog = false,
                 )
             }
@@ -256,10 +242,14 @@ internal class BoardWorkspaceViewModel(
             _state.update { updated }
             savedStateHandle[SELECTED_BOARD_ID] = updated.selectedBoardId
             savedStateHandle[BOARD_STACK] = ArrayList(updated.boardStack)
-            savedStateHandle[SENTENCE_BUTTONS] = updated.selectedButtons
-                .takeIf { it.isNotEmpty() }
-                ?.let(json::encodeToString)
         }
+    }
+
+    /** One-release import path for sentence state saved before CommunicationSession owned it. */
+    fun consumeLegacySentenceButtons(): List<ObfButton> {
+        val encoded = savedStateHandle.get<String>(SENTENCE_BUTTONS) ?: return emptyList()
+        savedStateHandle.remove<String>(SENTENCE_BUTTONS)
+        return runCatching { json.decodeFromString<List<ObfButton>>(encoded) }.getOrDefault(emptyList())
     }
 
     private fun handleBack(): BoardWorkspaceState {

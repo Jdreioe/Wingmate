@@ -18,6 +18,7 @@ import io.github.jdreioe.wingmate.ui.InteractionInputRoot
 import io.github.jdreioe.wingmate.ui.rememberReactiveSettings
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.CommunicationSession
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
@@ -39,6 +40,7 @@ fun App() {
     val voiceUseCase = koinInject<VoiceUseCase>()
     val backupManager = koinInject<CompleteBackupManager>()
     val settingsStateManager = koinInject<SettingsStateManager>()
+    val communicationSession = koinInject<CommunicationSession>()
     val restoreRevision by backupManager.restoreRevision.collectAsState()
     val reactiveSettings by rememberReactiveSettings()
 
@@ -145,6 +147,7 @@ fun App() {
             LaunchedEffect(restoreRevision) {
                 if (restoreRevision == 0L) return@LaunchedEffect
                 startupLoadState = StartupLoadState.Loading
+                communicationSession.reloadAfterRestore()
                 val loaded = withContext(Dispatchers.Default) {
                     loadStartupState(settingsRepository::get, voiceUseCase::selected)
                 }

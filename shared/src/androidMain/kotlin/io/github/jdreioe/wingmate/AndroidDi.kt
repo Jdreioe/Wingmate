@@ -5,6 +5,7 @@ import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.CommunicationSessionDataSource
 import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PhraseRecordingService
@@ -27,6 +28,7 @@ import io.github.jdreioe.wingmate.infrastructure.GoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.AndroidImageCacher
 import io.github.jdreioe.wingmate.infrastructure.AndroidPhraseRecordingService
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlConfigRepository
+import io.github.jdreioe.wingmate.infrastructure.AndroidPreferencesCommunicationSessionDataSource
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlPronunciationDictionaryRepository
@@ -64,6 +66,7 @@ fun overrideAndroidSpeechService(context: Context, aptabaseAppKey: String) {
             singleOf(::AndroidSystemVoiceProvider) { bind<SystemVoiceProvider>() }
             // Prefer SQLite-backed repositories on Android for parity with desktop
             singleOf(::AndroidSqlConfigRepository) { bind<ConfigRepository>() }
+            singleOf(::AndroidPreferencesCommunicationSessionDataSource) { bind<CommunicationSessionDataSource>() }
             // Audio clipboard support
             singleOf(::AndroidAudioClipboard) { bind<AudioClipboard>() }
             // Share service for Android share sheet
