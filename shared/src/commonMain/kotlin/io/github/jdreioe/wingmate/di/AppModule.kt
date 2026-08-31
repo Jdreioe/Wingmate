@@ -34,7 +34,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.dsl.bind
-import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -89,9 +88,11 @@ val appModule = module {
     
     single<AacLogger> { RealAacLogger(get(), getOrNull(named("logDir")), get()) }
 
-    factoryOf(::PhraseListStoreFactory)
+    singleOf(::PhraseListStoreFactory)
 
-    factory {
+    // One store per process: it is the shared source of truth observed by
+    // every client (iOS via CommunicationFacade, Linux/Android via Koin).
+    single {
         get<PhraseListStoreFactory>().create()
     }
 }

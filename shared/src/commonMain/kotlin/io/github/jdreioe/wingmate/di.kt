@@ -1,8 +1,6 @@
 package io.github.jdreioe.wingmate
 
 import io.github.jdreioe.wingmate.application.PhraseBloc
-import io.github.jdreioe.wingmate.application.SettingsBloc
-import io.github.jdreioe.wingmate.application.VoiceBloc
 import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -10,7 +8,6 @@ import io.github.jdreioe.wingmate.application.CategoryUseCase
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.NoopFeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SettingsStateManager
-import io.github.jdreioe.wingmate.domain.AzureF0Provisioner
 import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.UserDataManager
@@ -35,14 +32,11 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
-import io.github.jdreioe.wingmate.infrastructure.AutoF0FlowUseCase
-import io.github.jdreioe.wingmate.infrastructure.AzureArmClient
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.GoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.NoGoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.DictionaryLoader
-import io.github.jdreioe.wingmate.infrastructure.InMemoryAzureF0Provisioner
 import io.github.jdreioe.wingmate.infrastructure.InMemoryCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryPhraseRepository
@@ -58,7 +52,6 @@ import org.koin.dsl.module
 import org.koin.core.module.dsl.singleOf
 
 import io.github.jdreioe.wingmate.di.appModule
-import io.ktor.client.HttpClient
 
 @Suppress("unused")
 fun initKoin(extra: Module? = null) {
@@ -80,9 +73,6 @@ internal fun createCoreDataModule(): Module = module {
         singleOf(::InMemorySaidTextRepository) { bind<SaidTextRepository>() }
         singleOf(::InMemoryConfigRepository) { bind<ConfigRepository>() }
         singleOf(::InMemoryPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
-        singleOf(::InMemoryAzureF0Provisioner) { bind<AzureF0Provisioner>() }
-        single { AzureArmClient(HttpClient()) }
-        singleOf(::AutoF0FlowUseCase)
         singleOf(::NoopSpeechService) { bind<SpeechService>() } // Overridden per platform (Android, iOS)
         singleOf(::NoopFeatureUsageReporter) { bind<FeatureUsageReporter>() }
         singleOf(::AzureVoiceCatalog)
@@ -123,8 +113,6 @@ internal fun createCoreDataModule(): Module = module {
         singleOf(::SettingsStateManager)
         singleOf(::VoiceUseCase)
         factory { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>(), get<CategoryUseCase>()) }
-        factory { SettingsBloc(get<SettingsUseCase>()) }
-        factory { VoiceBloc(get<VoiceUseCase>()) }
 }
 
 // Convenience no-arg for Swift where optional bridging might produce a different symbol name

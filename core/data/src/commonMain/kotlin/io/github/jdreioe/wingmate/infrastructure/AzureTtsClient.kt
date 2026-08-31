@@ -545,15 +545,13 @@ object AzureTtsClient {
     
     /**
      * Synthesize speech using a bearer token instead of subscription key.
-     * 
-     * This is the secure method that should be used in production:
-     * 1. Client calls TokenExchangeClient.getToken() to get a short-lived token
-     * 2. This method uses that token to call Azure TTS directly
-     * 3. No subscription key is ever stored on the client device
-     * 
+     *
+     * The token comes from a short-lived exchange performed by the caller;
+     * this method never needs a stored subscription key.
+     *
      * @param client Ktor HTTP client
      * @param ssml The SSML document to synthesize
-     * @param token Bearer token from TokenExchangeClient
+     * @param token Bearer token
      * @param region Azure region (e.g., "eastus")
      * @param audioFormat Desired audio format
      */

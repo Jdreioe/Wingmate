@@ -24,7 +24,6 @@ kotlin {
                 implementation(project(":feature:communication:domain"))
                 implementation(project(":feature:communication:data"))
                 implementation(project(":core:presentation"))
-                implementation(project(":core:design-system"))
                 implementation(libs.koin.core)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
                 implementation("com.arkivanov.mvikotlin:mvikotlin:3.3.0")

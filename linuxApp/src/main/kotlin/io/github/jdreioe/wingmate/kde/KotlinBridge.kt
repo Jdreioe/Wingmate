@@ -141,6 +141,17 @@ class KotlinBridge(
     private val port: Int = 8765,
     private val backupFacade: BackupFacade,
 ) {
+    /**
+     * Maps a JSON field to the shared update convention: a missing key means
+     * "keep the existing value" (null), while a key present as null or blank
+     * means "remove it" ("") — the Rust client sends explicit nulls for
+     * cleared optional fields.
+     */
+    private fun JsonObject.optionalField(key: String): String? = when {
+        !containsKey(key) -> null
+        else -> this[key]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() } ?: ""
+    }
+
     @Volatile private var presetDownloadStage: String = "idle"
     @Volatile private var presetDownloadedBytes: Long = 0
     @Volatile private var presetTotalBytes: Long? = null
@@ -248,17 +259,20 @@ class KotlinBridge(
             put("/api/phrases/{id}") {
                 val id = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
                 val body = json.parseToJsonElement(call.receiveText()).jsonObject
-                val updated = phraseViewModel.updateDetails(
+                // The Rust client sends explicit nulls for cleared optional fields;
+                // map "key present" to the store's blank-removes convention and a
+                // missing key to the keep-existing convention.
+                phraseViewModel.updateDetails(
                     id = id,
-                    text = body["text"]?.jsonPrimitive?.contentOrNull,
-                    name = body["name"]?.jsonPrimitive?.contentOrNull,
-                    imageUrl = body["imageUrl"]?.jsonPrimitive?.contentOrNull,
-                    parentId = body["parentId"]?.jsonPrimitive?.contentOrNull,
-                    linkedBoardId = body["linkedBoardId"]?.jsonPrimitive?.contentOrNull,
-                    recordingPath = body["recordingPath"]?.jsonPrimitive?.contentOrNull,
+                    text = body["text"]?.jsonPrimitive?.contentOrNull?.trim()?.ifBlank { null },
+                    name = body["name"]?.jsonPrimitive?.contentOrNull?.trim(),
+                    imageUrl = body.optionalField("imageUrl"),
+                    parentId = body.optionalField("parentId"),
+                    linkedBoardId = body.optionalField("linkedBoardId"),
+                    recordingPath = body.optionalField("recordingPath"),
                     isHidden = body["isHidden"]?.jsonPrimitive?.booleanOrNull,
-                ) ?: return@put call.respond(HttpStatusCode.NotFound)
-                call.respond(updated)
+                )
+                call.respond(HttpStatusCode.OK)
             }
 
             put("/api/phrases/{id}/move") {
@@ -299,9 +313,10 @@ class KotlinBridge(
             put("/api/categories/{id}") {
                 val id = call.parameters["id"] ?: return@put call.respond(HttpStatusCode.BadRequest)
                 val name = json.parseToJsonElement(call.receiveText()).jsonObject["name"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                val updated = phraseViewModel.renameCategory(id, name)
-                    ?: return@put call.respond(HttpStatusCode.BadRequest)
-                call.respond(updated)
+                if (!phraseViewModel.renameCategory(id, name)) {
+                    return@put call.respond(HttpStatusCode.BadRequest)
+                }
+                call.respond(HttpStatusCode.OK)
             }
 
             put("/api/categories/{id}/move") {

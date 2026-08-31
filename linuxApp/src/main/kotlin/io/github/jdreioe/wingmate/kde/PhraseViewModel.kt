@@ -86,7 +86,12 @@ class PhraseViewModel {
         loadData()
     }
 
-    suspend fun updateDetails(
+    /**
+     * Full phrase edit routed through the shared store. Field values follow
+     * the store's update contract: null keeps the existing value, "" removes
+     * it. [KotlinBridge] translates its JSON body into that convention.
+     */
+    fun updateDetails(
         id: String,
         text: String?,
         name: String?,
@@ -95,29 +100,30 @@ class PhraseViewModel {
         linkedBoardId: String?,
         recordingPath: String?,
         isHidden: Boolean?,
-    ): Phrase? {
-        val existing = phraseRepository.getAll().firstOrNull { it.id == id } ?: return null
-        val updated = phraseRepository.update(
-            existing.copy(
-                text = text?.trim()?.takeIf { it.isNotEmpty() } ?: existing.text,
-                name = name?.trim()?.takeIf { it.isNotEmpty() },
-                imageUrl = imageUrl?.trim()?.takeIf { it.isNotEmpty() },
-                parentId = parentId?.takeIf { it.isNotBlank() },
-                linkedBoardId = linkedBoardId?.takeIf { it.isNotBlank() },
-                recordingPath = recordingPath?.takeIf { it.isNotBlank() },
-                isHidden = isHidden ?: existing.isHidden,
+    ) {
+        phraseListStore.accept(
+            PhraseListStore.Intent.UpdatePhraseDetails(
+                id = id,
+                text = text,
+                name = name,
+                imageUrl = imageUrl,
+                recordingPath = recordingPath,
+                parentId = parentId,
+                linkedBoardId = linkedBoardId,
+                isHidden = isHidden,
             )
         )
-        reloadData()
-        return updated
+        loadData()
     }
 
-    suspend fun renameCategory(id: String, name: String): Phrase? {
-        val existing = phraseRepository.getAll().firstOrNull { it.id == id } ?: return null
-        val normalized = name.trim().takeIf { it.isNotEmpty() } ?: return null
-        val updated = phraseRepository.update(existing.copy(text = normalized))
-        reloadData()
-        return updated
+    /** Returns false when the name is blank, true when the rename was dispatched. */
+    fun renameCategory(id: String, name: String): Boolean {
+        val normalized = name.trim().takeIf { it.isNotEmpty() } ?: return false
+        phraseListStore.accept(
+            PhraseListStore.Intent.UpdatePhrase(id = id, text = normalized, name = null, imageUrl = null)
+        )
+        loadData()
+        return true
     }
 
     suspend fun moveItem(id: String, delta: Int): Boolean {
@@ -125,8 +131,10 @@ class PhraseViewModel {
         val from = all.indexOfFirst { it.id == id }
         if (from < 0) return false
         val to = (from + delta).coerceIn(0, all.lastIndex)
-        if (from != to) phraseRepository.move(from, to)
-        reloadData()
+        if (from != to) {
+            phraseListStore.accept(PhraseListStore.Intent.MovePhrase(fromIndex = from, toIndex = to))
+        }
+        loadData()
         return true
     }
 
