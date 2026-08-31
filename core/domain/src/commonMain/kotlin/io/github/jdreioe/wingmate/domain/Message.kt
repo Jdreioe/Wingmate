@@ -1,6 +1,10 @@
 package io.github.jdreioe.wingmate.domain
 
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
+import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
+import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfButton
+import io.github.jdreioe.wingmate.domain.obf.buttonSpeechPart
 import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
 import io.github.jdreioe.wingmate.domain.obf.shouldSpeakSelectionImmediately
 import kotlinx.serialization.SerialName
@@ -33,7 +37,9 @@ data class MessagePart(
     val languageTag: String? = null,
     val recordingPath: String? = null,
     val mathMode: Boolean = false,
-)
+) {
+    companion object
+}
 
 @Serializable
 data class MessageLanguageSpan(
@@ -57,6 +63,8 @@ data class Message(
     val languageSpans: List<MessageLanguageSpan> = emptyList(),
     val editProvenance: List<MessageEditProvenance> = emptyList(),
 ) {
+    companion object
+
     val displayText: String
         get() = parts.joinToString("") { it.displayText }
 
@@ -320,4 +328,61 @@ private fun commonSuffixLength(first: String, second: String, prefixLength: Int)
     var length = 0
     while (length < limit && first[first.lastIndex - length] == second[second.lastIndex - length]) length++
     return length
+}
+
+// --- Screen ↔ Message mapping (Q4=a): domain owns the translation, UI only supplies graph ---
+
+fun MessagePart.Companion.fromScreenButton(
+    screenId: String,
+    board: ObfBoard,
+    button: ObfButton,
+    primaryLanguage: String,
+): MessagePart? {
+    val speechPart = board.buttonSpeechPart(button, primaryLanguage)
+    val recordingPath = speechPart?.recordingPath ?: button.soundId
+        ?.let { soundId -> board.sounds.firstOrNull { it.id == soundId } }
+        ?.path
+        ?.takeIf(String::isNotBlank)
+    if (speechPart == null && recordingPath == null) return null
+    return MessagePart(
+        displayText = speechPart?.text.orEmpty(),
+        spokenText = speechPart?.text.orEmpty(),
+        source = MessagePartSource.ScreenButton(
+            screenId = screenId,
+            pageId = board.id,
+            buttonId = button.id,
+        ),
+        languageTag = speechPart?.language ?: button.locale,
+        recordingPath = recordingPath,
+        mathMode = speechPart?.mathMode ?: button.mathMode,
+    )
+}
+
+fun Message.toScreenButtons(graph: BoardSetGraph): List<ObfButton> = parts.mapIndexed { index, part ->
+    val source = part.source as? MessagePartSource.ScreenButton
+    val original = source
+        ?.takeIf { it.screenId == graph.boardSet.id }
+        ?.let { graph.boardsById[it.pageId] }
+        ?.buttons
+        ?.firstOrNull { it.id == source.buttonId }
+    original ?: ObfButton(
+        id = source?.buttonId ?: "message-part-$index",
+        label = part.displayText.trimStart(),
+        vocalization = part.spokenText.trimStart(),
+        locale = part.languageTag,
+    ).withMathMode(part.mathMode)
+}
+
+fun legacyScreenMessage(
+    screenId: String,
+    graph: BoardSetGraph,
+    buttons: List<ObfButton>,
+    primaryLanguage: String,
+): Message = buttons.fold(Message()) { message, button ->
+    val board = graph.boards.firstOrNull { candidate ->
+        candidate.buttons.any { it.id == button.id }
+    } ?: graph.boards.firstOrNull()
+    val part = board?.let { MessagePart.fromScreenButton(screenId, it, button, primaryLanguage) }
+        ?: MessagePart(button.vocalization ?: button.label.orEmpty())
+    message.appendPart(part, spellingMode = board?.spellingMode == true)
 }

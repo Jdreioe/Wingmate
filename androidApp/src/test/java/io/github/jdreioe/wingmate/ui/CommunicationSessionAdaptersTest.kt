@@ -3,9 +3,13 @@ package io.github.jdreioe.wingmate.ui
 import io.github.jdreioe.wingmate.application.QueuedCommunicationSession
 import io.github.jdreioe.wingmate.domain.CommunicationAction
 import io.github.jdreioe.wingmate.domain.Message
+import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.MessagePartSource
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TextSpan
+import io.github.jdreioe.wingmate.domain.fromScreenButton
+import io.github.jdreioe.wingmate.domain.fromTextDiff
+import io.github.jdreioe.wingmate.domain.toScreenButtons
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
@@ -30,7 +34,7 @@ class CommunicationSessionAdaptersTest {
                 replacement = "Jonas",
                 mathMode = true,
             ),
-            replaceMessageTextAction("Hello world", "Hello Jonas", mathMode = true),
+            Message.fromTextDiff("Hello world", "Hello Jonas", mathMode = true),
         )
     }
 
@@ -61,7 +65,7 @@ class CommunicationSessionAdaptersTest {
             boards = listOf(board),
         )
 
-        val part = requireNotNull(screenMessagePart("core", board, button, "en-US"))
+        val part = requireNotNull(MessagePart.fromScreenButton("core", board, button, "en-US"))
         val message = Message().appendPart(part, spellingMode = false)
 
         assertEquals("Please help", part.spokenText)
@@ -90,10 +94,10 @@ class CommunicationSessionAdaptersTest {
             buttons = listOf(button),
         )
 
-        val screenPart = requireNotNull(screenMessagePart("core", board, button, "en-US"))
+        val screenPart = requireNotNull(MessagePart.fromScreenButton("core", board, button, "en-US"))
         session.accept(CommunicationAction.AppendPart(screenPart, spellingMode = false))
         val textAfterScreen = session.state.value.activeMessage.displayText
-        session.accept(replaceMessageTextAction(textAfterScreen, "$textAfterScreen now"))
+        session.accept(Message.fromTextDiff(textAfterScreen, "$textAfterScreen now"))
 
         assertEquals("Help now", session.state.value.activeMessage.displayText)
         assertEquals(

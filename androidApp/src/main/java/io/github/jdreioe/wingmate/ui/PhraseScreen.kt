@@ -74,11 +74,15 @@ import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.CommunicationAction
 import io.github.jdreioe.wingmate.domain.CommunicationPlaybackStatus
 import io.github.jdreioe.wingmate.domain.CommunicationSession
+import io.github.jdreioe.wingmate.domain.Message
 import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.MessagePartSource
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.activatePhrase
+import io.github.jdreioe.wingmate.domain.fromScreenButton
+import io.github.jdreioe.wingmate.domain.fromTextDiff
 import io.github.jdreioe.wingmate.domain.phraseSubtree
+import io.github.jdreioe.wingmate.domain.toScreenButtons
 import io.github.jdreioe.wingmate.domain.PredictionResult
 import io.github.jdreioe.wingmate.domain.TextEditingPolicy
 import io.github.jdreioe.wingmate.domain.TextPredictionService
@@ -215,10 +219,8 @@ fun PhraseScreen(
                 settings.secondaryLanguage in supported
         }
 
-            // Input state (hoisted so topBar History button can access it)
-            var input by remember {
-                mutableStateOf(TextFieldValue(communicationState.activeMessage.displayText))
-            }
+            // Derived input: text comes from session, cursor is local UI state (Q3=a, Q8=a)
+            var cursor by remember { mutableStateOf(TextRange(communicationState.activeMessage.displayText.length)) }
             var mathMode by remember { mutableStateOf(false) }
             LaunchedEffect(settings.ttsEngine) {
                 if (!supportsMathMode(settings.ttsEngine)) {
@@ -241,14 +243,15 @@ fun PhraseScreen(
             }
             LaunchedEffect(communicationState.activeMessage.displayText) {
                 val text = communicationState.activeMessage.displayText
-                if (input.text != text) {
-                    input = TextFieldValue(
-                        text = text,
-                        selection = TextRange(input.selection.start.coerceIn(0, text.length)),
-                    )
-                    syncDisplayText(text)
+                if (cursor.start > text.length || cursor.end > text.length) {
+                    cursor = TextRange(text.length)
                 }
+                syncDisplayText(text)
             }
+            val input = TextFieldValue(
+                text = communicationState.activeMessage.displayText,
+                selection = cursor,
+            )
             var predictions by remember { mutableStateOf(PredictionResult()) }
 
             val isSpeechPaused = communicationState.playbackStatus == CommunicationPlaybackStatus.Paused
@@ -569,13 +572,13 @@ fun PhraseScreen(
             val toggleThatThought: () -> Unit = {
                 val wasHoldingMessage = communicationState.heldMessage != null
                 communicationSession.accept(CommunicationAction.SwapHeldMessage)
-                val restoredText = communicationSession.state.value.activeMessage.displayText
-                input = TextFieldValue(restoredText, selection = TextRange(restoredText.length))
+                // cursor reset; text derives from new snapshot synchronously
+                cursor = TextRange(communicationSession.state.value.activeMessage.displayText.length)
                 featureUsageReporter.reportEvent(
                     FeatureUsageEvents.PLAYBACK_ON_THAT_THOUGHT,
                     "action" to if (wasHoldingMessage) "resume" else "pin"
                 )
-                syncDisplayText(restoredText)
+                syncDisplayText(communicationSession.state.value.activeMessage.displayText)
                 refocusInput()
             }
             var showPhraseSheet by remember { mutableStateOf(false) }
@@ -844,13 +847,13 @@ fun PhraseScreen(
                         value = input,
                         onValueChange = { newValue ->
                             communicationSession.accept(
-                                replaceMessageTextAction(
+                                Message.fromTextDiff(
                                     currentText = communicationSession.state.value.activeMessage.displayText,
                                     newText = newValue.text,
                                     mathMode = mathMode,
                                 )
                             )
-                            input = newValue
+                            cursor = newValue.selection
                             syncDisplayText(newValue.text)
                         },
                         modifier = Modifier
@@ -1030,11 +1033,11 @@ fun PhraseScreen(
                         ?.activationBehavior
                         ?: BoardActivationBehavior.SpeakOnly
                     val activatePhraseFromTypingScreen: (Phrase) -> Unit = { phrase ->
-                        val cursor = input.selection.start.coerceIn(0, input.text.length)
+                        val cursorPos = cursor.start.coerceIn(0, input.text.length)
                         val currentMessage = communicationSession.state.value.activeMessage
                         val activation = currentMessage.activatePhrase(
                             phrase = phrase,
-                            cursor = cursor,
+                            cursor = cursorPos,
                             activationBehavior = typingActivationBehavior,
                             speechPolicy = settings.speechPolicy,
                         )
@@ -1042,10 +1045,8 @@ fun PhraseScreen(
                             communicationSession.accept(
                                 CommunicationAction.ReplaceMessage(activation.message)
                             )
-                            val newText = activation.message.displayText
-                            val newCursor = cursor + phrase.text.length
-                            input = TextFieldValue(newText, selection = TextRange(newCursor))
-                            syncDisplayText(newText)
+                            cursor = TextRange((cursorPos + phrase.text.length).coerceIn(0, activation.message.displayText.length))
+                            syncDisplayText(activation.message.displayText)
                             featureUsageReporter.reportEvent(
                                 FeatureUsageEvents.PHRASE_INSERTED,
                                 "source" to if (isHistory) "history" else "typing_screen",
@@ -1056,15 +1057,15 @@ fun PhraseScreen(
                         }
                     }
 
-                    fun replaceInputText(newText: String, cursor: Int) {
+                    fun replaceInputText(newText: String, cursorPos: Int) {
                         communicationSession.accept(
-                            replaceMessageTextAction(
+                            Message.fromTextDiff(
                                 currentText = communicationSession.state.value.activeMessage.displayText,
                                 newText = newText,
                                 mathMode = mathMode,
                             )
                         )
-                        input = TextFieldValue(newText, selection = TextRange(cursor.coerceIn(0, newText.length)))
+                        cursor = TextRange(cursorPos.coerceIn(0, newText.length))
                         syncDisplayText(newText)
                     }
 
@@ -1645,7 +1646,7 @@ fun PhraseScreen(
                                 Row {
                                     IconButton(onClick = { 
                                         communicationSession.accept(CommunicationAction.Clear)
-                                        input = TextFieldValue("")
+                                        cursor = TextRange(0)
                                         syncDisplayText("")
                                     }) {
                                         Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.board_legacy_erase))
@@ -1668,13 +1669,13 @@ fun PhraseScreen(
                                 value = input,
                                 onValueChange = { newValue ->
                                     communicationSession.accept(
-                                        replaceMessageTextAction(
+                                        Message.fromTextDiff(
                                             currentText = communicationSession.state.value.activeMessage.displayText,
                                             newText = newValue.text,
                                             mathMode = mathMode,
                                         )
                                     )
-                                    input = newValue
+                                    cursor = newValue.selection
                                     syncDisplayText(newValue.text)
                                 },
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).then(boardShowKeyboard),
@@ -1704,13 +1705,13 @@ fun PhraseScreen(
                                 messageBarEditable = settings.boardMessageBarEditable,
                                 onSentenceChanged = { text ->
                                     communicationSession.accept(
-                                        replaceMessageTextAction(
+                                        Message.fromTextDiff(
                                             currentText = communicationSession.state.value.activeMessage.displayText,
                                             newText = text,
                                             mathMode = mathMode,
                                         )
                                     )
-                                    input = TextFieldValue(text, selection = TextRange(text.length))
+                                    cursor = TextRange(text.length)
                                     syncDisplayText(text)
                                 },
                                 extractedImages = extractedImages,
@@ -1731,7 +1732,7 @@ fun PhraseScreen(
                                         }
                                     } else {
                                         val board = currentBoard!!
-                                        val part = screenMessagePart(
+                                        val part = MessagePart.fromScreenButton(
                                             screenId = "legacy-obf",
                                             board = board,
                                             button = button,
@@ -1747,9 +1748,8 @@ fun PhraseScreen(
                                                     voice = selectedVoiceState.value,
                                                 )
                                             )
-                                            val newText = communicationSession.state.value.activeMessage.displayText
-                                            input = TextFieldValue(newText, selection = TextRange(newText.length))
-                                            syncDisplayText(newText)
+                                            cursor = TextRange(communicationSession.state.value.activeMessage.displayText.length)
+                                            syncDisplayText(communicationSession.state.value.activeMessage.displayText)
                                         }
                                     }
                                 },
@@ -1767,13 +1767,12 @@ fun PhraseScreen(
                                     communicationSession.accept(
                                         CommunicationAction.RemoveLastPart(currentBoard!!.spellingMode)
                                     )
-                                    val newText = communicationSession.state.value.activeMessage.displayText
-                                    input = TextFieldValue(newText, selection = TextRange(newText.length))
-                                    syncDisplayText(newText)
+                                    cursor = TextRange(communicationSession.state.value.activeMessage.displayText.length)
+                                    syncDisplayText(communicationSession.state.value.activeMessage.displayText)
                                 },
                                 onClearSentence = {
                                     communicationSession.accept(CommunicationAction.Clear)
-                                    input = TextFieldValue("")
+                                    cursor = TextRange(0)
                                     syncDisplayText("")
                                 },
                                 modifier = Modifier.weight(1f).fillMaxWidth()

@@ -132,6 +132,7 @@ internal fun createCoreDataModule(): Module = module {
                 saidTextRepository = get(),
                 currentSettings = settingsStateManager::getCurrentSettings,
                 scope = get(named("communicationSessionScope")),
+                predictionService = getOrNull(),
             )
         }
         singleOf(::VoiceUseCase)
