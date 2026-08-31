@@ -29,7 +29,7 @@ kotlin {
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.contentNegotiation)
                 implementation(libs.ktor.serialization.json)
-                implementation("io.github.pdvrieze.xmlutil:core:1.0.2")
+                implementation("io.github.pdvrieze.xmlutil:core:1.0.2.1")
                 implementation(libs.okio)
                 implementation("app.cash.sqldelight:runtime:2.0.2")
                 implementation("app.cash.sqldelight:coroutines-extensions:2.0.2")

@@ -212,9 +212,9 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     // Image loading
-    implementation("io.coil-kt.coil3:coil-compose:3.5.0")
-    implementation("io.coil-kt.coil3:coil-svg:3.5.0")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.5.0")
+    implementation("io.coil-kt.coil3:coil-compose:3.6.0")
+    implementation("io.coil-kt.coil3:coil-svg:3.6.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.0")
 
     // DI
     implementation(libs.koin.core)
