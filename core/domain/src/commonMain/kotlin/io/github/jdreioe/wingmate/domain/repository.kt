@@ -117,6 +117,22 @@ interface SpeechService {
         rate: Double? = null,
         cacheAudio: Boolean = true
     ) = speakSegments(segments, voice, pitch, rate)
+    /** Playback used by the Communication session, which records History after the request succeeds. */
+    suspend fun speakWithoutHistory(
+        text: String,
+        voice: Voice? = null,
+        pitch: Double? = null,
+        rate: Double? = null,
+        cacheAudio: Boolean = true,
+    ) = speakWithCachePolicy(text, voice, pitch, rate, cacheAudio)
+    /** Segmented counterpart to [speakWithoutHistory]. */
+    suspend fun speakSegmentsWithoutHistory(
+        segments: List<SpeechSegment>,
+        voice: Voice? = null,
+        pitch: Double? = null,
+        rate: Double? = null,
+        cacheAudio: Boolean = true,
+    ) = speakSegmentsWithCachePolicy(segments, voice, pitch, rate, cacheAudio)
     /** Synthesize speech into the reusable cache without playing it or adding History. */
     suspend fun cacheSpeech(
         text: String,

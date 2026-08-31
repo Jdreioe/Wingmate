@@ -1,9 +1,12 @@
 package io.github.jdreioe.wingmate.domain
 
+import kotlinx.serialization.Serializable
+
 /**
  * A platform-neutral, half-open text range. Kotlin and NSString both count UTF-16
  * code units, so these offsets can safely cross the Kotlin/Swift boundary.
  */
+@Serializable
 data class TextSpan(
     val start: Int,
     val endExclusive: Int,

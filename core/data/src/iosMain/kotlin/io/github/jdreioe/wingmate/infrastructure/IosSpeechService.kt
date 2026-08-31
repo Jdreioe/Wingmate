@@ -114,6 +114,27 @@ class IosSpeechService(
     }
 
     override suspend fun speakWithCachePolicy(text: String, voice: Voice?, pitch: Double?, rate: Double?, cacheAudio: Boolean) {
+        speakText(text, voice, pitch, rate, cacheAudio, recordInHistory = true)
+    }
+
+    override suspend fun speakWithoutHistory(
+        text: String,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+    ) {
+        speakText(text, voice, pitch, rate, cacheAudio, recordInHistory = false)
+    }
+
+    private suspend fun speakText(
+        text: String,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        recordInHistory: Boolean,
+    ) {
         val normalizedText = SpeechTextProcessor.normalizeShorthandSsml(text)
         if (normalizedText.isBlank()) return
         val requestId = beginRequest()
@@ -130,7 +151,7 @@ class IosSpeechService(
                 ?: error("The selected cloud speech engine is not configured")
             if (cacheAudio && cached == null) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] = audioBytes }
             playAudio(requestId, audioBytes)
-            trySaveHistory(normalizedText, effectiveVoice, pitch, rate, null)
+            if (recordInHistory) trySaveHistory(normalizedText, effectiveVoice, pitch, rate, null)
         }
     }
 
@@ -139,6 +160,27 @@ class IosSpeechService(
     }
 
     override suspend fun speakSegmentsWithCachePolicy(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?, cacheAudio: Boolean) {
+        speakSegmentList(segments, voice, pitch, rate, cacheAudio, recordInHistory = true)
+    }
+
+    override suspend fun speakSegmentsWithoutHistory(
+        segments: List<SpeechSegment>,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+    ) {
+        speakSegmentList(segments, voice, pitch, rate, cacheAudio, recordInHistory = false)
+    }
+
+    private suspend fun speakSegmentList(
+        segments: List<SpeechSegment>,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        recordInHistory: Boolean,
+    ) {
         if (segments.isEmpty()) return
         val requestId = beginRequest()
         executeRequest(requestId) {
@@ -154,7 +196,7 @@ class IosSpeechService(
                 ?: error("The selected cloud speech engine is not configured")
             if (cacheAudio && cached == null) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] = audioBytes }
             playAudio(requestId, audioBytes)
-            trySaveHistory(combinedText, effectiveVoice, pitch, rate, null)
+            if (recordInHistory) trySaveHistory(combinedText, effectiveVoice, pitch, rate, null)
         }
     }
 

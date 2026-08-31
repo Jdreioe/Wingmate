@@ -71,19 +71,19 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.TypingScreenUseCase
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.domain.CategoryItem
-import io.github.jdreioe.wingmate.domain.Message
+import io.github.jdreioe.wingmate.domain.CommunicationAction
+import io.github.jdreioe.wingmate.domain.CommunicationPlaybackStatus
+import io.github.jdreioe.wingmate.domain.CommunicationSession
+import io.github.jdreioe.wingmate.domain.MessagePart
+import io.github.jdreioe.wingmate.domain.MessagePartSource
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.activatePhrase
 import io.github.jdreioe.wingmate.domain.phraseSubtree
 import io.github.jdreioe.wingmate.domain.PredictionResult
-import io.github.jdreioe.wingmate.domain.SpeechPolicy
-import io.github.jdreioe.wingmate.domain.SpeechSegment
-import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TextEditingPolicy
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.TextSpan
 import io.github.jdreioe.wingmate.domain.TtsEngine
-import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
@@ -103,11 +103,6 @@ import org.koin.compose.getKoin
 import org.koin.compose.koinInject
 
 import com.hojmoseit.wingmate.R
-private data class ThoughtDraft(
-    val input: TextFieldValue,
-    val secondaryLanguageRanges: List<TextRange>,
-)
-
 internal fun supportsMathMode(ttsEngine: TtsEngine): Boolean =
     ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED
 
@@ -146,7 +141,8 @@ fun PhraseScreen(
     // Load settings for UI scaling using reactive state manager
     val settings by rememberReactiveSettings()
 
-    val speechService = koinInject<io.github.jdreioe.wingmate.domain.SpeechService>()
+    val communicationSession = koinInject<CommunicationSession>()
+    val communicationState by communicationSession.state.collectAsStateWithLifecycle()
     val saidRepo = koinInject<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
     val voiceUseCase = koinInject<VoiceUseCase>()
     val aacLogger = koinInject<io.github.jdreioe.wingmate.domain.AacLogger>()
@@ -220,10 +216,8 @@ fun PhraseScreen(
         }
 
             // Input state (hoisted so topBar History button can access it)
-            var input by remember { mutableStateOf(TextFieldValue("")) }
-            var message by remember { mutableStateOf(Message()) }
-            LaunchedEffect(input.text) {
-                if (message.displayText != input.text) message = message.edit(input.text)
+            var input by remember {
+                mutableStateOf(TextFieldValue(communicationState.activeMessage.displayText))
             }
             var mathMode by remember { mutableStateOf(false) }
             LaunchedEffect(settings.ttsEngine) {
@@ -231,9 +225,9 @@ fun PhraseScreen(
                     mathMode = false
                 }
             }
-            var secondaryLanguageRanges by remember { mutableStateOf<List<TextRange>>(emptyList()) }
-            var pinnedThoughtDraft by remember { mutableStateOf<ThoughtDraft?>(null) }
-            var scratchThoughtDraft by remember { mutableStateOf<ThoughtDraft?>(null) }
+            val secondaryLanguageRanges = communicationState.activeMessage.languageSpans
+                .filter { it.languageTag == settings.secondaryLanguage }
+                .map { TextRange(it.range.start, it.range.endExclusive) }
             val textFieldFocusRequester = remember { FocusRequester() }
             val refocusInput = remember(textFieldFocusRequester) {
                 { textFieldFocusRequester.requestFocus() }
@@ -245,26 +239,28 @@ fun PhraseScreen(
                     }
                 }
             }
-            var predictions by remember { mutableStateOf(PredictionResult()) }
-
-            // Speech service state tracking
-            var isSpeechPaused by remember(speechService) { mutableStateOf(speechService.isPaused()) }
-
-            // Polling this every 500ms caused avoidable background wakeups while typing.
-            // Keep it infrequent and let control actions update state immediately.
-            LaunchedEffect(speechService) {
-                while (true) {
-                    val paused = speechService.isPaused()
-                    if (paused != isSpeechPaused) {
-                        isSpeechPaused = paused
-                    }
-                    val pollDelay = if (speechService.isPlaying()) 1000L else 4000L
-                    kotlinx.coroutines.delay(pollDelay)
+            LaunchedEffect(communicationState.activeMessage.displayText) {
+                val text = communicationState.activeMessage.displayText
+                if (input.text != text) {
+                    input = TextFieldValue(
+                        text = text,
+                        selection = TextRange(input.selection.start.coerceIn(0, text.length)),
+                    )
+                    syncDisplayText(text)
                 }
             }
+            var predictions by remember { mutableStateOf(PredictionResult()) }
+
+            val isSpeechPaused = communicationState.playbackStatus == CommunicationPlaybackStatus.Paused
 
             // selected voice / available languages for language selection
-            val selectedVoiceState = produceState<io.github.jdreioe.wingmate.domain.Voice?>(initialValue = null, key1 = voiceUseCase) {
+            val selectedVoiceState = produceState<io.github.jdreioe.wingmate.domain.Voice?>(
+                initialValue = null,
+                voiceUseCase,
+                settings.primaryLanguage,
+                settings.secondaryLanguage,
+                showSettingsDialog,
+            ) {
                 value = runCatching { voiceUseCase.selected() }.getOrNull()
             }
             val uiScope = rememberCoroutineScope()
@@ -328,8 +324,22 @@ fun PhraseScreen(
             // Extracted images from OBZ (path -> bytes)
             var extractedImages by remember { mutableStateOf<Map<String, ByteArray>>(emptyMap()) }
             
-            // Selected buttons for Symbol Bar
-            var selectedObfButtons by remember { mutableStateOf<List<Pair<ObfButton, ImageBitmap?>>>(emptyList()) }
+            // Legacy imported boards render their symbols from the shared Message too.
+            val selectedObfButtons: List<Pair<ObfButton, ImageBitmap?>> =
+                communicationState.activeMessage.parts.mapIndexed { index, part ->
+                    val source = part.source as? MessagePartSource.ScreenButton
+                    val original = source
+                        ?.let { boardsMap[it.pageId] }
+                        ?.buttons
+                        ?.firstOrNull { it.id == source.buttonId }
+                    val button = original ?: ObfButton(
+                        id = source?.buttonId ?: "legacy-message-part-$index",
+                        label = part.displayText.trimStart(),
+                        vocalization = part.spokenText.trimStart(),
+                        locale = part.languageTag,
+                    ).withMathMode(part.mathMode)
+                    button to null
+                }
 
             PlatformBackHandler(enabled = currentBoard != null) {
                 when {
@@ -399,6 +409,22 @@ fun PhraseScreen(
                     throw failure
                 } catch (_: Exception) {
                     // Preserve the currently visible history if a refresh fails.
+                }
+            }
+
+            var observedSpeechRequestId by remember { mutableStateOf<Long?>(null) }
+            LaunchedEffect(communicationState.currentSpeechRequestId, saidRepo) {
+                val currentRequestId = communicationState.currentSpeechRequestId
+                if (currentRequestId != null) {
+                    observedSpeechRequestId = currentRequestId
+                } else if (observedSpeechRequestId != null) {
+                    observedSpeechRequestId = null
+                    runCatching { saidRepo.list() }
+                        .onSuccess { items ->
+                            historyItems = items
+                                .filter { it.visibleInHistory }
+                                .sortedByDescending { it.date ?: it.createdAt ?: 0L }
+                        }
                 }
             }
             
@@ -484,61 +510,11 @@ fun PhraseScreen(
                         "source" to "input",
                         "has_secondary_ranges" to secondaryLanguageRanges.isNotEmpty().toString()
                     )
-                    isSpeechPaused = false
-                    uiScope.launch(Dispatchers.IO) {
-                        try {
-                            val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                .withLanguageOverride(settings.primaryLanguage)
-                                ?.copy(mathMode = mathMode)
-                            val secondaryLang = settings.secondaryLanguage.takeIf { hasUsableSecondaryLanguage.value }
-                            val inputText = input.text
-
-                            val hasSSML = inputText.contains("<") && inputText.contains(">")
-                            val canUseRecordedMix = !mathMode && !hasSSML && secondaryLanguageRanges.isEmpty()
-                            val playedRecording = if (canUseRecordedMix) {
-                                runCatching {
-                                    trySpeakUsingRecordedPhrases(
-                                        inputText = inputText,
-                                        phrases = state.items,
-                                        speechService = speechService,
-                                        voice = selected
-                                    )
-                                }.getOrDefault(false)
-                            } else {
-                                false
-                            }
-
-                            if (!playedRecording) {
-                                // When SSML is present, bypass segmentation and speak directly
-                                if (hasSSML) {
-                                    speechService.speak(inputText, selected, selected?.pitch, selected?.rate)
-                                } else {
-                                    val segments = if (!mathMode && secondaryLanguageRanges.isNotEmpty() && secondaryLang != null) {
-                                        buildLanguageAwareSegments(inputText, secondaryLanguageRanges, secondaryLang)
-                                    } else emptyList()
-                                    if (segments.isNotEmpty()) {
-                                        speechService.speakSegments(segments, selected, selected?.pitch, selected?.rate)
-                                    } else {
-                                        speechService.speak(inputText, selected, selected?.pitch, selected?.rate)
-                                    }
-                                }
-                            }
-
-                            // Refresh history from repo so the History chip appears after first save
-                            // Also train prediction model incrementally with new phrase
-                            try {
-                                val list = saidRepo.list()
-                                uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
-                                // Incremental learning for immediate feedback
-                                if (predictionsEnabled) {
-                                    (predictionService as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService)?.learnPhrase(input.text)
-                                    predictionModelVersion++ // Trigger update after new entry
-                                }
-                            } catch (_: Throwable) {}
-                        } catch (t: Throwable) {
-                            // swallow for UI; diagnostics logged by service
-                        }
-                    }
+                    communicationSession.accept(
+                        CommunicationAction.SpeakActive(
+                            voice = selectedVoiceState.value?.copy(mathMode = mathMode),
+                        )
+                    )
                     refocusInput()
                 }
             }
@@ -547,11 +523,7 @@ fun PhraseScreen(
                     FeatureUsageEvents.PLAYBACK_PAUSE,
                     "source" to "input"
                 )
-                isSpeechPaused = true
-                uiScope.launch {
-                    runCatching { speechService.pause() }
-                        .onFailure { isSpeechPaused = speechService.isPaused() }
-                }
+                communicationSession.accept(CommunicationAction.Pause)
                 refocusInput()
             }
             val stopSpeech: () -> Unit = {
@@ -559,11 +531,7 @@ fun PhraseScreen(
                     FeatureUsageEvents.PLAYBACK_STOP,
                     "source" to "input"
                 )
-                isSpeechPaused = false
-                uiScope.launch {
-                    runCatching { speechService.stop() }
-                        .onFailure { isSpeechPaused = speechService.isPaused() }
-                }
+                communicationSession.accept(CommunicationAction.Stop)
                 refocusInput()
             }
             val resumeSpeech: () -> Unit = {
@@ -571,11 +539,7 @@ fun PhraseScreen(
                     FeatureUsageEvents.PLAYBACK_RESUME,
                     "source" to "input"
                 )
-                isSpeechPaused = false
-                uiScope.launch {
-                    runCatching { speechService.resume() }
-                        .onFailure { isSpeechPaused = speechService.isPaused() }
-                }
+                communicationSession.accept(CommunicationAction.Resume)
                 refocusInput()
             }
             // Selection-dependent actions shared by every Message control surface.
@@ -588,10 +552,11 @@ fun PhraseScreen(
                     if (!selectionHasLength) {
                         refocusInput()
                     } else {
-                        secondaryLanguageRanges = toggleSecondaryRange(
-                            secondaryLanguageRanges,
-                            normalizedSelection,
-                            input.text.length
+                        communicationSession.accept(
+                            CommunicationAction.ToggleLanguage(
+                                range = TextSpan(normalizedSelection.start, normalizedSelection.end),
+                                languageTag = settings.secondaryLanguage,
+                            )
                         )
                         featureUsageReporter.reportEvent(
                             FeatureUsageEvents.PLAYBACK_SECONDARY_TOGGLE,
@@ -602,34 +567,15 @@ fun PhraseScreen(
                 }
             } else null
             val toggleThatThought: () -> Unit = {
-                val activeDraft = ThoughtDraft(
-                    input = input,
-                    secondaryLanguageRanges = secondaryLanguageRanges
+                val wasHoldingMessage = communicationState.heldMessage != null
+                communicationSession.accept(CommunicationAction.SwapHeldMessage)
+                val restoredText = communicationSession.state.value.activeMessage.displayText
+                input = TextFieldValue(restoredText, selection = TextRange(restoredText.length))
+                featureUsageReporter.reportEvent(
+                    FeatureUsageEvents.PLAYBACK_ON_THAT_THOUGHT,
+                    "action" to if (wasHoldingMessage) "resume" else "pin"
                 )
-
-                if (pinnedThoughtDraft == null) {
-                    pinnedThoughtDraft = activeDraft
-                    val draftToLoad = scratchThoughtDraft
-                        ?: ThoughtDraft(TextFieldValue(""), emptyList())
-                    input = draftToLoad.input
-                    secondaryLanguageRanges = draftToLoad.secondaryLanguageRanges
-                    featureUsageReporter.reportEvent(
-                        FeatureUsageEvents.PLAYBACK_ON_THAT_THOUGHT,
-                        "action" to "pin"
-                    )
-                } else {
-                    scratchThoughtDraft = activeDraft
-                    val restoredDraft = pinnedThoughtDraft ?: ThoughtDraft(TextFieldValue(""), emptyList())
-                    pinnedThoughtDraft = null
-                    input = restoredDraft.input
-                    secondaryLanguageRanges = restoredDraft.secondaryLanguageRanges
-                    featureUsageReporter.reportEvent(
-                        FeatureUsageEvents.PLAYBACK_ON_THAT_THOUGHT,
-                        "action" to "resume"
-                    )
-                }
-
-                syncDisplayText(input.text)
+                syncDisplayText(restoredText)
                 refocusInput()
             }
             var showPhraseSheet by remember { mutableStateOf(false) }
@@ -897,8 +843,13 @@ fun PhraseScreen(
                     SecondaryLanguageTextField(
                         value = input,
                         onValueChange = { newValue ->
-                            val previous = input
-                            secondaryLanguageRanges = adjustRangesAfterEdit(previous.text, newValue.text, secondaryLanguageRanges)
+                            communicationSession.accept(
+                                replaceMessageTextAction(
+                                    currentText = communicationSession.state.value.activeMessage.displayText,
+                                    newText = newValue.text,
+                                    mathMode = mathMode,
+                                )
+                            )
                             input = newValue
                             syncDisplayText(newValue.text)
                         },
@@ -1038,31 +989,24 @@ fun PhraseScreen(
                     }
                     // #119: unified phrase playback for the grid's explicit play affordance and
                     // immediate-policy insertion. Plays the recording when present, else TTS.
-                    suspend fun speakPhraseFromGrid(phrase: Phrase) {
-                        val selected = runCatching { voiceUseCase.selected() }.getOrNull()
+                    fun speakPhraseFromGrid(phrase: Phrase) {
                         val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
-                        val playedRecorded = phrase.recordingPath?.let { path ->
-                            runCatching {
-                                speechService.speakRecordedAudio(
-                                    audioFilePath = path,
-                                    textForHistory = textToSpeak,
-                                    voice = selected
-                                )
-                            }.getOrDefault(false)
-                        } ?: false
-                        if (!playedRecorded) {
-                            speechService.speak(textToSpeak, selected)
-                        }
+                        communicationSession.accept(
+                            CommunicationAction.SpeakPart(
+                                part = MessagePart(
+                                    displayText = phrase.text,
+                                    spokenText = textToSpeak,
+                                    source = io.github.jdreioe.wingmate.domain.MessagePartSource.Phrase(phrase.id),
+                                    recordingPath = phrase.recordingPath,
+                                ),
+                                voice = selectedVoiceState.value,
+                            )
+                        )
                         featureUsageReporter.reportEvent(
                             FeatureUsageEvents.PHRASE_PLAYED,
                             "source" to "grid",
-                            "used_recording" to playedRecorded.toString()
+                            "used_recording" to (phrase.recordingPath != null).toString()
                         )
-                        // Refresh history from repo
-                        try {
-                            val list = saidRepo.list()
-                            uiScope.launch { historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L } }
-                        } catch (_: Throwable) {}
                     }
                     val playPhraseFromGrid: (Phrase) -> Unit = { phrase ->
                         // Classic Folder Navigation: if item has a linked board, entering it updates the view
@@ -1077,11 +1021,7 @@ fun PhraseScreen(
                                 )
                             }
                         } else {
-                            uiScope.launch(Dispatchers.IO) {
-                                try {
-                                    speakPhraseFromGrid(phrase)
-                                } catch (_: Throwable) {}
-                            }
+                            speakPhraseFromGrid(phrase)
                         }
                     }
                     val typingActivationBehavior = typingTemplateGraph
@@ -1091,18 +1031,19 @@ fun PhraseScreen(
                         ?: BoardActivationBehavior.SpeakOnly
                     val activatePhraseFromTypingScreen: (Phrase) -> Unit = { phrase ->
                         val cursor = input.selection.start.coerceIn(0, input.text.length)
-                        val activation = message.activatePhrase(
+                        val currentMessage = communicationSession.state.value.activeMessage
+                        val activation = currentMessage.activatePhrase(
                             phrase = phrase,
                             cursor = cursor,
                             activationBehavior = typingActivationBehavior,
                             speechPolicy = settings.speechPolicy,
                         )
-                        if (activation.message != message) {
-                            val oldText = input.text
-                            message = activation.message
-                            val newText = message.displayText
+                        if (activation.message != currentMessage) {
+                            communicationSession.accept(
+                                CommunicationAction.ReplaceMessage(activation.message)
+                            )
+                            val newText = activation.message.displayText
                             val newCursor = cursor + phrase.text.length
-                            secondaryLanguageRanges = adjustRangesAfterEdit(oldText, newText, secondaryLanguageRanges)
                             input = TextFieldValue(newText, selection = TextRange(newCursor))
                             syncDisplayText(newText)
                             featureUsageReporter.reportEvent(
@@ -1116,7 +1057,13 @@ fun PhraseScreen(
                     }
 
                     fun replaceInputText(newText: String, cursor: Int) {
-                        secondaryLanguageRanges = adjustRangesAfterEdit(input.text, newText, secondaryLanguageRanges)
+                        communicationSession.accept(
+                            replaceMessageTextAction(
+                                currentText = communicationSession.state.value.activeMessage.displayText,
+                                newText = newText,
+                                mathMode = mathMode,
+                            )
+                        )
                         input = TextFieldValue(newText, selection = TextRange(cursor.coerceIn(0, newText.length)))
                         syncDisplayText(newText)
                     }
@@ -1188,16 +1135,12 @@ fun PhraseScreen(
                             onWordSelected = { word ->
                                 val fv = input
                                 val updated = completePredictedWord(fv, word)
-                                secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, updated.text, secondaryLanguageRanges)
-                                input = updated
-                                syncDisplayText(updated.text)
+                                replaceInputText(updated.text, updated.selection.start)
                             },
                             onLetterSelected = { letter ->
                                 val fv = input
                                 val updated = insertPredictedText(fv, letter.toString())
-                                secondaryLanguageRanges = adjustRangesAfterEdit(fv.text, updated.text, secondaryLanguageRanges)
-                                input = updated
-                                syncDisplayText(updated.text)
+                                replaceInputText(updated.text, updated.selection.start)
                             },
                             fontSizeScale = settings.fontSizeScale,
                             modifier = Modifier.padding(vertical = 4.dp)
@@ -1657,9 +1600,12 @@ fun PhraseScreen(
                                         state.error == null,
                                     isActionEnabled = { effect ->
                                         when (effect) {
-                                            ObfButtonActionEffect.Pause -> speechService.isPlaying() && !isSpeechPaused
+                                            ObfButtonActionEffect.Pause ->
+                                                communicationState.currentSpeechRequestId != null && !isSpeechPaused
                                             ObfButtonActionEffect.Resume -> isSpeechPaused
-                                            ObfButtonActionEffect.Stop -> speechService.isPlaying() || isSpeechPaused
+                                            ObfButtonActionEffect.Stop ->
+                                                communicationState.currentSpeechRequestId != null ||
+                                                    communicationState.queuedSpeechCount > 0
                                             ObfButtonActionEffect.ToggleSecondaryLanguage -> toggleSecondarySelection != null
                                             is ObfButtonActionEffect.Unsupported -> false
                                             else -> true
@@ -1698,6 +1644,7 @@ fun PhraseScreen(
                                 // Right side: Erase and Home buttons
                                 Row {
                                     IconButton(onClick = { 
+                                        communicationSession.accept(CommunicationAction.Clear)
                                         input = TextFieldValue("")
                                         syncDisplayText("")
                                     }) {
@@ -1720,6 +1667,13 @@ fun PhraseScreen(
                             OutlinedTextField(
                                 value = input,
                                 onValueChange = { newValue ->
+                                    communicationSession.accept(
+                                        replaceMessageTextAction(
+                                            currentText = communicationSession.state.value.activeMessage.displayText,
+                                            newText = newValue.text,
+                                            mathMode = mathMode,
+                                        )
+                                    )
                                     input = newValue
                                     syncDisplayText(newValue.text)
                                 },
@@ -1728,22 +1682,11 @@ fun PhraseScreen(
                                 trailingIcon = {
                                     if (input.text.isNotEmpty()) {
                                         IconButton(onClick = {
-                                            // Speak the entire text
-                                            uiScope.launch(Dispatchers.IO) {
-                                                val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                                val inputText = input.text
-                                                val playedRecording = runCatching {
-                                                    trySpeakUsingRecordedPhrases(
-                                                        inputText = inputText,
-                                                        phrases = state.items,
-                                                        speechService = speechService,
-                                                        voice = selected
-                                                    )
-                                                }.getOrDefault(false)
-                                                if (!playedRecording) {
-                                                    speechService.speak(inputText, selected)
-                                                }
-                                            }
+                                            communicationSession.accept(
+                                                CommunicationAction.SpeakActive(
+                                                    selectedVoiceState.value?.copy(mathMode = mathMode)
+                                                )
+                                            )
                                         }) {
                                             Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.board_legacy_speak))
                                         }
@@ -1760,6 +1703,13 @@ fun PhraseScreen(
                                 board = currentBoard!!,
                                 messageBarEditable = settings.boardMessageBarEditable,
                                 onSentenceChanged = { text ->
+                                    communicationSession.accept(
+                                        replaceMessageTextAction(
+                                            currentText = communicationSession.state.value.activeMessage.displayText,
+                                            newText = text,
+                                            mathMode = mathMode,
+                                        )
+                                    )
                                     input = TextFieldValue(text, selection = TextRange(text.length))
                                     syncDisplayText(text)
                                 },
@@ -1780,30 +1730,25 @@ fun PhraseScreen(
                                             currentBoard = linkedBoard
                                         }
                                     } else {
-                                        // Normal button - speak and append text
-                                        val textToSpeak = button.vocalization ?: button.label
-                                        if (!textToSpeak.isNullOrBlank()) {
-                                            // Append to main input text field for consistency
-                                            val newText = if (input.text.isEmpty()) textToSpeak else "${input.text} $textToSpeak"
+                                        val board = currentBoard!!
+                                        val part = screenMessagePart(
+                                            screenId = "legacy-obf",
+                                            board = board,
+                                            button = button,
+                                            primaryLanguage = settings.primaryLanguage,
+                                        )
+                                        if (part != null) {
+                                            communicationSession.accept(
+                                                CommunicationAction.AppendPart(part, board.spellingMode)
+                                            )
+                                            communicationSession.accept(
+                                                CommunicationAction.SpeakPart(
+                                                    part = part,
+                                                    voice = selectedVoiceState.value,
+                                                )
+                                            )
+                                            val newText = communicationSession.state.value.activeMessage.displayText
                                             input = TextFieldValue(newText, selection = TextRange(newText.length))
-                                            
-                                            // Append to Symbol Bar list
-                                            selectedObfButtons = selectedObfButtons + (button to null)
-                                            
-                                            uiScope.launch(Dispatchers.IO) {
-                                                val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                                val playedRecording = runCatching {
-                                                    trySpeakUsingRecordedPhrases(
-                                                        inputText = textToSpeak,
-                                                        phrases = state.items,
-                                                        speechService = speechService,
-                                                        voice = selected
-                                                    )
-                                                }.getOrDefault(false)
-                                                if (!playedRecording) {
-                                                    speechService.speak(textToSpeak, selected)
-                                                }
-                                            }
                                             syncDisplayText(newText)
                                         }
                                     }
@@ -1811,34 +1756,23 @@ fun PhraseScreen(
                                 onSpeakSentence = {
                                     if (input.text.isNotBlank()) {
                                         aacLogger.logSentenceSpeak(input.text)
-                                        uiScope.launch(Dispatchers.IO) {
-                                            val selected = runCatching { voiceUseCase.selected() }.getOrNull()
-                                            speechService.speak(input.text, selected)
-                                        }
+                                        communicationSession.accept(
+                                            CommunicationAction.SpeakActive(
+                                                selectedVoiceState.value?.copy(mathMode = mathMode)
+                                            )
+                                        )
                                     }
                                 },
                                 onDeleteLast = {
-                                    if (selectedObfButtons.isNotEmpty()) {
-                                        val last = selectedObfButtons.last().first
-                                        val textToRemove = last.vocalization ?: last.label ?: ""
-                                        selectedObfButtons = selectedObfButtons.dropLast(1)
-                                        
-                                        val currentText = input.text.trim()
-                                        val newText = if (currentText.endsWith(textToRemove)) {
-                                            currentText.removeSuffix(textToRemove).trim()
-                                        } else {
-                                            currentText.substringBeforeLast(" ").trim()
-                                        }
-                                        input = TextFieldValue(newText, selection = TextRange(newText.length))
-                                        syncDisplayText(newText)
-                                    } else if (input.text.isNotEmpty()) {
-                                        val newText = input.text.dropLast(1)
-                                        input = TextFieldValue(newText, selection = TextRange(newText.length))
-                                        syncDisplayText(newText)
-                                    }
+                                    communicationSession.accept(
+                                        CommunicationAction.RemoveLastPart(currentBoard!!.spellingMode)
+                                    )
+                                    val newText = communicationSession.state.value.activeMessage.displayText
+                                    input = TextFieldValue(newText, selection = TextRange(newText.length))
+                                    syncDisplayText(newText)
                                 },
                                 onClearSentence = {
-                                    selectedObfButtons = emptyList()
+                                    communicationSession.accept(CommunicationAction.Clear)
                                     input = TextFieldValue("")
                                     syncDisplayText("")
                                 },
@@ -2027,29 +1961,6 @@ private fun isRangeFullySecondary(selection: TextRange, ranges: List<TextRange>)
     return TextEditingPolicy.isFullyCovered(selection.toTextSpan(), ranges.map { it.toTextSpan() }, textLength)
 }
 
-private fun toggleSecondaryRange(
-    ranges: List<TextRange>,
-    selection: TextRange,
-    textLength: Int
-): List<TextRange> {
-    return TextEditingPolicy.toggle(ranges.map { it.toTextSpan() }, selection.toTextSpan(), textLength)
-        .map { it.toTextRange() }
-}
-
-private fun adjustRangesAfterEdit(oldText: String, newText: String, ranges: List<TextRange>): List<TextRange> {
-    return TextEditingPolicy.adjustAfterEdit(oldText, newText, ranges.map { it.toTextSpan() })
-        .map { it.toTextRange() }
-}
-
-private fun clampRanges(ranges: List<TextRange>, maxLength: Int): List<TextRange> {
-    return TextEditingPolicy.merge(ranges.map { it.toTextSpan() }, maxLength).map { it.toTextRange() }
-}
-
-private fun mergeRanges(ranges: List<TextRange>): List<TextRange> {
-    val maxLength = ranges.maxOfOrNull { maxOf(it.start, it.end) } ?: 0
-    return clampRanges(ranges, maxLength)
-}
-
 private fun TextRange.toTextSpan(): TextSpan = TextSpan(start, end)
 
 private fun TextSpan.toTextRange(): TextRange = TextRange(start, endExclusive)
@@ -2062,226 +1973,6 @@ private fun completePredictedWord(value: TextFieldValue, suggestion: String): Te
 private fun insertPredictedText(value: TextFieldValue, text: String): TextFieldValue {
     val result = TextEditingPolicy.insert(value.text, value.selection.start, text)
     return TextFieldValue(result.text, selection = TextRange(result.cursor))
-}
-
-private val PauseTagRegex = Regex("""<(?:pause|break)(?:\s+(?:duration|time)=["']([^"']+)["'])?[^>]*/>""", RegexOption.IGNORE_CASE)
-
-private fun buildLanguageAwareSegments(
-    rawText: String,
-    markedRanges: List<TextRange>,
-    secondaryLanguage: String?
-): List<SpeechSegment> {
-    if (rawText.isBlank()) return emptyList()
-    if (markedRanges.isEmpty()) return SpeechTextProcessor.processText(rawText)
-
-    val normalizedRanges = clampRanges(markedRanges, rawText.length)
-    val segments = mutableListOf<SpeechSegment>()
-    var cursor = 0
-
-    PauseTagRegex.findAll(rawText).forEach { match ->
-        val before = rawText.substring(cursor, match.range.first)
-        segments += chunkWithLanguage(before, cursor, normalizedRanges, secondaryLanguage)
-        val duration = parseDuration(match.groupValues.getOrNull(1))
-        segments += SpeechSegment(text = "", pauseDurationMs = duration)
-        cursor = match.range.last + 1
-    }
-
-    val tail = rawText.substring(cursor)
-    segments += chunkWithLanguage(tail, cursor, normalizedRanges, secondaryLanguage)
-
-    return segments.filter { it.text.isNotBlank() || it.pauseDurationMs > 0 }
-}
-
-private fun chunkWithLanguage(
-    chunk: String,
-    offset: Int,
-    ranges: List<TextRange>,
-    secondaryLanguage: String?
-): List<SpeechSegment> {
-    if (chunk.isEmpty()) return emptyList()
-    val result = mutableListOf<SpeechSegment>()
-    var buffer = StringBuilder()
-    var currentState: Boolean? = null
-    var rangeIndex = 0
-    var activeRange = ranges.getOrNull(rangeIndex)
-
-    fun flush(state: Boolean?) {
-        if (buffer.isEmpty()) return
-        val textPart = buffer.toString()
-        val processed = SpeechTextProcessor.processText(textPart)
-        val lang = if (state == true) secondaryLanguage else null
-        processed.forEach { segment ->
-            val languageOverride = segment.languageTag ?: lang
-            result.add(segment.copy(languageTag = languageOverride))
-        }
-        buffer = StringBuilder()
-    }
-
-    chunk.forEachIndexed { index, c ->
-        val absoluteIndex = offset + index
-        while (activeRange != null && absoluteIndex >= activeRange.end) {
-            rangeIndex++
-            activeRange = ranges.getOrNull(rangeIndex)
-        }
-        val isSecondary = activeRange?.let { absoluteIndex >= it.start && absoluteIndex < it.end } ?: false
-        if (currentState == null) currentState = isSecondary
-        if (isSecondary != currentState) {
-            flush(currentState)
-            currentState = isSecondary
-        }
-        buffer.append(c)
-    }
-
-    flush(currentState)
-    return result
-}
-
-private fun parseDuration(durationStr: String?): Long {
-    if (durationStr.isNullOrBlank()) return 500L
-    val clean = durationStr.trim().lowercase()
-    return when {
-        clean.endsWith("ms") -> clean.removeSuffix("ms").toDoubleOrNull()?.toLong() ?: 500L
-        clean.endsWith("s") -> {
-            val seconds = clean.removeSuffix("s").toDoubleOrNull() ?: 0.5
-            (seconds * 1000).toLong()
-        }
-        else -> clean.toDoubleOrNull()?.toLong() ?: 500L
-    }
-}
-
-private data class RecordedPhraseEntry(
-    val phraseId: String,
-    val spokenText: String,
-    val audioPath: String
-)
-
-private sealed interface MixedPlaybackChunk {
-    data class Recorded(val entry: RecordedPhraseEntry) : MixedPlaybackChunk
-    data class Text(val text: String) : MixedPlaybackChunk
-}
-
-private suspend fun trySpeakUsingRecordedPhrases(
-    inputText: String,
-    phrases: List<Phrase>,
-    speechService: io.github.jdreioe.wingmate.domain.SpeechService,
-    voice: io.github.jdreioe.wingmate.domain.Voice?
-): Boolean {
-    val normalizedInput = inputText.trim()
-    if (normalizedInput.isEmpty()) return false
-
-    val recordedEntries = phrases.mapNotNull { phrase ->
-        val spoken = phraseSpokenText(phrase) ?: return@mapNotNull null
-        val path = phrase.recordingPath?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-        RecordedPhraseEntry(
-            phraseId = phrase.id,
-            spokenText = spoken,
-            audioPath = path
-        )
-    }
-    if (recordedEntries.isEmpty()) return false
-
-    val plan = buildMixedPlaybackPlan(normalizedInput, recordedEntries) ?: return false
-    return playMixedPlan(plan, speechService, voice)
-}
-
-private fun phraseSpokenText(phrase: Phrase): String? {
-    val spoken = (phrase.name?.ifBlank { null } ?: phrase.text).trim()
-    return spoken.ifBlank { null }
-}
-
-private fun buildMixedPlaybackPlan(
-    inputText: String,
-    entries: List<RecordedPhraseEntry>
-): List<MixedPlaybackChunk>? {
-    if (entries.isEmpty()) return null
-
-    val matchPool = entries
-        .distinctBy { it.phraseId }
-        .sortedByDescending { it.spokenText.length }
-
-    val chunks = mutableListOf<MixedPlaybackChunk>()
-    val textBuffer = StringBuilder()
-    var usedRecording = false
-    var cursor = 0
-
-    fun flushTextBuffer() {
-        if (textBuffer.isEmpty()) return
-        chunks += MixedPlaybackChunk.Text(textBuffer.toString())
-        textBuffer.clear()
-    }
-
-    while (cursor < inputText.length) {
-        val match = matchPool.firstOrNull { entry ->
-            val candidate = entry.spokenText
-            if (candidate.isEmpty()) return@firstOrNull false
-            if (cursor + candidate.length > inputText.length) return@firstOrNull false
-            if (!inputText.regionMatches(cursor, candidate, 0, candidate.length, ignoreCase = true)) {
-                return@firstOrNull false
-            }
-
-            isRecordedBoundaryStart(inputText, cursor) &&
-                isRecordedBoundaryEnd(inputText, cursor + candidate.length)
-        }
-
-        if (match != null) {
-            flushTextBuffer()
-            chunks += MixedPlaybackChunk.Recorded(match)
-            usedRecording = true
-            cursor += match.spokenText.length
-        } else {
-            textBuffer.append(inputText[cursor])
-            cursor++
-        }
-    }
-
-    flushTextBuffer()
-
-    return chunks.takeIf { usedRecording }
-}
-
-private suspend fun playMixedPlan(
-    chunks: List<MixedPlaybackChunk>,
-    speechService: io.github.jdreioe.wingmate.domain.SpeechService,
-    voice: io.github.jdreioe.wingmate.domain.Voice?
-): Boolean {
-    var usedRecording = false
-
-    for (chunk in chunks) {
-        when (chunk) {
-            is MixedPlaybackChunk.Recorded -> {
-                val entry = chunk.entry
-                val played = speechService.speakRecordedAudio(
-                    audioFilePath = entry.audioPath,
-                    textForHistory = entry.spokenText,
-                    voice = voice
-                )
-                if (!played) return false
-                usedRecording = true
-            }
-
-            is MixedPlaybackChunk.Text -> {
-                val text = chunk.text
-                if (text.isBlank()) {
-                    val pause = pauseForSeparatorChunk(text)
-                    if (pause > 0L) delay(pause)
-                    continue
-                }
-
-                val hasSpeakableContent = text.any { it.isLetterOrDigit() }
-                if (!hasSpeakableContent) {
-                    val pause = pauseForSeparatorChunk(text)
-                    if (pause > 0L) delay(pause)
-                    continue
-                }
-
-                // Keep punctuation/whitespace around text so transition from recording sounds less abrupt.
-                speechService.speak(text, voice, voice?.pitch, voice?.rate)
-                waitForSpeechToFinish(speechService)
-            }
-        }
-    }
-
-    return usedRecording
 }
 
 @Composable
@@ -2298,47 +1989,5 @@ private fun RepositoryFailurePanel(onRetry: () -> Unit) {
         Button(onClick = onRetry) {
             Text(stringResource(R.string.common_retry))
         }
-    }
-}
-
-private fun pauseForSeparatorChunk(text: String): Long {
-    val compact = text.trim()
-    if (compact.isEmpty()) {
-        return if (text.contains('\n')) 80L else 50L
-    }
-
-    return when {
-        compact.any { it == '.' || it == '!' || it == '?' } -> 100L
-        compact.any { it == ',' || it == ';' || it == ':' } -> 80L
-        else -> 50L
-    }
-}
-
-private suspend fun waitForSpeechToFinish(
-    speechService: io.github.jdreioe.wingmate.domain.SpeechService,
-    timeoutMs: Long = 15_000L
-) {
-    var elapsed = 0L
-    delay(100)
-    while (elapsed < timeoutMs && speechService.isPlaying()) {
-        delay(50)
-        elapsed += 50
-    }
-}
-
-private fun isRecordedBoundaryStart(text: String, index: Int): Boolean {
-    if (index <= 0) return true
-    return isRecordedPhraseSeparator(text[index - 1])
-}
-
-private fun isRecordedBoundaryEnd(text: String, indexExclusive: Int): Boolean {
-    if (indexExclusive >= text.length) return true
-    return isRecordedPhraseSeparator(text[indexExclusive])
-}
-
-private fun isRecordedPhraseSeparator(char: Char): Boolean {
-    return char.isWhitespace() || when (char) {
-        '.', ',', '!', '?', ';', ':', '-', '_', '/', '\\', '(', ')', '[', ']', '{', '}', '"', '\'' -> true
-        else -> false
     }
 }

@@ -26,6 +26,7 @@ import io.github.jdreioe.wingmate.application.SpeechFacade
 import io.github.jdreioe.wingmate.application.SettingsFacade
 import io.github.jdreioe.wingmate.application.BoardsFacade
 import io.github.jdreioe.wingmate.application.CommunicationFacade
+import io.github.jdreioe.wingmate.application.QueuedCommunicationSession
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.application.UnavailableBackupMediaAccess
 import io.github.jdreioe.wingmate.domain.FileStorage
@@ -35,6 +36,8 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
+import io.github.jdreioe.wingmate.domain.CommunicationSession
+import io.github.jdreioe.wingmate.domain.CommunicationSessionDataSource
 import io.github.jdreioe.wingmate.infrastructure.AutoF0FlowUseCase
 import io.github.jdreioe.wingmate.infrastructure.AzureArmClient
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
@@ -45,6 +48,7 @@ import io.github.jdreioe.wingmate.infrastructure.DictionaryLoader
 import io.github.jdreioe.wingmate.infrastructure.InMemoryAzureF0Provisioner
 import io.github.jdreioe.wingmate.infrastructure.InMemoryCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
+import io.github.jdreioe.wingmate.infrastructure.InMemoryCommunicationSessionDataSource
 import io.github.jdreioe.wingmate.infrastructure.InMemoryPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryPronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemorySaidTextRepository
@@ -56,9 +60,13 @@ import org.koin.core.module.Module
 import org.koin.core.module.dsl.bind
 import org.koin.dsl.module
 import org.koin.core.module.dsl.singleOf
+import org.koin.core.qualifier.named
 
 import io.github.jdreioe.wingmate.di.appModule
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 @Suppress("unused")
 fun initKoin(extra: Module? = null) {
@@ -79,6 +87,7 @@ internal fun createCoreDataModule(): Module = module {
         singleOf(::InMemoryVoiceRepository) { bind<VoiceRepository>() }
         singleOf(::InMemorySaidTextRepository) { bind<SaidTextRepository>() }
         singleOf(::InMemoryConfigRepository) { bind<ConfigRepository>() }
+        singleOf(::InMemoryCommunicationSessionDataSource) { bind<CommunicationSessionDataSource>() }
         singleOf(::InMemoryPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
         singleOf(::InMemoryAzureF0Provisioner) { bind<AzureF0Provisioner>() }
         single { AzureArmClient(HttpClient()) }
@@ -108,6 +117,7 @@ internal fun createCoreDataModule(): Module = module {
                 settingsRepository = get(),
                 voiceRepository = get(),
                 saidTextRepository = get(),
+                communicationSessionDataSource = get(),
                 dictionaryRepository = get(),
                 configRepository = get(),
                 filePicker = getOrNull(),
@@ -121,6 +131,19 @@ internal fun createCoreDataModule(): Module = module {
         singleOf(::BoardsFacade)
         singleOf(::CommunicationFacade)
         singleOf(::SettingsStateManager)
+        single(named("communicationSessionScope")) {
+            CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        }
+        single<CommunicationSession> {
+            val settingsStateManager = get<SettingsStateManager>()
+            QueuedCommunicationSession(
+                dataSource = get(),
+                speechService = get(),
+                saidTextRepository = get(),
+                currentSettings = settingsStateManager::getCurrentSettings,
+                scope = get(named("communicationSessionScope")),
+            )
+        }
         singleOf(::VoiceUseCase)
         factory { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>(), get<CategoryUseCase>()) }
         factory { SettingsBloc(get<SettingsUseCase>()) }

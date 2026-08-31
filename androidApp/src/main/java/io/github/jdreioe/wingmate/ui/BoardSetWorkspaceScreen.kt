@@ -64,6 +64,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -95,13 +96,14 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.SelectionHighlight
 import io.github.jdreioe.wingmate.domain.Base64Decoder
+import io.github.jdreioe.wingmate.domain.CommunicationAction
+import io.github.jdreioe.wingmate.domain.CommunicationSession
+import io.github.jdreioe.wingmate.domain.CommunicationSessionSnapshot
 import io.github.jdreioe.wingmate.domain.FileStorage
+import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.SoundPlayer
-import io.github.jdreioe.wingmate.domain.SpeechService
-import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.TextPredictionService
-import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
@@ -126,15 +128,12 @@ import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.withHomeFieldsBottomLeft
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
-import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.obf.GridFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.CellTapResult
 import io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion
-import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
 import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
 import io.github.jdreioe.wingmate.domain.obf.shouldSpeakSelectionImmediately
 import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
-import io.github.jdreioe.wingmate.domain.obf.buildResolvedSentence
 import io.github.jdreioe.wingmate.domain.obf.orderedPredictionButtonIds
 import io.github.jdreioe.wingmate.domain.obf.resolveCellTap
 import io.github.jdreioe.wingmate.domain.obf.renameDraftBoardSet
@@ -144,8 +143,6 @@ import io.github.jdreioe.wingmate.domain.obf.moveDraftField
 import io.github.jdreioe.wingmate.domain.obf.resizeDraftField
 import io.github.jdreioe.wingmate.domain.obf.updateDraftCell
 import io.github.jdreioe.wingmate.domain.obf.clearDraftCell
-import io.github.jdreioe.wingmate.domain.obf.joinSentenceText
-import io.github.jdreioe.wingmate.domain.obf.buttonSpeechPart
 import io.github.jdreioe.wingmate.domain.obf.normalizedOrder
 import io.github.jdreioe.wingmate.domain.obf.fieldSpanAt
 import io.github.jdreioe.wingmate.domain.obf.fieldAnchorAt
@@ -159,7 +156,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import org.koin.compose.koinInject
@@ -580,7 +576,8 @@ private fun BoardSetWorkspaceRoot(
     onExitToLibrary: () -> Unit
 ) {
     val useCase = koinInject<BoardSetUseCase>()
-    val speechService = koinInject<SpeechService>()
+    val communicationSession = koinInject<CommunicationSession>()
+    val communicationState by communicationSession.state.collectAsStateWithLifecycle()
     val voiceUseCase = koinInject<VoiceUseCase>()
     val soundPlayer = koinInject<SoundPlayer>()
     val fileStorage = koinInject<FileStorage>()
@@ -603,6 +600,12 @@ private fun BoardSetWorkspaceRoot(
         factory = workspaceFactory,
     )
     val workspace by workspaceViewModel.state.collectAsStateWithLifecycle()
+    val selectedVoice by produceState<io.github.jdreioe.wingmate.domain.Voice?>(
+        initialValue = null,
+        key1 = voiceUseCase,
+    ) {
+        value = runCatching { voiceUseCase.selected() }.getOrNull()
+    }
     val savedGraph = workspace.savedGraph
     val editSession = workspace.editSession
     val mode = workspace.mode
@@ -610,8 +613,9 @@ private fun BoardSetWorkspaceRoot(
     val showFinishDialog = workspace.showFinishDialog
     val isExporting = workspace.isExporting
     val isFullscreen = workspace.isFullscreen
-    val selectedButtonModels = workspace.selectedButtons
-    val selectedButtons: List<Pair<ObfButton, ImageBitmap?>> = selectedButtonModels.map { it to null }
+    val legacySentenceButtons = remember(workspaceViewModel) {
+        workspaceViewModel.consumeLegacySentenceButtons()
+    }
     // #120: time-bounded selection highlight.
     val selectionHighlight = remember(boardSetId) { SelectionHighlight() }
     var highlightedButtonId by remember(boardSetId) { mutableStateOf<String?>(null) }
@@ -762,6 +766,33 @@ private fun BoardSetWorkspaceRoot(
 
     val activeGraph = editSession?.draft ?: savedGraph
     val activeBoard = activeGraph?.boardsById?.get(workspace.selectedBoardId)
+    LaunchedEffect(
+        communicationState.isInitialized,
+        activeGraph?.boardSet?.id,
+        legacySentenceButtons,
+    ) {
+        val graph = activeGraph ?: return@LaunchedEffect
+        if (!communicationState.isInitialized || legacySentenceButtons.isEmpty()) return@LaunchedEffect
+        communicationSession.accept(
+            CommunicationAction.ImportIfEmpty(
+                CommunicationSessionSnapshot(
+                    activeMessage = legacyScreenMessage(
+                        screenId = graph.boardSet.id,
+                        graph = graph,
+                        buttons = legacySentenceButtons,
+                        primaryLanguage = settings.primaryLanguage,
+                    )
+                )
+            )
+        )
+    }
+    val activeMessage = communicationState.activeMessage
+    val selectedButtonModels = remember(activeMessage, activeGraph) {
+        activeGraph?.let(activeMessage::toScreenButtons).orEmpty()
+    }
+    val selectedButtons: List<Pair<ObfButton, ImageBitmap?>> = remember(selectedButtonModels) {
+        selectedButtonModels.map { it to null }
+    }
     val resolvedBoardSettings = remember(
         activeGraph?.boardSet?.screenSettings,
         activeBoard?.extensions,
@@ -789,14 +820,7 @@ private fun BoardSetWorkspaceRoot(
                 ?: io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides()
         )
     }
-    val messageText = remember(selectedButtons, activeBoard?.strings, settings.primaryLanguage) {
-        buildResolvedSentence(
-            buttons = selectedButtons.map { it.first },
-            strings = activeBoard?.strings.orEmpty(),
-            spellingMode = activeBoard?.spellingMode == true,
-            primaryLanguage = settings.primaryLanguage
-        )
-    }
+    val messageText = activeMessage.displayText
     val availableBoardActions = remember(activeBoard, showHiddenButtons) {
         val visibleGridButtonIds = activeBoard?.grid
             ?.order
@@ -909,19 +933,10 @@ private fun BoardSetWorkspaceRoot(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    workspaceViewModel.onAction(
-                        BoardWorkspaceAction.ReplaceSentence(
-                            currentDraft.takeIf { it.isNotEmpty() }
-                                ?.let { text ->
-                                    listOf(
-                                        ObfButton(
-                                            id = workspaceId("native-keyboard"),
-                                            label = text,
-                                            vocalization = text,
-                                        )
-                                    )
-                                }
-                                .orEmpty()
+                    communicationSession.accept(
+                        replaceMessageTextAction(
+                            currentText = communicationSession.state.value.activeMessage.displayText,
+                            newText = currentDraft,
                         )
                     )
                     nativeKeyboardDraft = null
@@ -1355,7 +1370,6 @@ private fun BoardSetWorkspaceRoot(
                                 workspaceViewModel.onAction(
                                     BoardWorkspaceAction.SelectBoard(it)
                                 )
-                                workspaceViewModel.onAction(BoardWorkspaceAction.ClearSentence)
                                 selectedField = null
                             }
                         )
@@ -1367,22 +1381,11 @@ private fun BoardSetWorkspaceRoot(
                             resolvedBoardSettings.showMessageBar,
                         messageBarEditable = resolvedBoardSettings.messageBarEditable,
                         onSentenceChanged = { text ->
-                            // Typed text replaces the sentence as a single free-hand token;
-                            // button taps keep composing tokens on top of it.
-                            workspaceViewModel.onAction(
-                                if (text.isBlank()) {
-                                    BoardWorkspaceAction.ClearSentence
-                                } else {
-                                    BoardWorkspaceAction.ReplaceSentence(
-                                        listOf(
-                                            ObfButton(
-                                                id = workspaceId("freehand"),
-                                                label = text,
-                                                vocalization = text
-                                            )
-                                        )
-                                    )
-                                }
+                            communicationSession.accept(
+                                replaceMessageTextAction(
+                                    currentText = communicationSession.state.value.activeMessage.displayText,
+                                    newText = text,
+                                )
                             )
                         },
                         messageText = messageText,
@@ -1406,21 +1409,20 @@ private fun BoardSetWorkspaceRoot(
                                 markButtonSelected(button.id)
                                 val actions = parseObfButtonActions(button)
                             if (actions.isNotEmpty()) {
-                                var speakAfterActions = false
                                 var navigateHome = false
-                                var nextSelection = selectedButtons
-                                var selectionToSpeak: List<Pair<ObfButton, ImageBitmap?>> = emptyList()
                                 for (effect in actions) {
                                     when (effect) {
                                         is ObfButtonActionEffect.AppendText -> {
                                             if (effect.text.isNotEmpty()) {
-                                                nextSelection = nextSelection + (
-                                                    ObfButton(
-                                                        id = workspaceId("action"),
-                                                        label = effect.text,
-                                                        vocalization = effect.text,
-                                                        locale = button.locale
-                                                    ).withMathMode(button.mathMode) to null
+                                                communicationSession.accept(
+                                                    CommunicationAction.AppendPart(
+                                                        part = MessagePart(
+                                                            displayText = effect.text,
+                                                            languageTag = button.locale,
+                                                            mathMode = button.mathMode,
+                                                        ),
+                                                        spellingMode = activeBoard.spellingMode,
+                                                    )
                                                 )
                                             }
                                         }
@@ -1428,62 +1430,71 @@ private fun BoardSetWorkspaceRoot(
                                             // Token sentences hold no selection, so wrap falls back
                                             // to inserting prefix + fallback + suffix as one token.
                                             val wrapped = effect.prefix + effect.fallback + effect.suffix
-                                            nextSelection = nextSelection + (
-                                                ObfButton(
-                                                    id = workspaceId("wrap"),
-                                                    label = wrapped,
-                                                    vocalization = wrapped,
-                                                    locale = button.locale
-                                                ).withMathMode(button.mathMode) to null
+                                            communicationSession.accept(
+                                                CommunicationAction.AppendPart(
+                                                    part = MessagePart(
+                                                        displayText = wrapped,
+                                                        languageTag = button.locale,
+                                                        mathMode = button.mathMode,
+                                                    ),
+                                                    spellingMode = activeBoard.spellingMode,
+                                                )
                                             )
                                         }
                                         ObfButtonActionEffect.Backspace -> {
-                                            nextSelection = backspaceSentenceSelection(
-                                                nextSelection,
-                                                spellingMode = activeBoard.spellingMode
+                                            communicationSession.accept(
+                                                CommunicationAction.RemoveLastPart(activeBoard.spellingMode)
                                             )
                                         }
                                         ObfButtonActionEffect.Clear -> {
-                                            nextSelection = emptyList()
+                                            communicationSession.accept(CommunicationAction.Clear)
                                         }
                                         ObfButtonActionEffect.Speak -> {
-                                            speakAfterActions = true
-                                            selectionToSpeak = nextSelection
+                                            communicationSession.accept(
+                                                CommunicationAction.SpeakActive(
+                                                    voice = selectedVoice,
+                                                    cacheAudio = activeGraph.boardSet.cacheWholeSentences,
+                                                )
+                                            )
                                         }
                                         ObfButtonActionEffect.Home -> {
                                             navigateHome = true
                                         }
                                         ObfButtonActionEffect.NativeKeyboard -> {
-                                            nativeKeyboardDraft = messageText
+                                            nativeKeyboardDraft = communicationSession.state.value.activeMessage.displayText
                                         }
                                         ObfButtonActionEffect.Predictions -> {
+                                            val currentText = communicationSession.state.value.activeMessage.displayText
                                             val insertion = predictionButtonIds
                                                 .indexOf(button.id)
                                                 .takeIf { it != -1 }
                                                 ?.let { index -> predictionsById[button.id] }
-                                                ?.let { nGramPredictionInsertion(messageText, it) }
+                                                ?.let { nGramPredictionInsertion(currentText, it) }
                                             if (!insertion.isNullOrEmpty()) {
-                                                nextSelection = nextSelection + (
-                                                    ObfButton(
-                                                        id = workspaceId("prediction"),
-                                                        label = insertion,
-                                                        vocalization = insertion,
-                                                        locale = button.locale
-                                                    ) to null
+                                                communicationSession.accept(
+                                                    CommunicationAction.AppendPart(
+                                                        part = MessagePart(
+                                                            displayText = insertion,
+                                                            languageTag = button.locale,
+                                                        ),
+                                                        spellingMode = activeBoard.spellingMode,
+                                                    )
                                                 )
                                             }
                                         }
                                         ObfButtonActionEffect.Pause -> {
-                                            scope.launch { speechService.pause() }
+                                            communicationSession.accept(CommunicationAction.Pause)
                                         }
                                         ObfButtonActionEffect.Resume -> {
-                                            scope.launch { speechService.resume() }
+                                            communicationSession.accept(CommunicationAction.Resume)
                                         }
                                         ObfButtonActionEffect.Stop -> {
-                                            scope.launch { speechService.stop() }
+                                            communicationSession.accept(CommunicationAction.Stop)
                                         }
-                                        ObfButtonActionEffect.ToggleSecondaryLanguage,
                                         ObfButtonActionEffect.SwapHeldMessage -> {
+                                            communicationSession.accept(CommunicationAction.SwapHeldMessage)
+                                        }
+                                        ObfButtonActionEffect.ToggleSecondaryLanguage -> {
                                             workspaceViewModel.onAction(
                                                 BoardWorkspaceAction.StatusChanged(
                                                     unsupportedActionTemplate.replace("%ACTION%", button.action.orEmpty())
@@ -1499,23 +1510,9 @@ private fun BoardSetWorkspaceRoot(
                                         }
                                     }
                                 }
-                                workspaceViewModel.onAction(
-                                    BoardWorkspaceAction.ReplaceSentence(nextSelection.map { it.first })
-                                )
                                 if (navigateHome) {
                                     workspaceViewModel.onAction(
                                         BoardWorkspaceAction.GoHome(activeGraph.boardSet.rootBoardId)
-                                    )
-                                }
-                                if (speakAfterActions) {
-                                    speakSelectedButtons(
-                                        selected = selectionToSpeak,
-                                        board = activeBoard,
-                                        primaryLanguage = settings.primaryLanguage,
-                                        voiceUseCase = voiceUseCase,
-                                        speechService = speechService,
-                                        cacheWholeSentence = activeGraph.boardSet.cacheWholeSentences,
-                                        scope = scope
                                     )
                                 }
                             } else {
@@ -1525,19 +1522,20 @@ private fun BoardSetWorkspaceRoot(
                                         BoardWorkspaceAction.OpenBoard(linkedBoard.id)
                                     )
                                 } else {
-                                    val resolved = resolveObfLocalizedString(
-                                        activeBoard.strings,
-                                        settings.primaryLanguage,
-                                        button.vocalization ?: button.label
+                                    val part = screenMessagePart(
+                                        screenId = activeGraph.boardSet.id,
+                                        board = activeBoard,
+                                        button = button,
+                                        primaryLanguage = settings.primaryLanguage,
                                     )
-                                    val spokenText = resolved?.trim().orEmpty()
                                     if (
-                                        spokenText.isNotEmpty() &&
+                                        part != null &&
                                         shouldAddBoardSelection(resolvedBoardSettings.activationBehavior)
                                     ) {
-                                        workspaceViewModel.onAction(
-                                            BoardWorkspaceAction.ReplaceSentence(
-                                                selectedButtonModels + button
+                                        communicationSession.accept(
+                                            CommunicationAction.AppendPart(
+                                                part = part,
+                                                spellingMode = activeBoard.spellingMode,
                                             )
                                         )
                                     }
@@ -1548,35 +1546,25 @@ private fun BoardSetWorkspaceRoot(
                                         settings.speechPolicy,
                                         resolvedBoardSettings.activationBehavior
                                     )) {
-                                        scope.launch(Dispatchers.IO) {
-                                            val recordedPath = sound?.path?.takeIf {
-                                                it.isNotBlank() && sound.data.isNullOrBlank() && sound.dataUrl.isNullOrBlank()
-                                            }
-                                            val playedRecording = recordedPath?.let { path ->
-                                                runCatching {
-                                                    speechService.speakRecordedAudio(
-                                                        audioFilePath = path,
-                                                        textForHistory = spokenText
-                                                    )
-                                                }.getOrDefault(false)
-                                            } ?: false
-                                            val playedSound = playedRecording || playButtonSound(
+                                        if (part != null) {
+                                            communicationSession.accept(
+                                                CommunicationAction.SpeakPart(
+                                                    part = part,
+                                                    voice = selectedVoice,
+                                                )
+                                            )
+                                        } else if (sound != null) {
+                                            scope.launch(Dispatchers.IO) {
+                                                playButtonSound(
                                                 sound = sound,
                                                 fileStorage = fileStorage,
                                                 soundPlayer = soundPlayer,
                                                 urlLoader = mediaUrlLoader
                                             )
-                                            if (!playedSound && spokenText.isNotEmpty()) {
-                                                runCatching {
-                                                    val voice = voiceUseCase.selected()
-                                                        .withLanguageOverride(button.locale ?: settings.primaryLanguage)
-                                                        ?.copy(mathMode = button.mathMode)
-                                                    speechService.speak(spokenText, voice, voice?.pitch, voice?.rate)
-                                                }
                                             }
                                         }
                                     }
-                                    if (spokenText.isNotEmpty() || sound != null) {
+                                    if (part != null || sound != null) {
                                         val returned = applyBoardReturnBehavior(
                                             behavior = resolvedBoardSettings.returnBehavior,
                                             currentBoardId = workspace.selectedBoardId,
@@ -1670,21 +1658,20 @@ private fun BoardSetWorkspaceRoot(
                         } else null,
                         homeBoardId = activeGraph.boardSet.rootBoardId,
                         onSpeakSentence = {
-                            speakSelectedButtons(
-                                selected = selectedButtons,
-                                board = activeBoard,
-                                primaryLanguage = settings.primaryLanguage,
-                                voiceUseCase = voiceUseCase,
-                                speechService = speechService,
-                                cacheWholeSentence = activeGraph.boardSet.cacheWholeSentences,
-                                scope = scope
+                            communicationSession.accept(
+                                CommunicationAction.SpeakActive(
+                                    voice = selectedVoice,
+                                    cacheAudio = activeGraph.boardSet.cacheWholeSentences,
+                                )
                             )
                         },
                         onDeleteLast = {
-                            workspaceViewModel.onAction(BoardWorkspaceAction.RemoveLastSentenceButton)
+                            communicationSession.accept(
+                                CommunicationAction.RemoveLastPart(activeBoard.spellingMode)
+                            )
                         },
                         onClearSentence = {
-                            workspaceViewModel.onAction(BoardWorkspaceAction.ClearSentence)
+                            communicationSession.accept(CommunicationAction.Clear)
                         },
                         modifier = Modifier.weight(1f).fillMaxWidth()
                     )
@@ -2142,116 +2129,6 @@ private fun deleteDraftBoard(graph: BoardSetGraph, boardId: String): BoardSetGra
 
 private fun workspaceId(prefix: String): String {
     return "${prefix}_${Clock.System.now().toEpochMilliseconds()}_${Random.nextInt(1000, 9999)}"
-}
-
-internal fun backspaceSentenceSelection(
-    selected: List<Pair<ObfButton, ImageBitmap?>>,
-    spellingMode: Boolean = false
-): List<Pair<ObfButton, ImageBitmap?>> {
-    if (selected.isEmpty()) return selected
-    val texts = selected.map { (button, _) -> button.vocalization ?: button.label ?: "" }
-    val trimmed = backspaceSentenceSelection(texts, spellingMode)
-    if (trimmed.size < texts.size) return selected.dropLast(1)
-    val lastButton = selected.last().first
-    val lastText = trimmed.last()
-    return selected.dropLast(1) + (
-        lastButton.copy(label = lastText, vocalization = lastText) to selected.last().second
-    )
-}
-
-private fun speakSelectedButtons(
-    selected: List<Pair<ObfButton, ImageBitmap?>>,
-    board: ObfBoard,
-    primaryLanguage: String,
-    voiceUseCase: VoiceUseCase,
-    speechService: SpeechService,
-    cacheWholeSentence: Boolean,
-    scope: kotlinx.coroutines.CoroutineScope
-) {
-    data class PlaybackPart(
-        val text: String,
-        val language: String?,
-        val recordingPath: String?,
-        val mathMode: Boolean
-    )
-
-    val speechParts = selected.mapNotNull { (button, _) ->
-        board.buttonSpeechPart(button, primaryLanguage)?.let {
-            PlaybackPart(
-                text = it.text,
-                language = it.language,
-                recordingPath = it.recordingPath,
-                mathMode = it.mathMode
-            )
-        }
-    }
-    if (speechParts.isEmpty()) return
-    scope.launch(Dispatchers.IO) {
-        runCatching {
-            val voice = voiceUseCase.selected()
-            val pendingTts = mutableListOf<PlaybackPart>()
-
-            suspend fun speakPendingTts() {
-                if (pendingTts.isEmpty()) return
-                val texts = pendingTts.map { it.text }
-                val sentence = joinSentenceText(texts, board.spellingMode)
-                val pendingVoice = voice
-                    .withLanguageOverride(pendingTts.first().language ?: primaryLanguage)
-                    ?.copy(mathMode = pendingTts.first().mathMode)
-                if (!pendingTts.first().mathMode && pendingTts.any { !it.language.isNullOrBlank() }) {
-                    val segments = pendingTts.map {
-                        SpeechSegment(text = it.text, languageTag = it.language)
-                    }
-                    speechService.speakSegmentsWithCachePolicy(
-                        segments,
-                        pendingVoice,
-                        pendingVoice?.pitch,
-                        pendingVoice?.rate,
-                        cacheAudio = cacheWholeSentence
-                    )
-                } else {
-                    speechService.speakWithCachePolicy(
-                        sentence,
-                        pendingVoice,
-                        pendingVoice?.pitch,
-                        pendingVoice?.rate,
-                        cacheAudio = cacheWholeSentence
-                    )
-                }
-                pendingTts.clear()
-                awaitSpeechPlayback(speechService)
-            }
-
-            for (part in speechParts) {
-                if (pendingTts.isNotEmpty() && pendingTts.first().mathMode != part.mathMode) {
-                    speakPendingTts()
-                }
-                val recordingPath = part.recordingPath
-                if (recordingPath == null) {
-                    pendingTts += part
-                    continue
-                }
-                speakPendingTts()
-                val played = speechService.speakRecordedAudio(
-                    audioFilePath = recordingPath,
-                    textForHistory = part.text,
-                    voice = voice
-                )
-                if (!played) {
-                    pendingTts += part.copy(recordingPath = null)
-                }
-            }
-            speakPendingTts()
-        }
-    }
-}
-
-private suspend fun awaitSpeechPlayback(speechService: SpeechService) {
-    withTimeoutOrNull(120_000) {
-        while (speechService.isPlaying()) {
-            delay(20)
-        }
-    }
 }
 
 /**

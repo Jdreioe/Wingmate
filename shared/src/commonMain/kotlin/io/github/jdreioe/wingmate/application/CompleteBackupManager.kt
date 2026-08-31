@@ -5,7 +5,11 @@ import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.CommunicationSessionDataSource
+import io.github.jdreioe.wingmate.domain.CommunicationSessionSnapshot
+import io.github.jdreioe.wingmate.domain.CommunicationStorageResult
 import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.Message
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
@@ -59,6 +63,7 @@ data class WingmateBackupPayload(
     val selectedVoice: Voice?,
     val history: List<SaidText>,
     val dictionary: List<PronunciationEntry>,
+    val communicationSession: CommunicationSessionSnapshot = CommunicationSessionSnapshot(),
     /** Read-only compatibility with legacy backups. Credentials are never exported or restored. */
     val azureSpeechConfig: SpeechServiceConfig? = null
 )
@@ -111,6 +116,7 @@ class CompleteBackupManager(
     private val settingsRepository: SettingsRepository,
     private val voiceRepository: VoiceRepository,
     private val saidTextRepository: SaidTextRepository,
+    private val communicationSessionDataSource: CommunicationSessionDataSource,
     private val dictionaryRepository: PronunciationDictionaryRepository,
     private val configRepository: ConfigRepository,
     private val filePicker: FilePicker?,
@@ -137,6 +143,16 @@ class CompleteBackupManager(
             val value = url?.takeIf(String::isNotBlank) ?: return null
             return if (value.startsWith("file://") || value.startsWith('/')) archivePath(value) else value
         }
+        fun Message.archiveMedia(): Message = copy(
+            parts = parts.map { part -> part.copy(recordingPath = archivePath(part.recordingPath)) },
+            editProvenance = editProvenance.map { provenance ->
+                provenance.copy(
+                    originalPart = provenance.originalPart.copy(
+                        recordingPath = archivePath(provenance.originalPart.recordingPath)
+                    )
+                )
+            },
+        )
         val portable = original.copy(
             boards = original.boards.map { board ->
                 board.copy(
@@ -147,7 +163,11 @@ class CompleteBackupManager(
             phrases = original.phrases.map {
                 it.copy(recordingPath = archivePath(it.recordingPath), imageUrl = archiveLocalUrl(it.imageUrl))
             },
-            history = original.history.map { it.copy(audioFilePath = archivePath(it.audioFilePath)) }
+            history = original.history.map { it.copy(audioFilePath = archivePath(it.audioFilePath)) },
+            communicationSession = original.communicationSession.copy(
+                activeMessage = original.communicationSession.activeMessage.archiveMedia(),
+                heldMessage = original.communicationSession.heldMessage?.archiveMedia(),
+            ),
         )
         val payloadBytes = json.encodeToString(portable).encodeToByteArray()
         val mediaEntries = sourcePaths.map { (archiveName, sourcePath) ->
@@ -219,6 +239,16 @@ class CompleteBackupManager(
             fun restoredLocalUrl(url: String?): String? = url?.let { value ->
                 restoredPaths[value]?.let { "file://$it" } ?: value
             }
+            fun Message.restoreMedia(): Message = copy(
+                parts = parts.map { part -> part.copy(recordingPath = restored(part.recordingPath)) },
+                editProvenance = editProvenance.map { provenance ->
+                    provenance.copy(
+                        originalPart = provenance.originalPart.copy(
+                            recordingPath = restored(provenance.originalPart.recordingPath)
+                        )
+                    )
+                },
+            )
             payload = payload.copy(
                 boards = payload.boards.map { board ->
                     board.copy(
@@ -229,7 +259,11 @@ class CompleteBackupManager(
                 phrases = payload.phrases.map {
                     it.copy(recordingPath = restored(it.recordingPath), imageUrl = restoredLocalUrl(it.imageUrl))
                 },
-                history = payload.history.map { it.copy(audioFilePath = restored(it.audioFilePath)) }
+                history = payload.history.map { it.copy(audioFilePath = restored(it.audioFilePath)) },
+                communicationSession = payload.communicationSession.copy(
+                    activeMessage = payload.communicationSession.activeMessage.restoreMedia(),
+                    heldMessage = payload.communicationSession.heldMessage?.restoreMedia(),
+                ),
             )
             validatePayload(payload)
             failureKind = BackupFailureKind.Persistence
@@ -271,6 +305,7 @@ class CompleteBackupManager(
         selectedVoice = voiceRepository.getSelected(),
         history = saidTextRepository.list(),
         dictionary = dictionaryRepository.getAll(),
+        communicationSession = communicationSessionDataSource.load().valueOrThrow(),
         azureSpeechConfig = null
     )
 
@@ -291,6 +326,7 @@ class CompleteBackupManager(
         payload.selectedVoice?.let { voiceRepository.saveSelected(it) }
         saidTextRepository.addAll(payload.history)
         payload.dictionary.forEach { dictionaryRepository.add(it) }
+        communicationSessionDataSource.save(payload.communicationSession).valueOrThrow()
     }
 
     private fun validatePayload(payload: WingmateBackupPayload) {
@@ -339,6 +375,11 @@ class CompleteBackupManager(
     private fun ByteArray.fileDescription(path: String) = WingmateBackupFile(path, size.toLong(), sha256())
     private fun ByteArray.matches(file: WingmateBackupFile): Boolean = size.toLong() == file.size && sha256() == file.sha256
     private fun ByteArray.sha256(): String = toByteString().sha256().hex()
+
+    private fun <T> CommunicationStorageResult<T>.valueOrThrow(): T = when (this) {
+        is CommunicationStorageResult.Success -> value
+        is CommunicationStorageResult.Failure -> error("Communication session could not be persisted")
+    }
 
     private companion object {
         const val MANIFEST_PATH = "manifest.json"

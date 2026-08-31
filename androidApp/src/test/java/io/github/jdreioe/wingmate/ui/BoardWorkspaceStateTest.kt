@@ -5,6 +5,8 @@ import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -80,22 +82,18 @@ class BoardWorkspaceStateTest {
     }
 
     @Test
-    fun `composed message survives recreation and can be edited afterwards`() {
-        val savedState = SavedStateHandle()
-        val first = BoardWorkspaceViewModel(savedState)
-        first.onAction(
-            BoardWorkspaceAction.ReplaceSentence(
-                listOf(
-                    ObfButton(id = "hello", label = "Hello", vocalization = "Hello"),
-                    ObfButton(id = "world", label = "world", vocalization = "world"),
-                )
-            )
+    fun `legacy composed message can be imported exactly once`() {
+        val buttons = listOf(
+            ObfButton(id = "hello", label = "Hello", vocalization = "Hello"),
+            ObfButton(id = "world", label = "world", vocalization = "world"),
         )
+        val savedState = SavedStateHandle(
+            mapOf("board_workspace.sentence_buttons" to Json.encodeToString(buttons))
+        )
+        val viewModel = BoardWorkspaceViewModel(savedState)
 
-        val restored = BoardWorkspaceViewModel(savedState)
-        restored.onAction(BoardWorkspaceAction.RemoveLastSentenceButton)
-
-        assertEquals(listOf("Hello"), restored.state.value.selectedButtons.map { it.vocalization })
+        assertEquals(buttons, viewModel.consumeLegacySentenceButtons())
+        assertTrue(viewModel.consumeLegacySentenceButtons().isEmpty())
     }
 
     @Test
@@ -115,13 +113,11 @@ class BoardWorkspaceStateTest {
     }
 
     @Test
-    fun `failed save keeps communication and edited draft visible`() {
+    fun `failed save keeps edited draft visible`() {
         val original = graph(name = "Core words")
         val edited = original.copy(boardSet = original.boardSet.copy(name = "My words"))
         val viewModel = BoardWorkspaceViewModel(SavedStateHandle())
-        val sentence = ObfButton(id = "hello", label = "Hello", vocalization = "Hello")
         viewModel.onAction(BoardWorkspaceAction.Initialize(original, startInEditMode = true))
-        viewModel.onAction(BoardWorkspaceAction.ReplaceSentence(listOf(sentence)))
         viewModel.onAction(BoardWorkspaceAction.ApplyEdit(edited))
         viewModel.onAction(BoardWorkspaceAction.SaveStarted)
 
@@ -129,7 +125,6 @@ class BoardWorkspaceStateTest {
 
         assertEquals(BoardWorkspaceMode.Edit, viewModel.state.value.mode)
         assertEquals(edited, viewModel.state.value.activeGraph)
-        assertEquals(listOf(sentence), viewModel.state.value.selectedButtons)
         assertEquals(
             BoardWorkspaceContentStatus.RecoverableFailure("Could not save"),
             viewModel.state.value.contentStatus,
@@ -137,17 +132,14 @@ class BoardWorkspaceStateTest {
     }
 
     @Test
-    fun `retrying a failed load returns to loading without clearing communication`() {
+    fun `retrying a failed load returns to loading`() {
         val viewModel = BoardWorkspaceViewModel(SavedStateHandle())
-        val sentence = ObfButton(id = "hello", label = "Hello", vocalization = "Hello")
-        viewModel.onAction(BoardWorkspaceAction.ReplaceSentence(listOf(sentence)))
         viewModel.onAction(BoardWorkspaceAction.LoadFailed("Could not load"))
 
         viewModel.onAction(BoardWorkspaceAction.RetryLoad)
 
         assertEquals(BoardWorkspaceContentStatus.Loading, viewModel.state.value.contentStatus)
         assertEquals(1, viewModel.state.value.loadRequestId)
-        assertEquals(listOf(sentence), viewModel.state.value.selectedButtons)
         assertEquals(null, viewModel.state.value.statusMessage)
     }
 

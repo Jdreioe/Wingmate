@@ -18,11 +18,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.draw.scale
 import io.github.jdreioe.wingmate.domain.AacLogger
-import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.CommunicationAction
+import io.github.jdreioe.wingmate.domain.CommunicationSession
+import io.github.jdreioe.wingmate.domain.MessagePart
 import org.koin.compose.koinInject
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -119,7 +119,7 @@ fun PhraseGridItem(
         MaterialTheme.colorScheme.tertiary
     }
     
-    val speechService: SpeechService = koinInject()
+    val communicationSession: CommunicationSession = koinInject()
     val aacLogger: AacLogger = koinInject()
     
     // Pulse animation state
@@ -138,9 +138,6 @@ fun PhraseGridItem(
     var isPointerDown by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     
-    // Stable scope for fire-and-forget speech (survives hover changes)
-    val fishingScope = rememberCoroutineScope()
-
     val primaryAction = {
         showMenu = false
         if (runCatching { onTap?.invoke() ?: onPlay() }.getOrDefault(false)) {
@@ -153,7 +150,13 @@ fun PhraseGridItem(
 
     LaunchedEffect(isHovered, settings.auditoryFishingEnabled) {
         if (isHovered && accessHost?.state?.isPaused != true && settings.auditoryFishingEnabled && item.text.isNotBlank()) {
-            fishingScope.launch { runCatching { speechService.speak(item.text, rate = 0.8) } }
+            communicationSession.accept(
+                CommunicationAction.SpeakPart(
+                    part = MessagePart(item.text),
+                    voice = null,
+                    rateOverride = 0.8,
+                )
+            )
         }
     }
 
