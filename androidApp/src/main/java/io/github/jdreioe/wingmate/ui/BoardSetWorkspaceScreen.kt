@@ -100,11 +100,16 @@ import io.github.jdreioe.wingmate.domain.CommunicationAction
 import io.github.jdreioe.wingmate.domain.CommunicationSession
 import io.github.jdreioe.wingmate.domain.CommunicationSessionSnapshot
 import io.github.jdreioe.wingmate.domain.FileStorage
+import io.github.jdreioe.wingmate.domain.Message
 import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.TextPredictionService
+import io.github.jdreioe.wingmate.domain.fromScreenButton
+import io.github.jdreioe.wingmate.domain.fromTextDiff
+import io.github.jdreioe.wingmate.domain.legacyScreenMessage
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
+import io.github.jdreioe.wingmate.domain.toScreenButtons
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
@@ -934,7 +939,7 @@ private fun BoardSetWorkspaceRoot(
             confirmButton = {
                 TextButton(onClick = {
                     communicationSession.accept(
-                        replaceMessageTextAction(
+                        Message.fromTextDiff(
                             currentText = communicationSession.state.value.activeMessage.displayText,
                             newText = currentDraft,
                         )
@@ -1382,7 +1387,7 @@ private fun BoardSetWorkspaceRoot(
                         messageBarEditable = resolvedBoardSettings.messageBarEditable,
                         onSentenceChanged = { text ->
                             communicationSession.accept(
-                                replaceMessageTextAction(
+                                Message.fromTextDiff(
                                     currentText = communicationSession.state.value.activeMessage.displayText,
                                     newText = text,
                                 )
@@ -1522,7 +1527,7 @@ private fun BoardSetWorkspaceRoot(
                                         BoardWorkspaceAction.OpenBoard(linkedBoard.id)
                                     )
                                 } else {
-                                    val part = screenMessagePart(
+                                    val part = MessagePart.fromScreenButton(
                                         screenId = activeGraph.boardSet.id,
                                         board = activeBoard,
                                         button = button,

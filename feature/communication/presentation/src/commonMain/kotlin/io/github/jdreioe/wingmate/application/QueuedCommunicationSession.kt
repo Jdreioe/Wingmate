@@ -18,6 +18,7 @@ import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
+import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import kotlinx.coroutines.CancellationException
@@ -44,6 +45,7 @@ class QueuedCommunicationSession(
     private val saidTextRepository: SaidTextRepository,
     private val currentSettings: () -> Settings,
     private val scope: CoroutineScope,
+    private val predictionService: TextPredictionService? = null,
 ) : CommunicationSession {
     private val mutableState = MutableStateFlow(CommunicationSessionState())
     override val state: StateFlow<CommunicationSessionState> = mutableState.asStateFlow()
@@ -307,21 +309,24 @@ class QueuedCommunicationSession(
             playMessage(request, generation)
             if (generation == stopGeneration.value && request.recordHistory) {
                 val now = Clock.System.now().toEpochMilliseconds()
-                saidTextRepository.add(
-                    SaidText(
-                        date = now,
-                        saidText = request.message.spokenText,
-                        voiceName = request.voice?.name ?: request.voice?.displayName,
-                        pitch = request.voice?.pitch,
-                        speed = request.voice?.rate,
-                        createdAt = now,
-                        primaryLanguage = request.voice?.selectedLanguage
-                            ?.takeIf(String::isNotBlank)
-                            ?: request.voice?.primaryLanguage
-                            ?: request.primaryLanguage,
-                        visibleInHistory = request.visibleInHistory,
-                    )
+                val saidText = SaidText(
+                    date = now,
+                    saidText = request.message.spokenText,
+                    voiceName = request.voice?.name ?: request.voice?.displayName,
+                    pitch = request.voice?.pitch,
+                    speed = request.voice?.rate,
+                    createdAt = now,
+                    primaryLanguage = request.voice?.selectedLanguage
+                        ?.takeIf(String::isNotBlank)
+                        ?: request.voice?.primaryLanguage
+                        ?: request.primaryLanguage,
+                    visibleInHistory = request.visibleInHistory,
                 )
+                saidTextRepository.add(saidText)
+                // Q6a: single training seam — session trains prediction from History writes
+                if (saidText.visibleInHistory) {
+                    runCatching { predictionService?.train(listOf(saidText)) }
+                }
             }
         } catch (failure: CancellationException) {
             if (!currentCoroutineContext().isActive) throw failure
