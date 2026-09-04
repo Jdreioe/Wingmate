@@ -17,6 +17,10 @@ kotlin {
     iosX64()
     iosArm64()
     iosSimulatorArm64()
+    linuxX64()
+    mingwX64()
+    macosX64()
+    macosArm64()
 
     sourceSets {
         val commonMain by getting {
@@ -60,6 +64,18 @@ kotlin {
                 implementation("app.cash.sqldelight:native-driver:2.0.2")
             }
         }
+
+        val desktopMain by creating {
+            dependsOn(commonMain)
+            dependencies {
+                implementation(libs.ktor.client.curl)
+                implementation("app.cash.sqldelight:native-driver:2.0.2")
+            }
+        }
+        getByName("linuxX64Main").dependsOn(desktopMain)
+        getByName("mingwX64Main").dependsOn(desktopMain)
+        getByName("macosX64Main").dependsOn(desktopMain)
+        getByName("macosArm64Main").dependsOn(desktopMain)
 
         val jvmMain by getting {
             dependencies {
