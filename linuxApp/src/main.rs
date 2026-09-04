@@ -19,7 +19,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use wingmate::partner_window_bridge::{self, PartnerWindowController};
 
+mod gaze;
 mod i18n;
+mod typing_keyboard;
 
 const DEFAULT_API_URL: &str = "http://127.0.0.1:8765";
 const WINGMATE_APP_ID: &str = "com.hojmoseit.wingmate";
@@ -752,6 +754,121 @@ enum AccessTarget {
     Category(Option<String>),
     /// Sentence-only composition: append text to the draft without speaking.
     Insert(String),
+    /// Gaze-surface chrome (paging, transport, navigation). Communication
+    /// content uses the variants above; vocabulary editing has no gaze
+    /// variant by design and stays on the OS-pointer path.
+    GazeControl(GazeControlAction),
+    /// Typing-surface action (in-app keyboard, message bar, prediction and
+    /// completion strips). One variant keeps every key dwellable through the
+    /// shared controller, exactly like taps.
+    Typing(TypingAction),
+}
+
+/// Every activatable control of the Typing workspace's input surface.
+/// Single-character `Key` ids insert themselves (see [`typing_keyboard::id`]);
+/// the rest mirror `Message` handlers without duplicating their behavior.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum TypingAction {
+    Key(String),
+    Speak,
+    Clear,
+    Undo,
+    SavePhrase,
+    OpenHistory,
+    Prediction(String),
+    CompletePhrase(String),
+}
+
+/// Actions of the eye-tracking communication surface. Each one maps onto an
+/// existing message in [`Wingmate::activate_access`], so gaze chrome reuses
+/// ordinary behavior instead of duplicating it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum GazeControlAction {
+    SpeakDraft,
+    SpeakSentence,
+    StopSpeech,
+    ClearDraft,
+    BoardBackspace,
+    BoardClear,
+    BoardHome,
+    BoardBack,
+    RestToggle,
+    PrevPage,
+    NextPage,
+    PrevCategories,
+    NextCategories,
+    GoTyping,
+    GoScreens,
+    ExitGaze,
+    /// Run a Screen set directly (mirror of `OpenBoardSet(id, false)`).
+    OpenBoardSet(String),
+    /// Leave the open set for the library (mirror of `ExitBoardSet`).
+    ExitBoardSet,
+}
+
+/// One selectable cell of the gaze communication surface.
+#[derive(Debug, Clone)]
+struct GazeItem {
+    label: String,
+    symbol: Option<String>,
+    target: AccessTarget,
+}
+
+impl GazeItem {
+    fn labeled(label: String, target: AccessTarget) -> Self {
+        Self {
+            label,
+            symbol: None,
+            target,
+        }
+    }
+
+    fn control(label: &str, action: GazeControlAction) -> Self {
+        Self {
+            label: label.to_string(),
+            symbol: None,
+            target: AccessTarget::GazeControl(action),
+        }
+    }
+}
+
+/// Bands of the gaze surface, in render order. The resolver and the view
+/// share this order through [`Wingmate::gaze_surface`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GazeBandKind {
+    Display,
+    ControlsTop,
+    ControlsBottom,
+    Categories,
+    Grid,
+}
+
+/// One frame of the gaze surface: ordered target lists plus the fractional
+/// layout the view renders and the resolver hit-tests against.
+struct GazeSurface {
+    bands: Vec<GazeBandKind>,
+    layout: gaze::GazeLayout,
+    draft_text: String,
+    status_text: String,
+    dwell_ready: bool,
+    controls_top: Vec<GazeItem>,
+    controls_bottom: Vec<GazeItem>,
+    categories: Vec<GazeItem>,
+    main: Vec<GazeItem>,
+    grid_cols: usize,
+    grid_rows: usize,
+}
+
+impl GazeSurface {
+    fn band_items(&self, kind: &GazeBandKind) -> Option<&Vec<GazeItem>> {
+        match kind {
+            GazeBandKind::Display => None,
+            GazeBandKind::ControlsTop => Some(&self.controls_top),
+            GazeBandKind::ControlsBottom => Some(&self.controls_bottom),
+            GazeBandKind::Categories => Some(&self.categories),
+            GazeBandKind::Grid => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -930,13 +1047,32 @@ struct Wingmate {
     known_access_targets: HashMap<String, AccessTarget>,
     window_width: f32,
     window_height: f32,
+    /// Native eye tracking (TD-I13 via `tobiifreed`). Gaze only drives the
+    /// fullscreen communication surface; the toggle persists locally because
+    /// no second provider exists yet to justify a shared setting (#126).
+    gaze_enabled: bool,
+    gaze_client: gaze::TobiifreeClient,
+    /// Target id currently entered via gaze (`None` when gaze holds nothing).
+    /// Shared with the pointer path's `known_access_targets` so activation
+    /// resolves identically; the bridge controller owns dwell either way.
+    gaze_target_id: Option<String>,
+    gaze_phrase_page: usize,
+    gaze_category_page: usize,
+    gaze_board_page: usize,
+    /// In-app keyboard state (Typing workspace). The caret is a character
+    /// offset into `draft`; shift is momentary (one insertion); symbols
+    /// switches the key grid to digits and punctuation.
+    draft_caret: usize,
+    kb_shift: bool,
+    kb_symbols: bool,
+    /// Draft before the last accepted word prediction (Undo support).
+    prediction_undo: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 enum Message {
     Navigate(Page),
     ToggleSettings,
-    DraftChanged(String),
     PredictionSelected(String),
     PredictionInsertionLoaded(Result<InsertionResult, String>),
     LoadedPhrases(Result<Vec<Phrase>, String>),
@@ -1044,6 +1180,15 @@ enum Message {
     SettingString(&'static str, String),
     ToggleInputPause,
     HideRestNotice,
+    ToggleGaze(bool),
+    GazePoll,
+    /// Accept a saved-phrase completion into the draft.
+    AcceptPhraseCompletion(String),
+    /// Restore the draft from before the last accepted word prediction.
+    UndoPrediction,
+    /// Save the current draft as a phrase (M+). Editing-access gated like
+    /// `AddPhrase`, which it delegates to.
+    SaveDraftAsPhrase,
     GridColumnsChanged(i32),
     StartupBoardSetChanged(String),
     StartupModeChanged(String),
@@ -1117,6 +1262,7 @@ impl Message {
         matches!(
             self,
             Self::AddPhrase
+                | Self::SaveDraftAsPhrase
                 | Self::DeletePhrase(_)
                 | Self::EditPhrase(_)
                 | Self::SavePhraseEdit
@@ -1302,6 +1448,16 @@ impl cosmic::Application for Wingmate {
             known_access_targets: HashMap::new(),
             window_width: 1024.0,
             window_height: 768.0,
+            gaze_enabled: gaze::load_gaze_enabled(),
+            gaze_client: gaze::TobiifreeClient::new(),
+            gaze_target_id: None,
+            gaze_phrase_page: 0,
+            gaze_category_page: 0,
+            gaze_board_page: 0,
+            draft_caret: 0,
+            kb_shift: false,
+            kb_symbols: false,
+            prediction_undo: None,
         };
 
         (
@@ -1322,6 +1478,7 @@ impl cosmic::Application for Wingmate {
             "starting" | "playing" | "paused"
         );
         let access_timer_active = self.settings.scanning_enabled
+            || self.gaze_enabled
             || (self.settings.dwell_to_select_millis > 0
                 && self.current_access_target_id.is_some())
             || self.selection_highlighted_access.is_some();
@@ -1351,6 +1508,13 @@ impl cosmic::Application for Wingmate {
         if self.rest_notice_visible {
             subscriptions.push(
                 cosmic::iced::time::every(Duration::from_secs(10)).map(|_| Message::HideRestNotice),
+            );
+        }
+        if self.gaze_enabled {
+            // Gaze samples arrive at tracker rate; drain them on a fixed
+            // cadence and resolve only the newest usable point per poll.
+            subscriptions.push(
+                cosmic::iced::time::every(Duration::from_millis(50)).map(|_| Message::GazePoll),
             );
         }
         Subscription::batch(subscriptions)
@@ -1383,11 +1547,6 @@ impl cosmic::Application for Wingmate {
                 }
                 return self.navigate(Page::Settings);
             }
-            Message::DraftChanged(value) => {
-                self.draft = value.clone();
-                self.partner.update_text(value.clone());
-                return self.api.predict(value).map(cosmic::Action::App);
-            }
             Message::PredictionSelected(word) => {
                 self.pending_prediction_word = Some(word.clone());
                 let api = self.api.clone();
@@ -1408,7 +1567,9 @@ impl cosmic::Application for Wingmate {
             Message::PredictionInsertionLoaded(result) => {
                 if let Some(_word) = self.pending_prediction_word.take() {
                     let insertion = result.map(|r| r.insertion).unwrap_or_default();
+                    self.prediction_undo = Some(self.draft.clone());
                     self.draft = format!("{}{} ", self.draft, insertion);
+                    self.draft_caret = self.draft.chars().count();
                     self.partner.update_text(self.draft.clone());
                     return self
                         .api
@@ -1768,8 +1929,34 @@ impl cosmic::Application for Wingmate {
             }
             Message::ClearDraft => {
                 self.draft.clear();
+                self.draft_caret = 0;
+                self.prediction_undo = None;
                 self.partner.update_text(String::new());
                 return self.api.predict(String::new()).map(cosmic::Action::App);
+            }
+            Message::AcceptPhraseCompletion(phrase) => {
+                self.draft = phrase;
+                self.draft_caret = self.draft.chars().count();
+                self.partner.update_text(self.draft.clone());
+                return self.api.predict(self.draft.clone()).map(cosmic::Action::App);
+            }
+            Message::UndoPrediction => {
+                if let Some(before) = self.prediction_undo.take() {
+                    self.draft = before;
+                    self.draft_caret = self.draft.chars().count();
+                    self.partner.update_text(self.draft.clone());
+                    return self.api.predict(self.draft.clone()).map(cosmic::Action::App);
+                }
+            }
+            Message::SaveDraftAsPhrase => {
+                let value = self.draft.trim().to_string();
+                if value.is_empty() {
+                    self.status = "Nothing to save: the message is empty.".to_string();
+                    return Task::none();
+                }
+                self.new_phrase = value;
+                self.status = "Saved as a phrase.".to_string();
+                return cosmic::Application::update(self, Message::AddPhrase);
             }
             Message::AccessEnter(target) => {
                 if self.settings.auditory_fishing_enabled && !self.input_is_paused {
@@ -2476,6 +2663,26 @@ impl cosmic::Application for Wingmate {
                     .access_input("togglePause", None, None)
                     .map(cosmic::Action::App);
             }
+            Message::ToggleGaze(enabled) => {
+                self.gaze_enabled = enabled;
+                gaze::save_gaze_enabled(enabled);
+                if !enabled {
+                    // Release any gaze-held target so no stale dwell can
+                    // complete after gaze is switched off.
+                    self.gaze_client.disconnect();
+                    if let Some(old_id) = self.gaze_target_id.take() {
+                        if let Some(old_target) = self.known_access_targets.remove(&old_id) {
+                            let target_id = access_target_id(&old_target);
+                            return self
+                                .api
+                                .access_input("exit", Some(target_id), None)
+                                .map(cosmic::Action::App);
+                        }
+                    }
+                }
+                return Task::none();
+            }
+            Message::GazePoll => return self.poll_gaze(),
             Message::HideRestNotice => {
                 self.rest_notice_visible = false;
                 return Task::none();
@@ -2703,7 +2910,10 @@ impl cosmic::Application for Wingmate {
                 }
             }
             Message::AppendMarkup(markup) => {
-                self.draft.push_str(markup);
+                let (next, caret) =
+                    typing_keyboard::insert_at(&self.draft, self.draft_caret, markup);
+                self.draft = next;
+                self.draft_caret = caret;
                 self.partner.update_text(self.draft.clone());
             }
             Message::ToggleThought => {
@@ -2713,6 +2923,7 @@ impl cosmic::Application for Wingmate {
                 } else {
                     self.thought_draft = Some(std::mem::take(&mut self.draft));
                 }
+                self.draft_caret = self.draft.chars().count();
                 self.partner.update_text(self.draft.clone());
             }
             Message::OnboardingNext => self.onboarding_step = (self.onboarding_step + 1).min(3),
@@ -3407,6 +3618,66 @@ impl Wingmate {
             self.draft.push(' ');
         }
         self.draft.push_str(text);
+        self.draft_caret = self.draft.chars().count();
+    }
+
+    /// Replace the draft and caret together, mirror to the partner window,
+    /// and refresh word predictions.
+    fn set_draft(&mut self, draft: String, caret: usize) -> Task<cosmic::Action<Message>> {
+        self.draft = draft;
+        self.draft_caret = typing_keyboard::clamp_caret(&self.draft, caret);
+        self.partner.update_text(self.draft.clone());
+        self.api.predict(self.draft.clone()).map(cosmic::Action::App)
+    }
+
+    /// Insert typed text at the caret, consuming momentary shift.
+    fn keyboard_insert_text(&mut self, text: &str) -> Task<cosmic::Action<Message>> {
+        let shifted = typing_keyboard::apply_shift(text, self.kb_shift);
+        self.kb_shift = false;
+        let (next, caret) = typing_keyboard::insert_at(&self.draft, self.draft_caret, &shifted);
+        self.set_draft(next, caret)
+    }
+
+    /// One activation path for tap, dwell, select-key, and scanning: every
+    /// key button and every `AccessTarget::Key` funnels through here.
+    fn press_keyboard_key(&mut self, id: &str) -> Task<cosmic::Action<Message>> {
+        use typing_keyboard::id as kid;
+        match id {
+            kid::BACKSPACE => {
+                let (next, caret) =
+                    typing_keyboard::backspace_at(&self.draft, self.draft_caret);
+                self.set_draft(next, caret)
+            }
+            // Enter speaks, matching the old text field's submit behavior.
+            kid::ENTER => {
+                cosmic::Application::update(self, Message::Speak(self.draft.clone()))
+            }
+            kid::SHIFT => {
+                self.kb_shift = !self.kb_shift;
+                Task::none()
+            }
+            kid::SYMBOLS => {
+                self.kb_symbols = true;
+                Task::none()
+            }
+            kid::LETTERS => {
+                self.kb_symbols = false;
+                Task::none()
+            }
+            kid::LEFT => {
+                self.draft_caret =
+                    typing_keyboard::move_caret(&self.draft, self.draft_caret, -1);
+                Task::none()
+            }
+            kid::RIGHT => {
+                self.draft_caret =
+                    typing_keyboard::move_caret(&self.draft, self.draft_caret, 1);
+                Task::none()
+            }
+            kid::SETTINGS => cosmic::Application::update(self, Message::ToggleSettings),
+            kid::SPACE => self.keyboard_insert_text(" "),
+            _ => self.keyboard_insert_text(id),
+        }
     }
 
     /// Resolve a phrase's access target, honoring the global speech policy.
@@ -3473,6 +3744,80 @@ impl Wingmate {
                 self.api
                     .select_category(category_id)
                     .map(cosmic::Action::App)
+            }
+            AccessTarget::Typing(action) => match action {
+                // The whole typing surface shares one activation path: tap,
+                // dwell, select-key, and scanning converge here and reuse
+                // ordinary message behavior.
+                TypingAction::Key(id) => self.press_keyboard_key(&id),
+                TypingAction::Speak => cosmic::Application::update(
+                    self,
+                    Message::Speak(self.draft.clone()),
+                ),
+                TypingAction::Clear => {
+                    cosmic::Application::update(self, Message::ClearDraft)
+                }
+                TypingAction::Undo => {
+                    cosmic::Application::update(self, Message::UndoPrediction)
+                }
+                TypingAction::SavePhrase => {
+                    cosmic::Application::update(self, Message::SaveDraftAsPhrase)
+                }
+                TypingAction::OpenHistory => cosmic::Application::update(
+                    self,
+                    Message::SelectCategory(Some("__history__".to_string())),
+                ),
+                TypingAction::Prediction(word) => {
+                    cosmic::Application::update(self, Message::PredictionSelected(word))
+                }
+                TypingAction::CompletePhrase(phrase) => {
+                    cosmic::Application::update(self, Message::AcceptPhraseCompletion(phrase))
+                }
+            },
+            AccessTarget::GazeControl(action) => {
+                // Gaze chrome reuses ordinary behavior; dwell, Rest mode, and
+                // debounce still apply through the shared controller.
+                let draft = self.draft.clone();
+                let sentence = self.board_sentence.clone();
+                let home = self.last_workspace;
+                match action {
+                    GazeControlAction::SpeakDraft => cosmic::Application::update(self, Message::Speak(draft)),
+                    GazeControlAction::SpeakSentence => cosmic::Application::update(self, Message::Speak(sentence)),
+                    GazeControlAction::StopSpeech => {
+                        cosmic::Application::update(self, Message::SpeechAction("/api/speak/stop"))
+                    }
+                    GazeControlAction::ClearDraft => cosmic::Application::update(self, Message::ClearDraft),
+                    GazeControlAction::BoardBackspace => {
+                        cosmic::Application::update(self, Message::BoardSentenceBackspace)
+                    }
+                    GazeControlAction::BoardClear => cosmic::Application::update(self, Message::BoardSentenceClear),
+                    GazeControlAction::BoardHome => cosmic::Application::update(self, Message::BoardNavigateHome),
+                    GazeControlAction::BoardBack => cosmic::Application::update(self, Message::BoardNavigateBack),
+                    GazeControlAction::RestToggle => cosmic::Application::update(self, Message::ToggleInputPause),
+                    GazeControlAction::PrevPage => {
+                        self.gaze_page_back();
+                        Task::none()
+                    }
+                    GazeControlAction::NextPage => {
+                        self.gaze_page_forward();
+                        Task::none()
+                    }
+                    GazeControlAction::PrevCategories => {
+                        self.gaze_category_page = self.gaze_category_page.saturating_sub(1);
+                        Task::none()
+                    }
+                    GazeControlAction::NextCategories => {
+                        self.gaze_category_page = self.gaze_category_page.saturating_add(1);
+                        Task::none()
+                    }
+                    GazeControlAction::GoTyping => cosmic::Application::update(self, Message::Navigate(Page::Communicate)),
+                    GazeControlAction::GoScreens => cosmic::Application::update(self, Message::Navigate(Page::Screens)),
+                    GazeControlAction::ExitGaze => cosmic::Application::update(self, Message::Navigate(home)),
+                    GazeControlAction::OpenBoardSet(id) => {
+                        cosmic::Application::update(self, Message::OpenBoardSet(id, false))
+                    }
+                    GazeControlAction::ExitBoardSet => cosmic::Application::update(self, Message::ExitBoardSet),
+                }
             }
         }
     }
@@ -3560,6 +3905,552 @@ impl Wingmate {
         )
     }
 
+    // -- Native gaze communication surface (issues #123 / #129) ------------
+    //
+    // The surface renders communication targets as large cells in horizontal
+    // bands whose fractional geometry is described by [`gaze::GazeLayout`].
+    // [`gaze_surface`] builds the ordered target lists once per frame; the
+    // view and [`gaze_target_at`] both consume them, so rendering and
+    // hit-testing cannot drift apart. Activation always travels the shared
+    // bridge dwell path; editing and destructive vocabulary controls have no
+    // gaze targets by design.
+
+    fn poll_gaze(&mut self) -> Task<cosmic::Action<Message>> {
+        if !self.gaze_enabled {
+            return Task::none();
+        }
+        let now = Instant::now();
+        let (poll, _) = self.gaze_client.poll(now);
+        // Gaze only drives the fullscreen surface: leaving it releases any
+        // gaze-held target, which also cancels pending dwell in the bridge.
+        let resolved = if self.page == Page::Fullscreen {
+            poll.point
+                .and_then(|(x, y)| self.gaze_target_at(x, y))
+        } else {
+            None
+        };
+        let resolved_id = resolved.as_ref().map(access_target_id);
+        if resolved_id == self.gaze_target_id {
+            return Task::none();
+        }
+        let mut tasks = Vec::new();
+        if let Some(old_id) = self.gaze_target_id.clone() {
+            if let Some(old_target) = self.known_access_targets.remove(&old_id) {
+                if self
+                    .access_press
+                    .as_ref()
+                    .is_some_and(|(pressed, _)| pressed == &old_target)
+                {
+                    self.access_press = None;
+                }
+                tasks.push(
+                    self.api
+                        .access_input("exit", Some(access_target_id(&old_target)), None)
+                        .map(cosmic::Action::App),
+                );
+            }
+        }
+        if let Some(target) = resolved {
+            let target_id = access_target_id(&target);
+            self.known_access_targets.insert(target_id.clone(), target);
+            self.gaze_target_id = Some(target_id.clone());
+            // No auditory-fishing cue on gaze enter: saccades would chatter.
+            // The resolved target still gets pointer emphasis and the
+            // selection highlight on activation.
+            tasks.push(
+                self.api
+                    .access_input("enter", Some(target_id), None)
+                    .map(cosmic::Action::App),
+            );
+        } else {
+            self.gaze_target_id = None;
+        }
+        Task::batch(tasks)
+    }
+
+    fn gaze_typing(&self) -> bool {
+        // The surface mirrors the workspace gaze was opened from. Settings
+        // and onboarding fall back to Typing, the primary workspace.
+        self.last_workspace != Page::Screens
+    }
+
+    fn gaze_target_at(&self, x: f64, y: f64) -> Option<AccessTarget> {
+        let surface = self.gaze_surface();
+        let (band, cell) = surface.layout.resolve(x, y)?;
+        let kind = *surface.bands.get(band)?;
+        if kind == GazeBandKind::Grid {
+            let (start, end) = surface.layout.band_range(band)?;
+            let span = (end - start) as f64;
+            if span <= 0.0 {
+                return None;
+            }
+            let local_y = ((y - start as f64) / span).clamp(0.0, 1.0);
+            let index =
+                gaze::resolve_grid_cell(x, local_y, surface.grid_cols, surface.grid_rows)?;
+            return surface.main.get(index).map(|item| item.target.clone());
+        }
+        surface
+            .band_items(&kind)?
+            .get(cell)
+            .map(|item| item.target.clone())
+    }
+
+    fn gaze_page_back(&mut self) {
+        if self.gaze_typing() {
+            self.gaze_phrase_page = self.gaze_phrase_page.saturating_sub(1);
+        } else {
+            self.gaze_board_page = self.gaze_board_page.saturating_sub(1);
+        }
+    }
+
+    fn gaze_page_forward(&mut self) {
+        if self.gaze_typing() {
+            self.gaze_phrase_page = self.gaze_phrase_page.saturating_add(1);
+        } else {
+            self.gaze_board_page = self.gaze_board_page.saturating_add(1);
+        }
+    }
+
+    /// Ordered target lists behind one surface frame plus the layout the
+    /// view renders and the resolver hit-tests against.
+    fn gaze_surface(&self) -> GazeSurface {
+        const GRID_COLS: usize = 3;
+        const GRID_ROWS: usize = 3;
+        const CATEGORY_STRIP: usize = 6;
+
+        let typing = self.gaze_typing();
+        let rest_label = if self.input_is_paused {
+            "Resume input"
+        } else {
+            "Rest mode"
+        };
+        let mut controls_top = vec![
+            GazeItem::control(
+                "Stop",
+                GazeControlAction::StopSpeech,
+            ),
+            GazeItem::control(rest_label, GazeControlAction::RestToggle),
+            GazeItem::control("Exit", GazeControlAction::ExitGaze),
+        ];
+        if typing {
+            controls_top.insert(
+                0,
+                GazeItem::control("Speak", GazeControlAction::SpeakDraft),
+            );
+            controls_top.insert(1, GazeItem::control("Clear", GazeControlAction::ClearDraft));
+        } else {
+            controls_top.insert(
+                0,
+                GazeItem::control("Speak", GazeControlAction::SpeakSentence),
+            );
+            controls_top.insert(1, GazeItem::control("Back", GazeControlAction::BoardBackspace));
+            controls_top.insert(2, GazeItem::control("Clear", GazeControlAction::BoardClear));
+        }
+
+        let mut controls_bottom = Vec::new();
+        if typing {
+            let pages = self.gaze_phrase_pages(GRID_COLS * GRID_ROWS);
+            if pages > 1 {
+                controls_bottom.push(GazeItem::control("Prev", GazeControlAction::PrevPage));
+                controls_bottom.push(GazeItem::control("Next", GazeControlAction::NextPage));
+            }
+            controls_bottom.push(GazeItem::control("Screens", GazeControlAction::GoScreens));
+        } else {
+            controls_bottom.push(GazeItem::control("Home", GazeControlAction::BoardHome));
+            controls_bottom.push(GazeItem::control("Back", GazeControlAction::BoardBack));
+            if self.board_graph.is_some() {
+                controls_bottom.push(GazeItem::control(
+                    "Library",
+                    GazeControlAction::ExitBoardSet,
+                ));
+            }
+            let pages = self.gaze_board_pages(GRID_COLS * GRID_ROWS);
+            if pages > 1 {
+                controls_bottom.push(GazeItem::control("Prev", GazeControlAction::PrevPage));
+                controls_bottom.push(GazeItem::control("Next", GazeControlAction::NextPage));
+            }
+            controls_bottom.push(GazeItem::control("Typing", GazeControlAction::GoTyping));
+        }
+
+        let mut categories = Vec::new();
+        if typing {
+            let mut all: Vec<(String, AccessTarget)> = vec![(
+                fl!("communicate-all"),
+                AccessTarget::Category(None),
+            )];
+            all.extend(self.categories.iter().map(|category| {
+                (
+                    category
+                        .name
+                        .clone()
+                        .unwrap_or_else(|| "Unnamed".to_string()),
+                    AccessTarget::Category(Some(category.id.clone())),
+                )
+            }));
+            let pages = all.len().div_ceil(CATEGORY_STRIP).max(1);
+            let page = self.gaze_category_page.min(pages - 1);
+            if page > 0 {
+                categories.push(GazeItem::control("<", GazeControlAction::PrevCategories));
+            }
+            categories.extend(
+                all.into_iter()
+                    .skip(page * CATEGORY_STRIP)
+                    .take(CATEGORY_STRIP)
+                    .map(|(label, target)| GazeItem::labeled(label, target)),
+            );
+            if page + 1 < pages {
+                categories.push(GazeItem::control(">", GazeControlAction::NextCategories));
+            }
+        }
+
+        let main = if typing {
+            self.gaze_phrase_items(GRID_COLS * GRID_ROWS)
+        } else {
+            self.gaze_board_items(GRID_COLS * GRID_ROWS)
+        };
+
+        let mut bands = vec![
+            (GazeBandKind::Display, gaze::GazeBand::display(2)),
+            (
+                GazeBandKind::ControlsTop,
+                gaze::GazeBand::interactive(1, controls_top.len()),
+            ),
+            (
+                GazeBandKind::ControlsBottom,
+                gaze::GazeBand::interactive(1, controls_bottom.len()),
+            ),
+        ];
+        if typing {
+            bands.push((
+                GazeBandKind::Categories,
+                gaze::GazeBand::interactive(1, categories.len()),
+            ));
+        }
+        bands.push((
+            GazeBandKind::Grid,
+            gaze::GazeBand::interactive(7, GRID_COLS),
+        ));
+        let kinds = bands.iter().map(|(kind, _)| *kind).collect();
+        let layout = gaze::GazeLayout::new(bands.into_iter().map(|(_, band)| band).collect());
+        GazeSurface {
+            bands: kinds,
+            layout,
+            draft_text: if typing {
+                self.draft.clone()
+            } else {
+                self.board_sentence.clone()
+            },
+            status_text: self.gaze_client.status(self.gaze_enabled, Instant::now()).label().to_string(),
+            dwell_ready: self.settings.dwell_to_select_millis > 0,
+            controls_top,
+            controls_bottom,
+            categories,
+            main,
+            grid_cols: GRID_COLS,
+            grid_rows: GRID_ROWS,
+        }
+    }
+
+    fn gaze_phrase_pages(&self, page_size: usize) -> usize {
+        self.gaze_phrase_source_len().div_ceil(page_size.max(1)).max(1)
+    }
+
+    fn gaze_phrase_source_len(&self) -> usize {
+        if self.selected_category.as_deref() == Some("__history__") {
+            self.history
+                .iter()
+                .filter(|item| item.said_text.is_some())
+                .count()
+        } else {
+            self.phrases.iter().filter(|phrase| !phrase.is_hidden).count()
+        }
+    }
+
+    /// Mirror of the Typing grid's phrase source (without vocabulary
+    /// management, which stays off the gaze path), windowed to one page.
+    fn gaze_phrase_items(&self, page_size: usize) -> Vec<GazeItem> {
+        let page_size = page_size.max(1);
+        let pages = self.gaze_phrase_pages(page_size);
+        let page = self.gaze_phrase_page.min(pages - 1);
+        if self.selected_category.as_deref() == Some("__history__") {
+            self.history
+                .iter()
+                .filter_map(|item| {
+                    item.said_text.as_ref().map(|said| {
+                        let spoken = said.clone();
+                        let target = if self.settings.speech_policy == "SentenceOnly" {
+                            AccessTarget::Insert(spoken.clone())
+                        } else {
+                            AccessTarget::Speak(spoken.clone())
+                        };
+                        GazeItem::labeled(spoken, target)
+                    })
+                })
+                .skip(page * page_size)
+                .take(page_size)
+                .collect()
+        } else {
+            self.phrases
+                .iter()
+                .filter(|phrase| !phrase.is_hidden)
+                .skip(page * page_size)
+                .take(page_size)
+                .map(|phrase| {
+                    let label = phrase.text.clone();
+                    let target = self.phrase_access_target(phrase);
+                    GazeItem::labeled(label, target)
+                })
+                .collect()
+        }
+    }
+
+    fn gaze_board_pages(&self, page_size: usize) -> usize {
+        self.gaze_board_source_len().div_ceil(page_size.max(1)).max(1)
+    }
+
+    fn gaze_board_source_len(&self) -> usize {
+        let Some(graph) = &self.board_graph else {
+            return self.board_sets.len();
+        };
+        if graph.board_set.id.is_empty() {
+            return 0;
+        }
+        let active = self
+            .active_board_id
+            .as_deref()
+            .unwrap_or(&graph.board_set.root_board_id);
+        match graph.boards.iter().find(|board| board.id == active) {
+            Some(board) => {
+                let fields: &[BoardField] = graph
+                    .field_items
+                    .get(&board.id)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
+                Self::gaze_board_buttons(board, fields).len()
+            }
+            None => 0,
+        }
+    }
+
+    /// Active board buttons in layout order (row, column), like the run view.
+    fn gaze_board_buttons<'a>(board: &'a Board, fields: &'a [BoardField]) -> Vec<&'a BoardButton> {
+        let mut ordered: Vec<&BoardField> = fields.iter().collect();
+        ordered.sort_by_key(|field| (field.row, field.column));
+        ordered
+            .into_iter()
+            .filter_map(|field| {
+                field.button_id.as_ref().and_then(|id| {
+                    board
+                        .buttons
+                        .iter()
+                        .find(|button| &button.id == id)
+                        .filter(|button| !button.hidden)
+                })
+            })
+            .collect()
+    }
+
+    /// Board library sets (when no set is open) or the active board's
+    /// buttons, windowed to one page.
+    fn gaze_board_items(&self, page_size: usize) -> Vec<GazeItem> {
+        let page_size = page_size.max(1);
+        let pages = self.gaze_board_pages(page_size);
+        let page = self.gaze_board_page.min(pages - 1);
+        let Some(graph) = &self.board_graph else {
+            return self
+                .board_sets
+                .iter()
+                .skip(page * page_size)
+                .take(page_size)
+                .map(|set| {
+                    GazeItem::labeled(
+                        set.name.clone(),
+                        AccessTarget::GazeControl(GazeControlAction::OpenBoardSet(set.id.clone())),
+                    )
+                })
+                .collect();
+        };
+        let active = self
+            .active_board_id
+            .as_deref()
+            .unwrap_or(&graph.board_set.root_board_id);
+        let Some(board) = graph.boards.iter().find(|board| board.id == active) else {
+            return Vec::new();
+        };
+        let fields: &[BoardField] = graph
+            .field_items
+            .get(&board.id)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        Self::gaze_board_buttons(board, fields)
+            .into_iter()
+            .skip(page * page_size)
+            .take(page_size)
+            .map(|button| {
+                let label = button
+                    .label
+                    .clone()
+                    .or_else(|| button.vocalization.clone())
+                    .unwrap_or_default();
+                let symbol = button
+                    .image_id
+                    .as_ref()
+                    .and_then(|image_id| {
+                        board.images.iter().find(|image| &image.id == image_id)
+                    })
+                    .and_then(|item| item.url.as_deref().or(item.path.as_deref()))
+                    .map(str::to_string);
+                GazeItem {
+                    label,
+                    symbol,
+                    target: AccessTarget::BoardButton(board.id.clone(), button.id.clone()),
+                }
+            })
+            .collect()
+    }
+
+    /// Fullscreen eye-tracking surface: the same ordered lists the resolver
+    /// hit-tests, rendered as large equal-width cells. Items move by value
+    /// into their widgets, so the returned tree only borrows `self`. Every
+    /// cell also stays tappable and OS-dwellable through [`access_widget`](Self::access_widget).
+    fn gaze_surface_view(&self) -> Element<'_, Message> {
+        let surface = self.gaze_surface();
+        let layout = surface.layout.clone();
+        // Move each band's items out of the owned surface frame.
+        let mut parts: Vec<(GazeBandKind, Vec<GazeItem>)> = Vec::new();
+        let mut surface = surface;
+        for kind in surface.bands.clone() {
+            let items = match kind {
+                GazeBandKind::Display => Vec::new(),
+                GazeBandKind::ControlsTop => std::mem::take(&mut surface.controls_top),
+                GazeBandKind::ControlsBottom => std::mem::take(&mut surface.controls_bottom),
+                GazeBandKind::Categories => std::mem::take(&mut surface.categories),
+                GazeBandKind::Grid => std::mem::take(&mut surface.main),
+            };
+            parts.push((kind, items));
+        }
+        let mut bands = column![].spacing(6);
+        for (index, (kind, items)) in parts.into_iter().enumerate() {
+            let portion = layout.portion(index).unwrap_or(1);
+            let band: Element<'_, Message> = match kind {
+                GazeBandKind::Display => container(
+                    column![
+                        text(if surface.draft_text.trim().is_empty() {
+                            "…".to_string()
+                        } else {
+                            surface.draft_text.clone()
+                        })
+                        .size(self.settings.font_px(40.0))
+                        .width(Fill),
+                        text(if surface.dwell_ready {
+                            surface.status_text.clone()
+                        } else {
+                            format!(
+                                "{}. Set Dwell to select above 0 in Settings → Access.",
+                                surface.status_text
+                            )
+                        })
+                        .size(15),
+                    ]
+                    .spacing(8),
+                )
+                .padding(16)
+                .width(Fill)
+                .height(cosmic::iced::Length::FillPortion(portion))
+                .into(),
+                GazeBandKind::ControlsTop => self.gaze_strip(items, portion),
+                GazeBandKind::ControlsBottom => self.gaze_strip(items, portion),
+                GazeBandKind::Categories => self.gaze_strip(items, portion),
+                GazeBandKind::Grid => {
+                    self.gaze_grid(items, surface.grid_cols, surface.grid_rows, portion)
+                }
+            };
+            bands = bands.push(band);
+        }
+        bands.height(Fill).width(Fill).into()
+    }
+
+    /// One single-row band of equal-width gaze cells.
+    fn gaze_strip(&self, items: Vec<GazeItem>, portion: u16) -> Element<'_, Message> {
+        let mut strip = row![].spacing(6);
+        for item in items {
+            strip = strip.push(
+                container(self.gaze_cell(item))
+                    .width(Fill)
+                    .height(Fill),
+            );
+        }
+        strip
+            .width(Fill)
+            .height(cosmic::iced::Length::FillPortion(portion))
+            .into()
+    }
+
+    /// Paged main grid: rows of exactly `cols` equal cells; a short final
+    /// row is padded with spacers so columns stay aligned with the resolver.
+    fn gaze_grid(
+        &self,
+        items: Vec<GazeItem>,
+        cols: usize,
+        rows: usize,
+        portion: u16,
+    ) -> Element<'_, Message> {
+        let cols = cols.max(1);
+        let mut items = items.into_iter();
+        let mut grid = column![].spacing(6);
+        for _ in 0..rows.max(1) {
+            let mut grid_row = row![].spacing(6);
+            for _ in 0..cols {
+                match items.next() {
+                    Some(item) => {
+                        grid_row = grid_row.push(
+                            container(self.gaze_cell(item))
+                                .width(Fill)
+                                .height(Fill),
+                        );
+                    }
+                    None => {
+                        grid_row = grid_row.push(Space::new().width(Fill).height(Fill));
+                    }
+                }
+            }
+            grid = grid.push(grid_row.height(Fill).width(Fill));
+        }
+        grid
+            .width(Fill)
+            .height(cosmic::iced::Length::FillPortion(portion))
+            .into()
+    }
+
+    fn gaze_cell(&self, item: GazeItem) -> Element<'_, Message> {
+        let mut content = column![]
+            .spacing(4)
+            .align_x(cosmic::iced::alignment::Alignment::Center);
+        if let Some(symbol) = self.image_for(item.symbol.as_deref(), 56.0) {
+            content = content.push(symbol);
+        }
+        let label = if item.label.trim().is_empty() {
+            "Untitled".to_string()
+        } else {
+            item.label
+        };
+        content = content.push(text(label).size(self.settings.font_px(22.0)));
+        let centered = container(content)
+            .width(Fill)
+            .height(Fill)
+            .align_x(cosmic::iced::alignment::Horizontal::Center)
+            .align_y(cosmic::iced::alignment::Vertical::Center);
+        let mut cell_button = button(centered).width(Fill).height(Fill).padding(10);
+        if self.settings.hold_to_select_millis == 0 {
+            cell_button =
+                cell_button.on_press(Message::AccessActivate(item.target.clone()));
+        }
+        if let Some(class) = access_button_class(self.access_visual_state(&item.target)) {
+            cell_button = cell_button.class(class);
+        }
+        self.access_widget(cell_button.into(), item.target)
+    }
+
     fn navigate(&mut self, page: Page) -> Task<cosmic::Action<Message>> {
         let returning_to_open_screen = self.page == Page::Settings
             && page == Page::Screens
@@ -3578,6 +4469,17 @@ impl Wingmate {
             Page::Communicate if self.settings.history_visible => {
                 self.api.load_history().map(cosmic::Action::App)
             }
+            // The Screens-flavored gaze surface lists the board library when
+            // no set is open; make sure it is loaded so gaze is never
+            // stranded on an empty grid.
+            Page::Fullscreen
+                if self.gaze_enabled
+                    && self.last_workspace == Page::Screens
+                    && self.board_graph.is_none()
+                    && self.board_sets.is_empty() =>
+            {
+                self.api.load_board_sets().map(cosmic::Action::App)
+            }
             _ => Task::none(),
         }
     }
@@ -3595,6 +4497,177 @@ impl Wingmate {
         self.last_workspace = Page::Screens;
         self.status = fl!("status-ready");
         self.queue_active_board_images()
+    }
+
+    /// Auto-size typing-surface button (message bar, strips). Dwellable
+    /// through the shared controller like every other typing target.
+    fn typing_bar_button(&self, label: String, action: TypingAction) -> Element<'_, Message> {
+        let target = AccessTarget::Typing(action);
+        let mut bar_button = button(text(label).size(self.settings.font_px(15.0)))
+            .height(self.settings.button_px(52.0))
+            .padding([8, 14]);
+        if self.settings.hold_to_select_millis == 0 {
+            bar_button = bar_button.on_press(Message::AccessActivate(target.clone()));
+        }
+        if let Some(class) = access_button_class(self.access_visual_state(&target)) {
+            bar_button = bar_button.class(class);
+        }
+        self.access_widget(bar_button.into(), target)
+    }
+
+    /// One keyboard key. `portion` is relative width inside its row
+    /// (letters 2, action keys 3, space 10).
+    fn keyboard_key(&self, id: &str, label: String, portion: u16) -> Element<'_, Message> {
+        let target = AccessTarget::Typing(TypingAction::Key(id.to_string()));
+        let content = container(text(label).size(self.settings.font_px(20.0)))
+            .align_x(cosmic::iced::alignment::Horizontal::Center)
+            .align_y(cosmic::iced::alignment::Vertical::Center)
+            .width(Fill)
+            .height(Fill);
+        let mut key = button(content)
+            .padding(6)
+            .height(self.settings.button_px(60.0))
+            .width(cosmic::iced::Length::FillPortion(portion));
+        if self.settings.hold_to_select_millis == 0 {
+            key = key.on_press(Message::AccessActivate(target.clone()));
+        }
+        if let Some(class) = access_button_class(self.access_visual_state(&target)) {
+            key = key.class(class);
+        }
+        self.access_widget(key.into(), target)
+    }
+
+    /// Message bar: draft with caret plus Speak / Clear on the first row and
+    /// Undo-prediction / M+ save-as-phrase / MR history on the second.
+    /// Fix is intentionally absent (AI fixing lives in Grid, out of scope).
+    fn keyboard_message_bar(&self) -> Element<'_, Message> {
+        let caret_text = typing_keyboard::render_with_caret(&self.draft, self.draft_caret);
+        let display = if caret_text.trim_matches('|').trim().is_empty() {
+            fl!("communicate-input-placeholder")
+        } else {
+            caret_text
+        };
+        let draft_view = container(text(display).size(self.settings.font_px(22.0)).width(Fill))
+            .padding(12)
+            .width(Fill)
+            .height(self.settings.input_px(64.0));
+        column![
+            row![
+                draft_view,
+                self.typing_bar_button("Speak".to_string(), TypingAction::Speak),
+                self.typing_bar_button("Clear".to_string(), TypingAction::Clear),
+            ]
+            .spacing(8),
+            row![
+                self.typing_bar_button("Undo".to_string(), TypingAction::Undo),
+                self.typing_bar_button("M+".to_string(), TypingAction::SavePhrase),
+                self.typing_bar_button("MR".to_string(), TypingAction::OpenHistory),
+            ]
+            .spacing(8),
+        ]
+        .spacing(8)
+        .into()
+    }
+
+    /// Saved-phrase completions for the current draft prefix. Empty when the
+    /// draft is empty or nothing matches; the phrase grid below still
+    /// browses the full vocabulary.
+    fn keyboard_completion_strip(&self) -> Element<'_, Message> {
+        let matches = typing_keyboard::phrase_completions(
+            self.phrases
+                .iter()
+                .filter(|phrase| !phrase.is_hidden)
+                .map(|phrase| phrase.text.as_str()),
+            &self.draft,
+            6,
+        );
+        if matches.is_empty() {
+            return Space::new().height(0).into();
+        }
+        scrollable(
+            row(matches.into_iter().map(|text| {
+                self.typing_bar_button(text.clone(), TypingAction::CompletePhrase(text))
+            }))
+            .spacing(8),
+        )
+        .direction(scrollable::Direction::Horizontal(
+            scrollable::Scrollbar::default(),
+        ))
+        .height(self.settings.button_px(52.0))
+        .into()
+    }
+
+    /// QWERTY / symbols key grid with momentary shift, caret arrows, and a
+    /// wide space bar. Follows the approved mockup: no number row (digits
+    /// live behind 123), no emoji key (no emoji support).
+    fn keyboard_grid(&self) -> Element<'_, Message> {
+        use typing_keyboard::id as kid;
+        if self.kb_symbols {
+            let mut grid = column![].spacing(6);
+            for key_row in typing_keyboard::SYMBOL_ROWS {
+                let mut row = row![].spacing(6);
+                for key in key_row {
+                    row = row.push(self.keyboard_key(key, key.to_string(), 2));
+                }
+                grid = grid.push(row);
+            }
+            grid = grid.push(self.keyboard_utility_row());
+            return grid.spacing(6).into();
+        }
+        let letter = |key: &str| {
+            let label = typing_keyboard::apply_shift(key, self.kb_shift);
+            self.keyboard_key(key, label, 2)
+        };
+        let mut grid = column![].spacing(6);
+        let mut top_row = row![].spacing(6);
+        for key in typing_keyboard::LETTER_ROW_TOP {
+            top_row = top_row.push(letter(key));
+        }
+        top_row = top_row.push(self.keyboard_key(kid::BACKSPACE, "backspace".to_string(), 3));
+        grid = grid.push(top_row);
+        let mut home_row = row![].spacing(6);
+        for key in typing_keyboard::LETTER_ROW_HOME {
+            home_row = home_row.push(letter(key));
+        }
+        home_row = home_row.push(self.keyboard_key(kid::ENTER, "enter".to_string(), 3));
+        grid = grid.push(home_row);
+        let mut bottom_row = row![].spacing(6);
+        bottom_row = bottom_row.push(self.keyboard_key(
+            kid::SHIFT,
+            if self.kb_shift {
+                "SHIFT".to_string()
+            } else {
+                "shift".to_string()
+            },
+            3,
+        ));
+        for key in typing_keyboard::LETTER_ROW_BOTTOM {
+            bottom_row = bottom_row.push(letter(key));
+        }
+        bottom_row = bottom_row.push(letter(","));
+        bottom_row = bottom_row.push(letter("."));
+        grid = grid.push(bottom_row);
+        grid = grid.push(self.keyboard_utility_row());
+        grid.spacing(6).into()
+    }
+
+    /// Bottom utility row, identical in both layouts: layout toggle, settings
+    /// shortcut, caret arrows, wide space, sentence punctuation.
+    fn keyboard_utility_row(&self) -> Element<'_, Message> {
+        use typing_keyboard::id as kid;
+        let mut key_row = row![].spacing(6);
+        if self.kb_symbols {
+            key_row = key_row.push(self.keyboard_key(kid::LETTERS, "ABC".to_string(), 3));
+        } else {
+            key_row = key_row.push(self.keyboard_key(kid::SYMBOLS, "123".to_string(), 3));
+        }
+        key_row = key_row.push(self.keyboard_key(kid::SETTINGS, "set".to_string(), 2));
+        key_row = key_row.push(self.keyboard_key(kid::LEFT, "<".to_string(), 2));
+        key_row = key_row.push(self.keyboard_key(kid::RIGHT, ">".to_string(), 2));
+        key_row = key_row.push(self.keyboard_key(kid::SPACE, "space".to_string(), 10));
+        key_row = key_row.push(self.keyboard_key("!", "!".to_string(), 2));
+        key_row = key_row.push(self.keyboard_key("?", "?".to_string(), 2));
+        key_row.into()
     }
 
     fn communicate_view(&self) -> Element<'_, Message> {
@@ -3723,24 +4796,24 @@ impl Wingmate {
             .spacing(16)
             .into();
         }
-        let input: Element<'_, Message> = container(
-            text_input(&fl!("communicate-input-placeholder"), &self.draft)
-                .on_input(Message::DraftChanged)
-                .on_submit(Message::Speak(self.draft.clone()))
-                .padding(16)
-                .size(self.settings.font_px(22.0)),
-        )
-        .height(self.settings.input_px(56.0))
-        .into();
-
+        let message_bar = self.keyboard_message_bar();
+        let completions = self.keyboard_completion_strip();
         let predictions = row(self.predictions.iter().take(6).map(|word| {
-            button(text(word).size(self.settings.font_px(15.0)))
-                .on_press(Message::PredictionSelected(word.clone()))
+            let target = AccessTarget::Typing(TypingAction::Prediction(word.clone()));
+            let mut prediction_button = button(text(word).size(self.settings.font_px(15.0)))
                 .height(self.settings.button_px(48.0))
-                .padding([10, 14])
-                .into()
+                .padding([10, 14]);
+            if self.settings.hold_to_select_millis == 0 {
+                prediction_button =
+                    prediction_button.on_press(Message::AccessActivate(target.clone()));
+            }
+            if let Some(class) = access_button_class(self.access_visual_state(&target)) {
+                prediction_button = prediction_button.class(class);
+            }
+            self.access_widget(prediction_button.into(), target)
         }))
         .spacing(8);
+        let keyboard = self.keyboard_grid();
 
         let all_target = AccessTarget::Category(None);
         let mut all_button = button(text(fl!("communicate-all")).size(self.settings.font_px(16.0)))
@@ -4048,8 +5121,10 @@ impl Wingmate {
         column![
             text(fl!("communicate-title")).size(self.settings.font_px(30.0)),
             return_to_board,
-            input,
+            message_bar,
+            completions,
             predictions,
+            keyboard,
             ssml,
             scrollable(categories)
                 .direction(scrollable::Direction::Horizontal(
@@ -4240,6 +5315,17 @@ impl Wingmate {
     }
 
     fn fullscreen_view(&self) -> Element<'_, Message> {
+        if self.gaze_enabled {
+            // Eye-tracking communication surface: large dwellable cells for
+            // phrases or board buttons plus gaze chrome. Editing stays on
+            // the ordinary workspaces by design. The surface fills the
+            // window (no outer padding) so normalized gaze fractions map
+            // onto bands without an offset.
+            return container(self.gaze_surface_view())
+                .width(Fill)
+                .height(Fill)
+                .into();
+        }
         container(
             column![
                 text(&self.draft)
@@ -5912,6 +6998,25 @@ impl Wingmate {
                     .width(240)
                 ]
                 .spacing(10),
+                Space::new().height(8),
+                text("Eye tracking (TD-I13)").size(24),
+                checkbox(self.gaze_enabled)
+                    .label("Use eye tracking via tobiifreed")
+                    .on_toggle(Message::ToggleGaze),
+                text(self
+                    .gaze_client
+                    .status(self.gaze_enabled, Instant::now())
+                    .label()),
+                text(
+                    "Gaze drives the fullscreen communication surface with the same dwell timing as above. \
+                    Set Dwell to select above 0, then open the surface and look at a target to select it. \
+                    Vocabulary editing stays on the ordinary workspaces. Gaze coordinates never leave this device.",
+                ),
+                labeled_icon_button(
+                    "view-fullscreen-symbolic",
+                    "Open eye-tracking communication",
+                    Message::Navigate(Page::Fullscreen),
+                ),
                 text(fl!("access-input-help")),
                 Space::new().height(12),
                 editing_access_controls,

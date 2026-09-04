@@ -22,6 +22,7 @@ checklist.
 | Hold, dwell, highlight, debounce, and selection sound | Supported | Configure timing under Access, then verify pointer/touch activation fires once and the selected phrase or board field receives the visible highlight. |
 | Auditory fishing | Supported | Enable exploration cues and verify entering a phrase, category, or board field produces a non-speech cue without activating it. |
 | Switch scanning | Supported | Enable scanning, verify the highlight advances through enabled areas, and use Space or Enter to select the highlighted target exactly once. |
+| Native gaze (TD-I13 via tobiifreed) | Supported (P1 slice; TD-I13 verification pending) | Start `tobiifreed`, enable Eye tracking under Access, and confirm the status line reaches Connected. Open eye-tracking communication from Typing and Screens; verify gaze reaches every phrase/category/control cell and every board-button/library cell, dwell speaks/inserts/navigates exactly like pointer hover, looking away cancels pending dwell, Rest mode suppresses activation and resume needs fresh dwell, stopping the daemon shows DaemonUnavailable without breaking touch/mouse/switch, and unknown protocol frames show Incompatible rather than activating. |
 | Feature analytics and local usage logging | Unsupported; hidden | Onboarding and Privacy state that Linux does not report analytics. |
 
 Before enabling a deferred access method, verify that pointer, keyboard, dwell, and

@@ -19,7 +19,7 @@ Legend: **Shipped** · **Partial** (works with gaps) · **Planned** (tracked) ·
 | Haptic feedback | Shipped (confirm/reject/scan-tick events) | None (UIKit haptics not wired) | N/A |
 | Switch scanning (#112–#114) | None ([#226](https://github.com/Jdreioe/Wingmate/issues/226)) | Shipped (native Swift scanning UI) | None |
 | Auditory scanning prompts (#113) | None | None | None |
-| Gaze input (native TD-I13) (#123–#129) | Planned | Planned | Planned (native branches exist) |
+| Gaze input (native TD-I13) (#123–#129) | Planned | Planned | Partial (P1 slice: `tobiifreed` socket → fullscreen gaze surface → shared dwell; TD-I13 verification pending) |
 | Head tracking providers (#125) | Planned | Planned | Planned |
 | External gaze-provider boundary (#126) | Planned | Planned | Planned |
 | Screen-reader operability of core speak flow | Partial — labels/i18n fixes tracked in #225; end-to-end audit: [#227](https://github.com/Jdreioe/Wingmate/issues/227) | Same as Android | N/A (own UX audit doc) |
