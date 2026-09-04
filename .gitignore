@@ -45,10 +45,6 @@ composeApp/build/
 ## Shared module
 shared/build/
 
-## Linux App
-linuxApp/build/
-linuxApp/target/
-
 ## iOS / Xcode
 iosApp/build/
 iosApp/iosApp.xcodeproj/xcuserdata/

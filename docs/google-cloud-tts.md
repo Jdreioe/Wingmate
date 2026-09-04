@@ -1,7 +1,7 @@
 # Google Cloud Text-to-Speech (BYOK)
 
-Wingmate can use a Google Cloud API key supplied by the user on Android, iOS,
-and Linux. Wingmate does not provide a shared Google credential or proxy speech
+Wingmate can use a Google Cloud API key supplied by the user on Android and iOS.
+Wingmate does not provide a shared Google credential or proxy speech
 through a Wingmate server.
 
 ## Setup
@@ -41,15 +41,10 @@ authorization key. This Google feature is Preview and may be unavailable to
 personal projects without an organization. Traditional Google TTS tiers do not
 require that additional Vertex AI permission.
 
-Google recommends both API and application restrictions. A locally installed
-Linux desktop application cannot strongly protect a client-side key with an
-application restriction, so Linux users should use a dedicated restricted key,
-set a conservative quota/budget alert, and monitor usage.
-
 ## Credential and phrase handling
 
-- The key is stored separately from Azure credentials using Android Keystore,
-  iOS Keychain, or Linux Secret Service/KWallet.
+- The key is stored separately from Azure credentials using Android Keystore or
+  iOS Keychain.
 - Wingmate status APIs expose only whether a key is configured.
 - Keys are excluded from `.wingmate-backup` archives and diagnostics.
 - The key is sent in the `x-goog-api-key` header, never in a URL.

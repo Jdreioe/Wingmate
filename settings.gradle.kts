@@ -14,7 +14,6 @@ plugins {
 rootProject.name = "WingmateKMP"
 include(":shared")
 include(":androidApp")
-include(":linuxApp")
 include(":core:domain")
 include(":core:data")
 include(":core:presentation")

@@ -39,8 +39,8 @@ data class QuickCoreDownloadProgress(
 
 /**
  * Downloads only allowlisted Quick Core archives and imports them through the shared OBZ
- * pipeline. Validated downloads are cached on device (like the Linux client) so repeat
- * imports skip the network transfer; cache writes that fail are ignored, not fatal.
+ * pipeline. Validated downloads are cached on device so repeat imports skip the
+ * network transfer; cache writes that fail are ignored, not fatal.
  */
 class QuickCorePresetService(
     private val client: HttpClient,

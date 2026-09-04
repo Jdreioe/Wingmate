@@ -47,9 +47,9 @@ allprojects {
         maven { url = uri("https://pkgs.dev.azure.com/MicrosoftDeviceSDK/DuoSDK-Public/_packaging/Duo-SDK-Feed/maven/v1") }
     }
 
-    // Project runtime classpaths resolve commons-lang3 via usb4java/commons-compress
-    // (linuxApp) and via Compose tooling (androidApp); without this force they fall
-    // back to 3.16.0, which is still vulnerable to GHSA-j288-q9x7-2f5v.
+    // Android's Compose tooling resolves commons-lang3 transitively; without this
+    // force it falls back to 3.16.0, which is still vulnerable to
+    // GHSA-j288-q9x7-2f5v.
     configurations.configureEach {
         resolutionStrategy {
             force(*patchedTransitiveVersions.toTypedArray())
@@ -66,8 +66,10 @@ tasks.register("assembleRelease") {
     dependsOn(":androidApp:assembleRelease")
 }
 
-tasks.register("packageLinux") {
-    group = "build"
-    description = "Builds the standalone Linux Kotlin bridge fat JAR."
-    dependsOn(":linuxApp:fatJar")
+// CodeQL's Java/Kotlin autobuilder invokes this conventional JVM task name,
+// which an Android/KMP build does not provide automatically.
+tasks.register("testClasses") {
+    group = "verification"
+    description = "Compiles the Android application for Java/Kotlin analysis."
+    dependsOn(":androidApp:compileDebugKotlin")
 }

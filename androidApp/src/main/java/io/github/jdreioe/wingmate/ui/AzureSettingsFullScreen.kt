@@ -223,7 +223,7 @@ fun AzureSettingsFullScreen(
                 }
             }
             
-            // Desktop virtual mic toggle (Linux only)
+            // Reserved for desktop builds.
             if (isDesktop()) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {

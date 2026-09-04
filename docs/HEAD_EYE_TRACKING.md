@@ -40,11 +40,7 @@ Accessibility → Interaction → Eye control** after installing and calibrating
 supported tracker. Microsoft’s setup guide is at
 <https://support.microsoft.com/accessibility/windows-eye-control/get-started-with-eye-control-in-windows>.
 
-## Android and Linux
+## Android
 
 Android accepts external mouse, keyboard, switch, and OS-provided pointer events.
-Linux accepts the same inputs through the desktop environment on both Wayland and
-X11. Pointer emphasis adds to the system pointer; it never hides or replaces it.
-
-If app-level pointer emphasis is unavailable, Wingmate keeps the OS pointer path
-active and explains the limitation in settings.
+Pointer emphasis adds to the system pointer; it never hides or replaces it.

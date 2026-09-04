@@ -1,16 +1,16 @@
 # Secret boundaries
 
 Infisical is the source of truth for developer and deployment secrets, but it
-must not inject all of them into every build. Mobile and desktop binaries are
-public artifacts: values compiled into them can be extracted.
+must not inject all of them into every build. Client binaries are public
+artifacts: values compiled into them can be extracted.
 
 | Value | Classification | Destination |
 |---|---|---|
 | `OPENSYMBOLS_SECRET` | Developer-owned secret | Cloudflare Worker only, through an Infisical Worker Secret Sync |
-| OpenSymbols proxy URL | Public configuration | Android BuildConfig, iOS Info.plist build setting, Linux environment |
+| OpenSymbols proxy URL | Public configuration | Android BuildConfig or iOS Info.plist build setting |
 | Aptabase app key | Public client identifier | Android BuildConfig only |
-| Azure Speech subscription key | User-owned secret | Android Keystore, iOS Keychain, or Linux Secret Service/KWallet |
-| Google Cloud Text-to-Speech API key | User-owned secret | Android Keystore, iOS Keychain, or Linux Secret Service/KWallet |
+| Azure Speech subscription key | User-owned secret | Android Keystore or iOS Keychain |
+| Google Cloud Text-to-Speech API key | User-owned secret | Android Keystore or iOS Keychain |
 | Android keystore and passwords | Build secret | Android release CI process only |
 | Play service-account JSON | Deployment secret | Android release CI process only |
 | `INFISICAL_TOKEN` | CI control-plane secret | GitHub Actions secret only |
