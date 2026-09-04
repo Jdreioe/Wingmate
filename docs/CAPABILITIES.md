@@ -86,8 +86,21 @@ provide account-based or automatic cross-device synchronization.
 | --- | --- | --- |
 | Android | Jetpack Compose | Optional Aptabase reporting, bulk ARASAAC symbol download, native sharing, and external or supported rear displays. |
 | iPhone and iPad | SwiftUI | Native Photos and recording flows, VoiceOver, configurable scanning areas, and OS Eye Tracking, Head Tracking, Switch Control, and Voice Control. Hardware secondary display is not exposed. |
+| Desktop (in development) | Rust with `iced` | Single native binary with no JVM; system TTS only. Not a supported client — see below. |
 
 See [supported platforms](PLATFORM_SUPPORT.md).
+
+### Desktop, in development
+
+The desktop client in `desktopApp/` runs the shared Kotlin core as a
+Kotlin/Native static library. Today it imports OBF and OBZ files, reopens recent
+files, navigates linked Pages, composes and speaks a Message through the
+operating system's own voice, holds a Message, edits the pronunciation
+dictionary and a small set of settings, and creates or restores a version-1
+backup. It has no Typing workspace, no vocabulary editing, no cloud voices, and
+none of the access features listed in the
+[accessibility matrix](ACCESSIBILITY_MATRIX.md). Track it in
+[#268](https://github.com/Jdreioe/Wingmate/issues/268).
 
 ## Current parity limits
 

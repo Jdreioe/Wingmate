@@ -32,9 +32,17 @@ current instructions are at
 Switch Control can also combine Eye Tracking or Head Tracking with a configured
 Select Item switch. Wingmate leaves these native actions intact.
 
+## Desktop
+
+The desktop client in `desktopApp/` is in development and offers none of the
+interaction settings above: it takes ordinary pointer and keyboard events only.
+An OS pointer driven by head or eye tracking therefore moves and clicks in it as
+in any other application, but there is no hover-to-select, Select key, or Rest
+mode yet. See the [accessibility matrix](ACCESSIBILITY_MATRIX.md).
+
 ## Windows Eye Control
 
-Wingmate does not currently ship a native Windows client, but Windows users of a
+Wingmate does not yet ship a supported Windows client, but Windows users of a
 compatible Wingmate environment can enable the OS pointer at **Settings →
 Accessibility → Interaction → Eye control** after installing and calibrating a
 supported tracker. Microsoft’s setup guide is at
