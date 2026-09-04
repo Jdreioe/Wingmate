@@ -20,8 +20,8 @@ For pointer, switch, head-tracking, and eye-tracking setup, see
 
 OpenSymbols search is routed through the Cloudflare Worker in
 [`infra/opensymbols-proxy`](infra/opensymbols-proxy). Infisical syncs the
-OpenSymbols shared secret directly to the Worker; the Android, iOS, and Linux
-apps receive only its public URL. See the proxy README for deployment and
+OpenSymbols shared secret directly to the Worker; the Android and iOS apps
+receive only its public URL. See the proxy README for deployment and
 client configuration. The handling rules for other credentials are documented
 in [`docs/SECRET_BOUNDARIES.md`](docs/SECRET_BOUNDARIES.md).
 

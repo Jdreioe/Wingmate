@@ -11,9 +11,8 @@ and hidden state. Communicators can reorder Phrases and Categories, hold a
 Message while composing another, review speech History, and copy or share text
 and generated audio where the platform provides a share action.
 
-Linux exposes local word prediction in normal builds. Android and iOS contain
-prediction support, but it is currently restricted to debug builds and is not a
-released cross-platform capability.
+Android and iOS contain local word prediction support, but it is currently
+restricted to debug builds and is not a released capability.
 
 ## Screens
 
@@ -87,10 +86,8 @@ provide account-based or automatic cross-device synchronization.
 | --- | --- | --- |
 | Android | Jetpack Compose | Optional Aptabase reporting, bulk ARASAAC symbol download, native sharing, and external or supported rear displays. |
 | iPhone and iPad | SwiftUI | Native Photos and recording flows, VoiceOver, configurable scanning areas, and OS Eye Tracking, Head Tracking, Switch Control, and Voice Control. Hardware secondary display is not exposed. |
-| Linux | Rust and Iced | Wayland and X11, desktop theme integration, Secret Service or KWallet credential storage, and an optional FTDI/EVE partner display. Analytics and local usage logging are not exposed. |
 
-See [supported platforms](PLATFORM_SUPPORT.md) and the
-[Linux accessibility matrix](LINUX_ACCESSIBILITY_MATRIX.md).
+See [supported platforms](PLATFORM_SUPPORT.md).
 
 ## Current parity limits
 

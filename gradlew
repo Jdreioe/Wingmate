@@ -102,6 +102,28 @@ die () {
     exit 1
 } >&2
 
+# Android configuration reads Infisical-provided values while Gradle configures
+# the project. Wrap the whole invocation before the JVM starts so installDebug
+# receives those values. INFISICAL_SKIP also prevents recursion and lets CI opt
+# out when it already runs Gradle inside `infisical run`.
+if [ -z "${INFISICAL_SKIP:-}" ]; then
+    for arg do
+        case $arg in
+          androidApp:installDebug | :androidApp:installDebug)
+            if ! command -v infisical >/dev/null 2>&1; then
+                die "Infisical CLI is required to install the Android debug app."
+            fi
+            INFISICAL_SKIP=1
+            export INFISICAL_SKIP
+            exec infisical run \
+                --project-config-dir="$APP_HOME" \
+                --env=prod \
+                -- "$APP_HOME/gradlew" "$@"
+            ;;
+        esac
+    done
+fi
+
 # OS specific support (must be 'true' or 'false').
 cygwin=false
 msys=false

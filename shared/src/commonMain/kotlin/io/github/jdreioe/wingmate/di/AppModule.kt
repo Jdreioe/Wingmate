@@ -91,7 +91,7 @@ val appModule = module {
     singleOf(::PhraseListStoreFactory)
 
     // One store per process: it is the shared source of truth observed by
-    // every client (iOS via CommunicationFacade, Linux/Android via Koin).
+    // every client (iOS via CommunicationFacade, Android via Koin).
     single {
         get<PhraseListStoreFactory>().create()
     }

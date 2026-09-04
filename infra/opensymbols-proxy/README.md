@@ -38,8 +38,6 @@ without the `/v1/opensymbols/search` suffix.
 - iOS: set `OPEN_SYMBOLS_PROXY_URL` in `Configuration/Config.xcconfig`. Xcode
   config files require the slash escape form, for example
   `OPEN_SYMBOLS_PROXY_URL = https:/$()/example.workers.dev`.
-- Linux: export `WINGMATE_OPENSYMBOLS_PROXY_URL=https://...workers.dev` before
-  launching or packaging the application.
 
 For local client testing, `http://localhost` and loopback addresses are
 accepted. Production client URLs must use HTTPS.

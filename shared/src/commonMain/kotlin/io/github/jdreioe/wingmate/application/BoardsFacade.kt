@@ -92,7 +92,7 @@ data class IosQuickCoreProgress(
 
 /**
  * A feature-scoped native boundary around board sets, board editing, and the
- * shared board-session logic (same behavior as Android/Linux).
+ * shared board-session logic used by Android and iOS.
  *
  * Keep Koin out of this file: the constructor receives exactly the use cases
  * and services this feature needs. Failures propagate as suspend exceptions
@@ -300,7 +300,7 @@ class BoardsFacade(
         return true
     }
 
-    // --- Shared board-session logic (same behavior as Android/Linux) ---
+    // --- Shared board-session logic ---
     fun nGramPredictionInsertion(sentence: String, suggestion: String): String =
         io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion(sentence, suggestion)
 

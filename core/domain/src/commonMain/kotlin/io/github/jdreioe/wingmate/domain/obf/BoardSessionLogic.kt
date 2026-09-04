@@ -4,7 +4,7 @@ import io.github.jdreioe.wingmate.domain.SpeechPolicy
 
 /**
  * Shared board-session logic used identically by every native client
- * (Android Compose, iOS SwiftUI, Linux). Keeping these here means prediction
+ * (Android Compose and iOS SwiftUI). Keeping these here means prediction
  * insertion, sentence composition, activation/return behavior, and edit-mode
  * cell taps behave the same everywhere.
  */

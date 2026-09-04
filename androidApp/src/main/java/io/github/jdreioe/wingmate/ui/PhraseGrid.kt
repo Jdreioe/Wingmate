@@ -148,7 +148,13 @@ fun PhraseGrid(
                             .padding(4.dp)
                             .fillMaxWidth()
                             .height(100.dp)
-                            .clickable { onAddPhrase?.invoke(); showAddDialog = true },
+                            .clickable {
+                                if (onAddPhrase != null) {
+                                    onAddPhrase()
+                                } else {
+                                    showAddDialog = true
+                                }
+                            },
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Box(

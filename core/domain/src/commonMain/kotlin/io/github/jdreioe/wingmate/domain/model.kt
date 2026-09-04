@@ -120,7 +120,7 @@ data class Settings(
     val secondaryLanguage: String = "",
     // TTS engine selection
     val ttsEngine: TtsEngine = TtsEngine.SYSTEM,
-    // Desktop (Linux) only: when true, route TTS audio to a virtual sink whose monitor can be used as a microphone in apps like Zoom
+    // Reserved for a future desktop client: route TTS audio to a virtual microphone.
     val virtualMicEnabled: Boolean = false,
     // Auto-update settings
     val autoUpdateEnabled: Boolean = true,

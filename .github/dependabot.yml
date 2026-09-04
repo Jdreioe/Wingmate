@@ -94,20 +94,6 @@ updates:
           - "com.github.triplet.play"
         update-types: ["version-update:semver-patch", "version-update:semver-minor"]
 
-  - package-ecosystem: cargo
-    directory: /linuxApp
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    groups:
-      cargo-minor-patch:
-        patterns: ["*"]
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
-      cargo-major:
-        patterns: ["*"]
-        update-types: ["version-update:semver-major"]
-
   - package-ecosystem: npm
     directory: /infra/opensymbols-proxy
     schedule:

@@ -81,7 +81,7 @@ class BackupFacade(
     }
 }
 
-/** Adds platform sharing to the backup feature without making it a Linux dependency. */
+/** Adds platform sharing to the backup feature without coupling it to a native client. */
 class BackupSharingFacade(
     private val backupFacade: BackupFacade,
     private val shareService: ShareService,
