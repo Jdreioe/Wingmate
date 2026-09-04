@@ -65,3 +65,11 @@ tasks.register("assembleDebug") {
 tasks.register("assembleRelease") {
     dependsOn(":androidApp:assembleRelease")
 }
+
+// CodeQL's Java/Kotlin autobuilder invokes this conventional JVM task name,
+// which an Android/KMP build does not provide automatically.
+tasks.register("testClasses") {
+    group = "verification"
+    description = "Compiles the Android application for Java/Kotlin analysis."
+    dependsOn(":androidApp:compileDebugKotlin")
+}
