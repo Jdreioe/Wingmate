@@ -6,13 +6,20 @@ fn main() {
     check_release_version(&repository);
     let target = env::var("CARGO_CFG_TARGET_OS").expect("target OS");
     let architecture = env::var("CARGO_CFG_TARGET_ARCH").expect("target architecture");
-    let (task, folder) = match (target.as_str(), architecture.as_str()) {
-        ("linux", "x86_64") => ("linkReleaseStaticLinuxX64", "linuxX64"),
-        ("windows", "x86_64") => ("linkReleaseStaticMingwX64", "mingwX64"),
-        ("macos", "x86_64") => ("linkReleaseStaticMacosX64", "macosX64"),
-        ("macos", "aarch64") => ("linkReleaseStaticMacosArm64", "macosArm64"),
+    let profile = env::var("PROFILE").expect("Cargo build profile");
+    let (build_type, binary_folder) = if profile == "release" {
+        ("Release", "releaseStatic")
+    } else {
+        ("Debug", "debugStatic")
+    };
+    let (kotlin_target, target_folder) = match (target.as_str(), architecture.as_str()) {
+        ("linux", "x86_64") => ("LinuxX64", "linuxX64"),
+        ("windows", "x86_64") => ("MingwX64", "mingwX64"),
+        ("macos", "x86_64") => ("MacosX64", "macosX64"),
+        ("macos", "aarch64") => ("MacosArm64", "macosArm64"),
         pair => panic!("unsupported Wingmate desktop target: {pair:?}"),
     };
+    let task = format!("link{build_type}Static{kotlin_target}");
     let gradle = if target == "windows" {
         "gradlew.bat"
     } else {
@@ -22,17 +29,19 @@ fn main() {
         .current_dir(&repository)
         .arg(format!(":desktopApp:bindings:{task}"))
         .arg("--console=plain")
+        .arg("--build-cache")
         .status()
         .expect("could not start Gradle");
     assert!(status.success(), "Kotlin/Native bridge build failed");
 
     println!("cargo:rerun-if-changed=../bindings/src");
     println!("cargo:rerun-if-changed=../bindings/build.gradle.kts");
+    println!("cargo:rerun-if-env-changed=PROFILE");
     println!(
         "cargo:rustc-link-search=native={}",
         repository
             .join(format!(
-                "desktopApp/bindings/build/bin/{folder}/releaseStatic"
+                "desktopApp/bindings/build/bin/{target_folder}/{binary_folder}"
             ))
             .display()
     );
