@@ -68,7 +68,6 @@ kotlin {
         val desktopMain by creating {
             dependsOn(commonMain)
             dependencies {
-                implementation(libs.ktor.client.curl)
                 implementation("app.cash.sqldelight:native-driver:2.0.2")
             }
         }
