@@ -10,8 +10,10 @@ acceptance testing.
 | Android | Jetpack Compose | Supported | Supported | Required for shared features and native Android UX |
 | iOS | SwiftUI with the shared Kotlin bridge | Supported | Supported | Required for shared features; native UI and accessibility work must be included |
 
-Wingmate does not currently ship a desktop client. A replacement will start as
-a new desktop implementation rather than continue the removed Rust/Iced client.
+Wingmate is rebuilding a cross-platform desktop client (`desktopApp/`, Rust +
+`iced`, Windows + macOS + Linux) on the shared Kotlin core through a
+Kotlin/Native C API; see #268 and ADR-0019. It is in development and is not
+yet a supported client.
 
 ## Feature acceptance policy
 

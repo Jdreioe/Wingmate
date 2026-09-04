@@ -9,6 +9,10 @@ Wingmate has two peer communication workspaces. **Typing** supports free text,
 predictions, and saved phrases. **Screens** supports visual vocabulary arranged
 across linked Pages using OBF and OBZ.
 
+Wingmate ships on Android and iOS. A desktop client for Windows, macOS, and
+Linux is in development in [`desktopApp/`](desktopApp) — a single native binary
+with no JVM, built on the same shared Kotlin core.
+
 See [current capabilities](docs/CAPABILITIES.md) and
 [supported platforms](docs/PLATFORM_SUPPORT.md).
 

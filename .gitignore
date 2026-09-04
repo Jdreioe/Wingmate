@@ -35,9 +35,10 @@ androidApp/build/
 androidApp/**/build/
 androidApp/release/
 
-## Desktop/JVM
+## Desktop
 desktopApp/build/
 desktopApp/bin/
+desktopApp/target/
 
 ## Compose
 composeApp/build/
@@ -85,7 +86,8 @@ iosApp/iosApp 20*/
 **/tmp/
 **/intermediates/
 **/.cxx/
-**/*.properties
+**/local.properties
+**/secrets.properties
 *.hprof
 
 ## Node tooling
