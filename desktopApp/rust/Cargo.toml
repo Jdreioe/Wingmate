@@ -23,7 +23,7 @@ authors = ["Jonas Dreiøe"]
 homepage = "https://github.com/Jdreioe/Wingmate"
 category = "Medical"
 license-file = "../../LICENSE"
-icons = ["../../iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/Icon-iOS-Default-1024x1024@1x.png"]
+icons = ["../assets/wingmate.png"]
 long-description = "Wingmate is a free and open-source AAC application for people who cannot rely on speech."
 
 [[package.metadata.packager.binaries]]
