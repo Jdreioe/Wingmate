@@ -27,14 +27,16 @@ pub enum Section {
     Speech,
     Pronunciation,
     Backup,
+    Screens,
 }
 
 impl Section {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Appearance,
         Self::Speech,
         Self::Pronunciation,
         Self::Backup,
+        Self::Screens,
     ];
 
     fn title(self) -> &'static str {
@@ -43,6 +45,7 @@ impl Section {
             Self::Speech => "Speech",
             Self::Pronunciation => "Pronunciation",
             Self::Backup => "Backup",
+            Self::Screens => "Screens",
         }
     }
 
@@ -52,6 +55,7 @@ impl Section {
             Self::Speech => "Voice and speaking speed",
             Self::Pronunciation => "Teach Wingmate a word",
             Self::Backup => "Save or restore your data",
+            Self::Screens => "Make one, or open a file",
         }
     }
 }
@@ -62,6 +66,7 @@ pub fn view<'a>(
     pronunciations: &'a [Pronunciation],
     word: &'a str,
     replacement: &'a str,
+    recents: &'a [String],
 ) -> Element<'a, Message> {
     row![
         sidebar(section),
@@ -73,6 +78,7 @@ pub fn view<'a>(
                     Section::Speech => speech(settings),
                     Section::Pronunciation => pronunciation(pronunciations, word, replacement),
                     Section::Backup => backup(),
+                    Section::Screens => screens(recents),
                 },
             ]
             .spacing(20)
@@ -107,18 +113,12 @@ fn sidebar(section: Section) -> Element<'static, Message> {
             button::secondary
         };
         nav = nav.push(
-            button(
-                column![
-                    text(item.title()).size(21),
-                    text(item.summary()).size(14),
-                ]
-                .spacing(4),
-            )
-            .width(Fill)
-            .height(NAV_ITEM_HEIGHT)
-            .padding([12, 18])
-            .style(style)
-            .on_press(Message::SelectSettingsSection(item)),
+            button(column![text(item.title()).size(21), text(item.summary()).size(14),].spacing(4))
+                .width(Fill)
+                .height(NAV_ITEM_HEIGHT)
+                .padding([12, 18])
+                .style(style)
+                .on_press(Message::SelectSettingsSection(item)),
         );
     }
     container(nav)
@@ -228,6 +228,42 @@ fn backup() -> Element<'static, Message> {
     ]
     .spacing(20)
     .into()
+}
+
+fn screens(recents: &[String]) -> Element<'_, Message> {
+    let mut content = column![
+        text("Make a new Screen, or open one from an Open Board Format file.").size(16),
+        row![
+            action("New Screen", button::primary)
+                .on_press(Message::Editor(crate::editor::Event::New)),
+            action("Open OBF or OBZ file", button::secondary).on_press(Message::ChooseBoardFile),
+        ]
+        .spacing(12),
+        text("Recent files").size(21),
+    ]
+    .spacing(20);
+    if recents.is_empty() {
+        content = content.push(text("No files opened yet.").size(16));
+    }
+    for path in recents {
+        content = content.push(
+            action(path.as_str(), button::secondary)
+                .width(Fill)
+                .on_press(Message::ImportFile(path.clone())),
+        );
+    }
+    content.into()
+}
+
+/// A settings action button, sized like every other target on this screen.
+fn action(
+    label: &str,
+    style: fn(&Theme, button::Status) -> button::Style,
+) -> button::Button<'_, Message> {
+    button(text(label).size(19))
+        .height(ACTION_HEIGHT)
+        .padding([12, 24])
+        .style(style)
 }
 
 /// One settings row: label on the left, a width-capped control on the right,

@@ -74,6 +74,9 @@ class DesktopCore(dataDirectory: String) {
     private val store = DesktopStore(dataDirectory)
     private val media = DesktopMediaStorage(dataDirectory)
     private val importer = BoardImportService(ObfParser(), store, store, DesktopFileAccess(), media)
+    private val editor = DesktopEditor(store)
+    fun editorJson(value: String): String = runBlocking { editor.command(value) }
+
     private val backup = DesktopBackup(store, media)
     private var activeBoardSetId: String? = null
     private var activeBoardId: String? = null

@@ -6,28 +6,22 @@ use base64::Engine;
 use iced::widget::{Space, button, column, container, image, row, scrollable, text};
 use iced::{Element, Fill};
 
-pub fn library<'a>(sets: &'a [BoardSet], recents: &'a [String]) -> Element<'a, Message> {
-    let mut content = column![
-        text("Screens").size(36),
-        button("Open OBF or OBZ file").on_press(Message::ChooseBoardFile),
-    ]
-    .spacing(16);
-    if !recents.is_empty() {
-        content = content.push(text("Recent files").size(22));
-        for path in recents {
-            content =
-                content.push(button(path.as_str()).on_press(Message::ImportFile(path.clone())));
-        }
+/// Only opens a saved Screen. Creating, importing, and reopening a recent file
+/// live in Settings > Screens.
+pub fn library(sets: &[BoardSet]) -> Element<'_, Message> {
+    let mut content = column![text("Screens").size(36)].spacing(16);
+    if sets.is_empty() {
+        content = content.push(
+            text("No Screens yet. Open Settings, then Screens, to make one or import an OBF or OBZ file.")
+                .size(19),
+        );
     }
-    if !sets.is_empty() {
-        content = content.push(text("Library").size(22));
-        for set in sets {
-            content = content.push(
-                button(set.name.as_str())
-                    .width(Fill)
-                    .on_press(Message::OpenBoardSet(set.id.clone())),
-            );
-        }
+    for set in sets {
+        content = content.push(
+            button(set.name.as_str())
+                .width(Fill)
+                .on_press(Message::OpenBoardSet(set.id.clone())),
+        );
     }
     container(scrollable(content.padding(24)))
         .width(Fill)
@@ -41,6 +35,9 @@ pub fn runner(view: &BoardView) -> Element<'_, Message> {
             button("Back").on_press(Message::Back),
             text(&view.title).size(30),
             Space::new().width(Fill),
+            crate::editor::controls::button("Edit Screen").on_press(Message::Editor(
+                crate::editor::Event::Begin(view.board_set_id.clone())
+            )),
             button("Library").on_press(Message::ShowLibrary)
         ]
         .spacing(16)
