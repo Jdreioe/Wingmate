@@ -40,6 +40,15 @@ An OS pointer driven by head or eye tracking therefore moves and clicks in it as
 in any other application, but there is no hover-to-select, Select key, or Rest
 mode yet. See the [accessibility matrix](ACCESSIBILITY_MATRIX.md).
 
+## Native gaze on the TD-I13 (planned)
+
+Wingmate does not read gaze data itself yet. Planned support for the TD-I13
+running Linux, using the `tobiifreed` daemon from
+[`Aetherall/tobiifree`](https://github.com/Aetherall/tobiifree), is specified in
+[the TD-I13 gaze plan](GAZE_TD_I13.md) and tracked in
+[#129](https://github.com/Jdreioe/Wingmate/issues/129). Until it ships, an OS
+pointer driven by the tracker is the supported path.
+
 ## Windows Eye Control
 
 Wingmate does not yet ship a supported Windows client, but Windows users of a
