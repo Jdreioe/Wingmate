@@ -41,9 +41,9 @@ jobs:
             kotlin_target: LinuxX64
             test_kotlin_build_type: Debug
             gradle: ./gradlew
-            package_format: deb
+            package_format: appimage
             artifact_name: wingmate-linux
-            artifact_path: desktopApp/target/x86_64-unknown-linux-gnu/release/*.deb
+            artifact_path: desktopApp/target/x86_64-unknown-linux-gnu/release/*.AppImage
           - os: macos-14
             target: aarch64-apple-darwin
             kotlin_target: MacosArm64
@@ -85,7 +85,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libwayland-dev speech-dispatcher
+          sudo apt-get install -y fuse libfuse2 libxkbcommon-dev libwayland-dev speech-dispatcher
       - name: Put the MinGW linker on PATH
         if: matrix.os == 'windows-latest'
         shell: bash

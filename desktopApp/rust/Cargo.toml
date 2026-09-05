@@ -33,8 +33,5 @@ main = true
 [package.metadata.packager.linux]
 generate-desktop-entry = true
 
-[package.metadata.packager.deb]
-depends = ["speech-dispatcher"]
-
 [package.metadata.packager.windows]
 allow-downgrades = false

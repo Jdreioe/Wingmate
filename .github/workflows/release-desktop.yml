@@ -24,7 +24,7 @@ jobs:
             kotlin_target: LinuxX64
             gradle: ./gradlew
             artifact_name: wingmate-linux
-            artifact_path: desktopApp/target/x86_64-unknown-linux-gnu/release/*.deb
+            artifact_path: desktopApp/target/x86_64-unknown-linux-gnu/release/*.AppImage
           - platform: macOS
             os: macos-14
             target: aarch64-apple-darwin
@@ -85,7 +85,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libwayland-dev speech-dispatcher
+          sudo apt-get install -y fuse libfuse2 libxkbcommon-dev libwayland-dev speech-dispatcher
       - name: Put the MinGW linker on PATH
         if: runner.os == 'Windows'
         shell: bash
@@ -105,7 +105,7 @@ jobs:
       - name: Build Linux installer
         if: runner.os == 'Linux'
         working-directory: desktopApp
-        run: cargo packager --release --target ${{ matrix.target }} --formats deb
+        run: cargo packager --release --target ${{ matrix.target }} --formats appimage
 
       - name: Import Windows signing certificate
         if: runner.os == 'Windows'

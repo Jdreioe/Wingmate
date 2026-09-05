@@ -12,7 +12,7 @@ affected surface directly.
 | Dependency vulnerability review | Dependency changes reported by GitHub for Gradle, npm, and workflow actions | Newly introduced high-or-critical vulnerabilities block the check |
 | Repository secret scan | Gitleaks over changed commits on PRs/pushes and the full fetched history weekly, with reports and PR comments disabled | High-confidence committed credentials block the check |
 | Client secret boundary | Project-specific checks for credentials in Android, iOS, and shared client code | Forbidden client-side credential handling blocks the check |
-| Desktop packaging | Unsigned `.deb`, `.dmg`, and `.msi` creation on native runners | Packaging failures block the desktop check |
+| Desktop packaging | Unsigned `.AppImage`, `.dmg`, and `.msi` creation on native runners | Packaging failures block the desktop check |
 | Desktop release | Developer ID signing and notarization on macOS, Authenticode on Windows, and a GPG-signed checksum manifest | A missing credential or failed signature blocks publication |
 
 The Gradle dependency graph is submitted to GitHub after changes reach `main`.
