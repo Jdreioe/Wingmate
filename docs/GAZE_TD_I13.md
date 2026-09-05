@@ -203,6 +203,8 @@ M3 only has to be safe, not forgiving.
 
 ### M5 — Calibration from inside Wingmate
 
+Tracked in [#273](https://github.com/Jdreioe/Wingmate/issues/273).
+
 The daemon forwards calibration commands to the tracker (`0x20` start, `0x21`
 add point, `0x22` finish, `0x23` apply) and returns them as `0x02` responses,
 so Wingmate can run calibration itself: fullscreen targets, gaze sampled at
