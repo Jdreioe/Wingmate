@@ -1,6 +1,10 @@
 mod bridge;
 mod editor;
 mod editor_update;
+// Transport for native TD-I13 gaze (#129). The runner consumes it in the
+// next milestone; see docs/GAZE_TD_I13.md.
+#[allow(dead_code)]
+mod gaze;
 mod message_bar;
 mod models;
 mod screens;

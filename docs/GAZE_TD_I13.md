@@ -95,17 +95,22 @@ Each milestone is independently reviewable and leaves the client working.
 
 ### M1 — Client transport
 
-`desktopApp/rust/src/gaze/` with a `TobiifreeClient`: connect, subscribe, read
-frames off a buffered stream, and reconnect with bounded backoff when the
-daemon is absent or restarts. Expose a status enum (`Disabled`, `Connecting`,
-`Connected`, `GazeLost`, `IncompatibleProtocol`, `DaemonUnavailable`) and a
-sample stream as an `iced` subscription. Unknown message types are skipped by
-length; a gaze frame of unexpected length moves the client to
-`IncompatibleProtocol` and stops decoding rather than guessing.
+`desktopApp/rust/src/gaze/`: a `protocol` decoder that reassembles the daemon's
+stream into samples, and a `client` that connects, subscribes, and reads them,
+with bounded reconnect backoff for a daemon that is absent or restarts. A
+status enum (`Disabled`, `Connecting`, `Connected`, `GazeLost`,
+`IncompatibleProtocol`, `DaemonUnavailable`) names what the user is told.
+Unknown message types are skipped by length; a gaze frame of unexpected length
+or missing a required field stops decoding rather than guessing.
 
-Tests: partial and coalesced reads, unknown message types, short and long gaze
-payloads, `present_mask` missing a required field, `validity` combinations,
-out-of-range coordinates, reconnect state transitions.
+The `iced` subscription that drives this from the UI thread lands in M3
+together with its consumer, so nothing runs in the background before something
+uses it.
+
+Tests: partial and coalesced reads, skipped message types, a gaze payload of
+another size, `present_mask` missing a required field, an undetected eye,
+absent and out-of-range coordinates, oversized payloads, and backoff growth
+and reset.
 
 ### M2 — Shared controller on the C bridge
 
