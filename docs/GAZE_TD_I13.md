@@ -70,8 +70,9 @@ device's already-calibrated answer to "where on the display area".
 | TD-I13 integrated tracker | `2104:031e` | Our hardware; not yet supported upstream |
 
 The I-13's tracker is a Tobii device (`2104`) with a product ID upstream does
-not know about, and that has two consequences we have to handle before M3 can
-be verified:
+not know about. It can be made to work, so this is a packaging prerequisite
+rather than an open question — but it is one Wingmate has to carry, because a
+daemon installed straight from upstream will not see the device:
 
 - `libusb_transport.zig` opens the device with a hardcoded
   `libusb_open_device_with_vid_pid(ctx, 0x2104, 0x0313)`, so a stock
@@ -81,11 +82,15 @@ be verified:
 - `assets/99-tobii.rules` grants uaccess to `0313` and `0102` only, so `031e`
   needs a matching rule or the daemon cannot claim it without root.
 
-Whether the TTP framing and the `GazeSample` field layout are identical on this
-tracker is unknown until it streams. Wingmate's decoder already fails closed on
-a payload of another size, so a different layout surfaces as
-`IncompatibleProtocol` rather than as wrong coordinates — but it would mean the
-offsets in this document are per-device, not universal.
+M4 therefore ships or documents a `tobiifreed` that knows `031e`, and the
+setup instructions carry the matching udev rule. Getting the device ID upstream
+removes that maintenance.
+
+The remaining unknown is whether the TTP framing and the `GazeSample` layout are
+identical on this tracker. Wingmate's decoder fails closed on a payload of
+another size, so a different layout surfaces as `IncompatibleProtocol` rather
+than as wrong coordinates — but it would mean the offsets in this document are
+per-device, not universal. One streaming session answers it.
 
 ## Architecture
 
@@ -269,10 +274,11 @@ connection state and rejection reasons.
 ## Risks and open questions
 
 - **Device support.** The I-13's tracker is `2104:031e`, which upstream neither
-  opens nor grants uaccess to (see [Devices](#devices)). Until a patched
-  `tobiifreed` claims it, M3 and M5 cannot be verified on real hardware; M1, M2,
-  and the Windows path do not depend on it. This is why #129 is a vertical
-  slice and #126 does not generalise a provider interface yet.
+  opens nor grants uaccess to (see [Devices](#devices)). It can be made to work,
+  so the cost is packaging and a udev rule rather than feasibility. The open
+  question is the `GazeSample` layout on this tracker, which one streaming
+  session settles. This is why #129 is a vertical slice and #126 does not
+  generalise a provider interface yet.
 - **Protocol drift.** The layout already changed once. Failing closed on any
   unexpected length turns drift into a clear status message instead of garbage
   coordinates driving selections.
