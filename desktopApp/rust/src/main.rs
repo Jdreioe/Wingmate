@@ -295,7 +295,7 @@ impl App {
                 .as_ref()
                 .map(editor::Editor::view)
                 .unwrap_or_else(|| text("No draft open").into()),
-            Route::Library => screens::library(&self.library, &self.recents),
+            Route::Library => screens::library(&self.library),
             Route::Runner => self
                 .board
                 .as_ref()
@@ -307,6 +307,7 @@ impl App {
                 &self.pronunciations,
                 &self.pronunciation_word,
                 &self.pronunciation_replacement,
+                &self.recents,
             ),
         };
         // The Settings screen carries its own navigation, so the header button

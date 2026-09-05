@@ -34,8 +34,13 @@ Run `cargo test` from this directory, and `./gradlew
 
 ## Screen editor
 
-Choose **New Screen** in the Library, or **Edit Screen** in an open Screen.
-The editor keeps a Kotlin draft until **Save Screen**. Apply form changes to
+Choose **New Screen** in **Settings > Screens**, or **Edit Screen** in an open
+Screen. That settings section also holds the OBF/OBZ importer and the recent
+files list; the Library screen only opens a saved Screen.
+
+The editor keeps a Kotlin draft until **Save Screen**. Save Screen is only
+available once every form change has been applied to the draft; until then the
+header names the buttons still to press. Apply form changes to
 that draft with the adjacent buttons; **Discard / close** asks before dropping
 unsaved work. Select a Cell to create or edit a Button, including hidden Buttons.
 Row/column controls move or swap Buttons, and span controls resize them using the

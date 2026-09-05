@@ -24,15 +24,25 @@ impl Editor {
             .height(Fill)
             .into();
         }
+        // Saving is only possible once every form edit has been applied to the
+        // draft, so the status names what is missing and Save Screen stays
+        // disabled until then.
+        let unapplied = self.unapplied_actions();
+        let status = if let Some(actions) = &unapplied {
+            format!("Apply first: {}", actions.join(", "))
+        } else if self.view.dirty {
+            "Unsaved changes".into()
+        } else {
+            "Saved".into()
+        };
+        let mut save = button("Save Screen");
+        if unapplied.is_none() {
+            save = save.on_press(msg(Event::Save));
+        }
         let header = row![
             text("Screen editor").size(30),
-            text(if self.view.dirty || !self.pending.is_empty() {
-                "Unsaved changes"
-            } else {
-                "Saved"
-            })
-            .width(140),
-            button("Save Screen").on_press(msg(Event::Save)),
+            text(status).width(320),
+            save,
             button("Discard / close").on_press(msg(Event::Discard))
         ]
         .spacing(12);

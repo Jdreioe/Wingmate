@@ -214,7 +214,13 @@ mod tests {
             app.editor.as_ref().unwrap().selected.as_ref().unwrap().row,
             0
         );
+        // Save stays unavailable, and says why, until the form is applied.
+        assert_eq!(
+            app.editor.as_ref().unwrap().unapplied_actions(),
+            Some(vec!["Apply Button"])
+        );
         let _ = app.update_editor(Event::Action(Action::ApplyButton));
+        assert_eq!(app.editor.as_ref().unwrap().unapplied_actions(), None);
         let _ = app.update_editor(Event::Input(Field::Row, "2".into()));
         let _ = app.update_editor(Event::Input(Field::Label, "Moved".into()));
         let _ = app.update_editor(Event::Action(Action::MoveButton));

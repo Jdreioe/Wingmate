@@ -157,6 +157,24 @@ impl Editor {
             Field::ColumnSpan => &mut self.column_span,
         } = value;
     }
+    /// Labels of the buttons that still have to be pressed before the draft can
+    /// be saved, in a stable order. `None` means the draft is ready to save.
+    pub(crate) fn unapplied_actions(&self) -> Option<Vec<&'static str>> {
+        let mut labels: Vec<&'static str> = self
+            .pending
+            .iter()
+            .map(|operation| match operation.as_str() {
+                "renameScreen" => "Rename Screen",
+                "renamePage" => "Rename Page",
+                "resizeGrid" => "Resize Grid",
+                "move" => "Move / swap",
+                "span" => "Resize Button",
+                _ => "Apply Button",
+            })
+            .collect();
+        labels.sort_unstable();
+        (!labels.is_empty()).then_some(labels)
+    }
     pub(crate) fn command(&self, operation: &str) -> Value {
         let cell = self.selected.as_ref();
         json!({"operation": operation, "name": if operation == "renameScreen" { &self.screen } else { &self.page },
