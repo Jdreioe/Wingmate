@@ -7,7 +7,10 @@ fn main() {
     let target = env::var("CARGO_CFG_TARGET_OS").expect("target OS");
     let architecture = env::var("CARGO_CFG_TARGET_ARCH").expect("target architecture");
     let profile = env::var("PROFILE").expect("Cargo build profile");
-    let (build_type, binary_folder) = if profile == "release" {
+    // MinGW cannot link Kotlin/Native's much larger debug archive into the iced
+    // test binary: its IMAGE_REL_AMD64_REL32 relocations overflow. Windows tests
+    // therefore use the release bridge even though Cargo itself uses debug.
+    let (build_type, binary_folder) = if target == "windows" || profile == "release" {
         ("Release", "releaseStatic")
     } else {
         ("Debug", "debugStatic")
@@ -20,30 +23,38 @@ fn main() {
         pair => panic!("unsupported Wingmate desktop target: {pair:?}"),
     };
     let task = format!("link{build_type}Static{kotlin_target}");
-    let gradle = if target == "windows" {
-        "gradlew.bat"
+    let library_directory = repository.join(format!(
+        "desktopApp/bindings/build/bin/{target_folder}/{binary_folder}"
+    ));
+    if env::var_os("WINGMATE_KOTLIN_BRIDGE_PREBUILT").is_none() {
+        let gradle = if target == "windows" {
+            "gradlew.bat"
+        } else {
+            "gradlew"
+        };
+        let status = Command::new(repository.join(gradle))
+            .current_dir(&repository)
+            .arg(format!(":desktopApp:bindings:{task}"))
+            .arg("--console=plain")
+            .arg("--build-cache")
+            .status()
+            .expect("could not start Gradle");
+        assert!(status.success(), "Kotlin/Native bridge build failed");
     } else {
-        "gradlew"
-    };
-    let status = Command::new(repository.join(gradle))
-        .current_dir(&repository)
-        .arg(format!(":desktopApp:bindings:{task}"))
-        .arg("--console=plain")
-        .arg("--build-cache")
-        .status()
-        .expect("could not start Gradle");
-    assert!(status.success(), "Kotlin/Native bridge build failed");
+        assert!(
+            library_directory.is_dir(),
+            "prebuilt Kotlin/Native bridge is missing from {}",
+            library_directory.display()
+        );
+    }
 
     println!("cargo:rerun-if-changed=../bindings/src");
     println!("cargo:rerun-if-changed=../bindings/build.gradle.kts");
     println!("cargo:rerun-if-env-changed=PROFILE");
+    println!("cargo:rerun-if-env-changed=WINGMATE_KOTLIN_BRIDGE_PREBUILT");
     println!(
         "cargo:rustc-link-search=native={}",
-        repository
-            .join(format!(
-                "desktopApp/bindings/build/bin/{target_folder}/{binary_folder}"
-            ))
-            .display()
+        library_directory.display()
     );
     println!("cargo:rustc-link-lib=static=wingmate_core");
     if target == "linux" {

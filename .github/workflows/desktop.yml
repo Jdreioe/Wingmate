@@ -35,14 +35,17 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             kotlin_target: LinuxX64
+            test_kotlin_build_type: Debug
             gradle: ./gradlew
           - os: macos-14
             target: aarch64-apple-darwin
             kotlin_target: MacosArm64
+            test_kotlin_build_type: Debug
             gradle: ./gradlew
           - os: windows-latest
             target: x86_64-pc-windows-gnu
             kotlin_target: MingwX64
+            test_kotlin_build_type: Release
             gradle: .\gradlew.bat
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
@@ -74,13 +77,17 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: bash
         run: echo "C:\msys64\mingw64\bin" >> "$GITHUB_PATH"
-      - name: Build debug Kotlin bridge
-        run: ${{ matrix.gradle }} :desktopApp:bindings:linkDebugStatic${{ matrix.kotlin_target }} --console=plain --build-cache
+      - name: Build test Kotlin bridge
+        run: ${{ matrix.gradle }} :desktopApp:bindings:link${{ matrix.test_kotlin_build_type }}Static${{ matrix.kotlin_target }} --console=plain --build-cache
       - name: Test Rust shell
         working-directory: desktopApp
         run: cargo test --locked --target ${{ matrix.target }}
+        env:
+          WINGMATE_KOTLIN_BRIDGE_PREBUILT: "1"
       - name: Build release Kotlin bridge
         run: ${{ matrix.gradle }} :desktopApp:bindings:linkReleaseStatic${{ matrix.kotlin_target }} --console=plain --build-cache
       - name: Build release Rust shell
         working-directory: desktopApp
         run: cargo build --release --locked --target ${{ matrix.target }}
+        env:
+          WINGMATE_KOTLIN_BRIDGE_PREBUILT: "1"
