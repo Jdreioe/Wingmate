@@ -34,12 +34,21 @@ jobs:
           # cannot link that archive.
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            kotlin_target: LinuxX64
+            test_kotlin_build_type: Debug
+            gradle: ./gradlew
           - os: macos-14
             target: aarch64-apple-darwin
+            kotlin_target: MacosArm64
+            test_kotlin_build_type: Debug
+            gradle: ./gradlew
           - os: windows-latest
             target: x86_64-pc-windows-gnu
+            kotlin_target: MingwX64
+            test_kotlin_build_type: Release
+            gradle: .\gradlew.bat
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
@@ -53,6 +62,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-provider: basic
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.konan
+          key: ${{ runner.os }}-konan-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-konan-
       - name: Install the Linux windowing and speech libraries
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -62,9 +77,17 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: bash
         run: echo "C:\msys64\mingw64\bin" >> "$GITHUB_PATH"
-      - name: Test desktop
+      - name: Build test Kotlin bridge
+        run: ${{ matrix.gradle }} :desktopApp:bindings:link${{ matrix.test_kotlin_build_type }}Static${{ matrix.kotlin_target }} --console=plain --build-cache
+      - name: Test Rust shell
         working-directory: desktopApp
         run: cargo test --locked --target ${{ matrix.target }}
-      - name: Check release binary
+        env:
+          WINGMATE_KOTLIN_BRIDGE_PREBUILT: "1"
+      - name: Build release Kotlin bridge
+        run: ${{ matrix.gradle }} :desktopApp:bindings:linkReleaseStatic${{ matrix.kotlin_target }} --console=plain --build-cache
+      - name: Build release Rust shell
         working-directory: desktopApp
         run: cargo build --release --locked --target ${{ matrix.target }}
+        env:
+          WINGMATE_KOTLIN_BRIDGE_PREBUILT: "1"
