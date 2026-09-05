@@ -46,3 +46,18 @@ Locked and system Screens cannot be edited here. Existing symbols, recordings,
 actions and extension metadata survive edits; rich Page elements are listed as
 unsupported placeholders. Symbol/action authoring, rich Page-element editing,
 Editing access credential setup, Page deletion and OBZ export are not yet exposed.
+
+### Preparing for alternative input
+
+Editor controls use large hit areas (at least 48 logical pixels high), with
+120 × 88 Cell targets that do not shrink when a Grid grows. Save/Discard and
+explicit scroll controls stay outside the scrolling content. Moving and resizing
+use labeled controls, without requiring drag gestures; selection and hidden state
+have text cues. Discard confirmation replaces the editor controls while open.
+
+`editor::controls::Action`, `editor::Event` and `editor::Field` identify semantic
+actions, Cell anchors and form fields independently of pointer events. Future gaze
+dwell and switch scanning should dispatch these same events, including scrolling,
+Page choice and confirmation, instead of adding separate mutation paths. Dwell,
+scan traversal, focus highlighting and assistive text entry are not implemented
+by this editor increment; Tab/Shift+Tab currently navigates native focusable inputs.

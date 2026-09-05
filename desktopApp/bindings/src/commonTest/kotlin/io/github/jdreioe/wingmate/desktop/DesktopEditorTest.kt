@@ -4,6 +4,7 @@ import io.github.jdreioe.wingmate.domain.obf.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import okio.FileSystem
+import okio.Path.Companion.toPath
 import kotlin.random.Random
 import kotlin.test.*
 
@@ -74,6 +75,34 @@ class DesktopEditorTest {
             val store = DesktopStore(path)
             store.restore(store.snapshot().copy(boardSets = listOf(set)))
             assertFailsWith<IllegalArgumentException> { DesktopCore(path).command("""{"operation":"begin","id":"screen"}""") }
+        }
+    }
+
+    @Test fun failedSaveKeepsStoredVocabularyAndDraftForRetry() = fixture { core, path ->
+        core.command("""{"operation":"new","name":"Before"}""")
+        val id = core.command("""{"operation":"save"}""").string("id")
+        core.command("""{"operation":"begin","id":"$id"}""")
+        core.command("""{"operation":"renameScreen","name":"After"}""")
+        val temporary = path.toPath() / "state.json.tmp"
+        FileSystem.SYSTEM.createDirectories(temporary)
+        assertFails { core.command("""{"operation":"save"}""") }
+        assertTrue("Before" in core.libraryJson())
+        assertTrue("Before" in DesktopCore(path).libraryJson())
+        FileSystem.SYSTEM.delete(temporary)
+        core.command("""{"operation":"save"}""")
+        assertTrue("After" in DesktopCore(path).libraryJson())
+    }
+
+    @Test fun screenLockedDuringEditingCannotBeSaved() = fixture { core, path ->
+        core.command("""{"operation":"new"}""")
+        val id = core.command("""{"operation":"save"}""").string("id")
+        val store = DesktopStore(path)
+        val editor = DesktopEditor(store)
+        runBlocking {
+            editor.command("""{"operation":"begin","id":"$id"}""")
+            val set = store.getBoardSet(id)!!
+            store.saveBoardSet(set.copy(isLocked = true))
+            assertFailsWith<IllegalArgumentException> { editor.command("""{"operation":"save"}""") }
         }
     }
 

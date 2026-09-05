@@ -94,7 +94,7 @@ internal class DesktopEditor(private val store: DesktopStore) {
     }
     private fun requireDraft() = draft ?: error("No editor draft is open")
     private fun dimensions(rows: Int, columns: Int) {
-        require(rows in 1..30 && columns in 1..30) { "Grid dimensions must be between 1 and 30" }
+        require(rows in 1..20 && columns in 1..20) { "Grid dimensions must be between 1 and 20" }
     }
     private fun newPage(name: String, rows: Int, columns: Int) = ObfBoard(
         format = "open-board-0.1", id = id("page"), name = name,

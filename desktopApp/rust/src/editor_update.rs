@@ -1,6 +1,6 @@
 use crate::{
     App, Message, Route,
-    editor::{Editor, Event, View},
+    editor::{Editor, Event, View, controls::Action},
 };
 use iced::Task;
 use serde_json::{Value, json};
@@ -8,6 +8,43 @@ use serde_json::{Value, json};
 impl App {
     pub(crate) fn update_editor(&mut self, event: Event) -> Task<Message> {
         match event {
+            Event::Action(action) => {
+                let operation = match action {
+                    Action::SelectPage(id) => {
+                        return self
+                            .update_editor(Event::Command(json!({"operation":"page", "id":id})));
+                    }
+                    Action::ScrollUp
+                    | Action::ScrollDown
+                    | Action::ScrollLeft
+                    | Action::ScrollRight => {
+                        let (x, y) = match action {
+                            Action::ScrollUp => (0.0, -280.0),
+                            Action::ScrollDown => (0.0, 280.0),
+                            Action::ScrollLeft => (-280.0, 0.0),
+                            _ => (280.0, 0.0),
+                        };
+                        return iced::widget::operation::scroll_by(
+                            "editor-body",
+                            iced::widget::scrollable::AbsoluteOffset { x, y },
+                        );
+                    }
+                    Action::RenameScreen => "renameScreen",
+                    Action::RenamePage => "renamePage",
+                    Action::AddPage => {
+                        return self.update_editor(Event::Command(json!({"operation":"addPage"})));
+                    }
+                    Action::StartingPage => "root",
+                    Action::ResizeGrid => "resizeGrid",
+                    Action::ApplyButton => "button",
+                    Action::MoveButton => "move",
+                    Action::ResizeButton => "span",
+                    Action::RemoveButton => "clear",
+                };
+                if let Some(editor) = &self.editor {
+                    return self.update_editor(Event::Command(editor.command(operation)));
+                }
+            }
             Event::New => self.editor_command(json!({"operation":"new"})),
             Event::Begin(id) => self.editor_command(json!({"operation":"begin", "id":id})),
             Event::Command(command) => self.editor_command(command),
@@ -105,6 +142,15 @@ impl App {
             Ok(view) => {
                 if let Some(mut previous) = self.editor.take() {
                     previous.pending.remove(operation);
+                    if operation == "move" {
+                        let row = command["toRow"].as_u64();
+                        let column = command["toColumn"].as_u64();
+                        previous.selected = view
+                            .cells
+                            .iter()
+                            .find(|c| Some(c.row as u64) == row && Some(c.column as u64) == column)
+                            .cloned();
+                    }
                     if previous.pending.is_empty() {
                         let selected = previous.selected.as_ref().map(|c| (c.row, c.column));
                         let same_page = previous.view.page_id == view.page_id;
@@ -127,5 +173,56 @@ impl App {
             }
             Err(error) => self.error = Some(error),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        bridge::{Core, NativeCore},
+        editor::Field,
+    };
+
+    #[test]
+    fn semantic_actions_edit_and_save_without_pointer_events() {
+        let directory = tempfile::tempdir().unwrap();
+        let core = NativeCore::new(directory.path().to_str().unwrap()).unwrap();
+        let mut app = App {
+            settings: core.settings().unwrap(),
+            core: Box::new(core),
+            editor: None,
+            close_after_editor: false,
+            route: Route::Library,
+            previous_route: Route::Library,
+            library: vec![],
+            recents: vec![],
+            board: None,
+            pronunciations: vec![],
+            settings_section: Default::default(),
+            pronunciation_word: String::new(),
+            pronunciation_replacement: String::new(),
+            error: None,
+            system_theme: iced::Theme::Light,
+        };
+        let _ = app.update_editor(Event::New);
+        let _ = app.update_editor(Event::Select(0, 0));
+        let _ = app.update_editor(Event::Input(Field::Label, "Hello".into()));
+        // Switching targets cannot silently throw away an unapplied form.
+        let _ = app.update_editor(Event::Select(1, 1));
+        assert_eq!(
+            app.editor.as_ref().unwrap().selected.as_ref().unwrap().row,
+            0
+        );
+        let _ = app.update_editor(Event::Action(Action::ApplyButton));
+        let _ = app.update_editor(Event::Input(Field::Row, "2".into()));
+        let _ = app.update_editor(Event::Input(Field::Label, "Moved".into()));
+        let _ = app.update_editor(Event::Action(Action::MoveButton));
+        let _ = app.update_editor(Event::Action(Action::ApplyButton));
+        let _ = app.update_editor(Event::Save);
+        assert!(app.error.is_none(), "{:?}", app.error);
+        let button = &app.board.as_ref().unwrap().cells[0];
+        assert_eq!(button.label, "Moved");
+        assert_eq!(button.row, 1);
     }
 }
