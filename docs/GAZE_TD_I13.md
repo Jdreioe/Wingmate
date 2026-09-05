@@ -189,21 +189,43 @@ Detection uses two separate signals, because they call for different help:
 - **Daemon reachable**: `gaze.sock` connects and streams.
 
 Controls: enable/disable (off by default), dwell duration, an opt-in
-diagnostics view, and a checkbox to start `tobiifreed` with Wingmate. Auto-start
-uses a systemd **user** service, so it needs no root and leaves the daemon
-shared with the overlay and calibration tools.
+diagnostics view, and a checkbox to start `tobiifreed` with Wingmate.
 
 Tracker present but no daemon is the state worth designing for: name what is
-missing and show the exact commands, rather than hiding the section or
+missing and show the exact command, rather than hiding the section or
 presenting a dead control.
 
-**Wingmate does not install the daemon.** It is a packaging problem, not a
-runtime one: ship `tobiifreed` alongside the desktop client, or document the
-Nix flake upstream provides. Downloading and installing it at runtime is a
-non-goal, because upstream publishes no binaries (it builds from source with
-Zig 0.14+/Nix), USB access needs a root udev step, some units need firmware
-extracted from Tobii's Windows driver and DFU-flashed, and an unreviewed
-background update would sit in the path of the user's only voice.
+#### Packaging on Linux
+
+The Linux client ships as an AppImage, which decides most of this.
+
+**The daemon is bundled, not downloaded.** A `tobiifreed` that knows `031e`
+travels inside the AppImage. Downloading and installing one at runtime stays a
+non-goal: upstream publishes no binaries, and an unreviewed background update
+has no business in the path of the user's only voice. Bundling also pins the
+daemon and the decoder to each other, so the sample layout this build expects
+cannot change behind our back — a version skew becomes a build decision instead
+of a field failure.
+
+Licensing works out: `tobiifree` is GPL-3.0 and `wingmate-desktop` is
+GPL-3.0-or-later, so the two can ship in one image. The AppImage carries the
+licence text and a written offer for the daemon's source.
+
+**Auto-start spawns the bundled daemon as a child process**, not a systemd user
+service: an AppImage has no install step, and a unit file pointing into its
+ephemeral mount path would break on the next run. The rule is
+socket-before-spawn — if `gaze.sock` already answers, a daemon is running and
+Wingmate connects to it instead. `tobiifreed` claims the tracker over USB, so
+two of them must never race for the device.
+
+**The udev rule stays a documented one-time command.** An AppImage cannot write
+to `/etc/udev/rules.d` and should not ask for root, so without the rule the
+daemon cannot claim `2104:031e`. The settings section names that exact state and
+shows the command to fix it. Distro packages that can install the rule
+themselves should.
+
+Firmware is out of scope entirely: some units need it extracted from Tobii's
+Windows driver and DFU-flashed, which Wingmate must never automate.
 
 Docs to update: `HEAD_EYE_TRACKING.md` (setup and troubleshooting), the
 accessibility matrix, `docs/PLATFORM_SUPPORT.md`, and `PRIVACY_POLICY.md`.
