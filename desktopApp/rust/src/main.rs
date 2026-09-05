@@ -1,4 +1,6 @@
 mod bridge;
+mod editor;
+mod editor_update;
 mod message_bar;
 mod models;
 mod screens;
@@ -14,7 +16,14 @@ fn main() -> iced::Result {
     iced::application(App::boot, App::update, App::view)
         .title("Wingmate")
         .theme(App::theme)
-        .subscription(|_| iced::system::theme_changes().map(Message::SystemTheme))
+        .subscription(|_| {
+            iced::Subscription::batch([
+                iced::system::theme_changes().map(Message::SystemTheme),
+                iced::keyboard::listen().map(Message::Keyboard),
+                iced::window::close_requests().map(|_| Message::CloseRequested),
+            ])
+        })
+        .exit_on_close_request(false)
         .window_size((1100.0, 760.0))
         .run()
 }
@@ -24,9 +33,12 @@ enum Route {
     Library,
     Runner,
     Settings,
+    Editor,
 }
 
 struct App {
+    editor: Option<editor::Editor>,
+    close_after_editor: bool,
     core: Box<dyn Core>,
     route: Route,
     previous_route: Route,
@@ -44,6 +56,9 @@ struct App {
 
 #[derive(Debug, Clone)]
 enum Message {
+    CloseRequested,
+    Keyboard(iced::keyboard::Event),
+    Editor(editor::Event),
     ShowLibrary,
     ChooseBoardFile,
     ImportFile(String),
@@ -76,6 +91,8 @@ impl App {
         let core: Box<dyn Core> =
             Box::new(NativeCore::new(&data).expect("could not initialize the Kotlin core"));
         let mut app = Self {
+            editor: None,
+            close_after_editor: false,
             library: core.library().unwrap_or_default(),
             recents: core.recents().unwrap_or_default(),
             settings: core.settings().unwrap_or(Settings {
@@ -104,6 +121,26 @@ impl App {
     fn update(&mut self, message: Message) -> Task<Message> {
         let mut task = Task::none();
         match message {
+            Message::CloseRequested => {
+                if self.editor.is_some() {
+                    self.close_after_editor = true;
+                    return self.update_editor(editor::Event::Discard);
+                }
+                return iced::exit();
+            }
+            Message::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Tab),
+                modifiers,
+                ..
+            }) => {
+                return if modifiers.shift() {
+                    iced::widget::operation::focus_previous()
+                } else {
+                    iced::widget::operation::focus_next()
+                };
+            }
+            Message::Keyboard(_) => {}
+            Message::Editor(event) => return self.update_editor(event),
             Message::ShowLibrary => {
                 self.route = Route::Library;
                 self.refresh_library();
@@ -253,6 +290,11 @@ impl App {
 
     fn view(&self) -> Element<'_, Message> {
         let body = match self.route {
+            Route::Editor => self
+                .editor
+                .as_ref()
+                .map(editor::Editor::view)
+                .unwrap_or_else(|| text("No draft open").into()),
             Route::Library => screens::library(&self.library, &self.recents),
             Route::Runner => self
                 .board
@@ -269,11 +311,12 @@ impl App {
         };
         // The Settings screen carries its own navigation, so the header button
         // that opens it would only be a no-op while that screen is open.
-        let open_settings: Element<'_, Message> = if self.route == Route::Settings {
-            iced::widget::Space::new().into()
-        } else {
-            button("Settings").on_press(Message::OpenSettings).into()
-        };
+        let open_settings: Element<'_, Message> =
+            if self.route == Route::Settings || self.route == Route::Editor {
+                iced::widget::Space::new().into()
+            } else {
+                button("Settings").on_press(Message::OpenSettings).into()
+            };
         let mut layout = column![
             row![
                 text("Wingmate").size(22),

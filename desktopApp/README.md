@@ -31,3 +31,18 @@ dictionary, and create or restore a backup.
 
 Run `cargo test` from this directory, and `./gradlew
 :desktopApp:bindings:allTests` from the repository root.
+
+## Screen editor
+
+Choose **New Screen** in the Library, or **Edit Screen** in an open Screen.
+The editor keeps a Kotlin draft until **Save Screen**. Apply form changes to
+that draft with the adjacent buttons; **Discard / close** asks before dropping
+unsaved work. Select a Cell to create or edit a Button, including hidden Buttons.
+Row/column controls move or swap Buttons, and span controls resize them using the
+shared Grid rules. Pages can be added, renamed, resized and made the starting Page;
+Buttons can link to any Page in the Screen.
+
+Locked and system Screens cannot be edited here. Existing symbols, recordings,
+actions and extension metadata survive edits; rich Page elements are listed as
+unsupported placeholders. Symbol/action authoring, rich Page-element editing,
+Editing access credential setup, Page deletion and OBZ export are not yet exposed.

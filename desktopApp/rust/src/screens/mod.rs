@@ -9,6 +9,7 @@ use iced::{Element, Fill};
 pub fn library<'a>(sets: &'a [BoardSet], recents: &'a [String]) -> Element<'a, Message> {
     let mut content = column![
         text("Screens").size(36),
+        button("New Screen").on_press(Message::Editor(crate::editor::Event::New)),
         button("Open OBF or OBZ file").on_press(Message::ChooseBoardFile),
     ]
     .spacing(16);
@@ -41,6 +42,9 @@ pub fn runner(view: &BoardView) -> Element<'_, Message> {
             button("Back").on_press(Message::Back),
             text(&view.title).size(30),
             Space::new().width(Fill),
+            button("Edit Screen").on_press(Message::Editor(crate::editor::Event::Begin(
+                view.board_set_id.clone()
+            ))),
             button("Library").on_press(Message::ShowLibrary)
         ]
         .spacing(16)

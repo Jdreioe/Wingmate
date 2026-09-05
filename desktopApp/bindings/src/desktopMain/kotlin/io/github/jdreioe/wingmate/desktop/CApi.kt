@@ -75,3 +75,5 @@ fun stringFree(value: CPointer<ByteVar>?) {
 @CName("wm_delete_pronunciation_json") fun deletePronunciation(context: COpaquePointer?, word: CPointer<ByteVar>?) = call(context) { deletePronunciationJson(word.string()) }
 @CName("wm_export_backup_json") fun exportBackup(context: COpaquePointer?, path: CPointer<ByteVar>?) = call(context) { exportBackupJson(path.string()) }
 @CName("wm_restore_backup_json") fun restoreBackup(context: COpaquePointer?, path: CPointer<ByteVar>?) = call(context) { restoreBackupJson(path.string()) }
+
+@CName("wm_editor_json") fun editor(context: COpaquePointer?, value: CPointer<ByteVar>?) = call(context) { editorJson(value.string()) }

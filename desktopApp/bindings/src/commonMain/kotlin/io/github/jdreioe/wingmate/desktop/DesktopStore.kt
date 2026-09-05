@@ -60,10 +60,9 @@ internal class DesktopStore(
         else json.decodeFromString<DesktopSnapshot>(fileSystem.read(stateFile) { readUtf8() })
     }.getOrDefault(DesktopSnapshot())
 
-    private fun persist() {
+    private fun persist(snapshot: DesktopSnapshot = state) {
         fileSystem.createDirectories(root)
-        fileSystem.write(temporaryStateFile) { writeUtf8(json.encodeToString(state)) }
-        if (fileSystem.exists(stateFile)) fileSystem.delete(stateFile)
+        fileSystem.write(temporaryStateFile) { writeUtf8(json.encodeToString(snapshot)) }
         fileSystem.atomicMove(temporaryStateFile, stateFile)
     }
 
@@ -84,8 +83,8 @@ internal class DesktopStore(
     fun snapshot(): DesktopSnapshot = state
 
     fun restore(restored: DesktopSnapshot) {
+        persist(restored)
         state = restored
-        persist()
     }
 
     override suspend fun getBoard(id: String) = state.boards.firstOrNull { it.id == id }
