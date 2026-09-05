@@ -69,6 +69,10 @@ fn main() {
     } else if target == "windows" {
         println!("cargo:rustc-link-lib=stdc++");
         println!("cargo:rustc-link-lib=z");
+        // ktor-io's Windows charset implementation uses Kotlin/Native's
+        // platform.iconv klib. Rust performs the final link, so it must carry
+        // that klib's static linker option across the FFI boundary.
+        println!("cargo:rustc-link-lib=static=iconv");
     }
 }
 
