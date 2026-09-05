@@ -30,7 +30,8 @@ impl Editor {
                 "Unsaved changes"
             } else {
                 "Saved"
-            }),
+            })
+            .width(140),
             button("Save Screen").on_press(msg(Event::Save)),
             button("Discard / close").on_press(msg(Event::Discard))
         ]
