@@ -32,6 +32,29 @@ dictionary, and create or restore a backup.
 Run `cargo test` from this directory, and `./gradlew
 :desktopApp:bindings:allTests` from the repository root.
 
+## Package locally
+
+Install `cargo-packager` 0.11.8, build a release binary, then create the native
+package on its target operating system:
+
+```sh
+cargo install cargo-packager --version 0.11.8 --locked
+cd desktopApp
+cargo build --release --locked
+cargo packager --release --formats deb  # Linux
+```
+
+Use `dmg` on macOS and `wix` on Windows. Normal desktop CI builds unsigned
+installers on all three operating systems. A `v*.*.*` tag starts the release
+workflow, which refuses to publish unless macOS and Windows signing credentials
+and the Linux release-signing key are configured. The resulting GitHub release
+contains a `.deb`, notarized `.dmg`, signed `.msi`, `SHA256SUMS`, and an armored
+signature for the checksum file. It also includes the public release key needed
+to verify that signature.
+
+The release tag supplies the installer version. It does not rewrite the checked-in
+development version.
+
 ## Screen editor
 
 Choose **New Screen** in **Settings > Screens**, or **Edit Screen** in an open

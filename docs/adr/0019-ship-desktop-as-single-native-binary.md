@@ -12,9 +12,11 @@ install or runtime.
 The removed `linuxApp/` ran a JVM sidecar (`fatJar`) with a localhost HTTP
 bridge (`KotlinBridge.kt`). That was easier to build but shipped two
 processes plus a Java runtime, with port/auth and version-skew seams.
-Distribution seamlessness (one `.exe` / `.dmg` / binary, unsigned bare
-binaries + checksums in v1) is the point of a Rust desktop, so we accept
-the binding-maintenance cost instead.
+Distribution seamlessness is the point of a Rust desktop, so we accept the
+binding-maintenance cost instead. Normal CI builds unsigned native installers.
+Tagged releases contain a Linux `.deb`, a Developer ID-signed and notarized
+macOS `.dmg`, and an Authenticode-signed Windows `.msi`. A GPG signature covers
+the release checksum manifest.
 
 Consequences:
 
