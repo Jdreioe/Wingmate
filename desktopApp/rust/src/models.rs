@@ -24,6 +24,7 @@ pub struct Cell {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BoardView {
+    pub board_set_id: String,
     pub title: String,
     pub rows: usize,
     pub columns: usize,
@@ -153,7 +154,10 @@ mod tests {
         assert_eq!(all[0], ThemeChoice::System);
         for choice in all {
             let encoded = serde_json::to_string(&choice).unwrap();
-            assert_eq!(serde_json::from_str::<ThemeChoice>(&encoded).unwrap(), choice);
+            assert_eq!(
+                serde_json::from_str::<ThemeChoice>(&encoded).unwrap(),
+                choice
+            );
         }
     }
 

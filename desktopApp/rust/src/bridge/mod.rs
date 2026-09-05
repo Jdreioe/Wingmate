@@ -6,6 +6,7 @@ use std::{
 };
 
 unsafe extern "C" {
+    fn wm_editor_json(context: *mut c_void, value: *const c_char) -> *mut c_char;
     fn wm_create(data_directory: *const c_char) -> *mut c_void;
     fn wm_destroy(context: *mut c_void);
     fn wm_string_free(value: *mut c_char);
@@ -28,6 +29,7 @@ unsafe extern "C" {
 }
 
 pub trait Core {
+    fn editor(&self, value: &serde_json::Value) -> Result<serde_json::Value, String>;
     fn library(&self) -> Result<Vec<BoardSet>, String>;
     fn recents(&self) -> Result<Vec<String>, String>;
     fn import_file(&self, path: &str) -> Result<Activation, String>;
@@ -101,6 +103,9 @@ struct BridgeError {
 }
 
 impl Core for NativeCore {
+    fn editor(&self, value: &serde_json::Value) -> Result<serde_json::Value, String> {
+        self.input(&value.to_string(), wm_editor_json)
+    }
     fn library(&self) -> Result<Vec<BoardSet>, String> {
         self.read(wm_library_json)
     }
@@ -173,5 +178,34 @@ mod tests {
         let core = NativeCore::new(directory.path().to_str().unwrap()).unwrap();
         assert!(core.library().unwrap().is_empty());
         assert_eq!(core.settings().unwrap().speech_rate, 1.0);
+    }
+    #[test]
+    fn editor_draft_round_trips_through_native_boundary() {
+        let directory = tempfile::tempdir().unwrap();
+        let core = NativeCore::new(directory.path().to_str().unwrap()).unwrap();
+        let draft = core
+            .editor(&serde_json::json!({"operation":"new", "name":"Test Screen"}))
+            .unwrap();
+        let _: crate::editor::View = serde_json::from_value(draft).unwrap();
+        assert!(core.library().unwrap().is_empty());
+        core.editor(&serde_json::json!({"operation":"button", "label":"Hello"}))
+            .unwrap();
+        assert!(
+            core.editor(&serde_json::json!({"operation":"span", "rowSpan":100}))
+                .is_err()
+        );
+        let saved = core
+            .editor(&serde_json::json!({"operation":"save"}))
+            .unwrap();
+        let id = saved["id"].as_str().unwrap();
+        let opened = core.open(id).unwrap();
+        assert_eq!(opened.view.cells[0].label, "Hello");
+        core.editor(&serde_json::json!({"operation":"begin", "id":id}))
+            .unwrap();
+        core.editor(&serde_json::json!({"operation":"renameScreen", "name":"Discard"}))
+            .unwrap();
+        core.editor(&serde_json::json!({"operation":"discard"}))
+            .unwrap();
+        assert_eq!(core.library().unwrap()[0].name, "Test Screen");
     }
 }
