@@ -140,6 +140,12 @@ The `iced` subscription that drives this from the UI thread lands in M3
 together with its consumer, so nothing runs in the background before something
 uses it.
 
+`wingmate-desktop --gaze-probe` connects for ten seconds and prints payload
+sizes, per-eye validity, and positions, so the pinned layout can be confirmed
+on a tracker before hit-testing depends on it. A payload of another size is
+reported as the per-device layout problem it is. Output goes to the terminal
+and nowhere else.
+
 Tests: partial and coalesced reads, skipped message types, a gaze payload of
 another size, `present_mask` missing a required field, an undetected eye,
 absent and out-of-range coordinates, oversized payloads, and backoff growth

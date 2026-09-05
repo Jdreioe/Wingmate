@@ -7,6 +7,8 @@
 //! a communication target, and everything about dwell and activation, stays
 //! out of here — see `docs/GAZE_TD_I13.md`.
 
+#[cfg(unix)]
+pub mod probe;
 pub mod protocol;
 
 use protocol::{Decoder, Message, ProtocolError, Sample};
@@ -119,11 +121,16 @@ pub mod client {
         /// several clients, so this never takes the tracker away from the
         /// user's other gaze tools.
         pub fn connect() -> Result<Self, ConnectError> {
-            let mut stream =
-                UnixStream::connect(socket_path()).map_err(|error| match error.kind() {
-                    ErrorKind::NotFound | ErrorKind::ConnectionRefused => ConnectError::Unavailable,
-                    _ => ConnectError::Io(error),
-                })?;
+            Self::connect_at(&socket_path())
+        }
+
+        /// Connects to a specific socket. `connect` is the path users take;
+        /// this exists so tests can drive a daemon of their own.
+        pub fn connect_at(path: &std::path::Path) -> Result<Self, ConnectError> {
+            let mut stream = UnixStream::connect(path).map_err(|error| match error.kind() {
+                ErrorKind::NotFound | ErrorKind::ConnectionRefused => ConnectError::Unavailable,
+                _ => ConnectError::Io(error),
+            })?;
             stream
                 .write_all(&protocol::subscribe_command())
                 .map_err(ConnectError::Io)?;
@@ -167,6 +174,77 @@ pub mod client {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    mod client {
+        use crate::gaze::client::Client;
+        use crate::gaze::protocol::{GAZE_SAMPLE_SIZE, Point, subscribe_command};
+        use std::io::{Read, Write};
+        use std::os::unix::net::UnixListener;
+
+        /// One framed gaze message carrying a valid sample at `(x, y)`.
+        fn gaze_message(x: f64, y: f64) -> Vec<u8> {
+            let mut payload = vec![0u8; GAZE_SAMPLE_SIZE];
+            // present mask: timestamp, frame counter, both validities, gaze 2D.
+            payload[0..4].copy_from_slice(&0b100_1111u32.to_le_bytes());
+            payload[4..8].copy_from_slice(&3u32.to_le_bytes());
+            payload[40..48].copy_from_slice(&x.to_le_bytes());
+            payload[48..56].copy_from_slice(&y.to_le_bytes());
+
+            let mut message = vec![0x01];
+            message.extend_from_slice(&(GAZE_SAMPLE_SIZE as u32).to_le_bytes());
+            message.extend(payload);
+            message
+        }
+
+        /// Stands in for `tobiifreed`: accepts one client, checks that it
+        /// subscribes, then writes two samples split across several writes.
+        #[test]
+        fn subscribes_and_reads_samples_from_a_daemon() {
+            let directory = tempfile::tempdir().expect("temporary directory");
+            let path = directory.path().join("gaze.sock");
+            let listener = UnixListener::bind(&path).expect("bind");
+
+            let daemon = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().expect("accept");
+                let mut subscribe = [0u8; 9];
+                stream
+                    .read_exact(&mut subscribe)
+                    .expect("subscribe command");
+                assert_eq!(subscribe, subscribe_command());
+
+                let mut bytes = gaze_message(0.25, 0.75);
+                bytes.extend(gaze_message(0.5, 0.5));
+                let split = bytes.len() / 3;
+                for chunk in bytes.chunks(split) {
+                    stream.write_all(chunk).expect("write");
+                }
+                // Hold the connection open until the client has read both.
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            });
+
+            let mut client = Client::connect_at(&path).expect("connect");
+            assert_eq!(
+                client.next_sample().expect("first sample").point,
+                Some(Point { x: 0.25, y: 0.75 })
+            );
+            assert_eq!(
+                client.next_sample().expect("second sample").point,
+                Some(Point { x: 0.5, y: 0.5 })
+            );
+            daemon.join().expect("daemon thread");
+        }
+
+        #[test]
+        fn reports_a_missing_daemon_as_unavailable() {
+            let directory = tempfile::tempdir().expect("temporary directory");
+            let missing = directory.path().join("gaze.sock");
+            assert!(matches!(
+                Client::connect_at(&missing),
+                Err(crate::gaze::ConnectError::Unavailable)
+            ));
+        }
+    }
 
     #[test]
     fn backoff_grows_to_a_bounded_delay_and_resets() {
