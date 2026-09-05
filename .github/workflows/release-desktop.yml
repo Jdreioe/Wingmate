@@ -69,6 +69,16 @@ jobs:
             echo "Expected a release tag such as v1.2.0" >&2
             exit 1
           fi
+
+          shared_version="$(sed -n 's/^versionName=//p' version.properties)"
+          case "$(tr -cd '.' <<< "$shared_version" | wc -c)" in
+            0) shared_version="$shared_version.0.0" ;;
+            1) shared_version="$shared_version.0" ;;
+          esac
+          if [[ "$version" != "$shared_version" ]]; then
+            echo "Release tag $GITHUB_REF_NAME does not match version.properties ($shared_version)" >&2
+            exit 1
+          fi
           echo "WINGMATE_DESKTOP_VERSION=$version" >> "$GITHUB_ENV"
 
       - name: Install the Linux windowing and speech libraries
@@ -88,40 +98,6 @@ jobs:
         run: cargo build --release --locked --target ${{ matrix.target }}
         env:
           WINGMATE_KOTLIN_BRIDGE_PREBUILT: "1"
-
-      - name: Set installer version from the tag
-        shell: bash
-        run: |
-          python3 - "$WINGMATE_DESKTOP_VERSION" <<'PY'
-          import pathlib
-          import re
-          import sys
-
-          version = sys.argv[1]
-          manifest = pathlib.Path("desktopApp/rust/Cargo.toml")
-          manifest_text = manifest.read_text()
-          manifest_text, replacements = re.subn(
-              r'(?m)^version = "[^"]+"$',
-              f'version = "{version}"',
-              manifest_text,
-              count=1,
-          )
-          if replacements != 1:
-              raise SystemExit("Could not set desktop Cargo package version")
-          manifest.write_text(manifest_text)
-
-          lockfile = pathlib.Path("desktopApp/Cargo.lock")
-          lock_text = lockfile.read_text()
-          package = re.compile(
-              r'(\[\[package\]\]\nname = "wingmate-desktop"\nversion = ")[^"]+("\n)'
-          )
-          lock_text, replacements = package.subn(
-              rf'\g<1>{version}\g<2>', lock_text, count=1
-          )
-          if replacements != 1:
-              raise SystemExit("Could not set desktop Cargo.lock package version")
-          lockfile.write_text(lock_text)
-          PY
 
       - name: Install desktop packager
         run: cargo install cargo-packager --version 0.11.8 --locked

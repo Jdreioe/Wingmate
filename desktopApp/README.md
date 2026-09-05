@@ -52,8 +52,8 @@ contains a `.deb`, notarized `.dmg`, signed `.msi`, `SHA256SUMS`, and an armored
 signature for the checksum file. It also includes the public release key needed
 to verify that signature.
 
-The release tag supplies the installer version. It does not rewrite the checked-in
-development version.
+The release tag must match the shared version in `version.properties`; the
+workflow refuses to publish a differently versioned installer and binary.
 
 ## Screen editor
 
