@@ -8,22 +8,22 @@ import kotlin.random.Random
 import kotlin.time.Clock
 
 @Serializable
-data class EditorCell(
+internal data class EditorCell(
     val row: Int, val column: Int, val rowSpan: Int, val columnSpan: Int,
     val label: String = "", val vocalization: String = "", val color: String = "",
     val hidden: Boolean = false, val linkedPage: String = "", val occupied: Boolean = false,
 )
 @Serializable
-data class EditorPage(val id: String, val name: String)
+internal data class EditorPage(val id: String, val name: String)
 @Serializable
-data class EditorView(
+internal data class EditorView(
     val screenName: String, val pageId: String, val pageName: String,
     val rootPageId: String, val pages: List<EditorPage>,
     val rows: Int, val columns: Int, val cells: List<EditorCell>, val dirty: Boolean,
     val unsupportedElements: List<String>,
 )
 @Serializable
-data class EditorCommand(
+internal data class EditorCommand(
     val operation: String, val id: String = "", val name: String = "",
     val rows: Int = 3, val columns: Int = 4, val row: Int = 0, val column: Int = 0,
     val toRow: Int = 0, val toColumn: Int = 0, val rowSpan: Int = 1, val columnSpan: Int = 1,

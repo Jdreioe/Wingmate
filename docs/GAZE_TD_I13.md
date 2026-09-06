@@ -119,8 +119,10 @@ Two rules keep this small:
   tremor re-arm, rest mode, and single activation and is unit-tested in
   `core/domain`. Desktop must not grow a second dwell implementation.
 
-`AccessInputController` takes caller-supplied timestamps, so the bridge can pass
-the sample clock and stay deterministic in tests.
+`AccessInputController` takes caller-supplied timestamps. The desktop runner
+uses one host monotonic millisecond clock for gaze, pointer, and key input.
+Device timestamps validate sample ordering; mixing their clock with pointer
+and timer timestamps would corrupt dwell elapsed time.
 
 ## Milestones
 
@@ -182,12 +184,37 @@ Fullscreen communication mode only — Wayland does not reliably report a normal
 window's position on the display, so a windowed mapping would be guesswork.
 Emphasis marks the resolved target; no cursor follows gaze.
 
-Invalid samples (either eye `validity != 0`, or `gaze_point_2d_norm` absent or
-outside `[0,1]²`) clear the current target after a short grace period, cancel
-pending dwell, and require a fresh dwell on reacquisition.
+M3 is implemented in the Linux desktop runner. Each communication control has
+a semantic widget ID; an iced widget operation hit-tests its actual layout
+bounds in logical window coordinates. Grid layout handles row and column spans.
+Gaps, empty cells, and overlapping target bounds do not select a target.
 
-Tests: synthetic samples over a fixture grid, boundary and span cells,
-gaze-loss cancellation, rest mode suppressing activation.
+The async Unix-socket reader runs only during an explicitly enabled session.
+A latest-value mailbox avoids queuing raw frames on the UI thread and retains
+a loss counter even if tracking recovers between UI updates. Device frame
+counters and timestamps reject duplicate or reordered samples; host monotonic
+time drives dwell and a 100 ms freshness limit. Disconnects reconnect with the
+M1 backoff, and dropping the subscription closes the socket.
+
+Invalid samples immediately clear the target and cancel dwell. Silence expires
+the target after 100 ms. Reacquisition starts fresh; visual grace and forgiving
+boundaries remain #158. Pending widget results are rejected after navigation,
+resize, pause changes, or tracking loss. Only fresh resolved targets advance
+the shared controller. Pointer hover cannot replace a live gaze target;
+pointer dwell remains usable while the daemon is unavailable or incompatible.
+
+The runner's session-only Start/Stop gaze control makes M3 testable before M4.
+It requires a nonzero dwell duration and fullscreen mode. Leaving communication,
+losing focus, or leaving fullscreen stops the session. Rest and resume use the
+existing click/touch controls or keyboard shortcuts. Library and editor controls
+are excluded. The daemon must already be calibrated to the display showing
+Wingmate; multiple displays and mismatched display areas remain unsupported.
+
+Verification: synthetic span/edge/gap hit-testing; real Unix-socket framing,
+reconnection and cancellation; shared-controller activation, gaze loss, Rest,
+and pointer-fallback integration tests. An isolated desktop session with a fake
+daemon selected a two-row spanning Button once and cleared it on invalid-eye
+samples. The real TD-I13 checklist remains outstanding.
 
 ### M4 — Settings, status, and setup
 
@@ -229,11 +256,14 @@ socket-before-spawn — if `gaze.sock` already answers, a daemon is running and
 Wingmate connects to it instead. `tobiifreed` claims the tracker over USB, so
 two of them must never race for the device.
 
-**The udev rule stays a documented one-time command.** An AppImage cannot write
-to `/etc/udev/rules.d` and should not ask for root, so without the rule the
-daemon cannot claim `2104:031e`. The settings section names that exact state and
-shows the command to fix it. Distro packages that can install the rule
-themselves should.
+**The udev rule is installed by the optional Linux installer.**
+`scripts/install-wingmate.sh --setup-gaze` installs the AppImage for the current
+user and uses `sudo` only to install and reload the host USB rule. The AppImage
+itself runs without root. The rule grants the active local desktop user access
+to runtime devices `2104:031e` and `2104:0313`; users reconnect the tracker after
+setup. Firmware/bootloader access is excluded. Distro packages that can install
+the rule themselves should. Daemon bundling and auto-start described above
+remain planned; the installer currently requires a separately started daemon.
 
 Firmware is out of scope entirely: some units need it extracted from Tobii's
 Windows driver and DFU-flashed, which Wingmate must never automate.

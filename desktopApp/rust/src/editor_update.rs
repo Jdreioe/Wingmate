@@ -189,6 +189,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let core = NativeCore::new(directory.path().to_str().unwrap()).unwrap();
         let mut app = App {
+            gaze: Default::default(),
+            gaze_starting: false,
             access: Default::default(),
             access_clock: std::time::Instant::now(),
             settings: core.settings().unwrap(),

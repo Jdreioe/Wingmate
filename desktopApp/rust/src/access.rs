@@ -2,7 +2,7 @@
 use crate::Message;
 use iced::{
     Element,
-    widget::{button, mouse_area},
+    widget::{button, container, mouse_area},
 };
 use serde::{Deserialize, Serialize};
 
@@ -70,8 +70,11 @@ pub fn area<'a>(
     } else {
         control
     };
-    mouse_area(control)
-        .on_enter(Message::Access(Event::Enter(target.clone())))
-        .on_exit(Message::Access(Event::Exit(target)))
-        .into()
+    container(
+        mouse_area(control)
+            .on_enter(Message::Access(Event::Enter(target.clone())))
+            .on_exit(Message::Access(Event::Exit(target.clone()))),
+    )
+    .id(target.id())
+    .into()
 }

@@ -28,10 +28,10 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 @Serializable
-data class DesktopBoardSet(val id: String, val name: String, val rootBoardId: String)
+internal data class DesktopBoardSet(val id: String, val name: String, val rootBoardId: String)
 
 @Serializable
-data class DesktopCell(
+internal data class DesktopCell(
     val id: String,
     val row: Int,
     val column: Int,
@@ -44,7 +44,7 @@ data class DesktopCell(
 )
 
 @Serializable
-data class DesktopBoardView(
+internal data class DesktopBoardView(
     val boardSetId: String,
     val boardId: String,
     val title: String,
@@ -57,10 +57,10 @@ data class DesktopBoardView(
 )
 
 @Serializable
-data class DesktopActivation(val view: DesktopBoardView, val speech: String? = null)
+internal data class DesktopActivation(val view: DesktopBoardView, val speech: String? = null)
 
 @Serializable
-data class DesktopSettings(
+internal data class DesktopSettings(
     /** An iced theme name, or "system" to follow the desktop environment. */
     val theme: String = "system",
     /** What the chosen palette implies, so [Settings.forceDarkTheme] stays useful. */
@@ -76,7 +76,7 @@ data class DesktopSettings(
 
 /** Only target identities and selection state cross this boundary, never coordinates. */
 @Serializable
-data class DesktopAccessResult(
+internal data class DesktopAccessResult(
     val isPaused: Boolean,
     val currentTargetId: String?,
     val dwellProgress: Float,
@@ -84,7 +84,7 @@ data class DesktopAccessResult(
 )
 
 @Serializable
-sealed interface DesktopAccessEffect {
+internal sealed interface DesktopAccessEffect {
     @Serializable
     @kotlinx.serialization.SerialName("activate")
     data class Activate(val targetId: String) : DesktopAccessEffect
@@ -94,8 +94,8 @@ sealed interface DesktopAccessEffect {
     data class PauseChanged(val isPaused: Boolean) : DesktopAccessEffect
 }
 
-/** Application-shaped Kotlin boundary. Rust receives view data, never domain objects. */
-class DesktopCore(dataDirectory: String) {
+/** Internal implementation behind CApi.kt; only its wm_* entry points are exported to Rust. */
+internal class DesktopCore(dataDirectory: String) {
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
     private val store = DesktopStore(dataDirectory)
     private val media = DesktopMediaStorage(dataDirectory)
