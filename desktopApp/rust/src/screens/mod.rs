@@ -1,3 +1,4 @@
+use crate::access::{self, Target};
 use crate::{
     Message,
     models::{BoardSet, BoardView},
@@ -29,16 +30,29 @@ pub fn library(sets: &[BoardSet]) -> Element<'_, Message> {
         .into()
 }
 
-pub fn runner(view: &BoardView) -> Element<'_, Message> {
+pub fn runner<'a>(view: &'a BoardView, access_state: &access::State) -> Element<'a, Message> {
     let mut page = column![
         row![
-            button("Back").on_press(Message::Back),
+            access::area(
+                button("Back").on_press(Message::Back),
+                Target::Back,
+                access_state
+            ),
             text(&view.title).size(30),
             Space::new().width(Fill),
             crate::editor::controls::button("Edit Screen").on_press(Message::Editor(
                 crate::editor::Event::Begin(view.board_set_id.clone())
             )),
-            button("Library").on_press(Message::ShowLibrary)
+            button("Library").on_press(Message::ShowLibrary),
+            button(if access_state.is_paused {
+                "Resume input"
+            } else {
+                "Rest"
+            })
+            .height(48)
+            .on_press(Message::Access(access::Event::SetPaused(
+                !access_state.is_paused
+            )))
         ]
         .spacing(16)
         .align_y(iced::Center)
@@ -64,12 +78,18 @@ pub fn runner(view: &BoardView) -> Element<'_, Message> {
                     content = content.push(image(handle).height(Fill));
                 }
                 content = content.push(text(label).size(22));
-                cells = cells.push(
+                cells = cells.push(access::area(
                     button(content)
                         .width(iced::FillPortion(cell.column_span))
                         .height(iced::FillPortion(cell.row_span))
                         .on_press(Message::Activate(cell.id.clone())),
-                );
+                    Target::Cell {
+                        board_set: view.board_set_id.clone(),
+                        page: view.board_id.clone(),
+                        button: cell.id.clone(),
+                    },
+                    access_state,
+                ));
                 column_index += cell.column_span as usize;
             } else {
                 cells = cells.push(Space::new().width(iced::FillPortion(1)));
@@ -82,6 +102,13 @@ pub fn runner(view: &BoardView) -> Element<'_, Message> {
         page = page.push(crate::message_bar::view(
             &view.message,
             view.show_speak_button,
+            access_state,
+        ));
+    }
+    page = page.push(iced::widget::progress_bar(0.0..=1.0, access_state.dwell_progress).girth(6));
+    if access_state.is_paused {
+        page = page.push(text(
+            "Rest mode. Select Resume input, or hold your select key for two seconds and release.",
         ));
     }
     container(page).width(Fill).height(Fill).into()

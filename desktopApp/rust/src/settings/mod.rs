@@ -6,10 +6,6 @@ use iced::widget::{
     button, column, container, pick_list, row, scrollable, slider, text, text_input,
 };
 
-// Hold-to-select and dwell-to-select are stored and round-tripped for the
-// Communicator's other clients, but desktop has no runner support for them
-// yet, so this screen does not offer controls that would do nothing. See
-// docs/ACCESSIBILITY_MATRIX.md and issue #268.
 use iced::{Element, Fill, Theme};
 
 /// Sidebar navigation is sized for touch and gaze rather than a mouse: every
@@ -25,15 +21,17 @@ pub enum Section {
     #[default]
     Appearance,
     Speech,
+    Access,
     Pronunciation,
     Backup,
     Screens,
 }
 
 impl Section {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Appearance,
         Self::Speech,
+        Self::Access,
         Self::Pronunciation,
         Self::Backup,
         Self::Screens,
@@ -43,6 +41,7 @@ impl Section {
         match self {
             Self::Appearance => "Appearance",
             Self::Speech => "Speech",
+            Self::Access => "Access",
             Self::Pronunciation => "Pronunciation",
             Self::Backup => "Backup",
             Self::Screens => "Screens",
@@ -53,6 +52,7 @@ impl Section {
         match self {
             Self::Appearance => "Theme and colours",
             Self::Speech => "Voice and speaking speed",
+            Self::Access => "Pointer dwell and Rest mode",
             Self::Pronunciation => "Teach Wingmate a word",
             Self::Backup => "Save or restore your data",
             Self::Screens => "Make one, or open a file",
@@ -76,6 +76,7 @@ pub fn view<'a>(
                 match section {
                     Section::Appearance => appearance(settings),
                     Section::Speech => speech(settings),
+                    Section::Access => access(settings),
                     Section::Pronunciation => pronunciation(pronunciations, word, replacement),
                     Section::Backup => backup(),
                     Section::Screens => screens(recents),
@@ -279,4 +280,17 @@ fn field<'a>(
     .spacing(24)
     .align_y(iced::Center)
     .into()
+}
+
+fn access(settings: &Settings) -> Element<'_, Message> {
+    column![
+        text("Dwell selects communication buttons while the pointer rests on them. Zero turns dwell off. Use your operating system's eye or head pointer setup to move the pointer."),
+        field(format!("Dwell duration: {} ms", settings.dwell_to_select_millis),
+            slider(0..=5000_u32, settings.dwell_to_select_millis as u32, Message::DwellChanged).step(100_u32)),
+        field(format!("Delay before dwell starts: {} ms", settings.dwell_rearm_delay_millis),
+            slider(0..=2000_u32, settings.dwell_rearm_delay_millis as u32, Message::RearmChanged).step(20_u32)),
+        field("Select key", text_input("e.g. F8, Space, Enter", &settings.select_key_binding).on_input(Message::SelectKeyChanged).padding(14)),
+        field("Rest mode key", text_input("e.g. F9", &settings.rest_mode_key_binding).on_input(Message::RestKeyChanged).padding(14)),
+        text("Leave shortcuts empty to disable them. Rest pauses dwell and select-key activation. Click or touch Resume input to continue, or hold the select key for two seconds and release."),
+    ].spacing(24).into()
 }

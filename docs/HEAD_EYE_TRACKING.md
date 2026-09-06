@@ -34,15 +34,26 @@ Select Item switch. Wingmate leaves these native actions intact.
 
 ## Desktop
 
-The desktop client in `desktopApp/` is in development and offers none of the
-interaction settings above: it takes ordinary pointer and keyboard events only.
-An OS pointer driven by head or eye tracking therefore moves and clicks in it as
-in any other application, but there is no hover-to-select, Select key, or Rest
-mode yet. See the [accessibility matrix](ACCESSIBILITY_MATRIX.md).
+The desktop client in `desktopApp/` is in development. In **Settings > Access**,
+set a dwell duration above zero to select Screen Buttons and communication
+controls by hovering. The delay before dwell starts filters brief contact with
+neighboring targets. A highlight identifies the target and a progress bar shows
+dwell progress. This uses the pointer provided by the operating system, including
+vendor eye/head tracking tools.
+
+Optional Select and Rest mode shortcuts accept names such as `F8`, `F9`,
+`Space`, or `Enter`; leave them empty to disable them. Select acts on the hovered
+communication target. Rest pauses dwell and Select. Click or touch **Resume
+input**, use the Rest shortcut, or hold Select for two seconds and release to
+resume. Direct clicks and touch remain available while resting.
+
+Leaving the communication screen or losing window focus cancels pending dwell.
+Library, settings, and editor controls still require ordinary input. See the
+[accessibility matrix](ACCESSIBILITY_MATRIX.md) for the remaining gaps.
 
 ## Native gaze on the TD-I13 (planned)
 
-Wingmate does not read gaze data itself yet. Planned support for the TD-I13
+Wingmate has a diagnostic gaze reader, but native gaze cannot select targets yet. Planned support for the TD-I13
 running Linux, using the `tobiifreed` daemon from
 [`Aetherall/tobiifree`](https://github.com/Aetherall/tobiifree), is specified in
 [the TD-I13 gaze plan](GAZE_TD_I13.md) and tracked in

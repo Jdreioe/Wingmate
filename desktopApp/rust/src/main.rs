@@ -1,3 +1,4 @@
+mod access;
 mod bridge;
 mod editor;
 mod editor_update;
@@ -27,10 +28,27 @@ fn main() -> iced::Result {
     iced::application(App::boot, App::update, App::view)
         .title("Wingmate")
         .theme(App::theme)
-        .subscription(|_| {
+        .subscription(|app| {
             iced::Subscription::batch([
                 iced::system::theme_changes().map(Message::SystemTheme),
                 iced::keyboard::listen().map(Message::Keyboard),
+                if app.route == Route::Runner
+                    && !app.access.is_paused
+                    && app.settings.dwell_to_select_millis > 0
+                    && app.access.current_target_id.is_some()
+                {
+                    iced::time::every(std::time::Duration::from_millis(16))
+                        .map(|_| Message::Access(access::Event::Tick))
+                } else {
+                    iced::Subscription::none()
+                },
+                iced::event::listen_with(|event, _, _| match event {
+                    iced::Event::Window(iced::window::Event::Unfocused)
+                    | iced::Event::Mouse(iced::mouse::Event::CursorLeft) => {
+                        Some(Message::Access(access::Event::Clear))
+                    }
+                    _ => None,
+                }),
                 iced::window::close_requests().map(|_| Message::CloseRequested),
             ])
         })
@@ -48,6 +66,8 @@ enum Route {
 }
 
 struct App {
+    access: access::State,
+    access_clock: std::time::Instant,
     editor: Option<editor::Editor>,
     close_after_editor: bool,
     core: Box<dyn Core>,
@@ -67,6 +87,11 @@ struct App {
 
 #[derive(Debug, Clone)]
 enum Message {
+    Access(access::Event),
+    DwellChanged(u32),
+    RearmChanged(u32),
+    SelectKeyChanged(String),
+    RestKeyChanged(String),
     CloseRequested,
     Keyboard(iced::keyboard::Event),
     Editor(editor::Event),
@@ -101,7 +126,14 @@ impl App {
         let data = data_directory().to_string_lossy().into_owned();
         let core: Box<dyn Core> =
             Box::new(NativeCore::new(&data).expect("could not initialize the Kotlin core"));
+        let app = Self::with_core(core);
+        (app, iced::system::theme().map(Message::SystemTheme))
+    }
+
+    fn with_core(core: Box<dyn Core>) -> Self {
         let mut app = Self {
+            access: access::State::default(),
+            access_clock: std::time::Instant::now(),
             editor: None,
             close_after_editor: false,
             library: core.library().unwrap_or_default(),
@@ -113,6 +145,9 @@ impl App {
                 speech_rate: 1.0,
                 hold_to_select_millis: 0,
                 dwell_to_select_millis: 0,
+                dwell_rearm_delay_millis: 120,
+                select_key_binding: String::new(),
+                rest_mode_key_binding: String::new(),
             }),
             pronunciations: core.pronunciations().unwrap_or_default(),
             core,
@@ -126,12 +161,46 @@ impl App {
             system_theme: Theme::Light,
         };
         app.refresh_library();
-        (app, iced::system::theme().map(Message::SystemTheme))
+        app
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
+        // Leaving communication or manually selecting cancels pending dwell. A
+        // stationary pointer must move again before it can arm another selection.
+        if matches!(
+            &message,
+            Message::ShowLibrary
+                | Message::OpenSettings
+                | Message::Editor(_)
+                | Message::CloseRequested
+                | Message::OpenBoardSet(_)
+                | Message::Activate(_)
+                | Message::Back
+                | Message::Clear
+                | Message::Hold
+                | Message::Speak
+        ) {
+            self.clear_access();
+        }
         let mut task = Task::none();
         match message {
+            Message::Access(event) => return self.update_access(event),
+            Message::DwellChanged(value) => {
+                self.settings.dwell_to_select_millis = value.into();
+                self.save_settings();
+            }
+            Message::RearmChanged(value) => {
+                self.settings.dwell_rearm_delay_millis = value.into();
+                self.save_settings();
+            }
+            Message::SelectKeyChanged(value) => {
+                self.settings.select_key_binding = value;
+                self.save_settings();
+            }
+            Message::RestKeyChanged(value) => {
+                self.settings.rest_mode_key_binding = value;
+                self.save_settings();
+            }
             Message::CloseRequested => {
                 if self.editor.is_some() {
                     self.close_after_editor = true;
@@ -150,7 +219,22 @@ impl App {
                     iced::widget::operation::focus_next()
                 };
             }
-            Message::Keyboard(_) => {}
+            Message::Keyboard(event) => {
+                if self.route == Route::Runner {
+                    let event = match event {
+                        iced::keyboard::Event::KeyPressed { key, .. } => {
+                            Some(access::Event::KeyDown(key_token(key)))
+                        }
+                        iced::keyboard::Event::KeyReleased { key, .. } => {
+                            Some(access::Event::KeyUp(key_token(key)))
+                        }
+                        _ => None,
+                    };
+                    if let Some(event) = event {
+                        return self.update_access(event);
+                    }
+                }
+            }
             Message::Editor(event) => return self.update_editor(event),
             Message::ShowLibrary => {
                 self.route = Route::Library;
@@ -254,6 +338,73 @@ impl App {
         task
     }
 
+    fn clear_access(&mut self) {
+        match self.core.access(
+            &access::Event::Clear,
+            self.access_clock.elapsed().as_millis() as i64,
+        ) {
+            Ok(state) => self.access = state,
+            Err(error) => {
+                self.access = access::State::default();
+                self.error = Some(error);
+            }
+        }
+    }
+
+    fn update_access(&mut self, event: access::Event) -> Task<Message> {
+        if self.route != Route::Runner && !matches!(event, access::Event::Clear) {
+            return Task::none();
+        }
+        let now = self.access_clock.elapsed().as_millis() as i64;
+        match self.core.access(&event, now) {
+            Ok(mut state) => {
+                let effect = state.effect.take();
+                self.access = state;
+                match effect {
+                    Some(access::Effect::Activate { target_id }) => {
+                        if let Ok(target) = serde_json::from_str::<access::Target>(&target_id) {
+                            // Reject an old Page's queued target after navigation.
+                            let valid = match &target {
+                                access::Target::Cell {
+                                    board_set,
+                                    page,
+                                    button,
+                                } => self.board.as_ref().is_some_and(|view| {
+                                    &view.board_set_id == board_set
+                                        && &view.board_id == page
+                                        && view.cells.iter().any(|cell| &cell.id == button)
+                                }),
+                                _ => true,
+                            };
+                            if valid {
+                                let result = match target {
+                                    access::Target::Cell { button, .. } => {
+                                        self.core.activate(&button)
+                                    }
+                                    access::Target::Back => self.core.back(),
+                                    access::Target::Clear => self.core.clear(),
+                                    access::Target::Hold => self.core.hold(),
+                                    access::Target::Speak => self.core.speak(),
+                                };
+                                return self.apply(result);
+                            }
+                        }
+                        self.clear_access();
+                    }
+                    Some(access::Effect::PauseChanged { is_paused }) => {
+                        self.access.is_paused = is_paused;
+                    }
+                    None => {}
+                }
+            }
+            Err(error) => {
+                self.clear_access();
+                self.error = Some(error);
+            }
+        }
+        Task::none()
+    }
+
     fn import(&mut self, path: &str) {
         let _ = self.apply(self.core.import_file(path));
         self.refresh_library();
@@ -272,6 +423,12 @@ impl App {
                         Message::SpeechFinished,
                     )
                 });
+                if self.board.as_ref().is_none_or(|previous| {
+                    previous.board_set_id != activation.view.board_set_id
+                        || previous.board_id != activation.view.board_id
+                }) {
+                    self.clear_access();
+                }
                 self.board = Some(activation.view);
                 self.route = Route::Runner;
                 self.error = None;
@@ -285,8 +442,10 @@ impl App {
     }
 
     fn save_settings(&mut self) {
-        if let Err(error) = self.core.update_settings(&self.settings) {
-            self.error = Some(error);
+        self.clear_access();
+        match self.core.update_settings(&self.settings) {
+            Ok(settings) => self.settings = settings,
+            Err(error) => self.error = Some(error),
         }
     }
     fn refresh_library(&mut self) {
@@ -310,7 +469,7 @@ impl App {
             Route::Runner => self
                 .board
                 .as_ref()
-                .map(screens::runner)
+                .map(|board| screens::runner(board, &self.access))
                 .unwrap_or_else(|| text("No Screen open").into()),
             Route::Settings => settings::view(
                 self.settings_section,
@@ -379,4 +538,53 @@ fn data_directory() -> std::path::PathBuf {
 
     root.expect("desktop data directory is unavailable")
         .join(app_directory)
+}
+
+fn key_token(key: iced::keyboard::Key) -> String {
+    match key {
+        iced::keyboard::Key::Character(value) => value.to_string(),
+        iced::keyboard::Key::Named(value) => format!("{value:?}"),
+        _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod access_runner_tests {
+    use super::*;
+    use access::{Event, Target};
+
+    #[test]
+    fn select_key_uses_existing_activation_and_leaving_runner_cancels_input() {
+        let directory = tempfile::tempdir().unwrap();
+        let core = NativeCore::new(directory.path().to_str().unwrap()).unwrap();
+        core.editor(&serde_json::json!({"operation":"new", "name":"Test"}))
+            .unwrap();
+        core.editor(&serde_json::json!({"operation":"button", "label":"Hello"}))
+            .unwrap();
+        let saved = core
+            .editor(&serde_json::json!({"operation":"save"}))
+            .unwrap();
+        let mut app = App::with_core(Box::new(core));
+        app.settings.select_key_binding = "F8".into();
+        app.save_settings();
+        let _ = app.update(Message::OpenBoardSet(saved["id"].as_str().unwrap().into()));
+        let view = app.board.as_ref().unwrap();
+        let target = Target::Cell {
+            board_set: view.board_set_id.clone(),
+            page: view.board_id.clone(),
+            button: view.cells[0].id.clone(),
+        };
+        let _ = app.update(Message::Access(Event::Enter(target.clone())));
+        let _ = app.update(Message::Access(Event::KeyDown("F8".into())));
+        assert_eq!(app.board.as_ref().unwrap().message, "Hello");
+        let _ = app.update(Message::Access(Event::KeyDown("F8".into())));
+        assert_eq!(app.board.as_ref().unwrap().message, "Hello");
+        let _ = app.update(Message::OpenSettings);
+        assert!(app.access.current_target_id.is_none());
+        let _ = app.update(Message::Access(Event::Enter(target)));
+        assert!(app.access.current_target_id.is_none());
+        let _ = app.update(Message::CloseSettings);
+        let _ = app.update(Message::Access(Event::Tick));
+        assert_eq!(app.board.as_ref().unwrap().message, "Hello");
+    }
 }

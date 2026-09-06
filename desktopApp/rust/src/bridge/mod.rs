@@ -1,3 +1,4 @@
+use crate::access::{Event, State};
 use crate::models::{Activation, BoardSet, Pronunciation, Settings};
 use serde::de::DeserializeOwned;
 use std::{
@@ -6,6 +7,22 @@ use std::{
 };
 
 unsafe extern "C" {
+    fn wm_access_target_entered_json(
+        context: *mut c_void,
+        target: *const c_char,
+        now: i64,
+    ) -> *mut c_char;
+    fn wm_access_target_exited_json(
+        context: *mut c_void,
+        target: *const c_char,
+        now: i64,
+    ) -> *mut c_char;
+    fn wm_access_clear_transient_input_json(context: *mut c_void, now: i64) -> *mut c_char;
+    fn wm_access_tick_json(context: *mut c_void, now: i64) -> *mut c_char;
+    fn wm_access_set_paused_json(context: *mut c_void, paused: i32, now: i64) -> *mut c_char;
+    fn wm_access_key_down_json(context: *mut c_void, key: *const c_char, now: i64) -> *mut c_char;
+    fn wm_access_key_up_json(context: *mut c_void, key: *const c_char, now: i64) -> *mut c_char;
+
     fn wm_editor_json(context: *mut c_void, value: *const c_char) -> *mut c_char;
     fn wm_create(data_directory: *const c_char) -> *mut c_void;
     fn wm_destroy(context: *mut c_void);
@@ -29,6 +46,7 @@ unsafe extern "C" {
 }
 
 pub trait Core {
+    fn access(&self, event: &Event, now: i64) -> Result<State, String>;
     fn editor(&self, value: &serde_json::Value) -> Result<serde_json::Value, String>;
     fn library(&self) -> Result<Vec<BoardSet>, String>;
     fn recents(&self) -> Result<Vec<String>, String>;
@@ -103,6 +121,29 @@ struct BridgeError {
 }
 
 impl Core for NativeCore {
+    fn access(&self, event: &Event, now: i64) -> Result<State, String> {
+        let context = self.context.as_ptr();
+        let input = match event {
+            Event::Enter(target) | Event::Exit(target) => target.id(),
+            Event::KeyDown(key) | Event::KeyUp(key) => key.clone(),
+            _ => String::new(),
+        };
+        let input = CString::new(input).map_err(|_| "Invalid access input".to_string())?;
+        self.decode(unsafe {
+            match event {
+                Event::Enter(_) => wm_access_target_entered_json(context, input.as_ptr(), now),
+                Event::Exit(_) => wm_access_target_exited_json(context, input.as_ptr(), now),
+                Event::Clear => wm_access_clear_transient_input_json(context, now),
+                Event::Tick => wm_access_tick_json(context, now),
+                Event::SetPaused(paused) => {
+                    wm_access_set_paused_json(context, i32::from(*paused), now)
+                }
+                Event::KeyDown(_) => wm_access_key_down_json(context, input.as_ptr(), now),
+                Event::KeyUp(_) => wm_access_key_up_json(context, input.as_ptr(), now),
+            }
+        })
+    }
+
     fn editor(&self, value: &serde_json::Value) -> Result<serde_json::Value, String> {
         self.input(&value.to_string(), wm_editor_json)
     }
@@ -207,5 +248,99 @@ mod tests {
         core.editor(&serde_json::json!({"operation":"discard"}))
             .unwrap();
         assert_eq!(core.library().unwrap()[0].name, "Test Screen");
+    }
+}
+
+#[cfg(test)]
+mod access_tests {
+    use super::{Core, NativeCore};
+    use crate::access::{Effect, Event, Target};
+
+    #[test]
+    fn dwell_settings_and_cancellation_cross_the_real_c_bridge() {
+        let directory = tempfile::tempdir().unwrap();
+        let core = NativeCore::new(directory.path().to_str().unwrap()).unwrap();
+        let mut settings = core.settings().unwrap();
+        settings.dwell_to_select_millis = 500;
+        settings.dwell_rearm_delay_millis = 120;
+        core.update_settings(&settings).unwrap();
+        let target = Target::Cell {
+            board_set: "set".into(),
+            page: "page".into(),
+            button: "quoted\" id".into(),
+        };
+        let entered = core.access(&Event::Enter(target.clone()), 1000).unwrap();
+        assert_eq!(entered.current_target_id, Some(target.id()));
+        assert_eq!(core.access(&Event::Tick, 1100).unwrap().dwell_progress, 0.0);
+        assert_eq!(core.access(&Event::Tick, 1370).unwrap().dwell_progress, 0.5);
+        assert!(matches!(core.access(&Event::Tick, 1620).unwrap().effect,
+            Some(Effect::Activate { target_id }) if target_id == target.id()));
+        assert!(core.access(&Event::Tick, 3000).unwrap().effect.is_none());
+        core.access(&Event::Exit(target.clone()), 3001).unwrap();
+        core.access(&Event::Enter(target.clone()), 4000).unwrap();
+        core.access(&Event::Clear, 4500).unwrap();
+        let lost = core.access(&Event::Tick, 5000).unwrap();
+        assert!(lost.current_target_id.is_none());
+        assert!(lost.effect.is_none());
+        core.access(&Event::Enter(target), 6000).unwrap();
+        assert!(core.access(&Event::Tick, 6619).unwrap().effect.is_none());
+        assert!(matches!(
+            core.access(&Event::Tick, 6620).unwrap().effect,
+            Some(Effect::Activate { .. })
+        ));
+        drop(core);
+        let reopened = NativeCore::new(directory.path().to_str().unwrap()).unwrap();
+        assert_eq!(reopened.settings().unwrap().dwell_rearm_delay_millis, 120);
+        assert_eq!(reopened.settings().unwrap().dwell_to_select_millis, 500);
+    }
+
+    #[test]
+    fn rest_and_select_key_effects_cross_the_real_c_bridge() {
+        let directory = tempfile::tempdir().unwrap();
+        let core = NativeCore::new(directory.path().to_str().unwrap()).unwrap();
+        let mut settings = core.settings().unwrap();
+        settings.dwell_to_select_millis = 500;
+        settings.dwell_rearm_delay_millis = 0;
+        settings.select_key_binding = "F8".into();
+        settings.rest_mode_key_binding = "F9".into();
+        core.update_settings(&settings).unwrap();
+        core.access(&Event::Enter(Target::Speak), 0).unwrap();
+        assert!(matches!(
+            core.access(&Event::KeyDown("F8".into()), 10)
+                .unwrap()
+                .effect,
+            Some(Effect::Activate { .. })
+        ));
+        assert!(
+            core.access(&Event::KeyDown("F8".into()), 20)
+                .unwrap()
+                .effect
+                .is_none()
+        );
+        core.access(&Event::KeyUp("F8".into()), 30).unwrap();
+        assert!(core.access(&Event::Tick, 1000).unwrap().effect.is_none());
+        let paused = core.access(&Event::KeyDown("F9".into()), 1100).unwrap();
+        assert!(paused.is_paused);
+        assert!(matches!(
+            paused.effect,
+            Some(Effect::PauseChanged { is_paused: true })
+        ));
+        assert!(core.access(&Event::Tick, 2000).unwrap().effect.is_none());
+        core.access(&Event::KeyDown("F8".into()), 2100).unwrap();
+        let resumed = core.access(&Event::KeyUp("F8".into()), 4100).unwrap();
+        assert!(!resumed.is_paused);
+        assert!(core.access(&Event::Tick, 4599).unwrap().effect.is_none());
+        assert!(matches!(
+            core.access(&Event::Tick, 4600).unwrap().effect,
+            Some(Effect::Activate { .. })
+        ));
+        assert!(
+            core.access(&Event::SetPaused(true), 5000)
+                .unwrap()
+                .is_paused
+        );
+        let cleared = core.access(&Event::Clear, 5001).unwrap();
+        assert!(cleared.is_paused);
+        assert!(cleared.current_target_id.is_none());
     }
 }
