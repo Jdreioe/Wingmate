@@ -12,6 +12,8 @@ affected surface directly.
 | Dependency vulnerability review | Dependency changes reported by GitHub for Gradle, npm, and workflow actions | Newly introduced high-or-critical vulnerabilities block the check |
 | Repository secret scan | Gitleaks over changed commits on PRs/pushes and the full fetched history weekly, with reports and PR comments disabled | High-confidence committed credentials block the check |
 | Client secret boundary | Project-specific checks for credentials in Android, iOS, and shared client code | Forbidden client-side credential handling blocks the check |
+| Desktop packaging | Unsigned `.AppImage`, `.dmg`, and `.msi` creation on native runners | Packaging failures block the desktop check |
+| Desktop release | Developer ID signing and notarization on macOS, Authenticode on Windows, and a GPG-signed checksum manifest | A missing credential or failed signature blocks publication |
 
 The Gradle dependency graph is submitted to GitHub after changes reach `main`.
 The npm lockfile is committed, and Dependabot opens weekly reviewed updates for
@@ -69,7 +71,7 @@ advisories, so this cannot silently regrow past the accepted list above.
 ## Deliberate hardware exclusions
 
 CI does not exercise physical gaze trackers, real microphones or speakers,
-Android devices, iPhones/iPads, signing, store
-submission, or live Azure/OpenSymbols credentials. Those paths need dedicated
-hardware or release validation; CI covers their compile-time boundaries and
-software-only tests without accessing user communication data.
+Android devices, iPhones/iPads, Android/iOS signing, store submission, or live
+Azure/OpenSymbols credentials. Those paths need dedicated hardware or release
+validation. Desktop tag builds do exercise signing and notarization on hosted
+runners without accessing user communication data.

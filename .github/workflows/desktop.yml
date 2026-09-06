@@ -3,6 +3,8 @@ name: Desktop
 on:
   pull_request:
     paths:
+      - ".github/workflows/desktop.yml"
+      - ".github/workflows/release-desktop.yml"
       - "desktopApp/**"
       - "shared/**"
       - "core/**"
@@ -12,6 +14,8 @@ on:
   push:
     branches: [main]
     paths:
+      - ".github/workflows/desktop.yml"
+      - ".github/workflows/release-desktop.yml"
       - "desktopApp/**"
       - "shared/**"
       - "core/**"
@@ -37,16 +41,25 @@ jobs:
             kotlin_target: LinuxX64
             test_kotlin_build_type: Debug
             gradle: ./gradlew
+            package_format: appimage
+            artifact_name: wingmate-linux
+            artifact_path: desktopApp/target/x86_64-unknown-linux-gnu/release/*.AppImage
           - os: macos-14
             target: aarch64-apple-darwin
             kotlin_target: MacosArm64
             test_kotlin_build_type: Debug
             gradle: ./gradlew
+            package_format: dmg
+            artifact_name: wingmate-macos
+            artifact_path: desktopApp/target/aarch64-apple-darwin/release/*.dmg
           - os: windows-latest
             target: x86_64-pc-windows-gnu
             kotlin_target: MingwX64
             test_kotlin_build_type: Release
             gradle: .\gradlew.bat
+            package_format: wix
+            artifact_name: wingmate-windows
+            artifact_path: desktopApp/target/x86_64-pc-windows-gnu/release/*.msi
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     steps:
@@ -72,11 +85,11 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libwayland-dev speech-dispatcher
+          sudo apt-get install -y fuse libfuse2 libxkbcommon-dev libwayland-dev speech-dispatcher
       - name: Put the MinGW linker on PATH
         if: matrix.os == 'windows-latest'
         shell: bash
-        run: echo "C:\msys64\mingw64\bin" >> "$GITHUB_PATH"
+        run: printf '%s\n' 'C:\msys64\mingw64\bin' >> "$GITHUB_PATH"
       - name: Build test Kotlin bridge
         run: ${{ matrix.gradle }} :desktopApp:bindings:link${{ matrix.test_kotlin_build_type }}Static${{ matrix.kotlin_target }} --console=plain --build-cache
       - name: Test Rust shell
@@ -91,3 +104,14 @@ jobs:
         run: cargo build --release --locked --target ${{ matrix.target }}
         env:
           WINGMATE_KOTLIN_BRIDGE_PREBUILT: "1"
+      - name: Install desktop packager
+        run: cargo install cargo-packager --version 0.11.8 --locked
+      - name: Build unsigned installer
+        working-directory: desktopApp
+        run: cargo packager --release --target ${{ matrix.target }} --formats ${{ matrix.package_format }}
+      - name: Upload installer
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error

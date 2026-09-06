@@ -14,3 +14,24 @@ serde_json = "1"
 
 [dev-dependencies]
 tempfile = "3"
+
+[package.metadata.packager]
+product-name = "Wingmate"
+identifier = "io.github.jdreioe.wingmate"
+publisher = "Wingmate"
+authors = ["Jonas Dreiøe"]
+homepage = "https://github.com/Jdreioe/Wingmate"
+category = "Medical"
+license-file = "../../LICENSE"
+icons = ["../assets/wingmate.png"]
+long-description = "Wingmate is a free and open-source AAC application for people who cannot rely on speech."
+
+[[package.metadata.packager.binaries]]
+path = "wingmate-desktop"
+main = true
+
+[package.metadata.packager.linux]
+generate-desktop-entry = true
+
+[package.metadata.packager.windows]
+allow-downgrades = false

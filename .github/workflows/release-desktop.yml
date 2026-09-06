@@ -1,0 +1,310 @@
+name: Release desktop
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Package ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            kotlin_target: LinuxX64
+            gradle: ./gradlew
+            artifact_name: wingmate-linux
+            artifact_path: desktopApp/target/x86_64-unknown-linux-gnu/release/*.AppImage
+          - platform: macOS
+            os: macos-14
+            target: aarch64-apple-darwin
+            kotlin_target: MacosArm64
+            gradle: ./gradlew
+            artifact_name: wingmate-macos
+            artifact_path: desktopApp/target/aarch64-apple-darwin/release/Wingmate_*.dmg
+          - platform: Windows
+            os: windows-latest
+            target: x86_64-pc-windows-gnu
+            kotlin_target: MingwX64
+            gradle: .\gradlew.bat
+            artifact_name: wingmate-windows
+            artifact_path: desktopApp/target/x86_64-pc-windows-gnu/release/*.msi
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.konan
+          key: ${{ runner.os }}-konan-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-konan-
+
+      - name: Read and validate release version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected a release tag such as v1.2.0" >&2
+            exit 1
+          fi
+
+          shared_version="$(sed -n 's/^versionName=//p' version.properties)"
+          case "$(tr -cd '.' <<< "$shared_version" | wc -c)" in
+            0) shared_version="$shared_version.0.0" ;;
+            1) shared_version="$shared_version.0" ;;
+          esac
+          if [[ "$version" != "$shared_version" ]]; then
+            echo "Release tag $GITHUB_REF_NAME does not match version.properties ($shared_version)" >&2
+            exit 1
+          fi
+          echo "WINGMATE_DESKTOP_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Install the Linux windowing and speech libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fuse libfuse2 libxkbcommon-dev libwayland-dev speech-dispatcher
+      - name: Put the MinGW linker on PATH
+        if: runner.os == 'Windows'
+        shell: bash
+        run: printf '%s\n' 'C:\msys64\mingw64\bin' >> "$GITHUB_PATH"
+
+      - name: Build release Kotlin bridge
+        run: ${{ matrix.gradle }} :desktopApp:bindings:linkReleaseStatic${{ matrix.kotlin_target }} --console=plain --build-cache
+      - name: Build release Rust shell
+        working-directory: desktopApp
+        run: cargo build --release --locked --target ${{ matrix.target }}
+        env:
+          WINGMATE_KOTLIN_BRIDGE_PREBUILT: "1"
+
+      - name: Install desktop packager
+        run: cargo install cargo-packager --version 0.11.8 --locked
+
+      - name: Build Linux installer
+        if: runner.os == 'Linux'
+        working-directory: desktopApp
+        run: cargo packager --release --target ${{ matrix.target }} --formats appimage
+
+      - name: Import Windows signing certificate
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE -or -not $env:WINDOWS_CERTIFICATE_PASSWORD) {
+            throw "WINDOWS_CERTIFICATE and WINDOWS_CERTIFICATE_PASSWORD are required"
+          }
+          $certificatePath = Join-Path $env:RUNNER_TEMP "wingmate-signing.pfx"
+          [IO.File]::WriteAllBytes(
+            $certificatePath,
+            [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+          )
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $certificate = Import-PfxCertificate `
+            -FilePath $certificatePath `
+            -CertStoreLocation Cert:\CurrentUser\My `
+            -Password $password
+          $signingCertificate = $certificate |
+            Where-Object HasPrivateKey |
+            Select-Object -First 1
+          if (-not $signingCertificate) {
+            throw "The Windows certificate has no private key"
+          }
+          "WINDOWS_CERTIFICATE_THUMBPRINT=$($signingCertificate.Thumbprint)" | Out-File `
+            -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Sign Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $signTool = Get-ChildItem `
+            "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signTool) { throw "signtool.exe was not found" }
+          "WINDOWS_SIGNTOOL=$($signTool.FullName)" | Out-File `
+            -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $signTool.FullName sign /fd SHA256 /td SHA256 `
+            /tr http://timestamp.digicert.com `
+            /sha1 $env:WINDOWS_CERTIFICATE_THUMBPRINT `
+            desktopApp/target/${{ matrix.target }}/release/wingmate-desktop.exe
+
+      - name: Build and sign Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Push-Location desktopApp
+          cargo packager --release --target ${{ matrix.target }} --formats wix
+          Pop-Location
+          $installer = Get-ChildItem `
+            desktopApp/target/${{ matrix.target }}/release/*.msi |
+            Select-Object -First 1
+          if (-not $installer) { throw "No MSI installer was produced" }
+          & $env:WINDOWS_SIGNTOOL sign /fd SHA256 /td SHA256 `
+            /tr http://timestamp.digicert.com `
+            /sha1 $env:WINDOWS_CERTIFICATE_THUMBPRINT `
+            $installer.FullName
+          & $env:WINDOWS_SIGNTOOL verify /pa /all $installer.FullName
+
+      - name: Remove Windows signing certificate
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ($env:WINDOWS_CERTIFICATE_THUMBPRINT) {
+            Remove-Item "Cert:\CurrentUser\My\$env:WINDOWS_CERTIFICATE_THUMBPRINT"
+          }
+          Remove-Item "$env:RUNNER_TEMP\wingmate-signing.pfx" -ErrorAction SilentlyContinue
+
+      - name: Import Apple signing certificate
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          if [[ -z "$APPLE_CERTIFICATE" || -z "$APPLE_CERTIFICATE_PASSWORD" ]]; then
+            echo "APPLE_CERTIFICATE and APPLE_CERTIFICATE_PASSWORD are required" >&2
+            exit 1
+          fi
+          keychain="$RUNNER_TEMP/wingmate-signing.keychain-db"
+          password="$(openssl rand -hex 24)"
+          certificate="$RUNNER_TEMP/wingmate-signing.p12"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$certificate" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          echo "APPLE_SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+
+      - name: Build, sign, and notarize macOS installer
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: desktopApp
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for value in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!value}" ]]; then
+              echo "$value is required" >&2
+              exit 1
+            fi
+          done
+
+          cargo packager --release --target ${{ matrix.target }} --formats app
+          app="target/${{ matrix.target }}/release/Wingmate.app"
+          codesign --deep --force --options runtime --timestamp \
+            --keychain "$APPLE_SIGNING_KEYCHAIN" \
+            --sign "$APPLE_SIGNING_IDENTITY" "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+          zip="$RUNNER_TEMP/Wingmate.zip"
+          ditto -c -k --keepParent "$app" "$zip"
+          xcrun notarytool submit "$zip" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$app"
+          xcrun stapler validate "$app"
+
+          stage="$RUNNER_TEMP/wingmate-dmg"
+          mkdir -p "$stage"
+          ditto "$app" "$stage/Wingmate.app"
+          ln -s /Applications "$stage/Applications"
+          dmg="target/${{ matrix.target }}/release/Wingmate_${WINGMATE_DESKTOP_VERSION}_aarch64.dmg"
+          hdiutil create -format UDZO -fs HFS+ -volname Wingmate \
+            -srcfolder "$stage" "$dmg"
+          codesign --force --timestamp \
+            --keychain "$APPLE_SIGNING_KEYCHAIN" \
+            --sign "$APPLE_SIGNING_IDENTITY" "$dmg"
+          codesign --verify --verbose=2 "$dmg"
+          xcrun notarytool submit "$dmg" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$dmg"
+          xcrun stapler validate "$dmg"
+
+      - name: Remove Apple signing keychain
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/wingmate-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/wingmate-signing.p12"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish desktop release
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: release-artifacts
+          merge-multiple: true
+      - name: Create signed checksum manifest
+        shell: bash
+        env:
+          LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+        run: |
+          if [[ -z "$LINUX_GPG_PRIVATE_KEY" || -z "$LINUX_GPG_PASSPHRASE" ]]; then
+            echo "LINUX_GPG_PRIVATE_KEY and LINUX_GPG_PASSPHRASE are required" >&2
+            exit 1
+          fi
+          cd release-artifacts
+          find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
+          printf '%s' "$LINUX_GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$LINUX_GPG_PASSPHRASE" \
+            --armor --detach-sign SHA256SUMS
+          gpg --armor --export > WINGMATE_RELEASE_KEY.asc
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release-artifacts/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Wingmate $GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag
