@@ -1,8 +1,8 @@
 diff --git a/driver/src/libusb_transport.zig b/driver/src/libusb_transport.zig
-index 1f4f3eb..895f189 100644
 --- a/driver/src/libusb_transport.zig
 +++ b/driver/src/libusb_transport.zig
-@@ -38,7 +38,10 @@ pub const LibusbTransport = struct {
+@@ -36,8 +36,11 @@ pub const LibusbTransport = struct {
+             log.err("libusb_init failed", .{});
              return error.LibusbInit;
          }
  
@@ -12,5 +12,6 @@ index 1f4f3eb..895f189 100644
 +            if (self.usb_handle != null) break;
 +        }
          if (self.usb_handle == null) {
-             log.err("device {x:0>4}:{x:0>4} not found", .{ VID, PID });
+-            log.err("device {x:0>4}:{x:0>4} not found", .{ VID, PID });
++            log.err("devices {x:0>4}:{x:0>4} or {x:0>4} not found", .{ VID, PID, 0x031e });
              c.libusb_exit(self.usb_ctx);
