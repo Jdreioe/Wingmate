@@ -830,6 +830,8 @@ mod native_gaze_tests {
             page: board.board_id.clone(),
             button: board.cells[0].id.clone(),
         };
+        // Simulate slow setup so dwell tests cannot reset time behind target entry.
+        app.access_clock -= Duration::from_millis(250);
         app.gaze.start();
         app.gaze.status = gaze::Status::Connected;
         (directory, app, target)
@@ -861,7 +863,7 @@ mod native_gaze_tests {
         hit(&mut app, target.clone());
         let _ = app.update(Message::Access(access::Event::Enter(access::Target::Clear)));
         assert_eq!(app.access.current_target_id, Some(target.id()));
-        app.access_clock = Instant::now() - Duration::from_millis(200);
+        app.access_clock -= Duration::from_millis(200);
         feed(&app, 2, true);
         hit(&mut app, target.clone());
         assert_eq!(app.board.as_ref().unwrap().message, "Hello");
@@ -895,7 +897,7 @@ mod native_gaze_tests {
             iced::Size::new(1100.0, 760.0),
         ));
         assert_eq!(app.access.current_target_id, Some(target.id()));
-        app.access_clock = Instant::now() - Duration::from_millis(200);
+        app.access_clock -= Duration::from_millis(200);
         let _ = app.update(Message::Access(access::Event::Tick));
         assert_eq!(app.board.as_ref().unwrap().message, "Hello");
     }
@@ -906,7 +908,7 @@ mod native_gaze_tests {
         feed(&app, 1, true);
         hit(&mut app, target.clone());
         let old = app.gaze.source.as_ref().unwrap().snapshot();
-        app.access_clock = Instant::now() - Duration::from_millis(200);
+        app.access_clock -= Duration::from_millis(200);
         feed(&app, 2, false);
         feed(&app, 3, true);
         let _ = app.update(Message::GazeHit(
@@ -919,7 +921,7 @@ mod native_gaze_tests {
         hit(&mut app, target.clone());
         assert!(app.board.as_ref().unwrap().message.is_empty());
         let _ = app.update(Message::Access(access::Event::SetPaused(true)));
-        app.access_clock = Instant::now() - Duration::from_millis(400);
+        app.access_clock -= Duration::from_millis(400);
         feed(&app, 4, true);
         hit(&mut app, target.clone());
         assert!(app.board.as_ref().unwrap().message.is_empty());
