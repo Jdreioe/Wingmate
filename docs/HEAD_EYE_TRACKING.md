@@ -58,6 +58,12 @@ Native gaze now drives the desktop Screen runner through `tobiifreed`. It is
 still awaiting verification on the real TD-I13 and is tracked in
 [#129](https://github.com/Jdreioe/Wingmate/issues/129).
 
+For AppImage installation and one-time USB permissions, run
+`bash scripts/install-wingmate.sh --appimage /path/to/Wingmate.AppImage --setup-gaze`
+from a checkout, then reconnect the tracker. See the
+[Linux installer instructions](../desktopApp/README.md#install-on-linux).
+The installer does not yet bundle or start the daemon.
+
 1. Start a calibrated `tobiifreed` that supports the TD-I13's `2104:031e` USB ID.
    Wingmate expects `$XDG_RUNTIME_DIR/tobiifreed/gaze.sock`, or
    `/tmp/tobiifreed/gaze.sock` when that environment variable is unset.

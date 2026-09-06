@@ -256,11 +256,14 @@ socket-before-spawn — if `gaze.sock` already answers, a daemon is running and
 Wingmate connects to it instead. `tobiifreed` claims the tracker over USB, so
 two of them must never race for the device.
 
-**The udev rule stays a documented one-time command.** An AppImage cannot write
-to `/etc/udev/rules.d` and should not ask for root, so without the rule the
-daemon cannot claim `2104:031e`. The settings section names that exact state and
-shows the command to fix it. Distro packages that can install the rule
-themselves should.
+**The udev rule is installed by the optional Linux installer.**
+`scripts/install-wingmate.sh --setup-gaze` installs the AppImage for the current
+user and uses `sudo` only to install and reload the host USB rule. The AppImage
+itself runs without root. The rule grants the active local desktop user access
+to runtime devices `2104:031e` and `2104:0313`; users reconnect the tracker after
+setup. Firmware/bootloader access is excluded. Distro packages that can install
+the rule themselves should. Daemon bundling and auto-start described above
+remain planned; the installer currently requires a separately started daemon.
 
 Firmware is out of scope entirely: some units need it extracted from Tobii's
 Windows driver and DFU-flashed, which Wingmate must never automate.

@@ -4,6 +4,46 @@ The desktop client is a pure [`iced`](https://iced.rs/) shell around the shared
 Kotlin core. Cargo builds the Kotlin/Native static library first and links it
 into the final executable, so users need neither a JVM nor a sidecar process.
 
+## Install on Linux
+
+From a checkout, run as your normal desktop user:
+
+```sh
+bash scripts/install-wingmate.sh --setup-gaze
+```
+
+This downloads the latest stable GitHub release, checks its SHA-256 against the
+release's `SHA256SUMS`, installs it under
+`${XDG_DATA_HOME:-~/.local/share}/wingmate-app`, and adds an application-menu
+launcher. It verifies download integrity over HTTPS; it does not verify the
+release's GPG signature. Omit `--setup-gaze` if you do not use a Tobii tracker.
+Only USB rule installation and reload use `sudo`.
+
+Until a release is published, install a locally built, trusted AppImage:
+
+```sh
+bash scripts/install-wingmate.sh --appimage /path/to/Wingmate.AppImage --setup-gaze
+```
+
+Use `--version vX.Y.Z` to select a release, including a prerelease. Local files
+are copied without checksum verification. Re-running updates the installed
+AppImage; close Wingmate first. Application data is kept separately and preserved.
+The download currently supports x86_64 Linux only. Install `curl`, `python3`,
+and your distribution's AppImage/FUSE runtime support if needed, plus
+`speech-dispatcher` for speech.
+
+USB setup grants the active local desktop user access to the TD-I13 (`2104:031e`)
+and Eye Tracker 5 (`2104:0313`). Reconnect the tracker after setup. Firmware and
+bootloader access are excluded. **The current AppImage does not bundle or start
+`tobiifreed`: start your calibrated custom daemon separately.** See
+[the gaze setup](../docs/HEAD_EYE_TRACKING.md#native-gaze-on-the-td-i13-linux-development-build).
+
+To uninstall, remove the `wingmate-app` directory and
+`applications/io.github.jdreioe.wingmate.desktop` under your data directory.
+Optionally remove `/etc/udev/rules.d/70-wingmate-tobii.rules` with administrator
+permission, reload udev rules, and reconnect the tracker. Keep
+`~/.local/share/wingmate` to preserve your communication data.
+
 ## Run locally
 
 Install the platform speech service (`speech-dispatcher` on Linux; macOS and
