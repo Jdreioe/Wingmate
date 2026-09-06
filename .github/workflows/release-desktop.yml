@@ -85,7 +85,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y fuse libfuse2 libxkbcommon-dev libwayland-dev speech-dispatcher
+          sudo apt-get install -y fuse libfuse2 libxkbcommon-dev libwayland-dev speech-dispatcher libusb-1.0-0-dev pkg-config python3-venv
       - name: Put the MinGW linker on PATH
         if: runner.os == 'Windows'
         shell: bash
@@ -101,6 +101,24 @@ jobs:
 
       - name: Install desktop packager
         run: cargo install cargo-packager --version 0.11.8 --locked
+
+      - name: Build pinned Linux gaze daemon
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          python3 -m venv "$RUNNER_TEMP/gaze-zig"
+          "$RUNNER_TEMP/gaze-zig/bin/pip" install ziglang==0.15.2
+          zig_dir="$("$RUNNER_TEMP/gaze-zig/bin/python" -c 'import pathlib, ziglang; print(pathlib.Path(ziglang.__file__).parent)')"
+          export PATH="$zig_dir:$PATH"
+          bash scripts/build-gaze-daemon.sh
+
+      - name: Upload corresponding gaze source
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tobiifreed-source
+          path: desktopApp/target/gaze-bundle/tobiifree-source.tar.gz
+          if-no-files-found: error
 
       - name: Build Linux installer
         if: runner.os == 'Linux'

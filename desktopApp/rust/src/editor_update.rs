@@ -84,6 +84,7 @@ impl App {
                     Ok(value) => {
                         self.editor = None;
                         if self.close_after_editor {
+                            self.gaze_setup.stop();
                             return iced::exit();
                         }
                         self.refresh_library();
@@ -107,6 +108,7 @@ impl App {
                 Ok(_) => {
                     self.editor = None;
                     if self.close_after_editor {
+                        self.gaze_setup.stop();
                         return iced::exit();
                     }
                     self.route = Route::Library;
@@ -191,6 +193,7 @@ mod tests {
         let mut app = App {
             gaze: Default::default(),
             gaze_starting: false,
+            gaze_setup: Default::default(),
             access: Default::default(),
             access_clock: std::time::Instant::now(),
             settings: core.settings().unwrap(),

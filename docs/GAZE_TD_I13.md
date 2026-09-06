@@ -216,7 +216,7 @@ and pointer-fallback integration tests. An isolated desktop session with a fake
 daemon selected a two-row spanning Button once and cleared it on invalid-eye
 samples. The real TD-I13 checklist remains outstanding.
 
-### M4 — Settings, status, and setup
+### M4 — Settings, status, and setup (implemented; hardware verification pending)
 
 A gaze section in desktop Settings, shown when there is something to say.
 Detection uses two separate signals, because they call for different help:
@@ -247,7 +247,8 @@ of a field failure.
 
 Licensing works out: `tobiifree` is GPL-3.0 and `wingmate-desktop` is
 GPL-3.0-or-later, so the two can ship in one image. The AppImage carries the
-licence text and a written offer for the daemon's source.
+licence text and the complete corresponding patched source itself, with build
+instructions; releases also publish that source archive.
 
 **Auto-start spawns the bundled daemon as a child process**, not a systemd user
 service: an AppImage has no install step, and a unit file pointing into its
@@ -262,8 +263,18 @@ user and uses `sudo` only to install and reload the host USB rule. The AppImage
 itself runs without root. The rule grants the active local desktop user access
 to runtime devices `2104:031e` and `2104:0313`; users reconnect the tracker after
 setup. Firmware/bootloader access is excluded. Distro packages that can install
-the rule themselves should. Daemon bundling and auto-start described above
-remain planned; the installer currently requires a separately started daemon.
+the rule themselves should. Daemon bundling and opt-in child startup are implemented. Selection and
+diagnostics remain session-only and off by default; only the startup preference
+persists locally. The daemon is pinned to
+`d303e47fa1a6cac452eedd157d3efb0dd08e3732` with the runtime USB-ID patch in
+`scripts/tobiifree/td-i13.patch`.
+
+Verification: 38 Rust tests pass, including USB discovery, socket reuse,
+concurrent-start exclusion, owned-child cleanup and diagnostics cancellation.
+The pinned daemon builds with Zig 0.15.2. A local debug AppImage was assembled
+and its daemon, x86-64 libusb and corresponding-source files were extracted and
+checked. This host required invoking appimagetool with a separately supplied
+runtime file; the normal CI packaging path and real TD-I13 remain unverified.
 
 Firmware is out of scope entirely: some units need it extracted from Tobii's
 Windows driver and DFU-flashed, which Wingmate must never automate.

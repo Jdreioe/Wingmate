@@ -11,6 +11,7 @@
 pub mod probe;
 pub mod protocol;
 pub mod runner;
+pub mod setup;
 pub mod targets;
 
 use protocol::{Decoder, Message, ProtocolError, Sample};

@@ -38,3 +38,12 @@ generate-desktop-entry = true
 
 [package.metadata.packager.windows]
 allow-downgrades = false
+
+[package.metadata.packager.appimage.files]
+"../target/gaze-bundle/libusb-1.0.so.0" = "/usr/lib/libusb-1.0.so.0"
+"../target/gaze-bundle/tobiifreed" = "/usr/bin/tobiifreed"
+"../target/gaze-bundle/LICENSE" = "/usr/share/doc/wingmate/tobiifree/LICENSE"
+"../target/gaze-bundle/SOURCE.txt" = "/usr/share/doc/wingmate/tobiifree/SOURCE.txt"
+"../target/gaze-bundle/build-gaze-daemon.sh" = "/usr/share/doc/wingmate/tobiifree/build-gaze-daemon.sh"
+"../target/gaze-bundle/td-i13.patch" = "/usr/share/doc/wingmate/tobiifree/td-i13.patch"
+"../target/gaze-bundle/tobiifree-source.tar.gz" = "/usr/share/doc/wingmate/tobiifree/tobiifree-source.tar.gz"

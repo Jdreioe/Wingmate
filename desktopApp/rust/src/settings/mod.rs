@@ -67,6 +67,7 @@ pub fn view<'a>(
     word: &'a str,
     replacement: &'a str,
     recents: &'a [String],
+    gaze: (&'a crate::gaze::setup::Setup, bool),
 ) -> Element<'a, Message> {
     row![
         sidebar(section),
@@ -76,7 +77,9 @@ pub fn view<'a>(
                 match section {
                     Section::Appearance => appearance(settings),
                     Section::Speech => speech(settings),
-                    Section::Access => access(settings),
+                    Section::Access => column![access(settings), gaze_settings(gaze.0, gaze.1)]
+                        .spacing(24)
+                        .into(),
                     Section::Pronunciation => pronunciation(pronunciations, word, replacement),
                     Section::Backup => backup(),
                     Section::Screens => screens(recents),
@@ -293,4 +296,45 @@ fn access(settings: &Settings) -> Element<'_, Message> {
         field("Rest mode key", text_input("e.g. F9", &settings.rest_mode_key_binding).on_input(Message::RestKeyChanged).padding(14)),
         text("Leave shortcuts empty to disable them. Rest pauses dwell and select-key activation. Click or touch Resume input to continue, or hold the select key for two seconds and release."),
     ].spacing(24).into()
+}
+
+fn gaze_settings(setup: &crate::gaze::setup::Setup, can_start: bool) -> Element<'_, Message> {
+    use iced::widget::checkbox;
+    if !setup.visible() {
+        return column![].into();
+    }
+    let mut content = column![
+        text("Native gaze (Linux)").size(24),
+        text(if setup.tracker { "Tobii tracker detected" } else { "No supported USB tracker detected" }),
+        text(if setup.reachable { "Daemon socket available; use diagnostics to check streaming." } else { "Gaze daemon unavailable. Enable startup below, or run: tobiifreed" }),
+        text("For USB access, run: bash scripts/install-wingmate.sh --setup-gaze
+Reconnect the tracker afterward. Firmware and calibration must already be prepared."),
+        checkbox(setup.autostart).label("Start tobiifreed with Wingmate").on_toggle(Message::GazeAutostart),
+        button("Retry bundled daemon").height(ACTION_HEIGHT).on_press(Message::GazeRetry),
+        text("Gaze selection is off by default. It uses the dwell duration above. Start from an open Screen; leaving communication or losing focus stops selection."),
+        button("Enable gaze and return to Screen (fullscreen)").height(ACTION_HEIGHT).on_press_maybe(can_start.then_some(Message::ToggleGaze)),
+        checkbox(setup.diagnostics.is_some()).label("Show live diagnostics (memory only)").on_toggle(Message::GazeDiagnostics),
+    ].spacing(16);
+    if let Some(error) = setup.error {
+        content = content.push(text(error));
+    }
+    if let Some(source) = &setup.diagnostics {
+        let snapshot = source.snapshot();
+        let status = match snapshot.point(std::time::Instant::now()) {
+            Some(point) => format!("Streaming: x {:.3}, y {:.3}", point.x, point.y),
+            None => match snapshot.status {
+                crate::gaze::Status::DaemonUnavailable => {
+                    "Daemon unavailable. Check USB access and retry the daemon."
+                }
+                crate::gaze::Status::IncompatibleProtocol => {
+                    "Gaze protocol incompatible. Use the bundled daemon version."
+                }
+                crate::gaze::Status::Connecting => "Connecting to the gaze stream…",
+                _ => "Gaze lost or stale. Look at the display to check tracking.",
+            }
+            .into(),
+        };
+        content = content.push(text(status));
+    }
+    content.into()
 }
