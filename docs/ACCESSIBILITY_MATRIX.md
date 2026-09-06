@@ -18,7 +18,7 @@ Legend: **Shipped** · **Partial** (works with gaps) · **Planned** (tracked) ·
 | Haptic feedback | Shipped (confirm/reject/scan-tick events) | None (UIKit haptics not wired) | None |
 | Switch scanning (#112–#114) | None ([#226](https://github.com/Jdreioe/Wingmate/issues/226)) | Shipped (native Swift scanning UI) | None |
 | Auditory scanning prompts (#113) | None | None | None |
-| Gaze input (native TD-I13) (#123–#129) | Planned | Planned | None (OS pointer only) |
+| Gaze input (native TD-I13) (#123–#129) | Planned | Planned | Planned — [#129](https://github.com/Jdreioe/Wingmate/issues/129), [plan](GAZE_TD_I13.md) |
 | Head tracking providers (#125) | Planned | Planned | None (OS pointer only) |
 | External gaze-provider boundary (#126) | Planned | Planned | None |
 | Screen-reader operability of core speak flow | Partial — labels/i18n fixes tracked in #225; end-to-end audit: [#227](https://github.com/Jdreioe/Wingmate/issues/227) | Same as Android | None — `iced` draws its own widgets and exposes no platform accessibility tree |

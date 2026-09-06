@@ -1,6 +1,10 @@
 mod bridge;
 mod editor;
 mod editor_update;
+// Transport for native TD-I13 gaze (#129). The runner consumes it in the
+// next milestone; see docs/GAZE_TD_I13.md.
+#[allow(dead_code)]
+mod gaze;
 mod message_bar;
 mod models;
 mod screens;
@@ -13,6 +17,13 @@ use iced::{Element, Fill, Task, Theme};
 use models::{Activation, BoardSet, BoardView, Pronunciation, Settings, ThemeChoice};
 
 fn main() -> iced::Result {
+    // A local check that the gaze daemon streams the sample layout this build
+    // pins; see docs/GAZE_TD_I13.md. Off the normal path and asked for by name.
+    #[cfg(unix)]
+    if std::env::args().nth(1).as_deref() == Some("--gaze-probe") {
+        gaze::probe::run();
+        return Ok(());
+    }
     iced::application(App::boot, App::update, App::view)
         .title("Wingmate")
         .theme(App::theme)
