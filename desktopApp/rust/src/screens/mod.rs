@@ -1,7 +1,7 @@
 use crate::access::{self, Target};
 use crate::{
     Message,
-    models::{BoardSet, BoardView},
+    models::{BoardSet, BoardView, Cell},
 };
 use base64::Engine;
 use iced::widget::{Space, button, column, container, image, row, scrollable, text};
@@ -30,7 +30,7 @@ pub fn library(sets: &[BoardSet]) -> Element<'_, Message> {
         .into()
 }
 
-pub fn runner<'a>(view: &'a BoardView, access_state: &access::State) -> Element<'a, Message> {
+pub fn runner<'a>(view: &'a BoardView, access_state: &'a access::State) -> Element<'a, Message> {
     let mut page = column![
         row![
             access::area(
@@ -59,45 +59,38 @@ pub fn runner<'a>(view: &'a BoardView, access_state: &access::State) -> Element<
     ]
     .spacing(12)
     .padding(20);
-    for row_index in 0..view.rows {
-        let mut cells = row![].spacing(10).height(Fill);
-        let mut column_index = 0;
-        while column_index < view.columns {
-            if let Some(cell) = view
-                .cells
-                .iter()
-                .find(|cell| cell.row == row_index && cell.column == column_index)
-            {
-                let label = if cell.label.is_empty() {
-                    &cell.vocalization
-                } else {
-                    &cell.label
-                };
-                let mut content = column![].align_x(iced::Center).spacing(6);
-                if let Some(handle) = cell.image.as_deref().and_then(image_handle) {
-                    content = content.push(image(handle).height(Fill));
-                }
-                content = content.push(text(label).size(22));
-                cells = cells.push(access::area(
-                    button(content)
-                        .width(iced::FillPortion(cell.column_span))
-                        .height(iced::FillPortion(cell.row_span))
-                        .on_press(Message::Activate(cell.id.clone())),
-                    Target::Cell {
-                        board_set: view.board_set_id.clone(),
-                        page: view.board_id.clone(),
-                        button: cell.id.clone(),
-                    },
-                    access_state,
-                ));
-                column_index += cell.column_span as usize;
+    page = page.push(iced::widget::responsive(move |size| {
+        let mut grid = iced::widget::stack![Space::new().width(Fill).height(Fill)].clip(true);
+        for cell in &view.cells {
+            let Some(bounds) = cell_bounds(cell, view.rows, view.columns, size) else {
+                continue;
+            };
+            let label = if cell.label.is_empty() {
+                &cell.vocalization
             } else {
-                cells = cells.push(Space::new().width(iced::FillPortion(1)));
-                column_index += 1;
+                &cell.label
+            };
+            let mut content = column![].align_x(iced::Center).spacing(6);
+            if let Some(handle) = cell.image.as_deref().and_then(image_handle) {
+                content = content.push(image(handle).height(Fill));
             }
+            content = content.push(text(label).size(22));
+            let control = access::area(
+                button(content)
+                    .width(bounds.width)
+                    .height(bounds.height)
+                    .on_press(Message::Activate(cell.id.clone())),
+                Target::Cell {
+                    board_set: view.board_set_id.clone(),
+                    page: view.board_id.clone(),
+                    button: cell.id.clone(),
+                },
+                access_state,
+            );
+            grid = grid.push(iced::widget::pin(control).position(bounds.position()));
         }
-        page = page.push(cells);
-    }
+        grid.into()
+    }));
     if view.show_message_bar {
         page = page.push(crate::message_bar::view(
             &view.message,
@@ -112,6 +105,36 @@ pub fn runner<'a>(view: &'a BoardView, access_state: &access::State) -> Element<
         ));
     }
     container(page).width(Fill).height(Fill).into()
+}
+
+/// Lay out spans in both directions. Empty cells and the gaps remain untargeted.
+pub(crate) fn cell_bounds(
+    cell: &Cell,
+    rows: usize,
+    columns: usize,
+    size: iced::Size,
+) -> Option<iced::Rectangle> {
+    const GAP: f32 = 10.0;
+    if rows == 0
+        || columns == 0
+        || cell.row_span == 0
+        || cell.column_span == 0
+        || cell.row.checked_add(cell.row_span as usize)? > rows
+        || cell.column.checked_add(cell.column_span as usize)? > columns
+    {
+        return None;
+    }
+    let width = (size.width - GAP * (columns - 1) as f32) / columns as f32;
+    let height = (size.height - GAP * (rows - 1) as f32) / rows as f32;
+    if width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    Some(iced::Rectangle {
+        x: cell.column as f32 * (width + GAP),
+        y: cell.row as f32 * (height + GAP),
+        width: cell.column_span as f32 * (width + GAP) - GAP,
+        height: cell.row_span as f32 * (height + GAP) - GAP,
+    })
 }
 
 fn image_handle(value: &str) -> Option<image::Handle> {

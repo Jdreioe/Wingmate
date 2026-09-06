@@ -2,9 +2,6 @@ mod access;
 mod bridge;
 mod editor;
 mod editor_update;
-// Transport for native TD-I13 gaze (#129). The runner consumes it in the
-// next milestone; see docs/GAZE_TD_I13.md.
-#[allow(dead_code)]
 mod gaze;
 mod message_bar;
 mod models;
@@ -33,6 +30,7 @@ fn main() -> iced::Result {
                 iced::system::theme_changes().map(Message::SystemTheme),
                 iced::keyboard::listen().map(Message::Keyboard),
                 if app.route == Route::Runner
+                    && !app.gaze_owns_input()
                     && !app.access.is_paused
                     && app.settings.dwell_to_select_millis > 0
                     && app.access.current_target_id.is_some()
@@ -42,9 +40,25 @@ fn main() -> iced::Result {
                 } else {
                     iced::Subscription::none()
                 },
+                if app.gaze.enabled() && !app.gaze_starting {
+                    iced::time::every(std::time::Duration::from_millis(16))
+                        .map(|_| Message::GazePoll)
+                } else {
+                    iced::Subscription::none()
+                },
+                app.gaze
+                    .source
+                    .as_ref()
+                    .map(|source| source.subscription().map(|_| Message::GazePoll))
+                    .unwrap_or_else(iced::Subscription::none),
                 iced::event::listen_with(|event, _, _| match event {
-                    iced::Event::Window(iced::window::Event::Unfocused)
-                    | iced::Event::Mouse(iced::mouse::Event::CursorLeft) => {
+                    iced::Event::Window(iced::window::Event::Unfocused) => {
+                        Some(Message::WindowUnfocused)
+                    }
+                    iced::Event::Window(iced::window::Event::Resized(_)) => {
+                        Some(Message::GazeLayoutChanged)
+                    }
+                    iced::Event::Mouse(iced::mouse::Event::CursorLeft) => {
                         Some(Message::Access(access::Event::Clear))
                     }
                     _ => None,
@@ -66,6 +80,8 @@ enum Route {
 }
 
 struct App {
+    gaze: gaze::runner::Session,
+    gaze_starting: bool,
     access: access::State,
     access_clock: std::time::Instant,
     editor: Option<editor::Editor>,
@@ -87,6 +103,12 @@ struct App {
 
 #[derive(Debug, Clone)]
 enum Message {
+    ToggleGaze,
+    GazePoll,
+    GazeLayoutChanged,
+    WindowUnfocused,
+    GazeWindow(u64, iced::window::Mode, iced::Size),
+    GazeHit(u64, u64, std::time::Instant, Option<access::Target>),
     Access(access::Event),
     DwellChanged(u32),
     RearmChanged(u32),
@@ -132,6 +154,8 @@ impl App {
 
     fn with_core(core: Box<dyn Core>) -> Self {
         let mut app = Self {
+            gaze: Default::default(),
+            gaze_starting: false,
             access: access::State::default(),
             access_clock: std::time::Instant::now(),
             editor: None,
@@ -182,9 +206,156 @@ impl App {
         ) {
             self.clear_access();
         }
+        if matches!(
+            &message,
+            Message::ShowLibrary
+                | Message::OpenSettings
+                | Message::Editor(_)
+                | Message::CloseRequested
+                | Message::WindowUnfocused
+        ) {
+            self.gaze.stop();
+            self.gaze_starting = false;
+            self.clear_access();
+        }
         let mut task = Task::none();
         match message {
-            Message::Access(event) => return self.update_access(event),
+            Message::WindowUnfocused => {}
+            Message::GazeLayoutChanged => {
+                if self.gaze.enabled() && !self.gaze_starting {
+                    self.clear_access();
+                }
+            }
+            Message::ToggleGaze => {
+                self.clear_access();
+                if self.gaze.enabled() {
+                    self.gaze.stop();
+                    self.gaze_starting = false;
+                    return iced::window::oldest().then(|id| {
+                        id.map(|id| iced::window::set_mode(id, iced::window::Mode::Windowed))
+                            .unwrap_or_else(Task::none)
+                    });
+                }
+                if !cfg!(target_os = "linux") || self.route != Route::Runner {
+                    return Task::none();
+                }
+                if self.settings.dwell_to_select_millis == 0 {
+                    self.error = Some(
+                        "Set a dwell duration in Settings > Access before starting gaze.".into(),
+                    );
+                    return Task::none();
+                }
+                self.gaze.start();
+                self.gaze_starting = true;
+                let epoch = self.gaze.epoch;
+                return iced::window::oldest().then(move |id| match id {
+                    Some(id) => {
+                        iced::window::set_mode::<Message>(id, iced::window::Mode::Fullscreen)
+                            .chain(query_gaze_window(id, epoch))
+                    }
+                    None => Task::none(),
+                });
+            }
+            Message::GazePoll => {
+                if !self.gaze.enabled() || self.gaze_starting {
+                    return Task::none();
+                }
+                let epoch = self.gaze.epoch;
+                return iced::window::oldest().then(move |id| {
+                    id.map(|id| query_gaze_window(id, epoch))
+                        .unwrap_or_else(Task::none)
+                });
+            }
+            Message::GazeWindow(epoch, mode, size) => {
+                if !self.gaze.enabled() || epoch != self.gaze.epoch || self.route != Route::Runner {
+                    return Task::none();
+                }
+                self.gaze_starting = false;
+                if mode != iced::window::Mode::Fullscreen {
+                    self.gaze.stop();
+                    self.clear_access();
+                    self.error =
+                        Some("Native gaze stopped because Wingmate is not fullscreen.".into());
+                    return Task::none();
+                }
+                let snapshot = self.gaze.source.as_ref().unwrap().snapshot();
+                let point = snapshot.point(std::time::Instant::now());
+                let status = if snapshot.status == gaze::Status::Connected && point.is_none() {
+                    gaze::Status::GazeLost
+                } else {
+                    snapshot.status
+                };
+                let will_own_input = !matches!(
+                    status,
+                    gaze::Status::DaemonUnavailable | gaze::Status::IncompatibleProtocol
+                );
+                if (self.gaze_owns_input() || will_own_input)
+                    && (self.gaze.status != status || self.gaze.losses != snapshot.losses)
+                {
+                    self.clear_access();
+                }
+                self.gaze.losses = snapshot.losses;
+                self.gaze.status = status;
+                if self.access.is_paused || point.is_none() {
+                    return Task::none();
+                }
+                if let Some(point) = point.and_then(|point| gaze::targets::map(point, size))
+                    && let Some(board) = &self.board
+                {
+                    let epoch = self.gaze.epoch;
+                    return iced::advanced::widget::operate(gaze::targets::HitTest::new(
+                        point, board,
+                    ))
+                    .map(move |target| {
+                        Message::GazeHit(epoch, snapshot.losses, snapshot.received, target)
+                    });
+                }
+                self.clear_access();
+            }
+            Message::GazeHit(epoch, losses, received, target) => {
+                if epoch != self.gaze.epoch
+                    || !self.gaze.enabled()
+                    || self.route != Route::Runner
+                    || self.access.is_paused
+                {
+                    return Task::none();
+                }
+                let latest = self.gaze.source.as_ref().unwrap().snapshot();
+                if losses != latest.losses
+                    || latest.point(std::time::Instant::now()).is_none()
+                    || received.elapsed() > gaze::runner::STALE_AFTER
+                {
+                    self.clear_access();
+                    return Task::none();
+                }
+                // A newer sample needs its own hit-test. Do not advance dwell
+                // using a point superseded while the widget operation ran.
+                if latest.received != received {
+                    return Task::none();
+                }
+                let Some(target) = target else {
+                    self.clear_access();
+                    return Task::none();
+                };
+                if self.access.current_target_id.as_deref() != Some(target.id().as_str()) {
+                    let _ = self.update_access(access::Event::Enter(target));
+                }
+                return self.update_access(access::Event::Tick);
+            }
+            Message::Access(event) => {
+                if self.gaze_owns_input()
+                    && matches!(
+                        event,
+                        access::Event::Enter(_)
+                            | access::Event::Exit(_)
+                            | access::Event::Clear
+                            | access::Event::Tick
+                    )
+                {
+                    return Task::none();
+                }
+                return self.update_access(event);
+            }
             Message::DwellChanged(value) => {
                 self.settings.dwell_to_select_millis = value.into();
                 self.save_settings();
@@ -338,7 +509,16 @@ impl App {
         task
     }
 
+    fn gaze_owns_input(&self) -> bool {
+        self.gaze.enabled()
+            && !matches!(
+                self.gaze.status,
+                gaze::Status::DaemonUnavailable | gaze::Status::IncompatibleProtocol
+            )
+    }
+
     fn clear_access(&mut self) {
+        self.gaze.epoch = self.gaze.epoch.wrapping_add(1);
         match self.core.access(
             &access::Event::Clear,
             self.access_clock.elapsed().as_millis() as i64,
@@ -354,6 +534,16 @@ impl App {
     fn update_access(&mut self, event: access::Event) -> Task<Message> {
         if self.route != Route::Runner && !matches!(event, access::Event::Clear) {
             return Task::none();
+        }
+        if self.gaze_owns_input()
+            && matches!(event, access::Event::KeyDown(_))
+            && self.gaze.source.as_ref().is_some_and(|source| {
+                let snapshot = source.snapshot();
+                snapshot.losses != self.gaze.losses
+                    || snapshot.point(std::time::Instant::now()).is_none()
+            })
+        {
+            self.clear_access();
         }
         let now = self.access_clock.elapsed().as_millis() as i64;
         match self.core.access(&event, now) {
@@ -393,6 +583,7 @@ impl App {
                     }
                     Some(access::Effect::PauseChanged { is_paused }) => {
                         self.access.is_paused = is_paused;
+                        self.gaze.epoch = self.gaze.epoch.wrapping_add(1);
                     }
                     None => {}
                 }
@@ -480,6 +671,19 @@ impl App {
                 &self.recents,
             ),
         };
+        let gaze_control: Element<'_, Message> =
+            if cfg!(target_os = "linux") && self.route == Route::Runner {
+                button(if self.gaze.enabled() {
+                    "Stop gaze"
+                } else {
+                    "Start gaze (fullscreen)"
+                })
+                .height(48)
+                .on_press(Message::ToggleGaze)
+                .into()
+            } else {
+                iced::widget::Space::new().into()
+            };
         // The Settings screen carries its own navigation, so the header button
         // that opens it would only be a no-op while that screen is open.
         let open_settings: Element<'_, Message> =
@@ -492,11 +696,15 @@ impl App {
             row![
                 text("Wingmate").size(22),
                 iced::widget::Space::new().width(Fill),
+                gaze_control,
                 open_settings,
             ]
             .padding(10),
             body,
         ];
+        if self.gaze.enabled() {
+            layout = layout.push(text(self.gaze.label()));
+        }
         if let Some(error) = &self.error {
             layout = layout.push(
                 container(row![
@@ -586,5 +794,152 @@ mod access_runner_tests {
         let _ = app.update(Message::CloseSettings);
         let _ = app.update(Message::Access(Event::Tick));
         assert_eq!(app.board.as_ref().unwrap().message, "Hello");
+    }
+}
+
+fn query_gaze_window(id: iced::window::Id, epoch: u64) -> Task<Message> {
+    iced::window::mode(id).then(move |mode| {
+        iced::window::size(id).map(move |size| Message::GazeWindow(epoch, mode, size))
+    })
+}
+
+#[cfg(test)]
+mod native_gaze_tests {
+    use super::*;
+    use gaze::protocol::{Point, Sample};
+    use std::time::{Duration, Instant};
+
+    fn fixture() -> (tempfile::TempDir, App, access::Target) {
+        let directory = tempfile::tempdir().unwrap();
+        let core = NativeCore::new(directory.path().to_str().unwrap()).unwrap();
+        core.editor(&serde_json::json!({"operation":"new", "name":"Gaze test"}))
+            .unwrap();
+        core.editor(&serde_json::json!({"operation":"button", "label":"Hello"}))
+            .unwrap();
+        let saved = core
+            .editor(&serde_json::json!({"operation":"save"}))
+            .unwrap();
+        let mut app = App::with_core(Box::new(core));
+        app.settings.dwell_to_select_millis = 100;
+        app.settings.dwell_rearm_delay_millis = 0;
+        app.save_settings();
+        let _ = app.update(Message::OpenBoardSet(saved["id"].as_str().unwrap().into()));
+        let board = app.board.as_ref().unwrap();
+        let target = access::Target::Cell {
+            board_set: board.board_set_id.clone(),
+            page: board.board_id.clone(),
+            button: board.cells[0].id.clone(),
+        };
+        app.gaze.start();
+        app.gaze.status = gaze::Status::Connected;
+        (directory, app, target)
+    }
+    fn feed(app: &App, frame: u32, valid: bool) {
+        app.gaze.source.as_ref().unwrap().sample(
+            Sample {
+                frame_counter: frame,
+                timestamp_us: frame as i64 * 1000,
+                point: valid.then_some(Point { x: 0.25, y: 0.25 }),
+            },
+            Instant::now(),
+        );
+    }
+    fn hit(app: &mut App, target: access::Target) {
+        let snapshot = app.gaze.source.as_ref().unwrap().snapshot();
+        let _ = app.update(Message::GazeHit(
+            app.gaze.epoch,
+            snapshot.losses,
+            snapshot.received,
+            Some(target),
+        ));
+    }
+
+    #[test]
+    fn gaze_uses_shared_activation_once_and_pointer_hover_cannot_steal_target() {
+        let (_directory, mut app, target) = fixture();
+        feed(&app, 1, true);
+        hit(&mut app, target.clone());
+        let _ = app.update(Message::Access(access::Event::Enter(access::Target::Clear)));
+        assert_eq!(app.access.current_target_id, Some(target.id()));
+        app.access_clock = Instant::now() - Duration::from_millis(200);
+        feed(&app, 2, true);
+        hit(&mut app, target.clone());
+        assert_eq!(app.board.as_ref().unwrap().message, "Hello");
+        feed(&app, 3, true);
+        hit(&mut app, target);
+        assert_eq!(app.board.as_ref().unwrap().message, "Hello");
+    }
+
+    #[test]
+    fn failed_reconnects_do_not_interrupt_pointer_dwell() {
+        let (_directory, mut app, target) = fixture();
+        app.gaze
+            .source
+            .as_ref()
+            .unwrap()
+            .unavailable(gaze::Status::DaemonUnavailable);
+        let _ = app.update(Message::GazeWindow(
+            app.gaze.epoch,
+            iced::window::Mode::Fullscreen,
+            iced::Size::new(1100.0, 760.0),
+        ));
+        let _ = app.update(Message::Access(access::Event::Enter(target.clone())));
+        app.gaze
+            .source
+            .as_ref()
+            .unwrap()
+            .unavailable(gaze::Status::DaemonUnavailable);
+        let _ = app.update(Message::GazeWindow(
+            app.gaze.epoch,
+            iced::window::Mode::Fullscreen,
+            iced::Size::new(1100.0, 760.0),
+        ));
+        assert_eq!(app.access.current_target_id, Some(target.id()));
+        app.access_clock = Instant::now() - Duration::from_millis(200);
+        let _ = app.update(Message::Access(access::Event::Tick));
+        assert_eq!(app.board.as_ref().unwrap().message, "Hello");
+    }
+
+    #[test]
+    fn brief_loss_stale_hits_pause_and_window_exit_cannot_finish_dwell() {
+        let (_directory, mut app, target) = fixture();
+        feed(&app, 1, true);
+        hit(&mut app, target.clone());
+        let old = app.gaze.source.as_ref().unwrap().snapshot();
+        app.access_clock = Instant::now() - Duration::from_millis(200);
+        feed(&app, 2, false);
+        feed(&app, 3, true);
+        let _ = app.update(Message::GazeHit(
+            app.gaze.epoch,
+            old.losses,
+            old.received,
+            Some(target.clone()),
+        ));
+        assert!(app.access.current_target_id.is_none());
+        hit(&mut app, target.clone());
+        assert!(app.board.as_ref().unwrap().message.is_empty());
+        let _ = app.update(Message::Access(access::Event::SetPaused(true)));
+        app.access_clock = Instant::now() - Duration::from_millis(400);
+        feed(&app, 4, true);
+        hit(&mut app, target.clone());
+        assert!(app.board.as_ref().unwrap().message.is_empty());
+        let _ = app.update(Message::Access(access::Event::SetPaused(false)));
+        hit(&mut app, target.clone());
+        assert!(app.board.as_ref().unwrap().message.is_empty());
+        let snapshot = app.gaze.source.as_ref().unwrap().snapshot();
+        let _ = app.update(Message::GazeHit(
+            app.gaze.epoch,
+            snapshot.losses,
+            Instant::now() - Duration::from_secs(1),
+            Some(target),
+        ));
+        assert!(app.access.current_target_id.is_none());
+        let _ = app.update(Message::GazeWindow(
+            app.gaze.epoch,
+            iced::window::Mode::Windowed,
+            iced::Size::new(1100.0, 760.0),
+        ));
+        assert!(!app.gaze.enabled());
+        assert!(app.board.as_ref().unwrap().message.is_empty());
     }
 }

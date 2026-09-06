@@ -10,6 +10,8 @@
 #[cfg(unix)]
 pub mod probe;
 pub mod protocol;
+pub mod runner;
+pub mod targets;
 
 use protocol::{Decoder, Message, ProtocolError, Sample};
 use std::time::Duration;

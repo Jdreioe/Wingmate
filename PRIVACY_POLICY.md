@@ -1,6 +1,6 @@
 # Privacy Policy for Wingmate
 
-**Last Updated: August 20, 2026**
+**Last Updated: September 6, 2026**
 
 Wingmate ("the App") is committed to protecting your privacy. This Privacy Policy explains how we handle your information.
 
@@ -31,6 +31,17 @@ Wingmate includes optional, **opt-in** feature usage reporting on Android using 
 - **What is not reported**: Phrase text, vocalization text, Azure keys, board JSON content, and local file paths.
 - **Purpose**: To understand which features are used and improve app quality.
 - **Provider privacy model**: Aptabase does not use device identifiers, cookies, fingerprinting, or long-term user identification for these anonymous events.
+
+### 1.4 Native Gaze Input, Linux Desktop
+When you explicitly start native gaze, Wingmate receives gaze samples from the
+local `tobiifreed` daemon to select communication controls. Samples remain in
+memory and are not uploaded, recorded, or included in backups. Wingmate does
+not log gaze coordinates, eye measurements, or the contents of gazed targets.
+Stopping gaze, leaving communication, or losing window focus closes Wingmate's
+connection; the separately managed daemon may continue running.
+
+The optional `--gaze-probe` command prints live gaze samples to your terminal
+only when explicitly invoked. Wingmate does not save that diagnostic output.
 
 ## 2. Data Storage
 The data in Section 1.1 is stored locally using each platform's application storage, media files, and secure credential storage. We do not have access to this data, nor do we sync it to our own servers.

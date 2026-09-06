@@ -18,7 +18,7 @@ Legend: **Shipped** · **Partial** (works with gaps) · **Planned** (tracked) ·
 | Haptic feedback | Shipped (confirm/reject/scan-tick events) | None (UIKit haptics not wired) | None |
 | Switch scanning (#112–#114) | None ([#226](https://github.com/Jdreioe/Wingmate/issues/226)) | Shipped (native Swift scanning UI) | None |
 | Auditory scanning prompts (#113) | None | None | None |
-| Gaze input (native TD-I13) (#123–#129) | Planned | Planned | Planned — [#129](https://github.com/Jdreioe/Wingmate/issues/129), [plan](GAZE_TD_I13.md) |
+| Gaze input (native TD-I13) (#123–#129) | Planned | Planned | Partial (Linux fullscreen Screen runner; synthetic verification only, TD-I13 verification pending) |
 | Head tracking providers (#125) | Planned | Planned | None (OS pointer only) |
 | External gaze-provider boundary (#126) | Planned | Planned | None |
 | Screen-reader operability of core speak flow | Partial — labels/i18n fixes tracked in #225; end-to-end audit: [#227](https://github.com/Jdreioe/Wingmate/issues/227) | Same as Android | None — `iced` draws its own widgets and exposes no platform accessibility tree |
@@ -38,9 +38,11 @@ Library, settings, and editor controls have no dwell targets yet. Rest/Resume
 requires a click or touch, the rest shortcut, or holding Select for two seconds
 and releasing to resume. Keyboard focus does not identify an access target yet;
 the select shortcut acts on the hovered target. Hold-to-select remains stored
-without runner support. Native gaze transport exists but is not connected to
-hit-testing yet. Windows vendor-pointer and real TD-I13 verification remain
-outstanding. Desktop remains in development; see
+without runner support. Linux native gaze now connects the daemon stream to
+actual widget bounds in the fullscreen Screen runner, including spanned Buttons.
+It cancels invalid/stale input and reconnects automatically. Enabling is
+session-only; daemon setup and calibration remain external. Windows
+vendor-pointer and real TD-I13 verification remain outstanding. Desktop remains in development; see
 [supported platforms](PLATFORM_SUPPORT.md) and ADR-0019.
 
 ## Deliberate non-goals (recorded 2026-08)
