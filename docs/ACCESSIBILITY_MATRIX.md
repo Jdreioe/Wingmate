@@ -7,10 +7,10 @@ Legend: **Shipped** · **Partial** (works with gaps) · **Planned** (tracked) ·
 
 | Feature | Android | iOS | Desktop |
 | --- | --- | --- | --- |
-| Dwell-to-select | Shipped (`InteractionInput`, configurable ms) | Shipped (shared `AccessInputController` via KoinBridge) | None (setting stored, no runner support) |
-| Tremor jitter filter (dwell re-arm delay) | Shipped (settings slider) | Partial (controller supports it; Swift does not sync the setting yet) | None |
-| Select key / switch press | Shipped (Space/Enter/F1–F12 bindings) | Shipped (bindings via settings sync) | None |
-| Rest mode toggle | Shipped (FAB is dwell/focus-reachable; rest key; **hold Select 2 s to resume**) | Partial (rest key + pause bridge; hold-to-resume needs bridge sync) | None |
+| Dwell-to-select | Shipped (`InteractionInput`, configurable ms) | Shipped (shared `AccessInputController` via KoinBridge) | Partial (Screen buttons and communication controls; shared controller) |
+| Tremor jitter filter (dwell re-arm delay) | Shipped (settings slider) | Partial (controller supports it; Swift does not sync the setting yet) | Partial (shared setting and controller wired) |
+| Select key / switch press | Shipped (Space/Enter/F1–F12 bindings) | Shipped (bindings via settings sync) | Partial (select key acts on hovered communication target) |
+| Rest mode toggle | Shipped (FAB is dwell/focus-reachable; rest key; **hold Select 2 s to resume**) | Partial (rest key + pause bridge; hold-to-resume needs bridge sync) | Partial (Rest/Resume button, rest key, hold Select 2 s; toggle is click/touch only) |
 | Per-target selection debounce (#118) | Shipped (+ reject haptic) | Partial (shared logic available; not wired everywhere) | None |
 | Selection highlight (#120) | Shipped | Partial | None |
 | Hold-to-select duration | Shipped | Partial | None (setting stored, no runner support) |
@@ -28,12 +28,19 @@ Legend: **Shipped** · **Partial** (works with gaps) · **Planned** (tracked) ·
 ## Desktop (recorded 2026-09)
 
 The desktop client (`desktopApp/`, [#268](https://github.com/Jdreioe/Wingmate/issues/268))
-accepts ordinary pointer and keyboard input and nothing else yet. Hold-to-select
-and dwell-to-select are persisted in shared `Settings` so the Communicator's
-other clients keep them, but desktop's runner does not act on them, so its
-Settings screen deliberately offers no controls for them rather than sliders
-that would do nothing. This is a recorded gap, not a parity exception: desktop
-is not a supported client until it is closed. See
+now runs pointer dwell, the dwell re-arm delay, select-key activation, and Rest
+mode through the shared `AccessInputController`. Settings > Access configures
+these behaviors. They apply to Screen Buttons, Back, Clear, Hold, and Speak.
+The target is highlighted and a progress bar shows dwell completion. Window
+focus loss, pointer exit, and leaving communication cancel pending dwell.
+
+Library, settings, and editor controls have no dwell targets yet. Rest/Resume
+requires a click or touch, the rest shortcut, or holding Select for two seconds
+and releasing to resume. Keyboard focus does not identify an access target yet;
+the select shortcut acts on the hovered target. Hold-to-select remains stored
+without runner support. Native gaze transport exists but is not connected to
+hit-testing yet. Windows vendor-pointer and real TD-I13 verification remain
+outstanding. Desktop remains in development; see
 [supported platforms](PLATFORM_SUPPORT.md) and ADR-0019.
 
 ## Deliberate non-goals (recorded 2026-08)

@@ -77,3 +77,12 @@ fun stringFree(value: CPointer<ByteVar>?) {
 @CName("wm_restore_backup_json") fun restoreBackup(context: COpaquePointer?, path: CPointer<ByteVar>?) = call(context) { restoreBackupJson(path.string()) }
 
 @CName("wm_editor_json") fun editor(context: COpaquePointer?, value: CPointer<ByteVar>?) = call(context) { editorJson(value.string()) }
+
+// Returned strings follow the same ownership rule as the rest of the C API.
+@CName("wm_access_target_entered_json") fun accessTargetEntered(context: COpaquePointer?, target: CPointer<ByteVar>?, nowMillis: Long) = call(context) { accessTargetEnteredJson(target.string(), nowMillis) }
+@CName("wm_access_target_exited_json") fun accessTargetExited(context: COpaquePointer?, target: CPointer<ByteVar>?, nowMillis: Long) = call(context) { accessTargetExitedJson(target.string(), nowMillis) }
+@CName("wm_access_clear_transient_input_json") fun accessClear(context: COpaquePointer?, nowMillis: Long) = call(context) { accessClearJson(nowMillis) }
+@CName("wm_access_tick_json") fun accessTick(context: COpaquePointer?, nowMillis: Long) = call(context) { accessTickJson(nowMillis) }
+@CName("wm_access_set_paused_json") fun accessSetPaused(context: COpaquePointer?, paused: Int, nowMillis: Long) = call(context) { accessSetPausedJson(paused != 0, nowMillis) }
+@CName("wm_access_key_down_json") fun accessKeyDown(context: COpaquePointer?, key: CPointer<ByteVar>?, nowMillis: Long) = call(context) { accessKeyDownJson(key.string(), nowMillis) }
+@CName("wm_access_key_up_json") fun accessKeyUp(context: COpaquePointer?, key: CPointer<ByteVar>?, nowMillis: Long) = call(context) { accessKeyUpJson(key.string(), nowMillis) }

@@ -1,5 +1,8 @@
 package io.github.jdreioe.wingmate.desktop
 
+import io.github.jdreioe.wingmate.application.AccessInputController
+import io.github.jdreioe.wingmate.application.AccessInputEffect
+import io.github.jdreioe.wingmate.domain.DEFAULT_DWELL_REARM_DELAY_MILLIS
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechPolicy
@@ -66,7 +69,30 @@ data class DesktopSettings(
     val speechRate: Float = 1f,
     val holdToSelectMillis: Long = 0,
     val dwellToSelectMillis: Long = 0,
+    val dwellRearmDelayMillis: Long = DEFAULT_DWELL_REARM_DELAY_MILLIS,
+    val selectKeyBinding: String = "",
+    val restModeKeyBinding: String = "",
 )
+
+/** Only target identities and selection state cross this boundary, never coordinates. */
+@Serializable
+data class DesktopAccessResult(
+    val isPaused: Boolean,
+    val currentTargetId: String?,
+    val dwellProgress: Float,
+    val effect: DesktopAccessEffect? = null,
+)
+
+@Serializable
+sealed interface DesktopAccessEffect {
+    @Serializable
+    @kotlinx.serialization.SerialName("activate")
+    data class Activate(val targetId: String) : DesktopAccessEffect
+
+    @Serializable
+    @kotlinx.serialization.SerialName("pauseChanged")
+    data class PauseChanged(val isPaused: Boolean) : DesktopAccessEffect
+}
 
 /** Application-shaped Kotlin boundary. Rust receives view data, never domain objects. */
 class DesktopCore(dataDirectory: String) {
@@ -76,6 +102,54 @@ class DesktopCore(dataDirectory: String) {
     private val importer = BoardImportService(ObfParser(), store, store, DesktopFileAccess(), media)
     private val editor = DesktopEditor(store)
     fun editorJson(value: String): String = runBlocking { editor.command(value) }
+
+    private val access = AccessInputController()
+
+    // Callers use one monotonic millisecond clock for all access events.
+    private fun accessJson(effect: AccessInputEffect? = null): String {
+        val state = access.state
+        return json.encodeToString(DesktopAccessResult(
+            state.isPaused, state.currentTargetId, state.dwellProgress,
+            when (effect) {
+                is AccessInputEffect.Activate -> DesktopAccessEffect.Activate(effect.targetId)
+                is AccessInputEffect.PauseChanged -> DesktopAccessEffect.PauseChanged(effect.isPaused)
+                null -> null
+            },
+        ))
+    }
+
+    private fun syncAccessSettings(): Settings = runBlocking {
+        store.get().also { access.rearmDelayMillis = it.dwellRearmDelayMillis }
+    }
+
+    fun accessTargetEnteredJson(targetId: String, nowMillis: Long): String {
+        syncAccessSettings()
+        access.targetEntered(targetId, nowMillis)
+        return accessJson()
+    }
+
+    fun accessTargetExitedJson(targetId: String, nowMillis: Long): String {
+        access.targetExited(targetId, nowMillis)
+        return accessJson()
+    }
+
+    fun accessClearJson(nowMillis: Long): String {
+        access.clearTransientInput(nowMillis)
+        return accessJson()
+    }
+
+    fun accessTickJson(nowMillis: Long): String =
+        accessJson(access.tick(nowMillis, syncAccessSettings().dwellToSelectMillis))
+
+    fun accessSetPausedJson(paused: Boolean, nowMillis: Long): String =
+        accessJson(access.setPaused(paused, nowMillis))
+
+    fun accessKeyDownJson(key: String, nowMillis: Long): String {
+        val settings = syncAccessSettings()
+        return accessJson(access.keyDown(key, settings.selectKeyBinding, settings.restModeKeyBinding, nowMillis))
+    }
+
+    fun accessKeyUpJson(key: String, nowMillis: Long): String = accessJson(access.keyUp(key, nowMillis))
 
     private val backup = DesktopBackup(store, media)
     private var activeBoardSetId: String? = null
@@ -178,6 +252,9 @@ class DesktopCore(dataDirectory: String) {
             speechRate = update.speechRate.coerceIn(.5f, 2f),
             holdToSelectMillis = update.holdToSelectMillis.coerceIn(0, 2_000),
             dwellToSelectMillis = update.dwellToSelectMillis.coerceIn(0, 5_000),
+            dwellRearmDelayMillis = update.dwellRearmDelayMillis.coerceIn(0, 2_000),
+            selectKeyBinding = update.selectKeyBinding,
+            restModeKeyBinding = update.restModeKeyBinding,
         ))
         settingsJson()
     }
@@ -249,6 +326,9 @@ class DesktopCore(dataDirectory: String) {
         prefersDark = forceDarkTheme,
         voice = voice, speechRate = speechRate, holdToSelectMillis = holdToSelectMillis,
         dwellToSelectMillis = dwellToSelectMillis,
+        dwellRearmDelayMillis = dwellRearmDelayMillis,
+        selectKeyBinding = selectKeyBinding,
+        restModeKeyBinding = restModeKeyBinding,
     )
 
     private fun errorJson(error: Throwable) = errorJson(error.message ?: "Operation failed")

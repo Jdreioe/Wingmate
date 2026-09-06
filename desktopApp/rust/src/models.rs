@@ -24,6 +24,7 @@ pub struct Cell {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BoardView {
+    pub board_id: String,
     pub board_set_id: String,
     pub title: String,
     pub rows: usize,
@@ -50,6 +51,9 @@ pub struct Settings {
     pub speech_rate: f32,
     pub hold_to_select_millis: u64,
     pub dwell_to_select_millis: u64,
+    pub dwell_rearm_delay_millis: u64,
+    pub select_key_binding: String,
+    pub rest_mode_key_binding: String,
 }
 
 /// Every theme iced ships, plus following the operating system. Persisted by

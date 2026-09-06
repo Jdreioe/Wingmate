@@ -1,11 +1,20 @@
 use crate::Message;
+use crate::access::{self, Target};
 use iced::widget::{button, container, row, text};
 use iced::{Element, Fill};
 
-pub fn view(message: &str, show_speak: bool) -> Element<'_, Message> {
+pub fn view<'a>(message: &'a str, show_speak: bool, state: &access::State) -> Element<'a, Message> {
     let mut controls = row![
-        button("Clear").on_press(Message::Clear),
-        button("Hold").on_press(Message::Hold),
+        access::area(
+            button("Clear").height(48).on_press(Message::Clear),
+            Target::Clear,
+            state
+        ),
+        access::area(
+            button("Hold").height(48).on_press(Message::Hold),
+            Target::Hold,
+            state
+        ),
         container(
             text(if message.is_empty() {
                 "Your message will appear here"
@@ -20,7 +29,11 @@ pub fn view(message: &str, show_speak: bool) -> Element<'_, Message> {
     .spacing(12)
     .align_y(iced::Center);
     if show_speak {
-        controls = controls.push(button("Speak").on_press(Message::Speak));
+        controls = controls.push(access::area(
+            button("Speak").height(48).on_press(Message::Speak),
+            Target::Speak,
+            state,
+        ));
     }
     container(controls).width(Fill).padding(12).into()
 }

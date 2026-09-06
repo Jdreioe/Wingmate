@@ -162,6 +162,17 @@ and the re-arm delay from shared `Settings`.
 This also unblocks desktop dwell for mouse and OS-pointer users, which the
 matrix currently records as a gap.
 
+M2 implementation now connects this bridge to desktop pointer hover for Screen
+Buttons and Back/Clear/Hold/Speak controls. Settings > Access exposes dwell,
+re-arm delay, and Select/Rest shortcuts. The runner uses one local monotonic
+clock for transitions and ticks, shows target emphasis and progress, and clears
+transient input on focus loss or leaving communication. Library and editing
+controls remain outside this increment. Rest/Resume is click/touch reachable;
+key users can toggle Rest or hold Select for two seconds and release to resume.
+Rust integration tests exercise the actual C ABI, including settings persistence,
+cancellation, single activation, and pause effects. Hardware verification remains
+outstanding.
+
 ### M3 — Hit-testing and activation
 
 Map `gaze_point_2d_norm` to the board grid and feed enter/exit into the bridge;
