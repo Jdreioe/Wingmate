@@ -43,3 +43,8 @@ diagnostics and optional startup of the bundled `tobiifreed` are implemented.
 Android, iOS, macOS and Windows retain their OS input paths. TD-I13 hardware,
 calibration and release AppImage verification remain required before claiming
 production support; see [setup](HEAD_EYE_TRACKING.md).
+
+Linux x86_64 desktop also implements experimental webcam gaze through a local
+EyeTrax runtime. Camera selection, calibration and validation use native UI;
+selection reuses the gaze runner. Real-camera AAC accuracy remains unverified.
+See [webcam setup and evaluation](WEBCAM_GAZE.md).

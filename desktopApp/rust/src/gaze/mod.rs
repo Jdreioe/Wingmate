@@ -1,11 +1,8 @@
-//! Native gaze input from the `tobiifreed` daemon (issue #129).
-//!
-//! The daemon owns the tracker's USB device and broadcasts samples over a Unix
-//! socket, so Wingmate reads gaze without touching libusb or linking the
-//! driver. This module is the transport half of that path: it connects,
-//! subscribes, and turns the byte stream into [`Sample`]s. Mapping a sample to
-//! a communication target, and everything about dwell and activation, stays
-//! out of here — see `docs/GAZE_TD_I13.md`.
+//! Native gaze sources for fullscreen communication: Tobii's local daemon and
+//! an optional local webcam estimator. Platform code owns capture, calibration,
+//! transport and hit-testing. Semantic targets use the shared access controller
+//! for dwell, Rest mode and activation. See `docs/GAZE_TD_I13.md` and
+//! `docs/WEBCAM_GAZE.md`.
 
 #[cfg(unix)]
 pub mod probe;
@@ -13,19 +10,23 @@ pub mod protocol;
 pub mod runner;
 pub mod setup;
 pub mod targets;
+pub mod webcam;
 
 use protocol::{Decoder, Message, ProtocolError, Sample};
 use std::time::Duration;
 
 /// What the user is told about the gaze source. Only one state is reported at
-/// a time, and every state except [`Status::Disabled`] is recoverable without
-/// restarting Wingmate.
+/// a time. Failures can be retried without restarting Wingmate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Status {
     /// Native gaze is switched off.
     #[default]
     Disabled,
     Connecting,
+    Calibrating,
+    CameraUnavailable,
+    WebcamRuntimeMissing,
+    CalibrationFailed(webcam::Failure),
     /// Connected and receiving usable gaze.
     Connected,
     /// Connected, but the eyes are not currently tracked.

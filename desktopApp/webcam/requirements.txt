@@ -1,0 +1,11 @@
+# Pinned EyeTrax Tasks API; no runtime model downloads. Python 3.10–3.12.
+eyetrax @ git+https://github.com/ck-zhang/EyeTrax.git@84e13a16af168ac7c383f7d50ec901cd6c0ad61d
+numpy==1.26.4
+mediapipe==0.10.32
+opencv-python==4.11.0.86
+# MediaPipe requires the contrib distribution; keep the shared cv2 version aligned.
+opencv-contrib-python==4.11.0.86
+scikit-learn==1.7.2
+scipy==1.15.3
+screeninfo==0.8.1
+pyvirtualcam==0.14.0

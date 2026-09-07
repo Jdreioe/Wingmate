@@ -9,6 +9,9 @@ use std::{path::PathBuf, process::Stdio};
 #[derive(Default)]
 pub struct Setup {
     pub tracker: bool,
+    pub cameras: Vec<super::webcam::Camera>,
+    pub camera: Option<super::webcam::Camera>,
+    pub use_webcam: bool,
     pub reachable: bool,
     pub autostart: bool,
     pub diagnostics: Option<Source>,
@@ -20,6 +23,7 @@ impl Setup {
     pub fn refresh(&mut self) {
         #[cfg(target_os = "linux")]
         {
+            self.cameras = super::webcam::cameras();
             self.tracker = detect(Path::new("/sys/bus/usb/devices"));
             self.reachable =
                 std::os::unix::net::UnixStream::connect(super::client::socket_path()).is_ok();
@@ -36,11 +40,6 @@ impl Setup {
     }
     pub fn visible(&self) -> bool {
         cfg!(target_os = "linux")
-            && (self.tracker
-                || self.reachable
-                || self.autostart
-                || self.diagnostics.is_some()
-                || self.error.is_some())
     }
     pub fn start(&mut self) {
         #[cfg(target_os = "linux")]

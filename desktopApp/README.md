@@ -131,3 +131,10 @@ dwell and switch scanning should dispatch these same events, including scrolling
 Page choice and confirmation, instead of adding separate mutation paths. Dwell,
 scan traversal, focus highlighting and assistive text entry are not implemented
 by this editor increment; Tab/Shift+Tab currently navigates native focusable inputs.
+
+## Experimental webcam gaze
+
+Linux desktop can use a generic V4L2 webcam through an optional local EyeTrax
+runtime. Run `bash scripts/install-webcam-gaze.sh`, then open a Screen and go to
+Settings > Access to select a camera and calibrate. See
+[setup, runtime requirements and pending hardware evaluation](../docs/WEBCAM_GAZE.md).

@@ -48,6 +48,18 @@ managed daemon may continue running.
 The optional `--gaze-probe` command prints live gaze samples to your terminal
 only when explicitly invoked. Wingmate does not save that diagnostic output.
 
+### 1.5 Optional Webcam Gaze, Linux Desktop
+Starting webcam gaze explicitly opens the selected camera for local eye tracking.
+Camera frames, eye features, calibration and estimated gaze remain in memory;
+they are not uploaded, recorded, logged or included in backups. The camera
+process closes when gaze stops, communication is left, Wingmate loses focus,
+or the app closes. Calibration is discarded when that process closes.
+
+The optional installer downloads software and a generic face-landmark model.
+It does not open a camera. Installed dependencies and that generic model persist
+locally. Tracking itself requires no network connection. Webcam selection and
+the webcam enable setting are not retained after Wingmate exits.
+
 ## 2. Data Storage
 The data in Section 1.1 is stored locally using each platform's application storage, media files, and secure credential storage. We do not have access to this data, nor do we sync it to our own servers.
 
