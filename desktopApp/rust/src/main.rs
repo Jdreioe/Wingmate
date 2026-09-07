@@ -60,6 +60,7 @@ fn main() -> iced::Result {
                 app.gaze
                     .source
                     .as_ref()
+                    .filter(|_| !app.gaze_starting)
                     .map(|source| source.subscription().map(|_| Message::GazePoll))
                     .unwrap_or_else(iced::Subscription::none),
                 iced::event::listen_with(|event, _, _| match event {
@@ -116,6 +117,10 @@ struct App {
 #[derive(Debug, Clone)]
 enum Message {
     ToggleGaze,
+    WebcamEnabled(bool),
+    WebcamCamera(gaze::webcam::Camera),
+    WebcamContinue,
+    WebcamRetry,
     GazeSetupPoll,
     GazeAutostart(bool),
     GazeDiagnostics(bool),
@@ -207,6 +212,30 @@ impl App {
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
+        if matches!(
+            &message,
+            Message::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+                ..
+            })
+        ) && self.gaze.enabled()
+        {
+            return self.update(Message::ToggleGaze);
+        }
+        if matches!(
+            &message,
+            Message::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter),
+                ..
+            })
+        ) && self.gaze.source.as_ref().is_some_and(|source| {
+            matches!(
+                source.snapshot().progress,
+                Some(gaze::webcam::Progress::Validated)
+            )
+        }) {
+            return self.update(Message::WebcamContinue);
+        }
         // Leaving communication or manually selecting cancels pending dwell. A
         // stationary pointer must move again before it can arm another selection.
         if matches!(
@@ -248,6 +277,31 @@ impl App {
         }
         let mut task = Task::none();
         match message {
+            Message::WebcamRetry => {
+                if !self.can_retry_webcam() {
+                    return Task::none();
+                }
+                self.gaze.stop();
+                return self.update(Message::ToggleGaze);
+            }
+            Message::WebcamEnabled(enabled) => {
+                self.gaze_setup.use_webcam = enabled;
+                self.gaze_setup.diagnostics = None;
+            }
+            Message::WebcamCamera(camera) => self.gaze_setup.camera = Some(camera),
+            Message::WebcamContinue => {
+                if let Some(source) = &self.gaze.source
+                    && matches!(
+                        source.snapshot().progress,
+                        Some(gaze::webcam::Progress::Validated)
+                    )
+                    && let Some(control) = &source.webcam
+                {
+                    control
+                        .presented
+                        .store(14, std::sync::atomic::Ordering::Release);
+                }
+            }
             Message::GazeSetupPoll => self.gaze_setup.refresh(),
             Message::GazeAutostart(enabled) => self.gaze_setup.set_autostart(enabled),
             Message::GazeRetry => self.gaze_setup.start(),
@@ -283,10 +337,21 @@ impl App {
                     );
                     return Task::none();
                 }
-                if self.gaze_setup.autostart {
+                if self.gaze_setup.autostart && !self.gaze_setup.use_webcam {
                     self.gaze_setup.start();
                 }
+                if self.gaze_setup.use_webcam && self.gaze_setup.camera.is_none() {
+                    self.error = Some("Choose a webcam in Settings > Access first.".into());
+                    return Task::none();
+                }
                 self.gaze.start();
+                if self.gaze_setup.use_webcam {
+                    self.gaze.source = self
+                        .gaze_setup
+                        .camera
+                        .clone()
+                        .map(gaze::runner::Source::camera);
+                }
                 self.gaze_starting = true;
                 let epoch = self.gaze.epoch;
                 return iced::window::oldest().then(move |id| match id {
@@ -319,6 +384,26 @@ impl App {
                         Some("Native gaze stopped because Wingmate is not fullscreen.".into());
                     return Task::none();
                 }
+                if self
+                    .gaze
+                    .source
+                    .as_ref()
+                    .is_some_and(|source| source.webcam.is_some())
+                {
+                    if self
+                        .gaze
+                        .camera_size
+                        .is_some_and(|previous| previous != size)
+                    {
+                        self.gaze.stop();
+                        self.clear_access();
+                        self.error = Some(
+                            "Display size changed. Start camera gaze again to recalibrate.".into(),
+                        );
+                        return Task::none();
+                    }
+                    self.gaze.camera_size = Some(size);
+                }
                 let snapshot = self.gaze.source.as_ref().unwrap().snapshot();
                 let point = snapshot.point(std::time::Instant::now());
                 let status = if snapshot.status == gaze::Status::Connected && point.is_none() {
@@ -328,7 +413,11 @@ impl App {
                 };
                 let will_own_input = !matches!(
                     status,
-                    gaze::Status::DaemonUnavailable | gaze::Status::IncompatibleProtocol
+                    gaze::Status::DaemonUnavailable
+                        | gaze::Status::IncompatibleProtocol
+                        | gaze::Status::CameraUnavailable
+                        | gaze::Status::WebcamRuntimeMissing
+                        | gaze::Status::CalibrationFailed(_)
                 );
                 if (self.gaze_owns_input() || will_own_input)
                     && (self.gaze.status != status || self.gaze.losses != snapshot.losses)
@@ -558,7 +647,11 @@ impl App {
         self.gaze.enabled()
             && !matches!(
                 self.gaze.status,
-                gaze::Status::DaemonUnavailable | gaze::Status::IncompatibleProtocol
+                gaze::Status::DaemonUnavailable
+                    | gaze::Status::IncompatibleProtocol
+                    | gaze::Status::CameraUnavailable
+                    | gaze::Status::WebcamRuntimeMissing
+                    | gaze::Status::CalibrationFailed(_)
             )
     }
 
@@ -694,7 +787,27 @@ impl App {
         }
     }
 
+    fn can_retry_webcam(&self) -> bool {
+        self.route == Route::Runner
+            && self
+                .gaze
+                .source
+                .as_ref()
+                .is_some_and(|source| source.webcam.is_some())
+            && matches!(
+                self.gaze.status,
+                gaze::Status::CameraUnavailable
+                    | gaze::Status::WebcamRuntimeMissing
+                    | gaze::Status::CalibrationFailed(_)
+            )
+    }
+
     fn view(&self) -> Element<'_, Message> {
+        if let Some(source) = &self.gaze.source
+            && let Some(calibration) = gaze::webcam::calibration_view(source)
+        {
+            return calibration;
+        }
         let body = match self.route {
             Route::Editor => self
                 .editor
@@ -750,6 +863,13 @@ impl App {
         ];
         if self.gaze.enabled() {
             layout = layout.push(text(self.gaze.label()));
+            if self.can_retry_webcam() {
+                layout = layout.push(
+                    button("Retry camera calibration")
+                        .height(48)
+                        .on_press(Message::WebcamRetry),
+                );
+            }
         }
         if let Some(error) = &self.error {
             layout = layout.push(
@@ -882,6 +1002,84 @@ mod native_gaze_tests {
         app.gaze.status = gaze::Status::Connected;
         (directory, app, target)
     }
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn webcam_retry_discards_old_selection_and_restarts_calibration() {
+        let (_directory, mut app, target) = fixture();
+        let camera = gaze::webcam::Camera {
+            path: "/dev/unused".into(),
+            name: "Test".into(),
+        };
+        app.gaze_setup.use_webcam = true;
+        app.gaze_setup.camera = Some(camera.clone());
+        app.gaze.source = Some(gaze::runner::Source::camera(camera.clone()));
+        let old_epoch = app.gaze.epoch;
+        feed(&app, 1, true);
+        hit(&mut app, target.clone());
+        let received = app.gaze.source.as_ref().unwrap().snapshot().received;
+        app.gaze.status = gaze::Status::CalibrationFailed(gaze::webcam::Failure::Accuracy);
+        let _ = app.update(Message::WebcamRetry);
+        assert!(app.gaze.epoch > old_epoch);
+        assert!(app.gaze_starting);
+        assert!(app.access.current_target_id.is_none());
+        let source = app.gaze.source.as_ref().unwrap();
+        assert_eq!(source.webcam.as_ref().unwrap().camera, camera);
+        assert_eq!(source.snapshot().status, gaze::Status::Connecting);
+        assert!(source.snapshot().sample.is_none());
+        let _ = app.update(Message::GazeHit(old_epoch, 0, received, Some(target)));
+        assert!(app.access.current_target_id.is_none());
+        assert_eq!(app.board.as_ref().unwrap().message, "");
+        let retry_epoch = app.gaze.epoch;
+        let _ = app.update(Message::WebcamRetry);
+        assert_eq!(
+            app.gaze.epoch, retry_epoch,
+            "duplicate retries must not restart setup"
+        );
+    }
+
+    #[test]
+    fn webcam_failure_focus_and_display_changes_cancel_selection() {
+        for failure in [
+            gaze::Status::CameraUnavailable,
+            gaze::Status::CalibrationFailed(gaze::webcam::Failure::Accuracy),
+            gaze::Status::WebcamRuntimeMissing,
+        ] {
+            let (_directory, mut app, target) = fixture();
+            app.gaze.source = Some(gaze::runner::Source::camera(gaze::webcam::Camera {
+                path: "/dev/unused".into(),
+                name: "Test".into(),
+            }));
+            feed(&app, 1, true);
+            hit(&mut app, target.clone());
+            app.gaze.source.as_ref().unwrap().unavailable(failure);
+            let _ = app.update(Message::GazeWindow(
+                app.gaze.epoch,
+                iced::window::Mode::Fullscreen,
+                iced::Size::new(1100.0, 760.0),
+            ));
+            assert!(app.access.current_target_id.is_none());
+            assert!(!app.gaze_owns_input());
+            assert_eq!(app.board.as_ref().unwrap().message, "");
+            let _ = app.update(Message::Access(access::Event::Enter(target)));
+            assert!(app.access.current_target_id.is_some());
+            let _ = app.update(Message::WindowUnfocused);
+            assert!(app.gaze.source.is_none());
+        }
+        let (_directory, mut app, _) = fixture();
+        app.gaze.source = Some(gaze::runner::Source::camera(gaze::webcam::Camera {
+            path: "/dev/unused".into(),
+            name: "Test".into(),
+        }));
+        app.gaze.camera_size = Some(iced::Size::new(1100.0, 760.0));
+        let _ = app.update(Message::GazeWindow(
+            app.gaze.epoch,
+            iced::window::Mode::Fullscreen,
+            iced::Size::new(1920.0, 1080.0),
+        ));
+        assert!(app.gaze.source.is_none());
+        assert!(app.error.as_ref().unwrap().contains("recalibrate"));
+    }
+
     #[test]
     fn diagnostics_cannot_select_and_close_on_focus_or_settings_exit() {
         let (_directory, mut app, _) = fixture();

@@ -53,9 +53,11 @@ hold and dwell activation, repeated-selection suppression, timed highlighting,
 an optional selection sound, auditory exploration, a Select key, Rest mode, and
 switch scanning where the native client exposes it.
 
-Operating-system eye and head tracking work as pointer input. Wingmate does not
-open a camera, collect gaze data, or provide gaze calibration. See
-[Pointer input and Rest mode](HEAD_EYE_TRACKING.md).
+Operating-system eye and head tracking work as pointer input. The Linux desktop
+development client also offers native Tobii gaze and experimental local webcam
+gaze with calibration and validation. Other clients retain OS input paths. See
+[Pointer input and Rest mode](HEAD_EYE_TRACKING.md) and
+[webcam limitations and hardware validation status](WEBCAM_GAZE.md).
 
 Editing access can protect vocabulary changes while leaving communication
 available. Individual Screens can also be frozen against editing. Coverage and

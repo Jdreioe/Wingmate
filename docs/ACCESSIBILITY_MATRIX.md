@@ -20,6 +20,7 @@ Legend: **Shipped** · **Partial** (works with gaps) · **Planned** (tracked) ·
 | Auditory scanning prompts (#113) | None | None | None |
 | Gaze input (native TD-I13) (#123–#129) | Planned | Planned | Partial (Linux fullscreen Screen runner, settings, diagnostics and bundled daemon startup; TD-I13 verification pending) |
 | Head tracking providers (#125) | Planned | Planned | None (OS pointer only) |
+| Webcam gaze (#276) | OS input only | OS input only | Experimental Linux x86_64: camera selection, calibration, validation and shared dwell; hardware evaluation pending |
 | External gaze-provider boundary (#126) | Planned | Planned | None |
 | Screen-reader operability of core speak flow | Partial — labels/i18n fixes tracked in #225; end-to-end audit: [#227](https://github.com/Jdreioe/Wingmate/issues/227) | Same as Android | None — `iced` draws its own widgets and exposes no platform accessibility tree |
 | Undo for destructive phrase actions | Shipped (snackbar undo incl. sub-items) | None | None (no Phrase editing on desktop yet) |

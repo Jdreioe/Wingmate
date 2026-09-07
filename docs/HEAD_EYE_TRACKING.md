@@ -1,9 +1,9 @@
 # Pointer input and Rest mode
 
 Wingmate works with ordinary OS pointer and keyboard events. A mouse, trackpad,
-head pointer, eye pointer, or adaptive switch can therefore use the same interface;
-Wingmate does not open a camera. The Linux desktop client can also receive native
-gaze from a local tracker daemon, as described below.
+head pointer, eye pointer, or adaptive switch can therefore use the same interface.
+The Linux desktop client also offers native Tobii gaze and experimental local
+webcam tracking with calibration, as described below.
 
 ## Wingmate interaction settings
 
@@ -146,3 +146,11 @@ Build the bundle with `bash scripts/build-gaze-daemon.sh` before Linux packaging
 (Zig 0.15.2, pkg-config and libusb development headers required). The AppImage
 contains the GPL licence and exact patched source under
 `usr/share/doc/wingmate/tobiifree`; releases also carry the source archive.
+
+## Webcam gaze on Linux desktop
+
+An experimental webcam provider is available in Settings > Access beside Tobii.
+It runs locally and includes automatic timed calibration and validation. Install
+its optional runtime with `bash scripts/install-webcam-gaze.sh`. See
+[webcam setup and validation limits](WEBCAM_GAZE.md). Sandberg Webcam Pro hardware
+results are pending; start with a small grid of large targets.

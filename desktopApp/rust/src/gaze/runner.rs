@@ -1,4 +1,4 @@
-//! A cancellable daemon reader and a latest-value mailbox. The UI never queues
+//! Cancellable gaze sources and a latest-value mailbox. The UI never queues
 //! raw frames. Every loss increments a counter even if gaze recovers between UI ticks.
 use super::{
     Status,
@@ -19,6 +19,7 @@ pub struct Snapshot {
     pub sample: Option<Sample>,
     pub received: Instant,
     pub losses: u64,
+    pub progress: Option<super::webcam::Progress>,
 }
 
 impl Snapshot {
@@ -33,34 +34,51 @@ impl Snapshot {
 }
 
 #[derive(Clone)]
-pub struct Source(Arc<Mutex<Snapshot>>);
+pub struct Source {
+    state: Arc<Mutex<Snapshot>>,
+    pub webcam: Option<Arc<super::webcam::Control>>,
+}
 
 impl Hash for Source {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        Arc::as_ptr(&self.0).hash(state);
+        Arc::as_ptr(&self.state).hash(state);
     }
 }
 
 impl Source {
     pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(Snapshot {
-            status: Status::Connecting,
-            sample: None,
-            received: Instant::now(),
-            losses: 0,
-        })))
+        Self {
+            state: Arc::new(Mutex::new(Snapshot {
+                status: Status::Connecting,
+                sample: None,
+                received: Instant::now(),
+                losses: 0,
+                progress: None,
+            })),
+            webcam: None,
+        }
+    }
+    pub fn camera(camera: super::webcam::Camera) -> Self {
+        let mut source = Self::new();
+        source.webcam = Some(Arc::new(super::webcam::Control::new(camera)));
+        source
+    }
+    pub fn progress(&self, progress: Option<super::webcam::Progress>) {
+        self.unavailable(Status::Calibrating);
+        self.state.lock().expect("gaze mailbox").progress = progress;
     }
     pub fn snapshot(&self) -> Snapshot {
-        self.0.lock().expect("gaze mailbox").clone()
+        self.state.lock().expect("gaze mailbox").clone()
     }
     pub(crate) fn unavailable(&self, status: Status) {
-        let mut state = self.0.lock().expect("gaze mailbox");
+        let mut state = self.state.lock().expect("gaze mailbox");
         state.status = status;
         state.sample = None;
+        state.progress = None;
         state.losses = state.losses.wrapping_add(1);
     }
     pub(crate) fn sample(&self, sample: Sample, received: Instant) {
-        let mut state = self.0.lock().expect("gaze mailbox");
+        let mut state = self.state.lock().expect("gaze mailbox");
         if sample.point.is_none()
             || received.saturating_duration_since(state.received) > STALE_AFTER
         {
@@ -82,6 +100,11 @@ impl Source {
 fn stream(source: &Source) -> impl Stream<Item = ()> + use<> {
     let source = source.clone();
     iced::stream::channel(1, move |_output| async move {
+        #[cfg(target_os = "linux")]
+        if source.webcam.is_some() {
+            super::webcam::run(source).await;
+            return;
+        }
         #[cfg(unix)]
         run(source, super::client::socket_path()).await;
         #[cfg(not(unix))]
@@ -183,6 +206,7 @@ pub struct Session {
     pub epoch: u64,
     pub losses: u64,
     pub status: Status,
+    pub camera_size: Option<iced::Size>,
 }
 impl Session {
     pub fn enabled(&self) -> bool {
@@ -197,10 +221,27 @@ impl Session {
     pub fn stop(&mut self) {
         self.epoch = self.epoch.wrapping_add(1);
         self.source = None;
+        self.camera_size = None;
         self.status = Status::Disabled;
     }
     pub fn label(&self) -> &'static str {
         match self.status {
+            Status::Calibrating => "Camera calibration in progress. Selection is paused.",
+            Status::CameraUnavailable => {
+                "Camera unavailable or busy. Check camera access, then retry camera calibration."
+            }
+            Status::WebcamRuntimeMissing => {
+                "Camera runtime missing. Run scripts/install-webcam-gaze.sh, then retry."
+            }
+            Status::CalibrationFailed(super::webcam::Failure::Tracking) => {
+                "Not enough usable eye tracking within 10 seconds. Keep both eyes visible, then retry camera calibration. Blinks are allowed."
+            }
+            Status::CalibrationFailed(super::webcam::Failure::Accuracy) => {
+                "Validation could not reliably match your gaze to the target. Selection is off. Adjust lighting or position, then retry camera calibration."
+            }
+            Status::CalibrationFailed(super::webcam::Failure::Estimator) => {
+                "The camera gaze estimator failed while processing calibration. Retry camera calibration."
+            }
             Status::Disabled => "Gaze off",
             Status::Connecting => "Connecting to gaze tracker",
             Status::Connected => "Gaze connected",

@@ -304,17 +304,38 @@ fn gaze_settings(setup: &crate::gaze::setup::Setup, can_start: bool) -> Element<
         return column![].into();
     }
     let mut content = column![
-        text("Native gaze (Linux)").size(24),
-        text(if setup.tracker { "Tobii tracker detected" } else { "No supported USB tracker detected" }),
-        text(if setup.reachable { "Daemon socket available; use diagnostics to check streaming." } else { "Gaze daemon unavailable. Enable startup below, or run: tobiifreed" }),
-        text("For USB access, run: bash scripts/install-wingmate.sh --setup-gaze
-Reconnect the tracker afterward. Firmware and calibration must already be prepared."),
-        checkbox(setup.autostart).label("Start tobiifreed with Wingmate").on_toggle(Message::GazeAutostart),
-        button("Retry bundled daemon").height(ACTION_HEIGHT).on_press(Message::GazeRetry),
-        text("Gaze selection is off by default. It uses the dwell duration above. Start from an open Screen; leaving communication or losing focus stops selection."),
-        button("Enable gaze and return to Screen (fullscreen)").height(ACTION_HEIGHT).on_press_maybe(can_start.then_some(Message::ToggleGaze)),
-        checkbox(setup.diagnostics.is_some()).label("Show live diagnostics (memory only)").on_toggle(Message::GazeDiagnostics),
-    ].spacing(16);
+        text("Gaze input (Linux)").size(24),
+        checkbox(setup.use_webcam)
+            .label("Use webcam eye tracking (experimental)")
+            .on_toggle(Message::WebcamEnabled),
+    ]
+    .spacing(16);
+    if setup.use_webcam {
+        content = content.extend([
+            iced::widget::pick_list(setup.cameras.clone(), setup.camera.clone(), Message::WebcamCamera)
+                .placeholder("Choose a webcam").into(),
+            text("Camera frames stay on this computer. Setup takes about a minute. Look at each timed target, then press Enter to begin selection if validation passes. Esc cancels at any time.").into(),
+            text("Use one display, fullscreen, and large targets. Recalibrate after moving yourself, the camera, or the display. Camera capture stops when gaze stops or Wingmate loses focus.").into(),
+            text("First-time setup: bash scripts/install-webcam-gaze.sh").into(),
+        ]);
+        if setup.cameras.is_empty() {
+            content = content.push(text(
+                "No webcam found. Connect a camera; this list refreshes automatically.",
+            ));
+        }
+    } else {
+        content = content.extend([
+            text(if setup.tracker { "Tobii tracker detected" } else { "No supported USB tracker detected" }).into(),
+            text(if setup.reachable { "Daemon socket available; use diagnostics to check streaming." } else { "Gaze daemon unavailable. Enable startup below, or run: tobiifreed" }).into(),
+            text("For USB access, run: bash scripts/install-wingmate.sh --setup-gaze. Reconnect the tracker afterward. Firmware and calibration must already be prepared.").into(),
+            checkbox(setup.autostart).label("Start tobiifreed with Wingmate").on_toggle(Message::GazeAutostart).into(),
+            button("Retry bundled daemon").height(ACTION_HEIGHT).on_press(Message::GazeRetry).into(),
+            checkbox(setup.diagnostics.is_some()).label("Show live diagnostics (memory only)").on_toggle(Message::GazeDiagnostics).into(),
+        ]);
+    }
+    content = content.push(text("Gaze uses the dwell duration above. Start from an open Screen; leaving communication or losing focus stops selection."))
+        .push(button("Enable gaze and return to Screen (fullscreen)").height(ACTION_HEIGHT)
+            .on_press_maybe((can_start && (!setup.use_webcam || setup.camera.is_some())).then_some(Message::ToggleGaze)));
     if let Some(error) = setup.error {
         content = content.push(text(error));
     }
