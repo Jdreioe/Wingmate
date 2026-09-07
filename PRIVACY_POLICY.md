@@ -38,7 +38,12 @@ local `tobiifreed` daemon to select communication controls. Samples remain in
 memory and are not uploaded, recorded, or included in backups. Wingmate does
 not log gaze coordinates, eye measurements, or the contents of gazed targets.
 Stopping gaze, leaving communication, or losing window focus closes Wingmate's
-connection; the separately managed daemon may continue running.
+selection connection. Opt-in live diagnostics use a separate memory-only
+connection that closes when leaving Access settings or losing focus.
+The optional daemon startup preference persists locally; gaze selection and
+diagnostics start off. Wingmate discards its bundled daemon's output and stops
+only that owned child when startup is disabled or Wingmate exits. An externally
+managed daemon may continue running.
 
 The optional `--gaze-probe` command prints live gaze samples to your terminal
 only when explicitly invoked. Wingmate does not save that diagnostic output.

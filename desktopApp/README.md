@@ -34,8 +34,8 @@ and your distribution's AppImage/FUSE runtime support if needed, plus
 
 USB setup grants the active local desktop user access to the TD-I13 (`2104:031e`)
 and Eye Tracker 5 (`2104:0313`). Reconnect the tracker after setup. Firmware and
-bootloader access are excluded. **The current AppImage does not bundle or start
-`tobiifreed`: start your calibrated custom daemon separately.** See
+bootloader access are excluded. Linux AppImages bundle a pinned `tobiifreed`; opt into starting it under
+**Settings > Access**. Calibration remains an external prerequisite. See
 [the gaze setup](../docs/HEAD_EYE_TRACKING.md#native-gaze-on-the-td-i13-linux-development-build).
 
 To uninstall, remove the `wingmate-app` directory and
@@ -79,6 +79,8 @@ package on its target operating system:
 
 ```sh
 cargo install cargo-packager --version 0.11.8 --locked
+# Linux: requires Zig 0.15.2, pkg-config and libusb development headers
+bash scripts/build-gaze-daemon.sh
 cd desktopApp
 cargo build --release --locked
 cargo packager --release --formats appimage  # Linux

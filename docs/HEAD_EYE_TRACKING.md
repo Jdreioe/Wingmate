@@ -62,9 +62,10 @@ For AppImage installation and one-time USB permissions, run
 `bash scripts/install-wingmate.sh --appimage /path/to/Wingmate.AppImage --setup-gaze`
 from a checkout, then reconnect the tracker. See the
 [Linux installer instructions](../desktopApp/README.md#install-on-linux).
-The installer does not yet bundle or start the daemon.
+The AppImage bundles the daemon; startup is opt-in under Settings > Access.
 
-1. Start a calibrated `tobiifreed` that supports the TD-I13's `2104:031e` USB ID.
+1. Enable bundled daemon startup in Settings > Access, or start a calibrated
+   `tobiifreed` that supports the TD-I13's `2104:031e` USB ID.
    Wingmate expects `$XDG_RUNTIME_DIR/tobiifreed/gaze.sock`, or
    `/tmp/tobiifreed/gaze.sock` when that environment variable is unset.
 2. Check the protocol on the device with
@@ -93,10 +94,10 @@ available throughout.
 
 **Stop gaze** ends the session and returns to windowed mode. Leaving the runner,
 losing window focus, or leaving fullscreen also ends gaze input. Start it again
-explicitly when ready. Gaze is off at startup and is not persisted yet.
+explicitly when ready. Gaze selection is off at startup and must be started explicitly.
 
 The daemon, USB permissions, calibration, and display setup must currently be
-prepared outside Wingmate. Bundling and setup are M4; in-app calibration is M5.
+prepared outside Wingmate. In-app calibration is M5.
 Library, editor, and settings controls are not native gaze targets. See
 [the engineering plan](GAZE_TD_I13.md) for those later milestones.
 
@@ -112,3 +113,36 @@ supported tracker. Microsoft’s setup guide is at
 
 Android accepts external mouse, keyboard, switch, and OS-provided pointer events.
 Pointer emphasis adds to the system pointer; it never hides or replaces it.
+
+### Gaze settings and bundled daemon (M4)
+
+Linux AppImages built from this revision include a pinned `tobiifreed` with
+TD-I13 and Eye Tracker 5 support. In **Settings > Access**, the native gaze
+section appears when a supported USB tracker or daemon is detected, or startup
+has been enabled. USB detection and daemon availability are reported separately.
+The dwell duration above the section applies to both pointer and native gaze.
+Open a Screen first to enable fullscreen gaze from settings; **Stop gaze** in
+the runner disables selection. Selection always starts off.
+
+Opt into **Start tobiifreed with Wingmate** to save that local startup preference
+and start the bundled daemon now and on subsequent launches. Wingmate reuses an
+existing socket; it does not replace an independently running daemon. Disabling
+startup or exiting Wingmate stops only its own child. A failed child is reported
+and can be retried with **Retry bundled daemon**. Child output is discarded.
+Development builds need `tobiifreed` beside `wingmate-desktop`, or a separately
+started daemon (`tobiifreed`). No runtime download or firmware flashing occurs.
+
+If the tracker is detected but the daemon cannot stream, run
+`bash scripts/install-wingmate.sh --setup-gaze`, reconnect the tracker, and retry.
+If the socket connects but the protocol is incompatible, use the bundled pinned
+daemon. Calibration and display configuration remain external prerequisites.
+
+**Show live diagnostics** subscribes only after you opt in. It shows current
+normalized coordinates or the stream failure state without activating controls,
+logging, saving or exporting samples. Leaving Access settings or losing focus
+closes diagnostics; enable it again explicitly when needed.
+
+Build the bundle with `bash scripts/build-gaze-daemon.sh` before Linux packaging
+(Zig 0.15.2, pkg-config and libusb development headers required). The AppImage
+contains the GPL licence and exact patched source under
+`usr/share/doc/wingmate/tobiifree`; releases also carry the source archive.

@@ -1,0 +1,15 @@
+tobiifreed — GPL-3.0
+Upstream: https://github.com/Aetherall/tobiifree
+Revision: d303e47fa1a6cac452eedd157d3efb0dd08e3732
+Wingmate modification: also recognize runtime USB device 2104:031e.
+
+The complete corresponding patched source is supplied in tobiifree-source.tar.gz
+alongside this notice, together with the GPL licence, build script and patch.
+Extract it and run `zig build -Doptimize=ReleaseSafe` in
+source/applications/tobiifreed with Zig 0.15.2, pkg-config and libusb development
+headers installed. No firmware is included.
+
+Source availability: the accompanying source archive may be copied and
+redistributed under the included GPL-3.0 terms. Wingmate release artifacts
+provide the same archive alongside the AppImage at
+https://github.com/Jdreioe/Wingmate/releases .

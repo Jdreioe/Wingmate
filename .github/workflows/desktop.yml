@@ -85,7 +85,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y fuse libfuse2 libxkbcommon-dev libwayland-dev speech-dispatcher
+          sudo apt-get install -y fuse libfuse2 libxkbcommon-dev libwayland-dev speech-dispatcher libusb-1.0-0-dev pkg-config python3-venv
       - name: Put the MinGW linker on PATH
         if: matrix.os == 'windows-latest'
         shell: bash
@@ -106,6 +106,16 @@ jobs:
           WINGMATE_KOTLIN_BRIDGE_PREBUILT: "1"
       - name: Install desktop packager
         run: cargo install cargo-packager --version 0.11.8 --locked
+      - name: Build pinned Linux gaze daemon
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          python3 -m venv "$RUNNER_TEMP/gaze-zig"
+          "$RUNNER_TEMP/gaze-zig/bin/pip" install ziglang==0.15.2
+          zig_dir="$("$RUNNER_TEMP/gaze-zig/bin/python" -c 'import pathlib, ziglang; print(pathlib.Path(ziglang.__file__).parent)')"
+          export PATH="$zig_dir:$PATH"
+          bash scripts/build-gaze-daemon.sh
+
       - name: Build unsigned installer
         working-directory: desktopApp
         run: cargo packager --release --target ${{ matrix.target }} --formats ${{ matrix.package_format }}

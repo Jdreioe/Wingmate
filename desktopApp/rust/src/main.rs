@@ -28,6 +28,17 @@ fn main() -> iced::Result {
         .subscription(|app| {
             iced::Subscription::batch([
                 iced::system::theme_changes().map(Message::SystemTheme),
+                if cfg!(target_os = "linux") {
+                    iced::time::every(std::time::Duration::from_secs(1))
+                        .map(|_| Message::GazeSetupPoll)
+                } else {
+                    iced::Subscription::none()
+                },
+                app.gaze_setup
+                    .diagnostics
+                    .as_ref()
+                    .map(|source| source.subscription().map(|_| Message::GazeSetupPoll))
+                    .unwrap_or_else(iced::Subscription::none),
                 iced::keyboard::listen().map(Message::Keyboard),
                 if app.route == Route::Runner
                     && !app.gaze_owns_input()
@@ -82,6 +93,7 @@ enum Route {
 struct App {
     gaze: gaze::runner::Session,
     gaze_starting: bool,
+    gaze_setup: gaze::setup::Setup,
     access: access::State,
     access_clock: std::time::Instant,
     editor: Option<editor::Editor>,
@@ -104,6 +116,10 @@ struct App {
 #[derive(Debug, Clone)]
 enum Message {
     ToggleGaze,
+    GazeSetupPoll,
+    GazeAutostart(bool),
+    GazeDiagnostics(bool),
+    GazeRetry,
     GazePoll,
     GazeLayoutChanged,
     WindowUnfocused,
@@ -148,7 +164,8 @@ impl App {
         let data = data_directory().to_string_lossy().into_owned();
         let core: Box<dyn Core> =
             Box::new(NativeCore::new(&data).expect("could not initialize the Kotlin core"));
-        let app = Self::with_core(core);
+        let mut app = Self::with_core(core);
+        app.gaze_setup.load();
         (app, iced::system::theme().map(Message::SystemTheme))
     }
 
@@ -156,6 +173,7 @@ impl App {
         let mut app = Self {
             gaze: Default::default(),
             gaze_starting: false,
+            gaze_setup: Default::default(),
             access: access::State::default(),
             access_clock: std::time::Instant::now(),
             editor: None,
@@ -218,8 +236,24 @@ impl App {
             self.gaze_starting = false;
             self.clear_access();
         }
+        if matches!(
+            &message,
+            Message::CloseSettings
+                | Message::WindowUnfocused
+                | Message::CloseRequested
+                | Message::ShowLibrary
+                | Message::Editor(_)
+        ) {
+            self.gaze_setup.diagnostics = None;
+        }
         let mut task = Task::none();
         match message {
+            Message::GazeSetupPoll => self.gaze_setup.refresh(),
+            Message::GazeAutostart(enabled) => self.gaze_setup.set_autostart(enabled),
+            Message::GazeRetry => self.gaze_setup.start(),
+            Message::GazeDiagnostics(enabled) => {
+                self.gaze_setup.diagnostics = enabled.then(gaze::runner::Source::new);
+            }
             Message::WindowUnfocused => {}
             Message::GazeLayoutChanged => {
                 if self.gaze.enabled() && !self.gaze_starting {
@@ -236,6 +270,10 @@ impl App {
                             .unwrap_or_else(Task::none)
                     });
                 }
+                if self.route == Route::Settings && self.previous_route == Route::Runner {
+                    self.gaze_setup.diagnostics = None;
+                    self.route = Route::Runner;
+                }
                 if !cfg!(target_os = "linux") || self.route != Route::Runner {
                     return Task::none();
                 }
@@ -244,6 +282,9 @@ impl App {
                         "Set a dwell duration in Settings > Access before starting gaze.".into(),
                     );
                     return Task::none();
+                }
+                if self.gaze_setup.autostart {
+                    self.gaze_setup.start();
                 }
                 self.gaze.start();
                 self.gaze_starting = true;
@@ -377,6 +418,7 @@ impl App {
                     self.close_after_editor = true;
                     return self.update_editor(editor::Event::Discard);
                 }
+                self.gaze_setup.stop();
                 return iced::exit();
             }
             Message::Keyboard(iced::keyboard::Event::KeyPressed {
@@ -431,7 +473,10 @@ impl App {
                 self.route = Route::Settings;
             }
             Message::CloseSettings => self.route = self.previous_route,
-            Message::SelectSettingsSection(section) => self.settings_section = section,
+            Message::SelectSettingsSection(section) => {
+                self.gaze_setup.diagnostics = None;
+                self.settings_section = section;
+            }
             Message::ThemeChanged(value) => {
                 self.settings.prefers_dark = value.prefers_dark();
                 self.settings.theme = value;
@@ -669,6 +714,7 @@ impl App {
                 &self.pronunciation_word,
                 &self.pronunciation_replacement,
                 &self.recents,
+                (&self.gaze_setup, self.previous_route == Route::Runner),
             ),
         };
         let gaze_control: Element<'_, Message> =
@@ -835,6 +881,21 @@ mod native_gaze_tests {
         app.gaze.start();
         app.gaze.status = gaze::Status::Connected;
         (directory, app, target)
+    }
+    #[test]
+    fn diagnostics_cannot_select_and_close_on_focus_or_settings_exit() {
+        let (_directory, mut app, _) = fixture();
+        let _ = app.update(Message::OpenSettings);
+        assert!(!app.gaze.enabled());
+        let _ = app.update(Message::GazeDiagnostics(true));
+        assert!(app.gaze_setup.diagnostics.is_some());
+        assert!(!app.gaze.enabled());
+        let _ = app.update(Message::WindowUnfocused);
+        assert!(app.gaze_setup.diagnostics.is_none());
+        let _ = app.update(Message::GazeDiagnostics(true));
+        let _ = app.update(Message::CloseSettings);
+        assert!(app.gaze_setup.diagnostics.is_none());
+        assert!(!app.gaze.enabled());
     }
     fn feed(app: &App, frame: u32, valid: bool) {
         app.gaze.source.as_ref().unwrap().sample(

@@ -36,3 +36,10 @@ yet a supported client.
 
 This document describes product support scope, not a promise that every existing
 feature has already reached full parity.
+
+Linux desktop native gaze is an intentional hardware capability exception:
+fullscreen Screen selection, USB discovery, Access settings, opt-in live
+diagnostics and optional startup of the bundled `tobiifreed` are implemented.
+Android, iOS, macOS and Windows retain their OS input paths. TD-I13 hardware,
+calibration and release AppImage verification remain required before claiming
+production support; see [setup](HEAD_EYE_TRACKING.md).
