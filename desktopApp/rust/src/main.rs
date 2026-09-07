@@ -1002,6 +1002,7 @@ mod native_gaze_tests {
         app.gaze.status = gaze::Status::Connected;
         (directory, app, target)
     }
+    #[cfg(target_os = "linux")]
     #[test]
     fn webcam_retry_discards_old_selection_and_restarts_calibration() {
         let (_directory, mut app, target) = fixture();
