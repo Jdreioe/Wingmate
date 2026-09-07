@@ -290,17 +290,65 @@ M3 only has to be safe, not forgiving.
 
 Tracked in [#273](https://github.com/Jdreioe/Wingmate/issues/273).
 
-The daemon forwards calibration commands to the tracker (`0x20` start, `0x21`
-add point, `0x22` finish, `0x23` apply) and returns them as `0x02` responses,
-so Wingmate can run calibration itself: fullscreen targets, gaze sampled at
-each, then apply. The alternative is sending an AAC user to a browser demo to
-fix their own input, which is reason enough to own the flow.
+The daemon exposes `0x20` start, `0x21` add point, `0x22` finish, and `0x23`
+apply. **Finish already computes and applies the calibration.** It is not a
+preview operation followed by a separate commit. M5 needs daemon changes
+before Wingmate can promise that failed or abandoned calibration preserves
+the previous calibration, as required by #273.
 
-Two costs: response payloads are undocumented and have to be read out of the
-upstream TypeScript SDK, and the command IDs in `daemon_protocol.zig` already
-disagree with upstream's `ARCHITECTURE.md` (`0x23` is `cal_apply` in the code
-and `cal_retrieve` in the document). Responses get the same fail-closed
-treatment as gaze frames.
+#### Protocol inspection, 2026-09-07
+
+Checked the source archive packaged with Wingmate, pinned to
+`d303e47fa1a6cac452eedd157d3efb0dd08e3732`, including the TD-I13 patch.
+The relevant upstream sources at that revision are:
+
+- [Daemon command dispatch](https://github.com/Aetherall/tobiifree/blob/d303e47fa1a6cac452eedd157d3efb0dd08e3732/applications/tobiifreed/src/main.zig):
+  start and apply return a response containing only the command byte on
+  success. Finish returns the command byte followed by the retrieved payload.
+  State-machine failure sends a separate error message with code `0x01`.
+  Add-point responses forward the raw tracker response without decoding quality.
+- [Tracker state machines](https://github.com/Aetherall/tobiifree/blob/d303e47fa1a6cac452eedd157d3efb0dd08e3732/driver/src/tobiifree_core.zig):
+  `calFinishPollInner` executes compute-and-apply (`0x42F`), retrieve (`0x44C`),
+  then close-realm. A failure after compute can therefore occur after the active
+  calibration has changed. The finish response hook advances on receipt without
+  validating the tracker response's success status.
+- [Socket command enum](https://github.com/Aetherall/tobiifree/blob/d303e47fa1a6cac452eedd157d3efb0dd08e3732/driver/src/daemon_protocol.zig):
+  no independent retrieve, abort, or rollback command is exposed. Lower-level
+  retrieve and close-realm requests exist in the core, but are not reachable
+  through this socket protocol.
+- [Socket cleanup](https://github.com/Aetherall/tobiifree/blob/d303e47fa1a6cac452eedd157d3efb0dd08e3732/applications/tobiifreed/src/server.zig):
+  disconnecting a client closes its socket without calibration cleanup.
+- [TypeScript client](https://github.com/Aetherall/tobiifree/blob/d303e47fa1a6cac452eedd157d3efb0dd08e3732/sdk/src/ws_source.ts):
+  `addCalibrationPoint` awaits the response but discards its contents. It does
+  not supply a per-point quality decoder. The SDK alone cannot establish the
+  quality or rejection semantics required by #273.
+
+The command enum remains authoritative over upstream `ARCHITECTURE.md`, which
+assigns different meanings to `0x22` and `0x23`. Do not decode an opaque response
+as success or label ordinary gaze validity as calibration quality.
+
+#### Implementation prerequisites
+
+1. Establish tracker response status, point-quality, and calibration-blob
+   decoding from protocol evidence. Verify retrieve/apply round-tripping on the
+   TD-I13 without logging or persisting calibration blobs or eye measurements.
+2. Add a daemon-owned calibration session with exclusive ownership, an in-memory
+   copy of the previous calibration, explicit cancellation, and cleanup on client
+   loss. Validate responses before advancing. If restoration cannot complete
+   after tracker loss, report it explicitly and keep gaze selection disabled;
+   never claim the previous calibration is intact without confirmation.
+3. Expose the session's validated outcomes through a versioned or explicitly
+   negotiated socket capability. Old daemons must leave calibration unavailable.
+   Exercise failure before and after compute, cancellation, malformed responses,
+   and client/tracker loss with synthetic transport tests.
+4. Build the fullscreen Wingmate flow on that boundary: paced targets,
+   per-point feedback and retry, cancellation, and no communication activation
+   during calibration. Finish with the real-device checks in #273.
+
+No supported Tobii USB device (`2104:0313` or `2104:031e`) was attached to the
+development host during this inspection. Real-device response and restoration
+verification remain outstanding. The in-app TD-I13 calibration flow is not
+implemented; webcam calibration is a separate provider and does not complete M5.
 
 Sized like M3, and independent of it: calibration is useful the moment gaze
 streams at all.

@@ -228,19 +228,19 @@ impl Session {
         match self.status {
             Status::Calibrating => "Camera calibration in progress. Selection is paused.",
             Status::CameraUnavailable => {
-                "Camera unavailable or busy. Check camera access, then stop gaze and retry."
+                "Camera unavailable or busy. Check camera access, then retry camera calibration."
             }
             Status::WebcamRuntimeMissing => {
                 "Camera runtime missing. Run scripts/install-webcam-gaze.sh, then retry."
             }
             Status::CalibrationFailed(super::webcam::Failure::Tracking) => {
-                "Not enough usable eye tracking within 10 seconds. Keep both eyes visible, then stop gaze and retry. Blinks are allowed."
+                "Not enough usable eye tracking within 10 seconds. Keep both eyes visible, then retry camera calibration. Blinks are allowed."
             }
             Status::CalibrationFailed(super::webcam::Failure::Accuracy) => {
-                "Validation could not reliably match your gaze to the target. Selection is off. Stop gaze and recalibrate."
+                "Validation could not reliably match your gaze to the target. Selection is off. Adjust lighting or position, then retry camera calibration."
             }
             Status::CalibrationFailed(super::webcam::Failure::Estimator) => {
-                "The camera gaze estimator failed while processing calibration. Stop gaze and retry."
+                "The camera gaze estimator failed while processing calibration. Retry camera calibration."
             }
             Status::Disabled => "Gaze off",
             Status::Connecting => "Connecting to gaze tracker",

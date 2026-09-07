@@ -120,6 +120,7 @@ enum Message {
     WebcamEnabled(bool),
     WebcamCamera(gaze::webcam::Camera),
     WebcamContinue,
+    WebcamRetry,
     GazeSetupPoll,
     GazeAutostart(bool),
     GazeDiagnostics(bool),
@@ -276,6 +277,13 @@ impl App {
         }
         let mut task = Task::none();
         match message {
+            Message::WebcamRetry => {
+                if !self.can_retry_webcam() {
+                    return Task::none();
+                }
+                self.gaze.stop();
+                return self.update(Message::ToggleGaze);
+            }
             Message::WebcamEnabled(enabled) => {
                 self.gaze_setup.use_webcam = enabled;
                 self.gaze_setup.diagnostics = None;
@@ -779,6 +787,21 @@ impl App {
         }
     }
 
+    fn can_retry_webcam(&self) -> bool {
+        self.route == Route::Runner
+            && self
+                .gaze
+                .source
+                .as_ref()
+                .is_some_and(|source| source.webcam.is_some())
+            && matches!(
+                self.gaze.status,
+                gaze::Status::CameraUnavailable
+                    | gaze::Status::WebcamRuntimeMissing
+                    | gaze::Status::CalibrationFailed(_)
+            )
+    }
+
     fn view(&self) -> Element<'_, Message> {
         if let Some(source) = &self.gaze.source
             && let Some(calibration) = gaze::webcam::calibration_view(source)
@@ -840,6 +863,13 @@ impl App {
         ];
         if self.gaze.enabled() {
             layout = layout.push(text(self.gaze.label()));
+            if self.can_retry_webcam() {
+                layout = layout.push(
+                    button("Retry camera calibration")
+                        .height(48)
+                        .on_press(Message::WebcamRetry),
+                );
+            }
         }
         if let Some(error) = &self.error {
             layout = layout.push(
@@ -972,6 +1002,40 @@ mod native_gaze_tests {
         app.gaze.status = gaze::Status::Connected;
         (directory, app, target)
     }
+    #[test]
+    fn webcam_retry_discards_old_selection_and_restarts_calibration() {
+        let (_directory, mut app, target) = fixture();
+        let camera = gaze::webcam::Camera {
+            path: "/dev/unused".into(),
+            name: "Test".into(),
+        };
+        app.gaze_setup.use_webcam = true;
+        app.gaze_setup.camera = Some(camera.clone());
+        app.gaze.source = Some(gaze::runner::Source::camera(camera.clone()));
+        let old_epoch = app.gaze.epoch;
+        feed(&app, 1, true);
+        hit(&mut app, target.clone());
+        let received = app.gaze.source.as_ref().unwrap().snapshot().received;
+        app.gaze.status = gaze::Status::CalibrationFailed(gaze::webcam::Failure::Accuracy);
+        let _ = app.update(Message::WebcamRetry);
+        assert!(app.gaze.epoch > old_epoch);
+        assert!(app.gaze_starting);
+        assert!(app.access.current_target_id.is_none());
+        let source = app.gaze.source.as_ref().unwrap();
+        assert_eq!(source.webcam.as_ref().unwrap().camera, camera);
+        assert_eq!(source.snapshot().status, gaze::Status::Connecting);
+        assert!(source.snapshot().sample.is_none());
+        let _ = app.update(Message::GazeHit(old_epoch, 0, received, Some(target)));
+        assert!(app.access.current_target_id.is_none());
+        assert_eq!(app.board.as_ref().unwrap().message, "");
+        let retry_epoch = app.gaze.epoch;
+        let _ = app.update(Message::WebcamRetry);
+        assert_eq!(
+            app.gaze.epoch, retry_epoch,
+            "duplicate retries must not restart setup"
+        );
+    }
+
     #[test]
     fn webcam_failure_focus_and_display_changes_cancel_selection() {
         for failure in [

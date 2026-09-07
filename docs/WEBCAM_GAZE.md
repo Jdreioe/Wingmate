@@ -33,8 +33,9 @@ needs no network connection. Setup requires several hundred MB of disk space.
    uses the existing target highlight, dwell feedback, Rest mode and shared
    communication actions. Esc or **Stop gaze** stops capture.
 
-A failed validation does not allow gaze selection. Stop and restart gaze to
-retry after adjusting lighting or position. Missing runtime, blocked camera
+A failed validation does not allow gaze selection. After adjusting lighting or
+position, choose **Retry camera calibration** to start a fresh calibration with
+the selected camera. **Stop gaze** remains available to leave gaze mode. Missing runtime, blocked camera
 access, a busy/disconnected camera and failed calibration have separate status
 messages. Calibration failures distinguish insufficient usable tracking,
 validation accuracy rejection, and estimator errors. No exception details or
