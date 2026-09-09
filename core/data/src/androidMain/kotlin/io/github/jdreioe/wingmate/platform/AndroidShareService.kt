@@ -40,7 +40,8 @@ class AndroidShareService(private val context: Context) : ShareService {
 
     override fun shareFile(fileName: String, content: ByteArray): Boolean {
         return runCatching {
-            val file = File(context.cacheDir, fileName)
+            // Match the narrowed FileProvider root: only cache/shared/ is grantable.
+            val file = File(File(context.cacheDir, "shared"), fileName)
             file.parentFile?.mkdirs()
             file.writeBytes(content)
             val authority = context.packageName + ".fileprovider"
