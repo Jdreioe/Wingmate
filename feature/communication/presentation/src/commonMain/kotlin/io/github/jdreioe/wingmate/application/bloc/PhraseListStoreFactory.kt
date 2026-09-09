@@ -172,7 +172,10 @@ class PhraseListStoreFactory(
         private fun updatePhraseRecording(id: String, recordingPath: String?) {
             scope.launch {
                 try {
-                    val updated = updatePhraseUseCase(id, null, null, null, recordingPath)
+                    // The dedicated recording intent always sets the field: a null
+                    // path from the facade (and "") is an explicit clear, matching
+                    // the native editors that send nil to remove a recording.
+                    val updated = updatePhraseUseCase(id, null, null, null, recordingPath ?: "")
                     loadPhrasesAndCategories()
                     dispatch(Msg.PhraseUpdated(updated))
                 } catch (ce: CancellationException) {
