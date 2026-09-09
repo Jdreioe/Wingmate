@@ -23,14 +23,25 @@ class UserDataManager(private val saidTextRepository: SaidTextRepository) {
 
     /**
      * Imports user history from a JSON string.
-     * Replaces existing history.
+     * Replaces existing history. The repository has no transaction primitive,
+     * so the current history is snapshotted first; if the import fails partway,
+     * the snapshot is restored instead of leaving history destroyed.
      */
     suspend fun importData(jsonData: String) {
         try {
             val history = json.decodeFromString(ListSerializer(SaidText.serializer()), jsonData)
             if (history.isNotEmpty()) {
-                saidTextRepository.deleteAll()
-                saidTextRepository.addAll(history)
+                val backup = saidTextRepository.list()
+                try {
+                    saidTextRepository.deleteAll()
+                    saidTextRepository.addAll(history)
+                } catch (e: Exception) {
+                    runCatching {
+                        saidTextRepository.deleteAll()
+                        saidTextRepository.addAll(backup)
+                    }
+                    throw e
+                }
             }
         } catch (e: Exception) {
             OperationalLogger.warn(
