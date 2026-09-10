@@ -39,6 +39,7 @@ data class BackupExportResult(
 /** A feature-scoped native boundary around backup creation and restoration. */
 class BackupFacade(
     private val backupManager: BackupManager,
+    private val predictionService: io.github.jdreioe.wingmate.domain.TextPredictionService? = null,
 ) {
     suspend fun exportBackup(): BackupExportResult = try {
         BackupExportResult(
@@ -63,7 +64,10 @@ class BackupFacade(
 
     suspend fun restoreBackup(path: String): BackupOperationResult = try {
         when (val result = backupManager.restoreBackup(path)) {
-            is BackupRestoreResult.Success -> BackupOperationResult(BackupOperationStatus.Success)
+            is BackupRestoreResult.Success -> {
+                predictionService?.refresh()
+                BackupOperationResult(BackupOperationStatus.Success)
+            }
             is BackupRestoreResult.Failure -> BackupOperationResult(
                 status = result.kind.toOperationStatus(),
                 message = result.message,

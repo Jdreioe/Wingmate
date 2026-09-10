@@ -78,6 +78,61 @@ class SimpleNGramPredictionServiceTest {
         assertEquals(emptyList(), service.predict("hel", -1, -1).letters)
     }
 
+    @Test
+    fun singleLetterFindsWordsOutsideTheGlobalFrequencyCache() = runBlocking {
+        val service = SimpleNGramPredictionService()
+        val frequentWords = (0 until 600).map { index ->
+            val suffix = "${('a'.code + index / 26).toChar()}${('a'.code + index % 26).toChar()}"
+            "common$suffix" to 200
+        }
+        service.setBaseLanguage(frequentWords + ("xylophone" to 1))
+
+        assertEquals(listOf("xylophone"), service.predict("x", 5, 0).words)
+    }
+
+    @Test
+    fun letterSuggestionsPreferCompletionsOfTheWholePrefix() = runBlocking {
+        val service = trainedWith("care", "party party party party party", "cargo")
+
+        assertEquals(listOf('e', 'g'), service.predict("car", 0, 3).letters)
+    }
+
+    @Test
+    fun unknownPrefixesStillGetLetterNGramFallbacks() = runBlocking {
+        val service = trainedWith("care")
+
+        assertEquals(listOf('e'), service.predict("zzar", 0, 3).letters)
+    }
+
+    @Test
+    fun completeWordsDoNotBlockLongerLetterCompletions() = runBlocking {
+        val service = trainedWith("car car car", "care", "cargo cargo")
+
+        assertEquals(listOf('g', 'e'), service.predict("CAR", 0, 3).letters)
+    }
+
+    @Test
+    fun precedingWordsGuideBothWordAndLetterSuggestions() = runBlocking {
+        val service = trainedWith("please drink tea", "we enjoy toast toast toast toast toast")
+
+        val result = service.predict("please drink t", 5, 3)
+
+        assertEquals("tea", result.words.first())
+        assertEquals('e', result.letters.first())
+        assertEquals(result.letters, service.predict("please drink t", 0, 3).letters)
+    }
+
+    @Test
+    fun lettersAfterASpaceComeFromContextualNextWords() = runBlocking {
+        val service = trainedWith("please drink water", "eat toast toast toast toast")
+
+        val result = service.predict("please drink ", 1, 3)
+
+        assertEquals(listOf("water"), result.words)
+        assertEquals('w', result.letters.first())
+        assertEquals(result.letters, service.predict("please drink ", 5, 3).letters)
+    }
+
     private suspend fun trainedWith(vararg phrases: String): SimpleNGramPredictionService {
         return SimpleNGramPredictionService().also { service ->
             service.train(phrases.map { SaidText(saidText = it) })

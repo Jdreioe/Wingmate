@@ -12,7 +12,11 @@ Message while composing another, review speech History, and copy or share text
 and generated audio where the platform provides a share action.
 
 Android and iOS contain local word prediction support, but it is currently
-restricted to debug builds and is not a released capability.
+restricted to debug builds in Typing and is not a released Typing capability.
+Prediction Buttons in Screens also use the shared local predictor. Both clients
+observe model updates, including dictionary loading, language changes, and
+persisted History changes. Word and letter suggestions use the same contextual
+ranking; see [Local predictions](PREDICTIONS.md).
 
 ## Screens
 

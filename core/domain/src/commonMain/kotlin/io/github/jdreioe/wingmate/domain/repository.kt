@@ -1,6 +1,6 @@
 package io.github.jdreioe.wingmate.domain
 
-
+import kotlinx.coroutines.flow.Flow
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 
@@ -170,26 +170,12 @@ data class PredictionResult(
     val letters: List<Char> = emptyList()
 )
 
-/**
- * Service for predicting the next word or letter based on user's text history.
- * Uses a lightweight n-gram model trained on previously spoken text.
- */
+/** Local predictions that update when the language or learned vocabulary changes. */
 interface TextPredictionService {
-    /**
-     * Train the model on the user's speech history.
-     */
-    suspend fun train(history: List<SaidText>)
-    
-    /**
-     * Predict the next words and letters given the current input context.
-     * @param context The current text being typed
-     * @param maxWords Maximum number of word predictions to return
-     * @param maxLetters Maximum number of letter predictions to return
-     */
-    suspend fun predict(context: String, maxWords: Int = 5, maxLetters: Int = 5): PredictionResult
-    
-    /**
-     * Check if the model has been trained.
-     */
-    fun isTrained(): Boolean
+    /** Observing starts model loading; callers never need to train or check readiness. */
+    fun predictions(context: String, maxWords: Int = 5, maxLetters: Int = 5):
+        Flow<PredictionResult>
+
+    /** Reload after persisted communication history changes. Does not block speech. */
+    fun refresh()
 }

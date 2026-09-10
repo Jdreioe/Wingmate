@@ -103,7 +103,6 @@ import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.Message
 import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.SoundPlayer
-import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.fromScreenButton
 import io.github.jdreioe.wingmate.domain.fromTextDiff
@@ -586,11 +585,9 @@ private fun BoardSetWorkspaceRoot(
     val voiceUseCase = koinInject<VoiceUseCase>()
     val soundPlayer = koinInject<SoundPlayer>()
     val fileStorage = koinInject<FileStorage>()
-    val saidTextRepository = koinInject<SaidTextRepository>()
     val settings by rememberReactiveSettings()
     val koin = org.koin.compose.getKoin()
     val predictionService = remember(koin) { koin.getOrNull<TextPredictionService>() }
-    val dictionaryLoader = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.DictionaryLoader>() }
     val mediaUrlLoader = remember(koin) { koin.getOrNull<ObfMediaUrlLoader>() }
     val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
     val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
@@ -674,37 +671,6 @@ private fun BoardSetWorkspaceRoot(
             ?.let(::listOf)
             .orEmpty()
     ).distinctBy { it.tag }
-
-    // Board keyboards must initialize the local model themselves: unlike the phrase screen,
-    // they may be the first communication surface a user opens.
-    LaunchedEffect(predictionService, saidTextRepository, settings.primaryLanguage) {
-        val service = predictionService ?: return@LaunchedEffect
-        try {
-            val history = saidTextRepository.list()
-            val nGramService = service as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
-            if (nGramService != null) {
-                val dictionary = try {
-                    dictionaryLoader?.loadDictionary(settings.primaryLanguage).orEmpty()
-                } catch (failure: CancellationException) {
-                    throw failure
-                } catch (_: Exception) {
-                    emptyList()
-                }
-                if (dictionary.isNotEmpty()) {
-                    nGramService.setBaseLanguage(dictionary)
-                    nGramService.train(history, clear = false)
-                } else {
-                    nGramService.train(history)
-                }
-            } else {
-                service.train(history)
-            }
-        } catch (failure: CancellationException) {
-            throw failure
-        } catch (_: Exception) {
-            // Prediction training is optional; the communication surface stays intact.
-        }
-    }
 
     LaunchedEffect(boardSetId, workspace.loadRequestId) {
         if (workspaceViewModel.state.value.savedGraph != null) return@LaunchedEffect
@@ -850,12 +816,14 @@ private fun BoardSetWorkspaceRoot(
     var predictionsById by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     LaunchedEffect(messageText, predictionButtonIds, predictionService) {
         predictionsById = emptyMap()
-        val service = predictionService?.takeIf { it.isTrained() } ?: return@LaunchedEffect
+        val service = predictionService ?: return@LaunchedEffect
         if (predictionButtonIds.isEmpty()) return@LaunchedEffect
-        val result = service.predict(messageText, maxWords = predictionButtonIds.size, maxLetters = 0)
-        predictionsById = predictionButtonIds.withIndex().mapNotNull { (index, id) ->
-            result.words.getOrNull(index)?.let { id to it }
-        }.toMap()
+        service.predictions(messageText, maxWords = predictionButtonIds.size, maxLetters = 0)
+            .collect { result ->
+                predictionsById = predictionButtonIds.withIndex().mapNotNull { (index, id) ->
+                    result.words.getOrNull(index)?.let { id to it }
+                }.toMap()
+            }
     }
 
     fun enterEditing() {

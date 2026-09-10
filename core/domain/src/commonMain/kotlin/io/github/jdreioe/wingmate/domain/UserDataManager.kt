@@ -7,7 +7,10 @@ import kotlinx.serialization.builtins.ListSerializer
 /**
  * Manages user data export and import operations.
  */
-class UserDataManager(private val saidTextRepository: SaidTextRepository) {
+class UserDataManager(
+    private val saidTextRepository: SaidTextRepository,
+    private val predictionService: TextPredictionService? = null,
+) {
     private val json = Json { 
         prettyPrint = true 
         ignoreUnknownKeys = true
@@ -35,6 +38,7 @@ class UserDataManager(private val saidTextRepository: SaidTextRepository) {
                 try {
                     saidTextRepository.deleteAll()
                     saidTextRepository.addAll(history)
+                    predictionService?.refresh()
                 } catch (e: Exception) {
                     runCatching {
                         saidTextRepository.deleteAll()

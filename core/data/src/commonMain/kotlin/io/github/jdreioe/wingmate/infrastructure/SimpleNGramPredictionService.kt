@@ -3,7 +3,6 @@ package io.github.jdreioe.wingmate.infrastructure
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.PredictionResult
 import io.github.jdreioe.wingmate.domain.SaidText
-import io.github.jdreioe.wingmate.domain.TextPredictionService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -16,7 +15,7 @@ import kotlinx.coroutines.withContext
  * cased occurrences from becoming duplicate suggestions while still retaining
  * the most frequently seen spelling for display.
  */
-class SimpleNGramPredictionService : TextPredictionService {
+class SimpleNGramPredictionService {
     private val mutex = Mutex()
 
     private companion object {
@@ -48,7 +47,7 @@ class SimpleNGramPredictionService : TextPredictionService {
     private var topFrequentWords: List<String> = emptyList()
     private var trained = false
 
-    override suspend fun train(history: List<SaidText>) = train(history, clear = true)
+    suspend fun train(history: List<SaidText>) = train(history, clear = true)
 
     suspend fun train(history: List<SaidText>, clear: Boolean) = withContext(Dispatchers.Default) {
         mutex.withLock {
@@ -56,14 +55,6 @@ class SimpleNGramPredictionService : TextPredictionService {
             history.forEach { entry ->
                 entry.saidText?.let { trainOnText(it, USER_WEIGHT) }
             }
-            finishTraining()
-        }
-    }
-
-    /** Add one user phrase without rebuilding the rest of the model. */
-    suspend fun learnPhrase(text: String) = withContext(Dispatchers.Default) {
-        mutex.withLock {
-            trainOnText(text, USER_WEIGHT)
             finishTraining()
         }
     }
@@ -177,13 +168,16 @@ class SimpleNGramPredictionService : TextPredictionService {
 
     private fun tokenize(text: String): List<String> = WORD_REGEX.findAll(text).map { it.value }.toList()
 
-    override suspend fun predict(context: String, maxWords: Int, maxLetters: Int): PredictionResult =
+    suspend fun predict(context: String, maxWords: Int, maxLetters: Int): PredictionResult =
         withContext(Dispatchers.Default) {
             mutex.withLock {
                 if (!trained) return@withContext PredictionResult()
+                val parsed = predictionContext(context)
+                val rankedWords = if (maxWords > 0 || maxLetters > 0) rankWords(parsed) else emptyList()
                 PredictionResult(
-                    words = predictWords(context, maxWords.coerceAtLeast(0)),
-                    letters = predictLetters(context, maxLetters.coerceAtLeast(0))
+                    words = rankedWords.take(maxWords.coerceAtLeast(0))
+                        .map { displayWord(it.word, parsed.surfacePrefix) },
+                    letters = predictLetters(parsed, rankedWords, maxLetters.coerceAtLeast(0))
                 )
             }
         }
@@ -211,9 +205,7 @@ class SimpleNGramPredictionService : TextPredictionService {
         return if (boundary == null) this else substring(boundary.range.last + 1)
     }
 
-    private fun predictWords(context: String, maxWords: Int): List<String> {
-        if (maxWords == 0) return emptyList()
-        val parsed = predictionContext(context)
+    private fun rankWords(parsed: PredictionContext): List<RankedWord> {
         val candidateWords = linkedSetOf<String>()
 
         val trigram = parsed.completedWords.takeLast(2).takeIf { it.size == 2 }
@@ -224,10 +216,9 @@ class SimpleNGramPredictionService : TextPredictionService {
 
         val prefixWords = when {
             parsed.prefix.isEmpty() -> topFrequentWords.take(FALLBACK_CANDIDATE_LIMIT)
-            parsed.prefix.length == 1 -> topFrequentWords.asSequence()
-                .filter { it.startsWith(parsed.prefix) && it != parsed.prefix }
-                .take(SHORT_PREFIX_CANDIDATE_LIMIT)
-                .toList()
+            parsed.prefix.length == 1 -> topWordsByFrequency(
+                wordsByPrefix[parsed.prefix].orEmpty(), SHORT_PREFIX_CANDIDATE_LIMIT
+            )
             else -> topWordsByFrequency(wordsByPrefix[parsed.prefix].orEmpty(), PREFIX_CANDIDATE_LIMIT)
         }
         candidateWords.addAll(prefixWords)
@@ -239,13 +230,15 @@ class SimpleNGramPredictionService : TextPredictionService {
 
         val trigramTotal = trigram.values.sum().coerceAtLeast(1).toDouble()
         val bigramTotal = bigram.values.sum().coerceAtLeast(1).toDouble()
-        val maximumFrequency = filtered.maxOf { wordFrequency[it] ?: 0 }.coerceAtLeast(1).toDouble()
+        // Keep unigram scores on a probability scale so aggregating candidates
+        // into letters cannot multiply the fallback weight by vocabulary size.
+        val unigramTotal = filtered.sumOf { (wordFrequency[it] ?: 0).toDouble() }.coerceAtLeast(1.0)
 
         return filtered.asSequence()
             .map { word ->
                 val score = TRIGRAM_WEIGHT * ((trigram[word] ?: 0) / trigramTotal) +
                     BIGRAM_WEIGHT * ((bigram[word] ?: 0) / bigramTotal) +
-                    UNIGRAM_WEIGHT * ((wordFrequency[word] ?: 0) / maximumFrequency)
+                    UNIGRAM_WEIGHT * ((wordFrequency[word] ?: 0) / unigramTotal)
                 RankedWord(word, score, wordFrequency[word] ?: 0)
             }
             .sortedWith(
@@ -253,8 +246,6 @@ class SimpleNGramPredictionService : TextPredictionService {
                     .thenByDescending { it.frequency }
                     .thenBy { it.word }
             )
-            .take(maxWords)
-            .map { displayWord(it.word, parsed.surfacePrefix) }
             .toList()
     }
 
@@ -276,11 +267,30 @@ class SimpleNGramPredictionService : TextPredictionService {
         .take(limit)
         .toList()
 
-    private fun predictLetters(context: String, maxLetters: Int): List<Char> {
+    private fun predictLetters(
+        parsed: PredictionContext,
+        rankedWords: List<RankedWord>,
+        maxLetters: Int
+    ): List<Char> {
         if (maxLetters == 0) return emptyList()
-        val prefix = predictionContext(context).prefix
+        val prefix = parsed.prefix
+
+        // Both suggestion rows use the same contextual scores. Sum the probability
+        // mass of completions sharing a next letter, before limiting either row.
+        val completionScores = mutableMapOf<Char, Double>()
+        rankedWords.forEach { ranked ->
+            val next = ranked.word.getOrNull(prefix.length) ?: return@forEach
+            completionScores[next] = (completionScores[next] ?: 0.0) + ranked.score
+        }
+        if (completionScores.isNotEmpty()) {
+            return completionScores.entries
+                .sortedWith(compareByDescending<Map.Entry<Char, Double>> { it.value }.thenBy { it.key })
+                .take(maxLetters)
+                .map { it.key }
+        }
         if (prefix.isEmpty()) return emptyList()
 
+        // Keep useful suggestions for unfamiliar words with no known completion.
         val trigram = prefix.takeLast(2).takeIf { it.length == 2 }
             ?.let(letterTrigramCounts::get).orEmpty()
         val bigram = letterBigramCounts[prefix.last()].orEmpty()
@@ -301,5 +311,4 @@ class SimpleNGramPredictionService : TextPredictionService {
             .toList()
     }
 
-    override fun isTrained(): Boolean = trained
 }

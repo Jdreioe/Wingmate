@@ -46,8 +46,8 @@ class DictionaryLoader(
             return it 
         }
         
-        // Use NonCancellable to ensure loading finishes even if UI recomposes
-        return withContext(kotlinx.coroutines.NonCancellable) {
+        // Model loading owns its lifetime; language changes must be able to cancel it.
+        return withContext(Dispatchers.Default) {
             // Check disk cache first
             if (fileStorage != null) {
                 val fileName = "$baseName.combined"

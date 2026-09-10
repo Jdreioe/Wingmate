@@ -13,7 +13,6 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SpeechService
-import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.IosAudioClipboard
 import io.github.jdreioe.wingmate.infrastructure.IosBoardRepository
@@ -40,7 +39,6 @@ import io.github.jdreioe.wingmate.application.SettingsFacade
 import io.github.jdreioe.wingmate.application.BoardsFacade
 import io.github.jdreioe.wingmate.application.CommunicationFacade
 import io.github.jdreioe.wingmate.infrastructure.IosBackupMediaAccess
-import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
 import io.github.jdreioe.wingmate.platform.AudioClipboard
 import io.github.jdreioe.wingmate.platform.ShareService
@@ -82,8 +80,6 @@ fun overrideIosSpeechService() {
             singleOf(::IosBoardSetRepository) { bind<BoardSetRepository>() }
             singleOf(::IosPhraseRepository) { bind<PhraseRepository>() }
             singleOf(::IosSpeechService) { bind<SpeechService>() }
-            // Text prediction service
-            singleOf(::SimpleNGramPredictionService) { bind<TextPredictionService>() }
             
             // Share service
             singleOf(::IosShareService) { bind<ShareService>() }

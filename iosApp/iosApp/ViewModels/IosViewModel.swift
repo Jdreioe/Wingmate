@@ -131,7 +131,18 @@ final class IosViewModel: ObservableObject {
     #if DEBUG
     @Published var predictions: Shared.PredictionResult = Shared.PredictionResult(words: [], letters: [])
     private var predictionJob: Task<Void, Never>? = nil
+    private var predictionSubscription: Shared.PredictionSubscription?
     #endif
+    private var boardPredictionSubscription: Shared.PredictionSubscription?
+
+    deinit {
+        boardPredictionSubscription?.cancel()
+        #if DEBUG
+        predictionJob?.cancel()
+        predictionSubscription?.cancel()
+        #endif
+    }
+
     // History items exposed as phrases for UI rendering
     @Published var historyPhrases: [Shared.Phrase] = []
     // Special selection for History view
@@ -422,10 +433,6 @@ final class IosViewModel: ObservableObject {
         }
     // Preload history once Koin is up
     await loadHistory()
-    #if DEBUG
-    // Predictions are a development-only feature and are excluded from production behavior.
-    _ = try? await bridge.trainPredictionModel()
-    #endif
     // Load pronunciations
     await loadPronunciations()
     // Load boardsets and selected board for symbol mode
@@ -625,10 +632,6 @@ final class IosViewModel: ObservableObject {
         if speechPolicy == "Immediate" {
             speak(title)
         }
-        #if DEBUG
-        // Incremental learning for development builds with predictions enabled.
-        Task { _ = try? await bridge.learnPhrase(text: t) }
-        #endif
     }
 
     func removeSentencePhrase(at index: Int) {
@@ -1384,10 +1387,6 @@ final class IosViewModel: ObservableObject {
         let normalizedRecordingPath = recordingPath?.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalRecordingPath = (normalizedRecordingPath?.isEmpty == false) ? normalizedRecordingPath : nil
         store?.accept(intent: Shared.PhraseListStoreIntent.AddPhrase(text: trimmed, name: finalAlternative, imageUrl: finalImageUrl, recordingPath: finalRecordingPath))
-        #if DEBUG
-        // Incremental learning for development builds with predictions enabled.
-        Task { _ = try? await bridge.learnPhrase(text: trimmed) }
-        #endif
     }
     
     // MARK: - Prediction
@@ -1407,27 +1406,21 @@ final class IosViewModel: ObservableObject {
 
         #if DEBUG
         predictionJob?.cancel()
-        predictionJob = Task {
-            // Keep native text entry responsive. The prediction bridge can be
-            // relatively expensive, so only query after the user pauses typing.
+        predictionSubscription?.cancel()
+        predictionSubscription = nil
+        if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            predictions = Shared.PredictionResult(words: [], letters: [])
+            return
+        }
+        predictionJob = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 250_000_000)
-            if Task.isCancelled { return }
-
-            // Skip inference on short/blank tokens to avoid clearing or churning
-            // the bar while typing.
-            let lastTokenLength = (newValue.split(separator: " ").last?.count) ?? 0
-            let shouldPredict = !newValue.isEmpty &&
-                (newValue.last == " " || lastTokenLength >= 2)
-            let res: Shared.PredictionResult
-            if newValue.isEmpty {
-                res = Shared.PredictionResult(words: [], letters: [])
-            } else if shouldPredict,
-                      let bridgePrediction = (try? await bridge.predict(context: newValue, maxWords: 5, maxLetters: 5)) {
-                res = bridgePrediction
-            } else {
-                res = self.predictions
+            guard !Task.isCancelled, let self else { return }
+            self.predictionSubscription = self.bridge.observePredictions(
+                context: newValue, maxWords: 5, maxLetters: 5
+            ) { [weak self] result in
+                guard let self, self.input == newValue else { return }
+                self.predictions = result
             }
-            await MainActor.run { self.predictions = res }
         }
         #endif
     }
@@ -1893,9 +1886,6 @@ final class IosViewModel: ObservableObject {
         }
         selectedBoardKeyboardLayout = boardsFacade.boardKeyboardLayout(board: board)
         selectedBoardUsesSpellingMode = boardsFacade.boardUsesSpellingMode(board: board)
-        if selectedBoardKeyboardLayout != nil {
-            _ = try? await bridge.trainPredictionModel()
-        }
     }
 
     func refreshBoardCells() async {
@@ -2084,23 +2074,26 @@ final class IosViewModel: ObservableObject {
     }
 
     func refreshBoardPredictions(context: String) async {
+        stopBoardPredictions()
         var seenIds = Set<String>()
         let predictorIds = boardCells
             .filter { cell in cell.actions.contains { $0.lowercased() == ":prediction" || $0.lowercased() == ":predictions" } }
             .map(\.buttonId)
             .filter { seenIds.insert($0).inserted }
-        guard !predictorIds.isEmpty else {
-            boardPredictionsByButtonId = [:]
-            return
+        guard !predictorIds.isEmpty else { return }
+        boardPredictionSubscription = bridge.observePredictions(
+            context: context, maxWords: Int32(predictorIds.count), maxLetters: 0
+        ) { [weak self] result in
+            self?.boardPredictionsByButtonId = Dictionary(
+                uniqueKeysWithValues: zip(predictorIds, result.words).map { ($0.0, $0.1) }
+            )
         }
-        let result = (try? await bridge.predict(
-            context: context,
-            maxWords: Int32(predictorIds.count),
-            maxLetters: 0
-        )) ?? Shared.PredictionResult(words: [], letters: [])
-        boardPredictionsByButtonId = Dictionary(
-            uniqueKeysWithValues: zip(predictorIds, result.words).map { ($0.0, $0.1) }
-        )
+    }
+
+    func stopBoardPredictions() {
+        boardPredictionSubscription?.cancel()
+        boardPredictionSubscription = nil
+        boardPredictionsByButtonId = [:]
     }
 
     func boardPrediction(for buttonId: String) -> String? {
