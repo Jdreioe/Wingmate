@@ -13,7 +13,6 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SpeechService
-import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.infrastructure.AndroidFileStorage
@@ -33,7 +32,6 @@ import io.github.jdreioe.wingmate.infrastructure.AndroidSqlPronunciationDictiona
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidSqlSaidTextRepository
-import io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
 import io.github.jdreioe.wingmate.infrastructure.AndroidSystemVoiceProvider
 import io.github.jdreioe.wingmate.infrastructure.AndroidSecureEditingCredentialStorage
 import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
@@ -82,7 +80,6 @@ fun overrideAndroidSpeechService(context: Context, aptabaseAppKey: String) {
             singleOf(::AndroidSecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
             singleOf(::AndroidBackupMediaAccess) { bind<BackupMediaAccess>() }
             singleOf(::AndroidImageCacher) { bind<ImageCacher>() }
-            singleOf(::SimpleNGramPredictionService) { bind<TextPredictionService>() }
             single<FeatureUsageReporter> {
                 AndroidAptabaseFeatureUsageReporter(
                     context = context,

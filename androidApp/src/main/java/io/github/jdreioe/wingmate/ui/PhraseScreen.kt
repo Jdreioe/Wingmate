@@ -81,10 +81,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.FlowPreview
 import androidx.compose.ui.res.stringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
@@ -96,8 +92,7 @@ internal fun supportsMathMode(ttsEngine: TtsEngine): Boolean =
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalFoundationApi::class,
-    ExperimentalComposeUiApi::class,
-    FlowPreview::class
+    ExperimentalComposeUiApi::class
 )
 @Composable
 fun PhraseScreen(
@@ -134,9 +129,7 @@ fun PhraseScreen(
     val predictionService = remember(koin, predictionsEnabled) {
         if (predictionsEnabled) koin.getOrNull<TextPredictionService>() else null
     }
-    val dictionaryLoader = remember(koin, predictionsEnabled) {
-        if (predictionsEnabled) koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.DictionaryLoader>() else null
-    }
+
     val updateService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.UpdateService>() }
     val filePicker = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.FilePicker>() }
     val phraseRepo = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.PhraseRepository>() }
@@ -326,50 +319,14 @@ fun PhraseScreen(
                 }
             }
 
-            // Track model version to re-trigger predictions when training finishes
-            var predictionModelVersion by remember { mutableStateOf(0) }
-
-            // Load history on start so the History category appears if there are existing items
-            // Also train the prediction model on the history
-            LaunchedEffect(saidRepo, primaryLanguageState.value) {
+            LaunchedEffect(saidRepo) {
                 try {
-                    val list = saidRepo.list()
-                    historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L }
-
-                    if (!predictionsEnabled) return@LaunchedEffect
-                    
-                    // Train prediction model: first load base language dictionary, then user history
-                    val ngramService = predictionService as? io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService
-                    if (ngramService != null) {
-                        if (dictionaryLoader != null) {
-                            val dictWords = try {
-                                dictionaryLoader.loadDictionary(primaryLanguageState.value)
-                            } catch (failure: kotlinx.coroutines.CancellationException) {
-                                throw failure
-                            } catch (_: Exception) {
-                                emptyList()
-                            }
-                            if (dictWords.isNotEmpty()) {
-                                ngramService.setBaseLanguage(dictWords)
-                                // History trained on TOP of dictionary, so don't clear
-                                ngramService.train(list, clear = false)
-                            } else {
-                                // Unsupported/unavailable dictionaries fall back to private local history.
-                                ngramService.train(list)
-                            }
-                        } else {
-                            ngramService.train(list)
-                        }
-                        
-                        predictionModelVersion++ // Trigger update
-                    } else if (predictionService != null) {
-                        predictionService.train(list)
-                        predictionModelVersion++
-                    }
+                    historyItems = saidRepo.list().filter { it.visibleInHistory }
+                        .sortedByDescending { it.date ?: it.createdAt ?: 0L }
                 } catch (failure: kotlinx.coroutines.CancellationException) {
                     throw failure
                 } catch (_: Exception) {
-                    // Preserve the currently visible history if a refresh fails.
+                    // Preserve visible history if a refresh fails.
                 }
             }
 
@@ -389,42 +346,17 @@ fun PhraseScreen(
                 }
             }
             
-            // Update predictions as user types or model retrains.
-            // Debounce + minimum token length avoids running n-gram inference on every keypress.
-            LaunchedEffect(predictionService, predictionModelVersion) {
-                if (!predictionsEnabled) {
+            // input is an immutable projection of the communication session.
+            // Restart on text changes instead of capturing its initial value in a flow.
+            LaunchedEffect(predictionService, input.text) {
+                val service = predictionService ?: return@LaunchedEffect
+                if (input.text.isBlank()) {
                     predictions = PredictionResult()
                     return@LaunchedEffect
                 }
-                if (predictionService == null || !predictionService.isTrained()) {
-                    predictions = PredictionResult()
-                    return@LaunchedEffect
-                }
-
-                snapshotFlow { input.text }
-                    .debounce(250)
-                    .distinctUntilChanged()
-                    .collectLatest { currentText ->
-                        val activeTokenLength = currentText
-                            .trimEnd()
-                            .substringAfterLast(' ', "")
-                            .length
-
-                        val shouldPredict = currentText.isNotBlank() &&
-                            (currentText.lastOrNull() == ' ' || activeTokenLength >= 2)
-
-                        // Clear only when input is fully empty; keep last suggestions
-                        // while typing a short token so the bar doesn't blink.
-                        if (currentText.isBlank()) {
-                            predictions = PredictionResult()
-                            return@collectLatest
-                        }
-                        if (!shouldPredict) {
-                            return@collectLatest
-                        }
-
-                        predictions = predictionService.predict(currentText, maxWords = 5, maxLetters = 4)
-                    }
+                delay(250)
+                service.predictions(input.text, maxWords = 5, maxLetters = 4)
+                    .collect { predictions = it }
             }
 
             val openBoardSets: () -> Unit = {

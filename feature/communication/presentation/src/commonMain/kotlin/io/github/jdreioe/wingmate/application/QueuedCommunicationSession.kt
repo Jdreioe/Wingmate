@@ -323,9 +323,9 @@ class QueuedCommunicationSession(
                     visibleInHistory = request.visibleInHistory,
                 )
                 saidTextRepository.add(saidText)
-                // Q6a: single training seam — session trains prediction from History writes
+                // Rebuild from persisted history without delaying speech or discarding vocabulary.
                 if (saidText.visibleInHistory) {
-                    runCatching { predictionService?.train(listOf(saidText)) }
+                    predictionService?.refresh()
                 }
             }
         } catch (failure: CancellationException) {

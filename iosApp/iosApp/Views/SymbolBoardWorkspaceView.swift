@@ -695,6 +695,7 @@ struct SymbolBoardWorkspaceView: View {
         .task(id: boardPredictionTaskId) {
             await model.refreshBoardPredictions(context: boardSentenceText)
         }
+        .onDisappear { model.stopBoardPredictions() }
         .fullScreenCover(isPresented: $isFullscreen) {
             VStack(spacing: 12) {
                 HStack {

@@ -15,6 +15,8 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechService
+import io.github.jdreioe.wingmate.domain.PredictionResult
+import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.TextSpan
 import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.CompletableDeferred
@@ -142,6 +144,28 @@ class QueuedCommunicationSessionTest {
     }
 
     @Test
+    fun `prediction refresh sees persisted history and ignores preview speech`() = runTest {
+        val history = FakeSaidTextRepository()
+        val refreshedHistory = mutableListOf<List<String?>>()
+        val predictions = object : TextPredictionService {
+            override fun predictions(context: String, maxWords: Int, maxLetters: Int) =
+                kotlinx.coroutines.flow.flowOf(PredictionResult())
+            override fun refresh() { refreshedHistory.add(history.items.map { it.saidText }) }
+        }
+        val session = session(saidTextRepository = history, predictionService = predictions)
+        runCurrent()
+        session.accept(CommunicationAction.SpeakPart(MessagePart("preview"), null))
+        session.accept(CommunicationAction.ReplaceMessage(Message(parts = listOf(MessagePart("hello")))))
+        session.accept(CommunicationAction.SpeakActive(null))
+        session.accept(CommunicationAction.ReplaceMessage(Message(parts = listOf(MessagePart("water")))))
+        session.accept(CommunicationAction.SpeakActive(null))
+        runCurrent()
+
+        assertEquals<List<List<String?>>>(listOf(listOf("hello"), listOf("hello", "water")), refreshedHistory)
+        assertEquals(CommunicationPlaybackStatus.Idle, session.state.value.playbackStatus)
+    }
+
+    @Test
     fun `preview speech and failed speech do not enter history`() = runTest {
         val history = FakeSaidTextRepository()
         val speech = RecordingSpeechService(failText = "bad")
@@ -214,12 +238,14 @@ class QueuedCommunicationSessionTest {
         dataSource: FakeSessionDataSource = FakeSessionDataSource(),
         speechService: RecordingSpeechService = RecordingSpeechService(),
         saidTextRepository: FakeSaidTextRepository = FakeSaidTextRepository(),
+        predictionService: TextPredictionService? = null,
     ) = QueuedCommunicationSession(
         dataSource = dataSource,
         speechService = speechService,
         saidTextRepository = saidTextRepository,
         currentSettings = { Settings(primaryLanguage = "en-US", historyVisible = true) },
         scope = backgroundScope,
+        predictionService = predictionService,
     )
 }
 

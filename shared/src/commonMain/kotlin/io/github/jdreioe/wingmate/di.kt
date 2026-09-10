@@ -25,6 +25,7 @@ import io.github.jdreioe.wingmate.application.CommunicationFacade
 import io.github.jdreioe.wingmate.application.QueuedCommunicationSession
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.application.UnavailableBackupMediaAccess
+import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
@@ -38,6 +39,7 @@ import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.GoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.NoGoogleApiRequestHeaders
+import io.github.jdreioe.wingmate.infrastructure.LocalTextPredictionService
 import io.github.jdreioe.wingmate.infrastructure.DictionaryLoader
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryCommunicationSessionDataSource
@@ -57,6 +59,7 @@ import org.koin.core.qualifier.named
 import io.github.jdreioe.wingmate.di.appModule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.SupervisorJob
 
 @Suppress("unused")
@@ -85,10 +88,21 @@ internal fun createCoreDataModule(): Module = module {
         single<GoogleApiRequestHeaders> { NoGoogleApiRequestHeaders }
         singleOf(::GoogleVoiceCatalog)
         single { DictionaryLoader(getOrNull<io.github.jdreioe.wingmate.domain.FileStorage>()) } // For language dictionary pretraining and caching
+        single<TextPredictionService> {
+            LocalTextPredictionService(
+                languages = get<SettingsStateManager>().settings.map { it.primaryLanguage },
+                historyRepository = get(),
+                loadDictionary = get<DictionaryLoader>()::loadDictionary,
+                scope = get(named("predictionScope")),
+            )
+        }
+        single(named("predictionScope")) {
+            CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        }
         singleOf(::PhraseUseCase)
         singleOf(::CategoryUseCase)
         single { SettingsUseCase(get(), getOrNull()) }
-        singleOf(::UserDataManager)
+        single { UserDataManager(get(), getOrNull()) }
         singleOf(::InMemorySecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
         // Use explicit constructors here: Koin's constructor-reference DSL attempts
         // to inject Kotlin parameters that have default values (iterations/timeout).
@@ -111,7 +125,7 @@ internal fun createCoreDataModule(): Module = module {
             )
         }
         single<BackupManager> { get<CompleteBackupManager>() }
-        singleOf(::BackupFacade)
+        single { BackupFacade(get(), getOrNull()) }
         singleOf(::SpeechFacade)
         singleOf(::SettingsFacade)
         singleOf(::BoardsFacade)

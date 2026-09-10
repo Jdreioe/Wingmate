@@ -6,6 +6,8 @@ import io.github.jdreioe.wingmate.application.AccessInputEffect
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.di.appModule
 import io.github.jdreioe.wingmate.initKoin
+import io.github.jdreioe.wingmate.domain.PredictionResult
+import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.TextEditResult
 import io.github.jdreioe.wingmate.domain.TextEditingPolicy
@@ -14,6 +16,10 @@ import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import kotlin.time.Clock
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CancellationException
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -24,6 +30,11 @@ data class IosAccessInputResult(
     val currentTargetId: String?,
     val dwellProgress: Float,
 )
+
+/** Native callers cancel their observation when the text or visible screen changes. */
+class PredictionSubscription internal constructor(private val scope: CoroutineScope) {
+    fun cancel() { scope.cancel() }
+}
 
 class KoinBridge : KoinComponent {
     private val accessInput = AccessInputController()
@@ -139,63 +150,19 @@ class KoinBridge : KoinComponent {
     }
 
     // --- Prediction Helpers ---
-    // Bridge to TextPredictionService
-    suspend fun predict(context: String, maxWords: Int, maxLetters: Int): io.github.jdreioe.wingmate.domain.PredictionResult {
-        return try {
-            get<io.github.jdreioe.wingmate.domain.TextPredictionService>().predict(context, maxWords, maxLetters)
-        } catch (ce: CancellationException) {
-            throw ce
-        } catch (_: Throwable) {
-            io.github.jdreioe.wingmate.domain.PredictionResult()
+    fun observePredictions(
+        context: String,
+        maxWords: Int,
+        maxLetters: Int,
+        onChange: (PredictionResult) -> Unit,
+    ): PredictionSubscription {
+        val scope = CoroutineScope(Dispatchers.Main)
+        scope.launch {
+            get<TextPredictionService>()
+                .predictions(context, maxWords, maxLetters)
+                .collect { onChange(it) }
         }
-    }
-
-    suspend fun trainPredictionModel() {
-        try {
-            val service = get<io.github.jdreioe.wingmate.domain.TextPredictionService>()
-            val repo = get<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
-            val list = repo.list()
-            
-            // If it's the n-gram service, we can try to load base dict first
-            if (service is io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService) {
-                // Determine primary language
-                val settings = get<SettingsUseCase>().get()
-                val lang = settings.primaryLanguage
-                
-                // Try to load dict
-                 try {
-                    val loader = get<io.github.jdreioe.wingmate.infrastructure.DictionaryLoader>()
-                    val dict = loader.loadDictionary(lang)
-                    if (dict.isNotEmpty()) {
-                        service.setBaseLanguage(dict)
-                        // Train history on top without clearing
-                        service.train(list, false)
-                        return
-                    }
-                } catch (ce: CancellationException) {
-                    throw ce
-                } catch (_: Throwable) {}
-                 // Fallback: train just history (clearing old)
-                service.train(list, true)
-            } else {
-                service.train(list)
-            }
-        } catch (ce: CancellationException) {
-            throw ce
-        } catch (t: Throwable) {
-            OperationalLogger.warn("prediction_model.train", "failed", exceptionClass = t.loggingClassName())
-        }
-    }
-
-    suspend fun learnPhrase(text: String) {
-        try {
-            val service = get<io.github.jdreioe.wingmate.domain.TextPredictionService>()
-            if (service is io.github.jdreioe.wingmate.infrastructure.SimpleNGramPredictionService) {
-                service.learnPhrase(text)
-            }
-        } catch (ce: CancellationException) {
-            throw ce
-        } catch (_: Throwable) {}
+        return PredictionSubscription(scope)
     }
 
     // --- Pronunciation Dictionary Helpers ---
