@@ -1218,6 +1218,7 @@ mod native_gaze_tests {
         assert_ne!(control.presented.load(Ordering::Acquire), 14);
     }
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn successful_calibration_can_be_retried_before_enabling_selection() {
         let (_directory, mut app, _) = fixture();
