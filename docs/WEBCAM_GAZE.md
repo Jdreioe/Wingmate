@@ -25,17 +25,57 @@ needs no network connection. Setup requires several hundred MB of disk space.
 2. Open a Screen with a small grid of large targets. In Settings > Access, set
    a dwell duration, enable **Use webcam eye tracking**, and choose the camera.
 3. Enable gaze. Wingmate enters fullscreen, then starts camera capture.
-4. Look at each `+`. Nine calibration targets and four independent validation
-   targets advance automatically, with two seconds to settle and two seconds
-   of usable tracking to collect each target. Blink normally; collection pauses
-   while your eyes are closed. Each target allows up to ten seconds of collection. No clicks or precise gaze selections are required.
-5. If validation passes, press Enter or choose **Start camera gaze**. Selection
+4. On the positioning screen, wait for **Eyes detected**. Adjust the target
+   size and time to find each target (Slow: four seconds, Normal: two, Fast:
+   one). Enable **Step through** if a Supporter should press Enter or choose
+   **Collect this point** once the Communicator is looking at each target.
+   Choose **Start calibration** or press Enter when tracking is available.
+5. Look at the center of each circle. Nine learning targets are followed by
+   four independent accuracy checks. Collection requires two seconds of usable
+   tracking and at least 15 samples. Blink normally; collection pauses during
+   blinks, with up to ten seconds of collection time per target. Automatic
+   progression is the default and requires no clicks on targets.
+6. Inspect the four-point result map. Each point has a percentage and a text
+   label as well as a color. Select a point for its average offset and spread.
+   All four checks finish even if one has low accuracy.
+7. If all checks pass, press Enter or choose **Start camera gaze**. Selection
    uses the existing target highlight, dwell feedback, Rest mode and shared
    communication actions. Esc or **Stop gaze** stops capture.
 
-A failed validation does not allow gaze selection. After adjusting lighting or
-position, choose **Retry camera calibration** to start a fresh calibration with
-the selected camera. **Stop gaze** remains available to leave gaze mode. Missing runtime, blocked camera
+A failed accuracy check keeps gaze selection off. Select a weak area on the
+results map and choose **Improve this area (4 points)**. Wingmate recollects the
+four learning points surrounding that area, keeping the other five points.
+For example, the top-left area uses the square with corners at 10% and 50% of
+screen width and height. Each new batch replaces the old samples at that corner;
+repeated improvements do not accumulate training batches. The pace, target size,
+and step-through settings still apply.
+
+After those four points, the estimator retrains and all four independent
+accuracy checks run again. Both the previous and candidate models predict the
+same fresh check samples. The candidate is accepted only if no area's matched
+sample count decreases and either a count increases or the total mean squared
+error falls. Otherwise Wingmate restores both the previous model and its
+learning samples, shows **Previous calibration kept**, and displays that model's
+results on the fresh checks. It does not reuse old passing scores. This prevents
+accepting a worse retry on those observations; it does not guarantee that later
+tracking will remain stable.
+
+Selection stays off until every check passes and
+**Start camera gaze** is chosen. You can improve another area from the new
+results. Keep your position and camera fixed: if either moves, use **Retry full
+calibration** to return to positioning and repeat all nine learning targets and
+four checks. Pace, size, and step-through choices survive a full retry;
+previous results and training data do not. Learning samples are held in memory
+only during calibration and discarded when gaze selection starts or the owned
+camera process closes. After a tracking or estimator failure, choose **Retry
+camera calibration**. **Cancel** or Esc leaves calibration.
+
+The positioning, pacing, step-through, and result-map interaction draws on the
+[Tobii Dynavox calibration guide](https://www.brianpen.com/Journal/docs/TobiiDynavox_EyeGazeCalibration_I-16.pdf)
+and [Grid 3 tutorial](https://setbccdnstorage.blob.core.windows.net/data/Grid_3/Grid3_EyeGazeCalibration_Tutorial_2024.pdf).
+The webcam currently reports eye detection, not measured eye position or distance.
+
+Missing runtime, blocked camera
 access, a busy/disconnected camera and failed calibration have separate status
 messages. Calibration failures distinguish insufficient usable tracking,
 validation accuracy rejection, and estimator errors. No exception details or

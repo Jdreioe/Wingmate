@@ -20,6 +20,8 @@ pub struct Snapshot {
     pub received: Instant,
     pub losses: u64,
     pub progress: Option<super::webcam::Progress>,
+    pub validation: Vec<super::webcam::ValidationSummary>,
+    pub kept_previous: bool,
 }
 
 impl Snapshot {
@@ -54,6 +56,8 @@ impl Source {
                 received: Instant::now(),
                 losses: 0,
                 progress: None,
+                validation: Vec::new(),
+                kept_previous: false,
             })),
             webcam: None,
         }
@@ -65,16 +69,51 @@ impl Source {
     }
     pub fn progress(&self, progress: Option<super::webcam::Progress>) {
         self.unavailable(Status::Calibrating);
-        self.state.lock().expect("gaze mailbox").progress = progress;
+        let mut state = self.state.lock().expect("gaze mailbox");
+        state.progress = progress;
+        state.received = Instant::now();
     }
     pub fn snapshot(&self) -> Snapshot {
         self.state.lock().expect("gaze mailbox").clone()
+    }
+    pub fn target_feedback(&self, index: u32, feedback: super::webcam::Feedback) {
+        let mut state = self.state.lock().expect("gaze mailbox");
+        if let Some(super::webcam::Progress::Target {
+            index: current,
+            feedback: value,
+            ..
+        }) = &mut state.progress
+            && *current == index
+        {
+            *value = feedback;
+            state.received = Instant::now();
+        }
+    }
+    pub fn calibration_complete(
+        &self,
+        summaries: Vec<super::webcam::ValidationSummary>,
+        kept_previous: bool,
+    ) {
+        let passed = summaries
+            .iter()
+            .all(super::webcam::ValidationSummary::passed);
+        self.unavailable(if passed {
+            Status::Calibrating
+        } else {
+            Status::CalibrationFailed(super::webcam::Failure::Accuracy)
+        });
+        let mut state = self.state.lock().expect("gaze mailbox");
+        state.validation = summaries;
+        state.kept_previous = kept_previous;
+        state.progress = Some(super::webcam::Progress::Validated);
     }
     pub(crate) fn unavailable(&self, status: Status) {
         let mut state = self.state.lock().expect("gaze mailbox");
         state.status = status;
         state.sample = None;
         state.progress = None;
+        state.validation.clear();
+        state.kept_previous = false;
         state.losses = state.losses.wrapping_add(1);
     }
     pub(crate) fn sample(&self, sample: Sample, received: Instant) {
