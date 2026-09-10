@@ -54,9 +54,6 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -117,9 +114,9 @@ jobs:
       - name: Fetch Infisical secrets
         uses: Infisical/secrets-action@6cd3f7c0e4cc0d2395ee4ef414eb6eeb5d3e73db # v1.0.17
         with:
-          method: oidc
-          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
-          oidc-audience: ${{ vars.INFISICAL_OIDC_AUDIENCE }}
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: prod
           domain: https://eu.infisical.com
