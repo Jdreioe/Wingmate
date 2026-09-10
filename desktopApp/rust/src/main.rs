@@ -121,6 +121,11 @@ enum Message {
     WebcamCamera(gaze::webcam::Camera),
     WebcamContinue,
     WebcamRetry,
+    WebcamStepThrough(bool),
+    WebcamPace(u32),
+    WebcamTargetSize(u32),
+    WebcamInspectResult(u32),
+    WebcamImproveArea(u32),
     GazeSetupPoll,
     GazeAutostart(bool),
     GazeDiagnostics(bool),
@@ -231,7 +236,11 @@ impl App {
         ) && self.gaze.source.as_ref().is_some_and(|source| {
             matches!(
                 source.snapshot().progress,
-                Some(gaze::webcam::Progress::Validated)
+                Some(
+                    gaze::webcam::Progress::Validated
+                        | gaze::webcam::Progress::Positioning { .. }
+                        | gaze::webcam::Progress::Target { .. }
+                )
             )
         }) {
             return self.update(Message::WebcamContinue);
@@ -281,8 +290,83 @@ impl App {
                 if !self.can_retry_webcam() {
                     return Task::none();
                 }
+                let preferences = self
+                    .gaze
+                    .source
+                    .as_ref()
+                    .and_then(|s| s.webcam.as_ref())
+                    .map(|c| {
+                        (
+                            c.settle_millis.load(std::sync::atomic::Ordering::Acquire),
+                            c.target_size.load(std::sync::atomic::Ordering::Acquire),
+                            c.step_through.load(std::sync::atomic::Ordering::Acquire),
+                        )
+                    });
                 self.gaze.stop();
-                return self.update(Message::ToggleGaze);
+                let task = self.update(Message::ToggleGaze);
+                if let Some((pace, size, step_through)) = preferences
+                    && let Some(control) = self.gaze.source.as_ref().and_then(|s| s.webcam.as_ref())
+                {
+                    control
+                        .settle_millis
+                        .store(pace, std::sync::atomic::Ordering::Release);
+                    control
+                        .target_size
+                        .store(size, std::sync::atomic::Ordering::Release);
+                    control
+                        .step_through
+                        .store(step_through, std::sync::atomic::Ordering::Release);
+                }
+                return task;
+            }
+            Message::WebcamPace(value)
+            | Message::WebcamTargetSize(value)
+            | Message::WebcamInspectResult(value) => {
+                if let Some(control) = self.gaze.source.as_ref().and_then(|s| s.webcam.as_ref()) {
+                    let setting = match message {
+                        Message::WebcamPace(_) if [1000, 2000, 4000].contains(&value) => {
+                            Some(&control.settle_millis)
+                        }
+                        Message::WebcamTargetSize(_) if [64, 80, 112].contains(&value) => {
+                            Some(&control.target_size)
+                        }
+                        Message::WebcamInspectResult(_) if (10..=13).contains(&value) => {
+                            Some(&control.selected_result)
+                        }
+                        _ => None,
+                    };
+                    if let Some(setting) = setting {
+                        setting.store(value, std::sync::atomic::Ordering::Release);
+                    }
+                }
+            }
+            Message::WebcamImproveArea(area) => {
+                if let Some(source) = &self.gaze.source
+                    && let Some(control) = &source.webcam
+                    && matches!(
+                        source.snapshot().progress,
+                        Some(gaze::webcam::Progress::Validated)
+                    )
+                    && source
+                        .snapshot()
+                        .validation
+                        .iter()
+                        .any(|r| r.target == area)
+                {
+                    let _ = control.improve_area.compare_exchange(
+                        0,
+                        area,
+                        std::sync::atomic::Ordering::AcqRel,
+                        std::sync::atomic::Ordering::Acquire,
+                    );
+                }
+            }
+            Message::WebcamStepThrough(enabled) => {
+                if let Some(control) = self.gaze.source.as_ref().and_then(|s| s.webcam.as_ref()) {
+                    control
+                        .step_through
+                        .store(enabled, std::sync::atomic::Ordering::Release);
+                }
             }
             Message::WebcamEnabled(enabled) => {
                 self.gaze_setup.use_webcam = enabled;
@@ -291,15 +375,44 @@ impl App {
             Message::WebcamCamera(camera) => self.gaze_setup.camera = Some(camera),
             Message::WebcamContinue => {
                 if let Some(source) = &self.gaze.source
-                    && matches!(
-                        source.snapshot().progress,
-                        Some(gaze::webcam::Progress::Validated)
-                    )
                     && let Some(control) = &source.webcam
                 {
-                    control
-                        .presented
-                        .store(14, std::sync::atomic::Ordering::Release);
+                    let snapshot = source.snapshot();
+                    let next = match snapshot.progress {
+                        Some(gaze::webcam::Progress::Positioning {
+                            feedback: gaze::webcam::Feedback::EyesVisible,
+                        }) if snapshot.received.elapsed()
+                            <= std::time::Duration::from_millis(300) =>
+                        {
+                            Some(100)
+                        }
+                        Some(gaze::webcam::Progress::Target { index, .. })
+                            if control
+                                .step_through
+                                .load(std::sync::atomic::Ordering::Acquire) =>
+                        {
+                            Some(index)
+                        }
+                        Some(gaze::webcam::Progress::Validated)
+                            if control
+                                .improve_area
+                                .load(std::sync::atomic::Ordering::Acquire)
+                                == 0
+                                && snapshot.validation.len() == 4
+                                && snapshot
+                                    .validation
+                                    .iter()
+                                    .all(gaze::webcam::ValidationSummary::passed) =>
+                        {
+                            Some(14)
+                        }
+                        _ => None,
+                    };
+                    if let Some(next) = next {
+                        control
+                            .presented
+                            .store(next, std::sync::atomic::Ordering::Release);
+                    }
                 }
             }
             Message::GazeSetupPoll => self.gaze_setup.refresh(),
@@ -402,7 +515,22 @@ impl App {
                         );
                         return Task::none();
                     }
-                    self.gaze.camera_size = Some(size);
+                    // Fullscreen mode can arrive before the compositor's final
+                    // size. Geometry matters once calibration presents a target,
+                    // not while the camera runtime is still starting.
+                    if self
+                        .gaze
+                        .source
+                        .as_ref()
+                        .unwrap()
+                        .snapshot()
+                        .progress
+                        .is_some_and(|progress| {
+                            !matches!(progress, gaze::webcam::Progress::Positioning { .. })
+                        })
+                    {
+                        self.gaze.camera_size = Some(size);
+                    }
                 }
                 let snapshot = self.gaze.source.as_ref().unwrap().snapshot();
                 let point = snapshot.point(std::time::Instant::now());
@@ -794,12 +922,17 @@ impl App {
                 .source
                 .as_ref()
                 .is_some_and(|source| source.webcam.is_some())
-            && matches!(
+            && (self.gaze.source.as_ref().is_some_and(|source| {
+                matches!(
+                    source.snapshot().progress,
+                    Some(gaze::webcam::Progress::Validated)
+                )
+            }) || matches!(
                 self.gaze.status,
                 gaze::Status::CameraUnavailable
                     | gaze::Status::WebcamRuntimeMissing
                     | gaze::Status::CalibrationFailed(_)
-            )
+            ))
     }
 
     fn view(&self) -> Element<'_, Message> {
@@ -1034,6 +1167,140 @@ mod native_gaze_tests {
         assert_eq!(
             app.gaze.epoch, retry_epoch,
             "duplicate retries must not restart setup"
+        );
+    }
+
+    #[test]
+    fn step_through_waits_for_confirmation_and_failed_results_cannot_start_gaze() {
+        use std::sync::atomic::Ordering;
+        let (_directory, mut app, _) = fixture();
+        let source = gaze::runner::Source::camera(gaze::webcam::Camera {
+            path: "/dev/unused".into(),
+            name: "Test".into(),
+        });
+        app.gaze.source = Some(source.clone());
+        let _ = app.update(Message::WebcamStepThrough(true));
+        let control = source.webcam.as_ref().unwrap();
+        source.progress(Some(gaze::webcam::Progress::Target {
+            index: 1,
+            learning_total: 9,
+            point: gaze::protocol::Point { x: 0.1, y: 0.1 },
+            validation: false,
+            feedback: gaze::webcam::Feedback::Waiting,
+        }));
+        let _ = app.update(Message::WebcamImproveArea(10));
+        assert_eq!(control.improve_area.load(Ordering::Acquire), 0);
+        let _ = gaze::webcam::calibration_view(&source);
+        assert_eq!(control.presented.load(Ordering::Acquire), 0);
+        let _ = app.update(Message::WebcamContinue);
+        assert_eq!(control.presented.load(Ordering::Acquire), 1);
+        source.calibration_complete(
+            (10..=13)
+                .map(|target| gaze::webcam::ValidationSummary {
+                    target,
+                    matched: if target == 10 { 19 } else { 22 },
+                    total: 22,
+                    offset: None,
+                    spread: None,
+                })
+                .collect(),
+            false,
+        );
+        let _ = app.update(Message::WebcamContinue);
+        assert_ne!(control.presented.load(Ordering::Acquire), 14);
+        assert!(source.snapshot().point(std::time::Instant::now()).is_none());
+        let _ = app.update(Message::WebcamImproveArea(99));
+        assert_eq!(control.improve_area.load(Ordering::Acquire), 0);
+        let _ = app.update(Message::WebcamImproveArea(10));
+        let _ = app.update(Message::WebcamImproveArea(11));
+        assert_eq!(control.improve_area.load(Ordering::Acquire), 10);
+        let _ = app.update(Message::WebcamContinue);
+        assert_ne!(control.presented.load(Ordering::Acquire), 14);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn successful_calibration_can_be_retried_before_enabling_selection() {
+        let (_directory, mut app, _) = fixture();
+        let camera = gaze::webcam::Camera {
+            path: "/dev/unused".into(),
+            name: "Test".into(),
+        };
+        app.gaze_setup.use_webcam = true;
+        app.gaze_setup.camera = Some(camera.clone());
+        app.gaze.source = Some(gaze::runner::Source::camera(camera));
+        app.gaze.source.as_ref().unwrap().calibration_complete(
+            (10..=13)
+                .map(|target| gaze::webcam::ValidationSummary {
+                    target,
+                    matched: 20,
+                    total: 20,
+                    offset: None,
+                    spread: None,
+                })
+                .collect(),
+            false,
+        );
+        app.gaze.status = gaze::Status::Calibrating;
+        assert!(app.can_retry_webcam());
+        let _ = app.update(Message::WebcamRetry);
+        assert!(
+            app.gaze
+                .source
+                .as_ref()
+                .unwrap()
+                .snapshot()
+                .validation
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn webcam_fullscreen_resize_before_first_target_does_not_cancel_calibration() {
+        let (_directory, mut app, _) = fixture();
+        app.gaze.source = Some(gaze::runner::Source::camera(gaze::webcam::Camera {
+            path: "/dev/unused".into(),
+            name: "Test".into(),
+        }));
+        app.gaze_starting = true;
+        let windowed = iced::Size::new(1100.0, 760.0);
+        let fullscreen = iced::Size::new(2560.0, 1440.0);
+        for size in [windowed, fullscreen] {
+            let _ = app.update(Message::GazeWindow(
+                app.gaze.epoch,
+                iced::window::Mode::Fullscreen,
+                size,
+            ));
+        }
+        assert!(
+            app.gaze.enabled(),
+            "fullscreen startup must keep calibration running"
+        );
+        app.gaze
+            .source
+            .as_ref()
+            .unwrap()
+            .progress(Some(gaze::webcam::Progress::Target {
+                index: 1,
+                learning_total: 9,
+                point: Point { x: 0.1, y: 0.1 },
+                validation: false,
+                feedback: gaze::webcam::Feedback::Waiting,
+            }));
+        let _ = app.update(Message::GazeWindow(
+            app.gaze.epoch,
+            iced::window::Mode::Fullscreen,
+            fullscreen,
+        ));
+        assert_eq!(app.gaze.camera_size, Some(fullscreen));
+        let _ = app.update(Message::GazeWindow(
+            app.gaze.epoch,
+            iced::window::Mode::Fullscreen,
+            windowed,
+        ));
+        assert!(
+            !app.gaze.enabled(),
+            "resizing during calibration must still stop it"
         );
     }
 
