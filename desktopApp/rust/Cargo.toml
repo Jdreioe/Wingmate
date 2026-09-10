@@ -1,6 +1,6 @@
 [package]
 name = "wingmate-desktop"
-version = "0.7.0"
+version = "1.2.0"
 edition = "2024"
 description = "Wingmate cross-platform AAC desktop client"
 license = "GPL-3.0-or-later"
