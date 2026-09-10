@@ -21,6 +21,9 @@ jobs:
   promote:
     runs-on: ubuntu-latest
     environment: google-play-production
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -105,22 +108,18 @@ jobs:
       - name: Prepare production release notes
         run: bash ci_scripts/prepare_play_release_notes.sh "${{ steps.version.outputs.beta_tag }}" production
 
-      - name: Install Infisical CLI
-        run: |
-          set -o pipefail
-          curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | sudo -E bash
-          sudo apt-get update
-          sudo apt-get install -y infisical
-          infisical --version
+      - name: Fetch Infisical secrets
+        uses: Infisical/secrets-action@6cd3f7c0e4cc0d2395ee4ef414eb6eeb5d3e73db # v1.0.17
+        with:
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          oidc-audience: ${{ vars.INFISICAL_OIDC_AUDIENCE }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: prod
+          domain: https://eu.infisical.com
 
       - name: Promote open beta release to production
-        env:
-          INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
-          INFISICAL_PROJECT_ID: ad96050f-9132-4f4e-ae16-e46e4c5734fc
-          INFISICAL_API_URL: https://eu.infisical.com
-          INFISICAL_SKIP: "1"
         run: >-
-          infisical run --projectId="$INFISICAL_PROJECT_ID" --env=prod --
           ./gradlew :androidApp:promoteReleaseArtifact
           --from-track beta
           --promote-track production
