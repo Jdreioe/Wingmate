@@ -5,6 +5,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.jdreioe.wingmate.ui.CommunicationSessionStatus
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
@@ -41,6 +43,7 @@ fun App() {
     val backupManager = koinInject<CompleteBackupManager>()
     val settingsStateManager = koinInject<SettingsStateManager>()
     val communicationSession = koinInject<CommunicationSession>()
+    val communicationState by communicationSession.state.collectAsStateWithLifecycle()
     val restoreRevision by backupManager.restoreRevision.collectAsState()
     val reactiveSettings by rememberReactiveSettings()
 
@@ -186,76 +189,79 @@ fun App() {
                 settings = reactiveSettings,
                 enabled = currentScreen == Screen.Phrases || currentScreen == Screen.BoardSets,
             ) {
-                Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-                    key(restoreRevision) {
-                        when {
-                            startupLoadState is StartupLoadState.Failed -> {
-                                Column(
-                                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                ) {
-                                    Text(
-                                        text = androidx.compose.ui.res.stringResource(com.hojmoseit.wingmate.R.string.startup_load_failed),
-                                        style = MaterialTheme.typography.bodyLarge,
+                Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+                    CommunicationSessionStatus(communicationState, communicationSession::accept)
+                    Box(Modifier.weight(1f)) {
+                        key(restoreRevision) {
+                            when {
+                                startupLoadState is StartupLoadState.Failed -> {
+                                    Column(
+                                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                    ) {
+                                        Text(
+                                            text = androidx.compose.ui.res.stringResource(com.hojmoseit.wingmate.R.string.startup_load_failed),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                        )
+                                        Spacer(Modifier.height(16.dp))
+                                        Button(onClick = { startupRetryKey++ }) {
+                                            Text(androidx.compose.ui.res.stringResource(com.hojmoseit.wingmate.R.string.common_retry))
+                                        }
+                                    }
+                                }
+                                startupLoadState is StartupLoadState.Loading || !communicationState.isInitialized -> {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
+                                        )
+                                    }
+                                }
+                                else -> when (currentScreen) {
+                                Screen.Welcome -> {
+                                    WelcomeScreen(
+                                        onComplete = ::completeWelcomeAndNavigate,
+                                        onBackupRestored = ::navigateAfterBackupRestore
                                     )
-                                    Spacer(Modifier.height(16.dp))
-                                    Button(onClick = { startupRetryKey++ }) {
-                                        Text(androidx.compose.ui.res.stringResource(com.hojmoseit.wingmate.R.string.common_retry))
+                                }
+                                Screen.Phrases -> {
+                                    PhraseScreen(
+                                        onBackToWelcome = ::showWelcomeFlow,
+                                        onOpenBoardSetManager = {
+                                            createBoardSetOnLaunch = false
+                                            startupBoardSetId = null
+                                            startupBoardSetMode = BoardWorkspaceMode.Run
+                                            currentScreen = Screen.BoardSets
+                                        },
+                                        onEditTypingScreen = {
+                                            createBoardSetOnLaunch = false
+                                            startupBoardSetId = TYPING_SCREEN_ID
+                                            startupBoardSetMode = BoardWorkspaceMode.Edit
+                                            currentScreen = Screen.BoardSets
+                                        }
+                                    )
+                                }
+                                Screen.BoardSets -> {
+                                    BoardSetManagerRoot(
+                                        onBackToWelcome = ::showWelcomeFlow,
+                                        onBack = {
+                                            createBoardSetOnLaunch = false
+                                            currentScreen = Screen.Phrases
+                                        },
+                                        createOnLaunch = createBoardSetOnLaunch,
+                                        initialBoardSetId = startupBoardSetId,
+                                        initialMode = startupBoardSetMode,
+                                    )
+                                }
+                                null -> {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
+                                        )
                                     }
                                 }
                             }
-                            startupLoadState is StartupLoadState.Loading -> {
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
-                                    )
-                                }
                             }
-                            else -> when (currentScreen) {
-                            Screen.Welcome -> {
-                                WelcomeScreen(
-                                    onComplete = ::completeWelcomeAndNavigate,
-                                    onBackupRestored = ::navigateAfterBackupRestore
-                                )
-                            }
-                            Screen.Phrases -> {
-                                PhraseScreen(
-                                    onBackToWelcome = ::showWelcomeFlow,
-                                    onOpenBoardSetManager = {
-                                        createBoardSetOnLaunch = false
-                                        startupBoardSetId = null
-                                        startupBoardSetMode = BoardWorkspaceMode.Run
-                                        currentScreen = Screen.BoardSets
-                                    },
-                                    onEditTypingScreen = {
-                                        createBoardSetOnLaunch = false
-                                        startupBoardSetId = TYPING_SCREEN_ID
-                                        startupBoardSetMode = BoardWorkspaceMode.Edit
-                                        currentScreen = Screen.BoardSets
-                                    }
-                                )
-                            }
-                            Screen.BoardSets -> {
-                                BoardSetManagerRoot(
-                                    onBackToWelcome = ::showWelcomeFlow,
-                                    onBack = {
-                                        createBoardSetOnLaunch = false
-                                        currentScreen = Screen.Phrases
-                                    },
-                                    createOnLaunch = createBoardSetOnLaunch,
-                                    initialBoardSetId = startupBoardSetId,
-                                    initialMode = startupBoardSetMode,
-                                )
-                            }
-                            null -> {
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
-                                    )
-                                }
-                            }
-                        }
                         }
                     }
                 }
