@@ -10,10 +10,12 @@ import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,22 +23,31 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 // Simple Bloc-style base
-abstract class Bloc<E, S>(initial: S) {
-    private val scope = CoroutineScope(Dispatchers.Default + Job())
+abstract class Bloc<E, S>(initial: S, dispatcher: CoroutineDispatcher = Dispatchers.Default) {
+    private val scope = CoroutineScope(dispatcher + Job())
+    private val events = Channel<E>(Channel.UNLIMITED)
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<S> = _state.asStateFlow()
+
+    init {
+        // Repository reads and writes must finish in dispatch order, including across suspension.
+        scope.launch {
+            for (event in events) handle(event)
+        }
+    }
 
     protected fun setState(reducer: (S) -> S) {
         _state.update(reducer)
     }
 
     fun dispatch(event: E) {
-        scope.launch { handle(event) }
+        events.trySend(event)
     }
 
     protected abstract suspend fun handle(event: E)
 
     fun close() {
+        events.cancel()
         scope.cancel()
     }
 }
@@ -61,8 +72,9 @@ data class PhraseState(
 class PhraseBloc(
     private val useCase: PhraseUseCase,
     private val featureUsageReporter: FeatureUsageReporter,
-    private val categoryUseCase: CategoryUseCase
-) : Bloc<PhraseEvent, PhraseState>(PhraseState()) {
+    private val categoryUseCase: CategoryUseCase,
+    dispatcher: CoroutineDispatcher = Dispatchers.Default,
+) : Bloc<PhraseEvent, PhraseState>(PhraseState(), dispatcher) {
     // Backward-compatible constructor for existing DI setups that pass a repository
     constructor(repo: PhraseRepository) : this(
         PhraseUseCase(repo),
