@@ -21,6 +21,8 @@ import io.github.jdreioe.wingmate.domain.TextSpan
 import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -83,6 +85,70 @@ class QueuedCommunicationSessionTest {
         assertEquals(1, speech.stopCount)
         assertEquals(0, session.state.value.queuedSpeechCount)
         assertNull(session.state.value.currentSpeechRequestId)
+    }
+
+    @Test
+    fun `speech still works after the Android adapter cancels its caller on stop`() = runTest {
+        val speech = RecordingSpeechService(blockFirstRequest = true, cancelCallerOnStop = true)
+        val history = FakeSaidTextRepository()
+        val session = session(speechService = speech, saidTextRepository = history)
+        runCurrent()
+        session.accept(CommunicationAction.ReplaceRange(TextSpan(0, 0), "one"))
+        session.accept(CommunicationAction.SpeakActive(null))
+        speech.firstStarted.await()
+        session.accept(CommunicationAction.SpeakPart(MessagePart("discarded"), null))
+
+        session.accept(CommunicationAction.Stop)
+        runCurrent()
+        session.accept(CommunicationAction.ReplaceMessage(Message(parts = listOf(MessagePart("new")))))
+        session.accept(CommunicationAction.SpeakActive(null))
+        runCurrent()
+
+        assertEquals(listOf("one", "new"), speech.spoken)
+        assertEquals(listOf("new"), history.items.map { it.saidText })
+        assertEquals(0, session.state.value.queuedSpeechCount)
+        assertNull(session.state.value.lastFailure)
+    }
+
+    @Test
+    fun `new speech waits for an earlier stop to finish`() = runTest {
+        val speech = RecordingSpeechService(cancelCallerOnStop = true)
+        val session = session(speechService = speech)
+        runCurrent()
+        session.accept(CommunicationAction.SpeakPart(MessagePart("old"), null))
+        runCurrent()
+        speech.stopGate = CompletableDeferred()
+
+        session.accept(CommunicationAction.Stop)
+        runCurrent()
+        session.accept(CommunicationAction.SpeakPart(MessagePart("new"), null))
+        runCurrent()
+        assertEquals(listOf("old"), speech.spoken)
+
+        speech.stopGate?.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("old", "new"), speech.spoken)
+        assertEquals(0, session.state.value.queuedSpeechCount)
+    }
+
+    @Test
+    fun `retrying a failed initial load restores the saved message instead of overwriting it`() = runTest {
+        val dataSource = FakeSessionDataSource(
+            snapshot = CommunicationSessionSnapshot(activeMessage = Message(parts = listOf(MessagePart("saved")))),
+            failLoads = true,
+        )
+        val session = session(dataSource = dataSource)
+        runCurrent()
+        assertEquals(CommunicationPersistenceStatus.Failed, session.state.value.persistenceStatus)
+
+        dataSource.failLoads = false
+        session.accept(CommunicationAction.RetryPersistence)
+        runCurrent()
+
+        assertEquals("saved", session.state.value.activeMessage.displayText)
+        assertEquals("saved", dataSource.snapshot.activeMessage.displayText)
+        assertEquals(CommunicationPersistenceStatus.Saved, session.state.value.persistenceStatus)
+        assertNull(session.state.value.lastFailure)
     }
 
     @Test
@@ -252,11 +318,13 @@ class QueuedCommunicationSessionTest {
 private class FakeSessionDataSource(
     var snapshot: CommunicationSessionSnapshot = CommunicationSessionSnapshot(),
     var failWrites: Boolean = false,
+    var failLoads: Boolean = false,
 ) : CommunicationSessionDataSource {
     var saveGate: CompletableDeferred<Unit>? = null
 
     override suspend fun load(): CommunicationStorageResult<CommunicationSessionSnapshot> =
-        CommunicationStorageResult.Success(snapshot)
+        if (failLoads) CommunicationStorageResult.Failure(CommunicationStorageError.Unavailable)
+        else CommunicationStorageResult.Success(snapshot)
 
     override suspend fun save(
         snapshot: CommunicationSessionSnapshot,
@@ -285,6 +353,7 @@ private class FakeSaidTextRepository : SaidTextRepository {
 private class RecordingSpeechService(
     private val blockFirstRequest: Boolean = false,
     private val failText: String? = null,
+    private val cancelCallerOnStop: Boolean = false,
 ) : SpeechService {
     val spoken = mutableListOf<String>()
     val recordings = mutableListOf<String>()
@@ -294,6 +363,8 @@ private class RecordingSpeechService(
     var pauseCount = 0
     var resumeCount = 0
     private var requestCount = 0
+    private var callerJob: Job? = null
+    var stopGate: CompletableDeferred<Unit>? = null
 
     override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) = Unit
     override suspend fun speakSegments(
@@ -310,6 +381,7 @@ private class RecordingSpeechService(
         rate: Double?,
         cacheAudio: Boolean,
     ) {
+        callerJob = currentCoroutineContext()[Job]
         spoken += text
         requestCount++
         if (requestCount == 1) {
@@ -341,6 +413,8 @@ private class RecordingSpeechService(
     }
     override suspend fun stop() {
         stopCount++
+        stopGate?.await()
+        if (cancelCallerOnStop) callerJob?.cancel()
         releaseFirst.complete(Unit)
     }
     override suspend fun resume() {

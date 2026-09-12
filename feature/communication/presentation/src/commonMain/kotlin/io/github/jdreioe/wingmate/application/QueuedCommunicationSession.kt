@@ -24,6 +24,9 @@ import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -33,6 +36,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlin.time.Clock
 
 /**
@@ -55,6 +59,9 @@ class QueuedCommunicationSession(
     private val speechRequests = Channel<SpeechRequest>(Channel.UNLIMITED)
     private val stopGeneration = MutableStateFlow(0L)
     private val pauseRequested = MutableStateFlow(false)
+    private val pendingStop = MutableStateFlow<Job?>(null)
+    private val activePlayback = MutableStateFlow<Job?>(null)
+    private var initialLoadFailed = false
     private var speechRequestSequence = 0L
     private var failureSequence = 0L
 
@@ -65,10 +72,28 @@ class QueuedCommunicationSession(
         }
         scope.launch {
             initialization.await()
-            for (ignored in saveRequests) persistLatestSnapshot()
+            for (ignored in saveRequests) {
+                if (initialLoadFailed && state.value.revision == 0L) loadInitialSnapshot()
+                else persistLatestSnapshot()
+            }
         }
         scope.launch {
-            for (request in speechRequests) play(request)
+            for (request in speechRequests) {
+                pendingStop.value?.join()
+                // Native Stop may cancel its caller. Give each request its own job so
+                // cancellation cannot terminate the consumer of future speech requests.
+                supervisorScope {
+                    val playback = async(start = CoroutineStart.LAZY) { play(request) }
+                    activePlayback.value = playback
+                    try {
+                        playback.await()
+                    } catch (cancelled: CancellationException) {
+                        if (!currentCoroutineContext().isActive) throw cancelled
+                    } finally {
+                        activePlayback.compareAndSet(playback, null)
+                    }
+                }
+            }
         }
     }
 
@@ -182,18 +207,25 @@ class QueuedCommunicationSession(
 
     private suspend fun loadInitialSnapshot() {
         when (val loaded = dataSource.load()) {
-            is CommunicationStorageResult.Success -> mutableState.update { current ->
-                if (current.revision == 0L) {
-                    current.copy(
-                        snapshot = loaded.value.immutableSnapshot(),
-                        isInitialized = true,
-                        persistenceStatus = CommunicationPersistenceStatus.Saved,
-                    )
-                } else {
-                    current.copy(isInitialized = true)
+            is CommunicationStorageResult.Success -> {
+                initialLoadFailed = false
+                mutableState.update { current ->
+                    if (current.revision == 0L) {
+                        current.copy(
+                            snapshot = loaded.value.immutableSnapshot(),
+                            isInitialized = true,
+                            persistenceStatus = CommunicationPersistenceStatus.Saved,
+                            lastFailure = current.lastFailure?.takeUnless {
+                                it.kind == CommunicationFailureKind.Persistence
+                            },
+                        )
+                    } else {
+                        current.copy(isInitialized = true)
+                    }
                 }
             }
             is CommunicationStorageResult.Failure -> {
+                initialLoadFailed = true
                 mutableState.update { it.copy(isInitialized = true) }
                 markPersistenceFailure()
             }
@@ -455,6 +487,8 @@ class QueuedCommunicationSession(
 
     private fun stop() {
         stopGeneration.update { it + 1 }
+        val playback = activePlayback.value
+        playback?.cancel()
         pauseRequested.value = false
         var drained = 0
         while (speechRequests.tryReceive().isSuccess) drained++
@@ -465,9 +499,14 @@ class QueuedCommunicationSession(
                 queuedSpeechCount = (current.queuedSpeechCount - drained).coerceAtLeast(0),
             )
         }
-        scope.launch {
+        val previousStop = pendingStop.value
+        val stopping = scope.launch(start = CoroutineStart.LAZY) {
+            previousStop?.join()
+            playback?.join()
             runCatching { speechService.stop() }.onFailure { markPlaybackFailure() }
         }
+        pendingStop.value = stopping
+        stopping.start()
     }
 
     private fun markPlaybackFailure() {
