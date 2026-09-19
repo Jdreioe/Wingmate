@@ -52,6 +52,8 @@
     <string name="common_back">Back</string>
     <string name="common_continue">Continue</string>
     <string name="common_retry">Retry</string>
+    <string name="communication_storage_failed">Your Message could not be loaded or saved. Keep Wingmate open and retry.</string>
+    <string name="communication_playback_failed">Speech could not finish. Your Message is still available; try speaking again.</string>
     <string name="startup_load_failed">Wingmate could not load your settings. Your existing configuration has not been changed.</string>
     <string name="welcome_import_unreadable">The selected file could not be read. Tap the import option to retry.</string>
     <string name="welcome_import_persistence_failed">The screen could not be saved. Your current screens were kept; tap to retry.</string>

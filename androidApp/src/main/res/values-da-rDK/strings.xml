@@ -52,6 +52,8 @@
     <string name="common_back">Tilbage</string>
     <string name="common_continue">Fortsæt</string>
     <string name="common_retry">Prøv igen</string>
+    <string name="communication_storage_failed">Din besked kunne ikke indlæses eller gemmes. Hold Wingmate åben, og prøv igen.</string>
+    <string name="communication_playback_failed">Oplæsningen kunne ikke gennemføres. Din besked er stadig tilgængelig. Prøv at læse den op igen.</string>
     <string name="startup_load_failed">Wingmate kunne ikke indlæse dine indstillinger. Din eksisterende konfiguration er ikke blevet ændret.</string>
     <string name="welcome_import_unreadable">Den valgte fil kunne ikke læses. Tryk på importmuligheden for at prøve igen.</string>
     <string name="welcome_import_persistence_failed">Skærmen kunne ikke gemmes. Dine nuværende skærme blev bevaret; tryk for at prøve igen.</string>
