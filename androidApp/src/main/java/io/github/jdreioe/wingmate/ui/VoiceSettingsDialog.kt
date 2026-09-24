@@ -25,7 +25,7 @@ fun VoiceSettingsDialog(
     show: Boolean, 
     voice: Voice, 
     onDismiss: () -> Unit, 
-    onSave: ((Voice) -> Unit)? = null,
+    onSave: (Voice) -> Unit,
     onOpenWelcomeFlow: (() -> Unit)? = null
 ) {
     if (!show) return
@@ -144,8 +144,7 @@ fun VoiceSettingsDialog(
         dismissButton = {
             TextButton(onClick = {
                 val updated = voice.copy(selectedLanguage = selectedLanguage, pitch = pitch, rate = rate, pitchForSSML = null, rateForSSML = null)
-                onSave?.invoke(updated)
-                onDismiss()
+                onSave(updated)
             }) { Text(stringResource(R.string.common_save)) }
         }
     )

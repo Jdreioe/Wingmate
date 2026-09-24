@@ -2118,7 +2118,8 @@ internal fun VoiceSelectionPage(
                         modifier = Modifier.padding(16.dp)
                     )
                 } else {
-                    filteredVoices.forEachIndexed { index, v ->
+                    filteredVoices.forEachIndexed { index, catalogVoice ->
+                        val v = selected?.takeIf { it.name == catalogVoice.name } ?: catalogVoice
                         VoiceRow(
                             voice = v,
                             isSelected = selected?.name == v.name,
@@ -2169,6 +2170,7 @@ internal fun VoiceSelectionPage(
                     operationError = null
                     try {
                         useCase.select(updated)
+                        selected = updated
                         val primary = updated.selectedLanguage.ifBlank { updated.primaryLanguage ?: "" }
                         if (primary.isNotBlank() && settingsUseCase != null) {
                             val current = settingsUseCase.get()

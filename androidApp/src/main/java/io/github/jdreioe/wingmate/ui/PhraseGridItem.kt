@@ -32,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -91,8 +92,28 @@ fun PhraseGridItem(
     val deleteLabel = stringResource(R.string.common_delete)
     val copySoundfileLabel = stringResource(R.string.phrase_item_copy_soundfile)
     val shareSoundfileLabel = stringResource(R.string.phrase_item_share_soundfile)
+    var showShareError by remember(item.recordingPath) { mutableStateOf(false) }
+    val audioPath = item.recordingPath?.takeIf { it.isNotBlank() }
+    val showHistoryShare = readOnly && !isEditMode && audioPath != null
+    val shareAudio = {
+        showShareError = audioPath == null ||
+            runCatching { shareService?.shareAudio(audioPath) == true }.getOrDefault(false).not()
+    }
     val moveUpLabel = stringResource(R.string.phrase_item_move_up)
     val moveDownLabel = stringResource(R.string.phrase_item_move_down)
+
+    if (showShareError) {
+        AlertDialog(
+            onDismissRequest = { showShareError = false },
+            title = { Text(shareSoundfileLabel) },
+            text = { Text(stringResource(R.string.phrase_item_share_failed)) },
+            confirmButton = {
+                TextButton(onClick = { showShareError = false }) {
+                    Text(stringResource(R.string.common_close))
+                }
+            },
+        )
+    }
 
     val settings by rememberReactiveSettings()
     
@@ -261,7 +282,6 @@ fun PhraseGridItem(
                                 })
                             }
                             // Copy/share audio file if available
-                            val audioPath = item.recordingPath
                             if (!audioPath.isNullOrBlank() && onCopyAudio != null) {
                                 DropdownMenuItem(text = { Text(copySoundfileLabel) }, onClick = {
                                     showMenu = false
@@ -271,9 +291,7 @@ fun PhraseGridItem(
                             if (!audioPath.isNullOrBlank()) {
                                 DropdownMenuItem(text = { Text(shareSoundfileLabel) }, onClick = {
                                     showMenu = false
-                                    runCatching {
-                                        shareService?.shareAudio(audioPath)
-                                    }
+                                    shareAudio()
                                 })
                             }
                         }
@@ -307,6 +325,7 @@ fun PhraseGridItem(
             Box(modifier = Modifier
                 .align(Alignment.Center)
                 .fillMaxSize()
+                .padding(end = if (showHistoryShare) 48.dp else 0.dp)
                 .rotate(rotation)) {
                 
                 val imageUrl = item.imageUrl
@@ -350,6 +369,11 @@ fun PhraseGridItem(
                 }
             }
 
+            if (showHistoryShare) {
+                IconButton(onClick = shareAudio, modifier = Modifier.align(Alignment.BottomEnd)) {
+                    Icon(Icons.Filled.Share, contentDescription = shareSoundfileLabel, tint = contentColor)
+                }
+            }
             if (isEditMode && !readOnly) {
                 // Show material-style move up / move down / delete buttons
                 Column(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) {

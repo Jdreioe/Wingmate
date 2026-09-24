@@ -77,6 +77,14 @@ sealed interface CommunicationAction {
         val cacheAudio: Boolean = true,
     ) : CommunicationAction
 
+    /** Speak an immutable workspace draft without replacing the active or Held Message. */
+    data class SpeakMessage(
+        val message: Message,
+        val voice: Voice?,
+        val segments: List<SpeechSegment>? = null,
+        val cacheAudio: Boolean = true,
+    ) : CommunicationAction
+
     data class SpeakPart(
         val part: MessagePart,
         val voice: Voice?,
