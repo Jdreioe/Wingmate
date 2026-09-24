@@ -34,6 +34,7 @@ fun toBuildConfigStringLiteral(value: String): String {
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.kotlinxSerialization)
     id("com.github.triplet.play")
 }
 

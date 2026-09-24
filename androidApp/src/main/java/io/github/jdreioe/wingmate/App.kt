@@ -1,5 +1,7 @@
 package io.github.jdreioe.wingmate
 
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.createSavedStateHandle
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,7 +34,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-enum class Screen { Welcome, Phrases, BoardSets }
+enum class Screen { Welcome, Phrases, BoardSets, Nodes }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,6 +46,19 @@ fun App() {
     val settingsStateManager = koinInject<SettingsStateManager>()
     val communicationSession = koinInject<CommunicationSession>()
     val communicationState by communicationSession.state.collectAsStateWithLifecycle()
+    val nodeFiles = koinInject<io.github.jdreioe.wingmate.domain.FileStorage>()
+    val nodeWorkspace: io.github.jdreioe.wingmate.ui.nodes.NodeWorkspaceViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = androidx.lifecycle.viewmodel.viewModelFactory {
+            initializer {
+                io.github.jdreioe.wingmate.ui.nodes.NodeWorkspaceViewModel(
+                    createSavedStateHandle(),
+                    io.github.jdreioe.wingmate.infrastructure.FileNodeWorkspaceStorage(nodeFiles),
+                    communicationSession,
+                    voiceUseCase::selected,
+                )
+            }
+        },
+    )
     val restoreRevision by backupManager.restoreRevision.collectAsState()
     val reactiveSettings by rememberReactiveSettings()
 
@@ -177,7 +192,7 @@ fun App() {
                 )
             }
 
-            PlatformBackHandler(enabled = currentScreen == Screen.BoardSets) {
+            PlatformBackHandler(enabled = currentScreen == Screen.BoardSets || currentScreen == Screen.Nodes) {
                 createBoardSetOnLaunch = false
                 startupBoardSetId = null
                 currentScreen = Screen.Phrases
@@ -187,7 +202,7 @@ fun App() {
             // screen content and controls clear of bars, gestures, and cutouts.
             InteractionInputRoot(
                 settings = reactiveSettings,
-                enabled = currentScreen == Screen.Phrases || currentScreen == Screen.BoardSets,
+                enabled = currentScreen == Screen.Phrases || currentScreen == Screen.BoardSets || currentScreen == Screen.Nodes,
             ) {
                 Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
                     CommunicationSessionStatus(communicationState, communicationSession::accept)
@@ -227,6 +242,12 @@ fun App() {
                                 Screen.Phrases -> {
                                     PhraseScreen(
                                         onBackToWelcome = ::showWelcomeFlow,
+                                        onOpenNodeWorkspace = { currentScreen = Screen.Nodes },
+                                        onTypingEdited = nodeWorkspace::recordTyping,
+                                        onConvertWordToNode = { word, message ->
+                                            nodeWorkspace.convertWord(word, message)
+                                            currentScreen = Screen.Nodes
+                                        },
                                         onOpenBoardSetManager = {
                                             createBoardSetOnLaunch = false
                                             startupBoardSetId = null
@@ -240,6 +261,9 @@ fun App() {
                                             currentScreen = Screen.BoardSets
                                         }
                                     )
+                                }
+                                Screen.Nodes -> {
+                                    io.github.jdreioe.wingmate.ui.nodes.NodeWorkspaceRoot(viewModel = nodeWorkspace, onBack = { currentScreen = Screen.Phrases })
                                 }
                                 Screen.BoardSets -> {
                                     BoardSetManagerRoot(

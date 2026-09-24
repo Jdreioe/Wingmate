@@ -300,6 +300,28 @@ class QueuedCommunicationSessionTest {
         assertEquals(0, session.state.value.queuedSpeechCount)
     }
 
+    @Test
+    fun `prepared workspace message preserves active and held messages and records history once`() = runTest {
+        val speech = RecordingSpeechService(blockFirstRequest = true)
+        val history = FakeSaidTextRepository()
+        val original = CommunicationSessionSnapshot(
+            activeMessage = Message(parts = listOf(MessagePart("typing"))),
+            heldMessage = Message(parts = listOf(MessagePart("held"))),
+        )
+        val session = session(dataSource = FakeSessionDataSource(original), speechService = speech, saidTextRepository = history)
+        runCurrent()
+        val segments = mutableListOf(SpeechSegment("", 250), SpeechSegment("I think I", 500))
+        val expected = segments.toList()
+        session.accept(CommunicationAction.SpeakMessage(Message(parts = listOf(MessagePart("I think I"))), null, segments))
+        segments.clear()
+        speech.firstStarted.await()
+        speech.releaseFirst.complete(Unit)
+        runCurrent()
+        assertEquals(expected, speech.preparedSegments.single())
+        assertEquals(original, session.state.value.snapshot)
+        assertEquals(listOf("I think I"), history.items.map { it.saidText })
+    }
+
     private fun kotlinx.coroutines.test.TestScope.session(
         dataSource: FakeSessionDataSource = FakeSessionDataSource(),
         speechService: RecordingSpeechService = RecordingSpeechService(),
@@ -357,6 +379,7 @@ private class RecordingSpeechService(
 ) : SpeechService {
     val spoken = mutableListOf<String>()
     val recordings = mutableListOf<String>()
+    val preparedSegments = mutableListOf<List<SpeechSegment>>()
     val firstStarted = CompletableDeferred<Unit>()
     val releaseFirst = CompletableDeferred<Unit>()
     var stopCount = 0
@@ -397,7 +420,10 @@ private class RecordingSpeechService(
         pitch: Double?,
         rate: Double?,
         cacheAudio: Boolean,
-    ) = speakWithoutHistory(segments.joinToString("") { it.text }, voice, pitch, rate, cacheAudio)
+    ) {
+        preparedSegments += segments.toList()
+        speakWithoutHistory(segments.joinToString("") { it.text }, voice, pitch, rate, cacheAudio)
+    }
 
     override suspend fun speakRecordedAudio(
         audioFilePath: String,

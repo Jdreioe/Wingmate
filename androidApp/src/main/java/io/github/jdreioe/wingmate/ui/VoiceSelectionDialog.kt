@@ -432,7 +432,8 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                         )
                     } else {
                         LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
-                            items(filteredAzureVoices) { v ->
+                            items(filteredAzureVoices) { catalogVoice ->
+                                val v = selected?.takeIf { it.name == catalogVoice.name } ?: catalogVoice
                                 Row(modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable(enabled = true, onClickLabel = null) {
@@ -496,6 +497,7 @@ fun VoiceSelectionDialog(show: Boolean, onDismiss: () -> Unit, onOpenWelcomeFlow
                     operationError = null
                     try {
                         useCase.select(updated)
+                        selected = updated
                         // also persist primary language from updated voice if available
                         val primary = updated.selectedLanguage.ifBlank { updated.primaryLanguage ?: "" }
                         if (primary.isNotBlank() && settingsUseCase != null) {

@@ -98,6 +98,9 @@ internal fun supportsMathMode(ttsEngine: TtsEngine): Boolean =
 fun PhraseScreen(
     onBackToWelcome: (() -> Unit)? = null,
     onOpenBoardSetManager: (() -> Unit)? = null,
+    onOpenNodeWorkspace: (() -> Unit)? = null,
+    onTypingEdited: ((String, String) -> Unit)? = null,
+    onConvertWordToNode: ((String, String) -> Unit)? = null,
     onEditTypingScreen: (() -> Unit)? = null,
     initialBoardId: String? = null
 ) {
@@ -461,6 +464,7 @@ fun PhraseScreen(
                 refocusInput()
             }
             fun replaceInputText(newText: String, cursorPos: Int) {
+                onTypingEdited?.invoke(communicationSession.state.value.activeMessage.displayText, newText)
                 communicationSession.accept(
                     Message.fromTextDiff(
                         currentText = communicationSession.state.value.activeMessage.displayText,
@@ -512,6 +516,15 @@ fun PhraseScreen(
                                                         mathMode = !mathMode
                                                         appBarMenuExpanded = false
                                                     }
+                                                )
+                                            }
+                                            if (onOpenNodeWorkspace != null) {
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(R.string.nodes_title)) },
+                                                    onClick = {
+                                                        appBarMenuExpanded = false
+                                                        onOpenNodeWorkspace()
+                                                    },
                                                 )
                                             }
                                             DropdownMenuItem(
@@ -704,6 +717,7 @@ fun PhraseScreen(
                     SecondaryLanguageTextField(
                         value = input,
                         onValueChange = { newValue ->
+                            onTypingEdited?.invoke(communicationSession.state.value.activeMessage.displayText, newValue.text)
                             communicationSession.accept(
                                 Message.fromTextDiff(
                                     currentText = communicationSession.state.value.activeMessage.displayText,
@@ -742,6 +756,17 @@ fun PhraseScreen(
                         }
                     )
                     
+
+                    if (onConvertWordToNode != null) {
+                        val nodeWord = io.github.jdreioe.wingmate.ui.nodes.wordAtSelection(input.text, input.selection.start, input.selection.end)
+                        TextButton(
+                            onClick = { nodeWord?.let { onConvertWordToNode(it, input.text) } },
+                            enabled = nodeWord != null,
+                        ) {
+                            Text(if (nodeWord == null) stringResource(R.string.nodes_select_word)
+                                else stringResource(R.string.nodes_convert_word, nodeWord))
+                        }
+                    }
 
                     // Typing vocabulary shown below the Message bar.
                     var showEditDialog by remember { mutableStateOf(false) }
@@ -1307,6 +1332,7 @@ fun PhraseScreen(
                             OutlinedTextField(
                                 value = input,
                                 onValueChange = { newValue ->
+                                    onTypingEdited?.invoke(communicationSession.state.value.activeMessage.displayText, newValue.text)
                                     communicationSession.accept(
                                         Message.fromTextDiff(
                                             currentText = communicationSession.state.value.activeMessage.displayText,

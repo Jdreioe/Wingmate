@@ -167,6 +167,13 @@ class QueuedCommunicationSession(
                 val message = state.value.activeMessage
                 enqueueSpeech(message, action.voice, action.cacheAudio, recordHistory = true)
             }
+            is CommunicationAction.SpeakMessage -> enqueueSpeech(
+                message = action.message,
+                voice = action.voice,
+                cacheAudio = action.cacheAudio,
+                recordHistory = true,
+                segments = action.segments,
+            )
             is CommunicationAction.SpeakPart -> enqueueSpeech(
                 message = Message(parts = listOf(action.part)),
                 voice = action.voice,
@@ -294,6 +301,7 @@ class QueuedCommunicationSession(
         cacheAudio: Boolean,
         recordHistory: Boolean,
         rateOverride: Double? = null,
+        segments: List<SpeechSegment>? = null,
     ) {
         if (message.spokenText.isBlank() && message.parts.none { it.recordingPath != null }) return
         val settings = currentSettings()
@@ -307,6 +315,7 @@ class QueuedCommunicationSession(
             cacheAudio = cacheAudio,
             rateOverride = rateOverride,
             recordHistory = recordHistory,
+            segments = segments?.toList(),
             visibleInHistory = settings.historyVisible,
             primaryLanguage = settings.primaryLanguage,
         )
@@ -380,6 +389,20 @@ class QueuedCommunicationSession(
     }
 
     private suspend fun playMessage(request: SpeechRequest, generation: Long) {
+        request.segments?.let { segments ->
+            awaitResume(generation)
+            mutableState.update { it.copy(playbackStatus = CommunicationPlaybackStatus.Playing) }
+            speechService.speakSegmentsWithoutHistory(
+                segments = segments,
+                voice = request.voice,
+                pitch = request.voice?.pitch,
+                rate = request.rateOverride ?: request.voice?.rate,
+                cacheAudio = request.cacheAudio,
+            )
+            awaitPlayback()
+            ensureNotStopped(generation)
+            return
+        }
         val pending = mutableListOf<SpeechChunk>()
 
         suspend fun flushPending() {
@@ -538,6 +561,7 @@ private data class SpeechRequest(
     val cacheAudio: Boolean,
     val rateOverride: Double?,
     val recordHistory: Boolean,
+    val segments: List<SpeechSegment>?,
     val visibleInHistory: Boolean,
     val primaryLanguage: String,
 )
