@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wingmate · Typing workspace layouts (#299)</title>
+<style>
+  :root {
+    /* Material 3 dark, tuned to the app on Jonas's Pixel */
+    --bg: #121318;
+    --s1: #1b1c22;
+    --s2: #23242b;
+    --s3: #2d2e36;
+    --s4: #383942;
+    --on: #e4e1e9;
+    --muted: #c6c5d0;
+    --faint: #8f909a;
+    --line: #45464f;
+    --primary: #b8c4ff;
+    --on-primary: #1f2d61;
+    --pc: #37457a;
+    --on-pc: #dde1ff;
+    --tert: #e8b9d6;
+    --tc: #5b3d57;
+    --scan: #ffd54f;
+    --page: #0b0c10;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--on);
+    font-family: Roboto, "Google Sans", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  svg.i { width: 1em; height: 1em; fill: currentColor; flex: none; display: block; }
+
+  .doc { max-width: 1280px; margin: 0 auto; padding: 48px 40px 80px; }
+  .doc > header h1 { font-size: 30px; font-weight: 500; margin: 0 0 8px; letter-spacing: -.2px; }
+  .doc > header p { color: var(--muted); max-width: 820px; line-height: 1.55; margin: 0 0 8px; font-size: 15px; }
+  .rules { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; }
+  .rules span { background: var(--s2); border: 1px solid var(--line); color: var(--muted); font-size: 12.5px;
+    padding: 5px 10px; border-radius: 99px; }
+
+  section.d { margin-top: 64px; }
+  section.d > h2 { font-size: 22px; font-weight: 500; margin: 0 0 4px; display: flex; gap: 12px; align-items: baseline; }
+  section.d > h2 .n { color: var(--primary); font-variant-numeric: tabular-nums; }
+  section.d > .lede { color: var(--muted); margin: 0 0 22px; max-width: 900px; line-height: 1.55; font-size: 15px; }
+  .row { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+  .fig { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .fig figcaption { color: var(--faint); font-size: 12.5px; max-width: 360px; text-align: center; line-height: 1.4; }
+  .notes { flex: 1; min-width: 280px; max-width: 420px; font-size: 14px; line-height: 1.55; color: var(--muted); }
+  .notes h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--faint); margin: 0 0 6px; font-weight: 600; }
+  .notes ul { margin: 0 0 18px; padding-left: 18px; }
+  .notes li { margin: 3px 0; }
+  .notes .cost { display: inline-block; font-size: 12px; padding: 3px 9px; border-radius: 6px; background: var(--s3); color: var(--on); margin-right: 6px; }
+  .notes b { color: var(--on); font-weight: 500; }
+
+  /* ---------- device frames ---------- */
+  .phone { width: 360px; height: 780px; border-radius: 40px; background: var(--bg); overflow: hidden; position: relative;
+    box-shadow: 0 0 0 9px #26272d, 0 0 0 10px #3a3b42, 0 30px 60px rgba(0,0,0,.6); display: flex; flex-direction: column; }
+  .tablet { width: 860px; height: 560px; border-radius: 26px; background: var(--bg); overflow: hidden; position: relative;
+    box-shadow: 0 0 0 12px #26272d, 0 0 0 13px #3a3b42, 0 30px 60px rgba(0,0,0,.6); display: flex; flex-direction: column; }
+  .sb { height: 30px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 22px;
+    font-size: 12px; color: var(--muted); font-weight: 500; }
+  .sb .dots { display: flex; gap: 5px; align-items: center; }
+  .sb .dots i { width: 14px; height: 9px; border-radius: 2px; background: var(--muted); display: block; opacity: .8; }
+  .nav { height: 20px; flex: none; display: grid; place-items: center; }
+  .nav::after { content: ""; width: 108px; height: 4px; border-radius: 4px; background: #8f909a; opacity: .7; }
+
+  /* ---------- app bar ---------- */
+  .bar { height: 56px; flex: none; display: flex; align-items: center; padding: 0 8px 0 16px; gap: 4px; }
+  .bar .t { font-size: 20px; flex: 1; }
+  .ib { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); font-size: 22px; }
+  .ib.tonal { background: var(--s3); color: var(--on); }
+  .ws { display: flex; background: var(--s2); border-radius: 99px; padding: 3px; gap: 2px; }
+  .ws span { padding: 8px 14px; border-radius: 99px; font-size: 14px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .ws span.on { background: var(--pc); color: var(--on-pc); font-weight: 500; }
+
+  /* ---------- Message bar (composer) ---------- */
+  .composer { display: flex; align-items: flex-end; gap: 8px; padding: 8px 10px; flex: none; }
+  .msg { flex: 1; background: var(--s3); border-radius: 26px; padding: 13px 18px; font-size: 17px; line-height: 1.35; min-height: 52px; }
+  .msg .ph { color: var(--faint); }
+  .caret { display: inline-block; width: 2px; height: 1.1em; background: var(--primary); vertical-align: -3px; margin-left: 1px; }
+  .round { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font-size: 26px; flex: none; }
+  .round.tonal { background: var(--s3); color: var(--on); }
+  .speak { background: var(--primary); color: var(--on-primary); }
+  .speak.pill { width: auto; padding: 0 20px 0 16px; border-radius: 26px; display: flex; gap: 8px; font-size: 16px; font-weight: 600; }
+  .speak.pill svg { font-size: 26px; }
+
+  /* ---------- Held message ---------- */
+  .held { margin: 4px 12px 0; background: var(--s2); border: 1px dashed var(--line); border-radius: 16px; padding: 10px 12px;
+    display: flex; gap: 10px; align-items: center; font-size: 14px; color: var(--muted); flex: none; }
+  .held svg { font-size: 20px; color: var(--tert); }
+  .held b { color: var(--on); font-weight: 500; display: block; font-size: 14.5px; }
+  .held .sw { margin-left: auto; background: var(--s3); color: var(--on); border-radius: 12px; padding: 9px 12px; font-size: 13px;
+    display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+
+  /* ---------- compact Phrase row ---------- */
+  .compact { display: flex; gap: 8px; padding: 6px 10px 2px; overflow: hidden; flex: none; }
+  .compact span { background: var(--s2); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; font-size: 15px;
+    white-space: nowrap; }
+
+  /* ---------- keyboard ---------- */
+  .kb { background: #1e1f25; padding: 8px 5px 6px; flex: none; display: flex; flex-direction: column; gap: 9px; }
+  .kb .sug { display: flex; justify-content: space-around; color: var(--muted); font-size: 15px; padding: 2px 0 4px; }
+  .kb .r { display: flex; gap: 5px; justify-content: center; }
+  .kb .k { flex: 1; max-width: 30px; height: 42px; border-radius: 7px; background: #3a3b42; display: grid; place-items: center;
+    font-size: 17px; color: #e8e8ee; }
+  .kb .k.m { max-width: 46px; flex: 1.5; background: #2c2d33; font-size: 15px; }
+  .kb .k.sp { max-width: 170px; flex: 6; font-size: 13px; color: var(--muted); }
+
+  /* ---------- Typing Screen tray ---------- */
+  .tray { background: var(--s1); border-radius: 26px 26px 0 0; flex: 1; min-height: 0; display: flex; flex-direction: column;
+    gap: 10px; padding: 8px 10px 8px; }
+  .grab { width: 36px; height: 4px; border-radius: 4px; background: var(--line); margin: 0 auto 2px; flex: none; }
+  .pages { display: flex; gap: 8px; overflow: hidden; flex: none; }
+  .pages span { border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; font-size: 14.5px; color: var(--muted);
+    white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+  .pages span.on { background: var(--pc); border-color: var(--pc); color: var(--on-pc); font-weight: 500; }
+  .pages span.on::before { content: "✓"; font-size: 13px; }
+  .coll { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-content: start; flex: 1; min-height: 0; }
+  .p { background: var(--s3); border-radius: 16px; padding: 12px; font-size: 15px; line-height: 1.3; min-height: 84px;
+    display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; position: relative; }
+  .p .tx { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .p.c { justify-content: center; align-items: center; font-size: 19px; font-weight: 500; }
+  .p.col-a { background: #2f3b2f; } .p.col-b { background: #3d3226; } .p.col-c { background: #2c3446; }
+  .p .rec { position: absolute; top: 9px; right: 9px; font-size: 15px; color: var(--muted); }
+  .p.add { background: transparent; border: 1.5px dashed var(--line); color: var(--primary); align-items: center; justify-content: center; font-size: 28px; }
+  .strip { display: flex; gap: 8px; flex: none; overflow: hidden; }
+  .btn { background: var(--s3); color: var(--on); border-radius: 14px; height: 48px; padding: 0 12px; display: flex; gap: 8px;
+    align-items: center; font-size: 14px; white-space: nowrap; flex: none; }
+  .btn svg { font-size: 21px; }
+  .btn.dis { opacity: .45; }
+  .btn.ssml { height: 40px; font-size: 13.5px; background: var(--s2); border: 1px solid var(--line); font-family: "Roboto Mono", ui-monospace, monospace; }
+  .sec { background: var(--tc); color: #ffd8ee; }
+  .secmark { background: var(--tc); color: #ffd8ee; border-radius: 6px; padding: 0 4px; border-bottom: 2px dashed var(--tert); }
+  .lang { font-size: 10px; font-weight: 700; background: var(--tert); color: #3f1f39; border-radius: 4px; padding: 1px 4px; margin-left: 4px; vertical-align: 2px; }
+
+  .btn.speak, .cell.speak { background: var(--primary); color: var(--on-primary); }
+  .meta { font-size: 11.5px; color: var(--faint); text-align: right; margin-top: 3px; }
+  /* ---------- callouts ---------- */
+  .co { position: absolute; z-index: 5; width: 24px; height: 24px; border-radius: 50%; background: var(--scan); color: #2b2100;
+    font: 700 12.5px/24px Roboto, sans-serif; text-align: center; box-shadow: 0 0 0 3px var(--bg), 0 2px 8px rgba(0,0,0,.5); }
+  ol.key { list-style: none; padding: 0; margin: 0 0 18px; }
+  ol.key li { display: flex; gap: 10px; margin: 7px 0; }
+  ol.key li b.k { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--scan); color: #2b2100; font-size: 11.5px;
+    display: grid; place-items: center; font-weight: 700; margin-top: 1px; }
+
+  /* ---------- design 2: fixed targets ---------- */
+  .fixed { display: grid; grid-template-columns: 1fr 92px; gap: 8px; flex: 1; min-height: 0; }
+  .fixed .coll { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .fixed .p { min-height: 0; font-size: 17px; }
+  .col { display: flex; flex-direction: column; gap: 8px; }
+  .col .btn { height: auto; flex: 1; flex-direction: column; justify-content: center; gap: 4px; padding: 6px; font-size: 12.5px; border-radius: 16px; }
+  .col .btn svg { font-size: 26px; }
+  .col .btn.speak { flex: 1.6; font-size: 14px; font-weight: 600; }
+  .col .btn.speak svg { font-size: 34px; }
+  .pager { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; flex: none; }
+  .pager .btn { justify-content: center; height: 52px; font-size: 15px; }
+  .pager .count { color: var(--muted); font-size: 14px; padding: 0 6px; }
+  .p.dwelling { box-shadow: inset 0 0 0 3px var(--primary); }
+  .dwell { position: absolute; left: 10px; right: 10px; bottom: 10px; height: 8px; border-radius: 8px; background: var(--s1); overflow: hidden; }
+  .dwell::after { content: ""; position: absolute; inset: 0; width: 68%; background: var(--primary); border-radius: 8px; }
+
+  /* ---------- design 3: tablet split ---------- */
+  .split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+  .split .left { display: flex; flex-direction: column; border-right: 1px solid var(--line); min-height: 0; }
+  .split .left .space { flex: 1; padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .split .right { display: flex; flex-direction: column; min-height: 0; padding: 10px 12px 12px; gap: 10px; }
+  .split .coll { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .split .p { min-height: 78px; font-size: 14.5px; }
+  .tablet .kb .k { max-width: 36px; height: 38px; }
+  .tablet .kb .k.sp { max-width: 200px; }
+
+  /* ---------- design 4: conversation ---------- */
+  .conv { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; padding: 8px 12px; overflow: hidden; }
+  .day { text-align: center; font-size: 12px; color: var(--faint); }
+  .said { align-self: flex-end; max-width: 84%; display: flex; gap: 8px; align-items: center; }
+  .said .bub { background: var(--pc); color: var(--on-pc); padding: 11px 14px; border-radius: 20px 20px 6px 20px; font-size: 15.5px; line-height: 1.35; }
+  .said .re { width: 44px; height: 44px; border-radius: 50%; background: var(--s3); display: grid; place-items: center; font-size: 22px; color: var(--on); flex: none; }
+  .said .meta { font-size: 11.5px; color: var(--faint); text-align: right; margin-top: 3px; }
+  .partner { align-self: flex-start; background: var(--s2); border: 1px dashed var(--line); color: var(--muted); border-radius: 20px 20px 20px 6px;
+    padding: 10px 14px; font-size: 13.5px; max-width: 80%; display: flex; gap: 8px; align-items: center; }
+
+  /* ---------- design 5: scanning / gaze ---------- */
+  .scan { flex: 1; min-height: 0; display: grid; grid-template-rows: 96px 60px 1fr; gap: 10px; padding: 10px 14px 14px; }
+  .scan .top { display: grid; grid-template-columns: 1fr 120px 96px 96px; gap: 10px; }
+  .scan .top .msg { border-radius: 18px; font-size: 22px; display: flex; align-items: center; }
+  .cell { background: var(--s3); border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; font-size: 15px; text-align: center; padding: 8px; position: relative; line-height: 1.25; }
+  .cell svg { font-size: 30px; }
+  .cell.speak { font-size: 17px; font-weight: 600; }
+  .cell.speak svg { font-size: 40px; }
+  .scan .navrow { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .scan .navrow .cell { flex-direction: row; font-size: 15px; }
+  .scan .navrow .cell svg { font-size: 22px; }
+  .scan .navrow .cell.on { background: var(--pc); color: var(--on-pc); font-weight: 500; }
+  .scan .grid { display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(3, 1fr); gap: 10px; }
+  .scan .grid .cell { font-size: 17px; }
+  .rowscan { outline: 4px solid var(--scan); outline-offset: 4px; border-radius: 20px; }
+  .scan .grid .hl { grid-column: 1 / 6; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<header>
+  <h1>Typing workspace: five layouts</h1>
+  <p>Mockups for <b>Jdreioe/Wingmate#299</b>, second round. Each layout is built around one Communicator situation and access method: touch typing, dwell and tremor, tablets, conversation, and switch or eye gaze. They share one <b>Message bar</b>, and a <b>Typing Screen</b> made from the Page elements Wingmate already has (Page navigation, Phrase collection, Action strips), so most of them could ship as a <b>Typing Screen template</b> rather than new screen code.</p>
+  <div class="rules">
+    <span>Speak is always visible</span><span>No gesture-only actions</span><span>Language shown by badge + underline, not color alone</span>
+    <span>Targets ≥ 48dp, primary ≥ 56dp</span><span>Message survives every error</span><span>Same demo vocabulary in every frame</span>
+  </div>
+</header>
+
+<!-- ================= TODAY ================= -->
+<section class="d">
+  <h2><span class="n">0</span> Today on Android</h2>
+  <p class="lede">For reference, drawn in the same style. Since <code>ab075ee1</code>, Android renders the old <code>PhraseGrid</code> again instead of the Typing Screen tray from #248 (<code>TypingScreenTray</code> and <code>CompactPhraseRow</code> still exist but nothing calls them).</p>
+  <div class="row">
+    <figure class="fig" style="margin:0">
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="dots"><i></i><i></i></span></div>
+        <div class="bar"><span class="t">Wingmate</span><span class="ib" data-i="more"></span></div>
+        <div style="padding:0 14px;display:flex;flex-direction:column;gap:12px;flex:1">
+          <div class="msg" style="border-radius:8px;background:transparent;border:1px solid var(--faint);min-height:130px">I want<span class="caret"></span></div>
+          <div style="border:1px solid var(--line);border-radius:99px;text-align:center;padding:11px;color:var(--muted);font-size:14px">SSML Controls</div>
+          <div class="pages"><span>All</span><span class="on">Daily</span><span>History</span><span>+ Add</span></div>
+          <div class="coll">
+            <div class="p"><span class="tx"><span style="background:var(--s4);border-radius:4px;padding:0 4px;font-size:12px;position:absolute;top:10px">Daily</span>Hello, nice to meet you</span></div>
+            <div class="p"><span class="tx"><span style="background:var(--s4);border-radius:4px;padding:0 4px;font-size:12px;position:absolute;top:10px">Daily</span>Can you help me, please?</span></div>
+            <div class="p"><span class="tx"><span style="background:var(--s4);border-radius:4px;padding:0 4px;font-size:12px;position:absolute;top:10px">Daily</span>I need a short break</span></div>
+            <div class="p add" data-i="add"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:center;gap:12px;padding:10px 0 6px">
+          <span class="round tonal" data-i="play"></span><span class="round tonal" data-i="translate"></span><span class="round tonal" data-i="pause"></span><span class="round tonal" data-i="stop"></span><span class="round tonal" data-i="bookmark"></span>
+        </div>
+        <div class="nav"></div>
+      </div>
+      <figcaption>Label drawn over the phrase text, five look-alike round buttons at the bottom, and the grid disappears when the keyboard opens.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ================= 1 ================= -->
+<section class="d">
+  <h2><span class="n">1</span> Composer with an input tray</h2>
+  <p class="lede">A messaging-app composer, as sketched in #248. The Message bar sits directly above whichever input surface is open. <b>+</b> swaps the keyboard for the Typing Screen; the same button then shows a keyboard icon and swaps back. While typing, a compact Phrase row keeps the active Page's Phrases one tap away.</p>
+  <div class="row">
+    <figure class="fig" style="margin:0">
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="dots"><i></i><i></i></span></div>
+        <div class="bar"><div class="ws"><span class="on">Typing</span><span>Screens</span></div><span style="flex:1"></span><span class="ib" data-i="more"></span></div>
+        <div class="held"><span data-i="bookmark"></span><span><span style="font-size:12px">Held message</span><b>Can we talk about the weekend later?</b></span><span class="sw"><span data-i="swap"></span>Swap</span></div>
+        <div style="flex:1"></div>
+        <div class="compact"><span>Hello, nice to meet you</span><span>Yes</span><span>No</span><span>I need a short break</span></div>
+        <div class="composer"><span class="round tonal" data-i="add"></span><div class="msg">I want to go <span class="secmark">outside</span><span class="lang">EN</span> after lunch<span class="caret"></span></div><span class="round speak" data-i="play"></span></div>
+        <div class="kb">
+          <div class="sug"><span>today</span><span>please</span><span>with</span></div>
+          <div class="r"><span class="k">q</span><span class="k">w</span><span class="k">e</span><span class="k">r</span><span class="k">t</span><span class="k">y</span><span class="k">u</span><span class="k">i</span><span class="k">o</span><span class="k">p</span><span class="k">å</span></div>
+          <div class="r"><span class="k">a</span><span class="k">s</span><span class="k">d</span><span class="k">f</span><span class="k">g</span><span class="k">h</span><span class="k">j</span><span class="k">k</span><span class="k">l</span><span class="k">æ</span><span class="k">ø</span></div>
+          <div class="r"><span class="k m" data-i="shift"></span><span class="k">z</span><span class="k">x</span><span class="k">c</span><span class="k">v</span><span class="k">b</span><span class="k">n</span><span class="k">m</span><span class="k m" data-i="backspace"></span></div>
+          <div class="r"><span class="k m">?123</span><span class="k m">,</span><span class="k sp">DA · EN</span><span class="k m">.</span><span class="k m" data-i="enter"></span></div>
+        </div>
+        <div class="nav" style="background:#1e1f25"></div>
+        <span class="co" style="top:440px;left:4px">1</span>
+        <span class="co" style="top:102px;right:6px">3</span>
+        <span class="co" style="top:422px;right:10px">2</span>
+      </div>
+      <figcaption>Typing: keyboard open, compact Phrase row above the Message bar.</figcaption>
+    </figure>
+    <figure class="fig" style="margin:0">
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="dots"><i></i><i></i></span></div>
+        <div class="bar"><div class="ws"><span class="on">Typing</span><span>Screens</span></div><span style="flex:1"></span><span class="ib" data-i="more"></span></div>
+        <div style="flex:.18"></div>
+        <div class="composer"><span class="round tonal" data-i="keyboard"></span><div class="msg">I want to go <span class="secmark">outside</span><span class="lang">EN</span> after lunch</div><span class="round speak" data-i="play"></span></div>
+        <div class="tray">
+          <div class="grab"></div>
+          <div class="pages"><span>All</span><span class="on">Daily</span><span>Care</span><span data-i-before="history">History</span></div>
+          <div class="coll">
+            <div class="p"><span class="tx">Hello, nice to meet you</span></div>
+            <div class="p"><span class="tx">Can you help me, please?</span></div>
+            <div class="p col-c"><span class="tx">I need a short break</span></div>
+            <div class="p c col-a">Yes</div>
+            <div class="p c col-b">No</div>
+            <div class="p"><span class="tx">Thank you for waiting while I type</span><span class="rec" data-i="mic"></span></div>
+            <div class="p"><span class="tx">Please speak a bit slower</span></div>
+            <div class="p c">Wait</div>
+            <div class="p add" data-i="add"></div>
+          </div>
+          <div class="strip"><span class="btn ssml">[0.5s]</span><span class="btn ssml">[1s]</span><span class="btn ssml">[2s]</span><span class="btn ssml">emphasis</span></div>
+          <div class="strip"><span class="btn" data-i-before="pause">Pause</span><span class="btn" data-i-before="stop">Stop</span><span class="btn sec" data-i-before="translate">EN</span><span class="btn" data-i-before="bookmark">Hold</span></div>
+        </div>
+        <div class="nav" style="background:var(--s1)"></div>
+        <span class="co" style="top:236px;right:10px">4</span>
+        <span class="co" style="top:686px;right:10px">5</span>
+      </div>
+      <figcaption>Typing Screen open: same Message bar, keyboard button swaps back.</figcaption>
+    </figure>
+    <div class="notes">
+      <ol class="key">
+        <li><b class="k">1</b><span><b>+ / keyboard</b> is the only switch between keyboard and Typing Screen. Tapping the Message field also brings the keyboard back.</span></li>
+        <li><b class="k">2</b><span><b>Compact Phrase row</b> of the active Page while the keyboard is open, so Phrases stay reachable while typing.</span></li>
+        <li><b class="k">3</b><span><b>Held message</b> is shown in the open with a labelled Swap, instead of as a bookmark icon whose state you have to remember.</span></li>
+        <li><b class="k">4</b><span><b>Speak</b> lives in the Message bar, the largest round target, on the thumb side.</span></li>
+        <li><b class="k">5</b><span><b>Two Action strips</b>: SSML, then speech controls with text labels. Secondary language is a labelled <b>EN</b> button plus an underline and badge in the text.</span></li>
+      </ol>
+      <h3>Who it's for</h3>
+      <ul><li>Touch typists who mix free text and Phrases in one Message.</li></ul>
+      <h3>Cost</h3>
+      <p><span class="cost">S–M</span>Most of it already exists. Rewire <code>TypingScreenTray</code> and <code>CompactPhraseRow</code> into <code>PhraseScreen</code>, then polish. This fixes the regression, and I recommend it as the base for everything below.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2 ================= -->
+<section class="d">
+  <h2><span class="n">2</span> Fixed targets for dwell and tremor</h2>
+  <p class="lede">Same composer and tray, but nothing in the Typing Screen scrolls or moves. Phrases are paged with large Previous/Next buttons, and the speech controls sit in a fixed column on the right, so every target stays in the same place from one use to the next. That muscle memory matters for pointer, dwell and head-tracking users.</p>
+  <div class="row">
+    <figure class="fig" style="margin:0">
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="dots"><i></i><i></i></span></div>
+        <div class="bar"><div class="ws"><span class="on">Typing</span><span>Screens</span></div><span style="flex:1"></span><span class="ib tonal" data-i="rest"></span><span class="ib" data-i="more"></span></div>
+        <div class="composer"><span class="round tonal" data-i="keyboard"></span><div class="msg" style="min-height:76px">Can you help me, please? I need a short break</div></div>
+        <div class="tray" style="border-radius:26px 26px 0 0">
+          <div class="pages"><span>All</span><span class="on">Daily</span><span>Care</span><span>Food</span></div>
+          <div class="fixed">
+            <div class="coll">
+              <div class="p"><span class="tx">Hello, nice to meet you</span></div>
+              <div class="p"><span class="tx">Can you help me, please?</span></div>
+              <div class="p col-c dwelling"><span class="tx">I need a short break</span><span class="dwell"></span></div>
+              <div class="p"><span class="tx">Thank you for waiting</span></div>
+              <div class="p c col-a">Yes</div>
+              <div class="p c col-b">No</div>
+            </div>
+            <div class="col">
+              <span class="btn speak" data-i-before="play">Speak</span>
+              <span class="btn" data-i-before="stop">Stop</span>
+              <span class="btn" data-i-before="backspace">Delete</span>
+              <span class="btn" data-i-before="bookmark">Hold</span>
+            </div>
+          </div>
+          <div class="pager"><span class="btn" data-i-before="left">Previous</span><span class="count">Page 1 of 3</span><span class="btn" data-i-after="right">Next</span></div>
+        </div>
+        <div class="nav" style="background:var(--s1)"></div>
+        <span class="co" style="top:420px;left:150px">1</span>
+        <span class="co" style="top:250px;right:12px">2</span>
+        <span class="co" style="top:690px;left:150px">3</span>
+        <span class="co" style="top:44px;right:94px">4</span>
+      </div>
+      <figcaption>Dwell in progress on "I need a short break". Nothing on this screen moves.</figcaption>
+    </figure>
+    <div class="notes">
+      <ol class="key">
+        <li><b class="k">1</b><span><b>Dwell progress</b> uses the existing dwell/hold activation: an outline marks the target and a bar fills inside it, so progress doesn't depend on color alone.</span></li>
+        <li><b class="k">2</b><span><b>Fixed control column</b>: Speak is the tallest target. Stop, Delete and Hold never change position. Disabled commands stay visible.</span></li>
+        <li><b class="k">3</b><span><b>Paging instead of scrolling</b>: a 2×3 Phrase grid with large Previous/Next buttons, because scroll gestures are hard with dwell, tremor or a head pointer.</span></li>
+        <li><b class="k">4</b><span><b>Rest mode</b> is always one target away, since it's what stops accidental selections while resting.</span></li>
+      </ol>
+      <h3>Who it's for</h3>
+      <ul><li>Communicators with tremor or reduced motor control, and dwell, head-pointer or OS eye-tracking users on a phone.</li></ul>
+      <h3>Cost</h3>
+      <p><span class="cost">M</span>Needs one new Phrase collection presentation ("paged", next to compact and expanded) and a vertical Action strip. Everything else is template layout.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 3 ================= -->
+<section class="d">
+  <h2><span class="n">3</span> Side by side on tablets and landscape</h2>
+  <p class="lede">On a wide screen there's no reason to make the keyboard and the Typing Screen take turns. The Message bar and keyboard stay on the left, and the Typing Screen stays open on the right. On a phone this falls back to layout 1.</p>
+  <div class="row">
+    <figure class="fig" style="margin:0">
+      <div class="tablet">
+        <div class="sb" style="padding:0 26px"><span>9:41</span><span class="dots"><i></i><i></i></span></div>
+        <div class="bar" style="padding:0 12px 0 20px"><div class="ws"><span class="on">Typing</span><span>Screens</span></div><span style="flex:1"></span><span class="ib" data-i="fullscreen"></span><span class="ib" data-i="more"></span></div>
+        <div class="split">
+          <div class="left">
+            <div class="space">
+              <div class="held" style="margin:0"><span data-i="bookmark"></span><span><span style="font-size:12px">Held message</span><b>Can we talk about the weekend later?</b></span><span class="sw"><span data-i="swap"></span>Swap</span></div>
+            </div>
+            <div class="composer" style="padding:8px 14px"><div class="msg" style="font-size:19px">I want to go <span class="secmark">outside</span><span class="lang">EN</span> after lunch<span class="caret"></span></div><span class="round speak" data-i="play"></span></div>
+            <div class="kb" style="border-radius:0">
+              <div class="r"><span class="k">q</span><span class="k">w</span><span class="k">e</span><span class="k">r</span><span class="k">t</span><span class="k">y</span><span class="k">u</span><span class="k">i</span><span class="k">o</span><span class="k">p</span><span class="k">å</span></div>
+              <div class="r"><span class="k">a</span><span class="k">s</span><span class="k">d</span><span class="k">f</span><span class="k">g</span><span class="k">h</span><span class="k">j</span><span class="k">k</span><span class="k">l</span><span class="k">æ</span><span class="k">ø</span></div>
+              <div class="r"><span class="k m" data-i="shift"></span><span class="k">z</span><span class="k">x</span><span class="k">c</span><span class="k">v</span><span class="k">b</span><span class="k">n</span><span class="k">m</span><span class="k m" data-i="backspace"></span></div>
+              <div class="r"><span class="k m">?123</span><span class="k sp">DA · EN</span><span class="k m">.</span><span class="k m" data-i="enter"></span></div>
+            </div>
+          </div>
+          <div class="right">
+            <div class="pages"><span>All</span><span class="on">Daily</span><span>Care</span><span>Food</span><span>History</span><span data-i-before="add">Add</span></div>
+            <div class="coll">
+              <div class="p"><span class="tx">Hello, nice to meet you</span></div>
+              <div class="p"><span class="tx">Can you help me, please?</span></div>
+              <div class="p col-c"><span class="tx">I need a short break</span></div>
+              <div class="p c col-a">Yes</div>
+              <div class="p"><span class="tx">Thank you for waiting while I type</span><span class="rec" data-i="mic"></span></div>
+              <div class="p"><span class="tx">Please speak a bit slower</span></div>
+              <div class="p c">Wait</div>
+              <div class="p c col-b">No</div>
+              <div class="p"><span class="tx">Can you repeat that?</span></div>
+              <div class="p"><span class="tx">I'm tired today</span></div>
+              <div class="p c">Again</div>
+              <div class="p add" data-i="add"></div>
+            </div>
+            <div class="strip"><span class="btn ssml">[0.5s]</span><span class="btn ssml">[1s]</span><span class="btn" data-i-before="pause">Pause</span><span class="btn" data-i-before="stop">Stop</span><span class="btn sec" data-i-before="translate">EN</span><span class="btn" data-i-before="bookmark">Hold</span></div>
+          </div>
+        </div>
+        <span class="co" style="top:96px;left:398px">1</span>
+        <span class="co" style="top:40px;right:100px">2</span>
+        <span class="co" style="top:470px;left:398px">3</span>
+      </div>
+      <figcaption>Tablet or phone in landscape: keyboard and Typing Screen visible together.</figcaption>
+    </figure>
+    <div class="notes">
+      <ol class="key">
+        <li><b class="k">1</b><span><b>Both input surfaces at once</b> on wide screens. Taking turns only exists to save space on phones.</span></li>
+        <li><b class="k">2</b><span><b>Partner display</b> (the existing fullscreen / external display) gets a visible button, because tablets are often shown to the conversation partner.</span></li>
+        <li><b class="k">3</b><span><b>One combined Action strip</b>: SSML on the left, speech controls on the right, all inside the Typing Screen.</span></li>
+      </ol>
+      <h3>Who it's for</h3>
+      <ul><li>Tablet users and wheelchair-mounted devices; the Pixel landscape work in #291.</li></ul>
+      <h3>Cost</h3>
+      <p><span class="cost">S</span>Breakpoint logic in <code>PhraseScreen</code> on top of layout 1.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 4 ================= -->
+<section class="d">
+  <h2><span class="n">4</span> Conversation above the composer</h2>
+  <p class="lede">The empty space above the Message bar shows what the Communicator has just said, like a chat thread. "Can you say that again?" is one of the most common requests in AAC conversations, and here the answer is one tap on the replay button. It uses the existing private History and is off when History is off.</p>
+  <div class="row">
+    <figure class="fig" style="margin:0">
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="dots"><i></i><i></i></span></div>
+        <div class="bar"><div class="ws"><span class="on">Typing</span><span>Screens</span></div><span style="flex:1"></span><span class="ib" data-i="more"></span></div>
+        <div class="conv">
+          <div class="day">Today</div>
+                    <div class="partner"><span data-i="mic" style="font-size:16px"></span>Partner's turn, nothing is recorded</div>
+          <div><div class="said"><span class="re" data-i="replay"></span><span class="bub">I would like a coffee with oat milk, please</span></div><div class="meta">10:04</div></div>
+          <div><div class="said"><span class="re" data-i="replay"></span><span class="bub">Thank you for waiting while I type</span></div><div class="meta">10:05 · just now</div></div>
+        </div>
+        <div class="held" style="margin:0 12px 6px"><span data-i="bookmark"></span><span><span style="font-size:12px">Held message</span><b>Can we talk about the weekend later?</b></span><span class="sw"><span data-i="swap"></span>Swap</span></div>
+        <div class="compact"><span>Yes</span><span>No</span><span>Wait</span><span>Can you repeat that?</span></div>
+        <div class="composer"><span class="round tonal" data-i="add"></span><div class="msg"><span class="ph">Type a message…</span></div><span class="round speak" data-i="play"></span></div>
+        <div class="kb">
+          <div class="r"><span class="k">q</span><span class="k">w</span><span class="k">e</span><span class="k">r</span><span class="k">t</span><span class="k">y</span><span class="k">u</span><span class="k">i</span><span class="k">o</span><span class="k">p</span><span class="k">å</span></div>
+          <div class="r"><span class="k">a</span><span class="k">s</span><span class="k">d</span><span class="k">f</span><span class="k">g</span><span class="k">h</span><span class="k">j</span><span class="k">k</span><span class="k">l</span><span class="k">æ</span><span class="k">ø</span></div>
+          <div class="r"><span class="k m" data-i="shift"></span><span class="k">z</span><span class="k">x</span><span class="k">c</span><span class="k">v</span><span class="k">b</span><span class="k">n</span><span class="k">m</span><span class="k m" data-i="backspace"></span></div>
+          <div class="r"><span class="k m">?123</span><span class="k sp">DA · EN</span><span class="k m">.</span><span class="k m" data-i="enter"></span></div>
+        </div>
+        <div class="nav" style="background:#1e1f25"></div>
+        <span class="co" style="top:306px;left:52px">1</span>
+        <span class="co" style="top:146px;left:292px">2</span>
+        <span class="co" style="top:388px;right:10px">3</span>
+      </div>
+      <figcaption>Replay speaks again; tapping the bubble itself loads it into the Message for editing.</figcaption>
+    </figure>
+    <div class="notes">
+      <ol class="key">
+        <li><b class="k">1</b><span><b>Replay</b> is a separate 44dp button. Tapping the bubble loads it into the Message. Two targets, two clear results, no long-press needed.</span></li>
+        <li><b class="k">2</b><span>The thread shows only what Wingmate spoke, so nothing from the partner is ever captured. The dashed note is a hint, not a recording.</span></li>
+        <li><b class="k">3</b><span><b>Held message</b> sits between the thread and the composer: visibly "set aside, not said yet".</span></li>
+      </ol>
+      <h3>Who it's for</h3>
+      <ul><li>Everyday back-and-forth conversation, especially in noisy places where the partner often asks for a repeat.</li></ul>
+      <h3>Watch out</h3>
+      <ul><li>History is private. The thread needs a quick "hide" option for when someone is looking over the Communicator's shoulder, and must respect the existing History-visibility setting.</li></ul>
+      <h3>Cost</h3>
+      <p><span class="cost">M</span>Read-only view over <code>SaidTextRepository</code>, replay through the existing speak path. No new data.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 5 ================= -->
+<section class="d">
+  <h2><span class="n">5</span> Whole-screen grid for switch scanning and eye gaze</h2>
+  <p class="lede">For switch and eye-gaze users, even the Message bar and the controls become large cells in one Grid, which the scanner walks row by row. No system keyboard, no scrolling, no small chips. The Typing Screen is already a Screen, so this is a template of the same Page elements with larger cells and a scan order, not a separate app.</p>
+  <div class="row">
+    <figure class="fig" style="margin:0">
+      <div class="tablet">
+        <div class="sb" style="padding:0 26px"><span>9:41</span><span class="dots"><i></i><i></i></span></div>
+        <div class="scan">
+          <div class="top">
+            <div class="msg">I need a short break<span class="caret"></span></div>
+            <div class="cell speak" data-i-before="play">Speak</div>
+            <div class="cell" data-i-before="backspace">Delete</div>
+            <div class="cell" data-i-before="close">Clear</div>
+          </div>
+          <div class="navrow">
+            <div class="cell on">Daily</div><div class="cell">Care</div><div class="cell">Food</div><div class="cell" data-i-before="keyboard">ABC</div><div class="cell" data-i-before="bookmark">Hold</div><div class="cell" data-i-before="rest">Rest</div>
+          </div>
+          <div class="grid">
+            <div class="cell">Hello, nice to meet you</div><div class="cell">Can you help me, please?</div><div class="cell" style="background:#2c3446">I need a short break</div><div class="cell" style="background:#2f3b2f;font-size:21px;font-weight:500">Yes</div><div class="cell" style="background:#3d3226;font-size:21px;font-weight:500">No</div>
+            <div class="hl rowscan"><div class="cell">Thank you for waiting</div><div class="cell">Please speak slower</div><div class="cell">Can you repeat that?</div><div class="cell" style="font-size:21px;font-weight:500">Wait</div><div class="cell">I'm tired today</div></div>
+            <div class="cell">I'm cold</div><div class="cell">I'm in pain</div><div class="cell">Call someone</div><div class="cell" data-i-before="left">Previous</div><div class="cell" data-i-before="right">Next</div>
+          </div>
+        </div>
+        <span class="co" style="top:350px;left:4px">1</span>
+        <span class="co" style="top:40px;left:616px">2</span>
+        <span class="co" style="top:148px;left:582px">3</span>
+        <span class="co" style="top:432px;right:4px">4</span>
+      </div>
+      <figcaption>Row scanning: the yellow outline is the row the switch will pick next.</figcaption>
+    </figure>
+    <div class="notes">
+      <ol class="key">
+        <li><b class="k">1</b><span><b>Row-then-cell scanning</b> with a thick outline, which reads on any background. Switch scanning on Android is still open in #226; this is the layout it would drive.</span></li>
+        <li><b class="k">2</b><span><b>Speak is the first cell in scan order</b> after the Message, so finishing a Message is the shortest scan path.</span></li>
+        <li><b class="k">3</b><span><b>Pages, spelling (ABC), Hold and Rest</b> are cells in one row, not small chips. ABC opens a scannable letter Page instead of the system keyboard.</span></li>
+        <li><b class="k">4</b><span><b>Previous/Next are cells</b> in a fixed corner, so they're reachable by scanning, dwell or a mapped key (#111).</span></li>
+      </ol>
+      <h3>Who it's for</h3>
+      <ul><li>Switch users, eye-gaze users (TD-I13, #129; webcam, #276), and anyone who can't use the system keyboard.</li></ul>
+      <h3>Cost</h3>
+      <p><span class="cost">L</span>The layout is a template. The real work is Android switch scanning (#226), a letter Page for ABC, and a Message bar that works as a Page element.</p>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+// Material Symbols (Apache 2.0) path data, inlined so the file works offline.
+const P = {
+  play: "M8 5v14l11-7z",
+  pause: "M6 19h4V5H6v14zm8-14v14h4V5h-4z",
+  stop: "M6 6h12v12H6z",
+  add: "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z",
+  close: "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+  backspace: "M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z",
+  keyboard: "M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z",
+  bookmark: "M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2z",
+  swap: "M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z",
+  more: "M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z",
+  translate: "M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7 1.62-4.33L19.12 17h-3.24z",
+  history: "M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z",
+  left: "M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z",
+  right: "M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z",
+  replay: "M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z",
+  rest: "M9 16h2V8H9v8zm3-14C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm1-4h2V8h-2v8z",
+  fullscreen: "M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z",
+  mic: "M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z",
+  shift: "M12 8.41 16.59 13 18 11.59l-6-6-6 6L7.41 13 12 8.41zM6 18h12v-2H6v2z",
+  enter: "M19 7v4H5.83l3.58-3.59L8 6l-6 6 6 6 1.41-1.41L5.83 13H21V7z"
+};
+const svg = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="${P[n]}"/></svg>`;
+document.querySelectorAll('[data-i]').forEach(e => e.insertAdjacentHTML('afterbegin', svg(e.dataset.i)));
+document.querySelectorAll('[data-i-before]').forEach(e => e.insertAdjacentHTML('afterbegin', svg(e.dataset.iBefore)));
+document.querySelectorAll('[data-i-after]').forEach(e => e.insertAdjacentHTML('beforeend', svg(e.dataset.iAfter)));
+</script>
+</body>
+</html>
