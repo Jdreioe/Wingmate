@@ -103,6 +103,17 @@
     font-size: 17px; color: #e8e8ee; }
   .kb .k.m { max-width: 46px; flex: 1.5; background: #2c2d33; font-size: 15px; }
   .kb .k.sp { max-width: 170px; flex: 6; font-size: 13px; color: var(--muted); }
+  /* Gboard at its usual height on Jonas's phone: half the screen, including the nav bar */
+  .kb.half { height: 370px; gap: 8px; padding-top: 10px; }
+  .kb.half .r { flex: 1; min-height: 0; }
+  .kb.half .k { height: auto; font-size: 19px; }
+  .kb.half .sug { font-size: 16px; padding: 4px 0 6px; border-bottom: 1px solid #2c2d33; }
+  .tray.half { flex: none; height: 370px; }
+  .tray.half .strip .btn { flex: 1; min-width: 0; padding: 0 6px; gap: 5px; justify-content: center; font-size: 13px; }
+  .tray.half .strip .btn.ssml { flex: none; padding: 0 10px; }
+  .held.one { padding: 6px 6px 6px 12px; border-radius: 14px; white-space: nowrap; }
+  .held.one .tx { overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--on); }
+  .held.one .sw { padding: 7px 10px; }
 
   /* ---------- Typing Screen tray ---------- */
   .tray { background: var(--s1); border-radius: 26px 26px 0 0; flex: 1; min-height: 0; display: flex; flex-direction: column;
@@ -246,32 +257,32 @@
     <figure class="fig" style="margin:0">
       <div class="phone">
         <div class="sb"><span>9:41</span><span class="dots"><i></i><i></i></span></div>
-        <div class="bar"><div class="ws"><span class="on">Typing</span><span>Screens</span></div><span style="flex:1"></span><span class="ib" data-i="more"></span></div>
-        <div class="held"><span data-i="bookmark"></span><span><span style="font-size:12px">Held message</span><b>Can we talk about the weekend later?</b></span><span class="sw"><span data-i="swap"></span>Swap</span></div>
         <div style="flex:1"></div>
+        <div class="held one"><span data-i="bookmark"></span><span class="tx">Held: Can we talk about the weekend later?</span><span class="sw"><span data-i="swap"></span>Swap</span></div>
         <div class="compact"><span>Hello, nice to meet you</span><span>Yes</span><span>No</span><span>I need a short break</span></div>
         <div class="composer"><span class="round tonal" data-i="add"></span><div class="msg">I want to go <span class="secmark">outside</span><span class="lang">EN</span> after lunch<span class="caret"></span></div><span class="round speak" data-i="play"></span></div>
-        <div class="kb">
+        <div class="kb half">
           <div class="sug"><span>today</span><span>please</span><span>with</span></div>
+          <div class="r"><span class="k">1</span><span class="k">2</span><span class="k">3</span><span class="k">4</span><span class="k">5</span><span class="k">6</span><span class="k">7</span><span class="k">8</span><span class="k">9</span><span class="k">0</span></div>
           <div class="r"><span class="k">q</span><span class="k">w</span><span class="k">e</span><span class="k">r</span><span class="k">t</span><span class="k">y</span><span class="k">u</span><span class="k">i</span><span class="k">o</span><span class="k">p</span><span class="k">å</span></div>
           <div class="r"><span class="k">a</span><span class="k">s</span><span class="k">d</span><span class="k">f</span><span class="k">g</span><span class="k">h</span><span class="k">j</span><span class="k">k</span><span class="k">l</span><span class="k">æ</span><span class="k">ø</span></div>
           <div class="r"><span class="k m" data-i="shift"></span><span class="k">z</span><span class="k">x</span><span class="k">c</span><span class="k">v</span><span class="k">b</span><span class="k">n</span><span class="k">m</span><span class="k m" data-i="backspace"></span></div>
           <div class="r"><span class="k m">?123</span><span class="k m">,</span><span class="k sp">DA · EN</span><span class="k m">.</span><span class="k m" data-i="enter"></span></div>
         </div>
         <div class="nav" style="background:#1e1f25"></div>
-        <span class="co" style="top:440px;left:4px">1</span>
-        <span class="co" style="top:102px;right:6px">3</span>
-        <span class="co" style="top:422px;right:10px">2</span>
+        <span class="co" style="top:318px;left:4px">1</span>
+        <span class="co" style="top:186px;right:4px">3</span>
+        <span class="co" style="top:238px;right:4px">2</span>
       </div>
-      <figcaption>Typing: keyboard open, compact Phrase row above the Message bar.</figcaption>
+      <figcaption>Typing: Gboard open at half the screen, compact Phrase row above the Message bar. The app bar is hidden while typing.</figcaption>
     </figure>
     <figure class="fig" style="margin:0">
       <div class="phone">
         <div class="sb"><span>9:41</span><span class="dots"><i></i><i></i></span></div>
         <div class="bar"><div class="ws"><span class="on">Typing</span><span>Screens</span></div><span style="flex:1"></span><span class="ib" data-i="more"></span></div>
-        <div style="flex:.18"></div>
+        <div style="flex:1"></div>
         <div class="composer"><span class="round tonal" data-i="keyboard"></span><div class="msg">I want to go <span class="secmark">outside</span><span class="lang">EN</span> after lunch</div><span class="round speak" data-i="play"></span></div>
-        <div class="tray">
+        <div class="tray half">
           <div class="grab"></div>
           <div class="pages"><span>All</span><span class="on">Daily</span><span>Care</span><span data-i-before="history">History</span></div>
           <div class="coll">
@@ -281,18 +292,15 @@
             <div class="p c col-a">Yes</div>
             <div class="p c col-b">No</div>
             <div class="p"><span class="tx">Thank you for waiting while I type</span><span class="rec" data-i="mic"></span></div>
-            <div class="p"><span class="tx">Please speak a bit slower</span></div>
-            <div class="p c">Wait</div>
-            <div class="p add" data-i="add"></div>
           </div>
           <div class="strip"><span class="btn ssml">[0.5s]</span><span class="btn ssml">[1s]</span><span class="btn ssml">[2s]</span><span class="btn ssml">emphasis</span></div>
           <div class="strip"><span class="btn" data-i-before="pause">Pause</span><span class="btn" data-i-before="stop">Stop</span><span class="btn sec" data-i-before="translate">EN</span><span class="btn" data-i-before="bookmark">Hold</span></div>
         </div>
         <div class="nav" style="background:var(--s1)"></div>
-        <span class="co" style="top:236px;right:10px">4</span>
+        <span class="co" style="top:304px;right:4px">4</span>
         <span class="co" style="top:686px;right:10px">5</span>
       </div>
-      <figcaption>Typing Screen open: same Message bar, keyboard button swaps back.</figcaption>
+      <figcaption>Typing Screen open at the keyboard's height, so the Message bar stays where it was. The keyboard button swaps back.</figcaption>
     </figure>
     <div class="notes">
       <ol class="key">
@@ -432,33 +440,32 @@
     <figure class="fig" style="margin:0">
       <div class="phone">
         <div class="sb"><span>9:41</span><span class="dots"><i></i><i></i></span></div>
-        <div class="bar"><div class="ws"><span class="on">Typing</span><span>Screens</span></div><span style="flex:1"></span><span class="ib" data-i="more"></span></div>
         <div class="conv">
-          <div class="day">Today</div>
-                    <div class="partner"><span data-i="mic" style="font-size:16px"></span>Partner's turn, nothing is recorded</div>
           <div><div class="said"><span class="re" data-i="replay"></span><span class="bub">I would like a coffee with oat milk, please</span></div><div class="meta">10:04</div></div>
           <div><div class="said"><span class="re" data-i="replay"></span><span class="bub">Thank you for waiting while I type</span></div><div class="meta">10:05 · just now</div></div>
         </div>
-        <div class="held" style="margin:0 12px 6px"><span data-i="bookmark"></span><span><span style="font-size:12px">Held message</span><b>Can we talk about the weekend later?</b></span><span class="sw"><span data-i="swap"></span>Swap</span></div>
+        <div class="held one" style="margin:0 12px 4px"><span data-i="bookmark"></span><span class="tx">Held: Can we talk about the weekend later?</span><span class="sw"><span data-i="swap"></span>Swap</span></div>
         <div class="compact"><span>Yes</span><span>No</span><span>Wait</span><span>Can you repeat that?</span></div>
         <div class="composer"><span class="round tonal" data-i="add"></span><div class="msg"><span class="ph">Type a message…</span></div><span class="round speak" data-i="play"></span></div>
-        <div class="kb">
+        <div class="kb half">
+          <div class="sug"><span>Yes</span><span>I</span><span>Thanks</span></div>
+          <div class="r"><span class="k">1</span><span class="k">2</span><span class="k">3</span><span class="k">4</span><span class="k">5</span><span class="k">6</span><span class="k">7</span><span class="k">8</span><span class="k">9</span><span class="k">0</span></div>
           <div class="r"><span class="k">q</span><span class="k">w</span><span class="k">e</span><span class="k">r</span><span class="k">t</span><span class="k">y</span><span class="k">u</span><span class="k">i</span><span class="k">o</span><span class="k">p</span><span class="k">å</span></div>
           <div class="r"><span class="k">a</span><span class="k">s</span><span class="k">d</span><span class="k">f</span><span class="k">g</span><span class="k">h</span><span class="k">j</span><span class="k">k</span><span class="k">l</span><span class="k">æ</span><span class="k">ø</span></div>
           <div class="r"><span class="k m" data-i="shift"></span><span class="k">z</span><span class="k">x</span><span class="k">c</span><span class="k">v</span><span class="k">b</span><span class="k">n</span><span class="k">m</span><span class="k m" data-i="backspace"></span></div>
           <div class="r"><span class="k m">?123</span><span class="k sp">DA · EN</span><span class="k m">.</span><span class="k m" data-i="enter"></span></div>
         </div>
         <div class="nav" style="background:#1e1f25"></div>
-        <span class="co" style="top:306px;left:52px">1</span>
-        <span class="co" style="top:146px;left:292px">2</span>
-        <span class="co" style="top:388px;right:10px">3</span>
+        <span class="co" style="top:30px;left:4px">1</span>
+        <span class="co" style="top:62px;right:12px">2</span>
+        <span class="co" style="top:222px;left:2px">3</span>
       </div>
-      <figcaption>Replay speaks again; tapping the bubble itself loads it into the Message for editing.</figcaption>
+      <figcaption>Gboard at half the screen leaves room for the last couple of Messages. Replay speaks again; tapping the bubble loads it into the Message.</figcaption>
     </figure>
     <div class="notes">
       <ol class="key">
         <li><b class="k">1</b><span><b>Replay</b> is a separate 44dp button. Tapping the bubble loads it into the Message. Two targets, two clear results, no long-press needed.</span></li>
-        <li><b class="k">2</b><span>The thread shows only what Wingmate spoke, so nothing from the partner is ever captured. The dashed note is a hint, not a recording.</span></li>
+        <li><b class="k">2</b><span>The thread shows only what Wingmate spoke, so nothing from the partner is ever captured.</span></li>
         <li><b class="k">3</b><span><b>Held message</b> sits between the thread and the composer: visibly "set aside, not said yet".</span></li>
       </ol>
       <h3>Who it's for</h3>
