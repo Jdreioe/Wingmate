@@ -76,7 +76,7 @@ fn main() {
     }
 }
 
-/// ADR-0014 keeps one semantic version for every client, in
+/// Every client shares one semantic version, kept in
 /// `version.properties`. Fail the build rather than ship a desktop binary
 /// that reports a version no release tag will ever match.
 fn check_release_version(repository: &Path) {
@@ -99,6 +99,6 @@ fn check_release_version(repository: &Path) {
     assert_eq!(
         crate_version, expected,
         "desktopApp/rust/Cargo.toml says {crate_version}, but version.properties \
-         releases {released}. Update Cargo.toml to {expected} (ADR-0014)."
+         releases {released}. Update Cargo.toml to {expected}."
     );
 }

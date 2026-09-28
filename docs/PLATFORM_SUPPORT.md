@@ -12,7 +12,7 @@ acceptance testing.
 
 Wingmate is rebuilding a cross-platform desktop client (`desktopApp/`, Rust +
 `iced`, Windows + macOS + Linux) on the shared Kotlin core through a
-Kotlin/Native C API; see #268 and ADR-0019. It is in development and is not
+Kotlin/Native C API; see #268. It is in development and is not
 yet a supported client.
 
 ## Feature acceptance policy

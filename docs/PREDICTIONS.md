@@ -30,7 +30,7 @@ letter n-grams provide a fallback for unfamiliar words.
 This is still a dictionary-and-History model. It does not include a pretrained
 sentence corpus, neural inference, or a new prediction-learning setting. The
 existing distinction between History and opt-in prediction learning described
-in ADR 0008 is not fully implemented by the current settings model.
+in `CONTEXT.md` is not fully implemented by the current settings model.
 
 Focused checks:
 

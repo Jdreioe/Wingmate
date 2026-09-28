@@ -44,7 +44,7 @@ actual widget bounds in the fullscreen Screen runner, including spanned Buttons.
 It cancels invalid/stale input and reconnects automatically. Enabling is
 session-only; daemon setup and calibration remain external. Windows
 vendor-pointer and real TD-I13 verification remain outstanding. Desktop remains in development; see
-[supported platforms](PLATFORM_SUPPORT.md) and ADR-0019.
+[supported platforms](PLATFORM_SUPPORT.md).
 
 ## Deliberate non-goals (recorded 2026-08)
 
