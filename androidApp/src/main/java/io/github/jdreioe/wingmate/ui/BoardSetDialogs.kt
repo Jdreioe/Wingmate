@@ -281,7 +281,7 @@ internal fun EditBoardCellDialog(
     initialLanguage: String? = null,
     initialMathMode: Boolean = false,
     initialHidden: Boolean = false,
-    initialShape: ObfButtonShape = ObfButtonShape.Square,
+    initialShape: ObfButtonShape = ObfButtonShape.Rounded,
     initialWordType: WordType? = null,
     isKeyboardBoard: Boolean = false,
     showMathMode: Boolean = true,

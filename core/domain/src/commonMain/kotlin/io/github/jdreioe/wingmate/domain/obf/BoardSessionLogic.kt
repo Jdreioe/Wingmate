@@ -390,7 +390,7 @@ fun updateDraftCell(
     linkedBoardId: String?,
     action: String? = null,
     actions: List<String> = emptyList(),
-    shape: ObfButtonShape = ObfButtonShape.Square,
+    shape: ObfButtonShape = ObfButtonShape.Rounded,
     wordType: WordType? = null
 ): BoardSetGraph {
     val board = graph.boardsById[boardId] ?: return graph

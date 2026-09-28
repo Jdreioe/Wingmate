@@ -24,6 +24,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
@@ -50,6 +51,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.animation.core.animateIntOffsetAsState
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.drag
@@ -140,6 +148,24 @@ enum class SymbolBarPresentation(val maxTextLines: Int, val maximumViewportFract
     Fullscreen(maxTextLines = 6, maximumViewportFraction = 0.6f)
 }
 
+/**
+ * Launcher-style editing for a grid of single-cell Buttons (the Typing Screen's
+ * Phrase collection). Long-pressing a movable Button lifts it and opens [menu]
+ * on it; dragging without lifting the finger closes the menu, moves the Button
+ * and reflows the others. Screen readers and switch access get Move earlier /
+ * Move later actions instead of the gesture.
+ *
+ * [onMove] receives the moved Button and the Button whose place it takes.
+ * With [gesturesEnabled] false (for example hold-to-select), only the
+ * accessibility actions remain, so a press is never taken over.
+ */
+class BoardReorder(
+    val canMove: (ObfButton) -> Boolean,
+    val onMove: (moved: ObfButton, target: ObfButton) -> Unit,
+    val gesturesEnabled: Boolean,
+    val menu: @Composable (button: ObfButton, dismiss: () -> Unit) -> Unit,
+)
+
 @Composable
 fun ObfBoardView(
     board: ObfBoard,
@@ -172,7 +198,11 @@ fun ObfBoardView(
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
     onGridHeightFractionChange: ((Float) -> Unit)? = null,
-    homeBoardId: String? = null
+    homeBoardId: String? = null,
+    // When set, grid rows never shrink below this height; the grid scrolls
+    // instead. Used by the Typing Screen's Phrase collection (#248).
+    scrollingMinimumCellHeight: Dp? = null,
+    reorder: BoardReorder? = null,
 ) {
     val settings by rememberReactiveSettings()
     val boardBackground = if (settings.highContrastMode) {
@@ -354,7 +384,10 @@ fun ObfBoardView(
                     ) {
                         mutableFloatStateOf(board.gridHeightFraction ?: defaultHeightFraction)
                     }
-                    val contentHeight = availableGridHeight * previewHeightFraction
+                    val fittedHeight = availableGridHeight * previewHeightFraction
+                    val contentHeight = scrollingMinimumCellHeight
+                        ?.let { maxOf(fittedHeight, it * rows + 8.dp * (rows - 1)) }
+                        ?: fittedHeight
                     Box(modifier = Modifier.fillMaxSize().verticalScroll(pageScrollState)) {
                         Box(
                             modifier = Modifier
@@ -368,6 +401,7 @@ fun ObfBoardView(
                                 items = gridItems,
                                 modifier = gridNavModifier,
                                 onMove = onCellMove,
+                                reorder = reorder,
                                 selectedField = selectedFieldAnchor,
                                 selectedFieldSpans = selectedFieldSpans,
                                 onResizeField = onResizeField,
@@ -388,6 +422,7 @@ fun ObfBoardView(
                                             onCellClick?.invoke(item.row, item.column, button)
                                                 ?: onButtonClick(button)
                                         },
+                                        onLongClick = onButtonLongClick?.let { callback -> { callback(button) } },
                                         isEditMode = isEditMode,
                                         isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
@@ -524,6 +559,7 @@ internal fun SpanningBoardGrid(
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
     focusedCell: Pair<Int, Int>? = null,
+    reorder: BoardReorder? = null,
     content: @Composable (BoardGridItem) -> Unit
 ) {
     var dragSource by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -689,6 +725,111 @@ internal fun SpanningBoardGrid(
             }
         }
 
+    // Launcher-style reordering (see BoardReorder). Movable Buttons in reading
+    // order; while dragging, the others shift one slot toward the gap.
+    val movable = remember(items, reorder) {
+        if (reorder == null) emptyList()
+        else items
+            .filter { it.rowSpan == 1 && it.columnSpan == 1 && it.button?.let(reorder.canMove) == true }
+            .sortedWith(compareBy({ it.row }, { it.column }))
+    }
+    var menuButtonId by remember(items) { mutableStateOf<String?>(null) }
+    var liftedButtonId by remember(items) { mutableStateOf<String?>(null) }
+    var reorderFrom by remember(items) { mutableStateOf<Int?>(null) }
+    var reorderTo by remember(items) { mutableStateOf<Int?>(null) }
+    var reorderOffset by remember(items) { mutableStateOf(Offset.Zero) }
+    var reorderDropped by remember(items) { mutableStateOf(false) }
+    // The new order arrives as new items; if it doesn't (the move was refused or
+    // editing needs unlocking first), settle back after a moment.
+    LaunchedEffect(reorderDropped) {
+        if (reorderDropped) {
+            delay(1500)
+            reorderFrom = null
+            reorderTo = null
+            liftedButtonId = null
+            reorderDropped = false
+        }
+    }
+    val haptics = LocalHapticFeedback.current
+    fun movableIndexAt(position: Offset): Int? {
+        val cell = cellAt(position) ?: return null
+        return movable.indexOfFirst { it.row == cell.first && it.column == cell.second }.takeIf { it >= 0 }
+    }
+    fun slotOffset(fromIndex: Int, toIndex: Int): IntOffset {
+        val cellWidth = (gridSizePx.width - horizontalGap * (columns - 1)).coerceAtLeast(0f) / columns
+        val cellHeight = (gridSizePx.height - verticalGap * (rows - 1)).coerceAtLeast(0f) / rows
+        val from = movable[fromIndex]
+        val to = movable[toIndex]
+        return IntOffset(
+            x = ((to.column - from.column) * (cellWidth + horizontalGap)).roundToInt(),
+            y = ((to.row - from.row) * (cellHeight + verticalGap)).roundToInt(),
+        )
+    }
+    val reorderModifier = if (reorder != null && reorder.gesturesEnabled && movable.isNotEmpty()) {
+        Modifier.pointerInput(movable, reorder) {
+            val slop = viewConfiguration.touchSlop
+            awaitEachGesture {
+                // Watch in the Initial pass so taps and scrolls still reach the
+                // Button and the scroller until the press becomes a long press.
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                val from = movableIndexAt(down.position) ?: return@awaitEachGesture
+                val interrupted = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    while (true) {
+                        val change = awaitPointerEvent(PointerEventPass.Initial).changes
+                            .firstOrNull { it.id == down.id }
+                        if (change == null || !change.pressed ||
+                            (change.position - down.position).getDistance() > slop
+                        ) {
+                            return@withTimeoutOrNull true
+                        }
+                    }
+                    @Suppress("UNREACHABLE_CODE")
+                    true
+                }
+                if (interrupted == true) return@awaitEachGesture
+                val button = movable[from].button ?: return@awaitEachGesture
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                menuButtonId = button.id
+                liftedButtonId = button.id
+                var dragging = false
+                while (true) {
+                    // From here the gesture is ours: consuming it cancels the
+                    // Button's tap and the scroller.
+                    val change = awaitPointerEvent(PointerEventPass.Initial).changes
+                        .firstOrNull { it.id == down.id } ?: break
+                    change.consume()
+                    if (!change.pressed) break
+                    val offset = change.position - down.position
+                    if (!dragging && offset.getDistance() > slop) {
+                        dragging = true
+                        menuButtonId = null
+                        reorderFrom = from
+                        reorderTo = from
+                    }
+                    if (dragging) {
+                        reorderOffset = offset
+                        movableIndexAt(change.position)?.let { reorderTo = it }
+                    }
+                }
+                val to = reorderTo
+                if (dragging && to != null && to != from) {
+                    reorderDropped = true
+                    movable[to].button?.let { target -> reorder.onMove(button, target) }
+                } else {
+                    reorderFrom = null
+                    reorderTo = null
+                    // Stay lifted while the menu is open; dismissing it lowers the Button.
+                    if (dragging) liftedButtonId = null
+                }
+            }
+        }
+    } else {
+        Modifier
+    }
+    val moveEarlierLabel = stringResource(R.string.phrase_move_earlier)
+    val moveLaterLabel = stringResource(R.string.phrase_move_later)
+    val optionsLabel = stringResource(R.string.phrase_item_edit)
+
     val dragModifier = if (onMove != null) {
         Modifier.pointerInput(rows, columns, items, onMove) {
             detectDragGesturesAfterLongPress(
@@ -732,6 +873,7 @@ internal fun SpanningBoardGrid(
             modifier = Modifier
                 .fillMaxSize()
                 .then(dragModifier)
+                .then(reorderModifier)
                 .onSizeChanged { gridSizePx = it },
             content = {
                 items.forEach { item ->
@@ -748,9 +890,70 @@ internal fun SpanningBoardGrid(
                                 focus.second in item.column until item.column + item.columnSpan
                         } == true && item.button != null
                         val ringShape = item.button?.shape?.toShape() ?: squareShape()
+                        val movableIndex = movable.indexOf(item)
+                        val from = reorderFrom
+                        val to = reorderTo
+                        val isDragged = movableIndex >= 0 && movableIndex == from
+                        // Slot this Button shows in while another one is dragged past it.
+                        val displayIndex = when {
+                            movableIndex < 0 || from == null || to == null -> movableIndex
+                            isDragged -> to
+                            from < to && movableIndex in (from + 1)..to -> movableIndex - 1
+                            from > to && movableIndex in to until from -> movableIndex + 1
+                            else -> movableIndex
+                        }
+                        val slotTarget = if (movableIndex >= 0 && displayIndex != movableIndex) {
+                            slotOffset(movableIndex, displayIndex)
+                        } else {
+                            IntOffset.Zero
+                        }
+                        val animatedSlot by animateIntOffsetAsState(slotTarget, label = "reorder-slot")
+                        val isLifted = item.button?.id != null && item.button.id == liftedButtonId
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
+                                .zIndex(if (isLifted) 1f else 0f)
+                                .offset {
+                                    if (isDragged && !reorderDropped) {
+                                        IntOffset(reorderOffset.x.roundToInt(), reorderOffset.y.roundToInt())
+                                    } else {
+                                        animatedSlot
+                                    }
+                                }
+                                .then(
+                                    if (isLifted) {
+                                        Modifier.scale(1.06f).shadow(8.dp, ringShape, clip = false)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .then(
+                                    if (movableIndex >= 0 && reorder != null) {
+                                        val button = item.button!!
+                                        Modifier.semantics {
+                                            customActions = listOfNotNull(
+                                                movable.getOrNull(movableIndex - 1)?.button?.let { previous ->
+                                                    CustomAccessibilityAction(moveEarlierLabel) {
+                                                        reorder.onMove(button, previous)
+                                                        true
+                                                    }
+                                                },
+                                                movable.getOrNull(movableIndex + 1)?.button?.let { next ->
+                                                    CustomAccessibilityAction(moveLaterLabel) {
+                                                        reorder.onMove(button, next)
+                                                        true
+                                                    }
+                                                },
+                                                CustomAccessibilityAction(optionsLabel) {
+                                                    menuButtonId = button.id
+                                                    true
+                                                },
+                                            )
+                                        }
+                                    } else {
+                                        Modifier
+                                    }
+                                )
                                 .then(
                                     if (isSelected) {
                                         Modifier.border(3.dp, selectionColor, ringShape)
@@ -776,6 +979,13 @@ internal fun SpanningBoardGrid(
                                 )
                         ) {
                             content(item)
+                            val menuButton = item.button
+                            if (reorder != null && menuButton != null && menuButton.id == menuButtonId) {
+                                reorder.menu(menuButton) {
+                                    menuButtonId = null
+                                    liftedButtonId = null
+                                }
+                            }
                         }
                     }
             }
@@ -1127,10 +1337,21 @@ fun ObfButtonItem(
         lineHeight = MaterialTheme.typography.labelMedium.lineHeight * boundedFontScale,
         fontWeight = FontWeight.Bold
     )
-    val scaledLabelSmall = MaterialTheme.typography.labelSmall.copy(
-        fontSize = MaterialTheme.typography.labelSmall.fontSize * boundedFontScale,
-        lineHeight = MaterialTheme.typography.labelSmall.lineHeight * boundedFontScale,
-        fontWeight = FontWeight.Bold
+    val scaledLabelSmall = MaterialTheme.typography.labelLarge.copy(
+        fontSize = MaterialTheme.typography.labelLarge.fontSize * boundedFontScale,
+        lineHeight = MaterialTheme.typography.labelLarge.lineHeight * boundedFontScale,
+        fontWeight = FontWeight.Medium
+    )
+    // Text-only Buttons (most Phrases) read like the #299 prototype: sentence
+    // text top-left, short words centered and larger.
+    val phraseTextStyle = MaterialTheme.typography.bodyLarge.copy(
+        fontSize = MaterialTheme.typography.bodyLarge.fontSize * boundedFontScale,
+        lineHeight = MaterialTheme.typography.bodyLarge.fontSize * boundedFontScale * 1.25f,
+    )
+    val shortWordStyle = MaterialTheme.typography.titleLarge.copy(
+        fontSize = MaterialTheme.typography.titleLarge.fontSize * boundedFontScale,
+        lineHeight = MaterialTheme.typography.titleLarge.lineHeight * boundedFontScale,
+        fontWeight = FontWeight.Medium
     )
     
     // Page links navigate immediately; pulsing the outgoing button makes the
@@ -1185,7 +1406,7 @@ fun ObfButtonItem(
         highContrastContainer
     } else {
         resolvedBackgroundColor?.let { runCatching { parseHexToColor(it) }.getOrNull() }
-            ?: MaterialTheme.colorScheme.surfaceVariant
+            ?: MaterialTheme.colorScheme.surfaceContainerHigh
     }
     
     val borderColor = if (settings.highContrastMode) {
@@ -1297,7 +1518,7 @@ fun ObfButtonItem(
             .accessTargetFocus(accessTargetId, if (isEditMode || !enabled) null else accessHost),
         shape = buttonShape,
         colors = CardDefaults.elevatedCardColors(containerColor = bgColor),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp),
         border = if (borderColor != null || settings.highContrastMode) {
              androidx.compose.foundation.BorderStroke(if (settings.highContrastMode) 3.dp else 2.dp, borderColor ?: highContrastContent)
         } else null,
@@ -1335,7 +1556,23 @@ fun ObfButtonItem(
                 val showLbl = effectiveBoardSettings.showLabels &&
                     !(displayLabel.isNullOrBlank() && displayVocalization.isNullOrBlank())
 
-                if (effectiveBoardSettings.labelAtTop && showImg && showLbl) {
+                if (showLbl && !showImg) {
+                    val labelText = displayLabel ?: displayVocalization ?: ""
+                    val shortWord = labelText.trim().let { it.length <= 12 && ' ' !in it }
+                    Box(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp),
+                        contentAlignment = if (shortWord) Alignment.Center else Alignment.TopStart,
+                    ) {
+                        Text(
+                            text = labelText,
+                            style = if (shortWord) shortWordStyle else phraseTextStyle,
+                            textAlign = if (shortWord) TextAlign.Center else TextAlign.Start,
+                            color = contentColor,
+                            maxLines = if (shortWord) 1 else 3,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                } else if (effectiveBoardSettings.labelAtTop && showImg && showLbl) {
                     val labelText = displayLabel ?: displayVocalization ?: ""
                     Text(
                         text = labelText,
@@ -1390,6 +1627,15 @@ fun ObfButtonItem(
                         )
                     }
                 }
+            }
+            if (button.soundId != null && button.loadBoard == null && !isHomeLink && !isTemporarilyRevealed) {
+                // Marks a Phrase that plays its own recording.
+                Icon(
+                    Icons.Default.Mic,
+                    contentDescription = null,
+                    tint = contentColor.copy(alpha = 0.7f),
+                    modifier = Modifier.align(Alignment.TopEnd).size(16.dp)
+                )
             }
             if (button.loadBoard != null || isHomeLink) {
                 val destinationDescription = if (isHomeLink) {

@@ -17,7 +17,7 @@ import kotlin.math.min
 /**
  * Corner radius (in dp) used for the rounded button shape.
  */
-internal val ButtonDefaultCornerRadius = 12.dp
+internal val ButtonDefaultCornerRadius = 16.dp
 
 /**
  * Central shape resolution shared by run mode, edit mode, previews, image
