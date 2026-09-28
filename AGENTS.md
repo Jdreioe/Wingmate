@@ -10,4 +10,4 @@ Uses the default canonical triage labels. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Uses a single-context layout: root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+Uses a single-context layout: root `CONTEXT.md`. See `docs/agents/domain.md`.
