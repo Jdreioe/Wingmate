@@ -26,6 +26,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request supersedes its running checks.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     name: ${{ matrix.os }}
@@ -75,7 +80,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-provider: basic
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # Cargo registry, compiled dependencies and installed tools (cargo-packager).
+      # Saved from main only; pull requests restore it without the slow save.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: desktopApp -> target
+          key: ${{ matrix.target }}
+          save-if: ${{ github.event_name != 'pull_request' }}
+      # Kotlin/Native toolchain and platform libraries. Restored everywhere,
+      # saved (at the end) from main only.
+      - id: konan
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.konan
           key: ${{ runner.os }}-konan-${{ hashFiles('gradle/libs.versions.toml') }}
@@ -97,17 +112,22 @@ jobs:
         run: cargo test --locked --target ${{ matrix.target }}
         env:
           WINGMATE_KOTLIN_BRIDGE_PREBUILT: "1"
+      # Pull requests stop after the tests; main also packages the installers.
+      # Tagged releases are built by release-desktop.yml.
       - name: Build release Kotlin bridge
+        if: github.event_name != 'pull_request'
         run: ${{ matrix.gradle }} :desktopApp:bindings:linkReleaseStatic${{ matrix.kotlin_target }} --console=plain --build-cache
       - name: Build release Rust shell
+        if: github.event_name != 'pull_request'
         working-directory: desktopApp
         run: cargo build --release --locked --target ${{ matrix.target }}
         env:
           WINGMATE_KOTLIN_BRIDGE_PREBUILT: "1"
       - name: Install desktop packager
+        if: github.event_name != 'pull_request'
         run: cargo install cargo-packager --version 0.11.8 --locked
       - name: Build pinned Linux gaze daemon
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && github.event_name != 'pull_request'
         shell: bash
         run: |
           python3 -m venv "$RUNNER_TEMP/gaze-zig"
@@ -117,11 +137,19 @@ jobs:
           bash scripts/build-gaze-daemon.sh
 
       - name: Build unsigned installer
+        if: github.event_name != 'pull_request'
         working-directory: desktopApp
         run: cargo packager --release --target ${{ matrix.target }} --formats ${{ matrix.package_format }}
       - name: Upload installer
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_path }}
           if-no-files-found: error
+      - name: Save the Kotlin/Native cache
+        if: github.event_name != 'pull_request' && steps.konan.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.konan
+          key: ${{ steps.konan.outputs.cache-primary-key }}
