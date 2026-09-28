@@ -64,6 +64,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -1468,6 +1469,14 @@ fun PhraseScreen(
                             },
                             modifier = Modifier
                                 .weight(1f)
+                                // Focusing the Message means typing, with or without an
+                                // on-screen keyboard (a hardware keyboard never shows one).
+                                .onFocusChanged { focus ->
+                                    if (focus.hasFocus && inputSurface == TypingInputSurface.Tray) {
+                                        trayLingering = true
+                                        inputSurface = TypingInputSurface.Keyboard
+                                    }
+                                }
                                 // Grows with the Message up to a cap, then scrolls.
                                 .heightIn(
                                     min = (56.dp * settings.inputFieldScale),

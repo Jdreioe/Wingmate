@@ -2,7 +2,9 @@ package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
-import androidx.compose.ui.test.junit4.v2.createComposeRule
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextClearance
@@ -17,12 +19,17 @@ import org.koin.core.context.loadKoinModules
 import org.koin.core.context.unloadKoinModules
 import org.koin.dsl.module
 
+/**
+ * Wingmate's own suggestions show while typing without an on-screen keyboard
+ * (a hardware keyboard). With Gboard open they stay hidden, because Gboard shows
+ * its own (#299), so the window here never shows a soft keyboard.
+ */
 class TypingPredictionVisibilityTest {
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun suggestionsAreVisibleWhileTypingWithThePhoneKeyboard() {
+    fun suggestionsAreVisibleWhileTypingWithAHardwareKeyboard() {
         val originalService = GlobalContext.get().get<TextPredictionService>()
         val predictionModule = module {
             single<TextPredictionService> {
@@ -39,6 +46,9 @@ class TypingPredictionVisibilityTest {
         }
         loadKoinModules(predictionModule)
         try {
+            composeRule.activityRule.scenario.onActivity { activity ->
+                activity.window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+            }
             composeRule.setContent { AppTheme { PhraseScreen() } }
             val input = composeRule.onNode(hasSetTextAction())
             input.performClick()
