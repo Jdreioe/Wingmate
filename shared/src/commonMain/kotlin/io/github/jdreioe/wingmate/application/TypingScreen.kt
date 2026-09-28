@@ -103,8 +103,7 @@ class TypingScreenUseCase(
 object TypingScreenProjector {
     private const val PAGE_NAVIGATION_ID = "typing-element:navigation"
     private const val PHRASE_COLLECTION_ID = "typing-element:phrases"
-    private const val SSML_STRIP_ID = "typing-element:ssml"
-    private const val PLAYBACK_STRIP_ID = "typing-element:playback"
+    private const val ACTION_STRIP_ID = "typing-element:actions"
 
     fun defaultTemplate(columns: Int, now: Long = Clock.System.now().toEpochMilliseconds()): BoardSetGraph {
         val safeColumns = columns.coerceIn(1, 12)
@@ -122,24 +121,20 @@ object TypingScreenProjector {
             actionButton("typing:ssml:telephone", "Telephone", ":wrap=<say-as interpret-as=\"telephone\">|</say-as>"),
             actionButton("typing:ssml:currency", "Currency", ":wrap=<say-as interpret-as=\"currency\">|</say-as>"),
         )
-        val playbackButtons = listOf(
-            actionButton("typing:playback:play", "Play", ":speak"),
-            actionButton("typing:playback:pause", "Pause", ":pause"),
-            actionButton("typing:playback:resume", "Resume", ":resume"),
-            actionButton("typing:playback:stop", "Stop", ":stop"),
-            actionButton("typing:playback:secondary", "Language", ":secondary-language"),
+        // Speak, Pause, Resume and Stop live in the Message bar, so the default
+        // strip holds only what the bar lacks (#299). Users can still add them.
+        val messageButtons = listOf(
             actionButton("typing:playback:hold", "Hold", ":hold-message"),
+            actionButton("typing:playback:secondary", "Language", ":secondary-language"),
         )
-        val buttons = ssmlButtons + playbackButtons
+        val buttons = messageButtons + ssmlButtons
         val elements = listOf(
             PageElement(PAGE_NAVIGATION_ID, PageElementTypes.PageNavigation, 0, 0, columnSpan = safeColumns)
                 .withConfiguration(PageNavigationElementConfig()),
-            PageElement(PHRASE_COLLECTION_ID, PageElementTypes.PhraseCollection, 1, 0, rowSpan = 6, columnSpan = safeColumns)
+            PageElement(PHRASE_COLLECTION_ID, PageElementTypes.PhraseCollection, 1, 0, rowSpan = 7, columnSpan = safeColumns)
                 .withConfiguration(PhraseCollectionElementConfig(columns = safeColumns)),
-            PageElement(SSML_STRIP_ID, PageElementTypes.ActionStrip, 7, 0, columnSpan = safeColumns)
-                .withConfiguration(ActionStripElementConfig(ssmlButtons.map { it.id })),
-            PageElement(PLAYBACK_STRIP_ID, PageElementTypes.ActionStrip, 8, 0, columnSpan = safeColumns)
-                .withConfiguration(ActionStripElementConfig(playbackButtons.map { it.id })),
+            PageElement(ACTION_STRIP_ID, PageElementTypes.ActionStrip, 8, 0, columnSpan = safeColumns)
+                .withConfiguration(ActionStripElementConfig(buttons.map { it.id })),
         )
         val board = ObfBoard(
             format = "open-board-0.1",

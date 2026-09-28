@@ -1,6 +1,16 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
@@ -30,11 +40,12 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.ui.draw.shadow
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar
@@ -53,7 +64,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -81,6 +91,7 @@ import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.activatePhrase
 import io.github.jdreioe.wingmate.domain.fromScreenButton
 import io.github.jdreioe.wingmate.domain.fromTextDiff
+import io.github.jdreioe.wingmate.domain.isGridPhrase
 import io.github.jdreioe.wingmate.domain.phraseSubtree
 import io.github.jdreioe.wingmate.domain.toScreenButtons
 import io.github.jdreioe.wingmate.domain.PredictionResult
@@ -103,13 +114,17 @@ import org.koin.compose.getKoin
 import org.koin.compose.koinInject
 
 import com.hojmoseit.wingmate.R
+/** Input surface under the Message bar. They take turns; only one is ever shown. */
+private enum class TypingInputSurface { Keyboard, Tray }
+
 internal fun supportsMathMode(ttsEngine: TtsEngine): Boolean =
     ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED
 
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalFoundationApi::class,
-    ExperimentalComposeUiApi::class
+    ExperimentalComposeUiApi::class,
+    ExperimentalLayoutApi::class,
 )
 @Composable
 fun PhraseScreen(
@@ -125,9 +140,13 @@ fun PhraseScreen(
     val typingTrayPreferences = remember(context) {
         context.getSharedPreferences("typing-screen-ui", android.content.Context.MODE_PRIVATE)
     }
-    var typingTrayHeight by remember {
-        mutableStateOf(typingTrayPreferences.getFloat("tray-height-dp", 360f).dp)
-    }
+    // Tray height, per client and outside the Screen graph (#248): a height the
+    // user dragged to wins; otherwise the last keyboard height, so switching
+    // surfaces doesn't move the Message bar. Both include the navigation bar.
+    fun storedHeight(key: String): Dp? =
+        typingTrayPreferences.getFloat(key, Float.NaN).takeUnless { it.isNaN() }?.dp
+    var draggedTrayHeight by remember { mutableStateOf(storedHeight("tray-height-dp")) }
+    var keyboardTrayHeight by remember { mutableStateOf(storedHeight("keyboard-height-dp")) }
     val bloc = koinInject<PhraseBloc>()
     val featureUsageReporter = koinInject<FeatureUsageReporter>()
     val state by bloc.state.collectAsStateWithLifecycle()
@@ -224,8 +243,16 @@ fun PhraseScreen(
                 .filter { it.languageTag == settings.secondaryLanguage }
                 .map { TextRange(it.range.start, it.range.endExclusive) }
             val textFieldFocusRequester = remember { FocusRequester() }
+            // The system keyboard and the Typing Screen tray take turns below the
+            // Message bar (#248, #299). The tray is the resting surface.
+            var inputSurface by remember { mutableStateOf(TypingInputSurface.Tray) }
+            // Returning focus would raise the keyboard, so only do it while typing.
             val refocusInput = remember(textFieldFocusRequester) {
-                { textFieldFocusRequester.requestFocus() }
+                {
+                    if (inputSurface == TypingInputSurface.Keyboard) {
+                        textFieldFocusRequester.requestFocus()
+                    }
+                }
             }
             val syncDisplayText = remember(showFullscreen) {
                 { text: String ->
@@ -241,9 +268,16 @@ fun PhraseScreen(
                 }
                 syncDisplayText(text)
             }
+            // The keyboard's in-progress word (composition). Gboard needs it back to
+            // replace the word with a suggestion or finish a swipe. It is kept only
+            // while the text is still what the field reported; any other edit
+            // (Phrase, Clear, Swap) drops it.
+            var lastFieldValue by remember { mutableStateOf<TextFieldValue?>(null) }
+            val displayText = communicationState.activeMessage.displayText
             val input = TextFieldValue(
-                text = communicationState.activeMessage.displayText,
+                text = displayText,
                 selection = cursor,
+                composition = lastFieldValue?.takeIf { it.text == displayText }?.composition,
             )
             var predictions by remember { mutableStateOf(PredictionResult()) }
 
@@ -513,21 +547,61 @@ fun PhraseScreen(
                 syncDisplayText(communicationSession.state.value.activeMessage.displayText)
                 refocusInput()
             }
-            var showPhraseSheet by remember { mutableStateOf(false) }
-            LaunchedEffect(showPhraseSheet) {
+            LaunchedEffect(inputSurface) {
                 AndroidAccessInputBus.restartScan()
             }
             val focusManager = LocalFocusManager.current
             val softwareKeyboardController = LocalSoftwareKeyboardController.current
-            BackHandler(enabled = showPhraseSheet) {
-                showPhraseSheet = false
+            // Follow the system keyboard: showing it means typing, and dismissing it
+            // (Back or the keyboard's own hide key) brings the tray back. A hardware
+            // keyboard never shows one, so the toggle below still sets the surface.
+            // Uses where the keyboard is heading, so the switch happens as its
+            // animation starts rather than after it ends.
+            val isImeVisible = WindowInsets.imeAnimationTarget.getBottom(density) > 0
+            var wasImeVisible by remember { mutableStateOf(false) }
+            // When switching to the keyboard, the tray stays underneath while the
+            // keyboard starts (a few hundred ms after it is requested) and slides up
+            // over it, so the Message bar never drops in between. A hardware
+            // keyboard never shows one, so this simply ends after a moment.
+            var trayLingering by remember { mutableStateOf(false) }
+            LaunchedEffect(trayLingering) {
+                if (trayLingering) {
+                    delay(700)
+                    trayLingering = false
+                }
+            }
+            LaunchedEffect(isImeVisible) {
+                if (isImeVisible) {
+                    if (inputSurface == TypingInputSurface.Tray) trayLingering = true
+                    inputSurface = TypingInputSurface.Keyboard
+                } else if (wasImeVisible) {
+                    inputSurface = TypingInputSurface.Tray
+                }
+                wasImeVisible = isImeVisible
+            }
+            val showTray: () -> Unit = {
+                inputSurface = TypingInputSurface.Tray
+                focusManager.clearFocus()
+                softwareKeyboardController?.hide()
+            }
+            val showKeyboard: () -> Unit = {
+                inputSurface = TypingInputSurface.Keyboard
+                trayLingering = true
+                textFieldFocusRequester.requestFocus()
+                softwareKeyboardController?.show()
             }
 
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = {
-                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    // Hidden while the system keyboard is up to leave room for the
+                    // Message; everything in it is back as soon as the keyboard closes.
+                    AnimatedVisibility(
+                        visible = !isImeVisible,
+                        enter = fadeIn(tween(200)),
+                        exit = fadeOut(tween(200)),
+                    ) { BoxWithConstraints(Modifier.fillMaxWidth()) {
                         val useOverflowMenu = maxWidth <= 720.dp
                         TopAppBar(
                             title = { Text("Wingmate", style = MaterialTheme.typography.titleLarge.copy(
@@ -696,15 +770,24 @@ fun PhraseScreen(
                                 }
                             }
                         )
-                    }
+                    } }
                 },
-                // Playback controls live in the message bar and the "+" phrase
-                // sheet; there is no bottom bar anymore (#243).
+                // Speak lives in the Message bar and the other speech controls in
+                // the tray's Action strip; there is no bottom bar (#243, #299).
             ) { innerPadding ->
-                BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                    val isWide = maxWidth >= 900.dp
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .consumeWindowInsets(innerPadding),
+                ) {
                     Row(Modifier.fillMaxSize()) {
-                        Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(16.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .padding(horizontal = 8.dp),
+                        ) {
                     if (state.loading) Text(stringResource(R.string.phrase_screen_loading), style = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                     ))
@@ -775,114 +858,6 @@ fun PhraseScreen(
                     }
                     val ssmlHighlightColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
 
-                    SecondaryLanguageTextField(
-                        value = input,
-                        onValueChange = { newValue ->
-                            communicationSession.accept(
-                                Message.fromTextDiff(
-                                    currentText = communicationSession.state.value.activeMessage.displayText,
-                                    newText = newValue.text,
-                                    mathMode = mathMode,
-                                )
-                            )
-                            cursor = newValue.selection
-                            syncDisplayText(newValue.text)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .shadow(2.dp, RoundedCornerShape(16.dp))
-                            // Compact by default to match SymbolBar's 64dp resting height;
-                            // still grows via the input-field-scale setting.
-                            .heightIn(min = (64.dp * settings.inputFieldScale), max = (180.dp * settings.inputFieldScale)),
-                        focusRequester = textFieldFocusRequester,
-                        onFocused = { showPhraseSheet = false },
-                        highlightRanges = secondaryLanguageRanges,
-                        highlightColor = secondaryHighlightColor,
-                        ssmlRanges = ssmlRanges,
-                        ssmlColor = ssmlHighlightColor,
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale,
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        minLines = 2,
-                        maxLines = 6,
-                        placeholder = {
-                            Text(
-                                stringResource(R.string.phrase_screen_enter_text_placeholder),
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
-                        },
-                        trailingContent = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                VerticalDivider(
-                                    modifier = Modifier
-                                        .padding(horizontal = 8.dp)
-                                        .height(40.dp)
-                                )
-                                if (isSpeechPaused) {
-                                    FilledIconButton(
-                                        onClick = resumeSpeech,
-                                        colors = IconButtonDefaults.filledIconButtonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary
-                                        )
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.SkipNext,
-                                            contentDescription = stringResource(R.string.playback_resume)
-                                        )
-                                    }
-                                } else {
-                                    FilledIconButton(
-                                        onClick = playInput,
-                                        colors = IconButtonDefaults.filledIconButtonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary
-                                        )
-                                    ) {
-                                        Icon(
-                                            Icons.Filled.PlayArrow,
-                                            contentDescription = stringResource(R.string.playback_play)
-                                        )
-                                    }
-                                }
-                                IconButton(onClick = pauseSpeech) {
-                                    Icon(
-                                        Icons.Filled.Pause,
-                                        contentDescription = stringResource(R.string.playback_pause)
-                                    )
-                                }
-                                IconButton(onClick = stopSpeech) {
-                                    Icon(
-                                        Icons.Filled.Stop,
-                                        contentDescription = stringResource(R.string.playback_stop)
-                                    )
-                                }
-                                IconButton(onClick = {
-                                    if (showPhraseSheet) {
-                                        showPhraseSheet = false
-                                        textFieldFocusRequester.requestFocus()
-                                        softwareKeyboardController?.show()
-                                    } else {
-                                        focusManager.clearFocus()
-                                        softwareKeyboardController?.hide()
-                                        showPhraseSheet = true
-                                    }
-                                }) {
-                                    Icon(
-                                        if (showPhraseSheet) Icons.Filled.Keyboard else Icons.Filled.Add,
-                                        contentDescription = stringResource(
-                                            if (showPhraseSheet) R.string.board_native_keyboard_title
-                                            else R.string.common_more_actions
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    )
-                    
-
                     // Typing vocabulary shown below the Message bar.
                     var showEditDialog by remember { mutableStateOf(false) }
                     var showAddPhraseDialog by remember { mutableStateOf(false) }
@@ -912,14 +887,16 @@ fun PhraseScreen(
                                     )
                                 }
                             } else {
-                                state.items.filter { selectedCategoryId == null || it.parentId == selectedCategoryId }
+                                state.items.filter {
+                                    it.isGridPhrase() && (selectedCategoryId == null || it.parentId == selectedCategoryId)
+                                }
                             }
                         }
                     }
                     val compactPhrases by remember(state.items, lastPhraseCategory?.id) {
                         derivedStateOf {
                             val categoryId = lastPhraseCategory?.id
-                            state.items.filter { categoryId == null || it.parentId == categoryId }
+                            state.items.filter { it.isGridPhrase() && (categoryId == null || it.parentId == categoryId) }
                         }
                     }
                     // #119: unified phrase playback for the grid's explicit play affordance and
@@ -1035,11 +1012,7 @@ fun PhraseScreen(
                             ObfButtonActionEffect.Stop -> stopSpeech()
                             ObfButtonActionEffect.ToggleSecondaryLanguage -> toggleSecondarySelection?.invoke()
                             ObfButtonActionEffect.SwapHeldMessage -> toggleThatThought()
-                            ObfButtonActionEffect.NativeKeyboard -> {
-                                showPhraseSheet = false
-                                textFieldFocusRequester.requestFocus()
-                                softwareKeyboardController?.show()
-                            }
+                            ObfButtonActionEffect.NativeKeyboard -> showKeyboard()
                             ObfButtonActionEffect.Home,
                             ObfButtonActionEffect.Predictions -> Unit
                             is ObfButtonActionEffect.Unsupported -> coroutineScope.launch {
@@ -1047,194 +1020,22 @@ fun PhraseScreen(
                             }
                         }
                     }
-                    // Everything below the message bar docks under the "+" panel.
-                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                    // On narrow screens, if keyboard is active, show prediction bar instead of SSML button
-                    val isKeyboardVisible = WindowInsets.ime.asPaddingValues().calculateBottomPadding() > 0.dp
                     val keyboardHeight = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
                     LaunchedEffect(keyboardHeight) {
                         if (keyboardHeight >= 200.dp) {
-                            typingTrayHeight = keyboardHeight
+                            // Wait for the keyboard animation to settle before storing.
+                            delay(300)
+                            keyboardTrayHeight = keyboardHeight
                             typingTrayPreferences.edit()
-                                .putFloat("tray-height-dp", keyboardHeight.value)
+                                .putFloat("keyboard-height-dp", keyboardHeight.value)
                                 .apply()
                         }
                     }
-                    
-                    if (predictionsEnabled && !isWide && isKeyboardVisible && (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty())) {
-                         PredictionBar(
-                            predictions = predictions,
-                            onWordSelected = { word ->
-                                val fv = input
-                                val updated = completePredictedWord(fv, word)
-                                replaceInputText(updated.text, updated.selection.start)
-                            },
-                            onLetterSelected = { letter ->
-                                val fv = input
-                                val updated = insertPredictedText(fv, letter.toString())
-                                replaceInputText(updated.text, updated.selection.start)
-                            },
-                            fontSizeScale = settings.fontSizeScale,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                    }
 
-                    Spacer(modifier = Modifier.height(8.dp))
                     if (categoryUseCaseState.value == null) {
                         Text(stringResource(R.string.phrase_screen_loading), style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = MaterialTheme.typography.labelSmall.fontSize * settings.fontSizeScale
                         ), color = MaterialTheme.colorScheme.outline)
-                    }
-
-                    // Category chips
-                    val historyCategoryLabel = stringResource(R.string.category_history)
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(horizontal = 0.dp)
-                    ) {
-                        // "All" chip to show all phrases
-                        item {
-                            FilterChip(
-                                selected = selectedPage == TypingPageSelection.AllPhrases,
-                                onClick = { selectedPage = TypingPageSelection.AllPhrases },
-                                label = { Text(stringResource(R.string.category_all), style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                )) }
-                            )
-                        }
-                        
-                        // Category chips
-                        itemsIndexed(categories, key = { _, category -> category.id }) { index, category ->
-                            var showCategoryMenu by remember { mutableStateOf(false) }
-                            Box {
-                                FilterChip(
-                                    selected = selectedCategory?.id == category.id,
-                                    onClick = {
-                                        if (selectedCategory?.id == category.id) {
-                                            requestTypingMutation { showCategoryMenu = true }
-                                        } else {
-                                            selectedPage = TypingPageSelection.Category(category)
-                                        }
-                                    },
-                                    label = { Text(category.name ?: stringResource(R.string.category_all), style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                    )) },
-                                    modifier = Modifier
-                                        .then(
-                                            if (isDesktop()) {
-                                                Modifier.pointerInput(Unit) {
-                                                    awaitPointerEventScope {
-                                                        while (true) {
-                                                            val event = awaitPointerEvent()
-                                                            if (event.type == PointerEventType.Press &&
-                                                                event.buttons.isSecondaryPressed) {
-                                                                requestTypingMutation { showCategoryMenu = true }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                Modifier
-                                            }
-                                        )
-                                        .combinedClickable(
-                                            onClick = {
-                                                if (selectedCategory?.id == category.id) {
-                                                    requestTypingMutation { showCategoryMenu = true }
-                                                } else {
-                                                    selectedPage = TypingPageSelection.Category(category)
-                                                }
-                                            },
-                                            onLongClick = { requestTypingMutation { showCategoryMenu = true } }
-                                        )
-                                )
-                                if (showCategoryMenu) {
-                                    ModalBottomSheet(onDismissRequest = { showCategoryMenu = false }) {
-                                        Column(modifier = Modifier.padding(bottom = 24.dp)) {
-                                    DropdownMenuItem(text = { Text(stringResource(R.string.category_move_left), style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                    )) }, enabled = index > 0, onClick = {
-                                        showCategoryMenu = false
-                                        val uc = categoryUseCaseState.value
-                                        if (index > 0 && uc != null) {
-                                            coroutineScope.launch(Dispatchers.IO) {
-                                                runCatching {
-                                                    uc.move(index, index - 1)
-                                                    uc.list()
-                                                }.onSuccess { updated ->
-                                                    coroutineScope.launch { categories = updated }
-                                                }.onFailure {
-                                                    coroutineScope.launch { categoriesLoadFailed = true }
-                                                }
-                                            }
-                                        }
-                                    })
-                                    DropdownMenuItem(text = { Text(stringResource(R.string.category_move_right), style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                    )) }, enabled = index < categories.lastIndex, onClick = {
-                                        showCategoryMenu = false
-                                        val uc = categoryUseCaseState.value
-                                        if (index < categories.lastIndex && uc != null) {
-                                            coroutineScope.launch(Dispatchers.IO) {
-                                                runCatching {
-                                                    uc.move(index, index + 1)
-                                                    uc.list()
-                                                }.onSuccess { updated ->
-                                                    coroutineScope.launch { categories = updated }
-                                                }.onFailure {
-                                                    coroutineScope.launch { categoriesLoadFailed = true }
-                                                }
-                                            }
-                                        }
-                                    })
-                                    DropdownMenuItem(text = { Text(stringResource(R.string.category_delete_with_phrases), style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                    )) }, onClick = {
-                                        showCategoryMenu = false
-                                        // Confirm dialog
-                                        confirmDeleteCategory = category
-                                    })
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        // History chip: appears only when there are items; placed immediately after user categories
-                        if (settings.historyVisible && historyItems.isNotEmpty()) {
-                            item {
-                                FilterChip(
-                                    selected = selectedPage == TypingPageSelection.History,
-                                    onClick = { selectedPage = TypingPageSelection.History },
-                                    label = { Text(stringResource(R.string.category_history), style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                    )) }
-                                )
-                            }
-                        }
-
-                        // Add category chip
-                        item {
-                            FilterChip(
-                                selected = false,
-                                onClick = { requestTypingMutation { showAddCategoryDialog = true } },
-                                label = { 
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Add,
-                                            contentDescription = stringResource(R.string.category_add_cd),
-                                            modifier = Modifier.size((16.dp * settings.playbackIconScale))
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(stringResource(R.string.common_add), style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                        ))
-                                    }
-                                }
-                            )
-                        }
-
-                        // Note: History chip is added above, before the Add chip
                     }
 
                     // Refresh history from repo when switching to History
@@ -1247,36 +1048,54 @@ fun PhraseScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // 1-row preview when not in "+" mode; full board lives in the docked panel.
-                    if (!showPhraseSheet && compactPhrases.isNotEmpty() && typingTemplateGraph?.rootBoard != null) {
-                        CompactPhraseRow(
-                            template = typingTemplateGraph!!.rootBoard!!,
-                            phrases = compactPhrases,
-                            onPhraseActivated = activatePhraseFromTypingScreen,
-                            onPhraseLongPress = { phrase ->
-                                if (!isHistory) {
-                                    editingPhrase = phrase
-                                    requestTypingMutation { showEditDialog = true }
+                    // Category menu (move, delete). Opened by tapping the selected
+                    // Category chip in the tray, behind editing access.
+                    var categoryMenu by remember { mutableStateOf<CategoryItem?>(null) }
+                    categoryMenu?.let { menuCategory ->
+                        val index = categories.indexOfFirst { it.id == menuCategory.id }
+                        val moveCategory: (Int) -> Unit = { target ->
+                            val uc = categoryUseCaseState.value
+                            if (index >= 0 && target in categories.indices && uc != null) {
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    runCatching {
+                                        uc.move(index, target)
+                                        uc.list()
+                                    }.onSuccess { updated ->
+                                        coroutineScope.launch { categories = updated }
+                                    }.onFailure {
+                                        coroutineScope.launch { categoriesLoadFailed = true }
+                                    }
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            }
+                        }
+                        val menuTextStyle = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                         )
-                        // Add new phrase → Edit Screen (the "+" panel)
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            TextButton(
-                                enabled = categoriesLoadedOnce && !categoriesLoadFailed,
-                                onClick = {
-                                focusManager.clearFocus()
-                                showPhraseSheet = true
-                            }) {
-                                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(stringResource(R.string.phrase_add_title))
+                        ModalBottomSheet(onDismissRequest = { categoryMenu = null }) {
+                            Column(modifier = Modifier.padding(bottom = 24.dp)) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.category_move_left), style = menuTextStyle) },
+                                    enabled = index > 0,
+                                    onClick = {
+                                        categoryMenu = null
+                                        moveCategory(index - 1)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.category_move_right), style = menuTextStyle) },
+                                    enabled = index in 0 until categories.lastIndex,
+                                    onClick = {
+                                        categoryMenu = null
+                                        moveCategory(index + 1)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.category_delete_with_phrases), style = menuTextStyle) },
+                                    onClick = {
+                                        categoryMenu = null
+                                        confirmDeleteCategory = menuCategory
+                                    },
+                                )
                             }
                         }
                     }
@@ -1422,29 +1241,12 @@ fun PhraseScreen(
                     }
 
                     if (showEditDialog && editingPhrase != null) {
-                        val editedPhraseIndex = state.items.indexOfFirst { it.id == editingPhrase?.id }
-                        val previousPhraseIndex = if (editedPhraseIndex > 0) {
-                            (editedPhraseIndex - 1 downTo 0).firstOrNull {
-                                state.items[it].parentId == editingPhrase?.parentId
-                            }
-                        } else null
-                        val nextPhraseIndex = if (editedPhraseIndex in state.items.indices) {
-                            (editedPhraseIndex + 1 until state.items.size).firstOrNull {
-                                state.items[it].parentId == editingPhrase?.parentId
-                            }
-                        } else null
                         AddPhraseDialog(
                             onDismiss = { showEditDialog = false; editingPhrase = null },
                             categories = categories,
                             initialPhrase = editingPhrase,
                             onSave = { p -> bloc.dispatch(PhraseEvent.Edit(p)); showEditDialog = false; editingPhrase = null },
                             onDelete = { id -> deleteWithUndo(id); showEditDialog = false; editingPhrase = null },
-                            onMoveEarlier = previousPhraseIndex?.let { target ->
-                                { bloc.dispatch(PhraseEvent.Move(editedPhraseIndex, target)) }
-                            },
-                            onMoveLater = nextPhraseIndex?.let { target ->
-                                { bloc.dispatch(PhraseEvent.Move(editedPhraseIndex, target)) }
-                            },
                         )
                     }
                     if (showAddPhraseDialog) {
@@ -1459,95 +1261,386 @@ fun PhraseScreen(
                         )
                     }
 
+                    // Free space above the Message bar; the bar and its input
+                    // surface stay anchored to the bottom (#299, layout 1).
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    val speechActive = isSpeechPaused ||
+                        communicationState.currentSpeechRequestId != null ||
+                        communicationState.queuedSpeechCount > 0
+                    val speechPlaying = communicationState.currentSpeechRequestId != null && !isSpeechPaused
+                    val typingActionEnabled: (ObfButtonActionEffect) -> Boolean = { effect ->
+                        when (effect) {
+                            ObfButtonActionEffect.Pause -> speechPlaying
+                            ObfButtonActionEffect.Resume -> isSpeechPaused
+                            ObfButtonActionEffect.Stop -> speechActive
+                            ObfButtonActionEffect.ToggleSecondaryLanguage -> toggleSecondarySelection != null
+                            is ObfButtonActionEffect.Unsupported -> false
+                            else -> true
+                        }
+                    }
+                    val typingTemplate = typingTemplateGraph?.rootBoard
+                    // Landscape with the keyboard up leaves room for one row above the
+                    // Message bar: the Action strip (with Swap when a Message is held)
+                    // replaces the Held and Phrase rows, so the Message stays visible.
+                    val landscape = LocalConfiguration.current.orientation ==
+                        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                    val oneRowWhileTyping = isImeVisible && landscape
+
+                    // The app bar (with the fullscreen display) hides while typing, so the
+                    // typing Action row starts with its own fullscreen toggle.
+                    val fullscreenLabel = stringResource(R.string.phrase_screen_toggle_fullscreen_cd)
+                    val fullscreenButton: @Composable () -> Unit = {
+                        FilledTonalIconButton(
+                            onClick = toggleFullscreen,
+                            modifier = Modifier.fillMaxHeight().aspectRatio(1f),
+                        ) {
+                            Icon(
+                                imageVector = if (showFullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                                contentDescription = fullscreenLabel,
+                            )
+                        }
                     }
 
-                    // Docked "+" panel: covers the content below the message bar
-                    // while the bar stays visible (Signal-style attachment picker).
-                    if (showPhraseSheet) {
-                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                            val renderedHeight = typingTrayHeight.coerceIn(
-                                minimumValue = minOf(240.dp, maxHeight),
-                                maximumValue = maxHeight,
+                    // Portrait while typing has free space above the Held row; the
+                    // Action strip (SSML, Language, Hold) fills it, as in the tray.
+                    AnimatedVisibility(
+                        visible = isImeVisible && !landscape && typingTemplate != null,
+                        enter = expandVertically(tween(250), expandFrom = Alignment.Bottom) + fadeIn(tween(250)),
+                        exit = shrinkVertically(tween(250), shrinkTowards = Alignment.Bottom) + fadeOut(tween(250)),
+                    ) {
+                        if (typingTemplate != null) {
+                            TypingActionRow(
+                                template = typingTemplate,
+                                onAction = onTypingAction,
+                                isActionEnabled = typingActionEnabled,
+                                modifier = Modifier.fillMaxWidth(),
+                                leading = fullscreenButton,
                             )
-                            Surface(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth()
-                                    .height(renderedHeight),
-                                color = MaterialTheme.colorScheme.background,
-                            ) {
-                                Column {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(28.dp)
-                                            .draggable(
-                                                orientation = Orientation.Vertical,
-                                                state = rememberDraggableState { delta ->
-                                                    val change = with(density) { (-delta).toDp() }
-                                                    typingTrayHeight = (typingTrayHeight + change).coerceAtLeast(240.dp)
-                                                },
-                                                onDragStopped = {
-                                                    typingTrayPreferences.edit()
-                                                        .putFloat("tray-height-dp", typingTrayHeight.value)
-                                                        .apply()
-                                                },
-                                            ),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        HorizontalDivider(modifier = Modifier.width(48.dp))
-                                    }
-                                    val typingTemplate = typingTemplateGraph?.rootBoard
-                                    if (typingTemplate == null) {
-                                        RepositoryFailurePanel(onRetry = { typingTemplateRevision++ })
-                                    } else TypingScreenTray(
-                                    template = typingTemplate,
-                                    phrases = visiblePhrases,
-                                    categories = categories,
-                                    selection = selectedPage,
-                                    showHistory = settings.historyVisible && historyItems.isNotEmpty(),
-                                    history = historyItems,
-                                    onSelectionChanged = { selectedPage = it },
-                                    onAddCategory = { requestTypingMutation { showAddCategoryDialog = true } },
-                                    onAddPhrase = { requestTypingMutation { showAddPhraseDialog = true } },
-                                    onPhraseActivated = activatePhraseFromTypingScreen,
-                                    onPhraseLongPress = { phrase ->
-                                        if (!isHistory) {
-                                            editingPhrase = phrase
-                                            requestTypingMutation { showEditDialog = true }
-                                        }
-                                    },
-                                    onHistoryActivated = { historyItem ->
-                                        val historyPhrase = Phrase(
-                                            id = "history_${historyItem.id ?: historyItem.date ?: historyItem.createdAt ?: 0}",
-                                            text = historyItem.saidText.orEmpty(),
-                                            createdAt = historyItem.date ?: historyItem.createdAt ?: 0L,
-                                            recordingPath = historyItem.audioFilePath,
-                                        )
-                                        activatePhraseFromTypingScreen(historyPhrase)
-                                    },
-                                    onAction = onTypingAction,
-                                    vocabularyMutationsEnabled = categoriesLoadedOnce &&
-                                        !categoriesLoadFailed &&
-                                        !typingTemplateLoadFailed &&
-                                        state.error == null,
-                                    isActionEnabled = { effect ->
-                                        when (effect) {
-                                            ObfButtonActionEffect.Pause ->
-                                                communicationState.currentSpeechRequestId != null && !isSpeechPaused
-                                            ObfButtonActionEffect.Resume -> isSpeechPaused
-                                            ObfButtonActionEffect.Stop ->
-                                                communicationState.currentSpeechRequestId != null ||
-                                                    communicationState.queuedSpeechCount > 0
-                                            ObfButtonActionEffect.ToggleSecondaryLanguage -> toggleSecondarySelection != null
-                                            is ObfButtonActionEffect.Unsupported -> false
-                                            else -> true
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                        }
+                    }
+
+                    communicationState.heldMessage?.takeUnless { oneRowWhileTyping }?.let { held ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    RoundedCornerShape(12.dp),
                                 )
-                                }
+                                .padding(start = 12.dp, end = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Bookmark,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.tertiary,
+                            )
+                            Text(
+                                text = stringResource(R.string.typing_held_message, held.displayText),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
+                                ),
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                onClick = toggleThatThought,
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) {
+                                Icon(Icons.Filled.SwapHoriz, contentDescription = null)
+                                Spacer(Modifier.width(6.dp))
+                                Text(stringResource(R.string.typing_held_message_swap))
                             }
+                        }
+                    }
+
+                    if (inputSurface == TypingInputSurface.Keyboard) {
+                        // Gboard shows its own suggestions, so Wingmate's only appear
+                        // for a hardware keyboard.
+                        if (!isImeVisible && !trayLingering && predictionsEnabled &&
+                            (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty())
+                        ) {
+                            PredictionBar(
+                                predictions = predictions,
+                                onWordSelected = { word ->
+                                    val updated = completePredictedWord(input, word)
+                                    replaceInputText(updated.text, updated.selection.start)
+                                },
+                                onLetterSelected = { letter ->
+                                    val updated = insertPredictedText(input, letter.toString())
+                                    replaceInputText(updated.text, updated.selection.start)
+                                },
+                                fontSizeScale = settings.fontSizeScale,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+                    // Slides in and out with the keyboard instead of popping, so the rows
+                    // above the Message bar move smoothly.
+                    AnimatedVisibility(
+                        visible = inputSurface == TypingInputSurface.Keyboard && !oneRowWhileTyping &&
+                            compactPhrases.isNotEmpty() && typingTemplate != null,
+                        enter = expandVertically(tween(250), expandFrom = Alignment.Bottom) + fadeIn(tween(250)),
+                        exit = shrinkVertically(tween(250), shrinkTowards = Alignment.Bottom) + fadeOut(tween(250)),
+                    ) {
+                        if (typingTemplate != null) {
+                            CompactPhraseRow(
+                                template = typingTemplate,
+                                phrases = compactPhrases,
+                                onPhraseActivated = activatePhraseFromTypingScreen,
+                                onPhraseLongPress = { phrase ->
+                                    editingPhrase = phrase
+                                    requestTypingMutation { showEditDialog = true }
+                                },
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            )
+                        }
+                    }
+
+                    if (oneRowWhileTyping && typingTemplate != null) {
+                        val held = communicationState.heldMessage
+                        TypingActionRow(
+                            template = typingTemplate,
+                            onAction = onTypingAction,
+                            isActionEnabled = typingActionEnabled,
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            leading = {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    fullscreenButton()
+                                    if (held != null) {
+                                    val heldLabel = stringResource(R.string.typing_held_message, held.displayText)
+                                    FilledTonalButton(
+                                        onClick = toggleThatThought,
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .semantics { contentDescription = heldLabel },
+                                    ) {
+                                        Icon(Icons.Filled.SwapHoriz, contentDescription = null)
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(stringResource(R.string.typing_held_message_swap))
+                                    }
+                                    }
+                                }
+                            },
+                        )
+                    }
+
+                    // Message bar: the input-surface toggle, the Message, and the speech
+                    // control as the largest target on the thumb side. It speaks, turns
+                    // into Pause while speech plays and Resume while paused; Stop joins
+                    // it while speech is active. All transport lives here (#299).
+                    val barButtonSize = (56.dp * settings.playbackIconScale).coerceIn(48.dp, 72.dp)
+                    val speakButtonSize = (64.dp * settings.playbackIconScale).coerceIn(56.dp, 88.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        val trayOpen = inputSurface == TypingInputSurface.Tray
+                        FilledTonalIconButton(
+                            onClick = if (trayOpen) showKeyboard else showTray,
+                            modifier = Modifier.size(barButtonSize),
+                        ) {
+                            Icon(
+                                imageVector = if (trayOpen) Icons.Filled.Keyboard else Icons.Filled.Add,
+                                contentDescription = stringResource(
+                                    if (trayOpen) R.string.typing_show_keyboard else R.string.typing_show_screen
+                                ),
+                            )
+                        }
+                        SecondaryLanguageTextField(
+                            value = input,
+                            onValueChange = { newValue ->
+                                communicationSession.accept(
+                                    Message.fromTextDiff(
+                                        currentText = communicationSession.state.value.activeMessage.displayText,
+                                        newText = newValue.text,
+                                        mathMode = mathMode,
+                                    )
+                                )
+                                lastFieldValue = newValue
+                                cursor = newValue.selection
+                                syncDisplayText(newValue.text)
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                // Grows with the Message up to a cap, then scrolls.
+                                .heightIn(
+                                    min = (56.dp * settings.inputFieldScale),
+                                    max = (160.dp * settings.inputFieldScale),
+                                ),
+                            focusRequester = textFieldFocusRequester,
+                            highlightRanges = secondaryLanguageRanges,
+                            highlightColor = secondaryHighlightColor,
+                            ssmlRanges = ssmlRanges,
+                            ssmlColor = ssmlHighlightColor,
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            minLines = 1,
+                            maxLines = 6,
+                            placeholder = {
+                                Text(
+                                    stringResource(R.string.phrase_screen_enter_text_placeholder),
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            },
+                        )
+                        if (speechActive) {
+                            FilledTonalIconButton(
+                                onClick = stopSpeech,
+                                modifier = Modifier.size(barButtonSize),
+                            ) {
+                                Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.playback_stop))
+                            }
+                        }
+                        FilledIconButton(
+                            onClick = when {
+                                isSpeechPaused -> resumeSpeech
+                                speechPlaying -> pauseSpeech
+                                else -> playInput
+                            },
+                            modifier = Modifier.size(speakButtonSize),
+                        ) {
+                            Icon(
+                                imageVector = when {
+                                    speechPlaying -> Icons.Filled.Pause
+                                    else -> Icons.Filled.PlayArrow
+                                },
+                                contentDescription = stringResource(
+                                    when {
+                                        isSpeechPaused -> R.string.playback_resume
+                                        speechPlaying -> R.string.playback_pause
+                                        else -> R.string.playback_play
+                                    }
+                                ),
+                                modifier = Modifier.size(speakButtonSize / 2),
+                            )
+                        }
+                    }
+
+                    // Space under the Message bar. The app root already pads for the
+                    // keyboard (safeDrawingPadding), so this only adds what the tray
+                    // needs beyond the keyboard's current height. The tray opens at the
+                    // keyboard's last height and stays drawn beneath the keyboard while
+                    // it slides in or out, so the Message bar never jumps.
+                    val navigationBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    // Limits come from the screen, which stays put while the keyboard
+                    // resizes the content area.
+                    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+                    val maxTrayHeight = screenHeight * 0.6f
+                    val preferredTrayHeight = draggedTrayHeight ?: keyboardTrayHeight ?: (screenHeight * 0.4f)
+                    val trayHeight = (preferredTrayHeight - navigationBarHeight)
+                        .coerceIn(minOf(200.dp, maxTrayHeight), maxTrayHeight)
+                    val trayDrawn = inputSurface == TypingInputSurface.Tray || trayLingering
+                    val imeInsets = WindowInsets.ime
+                    val imeTargetInsets = WindowInsets.imeAnimationTarget
+                    val navigationInsets = WindowInsets.navigationBars
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // Measured in the layout pass, like the root's keyboard padding,
+                            // so both follow the same keyboard frame.
+                            .layout { measurable, constraints ->
+                                val navigation = navigationInsets.getBottom(this)
+                                val ime = (imeInsets.getBottom(this) - navigation).coerceAtLeast(0)
+                                val imeTarget = (imeTargetInsets.getBottom(this) - navigation).coerceAtLeast(0)
+                                val height = if (trayDrawn || ime != imeTarget) {
+                                    (trayHeight.roundToPx() - ime).coerceAtLeast(0)
+                                } else {
+                                    0
+                                }
+                                val placeable = measurable.measure(
+                                    constraints.copy(minHeight = height, maxHeight = height)
+                                )
+                                layout(placeable.width, height) { placeable.place(0, 0) }
+                            },
+                    ) {
+                    if (trayDrawn) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                // Full height even while the keyboard still covers part of it.
+                                .wrapContentHeight(Alignment.Top, unbounded = true)
+                                .height(trayHeight),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(20.dp)
+                                    .draggable(
+                                        orientation = Orientation.Vertical,
+                                        state = rememberDraggableState { delta ->
+                                            val change = with(density) { (-delta).toDp() }
+                                            draggedTrayHeight = (trayHeight + navigationBarHeight + change)
+                                                .coerceIn(minOf(200.dp, maxTrayHeight), maxTrayHeight + navigationBarHeight)
+                                        },
+                                        onDragStopped = {
+                                            draggedTrayHeight?.let { height ->
+                                                typingTrayPreferences.edit()
+                                                    .putFloat("tray-height-dp", height.value)
+                                                    .apply()
+                                            }
+                                        },
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                HorizontalDivider(modifier = Modifier.width(48.dp))
+                            }
+                            if (typingTemplate == null) {
+                                RepositoryFailurePanel(onRetry = { typingTemplateRevision++ })
+                            } else TypingScreenTray(
+                                template = typingTemplate,
+                                phrases = visiblePhrases,
+                                categories = categories,
+                                selection = selectedPage,
+                                showHistory = settings.historyVisible && historyItems.isNotEmpty(),
+                                history = historyItems,
+                                onSelectionChanged = { selectedPage = it },
+                                onOpenCategoryMenu = { category ->
+                                    requestTypingMutation { categoryMenu = category }
+                                },
+                                onAddCategory = { requestTypingMutation { showAddCategoryDialog = true } },
+                                onAddPhrase = { requestTypingMutation { showAddPhraseDialog = true } },
+                                onPhraseActivated = activatePhraseFromTypingScreen,
+                                onEditPhrase = { phrase ->
+                                    editingPhrase = phrase
+                                    requestTypingMutation { showEditDialog = true }
+                                },
+                                onDeletePhrase = { phrase -> requestTypingMutation { deleteWithUndo(phrase.id) } },
+                                // Dropping onto a Phrase takes its place in the repository order.
+                                onMovePhrase = { moved, target ->
+                                    val from = state.items.indexOfFirst { it.id == moved.id }
+                                    val to = state.items.indexOfFirst { it.id == target.id }
+                                    if (from >= 0 && to >= 0 && from != to) {
+                                        requestTypingMutation { bloc.dispatch(PhraseEvent.Move(from, to)) }
+                                    }
+                                },
+                                onHistoryActivated = { historyItem ->
+                                    val historyPhrase = Phrase(
+                                        id = "history_${historyItem.id ?: historyItem.date ?: historyItem.createdAt ?: 0}",
+                                        text = historyItem.saidText.orEmpty(),
+                                        createdAt = historyItem.date ?: historyItem.createdAt ?: 0L,
+                                        recordingPath = historyItem.audioFilePath,
+                                    )
+                                    activatePhraseFromTypingScreen(historyPhrase)
+                                },
+                                onAction = onTypingAction,
+                                vocabularyMutationsEnabled = categoriesLoadedOnce &&
+                                    !categoriesLoadFailed &&
+                                    !typingTemplateLoadFailed &&
+                                    state.error == null,
+                                isActionEnabled = typingActionEnabled,
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                            )
                         }
                     }
                     }
@@ -1799,7 +1892,6 @@ private fun SecondaryLanguageTextField(
     onValueChange: (TextFieldValue) -> Unit,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
-    onFocused: () -> Unit = {},
     highlightRanges: List<TextRange> = emptyList(),
     highlightColor: Color,
     ssmlRanges: List<TextRange> = emptyList(),
@@ -1808,8 +1900,6 @@ private fun SecondaryLanguageTextField(
     placeholder: (@Composable () -> Unit)? = null,
     minLines: Int = 1,
     maxLines: Int = Int.MAX_VALUE,
-    // Inline actions rendered inside the bar, to the right of the text (message-bar style).
-    trailingContent: (@Composable () -> Unit)? = null
 ) {
     val annotated: AnnotatedString = remember(value.text, highlightRanges, highlightColor, ssmlRanges, ssmlColor) {
         buildAnnotatedString {
@@ -1836,47 +1926,32 @@ private fun SecondaryLanguageTextField(
 
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
-        Row(
-            modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            contentAlignment = Alignment.CenterStart,
         ) {
-            Box(modifier = Modifier.weight(1f)) {
-                if (value.text.isEmpty()) {
-                    placeholder?.invoke()
-                }
-
-                val showKeyboardMod = Modifier.showKeyboardOnFocus()
-                val inputModifier = if (focusRequester != null) {
-                    Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester)
-                        .onFocusChanged { if (it.isFocused) onFocused() }
-                        .then(showKeyboardMod)
-                } else {
-                    Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { if (it.isFocused) onFocused() }
-                        .then(showKeyboardMod)
-                }
-
-                BasicTextField(
-                    value = styledValue,
-                    onValueChange = {
-                        // Pass the plain text back to the parent to keep the logic simple there
-                        onValueChange(it.copy(annotatedString = AnnotatedString(it.text)))
-                    },
-                    textStyle = textStyle,
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = inputModifier,
-                    minLines = minLines,
-                    maxLines = maxLines
-                )
+            if (value.text.isEmpty()) {
+                placeholder?.invoke()
             }
-
-            trailingContent?.invoke()
+            val inputModifier = Modifier
+                .fillMaxWidth()
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                .showKeyboardOnFocus()
+            BasicTextField(
+                value = styledValue,
+                onValueChange = {
+                    // Pass the plain text back to the parent to keep the logic simple there
+                    onValueChange(it.copy(annotatedString = AnnotatedString(it.text)))
+                },
+                textStyle = textStyle,
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = inputModifier,
+                minLines = minLines,
+                maxLines = maxLines
+            )
         }
     }
 }

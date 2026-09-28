@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <resources>
+    <string name="typing_show_screen">Vis skriveskærm</string>
+    <string name="typing_show_keyboard">Vis tastatur</string>
+    <string name="typing_held_message">Parkeret: %1$s</string>
+    <string name="typing_held_message_swap">Byt</string>
     <string name="typing_screen_edit">Rediger skriveskærm</string>
     <string name="typing_screen_reset">Nulstil skriveskærm</string>
     <string name="typing_screen_reset_description">Erstat skriveskærmens layout og handlingsknapper med de nuværende standarder? Dine sætninger og kategorier bevares.</string>

@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <resources>
+    <string name="typing_show_screen">Show Typing Screen</string>
+    <string name="typing_show_keyboard">Show keyboard</string>
+    <string name="typing_held_message">Held: %1$s</string>
+    <string name="typing_held_message_swap">Swap</string>
     <string name="typing_screen_edit">Edit Typing Screen</string>
     <string name="typing_screen_reset">Reset Typing Screen</string>
     <string name="typing_screen_reset_description">Replace the Typing Screen layout and action buttons with the current defaults? Your phrases and categories will be kept.</string>
