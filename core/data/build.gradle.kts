@@ -43,7 +43,7 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
-                implementation("androidx.core:core-ktx:1.19.0")
+                implementation("androidx.core:core-ktx:1.19.1")
                 implementation("app.cash.sqldelight:android-driver:2.0.2")
                 implementation("org.apache.commons:commons-compress:1.28.0")
             }

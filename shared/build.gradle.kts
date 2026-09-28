@@ -47,7 +47,7 @@ kotlin {
                 api(project(":feature:communication:domain"))
                 api(project(":feature:communication:data"))
                 api(project(":feature:communication:presentation"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
                 implementation(libs.kotlinx.serialization.json)
                 implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.8.0")
                 api(libs.koin.core)
@@ -71,7 +71,7 @@ kotlin {
             dependencies {
                 implementation(kotlin("test"))
                 // Fake Main dispatcher for MVIKotlin CoroutineExecutor in tests
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
             }
         }
         val androidMain by getting {
@@ -90,7 +90,7 @@ kotlin {
                     exclude(group = "androidx.test", module = "monitor")
                 }
                 // Required for FileProvider and core Android helpers used in androidMain
-                implementation("androidx.core:core-ktx:1.19.0")
+                implementation("androidx.core:core-ktx:1.19.1")
                 // Compose Multiplatform for Android UI
                 implementation(compose.runtime)
                 implementation(compose.foundation)
@@ -116,7 +116,7 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
                 // Compose Multiplatform for desktop JVM UI
                 implementation(compose.runtime)
                 implementation(compose.foundation)
