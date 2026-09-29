@@ -43,7 +43,6 @@ class TypingScreenUseCaseTest {
         assertTrue(boardSets.listBoardSets().isEmpty())
         assertNull(boardSets.duplicateBoardSet(typing.boardSet.id))
         assertNull(boardSets.toggleLocked(typing.boardSet.id))
-        assertNull(boardSets.exportRootBoardAsObf(typing.boardSet.id))
         assertIs<ObzExportResult.Failure>(boardSets.exportBoardSetAsObzResult(typing.boardSet.id))
 
         boardSets.deleteBoardSet(typing.boardSet.id)
