@@ -266,7 +266,7 @@ data class PhraseActivation(
     val shouldSpeak: Boolean,
 )
 
-/** Shared activation rule used by every Typing Screen adapter. */
+/** Typing Screen Phrase activation: inserts and/or speaks per the activation behavior and speech policy. */
 fun Message.activatePhrase(
     phrase: Phrase,
     cursor: Int,
@@ -302,7 +302,7 @@ private fun List<MessagePart>.mergeAdjacentTypedParts(): List<MessagePart> = bui
     }
 }
 
-// --- Screen ↔ Message mapping (Q4=a): domain owns the translation, UI only supplies graph ---
+// --- Screen ↔ Message mapping: the domain owns the translation; the UI only supplies the graph ---
 
 fun MessagePart.Companion.fromScreenButton(
     screenId: String,

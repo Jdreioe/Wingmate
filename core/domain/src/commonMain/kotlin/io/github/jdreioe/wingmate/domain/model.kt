@@ -45,8 +45,8 @@ data class Phrase(
 )
 
 /**
- * Typed folder-Phrase: a Phrase that acts as a Category (folder). Backed by the
- * phrase repository; replaces the flat CategoryItem persistence. Q3=a.
+ * Typed folder-Phrase: a Phrase that acts as a Category (folder). Categories are
+ * persisted in the phrase repository this way rather than as separate CategoryItems.
  * A Phrase is a folder iff `isGridItem == false` or (`isGridItem == null` and `linkedBoardId != null`).
  */
 @JvmInline
@@ -68,9 +68,9 @@ fun FolderPhrase.toCategoryItem(): CategoryItem =
     CategoryItem(id = phrase.id, name = phrase.text)
 
 /**
- * UI-only view of a folder-Phrase. Persisted CategoryItem is replaced by
- * FolderPhrase; this type remains only as a compose UiModel mapper (Q7=a).
- * TODO: migrate screens to FolderPhrase directly and delete this alias.
+ * UI view of a folder-Phrase, and the entry type of the `categories` list in older
+ * backups. Categories are no longer persisted as CategoryItem; screens could use
+ * FolderPhrase directly, but the type must stay to read those backups.
  */
 @Serializable
 data class CategoryItem(
