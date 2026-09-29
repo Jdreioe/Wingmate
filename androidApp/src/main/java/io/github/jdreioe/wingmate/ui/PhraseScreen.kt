@@ -197,9 +197,6 @@ fun PhraseScreen(
     }
 
     var showSettingsDialog by remember { mutableStateOf(false) }
-    var showVoiceSelection by remember { mutableStateOf(false) }
-    var showUiLanguageDialog by remember { mutableStateOf(false) }
-    var showSettingsExportDialog by remember { mutableStateOf(false) }
     var showTypingResetConfirmation by remember { mutableStateOf(false) }
     var showTypingResetUnlock by remember { mutableStateOf(false) }
     var showTypingMutationUnlock by remember { mutableStateOf(false) }
@@ -1875,21 +1872,6 @@ fun PhraseScreen(
                             Text(stringResource(R.string.common_cancel))
                         }
                     },
-                )
-            }
-            if (showVoiceSelection) {
-                VoiceSelectionDialog(show = true, onDismiss = { showVoiceSelection = false })
-            }
-            if (showUiLanguageDialog) {
-                UiLanguageDialog(
-                    show = true,
-                    onDismiss = { showUiLanguageDialog = false },
-                    openPrimaryMenuInitially = true
-                )
-            }
-            if (showSettingsExportDialog) {
-                SettingsExportDialog(
-                    onDismiss = { showSettingsExportDialog = false }
                 )
             }
     }
