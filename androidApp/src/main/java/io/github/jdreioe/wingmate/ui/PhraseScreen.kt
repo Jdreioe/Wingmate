@@ -1,6 +1,5 @@
 package io.github.jdreioe.wingmate.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -12,7 +11,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -28,16 +26,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -46,8 +40,6 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.produceState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -69,9 +61,6 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.isSecondaryPressed
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.*
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
@@ -90,26 +79,20 @@ import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.MessagePartSource
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.activatePhrase
-import io.github.jdreioe.wingmate.domain.fromScreenButton
 import io.github.jdreioe.wingmate.domain.fromTextDiff
 import io.github.jdreioe.wingmate.domain.isGridPhrase
 import io.github.jdreioe.wingmate.domain.phraseSubtree
-import io.github.jdreioe.wingmate.domain.toScreenButtons
 import io.github.jdreioe.wingmate.domain.PredictionResult
 import io.github.jdreioe.wingmate.domain.TextEditingPolicy
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.TextSpan
 import io.github.jdreioe.wingmate.domain.TtsEngine
-import io.github.jdreioe.wingmate.domain.obf.ObfBoard
-import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
-import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.res.stringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
@@ -132,7 +115,6 @@ fun PhraseScreen(
     onBackToWelcome: (() -> Unit)? = null,
     onOpenBoardSetManager: (() -> Unit)? = null,
     onEditTypingScreen: (() -> Unit)? = null,
-    initialBoardId: String? = null
 ) {
     val koin = getKoin()
     val phraseScreenScope = rememberCoroutineScope()
@@ -164,11 +146,8 @@ fun PhraseScreen(
     val communicationState by communicationSession.state.collectAsStateWithLifecycle()
     val saidRepo = koinInject<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
     val voiceUseCase = koinInject<VoiceUseCase>()
-    val aacLogger = koinInject<io.github.jdreioe.wingmate.domain.AacLogger>()
-    val boardRepo = koinInject<io.github.jdreioe.wingmate.domain.BoardRepository>()
     val typingScreenUseCase = koinInject<TypingScreenUseCase>()
     val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
-    val obfParser = koinInject<io.github.jdreioe.wingmate.infrastructure.ObfParser>()
 
     val releaseBuild = isReleaseBuild()
     val predictionsEnabled = !releaseBuild
@@ -176,12 +155,7 @@ fun PhraseScreen(
         if (predictionsEnabled) koin.getOrNull<TextPredictionService>() else null
     }
 
-    val updateService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.UpdateService>() }
-    val filePicker = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.FilePicker>() }
     val phraseRepo = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.PhraseRepository>() }
-    val audioClipboard = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.AudioClipboard>() }
-    val shareService = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.platform.ShareService>() }
-    val enableObfObzImport = !releaseBuild
     var typingTemplateRevision by remember { mutableIntStateOf(0) }
     var typingTemplateGraph by remember { mutableStateOf<BoardSetGraph?>(null) }
     var typingTemplateLoadFailed by remember { mutableStateOf(false) }
@@ -204,14 +178,8 @@ fun PhraseScreen(
     var appBarMenuExpanded by remember { mutableStateOf(false) }
     var typingMenuExpanded by remember { mutableStateOf(false) }
     val showFullscreen by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsStateWithLifecycle()
-    val selectBoardDialogTitle = stringResource(R.string.phrase_screen_select_board_title)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        // Load persisted primary language for display in top e
-        // Use the reactive settings as key to ensure this updates when settings change
-        val primaryLanguageState = produceState(initialValue = settings.primaryLanguage, key1 = settings.primaryLanguage) {
-            value = settings.primaryLanguage
-        }
         val hasUsableSecondaryLanguage = produceState(
             initialValue = false,
             key1 = settings.secondaryLanguage,
@@ -342,56 +310,6 @@ fun PhraseScreen(
                 }
             }
             var historyItems by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.SaidText>>(emptyList()) }
-            
-            // OBF Board State
-            var currentBoard by remember { mutableStateOf<ObfBoard?>(null) }
-            // Map of all boards (ID -> Board) for linking support in OBZ files
-            var boardsMap by remember { mutableStateOf<Map<String, ObfBoard>>(emptyMap()) }
-            // Navigation stack for going back to previous boards
-            var boardStack by remember { mutableStateOf<List<ObfBoard>>(emptyList()) }
-            // Extracted images from OBZ (path -> bytes)
-            var extractedImages by remember { mutableStateOf<Map<String, ByteArray>>(emptyMap()) }
-            
-            // Legacy imported boards render their symbols from the shared Message too.
-            val selectedObfButtons: List<Pair<ObfButton, ImageBitmap?>> =
-                communicationState.activeMessage.parts.mapIndexed { index, part ->
-                    val source = part.source as? MessagePartSource.ScreenButton
-                    val original = source
-                        ?.let { boardsMap[it.pageId] }
-                        ?.buttons
-                        ?.firstOrNull { it.id == source.buttonId }
-                    val button = original ?: ObfButton(
-                        id = source?.buttonId ?: "legacy-message-part-$index",
-                        label = part.displayText.trimStart(),
-                        vocalization = part.spokenText.trimStart(),
-                        locale = part.languageTag,
-                    ).withMathMode(part.mathMode)
-                    button to null
-                }
-
-            PlatformBackHandler(enabled = currentBoard != null) {
-                when {
-                    boardStack.isNotEmpty() -> {
-                        currentBoard = boardStack.last()
-                        boardStack = boardStack.dropLast(1)
-                    }
-                    currentBoard != null -> {
-                        currentBoard = null
-                        boardStack = emptyList()
-                    }
-                }
-            }
-
-            LaunchedEffect(initialBoardId, boardRepo) {
-                if (initialBoardId.isNullOrBlank()) return@LaunchedEffect
-                val board = withContext(Dispatchers.IO) { boardRepo.getBoard(initialBoardId) }
-                if (board != null) {
-                    currentBoard = board
-                    boardsMap = mapOf(board.id to board)
-                    boardStack = emptyList()
-                    extractedImages = emptyMap()
-                }
-            }
 
             LaunchedEffect(saidRepo) {
                 try {
@@ -1125,7 +1043,7 @@ fun PhraseScreen(
                                         if (name.isNotBlank() && !categories.any { it.name.equals(name, ignoreCase = true) }) {
                                             val ucImmediate = categoryUseCaseState.value ?: koin.getOrNull<io.github.jdreioe.wingmate.application.CategoryUseCase>()?.also { categoryUseCaseState.value = it }
                                             // Always create an ephemeral chip so user sees immediate feedback
-                                            val temp = io.github.jdreioe.wingmate.domain.CategoryItem(id = "temp_${name}_${System.currentTimeMillis()}", name = name, selectedLanguage = primaryLanguageState.value)
+                                            val temp = io.github.jdreioe.wingmate.domain.CategoryItem(id = "temp_${name}_${System.currentTimeMillis()}", name = name, selectedLanguage = settings.primaryLanguage)
                                             categories = categories + temp
                                             selectedPage = TypingPageSelection.Category(temp)
                                             coroutineScope.launch(Dispatchers.IO) {
@@ -1649,166 +1567,6 @@ fun PhraseScreen(
                             )
                         }
                     }
-                    }
-                }
-
-                if (currentBoard != null) {
-                    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            // Top bar with board name and navigation buttons
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Left side: Back button (if stacked) and board name
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (boardStack.isNotEmpty()) {
-                                        IconButton(onClick = { 
-                                            currentBoard = boardStack.last()
-                                            boardStack = boardStack.dropLast(1)
-                                        }) {
-                                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
-                                        }
-                                    }
-                                    Text(currentBoard?.name ?: stringResource(R.string.board_legacy_fallback), style = MaterialTheme.typography.titleMedium)
-                                }
-                                // Right side: Erase and Home buttons
-                                Row {
-                                    IconButton(onClick = { 
-                                        communicationSession.accept(CommunicationAction.Clear)
-                                        cursor = TextRange(0)
-                                        syncDisplayText("")
-                                    }) {
-                                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.board_legacy_erase))
-                                    }
-                                    IconButton(onClick = { 
-                                        currentBoard = null
-                                        boardsMap = emptyMap()
-                                        boardStack = emptyList()
-                                    }) {
-                                        Icon(Icons.Default.Home, contentDescription = stringResource(R.string.board_legacy_home))
-                                    }
-                                }
-                            }
-                            
-                            // Textfield showing accumulated text; hidden when the board's
-                            // own message bar is editable (one bar total).
-                            val boardShowKeyboard = Modifier.showKeyboardOnFocus()
-                            if (!settings.boardMessageBarEditable) {
-                            OutlinedTextField(
-                                value = input,
-                                onValueChange = { newValue ->
-                                    communicationSession.accept(
-                                        Message.fromTextDiff(
-                                            currentText = communicationSession.state.value.activeMessage.displayText,
-                                            newText = newValue.text,
-                                            mathMode = mathMode,
-                                        )
-                                    )
-                                    cursor = newValue.selection
-                                    syncDisplayText(newValue.text)
-                                },
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).then(boardShowKeyboard),
-                                placeholder = { Text(stringResource(R.string.board_legacy_build_sentence)) },
-                                trailingIcon = {
-                                    if (input.text.isNotEmpty()) {
-                                        IconButton(onClick = {
-                                            communicationSession.accept(
-                                                CommunicationAction.SpeakActive(
-                                                    selectedVoiceState.value?.copy(mathMode = mathMode)
-                                                )
-                                            )
-                                        }) {
-                                            Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.board_legacy_speak))
-                                        }
-                                    }
-                                },
-                                singleLine = false,
-                                maxLines = 3
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            }
-
-                            // Board grid
-                            ObfBoardView(
-                                board = currentBoard!!,
-                                messageBarEditable = settings.boardMessageBarEditable,
-                                onSentenceChanged = { text ->
-                                    communicationSession.accept(
-                                        Message.fromTextDiff(
-                                            currentText = communicationSession.state.value.activeMessage.displayText,
-                                            newText = text,
-                                            mathMode = mathMode,
-                                        )
-                                    )
-                                    cursor = TextRange(text.length)
-                                    syncDisplayText(text)
-                                },
-                                extractedImages = extractedImages,
-                                selectedButtons = selectedObfButtons,
-                                messageText = input.text,
-                                onButtonClick = { button ->
-                                    // Check if this is a linking button
-                                    val loadBoard = button.loadBoard
-                                    if (loadBoard != null) {
-                                        // Try to find the linked board by ID or path
-                                        val linkedBoard = loadBoard.id?.let { boardsMap[it] }
-                                            ?: loadBoard.path?.let { path -> 
-                                                boardsMap.values.find { it.id == path.removeSuffix(".obf") }
-                                            }
-                                        if (linkedBoard != null) {
-                                            boardStack = boardStack + currentBoard!!
-                                            currentBoard = linkedBoard
-                                        }
-                                    } else {
-                                        val board = currentBoard!!
-                                        val part = MessagePart.fromScreenButton(
-                                            screenId = "legacy-obf",
-                                            board = board,
-                                            button = button,
-                                            primaryLanguage = settings.primaryLanguage,
-                                        )
-                                        if (part != null) {
-                                            communicationSession.accept(
-                                                CommunicationAction.AppendPart(part, board.spellingMode)
-                                            )
-                                            communicationSession.accept(
-                                                CommunicationAction.SpeakPart(
-                                                    part = part,
-                                                    voice = selectedVoiceState.value,
-                                                )
-                                            )
-                                            cursor = TextRange(communicationSession.state.value.activeMessage.displayText.length)
-                                            syncDisplayText(communicationSession.state.value.activeMessage.displayText)
-                                        }
-                                    }
-                                },
-                                onSpeakSentence = {
-                                    if (input.text.isNotBlank()) {
-                                        aacLogger.logSentenceSpeak(input.text)
-                                        communicationSession.accept(
-                                            CommunicationAction.SpeakActive(
-                                                selectedVoiceState.value?.copy(mathMode = mathMode)
-                                            )
-                                        )
-                                    }
-                                },
-                                onDeleteLast = {
-                                    communicationSession.accept(
-                                        CommunicationAction.RemoveLastPart(currentBoard!!.spellingMode)
-                                    )
-                                    cursor = TextRange(communicationSession.state.value.activeMessage.displayText.length)
-                                    syncDisplayText(communicationSession.state.value.activeMessage.displayText)
-                                },
-                                onClearSentence = {
-                                    communicationSession.accept(CommunicationAction.Clear)
-                                    cursor = TextRange(0)
-                                    syncDisplayText("")
-                                },
-                                modifier = Modifier.weight(1f).fillMaxWidth()
-                            )
-                        }
                     }
                 }
                     }
