@@ -35,7 +35,6 @@ import io.github.jdreioe.wingmate.application.BackupRestoreResult
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.EditingAccessState
-import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.SettingsStateManager
@@ -51,7 +50,6 @@ import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.GoogleVoiceModel
 import io.github.jdreioe.wingmate.domain.resolvedGoogleModel
-import io.github.jdreioe.wingmate.domain.withPreferredSupportedLanguage
 import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
 import io.github.jdreioe.wingmate.domain.WordTypeColorScheme
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
@@ -62,14 +60,10 @@ import io.github.jdreioe.wingmate.infrastructure.ArasaacSymbolDownloadService
 import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import io.github.jdreioe.wingmate.platform.FilePicker
 import io.github.jdreioe.wingmate.platform.ShareService
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.tooling.preview.Preview
 import org.koin.compose.getKoin
-import org.koin.compose.koinInject
 
 import com.hojmoseit.wingmate.R
 
@@ -167,7 +161,44 @@ fun SettingsScreen(
         keyboardController?.hide()
     }
 
-    BackHandler(enabled = true, onBack = { viewModel.onAction(SettingsAction.BackClicked) })
+    Box(modifier = Modifier.fillMaxSize()) {
+        SettingsContent(
+            state = state,
+            editingAccessState = editingAccessState,
+            editingAccessAvailable = editingAccessController != null,
+            onBackToWelcome = onBackToWelcome,
+            onAction = viewModel::onAction,
+            onGuessPronunciation = viewModel::guessPronunciation,
+        )
+
+        val dialogMode = state.editingAccessDialog
+        if (editingAccessController != null && dialogMode != null) {
+            EditingAccessDialog(
+                controller = editingAccessController,
+                mode = dialogMode,
+                onDismiss = { viewModel.onAction(SettingsAction.EditingAccessDialogDismissed) },
+                onSuccess = { viewModel.onAction(SettingsAction.EditingAccessDialogDismissed) }
+            )
+        }
+    }
+}
+
+/**
+ * Stateless settings shell. It renders whatever [state] supplies and reports user intent
+ * through [onAction], so loading, failure, and route rendering can be exercised without
+ * the persistence-heavy root.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SettingsContent(
+    state: SettingsUiState,
+    editingAccessState: EditingAccessState,
+    editingAccessAvailable: Boolean,
+    onBackToWelcome: (() -> Unit)?,
+    onAction: (SettingsAction) -> Unit,
+    onGuessPronunciation: suspend (String) -> String?,
+) {
+    BackHandler(enabled = true, onBack = { onAction(SettingsAction.BackClicked) })
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -178,7 +209,7 @@ fun SettingsScreen(
                     Text(settingsRouteTitle(state.route))
                 },
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.onAction(SettingsAction.BackClicked) }) {
+                    IconButton(onClick = { onAction(SettingsAction.BackClicked) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_close))
                     }
                 },
@@ -209,24 +240,24 @@ fun SettingsScreen(
                                 stringResource(R.string.settings_load_failed),
                                 color = MaterialTheme.colorScheme.error
                             )
-                            Button(onClick = { viewModel.onAction(SettingsAction.RetryLoad) }) {
+                            Button(onClick = { onAction(SettingsAction.RetryLoad) }) {
                                 Text(stringResource(R.string.common_retry))
                             }
                         }
                         else -> Column(modifier = Modifier.fillMaxSize()) {
                             if (state.saveFailed) {
                                 SaveFailureBanner(onRetry = {
-                                    viewModel.onAction(SettingsAction.RetrySave)
+                                    onAction(SettingsAction.RetrySave)
                                 })
                             }
                             Box(modifier = Modifier.fillMaxSize()) {
                                 SettingsRouteContent(
                                     state = state,
                                     editingAccessState = editingAccessState,
-                                    editingAccessAvailable = editingAccessController != null,
+                                    editingAccessAvailable = editingAccessAvailable,
                                     onBackToWelcome = onBackToWelcome,
-                                    onAction = viewModel::onAction,
-                                    onGuessPronunciation = viewModel::guessPronunciation,
+                                    onAction = onAction,
+                                    onGuessPronunciation = onGuessPronunciation,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -236,33 +267,43 @@ fun SettingsScreen(
                     val restorePath = state.pendingRestorePath
                     if (restorePath != null) {
                         AlertDialog(
-                            onDismissRequest = { viewModel.onAction(SettingsAction.RestoreDismissed) },
+                            onDismissRequest = { onAction(SettingsAction.RestoreDismissed) },
                             title = { Text(stringResource(R.string.backup_replace_title)) },
                             text = { Text(stringResource(R.string.backup_replace_warning)) },
                             confirmButton = {
                                 TextButton(onClick = {
-                                    viewModel.onAction(SettingsAction.RestoreConfirmed)
+                                    onAction(SettingsAction.RestoreConfirmed)
                                 }) { Text(stringResource(R.string.backup_replace_action)) }
                             },
                             dismissButton = {
                                 TextButton(onClick = {
-                                    viewModel.onAction(SettingsAction.RestoreDismissed)
+                                    onAction(SettingsAction.RestoreDismissed)
                                 }) { Text(stringResource(R.string.common_cancel)) }
                             }
                         )
                     }
-
-                    val dialogMode = state.editingAccessDialog
-                    if (editingAccessController != null && dialogMode != null) {
-                        EditingAccessDialog(
-                            controller = editingAccessController,
-                            mode = dialogMode,
-                            onDismiss = { viewModel.onAction(SettingsAction.EditingAccessDialogDismissed) },
-                            onSuccess = { viewModel.onAction(SettingsAction.EditingAccessDialogDismissed) }
-                        )
-                    }
                 }
             }
+}
+
+
+@Preview(showBackground = true, widthDp = 600, heightDp = 800)
+@Composable
+private fun SettingsContentPreview() {
+    AppTheme {
+        SettingsContent(
+            state = SettingsUiState(
+                route = SettingsRoute.Category(SettingsTab.Display),
+                isLoading = false,
+                settings = Settings(showLabels = true, showSymbols = true),
+            ),
+            editingAccessState = EditingAccessState(supported = false),
+            editingAccessAvailable = false,
+            onBackToWelcome = null,
+            onAction = {},
+            onGuessPronunciation = { null },
+        )
+    }
 }
 
 @Composable
@@ -1833,122 +1874,75 @@ private fun GeneralSection(
 // ─── Voice Selection Page ────────────────────────────────────────────────────
 
 @Composable
+private fun rememberVoiceSelectionOperations(): VoiceSelectionOperations {
+    val koin = getKoin()
+    return remember(koin) {
+        DefaultVoiceSelectionOperations(
+            voiceUseCase = koin.get(),
+            settingsUseCase = koin.get(),
+            systemVoiceProvider = koin.getOrNull(),
+            featureUsageReporter = koin.get(),
+        )
+    }
+}
+
+/** Voice picker shared by Settings and Welcome; [onVoiceSelected] defaults to [onBack]. */
+@Composable
 internal fun VoiceSelectionPage(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onVoiceSelected: (() -> Unit)? = null
 ) {
-    val koin = getKoin()
-    val useCase = koinInject<VoiceUseCase>()
-    val featureUsageReporter = koinInject<FeatureUsageReporter>()
-    val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
-    var loading by remember { mutableStateOf(true) }
-    var voices by remember { mutableStateOf<List<Voice>>(emptyList()) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var operationError by remember { mutableStateOf<String?>(null) }
-    var selected by remember { mutableStateOf<Voice?>(null) }
-    var showVoiceSettings by remember { mutableStateOf(false) }
-    var editingVoice by remember { mutableStateOf<Voice?>(null) }
-    var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
-    var systemVoices by remember { mutableStateOf<List<Voice>>(emptyList()) }
+    val operations = rememberVoiceSelectionOperations()
+    val viewModel: VoiceSelectionViewModel = viewModel(
+        factory = remember(operations) { viewModelFactory { initializer { VoiceSelectionViewModel(operations) } } }
+    )
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(viewModel) { viewModel.onAction(VoiceSelectionAction.Load) }
+    val currentOnChosen by rememberUpdatedState(onVoiceSelected ?: onBack)
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                VoiceSelectionEvent.VoiceChosen -> currentOnChosen()
+            }
+        }
+    }
+    VoiceSelectionContent(state = state, onAction = viewModel::onAction, modifier = modifier)
+}
+
+@Composable
+private fun VoiceSelectionContent(
+    state: VoiceSelectionUiState,
+    onAction: (VoiceSelectionAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val ready = state as? VoiceSelectionUiState.Ready
+    val ttsEngine = ready?.engine ?: TtsEngine.SYSTEM
+    val voices = ready?.voices.orEmpty()
     var selectedLanguage by remember { mutableStateOf<String?>(null) }
-    var availableLanguages by remember { mutableStateOf<List<String>>(emptyList()) }
     var voiceSearch by remember { mutableStateOf("") }
     var genderFilter by remember { mutableStateOf<String?>(null) }
     var googleModelFilter by remember { mutableStateOf<GoogleVoiceModel?>(null) }
-    var preferredLanguage by remember { mutableStateOf<String?>(null) }
-    var retryKey by remember { mutableIntStateOf(0) }
-    val scope = rememberCoroutineScope()
-
-    val systemVoiceProvider = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider>() }
-
-    val voiceLoadFailed = stringResource(R.string.voice_load_failed)
-    val voiceSaveFailed = stringResource(R.string.voice_save_failed)
-
-    LaunchedEffect(retryKey) {
-        loading = true
-        error = null
-        try {
-            val settings = checkNotNull(settingsUseCase) { "Settings are unavailable" }
-                .let { withContext(Dispatchers.Default) { it.get() } }
-            ttsEngine = settings.ttsEngine
-            preferredLanguage = settings.primaryLanguage
-            if (ttsEngine == TtsEngine.SYSTEM) {
-                val allSystemVoices = systemVoiceProvider?.getSystemVoices() ?: listOf(
-                    Voice(name = "system-default", displayName = "System Default", primaryLanguage = "en-US", gender = "Unknown")
-                )
-                systemVoices = allSystemVoices
-                availableLanguages = allSystemVoices.mapNotNull { it.primaryLanguage }.distinct().sorted()
-                selected = useCase.selected()
-            } else {
-                var cloudRefreshFailed = false
-                val fromCloud = try {
-                    withContext(Dispatchers.Default) {
-                        if (ttsEngine == TtsEngine.GOOGLE_CLOUD) useCase.refreshFromGoogle()
-                        else useCase.refreshFromAzure()
-                    }
-                } catch (failure: CancellationException) {
-                    throw failure
-                } catch (_: Exception) {
-                    cloudRefreshFailed = true
-                    emptyList()
-                }
-                val local = withContext(Dispatchers.Default) { useCase.listForEngine(ttsEngine) }
-                val allVoices = (fromCloud + local).distinctBy { it.name }
-                if (allVoices.isEmpty() && cloudRefreshFailed) {
-                    error("No cached voices were available after refresh failed")
-                }
-                voices = allVoices
-                availableLanguages = allVoices
-                    .flatMap { voice -> listOfNotNull(voice.primaryLanguage) + (voice.supportedLanguages ?: emptyList()) }
-                    .distinct()
-                    .sorted()
-                selected = useCase.selected()
-            }
-        } catch (failure: CancellationException) {
-            throw failure
-        } catch (_: Exception) {
-            error = voiceLoadFailed
-        } finally {
-            loading = false
-        }
-    }
+    var editingVoice by remember { mutableStateOf<Voice?>(null) }
 
     val queryTerms = remember(voiceSearch) {
         voiceSearch.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
     }
-
-    val languageFilteredSystemVoices = if (selectedLanguage != null) {
-        systemVoices.filter { it.primaryLanguage == selectedLanguage }
-    } else {
-        systemVoices
-    }
-
-    val languageFilteredAzureVoices = if (selectedLanguage != null) {
+    val languageFilteredVoices = remember(voices, selectedLanguage, ttsEngine) {
+        val language = selectedLanguage ?: return@remember voices
         voices.filter { voice ->
-            voice.primaryLanguage == selectedLanguage ||
-                voice.supportedLanguages?.contains(selectedLanguage) == true
+            voice.primaryLanguage == language ||
+                (ttsEngine != TtsEngine.SYSTEM && voice.supportedLanguages?.contains(language) == true)
         }
-    } else {
-        voices
     }
-
-    val activeLanguageFilteredVoices = if (ttsEngine == TtsEngine.SYSTEM) languageFilteredSystemVoices else languageFilteredAzureVoices
-    val allLabel = stringResource(R.string.language_all)
-    val availableGenders = remember(activeLanguageFilteredVoices) {
-        activeLanguageFilteredVoices.mapNotNull { it.gender?.trim()?.takeIf { gender -> gender.isNotEmpty() } }.distinct().sorted()
+    val availableGenders = remember(languageFilteredVoices) {
+        languageFilteredVoices.mapNotNull { it.gender?.trim()?.takeIf { gender -> gender.isNotEmpty() } }.distinct().sorted()
     }
-
     LaunchedEffect(availableGenders, genderFilter) {
         if (genderFilter != null && !availableGenders.contains(genderFilter)) {
             genderFilter = null
         }
     }
-
-    val filteredSystemVoices = remember(languageFilteredSystemVoices, queryTerms, genderFilter) {
-        languageFilteredSystemVoices.filter { voice -> matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter) }
-    }
-
     val availableGoogleModels = remember(voices, ttsEngine) {
         if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
             GoogleVoiceModel.entries.filter { model -> voices.any { it.resolvedGoogleModel() == model } }
@@ -1957,16 +1951,12 @@ internal fun VoiceSelectionPage(
     LaunchedEffect(availableGoogleModels, googleModelFilter) {
         if (googleModelFilter != null && googleModelFilter !in availableGoogleModels) googleModelFilter = null
     }
-
-    val filteredAzureVoices = remember(languageFilteredAzureVoices, queryTerms, genderFilter, googleModelFilter, ttsEngine) {
-        languageFilteredAzureVoices.filter { voice ->
+    val filteredVoices = remember(languageFilteredVoices, queryTerms, genderFilter, googleModelFilter, ttsEngine) {
+        languageFilteredVoices.filter { voice ->
             matchesVoiceFilters(voice = voice, queryTerms = queryTerms, genderFilter = genderFilter) &&
                 (ttsEngine != TtsEngine.GOOGLE_CLOUD || googleModelFilter == null || voice.resolvedGoogleModel() == googleModelFilter)
         }
     }
-
-    val visibleVoiceCount = if (ttsEngine == TtsEngine.SYSTEM) filteredSystemVoices.size else filteredAzureVoices.size
-    val totalVoiceCount = if (ttsEngine == TtsEngine.SYSTEM) systemVoices.size else voices.size
 
     Column(
         modifier = modifier
@@ -1991,25 +1981,17 @@ internal fun VoiceSelectionPage(
         )
 
         VoiceFilterChips(
-            languages = availableLanguages,
+            languages = ready?.languages.orEmpty(),
             selectedLanguage = selectedLanguage,
             genders = availableGenders,
             selectedGender = genderFilter,
             onLanguageSelected = { language ->
                 selectedLanguage = language
-                featureUsageReporter.reportEvent(
-                    FeatureUsageEvents.VOICE_FILTER_APPLIED,
-                    "filter" to "language",
-                    "value" to if (language == null) "all" else "selected"
-                )
+                onAction(VoiceSelectionAction.FilterApplied("language", cleared = language == null))
             },
             onGenderSelected = { gender ->
                 genderFilter = gender
-                featureUsageReporter.reportEvent(
-                    FeatureUsageEvents.VOICE_FILTER_APPLIED,
-                    "filter" to "gender",
-                    "value" to if (gender == null) "all" else "selected"
-                )
+                onAction(VoiceSelectionAction.FilterApplied("gender", cleared = gender == null))
             }
         )
 
@@ -2024,81 +2006,59 @@ internal fun VoiceSelectionPage(
         Text(
             pluralStringResource(
                 R.plurals.voice_showing_count,
-                totalVoiceCount,
-                visibleVoiceCount,
-                totalVoiceCount,
+                voices.size,
+                filteredVoices.size,
+                voices.size,
             ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        operationError?.let {
-            Text(it, color = MaterialTheme.colorScheme.error)
+        if (ready?.saveFailed == true) {
+            Text(stringResource(R.string.voice_save_failed), color = MaterialTheme.colorScheme.error)
         }
 
-        if (loading) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        } else if (error != null) {
-            Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
-            TextButton(onClick = { retryKey++ }) {
-                Text(stringResource(R.string.common_retry))
+        when (state) {
+            VoiceSelectionUiState.Loading ->
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            VoiceSelectionUiState.LoadFailed -> {
+                Text(stringResource(R.string.voice_load_failed), color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { onAction(VoiceSelectionAction.Load) }) {
+                    Text(stringResource(R.string.common_retry))
+                }
             }
-        } else {
-            val filteredVoices = if (ttsEngine == TtsEngine.SYSTEM) filteredSystemVoices else filteredAzureVoices
-            val titleRes = when (ttsEngine) {
-                TtsEngine.SYSTEM -> if (selectedLanguage != null) R.string.voice_system_title_with_lang else R.string.voice_system_title
-                TtsEngine.GOOGLE_CLOUD -> if (selectedLanguage != null) R.string.voice_google_title_with_lang else R.string.voice_google_title
-                else -> if (selectedLanguage != null) R.string.voice_azure_title_with_lang else R.string.voice_azure_title
-            }
-            val emptyRes = when (ttsEngine) {
-                TtsEngine.SYSTEM -> R.string.voice_no_system_match
-                TtsEngine.GOOGLE_CLOUD -> R.string.voice_no_google_match
-                else -> R.string.voice_no_azure_match
-            }
+            is VoiceSelectionUiState.Ready -> {
+                val titleRes = when (ttsEngine) {
+                    TtsEngine.SYSTEM -> if (selectedLanguage != null) R.string.voice_system_title_with_lang else R.string.voice_system_title
+                    TtsEngine.GOOGLE_CLOUD -> if (selectedLanguage != null) R.string.voice_google_title_with_lang else R.string.voice_google_title
+                    else -> if (selectedLanguage != null) R.string.voice_azure_title_with_lang else R.string.voice_azure_title
+                }
+                val emptyRes = when (ttsEngine) {
+                    TtsEngine.SYSTEM -> R.string.voice_no_system_match
+                    TtsEngine.GOOGLE_CLOUD -> R.string.voice_no_google_match
+                    else -> R.string.voice_no_azure_match
+                }
 
-            SettingsGroup(title = stringResource(titleRes, selectedLanguage ?: "")) {
-                if (filteredVoices.isEmpty()) {
-                    Text(
-                        stringResource(emptyRes),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                } else {
-                    filteredVoices.forEachIndexed { index, v ->
-                        VoiceRow(
-                            voice = v,
-                            isSelected = selected?.name == v.name,
-                            showSettings = ttsEngine != TtsEngine.SYSTEM,
-                            onSelect = {
-                                scope.launch {
-                                    operationError = null
-                                    try {
-                                        val voiceToSelect = if (ttsEngine == TtsEngine.SYSTEM) v else {
-                                            v.withPreferredSupportedLanguage(selectedLanguage ?: preferredLanguage)
-                                        }
-                                        useCase.select(voiceToSelect)
-                                        val primary = if (ttsEngine == TtsEngine.SYSTEM) (voiceToSelect.primaryLanguage ?: "") else voiceToSelect.selectedLanguage.ifBlank { voiceToSelect.primaryLanguage ?: "" }
-                                        if (primary.isNotBlank() && settingsUseCase != null) {
-                                            val current = settingsUseCase.get()
-                                            settingsUseCase.update(current.copy(primaryLanguage = primary))
-                                        }
-                                        selected = voiceToSelect
-                                        onVoiceSelected?.invoke() ?: onBack()
-                                    } catch (failure: CancellationException) {
-                                        throw failure
-                                    } catch (_: Exception) {
-                                        operationError = voiceSaveFailed
-                                    }
-                                }
-                            },
-                            onSettings = {
-                                editingVoice = v
-                                showVoiceSettings = true
-                            }
+                SettingsGroup(title = stringResource(titleRes, selectedLanguage ?: "")) {
+                    if (filteredVoices.isEmpty()) {
+                        Text(
+                            stringResource(emptyRes),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp)
                         )
-                        if (index < filteredVoices.lastIndex) {
-                            SettingsGroupDivider()
+                    } else {
+                        filteredVoices.forEachIndexed { index, v ->
+                            VoiceRow(
+                                voice = v,
+                                isSelected = state.selected?.name == v.name,
+                                showSettings = ttsEngine != TtsEngine.SYSTEM,
+                                onSelect = { onAction(VoiceSelectionAction.VoiceSelected(v, selectedLanguage)) },
+                                onSettings = { editingVoice = v }
+                            )
+                            if (index < filteredVoices.lastIndex) {
+                                SettingsGroupDivider()
+                            }
                         }
                     }
                 }
@@ -2106,35 +2066,14 @@ internal fun VoiceSelectionPage(
         }
     }
 
-    if (showVoiceSettings && editingVoice != null) {
+    editingVoice?.let { voice ->
         VoiceSettingsDialog(
             show = true,
-            voice = editingVoice!!,
-            onDismiss = { showVoiceSettings = false },
+            voice = voice,
+            onDismiss = { editingVoice = null },
             onSave = { updated ->
-                scope.launch {
-                    operationError = null
-                    try {
-                        useCase.select(updated)
-                        val primary = updated.selectedLanguage.ifBlank { updated.primaryLanguage ?: "" }
-                        if (primary.isNotBlank() && settingsUseCase != null) {
-                            val current = settingsUseCase.get()
-                            settingsUseCase.update(current.copy(primaryLanguage = primary))
-                        }
-                        showVoiceSettings = false
-                        val refreshed = if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
-                            useCase.refreshFromGoogle()
-                        } else {
-                            useCase.refreshFromAzure()
-                        }
-                        voices = (refreshed + useCase.listForEngine(ttsEngine)).distinctBy { it.name }
-                        selected = useCase.selected()
-                    } catch (failure: CancellationException) {
-                        throw failure
-                    } catch (_: Exception) {
-                        operationError = voiceSaveFailed
-                    }
-                }
+                editingVoice = null
+                onAction(VoiceSelectionAction.VoiceSettingsSaved(updated))
             }
         )
     }
@@ -2227,135 +2166,63 @@ private fun VoiceFilterChips(
 
 // ─── Language Selection Page ─────────────────────────────────────────────────
 
+/** Primary/secondary language picker shared by Settings and Welcome. */
 @Composable
 internal fun LanguageSelectionPage(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onContinue: (() -> Unit)? = null
 ) {
-    val voiceUseCase = koinInject<VoiceUseCase>()
-    val settingsUseCase = koinInject<SettingsUseCase>()
-    val featureUsageReporter = koinInject<FeatureUsageReporter>()
-    val scope = rememberCoroutineScope()
-    val allLabel = stringResource(R.string.language_all)
+    val operations = rememberVoiceSelectionOperations()
+    val viewModel: LanguageSelectionViewModel = viewModel(
+        factory = remember(operations) { viewModelFactory { initializer { LanguageSelectionViewModel(operations) } } }
+    )
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(viewModel) { viewModel.onAction(LanguageSelectionAction.Load) }
+    LanguageSelectionContent(state = state, onAction = viewModel::onAction, onContinue = onContinue, modifier = modifier)
+}
+
+@Composable
+private fun LanguageSelectionContent(
+    state: LanguageSelectionUiState,
+    onAction: (LanguageSelectionAction) -> Unit,
+    onContinue: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val ready = when (state) {
+        LanguageSelectionUiState.Loading -> {
+            Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            return
+        }
+        LanguageSelectionUiState.LoadFailed -> {
+            Column(modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.language_load_failed), color = MaterialTheme.colorScheme.error)
+                Button(onClick = { onAction(LanguageSelectionAction.Load) }) { Text(stringResource(R.string.common_retry)) }
+            }
+            return
+        }
+        is LanguageSelectionUiState.Ready -> state
+    }
     val noLanguagesAvailableLabel = stringResource(R.string.language_no_available)
     val noLanguagesMatchLabel = stringResource(R.string.language_no_match)
-
-    var available by remember { mutableStateOf<List<String>>(emptyList()) }
     var filter by remember { mutableStateOf("") }
-    var primary by remember { mutableStateOf("en-US") }
-    var secondary by remember { mutableStateOf("") }
-    var selectedVoiceIsMultilingual by remember { mutableStateOf(false) }
-    var useSecondaryLanguage by remember { mutableStateOf(false) }
-    var loading by remember { mutableStateOf(true) }
-    var loadError by remember { mutableStateOf<String?>(null) }
-    var operationError by remember { mutableStateOf<String?>(null) }
-    var retryKey by remember { mutableIntStateOf(0) }
-    val languageLoadFailed = stringResource(R.string.language_load_failed)
-    val languageSaveFailed = stringResource(R.string.language_save_failed)
-
-    LaunchedEffect(retryKey) {
-        loading = true
-        loadError = null
-        try {
-            val settings = settingsUseCase.get()
-            val sel = voiceUseCase.selected()
-            primary = settings.primaryLanguage
-            secondary = settings.secondaryLanguage
-            selectedVoiceIsMultilingual = sel?.supportedLanguages
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() }
-                ?.distinct()
-                ?.size
-                ?.let { it > 1 }
-                ?: false
-            useSecondaryLanguage = selectedVoiceIsMultilingual &&
-                settings.secondaryLanguage.isNotBlank() &&
-                settings.secondaryLanguage != settings.primaryLanguage
-            available = (sel?.supportedLanguages ?: emptyList())
-                .ifEmpty { listOf(settings.primaryLanguage, settings.secondaryLanguage, "en-US").filter { it.isNotBlank() } }
-                .distinct()
-        } catch (failure: CancellationException) {
-            throw failure
-        } catch (_: Exception) {
-            loadError = languageLoadFailed
-        } finally {
-            loading = false
-        }
-    }
-
-    if (loading) {
-        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        return
-    }
-    loadError?.let { message ->
-        Column(modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(message, color = MaterialTheme.colorScheme.error)
-            Button(onClick = { retryKey++ }) { Text(stringResource(R.string.common_retry)) }
-        }
-        return
-    }
-
-    val normalizedAvailable = remember(available) {
-        available.map { it.trim() }.filter { it.isNotEmpty() }.distinct().sorted()
-    }
 
     val queryTerms = remember(filter) {
         filter.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
     }
-
-    val filteredLanguages = remember(normalizedAvailable, queryTerms) {
-        normalizedAvailable.filter { lang ->
+    val filteredLanguages = remember(ready.languages, queryTerms) {
+        ready.languages.filter { lang ->
             val codePart = languageCodePart(lang)
             val regionPart = regionCodePart(lang)
-            val matchesSearch = queryTerms.all { term ->
+            queryTerms.all { term ->
                 lang.contains(term, ignoreCase = true) ||
                     localizedLocaleDisplayName(lang).contains(term, ignoreCase = true) ||
                     codePart.contains(term, ignoreCase = true) ||
                     (regionPart?.contains(term, ignoreCase = true) == true)
             }
-            matchesSearch
         }
     }
-
-    fun updateLanguage(target: String, value: String) {
-        scope.launch {
-            operationError = null
-            var previous: Settings? = null
-            try {
-                val current = settingsUseCase.get()
-                previous = current
-                val updated = if (target == "primary") current.copy(primaryLanguage = value) else current.copy(secondaryLanguage = value)
-                settingsUseCase.update(updated)
-                featureUsageReporter.reportEvent(
-                    FeatureUsageEvents.LANGUAGE_UPDATED,
-                    "target" to target,
-                    "value" to value
-                )
-                if (target == "primary") {
-                    voiceUseCase.selected()?.let { voiceUseCase.select(it.copy(selectedLanguage = value)) }
-                }
-            } catch (failure: CancellationException) {
-                throw failure
-            } catch (_: Exception) {
-                val persisted = try {
-                    settingsUseCase.get()
-                } catch (failure: CancellationException) {
-                    throw failure
-                } catch (_: Exception) {
-                    previous
-                }
-                persisted?.let {
-                    primary = it.primaryLanguage
-                    secondary = it.secondaryLanguage
-                    useSecondaryLanguage = selectedVoiceIsMultilingual &&
-                        it.secondaryLanguage.isNotBlank() &&
-                        it.secondaryLanguage != it.primaryLanguage
-                }
-                operationError = languageSaveFailed
-            }
-        }
-    }
+    val emptyLabel = if (ready.languages.isEmpty()) noLanguagesAvailableLabel else noLanguagesMatchLabel
 
     Column(
         modifier = modifier
@@ -2363,8 +2230,8 @@ internal fun LanguageSelectionPage(
             .padding(top = 24.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        operationError?.let {
-            Text(it, color = MaterialTheme.colorScheme.error)
+        if (ready.saveFailed) {
+            Text(stringResource(R.string.language_save_failed), color = MaterialTheme.colorScheme.error)
         }
 
         OutlinedTextField(
@@ -2392,13 +2259,13 @@ internal fun LanguageSelectionPage(
             )
             LanguageList(
                 available = filteredLanguages,
-                selected = primary,
-                emptyLabel = if (normalizedAvailable.isEmpty()) noLanguagesAvailableLabel else noLanguagesMatchLabel,
-                onSelect = { sel -> primary = sel; updateLanguage("primary", sel) }
+                selected = ready.primary,
+                emptyLabel = emptyLabel,
+                onSelect = { onAction(LanguageSelectionAction.PrimarySelected(it)) }
             )
         }
 
-        if (selectedVoiceIsMultilingual) {
+        if (ready.voiceIsMultilingual) {
             SettingsGroup(title = stringResource(R.string.language_secondary)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -2413,34 +2280,17 @@ internal fun LanguageSelectionPage(
                         )
                     }
                     Switch(
-                        checked = useSecondaryLanguage,
-                        onCheckedChange = { enabled ->
-                            useSecondaryLanguage = enabled
-                            featureUsageReporter.reportEvent(
-                                FeatureUsageEvents.SECONDARY_LANGUAGE_TOGGLED,
-                                "enabled" to enabled.toString(),
-                                "source" to "language_selection"
-                            )
-                            if (enabled) {
-                                val initial = normalizedAvailable.firstOrNull { it != primary }
-                                    ?: normalizedAvailable.firstOrNull()
-                                    ?: primary
-                                secondary = initial
-                                updateLanguage("secondary", initial)
-                            } else {
-                                secondary = ""
-                                updateLanguage("secondary", "")
-                            }
-                        }
+                        checked = ready.usesSecondary,
+                        onCheckedChange = { onAction(LanguageSelectionAction.SecondaryToggled(it)) }
                     )
                 }
-                if (useSecondaryLanguage) {
+                if (ready.usesSecondary) {
                     Spacer(Modifier.height(8.dp))
                     LanguageList(
                         available = filteredLanguages,
-                        selected = secondary,
-                        emptyLabel = if (normalizedAvailable.isEmpty()) noLanguagesAvailableLabel else noLanguagesMatchLabel,
-                        onSelect = { sel -> secondary = sel; updateLanguage("secondary", sel) }
+                        selected = ready.secondary,
+                        emptyLabel = emptyLabel,
+                        onSelect = { onAction(LanguageSelectionAction.SecondarySelected(it)) }
                     )
                 }
             }
