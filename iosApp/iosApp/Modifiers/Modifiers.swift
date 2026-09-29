@@ -37,7 +37,7 @@ struct WiggleEffect: ViewModifier {
                     startWiggle() 
                 } 
             }
-            .onChange(of: active) { isActive, _ in 
+            .onChange(of: active) { _, isActive in
                 if isActive { 
                     startWiggle() 
                 } else { 
