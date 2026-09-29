@@ -299,7 +299,7 @@ class CompleteBackupManager(
         boards = boardRepository.listBoards(),
         boardSets = boardSetRepository.listBoardSets(),
         phrases = phraseRepository.getAll(),
-        // categories is read-compat only (Q2=a); new backups write empty list and phrases contain folder-Phrases
+        // Categories travel as folder-Phrases in `phrases`; `categories` is only read from older backups.
         categories = emptyList(),
         settings = settingsRepository.get(),
         voices = voiceRepository.getVoices(),
@@ -319,7 +319,7 @@ class CompleteBackupManager(
 
         boardRepository.saveBoards(payload.boards)
         payload.boardSets.forEach { boardSetRepository.saveBoardSet(it) }
-        // Q2=a migration: old backups with flat categories → folder-Phrases
+        // Older backups stored Categories as a flat list; restore them as folder-Phrases.
         val migratedCategories = payload.categories.mapNotNull { cat ->
             val id = cat.id.ifBlank { return@mapNotNull null }
             // skip if a phrase with same id already exists (new backup or duplicate)

@@ -40,12 +40,14 @@ the normal Screen creation flow.
 
 ## Speech and language
 
-Wingmate supports operating-system voices and user-configured Azure Neural
-Voices. Communicators can select a voice, primary language, optional secondary
-language, and speech rate; use a pronunciation dictionary; and choose immediate
-speech or silent composition until the complete Message is activated.
+Wingmate supports operating-system voices and, on Android and iOS,
+user-configured Azure Neural Voices and
+[Google Cloud Text-to-Speech](google-cloud-tts.md) voices. Communicators can
+select a voice, primary language, optional secondary language, and speech
+rate; use a pronunciation dictionary; and choose immediate speech or silent
+composition until the complete Message is activated.
 
-Generated speech may be cached locally. Azure synthesis requires a network for
+Generated speech may be cached locally. Cloud synthesis requires a network for
 uncached text. System text-to-speech provides the offline path supported by the
 operating system. A network failure must not discard the active Message.
 
@@ -100,12 +102,13 @@ See [supported platforms](PLATFORM_SUPPORT.md).
 
 The desktop client in `desktopApp/` runs the shared Kotlin core as a
 Kotlin/Native static library. Today it imports OBF and OBZ files, reopens recent
-files, navigates linked Pages, composes and speaks a Message through the
-operating system's own voice, holds a Message, edits the pronunciation
-dictionary and a small set of settings, and creates or restores a version-1
-backup. It has no Typing workspace, no vocabulary editing, no cloud voices, and
-none of the access features listed in the
-[accessibility matrix](ACCESSIBILITY_MATRIX.md). Track it in
+files, navigates linked Pages, creates and edits Screens, composes and speaks a
+Message through the operating system's own voice, holds a Message, edits the
+pronunciation dictionary and a small set of settings, and creates or restores a
+version-1 backup. Communication targets support dwell, a Select key, and Rest
+mode, and Linux adds native Tobii and experimental webcam gaze; coverage is
+partial, as recorded in the [accessibility matrix](ACCESSIBILITY_MATRIX.md). It
+has no Typing workspace and no cloud voices. Track it in
 [#268](https://github.com/Jdreioe/Wingmate/issues/268).
 
 ## Current parity limits

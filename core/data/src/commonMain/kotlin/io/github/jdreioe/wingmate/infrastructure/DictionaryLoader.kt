@@ -184,11 +184,4 @@ class DictionaryLoader(
         "main_sv", "main_ta", "main_tcy", "main_te", "main_tok", "main_tr", "main_uk", 
         "main_ur", "main_zgh", "main_zgh_ZZ"
     )
-    
-    /**
-     * Checks if a dictionary is available for the given language.
-     */
-    fun isLanguageSupported(languageCode: String): Boolean {
-        return resolveDictionaryBaseName(languageCode) != null
-    }
 }

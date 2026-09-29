@@ -13,8 +13,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.core.content.ContextCompat
-import androidx.window.layout.WindowInfoTracker
-import androidx.window.layout.FoldingFeature
 import androidx.window.area.WindowAreaController
 import androidx.window.area.WindowAreaSession
 import androidx.window.area.WindowAreaInfo
@@ -33,10 +31,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.window.core.ExperimentalWindowApi
 import org.koin.core.context.GlobalContext
-import io.github.jdreioe.wingmate.App
 import io.github.jdreioe.wingmate.ui.AppTheme
 import io.github.jdreioe.wingmate.ui.AndroidAccessInputBus
-import io.github.jdreioe.wingmate.ui.FullScreenDisplay
 @OptIn(ExperimentalWindowApi::class)
 class MainActivity : ComponentActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
@@ -46,7 +42,6 @@ class MainActivity : ComponentActivity() {
         AndroidAccessInputBus.dispatch(event) || super.onKeyUp(keyCode, event)
 
     private var presentation: ExternalDisplayPresentation? = null
-    private var isFoldableUnfolded = false
     
     // Window Area API variables for rear display and dual-screen mode
 
@@ -58,7 +53,6 @@ class MainActivity : ComponentActivity() {
     private var capabilityStatus: WindowAreaCapability.Status =
         WindowAreaCapability.Status.WINDOW_AREA_STATUS_UNSUPPORTED
 
-    private val dualScreenOperation = WindowAreaCapability.Operation.OPERATION_PRESENT_ON_AREA
     private val rearDisplayOperation = WindowAreaCapability.Operation.OPERATION_TRANSFER_ACTIVITY_TO_AREA
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) { 
@@ -170,9 +164,6 @@ class MainActivity : ComponentActivity() {
         // Auto-open fullscreen if second display is already connected at startup
         checkAndAutoOpenOnSecondDisplay()
 
-        // Start observing foldable state changes
-        observeFoldableState()
-        
         setContent {
             AppTheme {
                 Box(Modifier.fillMaxSize()) {
@@ -207,7 +198,6 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         (getSystemService(DISPLAY_SERVICE) as? DisplayManager)?.unregisterDisplayListener(displayListener)
-        // Keep presentation if desired; you can dismiss here if you prefer tie to activity lifecycle
     }
 
     private fun attachToExternalDisplayIfRequested() {
@@ -215,14 +205,10 @@ class MainActivity : ComponentActivity() {
         if (!show) return
         val dm = getSystemService(DISPLAY_SERVICE) as? DisplayManager ?: return
         val displays = dm.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
-        val external = displays.firstOrNull()
-        if (external != null) {
-            if (presentation?.display != external) {
-                dismissPresentation()
-                presentation = ExternalDisplayPresentation(this, external).also { it.show() }
-            }
-        } else {
-            // No external display; optional: show a full-screen Activity instead (not implemented here)
+        val external = displays.firstOrNull() ?: return
+        if (presentation?.display != external) {
+            dismissPresentation()
+            presentation = ExternalDisplayPresentation(this, external).also { it.show() }
         }
     }
 
@@ -248,32 +234,11 @@ class MainActivity : ComponentActivity() {
             operation = "display.check",
             outcome = "completed",
             count = externalDisplays.size,
-            enabled = isFoldableUnfolded,
         )
-        
-        // Auto-open only for external displays or foldable unfolded
-        
+
         if (externalDisplays.isNotEmpty()) {
             OperationalLogger.info("display.fullscreen", "auto_opened")
             io.github.jdreioe.wingmate.presentation.DisplayWindowBus.open()
-        }
-    }
-
-    private fun observeFoldableState() {
-        lifecycleScope.launch {
-            WindowInfoTracker.getOrCreate(this@MainActivity)
-                .windowLayoutInfo(this@MainActivity)
-                .map { windowLayoutInfo ->
-                    val foldingFeatures = windowLayoutInfo.displayFeatures.filterIsInstance<FoldingFeature>()
-                    foldingFeatures.any { feature ->
-                        feature.state == FoldingFeature.State.FLAT || 
-                        feature.state == FoldingFeature.State.HALF_OPENED
-                    }
-                }
-                .distinctUntilChanged()
-                .collect { unfolded ->
-                    isFoldableUnfolded = unfolded
-                }
         }
     }
 

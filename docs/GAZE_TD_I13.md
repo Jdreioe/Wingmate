@@ -131,8 +131,9 @@ Each milestone is independently reviewable and leaves the client working.
 ### M1 — Client transport
 
 `desktopApp/rust/src/gaze/`: a `protocol` decoder that reassembles the daemon's
-stream into samples, and a `client` that connects, subscribes, and reads them,
-with bounded reconnect backoff for a daemon that is absent or restarts. A
+stream into samples, a `client` that connects, subscribes, and reads them, and a
+bounded `Backoff` delay. The reconnect loop in `gaze/runner.rs` applies that
+backoff for a daemon that is absent or restarts. A
 status enum (`Disabled`, `Connecting`, `Connected`, `GazeLost`,
 `IncompatibleProtocol`, `DaemonUnavailable`) names what the user is told.
 Unknown message types are skipped by length; a gaze frame of unexpected length

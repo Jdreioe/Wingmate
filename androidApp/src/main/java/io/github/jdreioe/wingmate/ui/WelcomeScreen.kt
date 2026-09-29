@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -28,7 +29,6 @@ import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
-import io.github.jdreioe.wingmate.ui.PlatformBackHandler
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
@@ -40,6 +40,7 @@ import kotlinx.coroutines.withContext
 import androidx.compose.ui.res.stringResource
 import org.koin.compose.getKoin
 
+import com.hojmoseit.wingmate.BuildConfig
 import com.hojmoseit.wingmate.R
 @Composable
 fun WelcomeScreen(
@@ -48,7 +49,7 @@ fun WelcomeScreen(
 ) {
     val koin = getKoin()
     val boardImportService = remember(koin) {
-        if (!isReleaseBuild()) koin.getOrNull<BoardImportService>() else null
+        if (BuildConfig.DEBUG) koin.getOrNull<BoardImportService>() else null
     }
     val enableBoardImport = boardImportService != null
     val featureUsageReporter = remember(koin) {
@@ -90,7 +91,7 @@ fun WelcomeScreen(
         featureUsageReporter?.reportEvent(FeatureUsageEvents.WELCOME_STEP_VIEWED, "step" to step.toString())
     }
 
-    PlatformBackHandler(enabled = step > 0) {
+    BackHandler(enabled = step > 0) {
         when (step) {
             1 -> if (modeTour != null) modeTour = null else step = 0
             2 -> step = 1

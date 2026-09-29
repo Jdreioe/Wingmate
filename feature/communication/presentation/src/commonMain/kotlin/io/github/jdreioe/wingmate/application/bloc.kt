@@ -1,14 +1,6 @@
 package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.Phrase
-import io.github.jdreioe.wingmate.domain.CategoryItem
-import io.github.jdreioe.wingmate.domain.PhraseRepository
-import io.github.jdreioe.wingmate.domain.Settings
-import io.github.jdreioe.wingmate.domain.SettingsRepository
-import io.github.jdreioe.wingmate.domain.Voice
-import io.github.jdreioe.wingmate.application.PhraseUseCase
-import io.github.jdreioe.wingmate.application.SettingsUseCase
-import io.github.jdreioe.wingmate.application.VoiceUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -55,8 +47,6 @@ abstract class Bloc<E, S>(initial: S, dispatcher: CoroutineDispatcher = Dispatch
 // App-specific blocs
 sealed class PhraseEvent {
     data class Add(val phrase: Phrase) : PhraseEvent()
-    // Legacy event kept for binary compatibility; handled through CategoryUseCase.
-    data class AddCategory(val category: io.github.jdreioe.wingmate.domain.CategoryItem) : PhraseEvent()
     data class Edit(val phrase: Phrase) : PhraseEvent()
     data class Delete(val id: String) : PhraseEvent()
     data class Move(val fromIndex: Int, val toIndex: Int) : PhraseEvent()
@@ -72,16 +62,8 @@ data class PhraseState(
 class PhraseBloc(
     private val useCase: PhraseUseCase,
     private val featureUsageReporter: FeatureUsageReporter,
-    private val categoryUseCase: CategoryUseCase,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : Bloc<PhraseEvent, PhraseState>(PhraseState(), dispatcher) {
-    // Backward-compatible constructor for existing DI setups that pass a repository
-    constructor(repo: PhraseRepository) : this(
-        PhraseUseCase(repo),
-        NoopFeatureUsageReporter(),
-        CategoryUseCase(repo, NoopFeatureUsageReporter())
-    )
-
     override suspend fun handle(event: PhraseEvent) {
         when (event) {
             is PhraseEvent.Load -> {
@@ -104,18 +86,6 @@ class PhraseBloc(
                         "has_category" to (!event.phrase.parentId.isNullOrBlank()).toString(),
                         "has_recording" to (!event.phrase.recordingPath.isNullOrBlank()).toString()
                     )
-                    val list = useCase.list()
-                    setState { it.copy(loading = false, items = list) }
-                } catch (ce: CancellationException) {
-                    throw ce
-                } catch (t: Throwable) {
-                    setState { it.copy(loading = false, error = t.message) }
-                }
-            }
-            is PhraseEvent.AddCategory -> {
-                setState { it.copy(loading = true, error = null) }
-                try {
-                    categoryUseCase.add(event.category)
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
                 } catch (ce: CancellationException) {
@@ -168,105 +138,6 @@ class PhraseBloc(
                     )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
-                } catch (ce: CancellationException) {
-                    throw ce
-                } catch (t: Throwable) {
-                    setState { it.copy(loading = false, error = t.message) }
-                }
-            }
-        }
-    }
-}
-
-sealed class SettingsEvent {
-    data class Update(val settings: Settings) : SettingsEvent()
-    data object Load : SettingsEvent()
-}
-
-data class SettingsState(
-    val loading: Boolean = false,
-    val value: Settings? = null,
-    val error: String? = null
-)
-
-class SettingsBloc(private val useCase: SettingsUseCase) : Bloc<SettingsEvent, SettingsState>(SettingsState()) {
-    constructor(repo: SettingsRepository) : this(SettingsUseCase(repo))
-
-    override suspend fun handle(event: SettingsEvent) {
-        when (event) {
-            is SettingsEvent.Load -> {
-                setState { it.copy(loading = true, error = null) }
-                try {
-                    val s = useCase.get()
-                    setState { it.copy(loading = false, value = s) }
-                } catch (ce: CancellationException) {
-                    throw ce
-                } catch (t: Throwable) {
-                    setState { it.copy(loading = false, error = t.message) }
-                }
-            }
-            is SettingsEvent.Update -> {
-                setState { it.copy(loading = true, error = null) }
-                try {
-                    val s = useCase.update(event.settings)
-                    setState { it.copy(loading = false, value = s) }
-                } catch (ce: CancellationException) {
-                    throw ce
-                } catch (t: Throwable) {
-                    setState { it.copy(loading = false, error = t.message) }
-                }
-            }
-        }
-    }
-}
-
-// Voice Bloc
-sealed class VoiceEvent {
-    data object Load : VoiceEvent()
-    data class Select(val voice: Voice) : VoiceEvent()
-    data object RefreshFromAzure : VoiceEvent()
-}
-
-data class VoiceState(
-    val loading: Boolean = false,
-    val items: List<Voice> = emptyList(),
-    val selected: Voice? = null,
-    val error: String? = null,
-)
-
-class VoiceBloc(
-    private val useCase: VoiceUseCase
-) : Bloc<VoiceEvent, VoiceState>(VoiceState()) {
-
-    override suspend fun handle(event: VoiceEvent) {
-        when (event) {
-            is VoiceEvent.Load -> {
-                setState { it.copy(loading = true, error = null) }
-                try {
-                    val list = useCase.list()
-                    val sel = useCase.selected()
-                    setState { it.copy(loading = false, items = list, selected = sel) }
-                } catch (ce: CancellationException) {
-                    throw ce
-                } catch (t: Throwable) {
-                    setState { it.copy(loading = false, error = t.message) }
-                }
-            }
-            is VoiceEvent.Select -> {
-                try {
-                    useCase.select(event.voice)
-                    setState { it.copy(selected = event.voice) }
-                } catch (ce: CancellationException) {
-                    throw ce
-                } catch (t: Throwable) {
-                    setState { it.copy(error = t.message) }
-                }
-            }
-            is VoiceEvent.RefreshFromAzure -> {
-                setState { it.copy(loading = true, error = null) }
-                try {
-                    val fromCloud = useCase.refreshFromAzure()
-                    setState { it.copy(loading = false, items = fromCloud) }
                 } catch (ce: CancellationException) {
                     throw ce
                 } catch (t: Throwable) {

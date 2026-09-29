@@ -22,7 +22,6 @@ internal class AndroidSqlOpenHelper(
     }
 
     private fun ensureTables(db: SQLiteDatabase) {
-        // Mirror desktop schema minimal subset
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS phrases (
                 id TEXT PRIMARY KEY,
@@ -32,7 +31,6 @@ internal class AndroidSqlOpenHelper(
                 image_url TEXT,
                 parent_id TEXT,
                 linked_board_id TEXT,
-                is_category INTEGER DEFAULT 0,
                 created_at INTEGER,
                 recording_path TEXT,
                 is_hidden INTEGER NOT NULL DEFAULT 0,
@@ -48,46 +46,6 @@ internal class AndroidSqlOpenHelper(
         ensureColumn(db, "phrases", "linked_board_id", "TEXT")
         ensureColumn(db, "phrases", "puck_action", "TEXT")
         ensureColumn(db, "phrases", "is_hidden", "INTEGER NOT NULL DEFAULT 0")
-
-        db.execSQL("""
-            CREATE TABLE IF NOT EXISTS categories (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                selectedLanguage TEXT,
-                ordering INTEGER DEFAULT 0
-            );
-        """.trimIndent())
-        // Legacy migration: move phrases flagged as categories into categories table and delete them from phrases
-        try {
-            db.beginTransaction()
-            val cursor = db.rawQuery("SELECT id, COALESCE(NULLIF(name,''), NULLIF(text,'')) FROM phrases WHERE is_category = 1", null)
-            val legacy = mutableListOf<Pair<String, String?>>()
-            while (cursor.moveToNext()) {
-                legacy += cursor.getString(0) to cursor.getString(1)
-            }
-            cursor.close()
-            if (legacy.isNotEmpty()) {
-                // Determine next ordering
-                var next = 0
-                val ordCur = db.rawQuery("SELECT COALESCE(MAX(ordering), -1) FROM categories", null)
-                if (ordCur.moveToFirst()) next = ordCur.getInt(0) + 1
-                ordCur.close()
-                val insert = db.compileStatement("INSERT OR IGNORE INTO categories(id, name, selectedLanguage, ordering) VALUES (?,?,?,?)")
-                legacy.forEachIndexed { idx, (id, name) ->
-                    insert.bindString(1, id)
-                    insert.bindString(2, name ?: id)
-                    insert.bindNull(3)
-                    insert.bindLong(4, (next + idx).toLong())
-                    insert.executeInsert()
-                }
-                db.delete("phrases", "is_category = 1", emptyArray())
-            }
-            db.setTransactionSuccessful()
-        } catch (_: Throwable) {
-            // swallow; non-critical
-        } finally {
-            try { db.endTransaction() } catch (_: Throwable) {}
-        }
 
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS configs (
@@ -190,7 +148,48 @@ internal class AndroidSqlOpenHelper(
         if (oldVersion < 8 && newVersion >= 8) {
             ensureColumn(db, "said_texts", "visible_in_history", "INTEGER NOT NULL DEFAULT 1")
         }
+        if (oldVersion < 9 && newVersion >= 9) {
+            convertFlatCategoriesToFolderPhrases(db)
+        }
     }
+
+    /**
+     * Wingmate 1.1.0 and earlier stored Categories in a separate `categories` table (and, before
+     * that, as `is_category` phrase rows). Categories are now folder-Phrases: phrase rows whose
+     * `linked_board_id` is their own id. Convert both legacy shapes in place, keeping ids so
+     * `parent_id` membership survives, and append them after existing phrases in their old order.
+     * Mirrors the flat-category conversion in CompleteBackupManager's restore.
+     */
+    private fun convertFlatCategoriesToFolderPhrases(db: SQLiteDatabase) {
+        if (hasColumn(db, "phrases", "is_category")) {
+            db.execSQL("UPDATE phrases SET linked_board_id = id, is_category = 0 WHERE is_category = 1")
+        }
+        if (!hasTable(db, "categories")) return
+        var ordering = db.rawQuery("SELECT COALESCE(MAX(ordering), -1) + 1 FROM phrases", null).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getLong(0) else 0L
+        }
+        val orderBy = if (hasColumn(db, "categories", "ordering")) "ordering, rowid" else "rowid"
+        val createdAt = System.currentTimeMillis()
+        val insert = db.compileStatement(
+            "INSERT OR IGNORE INTO phrases(id, text, linked_board_id, created_at, is_hidden, ordering) VALUES (?, ?, ?, ?, 0, ?)"
+        )
+        db.rawQuery("SELECT id, name FROM categories ORDER BY $orderBy", null).use { cursor ->
+            while (cursor.moveToNext()) {
+                val id = cursor.getString(0)?.takeIf { it.isNotBlank() } ?: continue
+                val name = cursor.getString(1)?.trim()?.takeIf { it.isNotEmpty() } ?: "Category"
+                insert.bindString(1, id)
+                insert.bindString(2, name)
+                insert.bindString(3, id)
+                insert.bindLong(4, createdAt)
+                insert.bindLong(5, ordering++)
+                insert.executeInsert()
+            }
+        }
+        db.execSQL("DROP TABLE categories")
+    }
+
+    private fun hasTable(db: SQLiteDatabase, table: String): Boolean =
+        db.rawQuery("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", arrayOf(table)).use { it.moveToFirst() }
 
     private fun ensureColumn(
         db: SQLiteDatabase,
@@ -198,21 +197,19 @@ internal class AndroidSqlOpenHelper(
         column: String,
         declaration: String
     ) {
-        val exists = db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
-            val nameIndex = cursor.getColumnIndexOrThrow("name")
-            var found = false
-            while (cursor.moveToNext()) {
-                if (cursor.getString(nameIndex) == column) {
-                    found = true
-                    break
-                }
-            }
-            found
-        }
-        if (!exists) db.execSQL("ALTER TABLE $table ADD COLUMN $column $declaration")
+        if (!hasColumn(db, table, column)) db.execSQL("ALTER TABLE $table ADD COLUMN $column $declaration")
     }
 
+    private fun hasColumn(db: SQLiteDatabase, table: String, column: String): Boolean =
+        db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex) == column) return true
+            }
+            false
+        }
+
     companion object {
-        private const val DB_VERSION = 8
+        private const val DB_VERSION = 9
     }
 }

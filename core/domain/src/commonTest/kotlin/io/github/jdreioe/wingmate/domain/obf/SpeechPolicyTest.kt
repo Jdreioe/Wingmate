@@ -43,12 +43,6 @@ class SpeechPolicyTest {
     }
 
     @Test
-    fun phraseSelectionsFollowTheSamePolicy() {
-        assertTrue(shouldSpeakPhraseSelection(SpeechPolicy.Immediate))
-        assertFalse(shouldSpeakPhraseSelection(SpeechPolicy.SentenceOnly))
-    }
-
-    @Test
     fun compositionStillAddsSelectionsInEveryMode() {
         // Sentence construction stays correct regardless of the speech policy.
         assertEquals(

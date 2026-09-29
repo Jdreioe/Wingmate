@@ -56,18 +56,6 @@ class TextEditingPolicyTest {
     }
 
     @Test
-    fun completeTextEditKeepsSpansAfterTheEditAligned() {
-        assertEquals(
-            listOf(TextSpan(11, 14)),
-            TextEditingPolicy.adjustAfterEdit(
-                oldText = "say hello",
-                newText = "please say hello",
-                spans = listOf(TextSpan(4, 7)),
-            ),
-        )
-    }
-
-    @Test
     fun completeWordReplacesAPartialWordAtTheCursor() {
         assertEquals(
             TextEditResult("say hello now", 10),

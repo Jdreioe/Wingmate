@@ -8,8 +8,6 @@ import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
 import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
-import io.github.jdreioe.wingmate.application.usecase.MovePhraseUseCase
-import io.github.jdreioe.wingmate.application.usecase.GetAllItemsUseCase
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSpeechCache
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
@@ -71,8 +69,6 @@ val appModule = module {
     singleOf(::GetPhrasesAndCategoriesUseCase)
     singleOf(::DeletePhraseUseCase)
     singleOf(::UpdatePhraseUseCase)
-    singleOf(::MovePhraseUseCase)
-    singleOf(::GetAllItemsUseCase)
     
     single {
         BoardImportService(
@@ -90,8 +86,8 @@ val appModule = module {
 
     singleOf(::PhraseListStoreFactory)
 
-    // One store per process: it is the shared source of truth observed by
-    // every client (iOS via CommunicationFacade, Android via Koin).
+    // One store per process: the source of truth iOS observes through
+    // CommunicationFacade.
     single {
         get<PhraseListStoreFactory>().create()
     }

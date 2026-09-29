@@ -110,7 +110,7 @@ class CompleteBackupManagerTest {
                             source = io.github.jdreioe.wingmate.domain.MessagePartSource.Phrase("phrase"),
                         )
                     )
-                ).edit("Water"),
+                ).replaceRange(0, 10, MessagePart("Water")),
                 heldMessage = Message(parts = listOf(MessagePart("Please wait"))),
             )
         )

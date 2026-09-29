@@ -326,7 +326,7 @@ struct SymbolBoardWorkspaceView: View {
                 set: { if !$0 { deleteTargetSet = nil } }
             )
         ) {
-            Button(NSLocalizedString("common_delete", comment: ""), role: .destructive) {
+            Button(NSLocalizedString("common.delete", comment: ""), role: .destructive) {
                 if let target = deleteTargetSet {
                     Task {
                         if await model.editingIsAuthorized() {
@@ -363,7 +363,7 @@ struct SymbolBoardWorkspaceView: View {
         }
         .alert("boardset.delete_board", isPresented: $showDeleteBoardConfirmation) {
             Button("common.cancel", role: .cancel) {}
-            Button("common_delete", role: .destructive) {
+            Button("common.delete", role: .destructive) {
                 Task { await model.deleteSelectedBoard() }
             }
         } message: {

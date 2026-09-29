@@ -1,7 +1,7 @@
 package io.github.jdreioe.wingmate.domain
 
-// Single place for prefix/suffix math — Q2=b, Q7=a. Keeps TextEditingPolicy a hidden detail
-// of the Message module; UI sends ReplaceRange without recomputing diffs.
+// Turns a text field's before/after text into one ReplaceRange by trimming the common
+// prefix and suffix, so UIs that only report full text never compute diffs themselves.
 
 fun Message.Companion.fromTextDiff(
     currentText: String,

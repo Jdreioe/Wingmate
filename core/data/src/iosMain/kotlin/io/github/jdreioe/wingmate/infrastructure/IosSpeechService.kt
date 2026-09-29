@@ -18,8 +18,6 @@ import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.ktor.client.HttpClient
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.addressOf
@@ -32,10 +30,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import platform.AVFAudio.AVAudioPlayer
 import platform.AVFAudio.AVAudioPlayerDelegateProtocol
 import platform.Foundation.NSData
@@ -279,40 +273,6 @@ class IosSpeechService(
     override fun isPaused(): Boolean = currentPlayer != null && state.status == SpeechPlaybackStatus.PAUSED
 
     override fun playbackState(): SpeechPlaybackState = state
-
-    override suspend fun guessPronunciation(text: String, language: String): String? {
-        val langCode = language.take(2).lowercase()
-        return try {
-            suspend fun lookup(edition: String, requireLanguageTag: Boolean): String? {
-            val response = httpClient.get("https://$edition.wiktionary.org/w/api.php") {
-                url { parameters.append("action", "query"); parameters.append("titles", text.trim()); parameters.append("prop", "revisions"); parameters.append("rvprop", "content"); parameters.append("format", "json") }
-            }
-            if (response.status.value != 200) return null
-
-            val body = response.bodyAsText()
-            val json = Json { ignoreUnknownKeys = true }
-            val root = json.parseToJsonElement(body).jsonObject
-            val pages = root["query"]?.jsonObject?.get("pages")?.jsonObject ?: return null
-            val pageKey = pages.keys.firstOrNull() ?: return null
-            if (pageKey == "-1") return null
-
-            val page = pages[pageKey]?.jsonObject
-            val revisions = page?.get("revisions")?.jsonArray
-            val content = revisions?.getOrNull(0)?.jsonObject?.get("*")?.jsonPrimitive?.content
-            if (content != null) {
-                val regex = if (requireLanguageTag) Regex("\\{\\{IPA\\|$langCode\\|/([^/]+)/") else Regex("\\{\\{IPA\\|(?:$langCode\\|)?/([^/]+)/")
-                regex.find(content)?.groupValues?.getOrNull(1)?.let { return it }
-                val regexBrackets = Regex("\\{\\{IPA\\|$langCode\\|\\[([^\\]]+)\\]")
-                regexBrackets.find(content)?.groupValues?.getOrNull(1)?.let { return it }
-            }
-            return null
-            }
-            lookup(langCode, requireLanguageTag = false) ?: if (langCode != "en") lookup("en", requireLanguageTag = true) else null
-        } catch (e: Exception) {
-            OperationalLogger.warn("pronunciation.lookup", "failed")
-            null
-        }
-    }
 
     private suspend fun synthesize(text: String, voice: Voice): ByteArray? = withContext(Dispatchers.Default) {
         when (settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE) {

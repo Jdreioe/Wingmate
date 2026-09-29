@@ -28,9 +28,8 @@ class PhraseBlocTest {
             override suspend fun delete(id: String) = error("Not used")
             override suspend fun move(fromIndex: Int, toIndex: Int) = error("Not used")
         }
-        val reporter = NoopFeatureUsageReporter()
         val bloc = PhraseBloc(
-            PhraseUseCase(repository), reporter, CategoryUseCase(repository, reporter),
+            PhraseUseCase(repository), NoopFeatureUsageReporter(),
             StandardTestDispatcher(testScheduler),
         )
         val phrase = Phrase(id = "new", text = "hello", createdAt = 0L)

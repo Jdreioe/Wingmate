@@ -2,7 +2,6 @@ package io.github.jdreioe.wingmate
 
 import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.application.SettingsUseCase
-import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemorySettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -33,7 +32,7 @@ class ReactiveSettingsUseCaseTest {
     @Test
     fun updatingSettingsThroughUseCaseNotifiesRunningApp() = runTest(dispatcher) {
         val repository = InMemorySettingsRepository()
-        val stateManager = SettingsStateManager(repository, InMemoryConfigRepository())
+        val stateManager = SettingsStateManager(repository)
         val useCase = SettingsUseCase(repository, stateManager)
         advanceUntilIdle()
 

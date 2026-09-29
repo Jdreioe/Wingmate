@@ -63,45 +63,6 @@ private func searchOpenSymbolsUsingBridge(
     return ([], result.errorCode)
 }
 
-struct WelcomeScreenIOS: View {
-    @State private var step: Int = 0
-    @State private var showAzureSettings = false
-    @State private var showVoicePicker = false
-    let onContinue: () -> Void
-    let onVoiceSelected: (Shared.Voice) -> Void
-
-    var body: some View {
-        VStack(spacing: 16) {
-            if step == 0 {
-                Spacer()
-                Text("welcome.title").font(.largeTitle).bold()
-                Text("welcome.subtitle")
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
-                Spacer()
-                HStack(spacing: 12) {
-                    Button("welcome.azure_settings") { showAzureSettings = true }
-                    Button("welcome.choose_voice") { showVoicePicker = true }
-                    Button("common.continue") { onContinue() }
-                }
-            }
-        }
-        .padding(24)
-        .background(Color(.systemGroupedBackground))
-        .sheet(isPresented: $showAzureSettings) {
-            AzureSettingsSheet(onClose: { showAzureSettings = false })
-                .presentationDetents([.medium, .large])
-        }
-        .sheet(isPresented: $showVoicePicker) {
-            VoiceSelectionSheet(selected: nil, onClose: { showVoicePicker = false }) { v in
-                onVoiceSelected(v)
-                showVoicePicker = false
-            }
-            .presentationDetents([.medium, .large])
-        }
-    }
-}
-
 struct AddCategorySheet: View {
     @State private var name: String = ""
     let onClose: () -> Void
@@ -536,11 +497,7 @@ struct AddPhraseSheet: View {
     }
 
     private func requestMicPermission(_ cb: @escaping (Bool) -> Void) {
-        if #available(iOS 17.0, *) {
-            AVAudioApplication.requestRecordPermission { granted in cb(granted) }
-        } else {
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in cb(granted) }
-        }
+        AVAudioApplication.requestRecordPermission { granted in cb(granted) }
     }
 
     @MainActor
@@ -1044,11 +1001,7 @@ struct EditPhraseSheet: View {
     }
 
     private func requestMicPermission(_ cb: @escaping (Bool) -> Void) {
-        if #available(iOS 17.0, *) {
-            AVAudioApplication.requestRecordPermission { granted in cb(granted) }
-        } else {
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in cb(granted) }
-        }
+        AVAudioApplication.requestRecordPermission { granted in cb(granted) }
     }
 
     private func searchOpenSymbols() async {
@@ -1128,90 +1081,6 @@ struct EditPhraseSheet: View {
         let destination = symbolsDir.appendingPathComponent(filename)
         try data.write(to: destination, options: .atomic)
         return destination.absoluteString
-    }
-}
-
-struct AzureSettingsSheet: View {
-    @State private var endpoint: String = ""
-    @State private var key: String = ""
-    @State private var credentialConfigured = false
-    @State private var replacingCredentials = false
-    @State private var loading = true
-    @State private var saving = false
-    @State private var error: String? = nil
-    private let speechFacade = IosDiBridge().speechFacade()
-    let onClose: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("azure.settings.title") {
-                    if credentialConfigured && !replacingCredentials {
-                        Text("azure.credentials.configured")
-                        Button("azure.credentials.replace") {
-                            endpoint = ""
-                            key = ""
-                            replacingCredentials = true
-                        }
-                    } else {
-                        TextField(NSLocalizedString("azure.endpoint.placeholder", comment: ""), text: $endpoint)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled(true)
-                        SecureField(NSLocalizedString("azure.key.placeholder", comment: ""), text: $key)
-                    }
-                }
-                if !credentialConfigured || replacingCredentials {
-                    Section {
-                        Button(saving ? "common.saving" : "common.save") {
-                            Task {
-                                let trimmedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-                                guard speechFacade.isValidAzureSpeechEndpoint(endpoint: trimmedEndpoint) else {
-                                    self.error = NSLocalizedString("azure_setup.error.endpoint", comment: "")
-                                    return
-                                }
-                                saving = true
-                                defer { saving = false }
-
-                                do {
-                                    let cfg = Shared.SpeechServiceConfig(endpoint: trimmedEndpoint,
-                                                                         subscriptionKey: key.trimmingCharacters(in: .whitespacesAndNewlines))
-                                    try await speechFacade.saveSpeechConfig(config: cfg)
-                                    _ = try? await speechFacade.listVoices()
-                                    credentialConfigured = true
-                                    replacingCredentials = false
-                                    endpoint = ""
-                                    key = ""
-                                } catch {
-                                    self.error = error.localizedDescription
-                                    return
-                                }
-                                onClose()
-                            }
-                        }
-                        .disabled(loading || saving || (endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
-                    }
-                }
-            }
-            .navigationTitle(Text("azure.settings.title"))
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) } }
-            .onAppear {
-                Task {
-                    loading = true
-                    defer { loading = false }
-                    do {
-                        let cfg = try await speechFacade.getSpeechConfig()
-                        endpoint = cfg.endpoint
-                        key = ""
-                        credentialConfigured = cfg.credentialConfigured
-                        replacingCredentials = false
-                    } catch { self.error = error.localizedDescription }
-                }
-            }
-            .overlay(alignment: .top) { if loading { ProgressView().padding(.top, 8) } }
-            .alert("common.error", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-                Button("common.ok", role: .cancel) { error = nil }
-            } message: { Text(error ?? NSLocalizedString("common.unknown_error", comment: "")) }
-        }
     }
 }
 
@@ -1472,53 +1341,5 @@ struct UiSizeSheet: View {
             .navigationTitle(Text("ui_size.title"))
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) } }
         }
-    }
-}
-
-struct ReorderPhrasesSheet: View {
-    let phrases: [Shared.Phrase]
-    let allPhrases: [Shared.Phrase]
-    let onMove: (Int, Int) -> Void
-    let onClose: () -> Void
-
-    @State private var local: [Shared.Phrase] = []
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(local, id: \.id) { p in Text(p.name ?? p.text) }
-                    .onMove(perform: move)
-            }
-            .navigationTitle(Text("reorder.title"))
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) }
-                ToolbarItem(placement: .topBarTrailing) { EditButton() }
-            }
-            .onAppear { self.local = phrases }
-        }
-    }
-
-    private func move(from source: IndexSet, to destination: Int) {
-        guard let fromLocal = source.first else { return }
-        var toLocal = destination
-        if toLocal > fromLocal { toLocal -= 1 }
-        let movingId = local[fromLocal].id
-        let targetGlobal: Int = {
-            if toLocal >= local.count - 1 {
-                if let lastId = local.last?.id, let lastGlobal = allPhrases.firstIndex(where: { $0.id == lastId }) {
-                    return lastGlobal + 1
-                }
-                return allPhrases.count
-            } else {
-                let targetId = local[toLocal].id
-                return allPhrases.firstIndex(where: { $0.id == targetId }) ?? allPhrases.count
-            }
-        }()
-        guard let fromGlobal = allPhrases.firstIndex(where: { $0.id == movingId }) else { return }
-        var updated = local
-        let item = updated.remove(at: fromLocal)
-        updated.insert(item, at: max(0, min(toLocal, updated.count)))
-        self.local = updated
-        onMove(fromGlobal, targetGlobal)
     }
 }

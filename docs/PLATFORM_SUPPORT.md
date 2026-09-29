@@ -25,7 +25,8 @@ yet a supported client.
   Android and iOS or document a deliberate platform exception.
 - Screen, symbol, layout, and customization issues are complete only when their
   released shared behavior works in Android and iOS SwiftUI.
-- Compose UI behavior is verified on Android until a new desktop client exists.
+- Jetpack Compose UI behavior is verified on Android. The desktop client's
+  native `iced` UI is not part of feature acceptance until it is supported.
 - iOS features must expose the required data and operations through the shared
   bridge and provide equivalent SwiftUI and VoiceOver behavior.
 - Hardware-specific features may remain native when they use a platform adapter

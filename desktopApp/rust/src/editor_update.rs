@@ -157,10 +157,8 @@ impl App {
                         let selected = previous.selected.as_ref().map(|c| (c.row, c.column));
                         let same_page = previous.view.page_id == view.page_id;
                         let mut next = Editor::new(view);
-                        if same_page {
-                            if let Some((row, column)) = selected {
-                                next.select(row, column);
-                            }
+                        if same_page && let Some((row, column)) = selected {
+                            next.select(row, column);
                         }
                         self.editor = Some(next);
                     } else {
@@ -181,10 +179,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        bridge::{Core, NativeCore},
-        editor::Field,
-    };
+    use crate::{bridge::NativeCore, editor::Field};
 
     #[test]
     fn semantic_actions_edit_and_save_without_pointer_events() {
@@ -197,7 +192,7 @@ mod tests {
             access: Default::default(),
             access_clock: std::time::Instant::now(),
             settings: core.settings().unwrap(),
-            core: Box::new(core),
+            core,
             editor: None,
             close_after_editor: false,
             route: Route::Library,

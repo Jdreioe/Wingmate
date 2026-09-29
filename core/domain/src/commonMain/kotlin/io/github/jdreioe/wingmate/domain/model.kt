@@ -45,8 +45,8 @@ data class Phrase(
 )
 
 /**
- * Typed folder-Phrase: a Phrase that acts as a Category (folder). Backed by the
- * phrase repository; replaces the flat CategoryItem persistence. Q3=a.
+ * Typed folder-Phrase: a Phrase that acts as a Category (folder). Categories are
+ * persisted in the phrase repository this way rather than as separate CategoryItems.
  * A Phrase is a folder iff `isGridItem == false` or (`isGridItem == null` and `linkedBoardId != null`).
  */
 @JvmInline
@@ -68,9 +68,9 @@ fun FolderPhrase.toCategoryItem(): CategoryItem =
     CategoryItem(id = phrase.id, name = phrase.text)
 
 /**
- * UI-only view of a folder-Phrase. Persisted CategoryItem is replaced by
- * FolderPhrase; this type remains only as a compose UiModel mapper (Q7=a).
- * TODO: migrate screens to FolderPhrase directly and delete this alias.
+ * UI view of a folder-Phrase, and the entry type of the `categories` list in older
+ * backups. Categories are no longer persisted as CategoryItem; screens could use
+ * FolderPhrase directly, but the type must stay to read those backups.
  */
 @Serializable
 data class CategoryItem(
@@ -122,10 +122,6 @@ data class Settings(
     val ttsEngine: TtsEngine = TtsEngine.SYSTEM,
     // Reserved for a future desktop client: route TTS audio to a virtual microphone.
     val virtualMicEnabled: Boolean = false,
-    // Auto-update settings
-    val autoUpdateEnabled: Boolean = true,
-    val checkUpdateInterval: Long = 24 * 60 * 60 * 1000L, // 24 hours in milliseconds
-    val lastUpdateCheck: Long = 0L,
     // UI scaling settings (multipliers)
     val fontSizeScale: Float = 1.0f,
     val playbackIconScale: Float = 1.0f,
@@ -144,14 +140,6 @@ data class Settings(
     val startupBoardSetId: String? = null,
     // Partner window display (TD-I13 via FTDI FT232H) — desktop only
     val partnerWindowEnabled: Boolean = false,
-    // EVE ROM font index (16-34); 31 = largest standard ROM font
-    val partnerWindowFontSize: Int = 31,
-    // Number of text lines to show (1-4); word-wrapping is done in software
-    val partnerWindowMaxLines: Int = 2,
-    // Show idle face on partner window after 10s of no text input
-    val partnerWindowIdleEnabled: Boolean = true,
-    // On-screen keyboard scale (0.5 = half, 1.0 = normal, 2.0 = double)
-    val oskKeyboardScale: Float = 1.0f,
     // Optional product analytics (Aptabase on Android). Default is opt-out.
     val featureUsageReportingEnabled: Boolean = false,
     // Accessibility settings (OpenAAC)
@@ -207,52 +195,3 @@ data class Settings(
     val scanAutoAdvanceSeconds: Float = 1.2f
 )
 
-@Serializable
-data class AppVersion(
-    val version: String,
-    val major: Int,
-    val minor: Int,
-    val patch: Int
-) {
-    fun isNewerThan(other: AppVersion): Boolean {
-        return when {
-            major > other.major -> true
-            major < other.major -> false
-            minor > other.minor -> true
-            minor < other.minor -> false
-            patch > other.patch -> true
-            else -> false
-        }
-    }
-    
-    companion object {
-        fun parse(versionString: String): AppVersion {
-            val cleanVersion = versionString.removePrefix("v")
-            val parts = cleanVersion.split(".")
-            val major = parts.getOrNull(0)?.toIntOrNull() ?: 0
-            val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
-            val patch = parts.getOrNull(2)?.toIntOrNull() ?: 0
-            return AppVersion(cleanVersion, major, minor, patch)
-        }
-    }
-}
-
-@Serializable
-data class UpdateInfo(
-    val version: AppVersion,
-    val downloadUrl: String,
-    val releaseNotes: String,
-    val publishedAt: String,
-    val assetName: String,
-    val assetSize: Long
-)
-
-enum class UpdateStatus {
-    CHECKING,
-    AVAILABLE,
-    DOWNLOADING,
-    DOWNLOADED,
-    INSTALLING,
-    UP_TO_DATE,
-    ERROR
-}

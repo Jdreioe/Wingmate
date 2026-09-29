@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
@@ -166,7 +167,7 @@ fun SettingsScreen(
         keyboardController?.hide()
     }
 
-    PlatformBackHandler(enabled = true, onBack = { viewModel.onAction(SettingsAction.BackClicked) })
+    BackHandler(enabled = true, onBack = { viewModel.onAction(SettingsAction.BackClicked) })
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -393,8 +394,6 @@ private fun CategoryContent(
                 googleCredentialConfigured = state.googleCredentialConfigured,
                 onOpenGoogleSetup = { onAction(SettingsAction.GoogleSetupOpened) },
                 onClearGoogleCredentials = { onAction(SettingsAction.GoogleCredentialsCleared) },
-                virtualMic = settings.virtualMicEnabled,
-                onVirtualMicChange = { checked -> onAction(SettingsAction.VirtualMicChanged(checked)) },
                 onOpenVoiceSelection = { onAction(SettingsAction.VoiceSelectionOpened) },
                 onOpenLanguageSelection = { onAction(SettingsAction.LanguageSelectionOpened) },
                 onOpenF0Setup = { onAction(SettingsAction.F0SetupOpened) }
@@ -507,8 +506,6 @@ private fun CategoryContent(
                 startupMode = settings.startupMode,
                 startupBoardSetId = settings.startupBoardSetId,
                 availableBoardSets = state.boardSets,
-                partnerWindowEnabled = settings.partnerWindowEnabled,
-                partnerDeviceConnected = state.partnerDeviceConnected,
                 arasaacAvailable = state.arasaacAvailable,
                 cachedArasaacSymbols = state.cachedArasaacSymbols,
                 arasaacProgress = state.arasaacProgress,
@@ -525,9 +522,6 @@ private fun CategoryContent(
                 onStartupModeChange = { mode -> onAction(SettingsAction.StartupModeChanged(mode)) },
                 onStartupBoardSetChange = { boardSetId ->
                     onAction(SettingsAction.StartupBoardSetChanged(boardSetId))
-                },
-                onPartnerWindowChange = { checked ->
-                    onAction(SettingsAction.PartnerWindowChanged(checked))
                 },
                 onDownloadArasaac = { onAction(SettingsAction.DownloadArasaacClicked) },
                 onCreateBackup = { onAction(SettingsAction.CreateBackupClicked) },
@@ -594,9 +588,7 @@ private fun SettingsHomePage(
                 "tts", "azure", "system tts", "engine", "endpoint", "subscription",
                 "region", "key", "voice", stringResource(R.string.phrase_screen_voice_settings),
                 stringResource(R.string.voice_select_title), stringResource(R.string.common_language),
-                stringResource(R.string.ui_settings_virtual_mic_title),
-                stringResource(R.string.ui_settings_virtual_mic_desc),
-                "microphone", "zoom", "meet", "language"
+                "language"
             )
         ),
         SettingsCategoryItem(
@@ -675,14 +667,12 @@ private fun SettingsHomePage(
                 stringResource(R.string.ui_settings_symbols_download_title),
                 stringResource(R.string.ui_settings_symbols_download_desc),
                 stringResource(R.string.ui_settings_symbols_download),
-                stringResource(R.string.ui_settings_partner_window_title),
-                stringResource(R.string.ui_settings_partner_window_desc),
                 stringResource(R.string.phrase_screen_welcome_screen),
                 stringResource(R.string.backup_title),
                 stringResource(R.string.backup_create),
                 stringResource(R.string.backup_restore),
                 "startup", "arasaac", "offline",
-                "partner", "welcome", "boards", "screens", "backup", "restore"
+                "welcome", "boards", "screens", "backup", "restore"
             )
         )
     )
@@ -725,15 +715,6 @@ private fun SettingsHomePage(
                 stringResource(R.string.common_language),
                 "voice", "language"
             )
-        ),
-        SettingsCategoryItem(
-            tab = SettingsTab.Speech,
-            title = stringResource(R.string.ui_settings_virtual_mic_title),
-            subtitle = stringResource(R.string.ui_settings_virtual_mic_desc),
-            icon = Icons.Filled.RecordVoiceOver,
-            iconContainerColor = Color(0xFF78D6F7),
-            iconColor = Color(0xFF004E65),
-            keywords = listOf("microphone", "zoom", "meet", "virtual")
         ),
         // Display
         SettingsCategoryItem(
@@ -964,15 +945,6 @@ private fun SettingsHomePage(
             iconColor = Color(0xFF1D4E18),
             keywords = listOf("welcome", "onboarding")
         ),
-        SettingsCategoryItem(
-            tab = SettingsTab.General,
-            title = stringResource(R.string.ui_settings_partner_window_title),
-            subtitle = stringResource(R.string.ui_settings_partner_window_desc),
-            icon = Icons.Filled.Storage,
-            iconContainerColor = Color(0xFFA9D49A),
-            iconColor = Color(0xFF1D4E18),
-            keywords = listOf("partner", "display", "td-i13", "mirror")
-        ),
         pronunciationItem
     )
 
@@ -1111,8 +1083,6 @@ private fun SpeechSection(
     googleCredentialConfigured: Boolean,
     onOpenGoogleSetup: () -> Unit,
     onClearGoogleCredentials: () -> Unit,
-    virtualMic: Boolean,
-    onVirtualMicChange: (Boolean) -> Unit,
     onOpenVoiceSelection: () -> Unit = {},
     onOpenLanguageSelection: () -> Unit = {},
     onOpenF0Setup: () -> Unit = {}
@@ -1209,15 +1179,6 @@ private fun SpeechSection(
             icon = Icons.Filled.Language,
             onClick = onOpenLanguageSelection
         )
-        if (isDesktop()) {
-            SettingsGroupDivider()
-            SettingsSwitch(
-                checked = virtualMic,
-                onCheckedChange = onVirtualMicChange,
-                title = stringResource(R.string.ui_settings_virtual_mic_title),
-                description = stringResource(R.string.ui_settings_virtual_mic_desc)
-            )
-        }
     }
 }
 
@@ -1680,8 +1641,6 @@ private fun GeneralSection(
     startupMode: StartupMode,
     startupBoardSetId: String?,
     availableBoardSets: List<ObfBoardSet>,
-    partnerWindowEnabled: Boolean,
-    partnerDeviceConnected: Boolean,
     arasaacAvailable: Boolean,
     cachedArasaacSymbols: Int,
     arasaacProgress: ArasaacDownloadProgress?,
@@ -1692,7 +1651,6 @@ private fun GeneralSection(
     backupStatusMessage: String?,
     onStartupModeChange: (StartupMode) -> Unit,
     onStartupBoardSetChange: (String?) -> Unit,
-    onPartnerWindowChange: (Boolean) -> Unit,
     onDownloadArasaac: () -> Unit,
     onCreateBackup: () -> Unit,
     onRestoreBackup: () -> Unit,
@@ -1868,17 +1826,6 @@ private fun GeneralSection(
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.phrase_screen_welcome_screen))
             }
-        }
-    }
-
-    if (partnerDeviceConnected) {
-        SettingsGroup(title = stringResource(R.string.ui_settings_partner_window_group)) {
-            SettingsSwitch(
-                checked = partnerWindowEnabled,
-                onCheckedChange = onPartnerWindowChange,
-                title = stringResource(R.string.ui_settings_partner_window_title),
-                description = stringResource(R.string.ui_settings_partner_window_desc)
-            )
         }
     }
 }

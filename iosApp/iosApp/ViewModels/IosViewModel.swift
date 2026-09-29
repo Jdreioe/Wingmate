@@ -56,15 +56,10 @@ struct SentencePhraseToken: Identifiable, Equatable {    var id: String = UUID()
 final class IosViewModel: ObservableObject {
     private enum PendingSpeechRetry {
         case text(String)
-        case boardSentence(String, String)
     }
     private final class StoreObserver: NSObject, Shared.RxObserver {
         private let onNextState: (Shared.PhraseListStoreState) -> Void
         private let onCompleteState: () -> Void
-        init(onNext: @escaping (Shared.PhraseListStoreState) -> Void) {
-            self.onNextState = onNext
-            self.onCompleteState = {}
-        }
         init(onNext: @escaping (Shared.PhraseListStoreState) -> Void, onComplete: @escaping () -> Void) {
             self.onNextState = onNext
             self.onCompleteState = onComplete
@@ -202,9 +197,6 @@ final class IosViewModel: ObservableObject {
     // Pronunciation Dictionary
     @Published var pronunciations: [Shared.PronunciationEntry] = []
 
-    // Debug helpers
-    @Published var debugRepoName: String = ""
-    @Published var debugPersistedVoiceName: String = ""
     // Azure availability (subscription configured)
     @Published var azureConfigured: Bool = false
     @Published var googleConfigured: Bool = false
@@ -395,8 +387,6 @@ final class IosViewModel: ObservableObject {
 
     func start() async {
         await MainActor.run { IosDiBridge().startKoinWithOverridesBridge() }
-        let repoNameBefore = KoinBridge().debugVoiceRepositoryName()
-        print("DEBUG: After startKoinWithOverrides: Bound VoiceRepository = \(repoNameBefore)")
         self.store = communicationFacade.phraseListStore()
         let observer = StoreObserver(onNext: { [weak self] newState in self?.state = newState }, onComplete: { [weak self] in
             self?.disposable = nil
@@ -575,12 +565,6 @@ final class IosViewModel: ObservableObject {
     var filteredPhrases: [Shared.Phrase] {
         guard let sel = state.selectedCategoryId, !sel.isEmpty else { return state.phrases }
         return state.phrases.filter { $0.parentId == sel }
-    }
-
-    var isHistorySelected: Bool {
-        // We consider history selected when selectedCategoryId is nil but a shadow selection equals history
-        // The MainContentView will drive this by selecting our sentinel explicitly.
-        return false // The view controls selection via the chip; we keep store selection separate.
     }
 
     func insertPhraseText(_ phrase: Shared.Phrase) {
@@ -784,8 +768,6 @@ final class IosViewModel: ObservableObject {
         switch retry {
         case .text(let text):
             speak(text)
-        case .boardSentence(let text, let boardSetId):
-            speakBoardSentence(text, boardSetId: boardSetId)
         }
     }
 
@@ -958,12 +940,6 @@ final class IosViewModel: ObservableObject {
                 }
             }
         }
-    }
-
-    func setUseSystemTts(_ enabled: Bool) {
-        self.useSystemTts = enabled
-        UserDefaults.standard.set(enabled, forKey: "use_system_tts")
-        Task { _ = try? await speechFacade.updateUseSystemTts(enabled: enabled) }
     }
 
     func setTtsEngine(_ engine: String) {
@@ -1235,15 +1211,6 @@ final class IosViewModel: ObservableObject {
                 self.selectedVoice = pv
                 if let langs = pv.supportedLanguages { self.availableLanguages = langs } else { self.availableLanguages = [] }
                 self.primaryLanguage = effectiveLanguage(for: pv)
-                #if DEBUG
-                let name = (pv.displayName ?? pv.name) ?? "—"
-                let lang = effectiveLanguage(for: pv)
-                print("DEBUG: speechFacade.selectedVoice() => \(name) [\(lang)]")
-                #endif
-            } else {
-                #if DEBUG
-                print("DEBUG: speechFacade.selectedVoice() => (none)")
-                #endif
             }
         } catch {
             // swallow for now
@@ -1449,56 +1416,6 @@ final class IosViewModel: ObservableObject {
     }
     #endif
 
-    private func hasAudioPath(_ path: String?) -> Bool {
-        guard let path = path else { return false }
-        return !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func resolveLastAudioPath() -> String? {
-        let normalizedInput = input.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // 1) Prefer an exact match to current input if available.
-        if !normalizedInput.isEmpty,
-           let byText = historyPhrases.first(where: {
-               let t = ($0.text).trimmingCharacters(in: .whitespacesAndNewlines)
-               let n = ($0.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-               return (t == normalizedInput || n == normalizedInput) && hasAudioPath($0.recordingPath)
-           }),
-           let path = byText.recordingPath {
-            return path
-        }
-
-        // 2) Fall back to the most recent history entry with audio.
-        if let fromHistory = historyPhrases.first(where: { hasAudioPath($0.recordingPath) }),
-           let path = fromHistory.recordingPath {
-            return path
-        }
-
-        // 3) Last fallback: any stored phrase recording.
-        if let fromPhrases = state.phrases.first(where: { hasAudioPath($0.recordingPath) }),
-           let path = fromPhrases.recordingPath {
-            return path
-        }
-
-        return nil
-    }
-
-    var hasShareableAudio: Bool {
-        resolveLastAudioPath() != nil
-    }
-    
-    // MARK: - Sharing
-    func shareLastAudio() {
-        guard let path = resolveLastAudioPath() else { return }
-        bridge.shareAudio(path: path)
-    }
-
-    func copyLastAudio() {
-        guard let path = resolveLastAudioPath() else { return }
-        // Fallback to share to avoid framework symbol mismatch when copyAudio is not exported in current build.
-        bridge.shareAudio(path: path)
-    }
-    
     // MARK: - Pronunciations
     func loadPronunciations() async {
         do {
@@ -1609,7 +1526,7 @@ final class IosViewModel: ObservableObject {
                 .sorted { $0.updatedAt > $1.updatedAt }
         } catch {
             boardSets = []
-            boardStatusMessage = NSLocalizedString("board_sets_load_error", comment: "")
+            boardStatusMessage = NSLocalizedString("board_sets.error.load_failed", comment: "")
         }
 
         if selectedBoardSetId == nil || !boardSets.contains(where: { $0.id == selectedBoardSetId }) {
@@ -2051,12 +1968,6 @@ final class IosViewModel: ObservableObject {
         highlightedButtonId = current
     }
 
-    func clearBoardSelectionHighlight() {
-        selectionHighlightGeneration += 1
-        bridge.selectionHighlightClear()
-        highlightedButtonId = nil
-    }
-
     // #118: per-target activation debounce. A zero duration disables the guard entirely.
     private var lastActivationAtMillis: [String: Int64] = [:]
     private func acceptActivation(targetId: String) -> Bool {
@@ -2098,29 +2009,6 @@ final class IosViewModel: ObservableObject {
 
     func boardPrediction(for buttonId: String) -> String? {
         boardPredictionsByButtonId[buttonId]
-    }
-
-    func saveSelectedBoardSet() async {
-        guard let board = selectedBoard else {
-            boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
-            return
-        }
-        guard !selectedBoardSetLocked else {
-            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
-            return
-        }
-
-        do {
-            let saved = try await boardsFacade.saveBoard(board: board)
-            if saved.boolValue {
-                if let setId = selectedBoardSetId { _ = try? await boardsFacade.touchBoardSet(id: setId) }
-                touchSelectedBoardSet(statusKey: "boardset.status.saved")
-            } else {
-                boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
-            }
-        } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
-        }
     }
 
     func renameSelectedBoardSet(_ name: String) async {
@@ -2208,7 +2096,7 @@ final class IosViewModel: ObservableObject {
             selectedBoardId = updated.rootBoardId
             await loadSelectedBoard()
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.delete_failed", comment: "")
+            boardStatusMessage = NSLocalizedString("boardset.error.delete_board_failed", comment: "")
         }
     }
 
@@ -2223,7 +2111,7 @@ final class IosViewModel: ObservableObject {
                     ? NSLocalizedString("boardset.status.locked", comment: "")
                     : NSLocalizedString("boardset.status.unlocked", comment: "")
             } catch {
-                boardStatusMessage = NSLocalizedString("board_sets_lock_error", comment: "")
+                boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
             }
         }
     }
@@ -2244,9 +2132,9 @@ final class IosViewModel: ObservableObject {
                     boardFieldItems = []
                 }
             }
-            boardStatusMessage = NSLocalizedString("boardset.status.deleted", comment: "")
+            boardStatusMessage = NSLocalizedString("board_sets.status.deleted", comment: "")
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.delete_failed", comment: "")
+            boardStatusMessage = NSLocalizedString("board_sets.error.delete_failed", comment: "")
         }
     }
 
@@ -2258,10 +2146,10 @@ final class IosViewModel: ObservableObject {
                 selectedBoardSetId = info.id
                 selectedBoardId = info.rootBoardId
                 await loadSelectedBoard()
-                boardStatusMessage = NSLocalizedString("boardset.status.duplicated", comment: "")
+                boardStatusMessage = NSLocalizedString("board_sets.status.duplicated", comment: "")
             }
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.duplicate_failed", comment: "")
+            boardStatusMessage = NSLocalizedString("board_sets.error.duplicate_failed", comment: "")
         }
     }
 }

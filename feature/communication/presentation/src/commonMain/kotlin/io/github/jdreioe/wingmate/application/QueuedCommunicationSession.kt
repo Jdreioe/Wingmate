@@ -114,9 +114,6 @@ class QueuedCommunicationSession(
                     )
                 )
             }
-            is CommunicationAction.InsertPart -> mutateSnapshot { snapshot ->
-                snapshot.copy(activeMessage = snapshot.activeMessage.insertPart(action.cursor, action.part))
-            }
             is CommunicationAction.AppendPart -> mutateSnapshot { snapshot ->
                 snapshot.copy(
                     activeMessage = snapshot.activeMessage.appendPart(action.part, action.spellingMode)

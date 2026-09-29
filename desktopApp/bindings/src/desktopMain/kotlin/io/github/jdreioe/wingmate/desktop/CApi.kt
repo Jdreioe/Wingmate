@@ -13,6 +13,8 @@ import kotlinx.cinterop.nativeHeap
 import kotlinx.cinterop.set
 import kotlinx.cinterop.toKString
 import kotlin.native.CName
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 private fun CPointer<ByteVar>?.string(): String = this?.toKString().orEmpty()
 
@@ -26,23 +28,8 @@ private fun ownedCString(value: String): CPointer<ByteVar> {
 
 private inline fun call(context: COpaquePointer?, block: DesktopCore.() -> String): CPointer<ByteVar> {
     val result = runCatching { context!!.asStableRef<DesktopCore>().get().block() }
-        .getOrElse { "{\"error\":${jsonString(it.message ?: "Desktop core operation failed")}}" }
+        .getOrElse { JsonObject(mapOf("error" to JsonPrimitive(it.message ?: "Desktop core operation failed"))).toString() }
     return ownedCString(result)
-}
-
-private fun jsonString(value: String): String = buildString {
-    append('"')
-    value.forEach { character ->
-        when (character) {
-            '"' -> append("\\\"")
-            '\\' -> append("\\\\")
-            '\n' -> append("\\n")
-            '\r' -> append("\\r")
-            '\t' -> append("\\t")
-            else -> append(character)
-        }
-    }
-    append('"')
 }
 
 @CName("wm_create")

@@ -68,7 +68,6 @@ class SettingsFacade(
     suspend fun updateSelectionDebounceMillis(millis: Long) = updateSettings { it.copy(selectionDebounceMillis = millis.coerceIn(0, 1_000)) }
     suspend fun updateSelectionSoundEnabled(enabled: Boolean) = updateSettings { it.copy(selectionSoundEnabled = enabled) }
     suspend fun updateAuditoryFishingEnabled(enabled: Boolean) = updateSettings { it.copy(auditoryFishingEnabled = enabled) }
-    suspend fun updateSelectionHighlightMillis(millis: Long) = updateSettings { it.copy(selectionHighlightMillis = millis.coerceIn(0, 5_000)) }
     suspend fun updateSpeechPolicy(policy: String) = updateSettings {
         it.copy(speechPolicy = runCatching { SpeechPolicy.valueOf(policy) }.getOrDefault(SpeechPolicy.Immediate))
     }
@@ -88,8 +87,6 @@ class SettingsFacade(
 
     suspend fun updateBoardShowSpeakButton(enabled: Boolean) = updateSettings { it.copy(boardShowSpeakButton = enabled) }
 
-    suspend fun updateBoardMessageBarEditable(editable: Boolean) = updateSettings { it.copy(boardMessageBarEditable = editable) }
-
     suspend fun updateUsageLoggingEnabled(enabled: Boolean) {
         updateSettings { it.copy(usageLoggingEnabled = enabled) }
         aacLogger.setEnabled(enabled)
@@ -101,8 +98,6 @@ class SettingsFacade(
         updateSettings { it.copy(featureUsageReportingEnabled = enabled) }
         featureUsageReporter.setEnabled(enabled)
     }
-
-    suspend fun startupUsesScreens(): Boolean = settingsUseCase.get().startupMode == StartupMode.Screens
 
     suspend fun iosSettingsFlags(): IosSettingsFlags {
         val settings = settingsUseCase.get()

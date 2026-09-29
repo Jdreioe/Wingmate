@@ -3,9 +3,7 @@ import io.github.jdreioe.wingmate.application.CommunicationFacade
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStoreFactory
 import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
-import io.github.jdreioe.wingmate.application.usecase.GetAllItemsUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
-import io.github.jdreioe.wingmate.application.usecase.MovePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PhraseRepository
@@ -15,7 +13,6 @@ import io.github.jdreioe.wingmate.infrastructure.InMemorySaidTextRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -39,7 +36,7 @@ class CommunicationFacadeTest {
     }
 
     @Test
-    fun historyListsOnlyVisibleSaidTextsAsPhrases() = runBlocking {
+    fun historyListsOnlyVisibleSaidTextsAsPhrases() = withFakeMain {
         val saidRepo = InMemorySaidTextRepository()
         val facade = facade(saidRepo)
 
@@ -104,8 +101,6 @@ class CommunicationFacadeTest {
             addPhraseUseCase = AddPhraseUseCase(phraseRepo),
             deletePhraseUseCase = DeletePhraseUseCase(phraseRepo),
             updatePhraseUseCase = UpdatePhraseUseCase(phraseRepo),
-            movePhraseUseCase = MovePhraseUseCase(phraseRepo),
-            getAllItemsUseCase = GetAllItemsUseCase(phraseRepo),
             phraseRepository = phraseRepo,
         ).create()
         return CommunicationFacade(

@@ -32,7 +32,9 @@ class MessageTest {
             phrase = Phrase(id = "tea", text = "Tea", createdAt = 1),
         )
 
-        val edited = original.edit("Hot Tea").edit("Hot Tea please")
+        val edited = original
+            .replaceRange(0, 0, MessagePart("Hot "))
+            .replaceRange(7, 7, MessagePart(" please"))
 
         assertEquals("Hot Tea please", edited.displayText)
         assertIs<MessagePartSource.Phrase>(edited.parts.single { it.displayText == "Tea" }.source)
@@ -99,8 +101,8 @@ class MessageTest {
             source = MessagePartSource.Phrase("wc"),
         )
 
-        val edited = Message(parts = listOf(originalPart)).edit("Bathroom")
-        val restored = edited.edit("WC")
+        val edited = Message(parts = listOf(originalPart)).replaceRange(0, 2, MessagePart("Bathroom"))
+        val restored = edited.replaceRange(0, 8, MessagePart("WC"))
 
         assertIs<MessagePartSource.Typed>(edited.parts.single().source)
         assertEquals(listOf(MessageEditProvenance(TextSpan(0, 8), originalPart)), edited.editProvenance)

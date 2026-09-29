@@ -128,18 +128,5 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
             .onAppear {
                 Task { await model.start() }
             }
-            .onChange(of: model.selectedVoice?.name ?? String()) { _, _ in
-                #if DEBUG
-                let v = model.selectedVoice
-                let name = (v?.displayName ?? v?.name) ?? "—"
-                let lang = v.map { model.effectiveLanguage(for: $0) } ?? "-"
-                print("DEBUG: Selected voice \(name) [\(lang)]")
-                #endif
-            }
-            .onChange(of: model.primaryLanguage) { _, lang in
-                #if DEBUG
-                print("DEBUG: Primary language \(lang)")
-                #endif
-            }
     }
 }
