@@ -46,8 +46,6 @@ object OpenSymbolsClient {
         proxyBaseUrl = normalizeProxyBaseUrl(url)
     }
 
-    fun isConfigured(): Boolean = proxyBaseUrl != null
-
     suspend fun search(
         query: String,
         locale: String = "en",

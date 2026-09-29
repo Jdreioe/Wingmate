@@ -188,8 +188,7 @@ class BoardImportServiceTest {
             fileStorage = storage
         )
 
-        val set = service.importBoardSetFromPath("board.obf")
-        assertNotNull(set)
+        val set = assertIs<BoardImportResult.Success>(service.importBoardSetFromPathResult("board.obf")).boardSet
         assertEquals(1, set.boardIds.size)
         val board = boardRepo.getBoard(set.rootBoardId)
         assertNotNull(board)
@@ -283,8 +282,7 @@ class BoardImportServiceTest {
             fileStorage = storage
         )
 
-        val set = service.importBoardSetFromPath("pack.obz")
-        assertNotNull(set)
+        val set = assertIs<BoardImportResult.Success>(service.importBoardSetFromPathResult("pack.obz")).boardSet
         assertEquals(2, set.boardIds.size)
         assertEquals(false, set.screenSettings.showSymbols)
         assertEquals(BoardActivationBehavior.AddOnly, set.screenSettings.activationBehavior)

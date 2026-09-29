@@ -108,13 +108,6 @@ object AzureTtsClient {
             }
         }
     }
-    
-    /**
-     * Backward compatibility method with default audio format
-     */
-    suspend fun synthesize(client: HttpClient, ssml: String, config: SpeechServiceConfig): ByteArray {
-        return synthesize(client, ssml, config, AudioFormat.MP3_24KHZ_160KBPS)
-    }
 
     /**
      * Enhanced SSML generation with better voice parameter support
@@ -539,92 +532,6 @@ object AzureTtsClient {
 
     private const val MATHML_NAMESPACE = "http://www.w3.org/1998/Math/MathML"
     
-    // ========================================================================
-    // TOKEN-BASED AUTHENTICATION (Secure Backend)
-    // ========================================================================
-    
-    /**
-     * Synthesize speech using a bearer token instead of subscription key.
-     *
-     * The token comes from a short-lived exchange performed by the caller;
-     * this method never needs a stored subscription key.
-     *
-     * @param client Ktor HTTP client
-     * @param ssml The SSML document to synthesize
-     * @param token Bearer token
-     * @param region Azure region (e.g., "eastus")
-     * @param audioFormat Desired audio format
-     */
-    suspend fun synthesizeWithToken(
-        client: HttpClient,
-        ssml: String,
-        token: String,
-        region: String,
-        audioFormat: AudioFormat = AudioFormat.MP3_24KHZ_160KBPS
-    ): ByteArray {
-        val endpoint = requireAzureSpeechEndpoint(region)
-        requireCredentialSafeClient(client)
-        val url = endpoint.synthesisUrl
-        
-        OperationalLogger.info("azure_tts.token_synthesize", "started")
-        
-        try {
-            val response: HttpResponse = client.post(url) {
-                headers {
-                    // Use Bearer token instead of subscription key
-                    append(HttpHeaders.Authorization, "Bearer $token")
-                    append(HttpHeaders.ContentType, "application/ssml+xml")
-                    append("X-Microsoft-OutputFormat", audioFormat.value)
-                    append(HttpHeaders.UserAgent, "WingmateKMP/2.0")
-                    append(HttpHeaders.Accept, "audio/*")
-                }
-                setBody(ssml)
-            }
-            
-            OperationalLogger.info("azure_tts.token_synthesize", "response_received", statusCode = response.status.value)
-            
-            when {
-                response.status.isSuccess() -> {
-                    val bytes = response.body<ByteArray>()
-                    OperationalLogger.info("azure_tts.token_synthesize", "succeeded", count = bytes.size)
-                    
-                    if (bytes.isEmpty()) {
-                        throw RuntimeException("Azure TTS returned empty audio data")
-                    }
-                    return bytes
-                }
-                response.status.value == 401 -> {
-                    OperationalLogger.warn("azure_tts.token_synthesize", "authentication_failed", statusCode = 401)
-                    throw TokenExpiredException("Azure TTS token expired or invalid")
-                }
-                response.status.value == 429 -> {
-                    OperationalLogger.warn("azure_tts.token_synthesize", "rate_limited", statusCode = 429)
-                    throw RuntimeException("Azure TTS rate limit exceeded. Please try again later.")
-                }
-                else -> {
-                    OperationalLogger.error(
-                        operation = "azure_tts.token_synthesize",
-                        outcome = "failed",
-                        statusCode = response.status.value,
-                    )
-                    throw RuntimeException("Azure TTS failed: ${response.status}")
-                }
-            }
-        } catch (e: TokenExpiredException) {
-            throw e
-        } catch (e: RuntimeException) {
-            throw e
-        } catch (e: Exception) {
-            OperationalLogger.error(
-                operation = "azure_tts.token_synthesize",
-                outcome = "network_failed",
-                exceptionClass = e.loggingClassName(),
-            )
-            throw RuntimeException("Azure TTS network error", e)
-        }
-    }
-
-    
     suspend fun getVoices(
         client: HttpClient, 
         config: SpeechServiceConfig
@@ -708,9 +615,3 @@ object AzureTtsClient {
         }
     }
 }
-
-/**
- * Exception thrown when the Azure TTS token has expired.
- * The caller should invalidate the cached token and request a new one.
- */
-class TokenExpiredException(message: String) : Exception(message)
