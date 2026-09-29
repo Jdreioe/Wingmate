@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -140,7 +141,7 @@ internal fun BoardSettingsScreen(
         if (preference != null) preference = null else finish()
     }
 
-    PlatformBackHandler(enabled = true, onBack = ::handleBack)
+    BackHandler(enabled = true, onBack = ::handleBack)
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),

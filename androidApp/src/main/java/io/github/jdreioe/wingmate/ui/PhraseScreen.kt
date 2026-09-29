@@ -97,6 +97,7 @@ import androidx.compose.ui.res.stringResource
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
 
+import com.hojmoseit.wingmate.BuildConfig
 import com.hojmoseit.wingmate.R
 /** Input surface under the Message bar. They take turns; only one is ever shown. */
 private enum class TypingInputSurface { Keyboard, Tray }
@@ -149,8 +150,7 @@ fun PhraseScreen(
     val typingScreenUseCase = koinInject<TypingScreenUseCase>()
     val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
 
-    val releaseBuild = isReleaseBuild()
-    val predictionsEnabled = !releaseBuild
+    val predictionsEnabled = BuildConfig.DEBUG
     val predictionService = remember(koin, predictionsEnabled) {
         if (predictionsEnabled) koin.getOrNull<TextPredictionService>() else null
     }

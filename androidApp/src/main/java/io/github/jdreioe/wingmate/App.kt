@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,7 +16,6 @@ import io.github.jdreioe.wingmate.ui.PhraseScreen
 import io.github.jdreioe.wingmate.ui.BoardSetManagerRoot
 import io.github.jdreioe.wingmate.ui.BoardWorkspaceMode
 import io.github.jdreioe.wingmate.ui.AppTheme
-import io.github.jdreioe.wingmate.ui.PlatformBackHandler
 import io.github.jdreioe.wingmate.ui.InteractionInputRoot
 import io.github.jdreioe.wingmate.ui.rememberReactiveSettings
 import io.github.jdreioe.wingmate.domain.SettingsRepository
@@ -177,7 +177,7 @@ fun App() {
                 )
             }
 
-            PlatformBackHandler(enabled = currentScreen == Screen.BoardSets) {
+            BackHandler(enabled = currentScreen == Screen.BoardSets) {
                 createBoardSetOnLaunch = false
                 startupBoardSetId = null
                 currentScreen = Screen.Phrases

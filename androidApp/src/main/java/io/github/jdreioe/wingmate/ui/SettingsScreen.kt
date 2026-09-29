@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
@@ -166,7 +167,7 @@ fun SettingsScreen(
         keyboardController?.hide()
     }
 
-    PlatformBackHandler(enabled = true, onBack = { viewModel.onAction(SettingsAction.BackClicked) })
+    BackHandler(enabled = true, onBack = { viewModel.onAction(SettingsAction.BackClicked) })
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
