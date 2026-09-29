@@ -1609,7 +1609,7 @@ final class IosViewModel: ObservableObject {
                 .sorted { $0.updatedAt > $1.updatedAt }
         } catch {
             boardSets = []
-            boardStatusMessage = NSLocalizedString("board_sets_load_error", comment: "")
+            boardStatusMessage = NSLocalizedString("board_sets.error.load_failed", comment: "")
         }
 
         if selectedBoardSetId == nil || !boardSets.contains(where: { $0.id == selectedBoardSetId }) {
@@ -2208,7 +2208,7 @@ final class IosViewModel: ObservableObject {
             selectedBoardId = updated.rootBoardId
             await loadSelectedBoard()
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.delete_failed", comment: "")
+            boardStatusMessage = NSLocalizedString("boardset.error.delete_board_failed", comment: "")
         }
     }
 
@@ -2223,7 +2223,7 @@ final class IosViewModel: ObservableObject {
                     ? NSLocalizedString("boardset.status.locked", comment: "")
                     : NSLocalizedString("boardset.status.unlocked", comment: "")
             } catch {
-                boardStatusMessage = NSLocalizedString("board_sets_lock_error", comment: "")
+                boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
             }
         }
     }
@@ -2244,9 +2244,9 @@ final class IosViewModel: ObservableObject {
                     boardFieldItems = []
                 }
             }
-            boardStatusMessage = NSLocalizedString("boardset.status.deleted", comment: "")
+            boardStatusMessage = NSLocalizedString("board_sets.status.deleted", comment: "")
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.delete_failed", comment: "")
+            boardStatusMessage = NSLocalizedString("board_sets.error.delete_failed", comment: "")
         }
     }
 
@@ -2258,10 +2258,10 @@ final class IosViewModel: ObservableObject {
                 selectedBoardSetId = info.id
                 selectedBoardId = info.rootBoardId
                 await loadSelectedBoard()
-                boardStatusMessage = NSLocalizedString("boardset.status.duplicated", comment: "")
+                boardStatusMessage = NSLocalizedString("board_sets.status.duplicated", comment: "")
             }
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.duplicate_failed", comment: "")
+            boardStatusMessage = NSLocalizedString("board_sets.error.duplicate_failed", comment: "")
         }
     }
 }

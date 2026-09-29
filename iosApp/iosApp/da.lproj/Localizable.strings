@@ -121,6 +121,8 @@
 "phrase.edit" = "Rediger";
 "phrase.play_tts" = "Afspil";
 "phrase.record" = "Optag";
+"phrase.play_recording" = "Afspil optagelse";
+"phrase.record.replace" = "Erstat optagelse";
 "textfield.mark_secondary_language" = "Markér til andet sprog";
 "phrase.title" = "Titel";
 "phrase.title.placeholder" = "Titel";
@@ -128,6 +130,8 @@
 "common.search" = "Søg";
 "common.clear" = "Ryd";
 "common.stop" = "Stop";
+"common.play" = "Afspil";
+"common.delete" = "Slet";
 
 "phrase.recording" = "Optagelse";
 "phrase.mic_permission_denied" = "Mikrofontilladelse afvist. Aktiver den i Indstillinger.";
@@ -384,6 +388,7 @@
 "board_sets.status.duplicated" = "Skærm duplikeret.";
 "board_sets.error.delete_failed" = "Skærmen kunne ikke slettes.";
 "board_sets.error.duplicate_failed" = "Skærmen kunne ikke duplikeres.";
+"board_sets.error.load_failed" = "Skærmene kunne ikke indlæses.";
 "board_workspace.editing" = "Redigerer %@";
 "board_workspace.finish" = "Færdig";
 "board_workspace.undo" = "Fortryd";
@@ -487,6 +492,7 @@
 "boardset.make_home" = "Brug som startside";
 "boardset.delete_board" = "Slet side";
 "boardset.delete_board.message" = "Vil du slette denne side? Links til den fjernes også.";
+"boardset.error.delete_board_failed" = "Siden kunne ikke slettes.";
 "boardset.background_color" = "Sidebaggrund";
 "boardset.background_custom" = "Brug en brugerdefineret baggrund";
 "boardset.background_footer" = "Slå dette fra for at bruge appens tema.";

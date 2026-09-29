@@ -118,6 +118,8 @@
 "phrase.edit" = "Bearbeiten";
 "phrase.play_tts" = "Abspielen";
 "phrase.record" = "Aufnehmen";
+"phrase.play_recording" = "Aufnahme abspielen";
+"phrase.record.replace" = "Aufnahme ersetzen";
 "textfield.mark_secondary_language" = "Für Zweitsprache markieren";
 "phrase.title" = "Titel";
 "phrase.title.placeholder" = "Titel";
@@ -125,6 +127,8 @@
 "common.search" = "Suchen";
 "common.clear" = "Löschen";
 "common.stop" = "Stopp";
+"common.play" = "Abspielen";
+"common.delete" = "Löschen";
 
 "phrase.recording" = "Aufnahme";
 "phrase.mic_permission_denied" = "Mikrofonberechtigung verweigert. Aktiviere sie in den Einstellungen.";
@@ -381,6 +385,7 @@
 "board_sets.status.duplicated" = "Bildschirm dupliziert.";
 "board_sets.error.delete_failed" = "Bildschirm konnte nicht gelöscht werden.";
 "board_sets.error.duplicate_failed" = "Bildschirm konnte nicht dupliziert werden.";
+"board_sets.error.load_failed" = "Bildschirme konnten nicht geladen werden.";
 "board_workspace.editing" = "%@ wird bearbeitet";
 "board_workspace.finish" = "Fertig";
 "board_workspace.undo" = "Rückgängig";
@@ -475,6 +480,7 @@
 "boardset.make_home" = "Als Startseite festlegen";
 "boardset.delete_board" = "Seite löschen";
 "boardset.delete_board.message" = "Diese Seite löschen? Verknüpfungen zu ihr werden ebenfalls entfernt.";
+"boardset.error.delete_board_failed" = "Seite konnte nicht gelöscht werden.";
 "boardset.create_kind" = "Tafeltyp";
 "boardset.create_blank" = "Leere Tafel";
 "boardset.create_keyboard_qwerty" = "QWERTY-Tastatur";

@@ -43,7 +43,6 @@
 "welcome_flow.skip" = "Skip for now";
 "welcome_flow.next" = "Next";
 "welcome_flow.back" = "Back";
-"welcome_flow.finish" = "Finish Setup";
 
 "tts.placeholder" = "Type text to speak";
 "toolbar.language" = "Language";
@@ -124,6 +123,8 @@
 "phrase.edit" = "Edit";
 "phrase.play_tts" = "Play";
 "phrase.record" = "Record";
+"phrase.play_recording" = "Play recording";
+"phrase.record.replace" = "Replace recording";
 "textfield.mark_secondary_language" = "Mark for second language";
 "phrase.title" = "Title";
 "phrase.title.placeholder" = "Title";
@@ -131,6 +132,8 @@
 "common.search" = "Search";
 "common.clear" = "Clear";
 "common.stop" = "Stop";
+"common.play" = "Play";
+"common.delete" = "Delete";
 
 "phrase.recording" = "Recording";
 "phrase.mic_permission_denied" = "Microphone permission denied. Enable it in Settings.";
@@ -478,6 +481,7 @@
 "board_sets.status.duplicated" = "Screen duplicated.";
 "board_sets.error.delete_failed" = "Failed to delete screen.";
 "board_sets.error.duplicate_failed" = "Failed to duplicate screen.";
+"board_sets.error.load_failed" = "Could not load screens.";
 "board_workspace.editing" = "Editing %@";
 "board_workspace.finish" = "Finish";
 "board_workspace.undo" = "Undo";
@@ -490,6 +494,7 @@
 "boardset.make_home" = "Set as Start Page";
 "boardset.delete_board" = "Delete Page";
 "boardset.delete_board.message" = "Delete this page? Links to it will also be removed.";
+"boardset.error.delete_board_failed" = "Could not delete page.";
 "boardset.background_color" = "Page background";
 "boardset.background_custom" = "Use a custom background";
 "boardset.background_footer" = "Turn this off to inherit the app theme.";
