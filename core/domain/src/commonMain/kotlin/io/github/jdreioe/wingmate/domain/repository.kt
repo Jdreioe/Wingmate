@@ -153,15 +153,6 @@ interface BoardSpeechCache {
     suspend fun cacheAll()
 }
 
-interface UpdateService {
-    suspend fun checkForUpdates(): UpdateInfo?
-    suspend fun downloadUpdate(updateInfo: UpdateInfo): Result<String>
-    suspend fun installUpdate(downloadPath: String): Result<Unit>
-    fun getCurrentVersion(): AppVersion
-    suspend fun getUpdateStatus(): UpdateStatus
-    suspend fun setUpdateStatus(status: UpdateStatus)
-}
-
 /**
  * Prediction result containing word and letter suggestions.
  */
