@@ -19,6 +19,7 @@ import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
 import io.github.jdreioe.wingmate.domain.TextPredictionService
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import kotlinx.coroutines.CancellationException
@@ -42,6 +43,10 @@ import kotlin.time.Clock
 /**
  * Owns the current communication and serializes persistence and playback behind
  * one state/action interface. Callers never wait for either side effect.
+ *
+ * Speech uses the engine selected when the request was accepted. If a cloud engine
+ * fails, the request continues with the device voice and a non-blocking
+ * [CommunicationFailureKind.SpeechFallback] explains why the voice changed.
  */
 class QueuedCommunicationSession(
     private val dataSource: CommunicationSessionDataSource,
@@ -176,7 +181,7 @@ class QueuedCommunicationSession(
             CommunicationAction.Stop -> stop()
             CommunicationAction.RetryPersistence -> saveRequests.trySend(Unit)
             CommunicationAction.DismissFailure -> mutableState.update { current ->
-                if (current.lastFailure?.kind == CommunicationFailureKind.Playback) {
+                if (current.lastFailure?.kind != CommunicationFailureKind.Persistence) {
                     current.copy(lastFailure = null)
                 } else {
                     current
@@ -306,6 +311,7 @@ class QueuedCommunicationSession(
             recordHistory = recordHistory,
             visibleInHistory = settings.historyVisible,
             primaryLanguage = settings.primaryLanguage,
+            engine = settings.ttsEngine,
         )
         mutableState.update { current ->
             current.copy(queuedSpeechCount = current.queuedSpeechCount + 1)
@@ -378,6 +384,31 @@ class QueuedCommunicationSession(
 
     private suspend fun playMessage(request: SpeechRequest, generation: Long) {
         val pending = mutableListOf<SpeechChunk>()
+        // Once the cloud fails, finish the rest of this request on the device voice.
+        var engine = request.engine
+
+        suspend fun speakPending(segments: List<SpeechSegment>, voice: Voice?) {
+            if (segments.any { !it.languageTag.isNullOrBlank() }) {
+                speechService.speakSegmentsWithoutHistory(
+                    segments = segments,
+                    voice = voice,
+                    pitch = voice?.pitch,
+                    rate = request.rateOverride ?: voice?.rate,
+                    cacheAudio = request.cacheAudio,
+                    engine = engine,
+                )
+            } else {
+                speechService.speakWithoutHistory(
+                    text = segments.joinToString("") { it.text },
+                    voice = voice,
+                    pitch = voice?.pitch,
+                    rate = request.rateOverride ?: voice?.rate,
+                    cacheAudio = request.cacheAudio,
+                    engine = engine,
+                )
+            }
+            awaitPlayback()
+        }
 
         suspend fun flushPending() {
             if (pending.isEmpty()) return
@@ -390,25 +421,18 @@ class QueuedCommunicationSession(
             mutableState.update { current ->
                 current.copy(playbackStatus = CommunicationPlaybackStatus.Playing)
             }
-            if (segments.any { !it.languageTag.isNullOrBlank() }) {
-                speechService.speakSegmentsWithoutHistory(
-                    segments = segments,
-                    voice = voice,
-                    pitch = voice?.pitch,
-                    rate = request.rateOverride ?: voice?.rate,
-                    cacheAudio = request.cacheAudio,
-                )
-            } else {
-                speechService.speakWithoutHistory(
-                    text = pending.joinToString("") { it.text },
-                    voice = voice,
-                    pitch = voice?.pitch,
-                    rate = request.rateOverride ?: voice?.rate,
-                    cacheAudio = request.cacheAudio,
-                )
+            try {
+                speakPending(segments, voice)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (cloudFailure: Throwable) {
+                if (engine == TtsEngine.SYSTEM) throw cloudFailure
+                ensureNotStopped(generation)
+                engine = TtsEngine.SYSTEM
+                markFailure(CommunicationFailureKind.SpeechFallback)
+                speakPending(segments, voice)
             }
             pending.clear()
-            awaitPlayback()
             ensureNotStopped(generation)
         }
 
@@ -506,8 +530,10 @@ class QueuedCommunicationSession(
         stopping.start()
     }
 
-    private fun markPlaybackFailure() {
-        val failure = CommunicationFailure(++failureSequence, CommunicationFailureKind.Playback)
+    private fun markPlaybackFailure() = markFailure(CommunicationFailureKind.Playback)
+
+    private fun markFailure(kind: CommunicationFailureKind) {
+        val failure = CommunicationFailure(++failureSequence, kind)
         mutableState.update { current -> current.copy(lastFailure = failure) }
     }
 
@@ -537,6 +563,7 @@ private data class SpeechRequest(
     val recordHistory: Boolean,
     val visibleInHistory: Boolean,
     val primaryLanguage: String,
+    val engine: TtsEngine,
 )
 
 private data class SpeechChunk(

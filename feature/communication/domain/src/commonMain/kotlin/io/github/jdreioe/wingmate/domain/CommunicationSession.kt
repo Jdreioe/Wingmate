@@ -26,6 +26,8 @@ enum class CommunicationPlaybackStatus {
 enum class CommunicationFailureKind {
     Persistence,
     Playback,
+    /** The cloud voice failed, so the device voice spoke instead. The Message was still spoken. */
+    SpeechFallback,
 }
 
 data class CommunicationFailure(
