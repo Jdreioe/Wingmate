@@ -22,8 +22,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.Locale
 
-fun isDesktop(): Boolean = false
-
 fun isReleaseBuild(): Boolean = runCatching {
 	// Resolve app-module BuildConfig at runtime so common UI can detect Android release builds.
 	val buildConfig = Class.forName("com.hojmoseit.wingmate.BuildConfig")

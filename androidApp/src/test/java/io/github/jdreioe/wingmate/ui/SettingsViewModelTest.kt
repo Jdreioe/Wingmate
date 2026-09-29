@@ -15,7 +15,6 @@ import io.github.jdreioe.wingmate.infrastructure.ArasaacDownloadProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -289,7 +288,6 @@ class SettingsViewModelTest {
 
     private class FakeSettingsOperations : SettingsOperations {
         override val arasaacAvailable: Boolean = true
-        override val partnerDeviceConnected: Flow<Boolean> = MutableStateFlow(false)
         override val editingAccessState: StateFlow<EditingAccessState>? =
             MutableStateFlow(EditingAccessState())
 

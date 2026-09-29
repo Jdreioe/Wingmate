@@ -92,7 +92,6 @@ internal data class SettingsUiState(
     val arasaacDownloadFailed: Boolean = false,
     val arasaacFailedCount: Int = 0,
     val dictionaryEntries: List<PronunciationEntry> = emptyList(),
-    val partnerDeviceConnected: Boolean = false,
     val editingAccessDialog: EditingAccessDialogMode? = null,
     val backupWorking: Boolean = false,
     val backupStatus: SettingsMessage? = null,
@@ -115,7 +114,6 @@ internal sealed interface SettingsAction {
     data object GoogleSetupCompleted : SettingsAction
 
     data class TtsEngineSelected(val engine: TtsEngine) : SettingsAction
-    data class VirtualMicChanged(val enabled: Boolean) : SettingsAction
     data class AzureEndpointChanged(val value: String) : SettingsAction
     data class AzureSubscriptionKeyChanged(val value: String) : SettingsAction
     data object ReplaceAzureCredentialsClicked : SettingsAction
@@ -165,7 +163,6 @@ internal sealed interface SettingsAction {
 
     data class StartupModeChanged(val mode: StartupMode) : SettingsAction
     data class StartupBoardSetChanged(val boardSetId: String?) : SettingsAction
-    data class PartnerWindowChanged(val enabled: Boolean) : SettingsAction
     data object DownloadArasaacClicked : SettingsAction
 
     data object CreateBackupClicked : SettingsAction
@@ -204,7 +201,6 @@ internal sealed interface SettingsEvent {
 internal interface SettingsOperations {
     /** True when an ARASAAC symbol store is available on this platform. */
     val arasaacAvailable: Boolean
-    val partnerDeviceConnected: Flow<Boolean>
     val editingAccessState: StateFlow<EditingAccessState>?
 
     suspend fun getSettings(): Settings
@@ -255,8 +251,6 @@ internal class DefaultSettingsOperations(
     private val editingAccessController: EditingAccessController?,
 ) : SettingsOperations {
     override val arasaacAvailable: Boolean get() = arasaacDownloader != null
-    override val partnerDeviceConnected: Flow<Boolean> =
-        PartnerWindowAvailability.deviceConnected
     override val editingAccessState: StateFlow<EditingAccessState>? =
         editingAccessController?.state
 
@@ -404,14 +398,6 @@ internal class SettingsViewModel(
     private var azureSaveJob: Job? = null
     private var initialized = false
 
-    init {
-        viewModelScope.launch {
-            operations.partnerDeviceConnected.collect { connected ->
-                _state.update { it.copy(partnerDeviceConnected = connected) }
-            }
-        }
-    }
-
     fun onAction(action: SettingsAction) {
         when (action) {
             SettingsAction.Initialize -> initialize()
@@ -436,9 +422,6 @@ internal class SettingsViewModel(
 
             is SettingsAction.TtsEngineSelected -> persist {
                 it.copy(ttsEngine = action.engine)
-            }
-            is SettingsAction.VirtualMicChanged -> persist {
-                it.copy(virtualMicEnabled = action.enabled)
             }
             is SettingsAction.AzureEndpointChanged -> {
                 _state.update {
@@ -575,9 +558,6 @@ internal class SettingsViewModel(
             }
             is SettingsAction.StartupBoardSetChanged -> persist {
                 it.copy(startupBoardSetId = action.boardSetId)
-            }
-            is SettingsAction.PartnerWindowChanged -> persist {
-                it.copy(partnerWindowEnabled = action.enabled)
             }
             SettingsAction.DownloadArasaacClicked -> downloadArasaacSymbols()
 
