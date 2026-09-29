@@ -1,9 +1,5 @@
 /* German Localizations */
 "app.title" = "Wingmate";
-"welcome.title" = "Willkommen";
-"welcome.subtitle" = "Eine AAC-App, die sich auf jeder Plattform nativ anfühlt.";
-"welcome.azure_settings" = "Azure-Einstellungen";
-"welcome.choose_voice" = "Stimme wählen";
 "common.continue" = "Weiter";
 
 /* Welcome Flow */
@@ -35,10 +31,6 @@
 "welcome_flow.google_tts.con2" = "Google-Cloud-Einrichtung und Abrechnung erforderlich";
 "welcome_flow.google_tts.con3" = "Nutzung kann Kosten verursachen";
 "welcome_flow.voice_setup.title" = "Wähle deine Stimme";
-"welcome_flow.voice_setup.subtitle" = "Wähle eine Stimme, die für dich richtig klingt";
-"welcome_flow.voice_test.placeholder" = "Hallo, so klinge ich!";
-"welcome_flow.phrases_setup.title" = "Füge deine ersten Phrasen hinzu";
-"welcome_flow.phrases_setup.subtitle" = "Erstelle einige Phrasen, die du häufig verwendest";
 "welcome_flow.get_started" = "Loslegen";
 "welcome_flow.skip" = "Vorerst überspringen";
 "welcome_flow.next" = "Weiter";
@@ -63,8 +55,6 @@
 "toolbar.voice" = "Stimme";
 "toolbar.second_language" = "Zweitsprache";
 "toolbar.add_category" = "Kategorie hinzufügen";
-"toolbar.ui_size" = "UI-Größe";
-"toolbar.welcome_flow" = "Einrichtungsassistent";
 "toolbar.settings_panel" = "Einstellungs-Panel";
 
 "categories.all" = "Alle";
@@ -76,35 +66,25 @@
 "category.delete" = "Kategorie löschen";
 
 "phrase.new.title" = "Neue Phrase";
-"phrase.text.placeholder" = "Phrasentext";
 "phrase.edit.title" = "Phrase bearbeiten";
-"phrase.display_name.optional" = "Anzeigename (optional)";
 "phrase.save" = "Speichern";
 "phrase.delete" = "Löschen";
 "phrase.add.tile" = "Hinzufügen";
 
 "debug.content_loaded" = "DEBUG: ContentView geladen";
-"debug.voice" = "Stimme";
 
-"azure.settings.title" = "Azure-Einstellungen";
 "azure.endpoint.placeholder" = "Endpunkt (https://<region>.tts.speech.microsoft.com)";
 "azure.key.placeholder" = "Abonnementschlüssel";
-"azure.credentials.configured" = "Die Azure Speech-Anmeldedaten sind auf diesem Gerät sicher konfiguriert.";
-"azure.credentials.replace" = "Azure-Anmeldedaten ersetzen";
 "common.error" = "Fehler";
 "common.retry" = "Erneut versuchen";
 "speech.playback_failed" = "Die Sprachausgabe konnte nicht abgespielt werden. Bitte versuche es erneut.";
 "common.ok" = "OK";
-"common.saving" = "Speichern…";
 "common.save" = "Speichern";
-
-"reorder.title" = "Phrasen neu anordnen";
 
 "voice.search.placeholder" = "Stimmen suchen";
 "common.select" = "Auswählen";
 "common.no_name" = "(Kein Name)";
 "common.unknown_error" = "Unbekannter Fehler";
-"common.name" = "Name";
 
 "ui_size.title" = "UI-Größe";
 "ui_size.input.section" = "Eingabe";
@@ -132,8 +112,6 @@
 
 "phrase.recording" = "Aufnahme";
 "phrase.mic_permission_denied" = "Mikrofonberechtigung verweigert. Aktiviere sie in den Einstellungen.";
-"phrase.alternative_text.optional" = "Alternativer Phrasentext (optional)";
-"phrase.alternative_text.placeholder" = "Was stattdessen gesprochen werden soll";
 
 "phrase.symbol.section" = "Symbol (OpenSymbols)";
 "phrase.symbol.source" = "Symbolquelle";
@@ -167,13 +145,9 @@
 "debug.voice.none" = "Stimme: (keine)";
 
 "common.cancel" = "Abbrechen";
-"common.change" = "Ändern...";
-"common.unknown" = "Unbekannt";
-"common.unknown_language" = "Unbekannte Sprache";
 
 "settings.title" = "Einstellungen";
 "settings.tts.title" = "Text-zu-Sprache-Engine";
-"settings.tts.use_system" = "System-TTS verwenden";
 "settings.tts.system_when_offline" = "System-TTS offline verwenden";
 "settings.restart_setup" = "Einrichtungsassistent neu starten";
 
@@ -246,20 +220,15 @@
 
 "welcome_flow.choose_primary_language" = "Primäre Sprache für diese Stimme wählen";
 "welcome_flow.select_language" = "Sprache wählen";
-"welcome_flow.pros" = "Vorteile";
-"welcome_flow.cons" = "Nachteile";
-"welcome_flow.preview_text.placeholder" = "Text für Vorschau eingeben...";
 
 "toolbar.switch_symbol_mode" = "Zum Symbol-Arbeitsbereich wechseln";
 "toolbar.switch_phrase_mode" = "Zum Phrasen-Arbeitsbereich wechseln";
 
 "symbol.workspace.title" = "Symbol-Arbeitsbereich";
-"symbol.workspace.subtitle" = "Bildschirme erstellen und verwalten";
 
 "boardset.create" = "Neuer Bildschirm";
 "boardset.creating" = "Bildschirm wird erstellt…";
 "boardset.create_first" = "Ersten Bildschirm erstellen";
-"boardset.empty" = "Noch keine Bildschirme";
 "boardset.default_name" = "Neuer Bildschirm";
 "boardset.name" = "Bildschirmname";
 "boardset.name_placeholder" = "Alltagskommunikation";
@@ -268,12 +237,9 @@
 "boardset.columns" = "Spalten: %d";
 "boardset.board_name" = "Seitenname";
 "boardset.board_name_placeholder" = "Essensseite";
-"boardset.board_picker" = "Seite";
 "boardset.add_board" = "Seite hinzufügen";
-"boardset.save" = "Bildschirm speichern";
 "boardset.lock" = "Bildschirm sperren";
 "boardset.unlock" = "Bildschirm entsperren";
-"boardset.locked_banner" = "Der Bildschirm ist gesperrt. Zum Bearbeiten entsperren.";
 "boardset.untitled_board" = "Unbenannte Seite";
 "boardset.grid_summary" = "%d x %d Raster, %d Schaltflächen";
 
@@ -297,8 +263,6 @@
 "boardset.unlock.reason" = "Entsperre diesen Bildschirm, um Symbole und Layout zu bearbeiten.";
 "boardset.unlock.failed" = "Authentifizierung fehlgeschlagen.";
 
-"boardset.edit" = "Felder bearbeiten";
-"boardset.edit_done" = "Bearbeiten beenden";
 "boardset.cell.empty" = "Leeres Feld";
 "boardset.cell.edit_title" = "Feld bearbeiten";
 "boardset.cell.label" = "Beschriftung";
@@ -310,10 +274,6 @@
 "boardset.cell.background_picker" = "Hintergrundfarbe";
 "boardset.cell.border_enabled" = "Randfarbe setzen";
 "boardset.cell.border_picker" = "Randfarbe";
-"boardset.cell.background_hex" = "Hintergrundfarbe (HEX)";
-"boardset.cell.border_hex" = "Randfarbe (HEX)";
-"boardset.cell.clear" = "Feld leeren";
-"boardset.cell.delete" = "Feld löschen";
 
 "sentence.box.title" = "Satzfeld";
 "sentence.box.delete_phrase" = "Phrase aus Satz loschen";
@@ -388,8 +348,6 @@
 "board_sets.error.load_failed" = "Bildschirme konnten nicht geladen werden.";
 "board_workspace.editing" = "%@ wird bearbeitet";
 "board_workspace.finish" = "Fertig";
-"board_workspace.undo" = "Rückgängig";
-"board_workspace.home" = "Startseite";
 "board_workspace.exit_library" = "Bildschirme";
 
 "settings.search" = "Einstellungen durchsuchen";
@@ -413,7 +371,6 @@
 "settings.speech.google.api_key" = "Google Cloud API-Schlüssel";
 "settings.speech.google.help" = "Aktiviere Cloud Text-to-Speech und beschränke diesen Schlüssel auf diese API. Der Schlüssel bleibt im Schlüsselbund dieses Geräts und wird nicht gesichert.";
 "settings.speech.google.clear" = "API-Schlüssel löschen";
-"settings.speech.google.save_failed" = "Der Google Cloud API-Schlüssel konnte nicht gespeichert werden.";
 "settings.speech.google.clear_failed" = "Der Google Cloud API-Schlüssel konnte nicht gelöscht werden.";
 "settings.speech.google.setup.welcome_title" = "Eigene Google Cloud-Stimme verwenden";
 "settings.speech.google.setup.welcome_description" = "Wingmate kann mit Google Cloud Text-to-Speech und einem API-Schlüssel aus deinem eigenen Google Cloud-Projekt sprechen.";
@@ -464,7 +421,6 @@
 "settings.general.startup_screen" = "Zu öffnender Bildschirm";
 "settings.general.screen_library" = "Bildschirmübersicht";
 "settings.general.startup.footer" = "Wähle, welchen Kommunikationsmodus Wingmate beim Start öffnet.";
-"settings.general.privacy" = "Datenschutz";
 "settings.general.analytics" = "Nutzungsberichte";
 "settings.general.analytics.footer" = "Teile anonyme Funktionsereignisse. Texte, Schlüssel, Dateipfade und Bildschirminhalte werden nie übertragen.";
 "settings.privacy.local_data" = "Lokale Daten";
@@ -498,7 +454,6 @@
 "boardset.native_keyboard.return" = "Zurück zur Tafel";
 "boardset.quick_core.downloading" = "Quick Core wird heruntergeladen und vorbereitet…";
 "boardset.cell.insert_text" = "Von dieser Taste eingefügter Text";
-"boardset.cell.key_action" = "Sonderaktion";
 "boardset.cell.action.none" = "Keine Sonderaktion";
 "boardset.cell.action.spell" = "Beschriftung buchstabieren";
 "boardset.cell.action.space" = "Leerzeichen";
