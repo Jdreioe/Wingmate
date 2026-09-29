@@ -45,21 +45,6 @@ struct CategoryChip: View {
     }
 }
 
-struct LanguageChip: View {
-    let title: String
-    let selected: Bool
-    let onTap: () -> Void
-    var body: some View {
-        Button(action: onTap) {
-            Text(title)
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(selected ? Color.accentColor.opacity(0.2) : Color.secondary.opacity(0.12))
-                .foregroundStyle(selected ? Color.accentColor : Color.primary)
-                .clipShape(Capsule())
-        }.buttonStyle(.plain)
-    }
-}
-
 struct MultiLineInput: View {
     @Binding var text: String
     @Binding var selectedRange: NSRange
