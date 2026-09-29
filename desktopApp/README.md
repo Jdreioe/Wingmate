@@ -68,6 +68,13 @@ dictionary, and create or restore a backup.
   copies returned strings, and exposes typed results.
 - `rust/src/screens/`, `settings/`, `message_bar.rs`, and `speech/` contain only
   native presentation and operating-system adapters.
+- `rust/src/access.rs` names dwell and Select targets and draws their feedback;
+  the shared Kotlin access controller owns all selection timing.
+- `rust/src/editor/` and `editor_update.rs` present the Screen editor; the
+  Kotlin draft owns every change until **Save Screen**.
+- `rust/src/gaze/` holds the native gaze sources (the Tobii daemon client and
+  bundled-daemon setup, and the local webcam provider) and hit-tests gaze
+  against the laid-out controls.
 
 Run `cargo test` from this directory, and `./gradlew
 :desktopApp:bindings:allTests` from the repository root.

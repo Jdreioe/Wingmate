@@ -16,7 +16,7 @@ artifacts: values compiled into them can be extracted.
 | Apple Developer ID certificate and notarization credentials | Build secrets | macOS desktop release job only |
 | Windows Authenticode certificate | Build secret | Windows desktop release job only |
 | Linux release-signing key | Build secret | Desktop release publishing job only |
-| `INFISICAL_TOKEN` | CI control-plane secret | GitHub Actions secret only |
+| `INFISICAL_CLIENT_ID` and `INFISICAL_CLIENT_SECRET` | CI control-plane secrets | GitHub Actions secrets for the Google Play workflows only |
 | Cloudflare API token | Deployment secret | Worker deployment environment only |
 
 ## Infisical layout

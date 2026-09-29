@@ -96,23 +96,10 @@ available throughout.
 losing window focus, or leaving fullscreen also ends gaze input. Start it again
 explicitly when ready. Gaze selection is off at startup and must be started explicitly.
 
-The daemon, USB permissions, calibration, and display setup must currently be
-prepared outside Wingmate. In-app calibration is M5.
+Calibration and display setup must currently be prepared outside Wingmate.
+In-app calibration is M5.
 Library, editor, and settings controls are not native gaze targets. See
 [the engineering plan](GAZE_TD_I13.md) for those later milestones.
-
-## Windows Eye Control
-
-Wingmate does not yet ship a supported Windows client, but Windows users of a
-compatible Wingmate environment can enable the OS pointer at **Settings →
-Accessibility → Interaction → Eye control** after installing and calibrating a
-supported tracker. Microsoft’s setup guide is at
-<https://support.microsoft.com/accessibility/windows-eye-control/get-started-with-eye-control-in-windows>.
-
-## Android
-
-Android accepts external mouse, keyboard, switch, and OS-provided pointer events.
-Pointer emphasis adds to the system pointer; it never hides or replaces it.
 
 ### Gaze settings and bundled daemon (M4)
 
@@ -146,6 +133,19 @@ Build the bundle with `bash scripts/build-gaze-daemon.sh` before Linux packaging
 (Zig 0.15.2, pkg-config and libusb development headers required). The AppImage
 contains the GPL licence and exact patched source under
 `usr/share/doc/wingmate/tobiifree`; releases also carry the source archive.
+
+## Windows Eye Control
+
+Wingmate does not yet ship a supported Windows client, but Windows users of a
+compatible Wingmate environment can enable the OS pointer at **Settings →
+Accessibility → Interaction → Eye control** after installing and calibrating a
+supported tracker. Microsoft’s setup guide is at
+<https://support.microsoft.com/accessibility/windows-eye-control/get-started-with-eye-control-in-windows>.
+
+## Android
+
+Android accepts external mouse, keyboard, switch, and OS-provided pointer events.
+Pointer emphasis adds to the system pointer; it never hides or replaces it.
 
 ## Webcam gaze on Linux desktop
 
