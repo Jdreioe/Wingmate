@@ -8,8 +8,6 @@ import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
 import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
-import io.github.jdreioe.wingmate.application.usecase.MovePhraseUseCase
-import io.github.jdreioe.wingmate.application.usecase.GetAllItemsUseCase
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSpeechCache
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
@@ -71,8 +69,6 @@ val appModule = module {
     singleOf(::GetPhrasesAndCategoriesUseCase)
     singleOf(::DeletePhraseUseCase)
     singleOf(::UpdatePhraseUseCase)
-    singleOf(::MovePhraseUseCase)
-    singleOf(::GetAllItemsUseCase)
     
     single {
         BoardImportService(

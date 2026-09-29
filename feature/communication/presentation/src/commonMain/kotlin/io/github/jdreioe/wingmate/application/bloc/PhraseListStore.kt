@@ -2,8 +2,6 @@ package io.github.jdreioe.wingmate.application.bloc
 
 import com.arkivanov.mvikotlin.core.store.Store
 import io.github.jdreioe.wingmate.domain.Phrase
-import io.github.jdreioe.wingmate.domain.CategoryItem
-import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.flow.Flow
 
 interface PhraseListStore : Store<PhraseListStore.Intent, PhraseListStore.State, Nothing> {
@@ -33,23 +31,6 @@ interface PhraseListStore : Store<PhraseListStore.Intent, PhraseListStore.State,
         val imageUrl: String? = null
     ) : Intent()
     data class UpdatePhraseRecording(val id: String, val recordingPath: String?) : Intent()
-
-    /**
-     * Full phrase edit following the shared update contract: a null field
-     * keeps the existing value, an explicit blank string removes it, and
-     * a non-blank value replaces it.
-     */
-    data class UpdatePhraseDetails(
-        val id: String,
-        val text: String? = null,
-        val name: String? = null,
-        val imageUrl: String? = null,
-        val recordingPath: String? = null,
-        val parentId: String? = null,
-        val linkedBoardId: String? = null,
-        val isHidden: Boolean? = null
-    ) : Intent()
-    data class MoveCategory(val fromIndex: Int, val toIndex: Int) : Intent()
     data class MovePhrase(val fromIndex: Int, val toIndex: Int) : Intent()
     }
 
