@@ -11,6 +11,10 @@ kotlin {
         namespace = "io.github.jdreioe.wingmate.core.data"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
+
+        withDeviceTestBuilder { sourceSetTreeName = "test" }.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
 
     jvm()
@@ -53,6 +57,13 @@ kotlin {
             dependencies {
                 implementation(kotlin("test"))
                 implementation(libs.ktor.client.mock)
+            }
+        }
+
+        val androidDeviceTest by getting {
+            dependencies {
+                implementation(libs.androidx.testExt.junit)
+                implementation("androidx.test:runner:1.7.0")
             }
         }
 
