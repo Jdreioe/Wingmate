@@ -188,15 +188,6 @@ object SpeechTextProcessor {
     }
     
     /**
-     * Removes all pause tags from text, returning clean text
-     */
-    fun stripPauseTags(text: String): String {
-        val normalizedText = normalizeShorthandSsml(text)
-        val pauseRegex = Regex("""<(?:pause|break)(?:\s+(?:duration|time)=["'][^"']+["'])?[^>]*/>""", RegexOption.IGNORE_CASE)
-        return pauseRegex.replace(normalizedText, "").replace(Regex("""\s+"""), " ").trim()
-    }
-    
-    /**
      * Merges lines that don't end with proper sentence-ending punctuation
      * This is especially useful for text copied from PDFs where lines are broken arbitrarily
      * 
@@ -245,29 +236,4 @@ object SpeechTextProcessor {
         
         return mergedLines.joinToString("\n")
     }
-
-    /**
-     * Get example texts that demonstrate pause tag functionality and PDF line merging
-     */
-    fun getExampleTexts(): List<String> = listOf(
-        "Hello there. <pause duration=\"1s\"/> How are you today?",
-        "First sentence. <pause/> Second sentence after default pause. <pause duration=\"2s\"/> Third sentence after 2 second pause.",
-        "Welcome to the presentation. <break time=\"1.5s\"/> Let's begin with the first topic. <pause duration=\"500ms\"/> This is important information.",
-        "One. <pause duration=\"1s\"/> Two. <pause duration=\"1s\"/> Three. <pause duration=\"1s\"/> Ready!",
-        "This is a test of <pause duration=\"2000\"/> a long pause in milliseconds.",
-        // Examples showing PDF line merging (simulating copy-paste from PDF)
-        "This is a sentence that was\nbroken across multiple lines\nwhen copied from a PDF. <pause/> This sentence ends properly.\nSo this starts a new sentence.",
-        "The quick brown fox\njumps over the lazy\ndog. <pause duration=\"1s\"/> This demonstrates how\ntext copied from PDFs\ngets automatically merged.",
-        "Lorem ipsum dolor sit\namet, consectetur\nadipiscing elit. <break time=\"2s\"/> Sed do eiusmod\ntempor incididunt ut\nlabore et dolore magna aliqua."
-    )
-
-    /**
-     * Get examples specifically for testing PDF line merging without pause tags
-     */
-    fun getPdfMergeExamples(): List<String> = listOf(
-        "This sentence was broken\nacross multiple lines when\ncopied from a PDF document.",
-        "First complete sentence. Second sentence\nwas unfortunately split\ninto multiple lines.",
-        "The benefits of artificial\nintelligence include improved\nefficiency and automation.\nHowever, there are also\nconcerns about job displacement.",
-        "Machine learning algorithms\ncan process vast amounts\nof data quickly. They identify\npatterns humans might miss."
-    )
 }

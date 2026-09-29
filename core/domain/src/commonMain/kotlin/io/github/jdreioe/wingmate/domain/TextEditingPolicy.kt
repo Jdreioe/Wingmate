@@ -80,32 +80,6 @@ object TextEditingPolicy {
         }, textLength)
     }
 
-    /** Keeps marked spans aligned when a UI reports the complete text before and after an edit. */
-    fun adjustAfterEdit(oldText: String, newText: String, spans: List<TextSpan>): List<TextSpan> {
-        if (spans.isEmpty()) return emptyList()
-        if (oldText == newText) return merge(spans, newText.length)
-
-        val prefix = commonPrefixLength(oldText, newText)
-        val suffix = commonSuffixLength(oldText, newText, prefix)
-        val oldChangedEnd = oldText.length - suffix
-        val newChangedEnd = newText.length - suffix
-        val delta = newChangedEnd - oldChangedEnd
-
-        val updated = spans.sortedBy { it.start }.flatMap { span ->
-            when {
-                span.endExclusive <= prefix -> listOf(span)
-                span.start >= oldChangedEnd -> listOf(TextSpan(span.start + delta, span.endExclusive + delta))
-                else -> buildList {
-                    if (span.start < prefix) add(TextSpan(span.start, prefix))
-                    if (span.endExclusive > oldChangedEnd) {
-                        add(TextSpan(oldChangedEnd + delta, span.endExclusive + delta))
-                    }
-                }
-            }
-        }
-        return merge(updated, newText.length)
-    }
-
     /** Keeps marked spans aligned when a native editor reports an explicit replacement range. */
     fun adjustForReplacement(
         textLength: Int,
@@ -156,19 +130,5 @@ object TextEditingPolicy {
     fun insert(text: String, cursor: Int, value: String): TextEditResult {
         val position = cursor.coerceIn(0, text.length)
         return TextEditResult(text.replaceRange(position, position, value), position + value.length)
-    }
-
-    private fun commonPrefixLength(a: String, b: String): Int {
-        val limit = minOf(a.length, b.length)
-        var index = 0
-        while (index < limit && a[index] == b[index]) index++
-        return index
-    }
-
-    private fun commonSuffixLength(a: String, b: String, prefix: Int): Int {
-        val limit = minOf(a.length - prefix, b.length - prefix)
-        var count = 0
-        while (count < limit && a[a.length - 1 - count] == b[b.length - 1 - count]) count++
-        return count
     }
 }

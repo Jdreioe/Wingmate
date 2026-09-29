@@ -55,11 +55,6 @@ sealed interface CommunicationAction {
         val mathMode: Boolean = false,
     ) : CommunicationAction
 
-    data class InsertPart(
-        val cursor: Int,
-        val part: MessagePart,
-    ) : CommunicationAction
-
     data class AppendPart(
         val part: MessagePart,
         val spellingMode: Boolean,

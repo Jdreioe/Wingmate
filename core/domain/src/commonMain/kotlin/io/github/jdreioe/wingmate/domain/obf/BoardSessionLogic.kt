@@ -42,10 +42,6 @@ fun shouldSpeakBoardSelection(behavior: BoardActivationBehavior): Boolean =
 fun shouldSpeakSelectionImmediately(policy: SpeechPolicy, behavior: BoardActivationBehavior): Boolean =
     policy == SpeechPolicy.Immediate && shouldSpeakBoardSelection(behavior)
 
-/** Convenience for phrase-grid selections, which carry no board-level behavior. */
-fun shouldSpeakPhraseSelection(policy: SpeechPolicy): Boolean =
-    policy == SpeechPolicy.Immediate
-
 /**
  * Resolve the board to show after a selection, given the return behavior and the
  * navigation history. Returns the next board id and the updated stack.
@@ -80,26 +76,6 @@ fun backspaceSentenceSelection(
     val last = texts.last()
     if (last.length <= 1) return texts.dropLast(1)
     return texts.dropLast(1) + last.dropLast(1)
-}
-
-/**
- * Compose the sentence text from the selected buttons, resolving each through the
- * board's `strings` localization table and honoring spelling mode.
- */
-fun buildResolvedSentence(
-    buttons: List<ObfButton>,
-    strings: Map<String, Map<String, String>>,
-    spellingMode: Boolean,
-    primaryLanguage: String
-): String {
-    val tokens = buttons.mapNotNull { button ->
-        resolveObfLocalizedString(
-            strings = strings,
-            locale = primaryLanguage,
-            rawValue = button.vocalization ?: button.label
-        )?.takeIf { it.isNotEmpty() }
-    }
-    return joinSentenceText(tokens, spellingMode)
 }
 
 /**

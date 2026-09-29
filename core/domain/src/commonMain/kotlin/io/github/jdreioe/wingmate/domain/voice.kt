@@ -238,12 +238,3 @@ data class SaidText(
     /** Whether this playback was eligible for the user-facing History feed. */
     val visibleInHistory: Boolean = true,
 )
-
-@Serializable
-data class UiSettings(
-    val id: Int? = null,
-    val name: String = "default",
-    val primaryLanguage: String = "en-US",
-    val secondaryLanguage: String = "",
-    val isWiggleMode: Boolean = false,
-)

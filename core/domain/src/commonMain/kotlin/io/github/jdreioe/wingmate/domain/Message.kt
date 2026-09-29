@@ -71,20 +71,6 @@ data class Message(
     val spokenText: String
         get() = parts.joinToString("") { it.spokenText }
 
-    fun edit(newText: String): Message {
-        val oldText = displayText
-        if (newText == oldText) return this
-
-        val prefixLength = commonPrefixLength(oldText, newText)
-        val suffixLength = commonSuffixLength(oldText, newText, prefixLength)
-        val replacement = newText.substring(prefixLength, newText.length - suffixLength)
-        return replaceRange(
-            start = prefixLength,
-            endExclusive = oldText.length - suffixLength,
-            replacement = replacement.takeIf(String::isNotEmpty)?.let(::typedPart),
-        )
-    }
-
     fun insertPhrase(cursor: Int, phrase: Phrase): Message = replaceRange(
         start = cursor,
         endExclusive = cursor,
@@ -314,20 +300,6 @@ private fun List<MessagePart>.mergeAdjacentTypedParts(): List<MessagePart> = bui
             add(part)
         }
     }
-}
-
-private fun commonPrefixLength(first: String, second: String): Int {
-    val limit = minOf(first.length, second.length)
-    var index = 0
-    while (index < limit && first[index] == second[index]) index++
-    return index
-}
-
-private fun commonSuffixLength(first: String, second: String, prefixLength: Int): Int {
-    val limit = minOf(first.length - prefixLength, second.length - prefixLength)
-    var length = 0
-    while (length < limit && first[first.lastIndex - length] == second[second.lastIndex - length]) length++
-    return length
 }
 
 // --- Screen ↔ Message mapping (Q4=a): domain owns the translation, UI only supplies graph ---

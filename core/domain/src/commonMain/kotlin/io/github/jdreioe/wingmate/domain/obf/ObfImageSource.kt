@@ -1,17 +1,5 @@
 package io.github.jdreioe.wingmate.domain.obf
 
-/**
- * Resolved image source following the OBF priority order:
- * **data → dataUrl → path → url → symbol**.
- */
-sealed class ObfImageSource {
-    data class DataUri(val data: String) : ObfImageSource()
-    data class Path(val path: String) : ObfImageSource()
-    data class Url(val url: String) : ObfImageSource()
-    data class Symbol(val symbol: ObfSymbol) : ObfImageSource()
-    data object None : ObfImageSource()
-}
-
 /** Ordered media candidates shared by import, rendering, playback, and export. */
 sealed interface ObfMediaSource {
     data class Data(val value: String) : ObfMediaSource
@@ -20,6 +8,7 @@ sealed interface ObfMediaSource {
     data class Symbol(val value: ObfSymbol) : ObfMediaSource
 }
 
+/** Image candidates in OBF priority order: data, dataUrl, path, url, symbol. Blank fields are skipped. */
 fun obfImageSources(image: ObfImage?): List<ObfMediaSource> {
     if (image == null) return emptyList()
     return buildList {
@@ -45,17 +34,4 @@ fun obfSoundSources(sound: ObfSound?): List<ObfMediaSource> {
 
 fun interface ObfMediaUrlLoader {
     suspend fun load(url: String): ByteArray?
-}
-
-/**
- * Pick the highest-priority non-blank image reference on [image].
- */
-fun resolveObfImageSource(image: ObfImage?): ObfImageSource {
-    return when (val source = obfImageSources(image).firstOrNull()) {
-        is ObfMediaSource.Data -> ObfImageSource.DataUri(source.value)
-        is ObfMediaSource.Path -> ObfImageSource.Path(source.value)
-        is ObfMediaSource.Url -> ObfImageSource.Url(source.value)
-        is ObfMediaSource.Symbol -> ObfImageSource.Symbol(source.value)
-        null -> ObfImageSource.None
-    }
 }

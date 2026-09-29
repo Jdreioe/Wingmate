@@ -95,16 +95,4 @@ class SettingsStateManager(
     fun applyLoadedSettings(settings: Settings) {
         _settings.value = settings
     }
-    
-    /**
-     * Reload settings from repository (useful for external changes)
-     */
-    suspend fun reloadSettings() {
-        try {
-            val reloadedSettings = settingsRepository.get()
-            _settings.value = reloadedSettings
-        } catch (e: Exception) {
-            // Keep current settings if reload fails
-        }
-    }
 }
