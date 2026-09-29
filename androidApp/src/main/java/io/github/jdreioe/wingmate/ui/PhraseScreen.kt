@@ -69,6 +69,7 @@ import io.github.jdreioe.wingmate.application.PhraseBloc
 import io.github.jdreioe.wingmate.application.PhraseEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.TypingScreenUseCase
+import io.github.jdreioe.wingmate.application.CategoryUseCase
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.CommunicationAction
@@ -148,6 +149,7 @@ fun PhraseScreen(
     val saidRepo = koinInject<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
     val voiceUseCase = koinInject<VoiceUseCase>()
     val typingScreenUseCase = koinInject<TypingScreenUseCase>()
+    val categoryUseCase = koinInject<CategoryUseCase>()
     val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
 
     val predictionsEnabled = BuildConfig.DEBUG
@@ -722,26 +724,13 @@ fun PhraseScreen(
                         }
                     }
 
-                    // Dynamically resolve CategoryUseCase; it might be registered after initial composition (platform overrides)
-                    val categoryUseCaseState = remember { mutableStateOf<io.github.jdreioe.wingmate.application.CategoryUseCase?>(null) }
-                    LaunchedEffect(Unit) {
-                        // Retry until available (or stop after some attempts if desired)
-                        repeat(30) {
-                            if (categoryUseCaseState.value != null) return@LaunchedEffect
-                            categoryUseCaseState.value = koin.getOrNull<io.github.jdreioe.wingmate.application.CategoryUseCase>()
-                            if (categoryUseCaseState.value != null) return@LaunchedEffect
-                            delay(250)
-                        }
-                        if (categoryUseCaseState.value == null) categoriesLoadFailed = true
-                    }
                     var categories by remember { mutableStateOf<List<CategoryItem>>(emptyList()) }
                     var categoryLoadRevision by remember { mutableIntStateOf(0) }
                     val coroutineScope = rememberCoroutineScope()
 
                     // load initial categories
-                    LaunchedEffect(categoryUseCaseState.value, categoryLoadRevision) {
-                        val uc = categoryUseCaseState.value ?: return@LaunchedEffect
-                        runCatching { uc.list() }
+                    LaunchedEffect(categoryUseCase, categoryLoadRevision) {
+                        runCatching { categoryUseCase.list() }
                             .onSuccess {
                                 categories = it
                                 categoriesLoadedOnce = true
@@ -948,12 +937,6 @@ fun PhraseScreen(
                         }
                     }
 
-                    if (categoryUseCaseState.value == null) {
-                        Text(stringResource(R.string.phrase_screen_loading), style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = MaterialTheme.typography.labelSmall.fontSize * settings.fontSizeScale
-                        ), color = MaterialTheme.colorScheme.outline)
-                    }
-
                     // Refresh history from repo when switching to History
                     LaunchedEffect(selectedPage) {
                         if (settings.historyVisible && selectedPage == TypingPageSelection.History) {
@@ -970,17 +953,19 @@ fun PhraseScreen(
                     categoryMenu?.let { menuCategory ->
                         val index = categories.indexOfFirst { it.id == menuCategory.id }
                         val moveCategory: (Int) -> Unit = { target ->
-                            val uc = categoryUseCaseState.value
-                            if (index >= 0 && target in categories.indices && uc != null) {
+                            if (index >= 0 && target in categories.indices) {
                                 coroutineScope.launch(Dispatchers.IO) {
                                     runCatching {
-                                        uc.move(index, target)
-                                        uc.list()
+                                        categoryUseCase.move(index, target)
+                                        categoryUseCase.list()
                                     }.onSuccess { updated ->
                                         coroutineScope.launch { categories = updated }
                                     }.onFailure {
                                         coroutineScope.launch { categoriesLoadFailed = true }
                                     }
+                                    // Categories are stored among the Phrases, so moving one
+                                    // shifts Phrase positions too; reload before the next Phrase move.
+                                    bloc.dispatch(PhraseEvent.Load)
                                 }
                             }
                         }
@@ -1041,40 +1026,24 @@ fun PhraseScreen(
                                     onClick = {
                                         val name = categoryName.trim()
                                         if (name.isNotBlank() && !categories.any { it.name.equals(name, ignoreCase = true) }) {
-                                            val ucImmediate = categoryUseCaseState.value ?: koin.getOrNull<io.github.jdreioe.wingmate.application.CategoryUseCase>()?.also { categoryUseCaseState.value = it }
-                                            // Always create an ephemeral chip so user sees immediate feedback
-                                            val temp = io.github.jdreioe.wingmate.domain.CategoryItem(id = "temp_${name}_${System.currentTimeMillis()}", name = name, selectedLanguage = settings.primaryLanguage)
-                                            categories = categories + temp
-                                            selectedPage = TypingPageSelection.Category(temp)
                                             coroutineScope.launch(Dispatchers.IO) {
-                                                // Wait for a real use case if not yet available
-                                                var uc = ucImmediate
-                                                var attempts = 0
-                                                while (uc == null && attempts < 40) { // up to ~10s
-                                                    kotlinx.coroutines.delay(250)
-                                                    uc = categoryUseCaseState.value ?: koin.getOrNull<io.github.jdreioe.wingmate.application.CategoryUseCase>()?.also { categoryUseCaseState.value = it }
-                                                    attempts++
-                                                }
-                                                if (uc != null) {
-                                                    try {
-                                                        val added = uc.add(temp.copy(id = ""))
-                                                        val newList = uc.list()
-                                                        coroutineScope.launch {
-                                                            categories = newList
-                                                            selectedPage = TypingPageSelection.Category(
-                                                                newList.find { it.id == added.id } ?: added
-                                                            )
-                                                        }
-                                                    } catch (t: Throwable) {
-                                                        // Roll back ephemeral on failure
-                                                        coroutineScope.launch {
-                                                            categories = categories.filterNot { it.id == temp.id }
-                                                            categoriesLoadFailed = true
-                                                        }
+                                                runCatching {
+                                                    val added = categoryUseCase.add(
+                                                        CategoryItem(id = "", name = name, selectedLanguage = settings.primaryLanguage)
+                                                    )
+                                                    added to categoryUseCase.list()
+                                                }.onSuccess { (added, updated) ->
+                                                    coroutineScope.launch {
+                                                        categories = updated
+                                                        selectedPage = TypingPageSelection.Category(
+                                                            updated.find { it.id == added.id } ?: added
+                                                        )
                                                     }
-                                                } else {
-                                                    // Could not persist; mark temp visually by leaving it (user session only)
+                                                }.onFailure {
+                                                    coroutineScope.launch { categoriesLoadFailed = true }
                                                 }
+                                                // Categories are stored among the Phrases; keep the Phrase list in step.
+                                                bloc.dispatch(PhraseEvent.Load)
                                             }
                                         }
                                         showAddCategoryDialog = false
@@ -1114,34 +1083,34 @@ fun PhraseScreen(
                                     val cat = confirmDeleteCategory
                                     confirmDeleteCategory = null
                                     if (cat != null) {
-                                        val uc = categoryUseCaseState.value
-                                        if (uc != null) {
-                                            coroutineScope.launch(Dispatchers.IO) {
-                                                // Delete phrases under this category (PhraseRepo)
-                                                val phraseRepository = phraseRepo ?: run {
-                                                    coroutineScope.launch { categoriesLoadFailed = true }
-                                                    return@launch
-                                                }
-                                                val allPhrases = runCatching {
-                                                    phraseRepository.getAll()
-                                                }.getOrElse {
-                                                    coroutineScope.launch { categoriesLoadFailed = true }
-                                                    return@launch
-                                                }
-                                                val toDelete = allPhrases.filter { it.parentId == cat.id }
-                                                val updated = runCatching {
-                                                    toDelete.forEach { phraseRepository.delete(it.id) }
-                                                    uc.delete(cat.id)
-                                                    uc.list()
-                                                }.getOrElse {
-                                                    coroutineScope.launch { categoriesLoadFailed = true }
-                                                    return@launch
-                                                }
-                                                coroutineScope.launch {
-                                                    categories = updated
-                                                    if (selectedCategory?.id == cat.id) {
-                                                        selectedPage = TypingPageSelection.AllPhrases
-                                                    }
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            // Delete phrases under this category (PhraseRepo)
+                                            val phraseRepository = phraseRepo ?: run {
+                                                coroutineScope.launch { categoriesLoadFailed = true }
+                                                return@launch
+                                            }
+                                            val allPhrases = runCatching {
+                                                phraseRepository.getAll()
+                                            }.getOrElse {
+                                                coroutineScope.launch { categoriesLoadFailed = true }
+                                                return@launch
+                                            }
+                                            val toDelete = allPhrases.filter { it.parentId == cat.id }
+                                            val result = runCatching {
+                                                toDelete.forEach { phraseRepository.delete(it.id) }
+                                                categoryUseCase.delete(cat.id)
+                                                categoryUseCase.list()
+                                            }
+                                            // Reload even after a partial failure so deleted Phrases leave the tray.
+                                            bloc.dispatch(PhraseEvent.Load)
+                                            val updated = result.getOrElse {
+                                                coroutineScope.launch { categoriesLoadFailed = true }
+                                                return@launch
+                                            }
+                                            coroutineScope.launch {
+                                                categories = updated
+                                                if (selectedCategory?.id == cat.id) {
+                                                    selectedPage = TypingPageSelection.AllPhrases
                                                 }
                                             }
                                         }
