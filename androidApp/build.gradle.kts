@@ -112,12 +112,6 @@ android {
         buildConfig = true
     }
 
-    composeOptions {
-        // Compiler extension version must match the Compose compiler compatible with the project's Kotlin plugin.
-        // If you use a different Compose compiler version in CI/IDE, adjust this value accordingly.
-        kotlinCompilerExtensionVersion = libs.versions.kotlin.get()
-    }
-
     lint {
         disable += "Instantiatable"
     }
@@ -218,11 +212,8 @@ dependencies {
 
     // DI
     implementation(libs.koin.core)
-    implementation(libs.koin.android)
     implementation(libs.koin.compose)
 
-    // Ktor engine for ARM API calls
-    implementation(libs.ktor.client.okhttp)
     implementation(libs.kotlinx.serialization.json)
 
     // Dual-screen / WindowManager (API 34+ rear display & window area APIs)
@@ -231,17 +222,9 @@ dependencies {
     // Unit testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
-    testImplementation(libs.kotlinx.serialization.json)
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${libs.versions.kotlinx.coroutines.get()}")
 }
 
 kotlin {
     jvmToolchain(21)
-}
-
-// Utility task to print AGP version in use
-tasks.register("printAgpVersion") {
-    doLast {
-        println("AGP version: " + com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION)
-    }
 }

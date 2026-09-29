@@ -34,15 +34,6 @@
     <string name="typing_screen_new_action">Ny handling</string>
     <string name="app_name">Wingmate</string>
 
-    <string name="language">Sprog</string>
-    <string name="select_voice">Vælg stemme</string>
-    <string name="search_voices">Søg stemmer</string>
-    <string name="filter_languages">Filtrer sprog</string>
-    <string name="all_languages">Alle sprog</string>
-    <string name="gender">Køn</string>
-    <string name="no_system_voices_match">Ingen systemstemmer matcher de aktuelle filtre</string>
-    <string name="no_azure_voices_match">Ingen Azure-stemmer matcher de aktuelle filtre</string>
-    <string name="close">Luk</string>
 
 
     <string name="common_language">Sprog</string>
@@ -84,7 +75,6 @@
         <item quantity="other">%1$d sider</item>
     </plurals>
     <string name="board_sets_locked">Låst</string>
-    <string name="board_sets_actions">Skærmhandlinger</string>
     <string name="board_sets_open">Åbn</string>
     <string name="board_sets_edit">Rediger</string>
     <string name="board_sets_duplicate">Dupliker</string>
@@ -102,15 +92,11 @@
     <string name="board_sets_import">Importer skærm</string>
     <string name="board_sets_imported">Skærmen blev importeret</string>
     <string name="board_sets_import_error">Skærmen kunne ikke importeres</string>
-    <string name="board_workspace_title">Skærm</string>
     <string name="common_more_actions">Flere handlinger</string>
     <string name="board_workspace_editing">Redigerer: %1$s</string>
     <string name="board_workspace_unlock_to_edit">Lås skærmen op før redigering</string>
     <string name="board_workspace_undo">Fortryd</string>
     <string name="board_workspace_finish">Afslut redigering</string>
-    <string name="board_workspace_actions">Sidehandlinger</string>
-    <string name="board_workspace_rename">Omdøb side</string>
-    <string name="board_workspace_rename_set">Omdøb skærm</string>
     <string name="board_workspace_resize">Tilpas sidens størrelse</string>
     <string name="board_workspace_resize_body">Vælg antal rækker og kolonner. Felter uden for den nye side skal flyttes, før siden kan gøres mindre.</string>
     <string name="board_workspace_resize_blocked">Siden kan ikke gøres mindre, mens der er felter i de rækker eller kolonner, som fjernes.</string>
@@ -159,12 +145,8 @@
     <string name="board_workspace_back_to_library">Tilbage til skærme</string>
     <string name="board_workspace_finish_title">Afslut redigering?</string>
     <string name="board_workspace_finish_body">Gem ændringerne, før du vender tilbage til kommunikation?</string>
-    <string name="board_workspace_saved">Ændringerne blev gemt</string>
     <string name="board_workspace_save_error">Ændringerne kunne ikke gemmes</string>
     <string name="board_workspace_export_error">Skærmen kunne ikke eksporteres. Din nuværende skærm blev ikke ændret; prøv igen.</string>
-    <string name="board_workspace_save_phrase">Gem under fraser</string>
-    <string name="board_workspace_phrase_saved">Gemt under Alle fraser</string>
-    <string name="board_workspace_phrase_save_error">Sætningen kunne ikke gemmes under fraser</string>
     <string name="board_workspace_speak_sentence">Læs sætningen op</string>
     <string name="board_workspace_delete_last">Slet sidste ord</string>
     <string name="board_workspace_clear_sentence">Ryd sætningen</string>
@@ -176,7 +158,6 @@
     <string name="board_workspace_delete_body">Slet “%1$s” fra denne skærm?</string>
     <string name="board_workspace_board_fallback">Side</string>
     <string name="board_workspace_board_name">Sidenav</string>
-    <string name="board_workspace_rename_action">Omdøb</string>
     <string name="board_settings_screen_title">Skærmindstillinger</string>
     <string name="board_settings_page_title">Sideindstillinger</string>
     <string name="board_settings_group_screen">Skærm</string>
@@ -221,7 +202,6 @@
     <string name="board_settings_reset_screen">Nulstil skærmindstillinger</string>
     <string name="board_settings_reset_page">Nulstil sidetilpasninger</string>
     <string name="board_cell_opens_board">Åbner siden: %1$s</string>
-    <string name="board_cell_no_link">Åbner ikke en anden side</string>
     <string name="board_dialog_new_set">Ny skærm</string>
     <string name="board_dialog_template">Skabelon</string>
     <string name="board_dialog_template_blank">Tom</string>
@@ -284,10 +264,7 @@
     <string name="board_dialog_special_actions_help">Tryk for at vælge, hvad knappen skal gøre</string>
 
     <string name="language_dialog_title">Sprog</string>
-    <string name="language_filter_languages">Filtrer sprog</string>
     <string name="language_search_label">Søg (eksempel: da eller DK)</string>
-    <string name="language_filter_code">Sprogkode</string>
-    <string name="language_filter_region">Region</string>
     <string name="language_primary">Hovedsprog</string>
     <string name="language_primary_description">Bruges som standard, når Wingmate taler og foreslår ord.</string>
     <string name="language_secondary">Andet sprog</string>
@@ -331,16 +308,12 @@
     <string name="welcome_analytics_opt_in">Del anonym analysedata</string>
 
     <string name="voice_select_title">Vælg stemme</string>
-    <string name="voice_search_label">Søg stemmer</string>
     <string name="voice_search_placeholder">Navn, sprogkode eller køn</string>
-    <string name="voice_filter_languages_content_desc">Filtrer sprog</string>
     <string name="voice_all_languages">Alle sprog</string>
-    <string name="voice_gender_label">Køn: %1$s</string>
     <plurals name="voice_showing_count">
         <item quantity="one">Viser %1$d af %2$d stemme</item>
         <item quantity="other">Viser %1$d af %2$d stemmer</item>
     </plurals>
-    <string name="voice_error">Fejl: %1$s</string>
     <string name="voice_system_title">System TTS-stemmer</string>
     <string name="voice_system_title_with_lang">System TTS-stemmer (%1$s)</string>
     <string name="voice_azure_title">Azure TTS-stemmer</string>
@@ -387,9 +360,6 @@
     <string name="playback_resume">Fortsæt</string>
     <string name="playback_pause">Pause</string>
     <string name="playback_stop">Stop</string>
-    <string name="playback_secondary_language">Skift sekundært sprog</string>
-    <string name="playback_new_thought">Start en ny tanke</string>
-    <string name="playback_previous_thought">Gå tilbage til den forrige tanke</string>
     <string name="prediction_insert_letter">Indsæt bogstavet %1$s</string>
     <string name="phrase_clear_button">Ryd</string>
     <string name="phrase_recording_in_progress">Optagelse i gang...</string>
@@ -418,7 +388,6 @@
     <string name="opensymbols_search_title">Søg efter symboler</string>
     <string name="symbol_package_all">Alle</string>
     <string name="opensymbols_search_label">Søg efter piktogram...</string>
-    <string name="opensymbols_search_cd">Søg</string>
     <string name="opensymbols_not_configured">OpenSymbols er ikke konfigureret i denne build.\nSæt WINGMATE_OPENSYMBOLS_PROXY_URL i local.properties før build.</string>
     <string name="opensymbols_no_results">Ingen resultater fundet</string>
     <string name="opensymbols_throttled">OpenSymbols har modtaget for mange søgninger. Vent et øjeblik, og prøv igen.</string>
@@ -426,35 +395,11 @@
     <string name="opensymbols_retry">Prøv igen</string>
     <string name="opensymbols_image_unavailable">Billedet er ikke tilgængeligt</string>
 
-    <string name="data_management_title">Datahåndtering</string>
-    <string name="data_management_description">Eksporter eller importer din talehistorik og trænet modeldata som JSON.</string>
-    <string name="data_management_export">Eksporter</string>
-    <string name="data_management_import">Importer</string>
-    <string name="data_management_status_exporting">Eksporterer...</string>
-    <string name="data_management_status_export_ready">Eksport klar (delt)</string>
-    <string name="data_management_status_copied_clipboard">Kopieret til udklipsholder!</string>
-    <string name="data_management_status_export_failed">Eksport fejlede: %1$s</string>
-    <string name="data_management_button_share_copy_history">Del / kopier historik</string>
-    <string name="data_management_paste_json_label">Indsæt JSON her</string>
-    <string name="data_management_status_importing">Importerer...</string>
-    <string name="data_management_status_import_success">Import lykkedes! Genstart appen for at se ændringer.</string>
-    <string name="data_management_status_import_failed_invalid">Import fejlede: Ugyldig JSON</string>
-    <string name="data_management_button_overwrite_history">Overskriv historik</string>
 
     <string name="category_add_title">Tilføj kategori</string>
     <string name="category_name_label">Kategorinavn</string>
-    <string name="category_error_name_empty">Navn må ikke være tomt</string>
-    <string name="category_error_exists">Kategori med dette navn findes allerede</string>
-    <string name="category_selector_title">Kategori for %1$s</string>
-    <string name="category_add_cd">Tilføj kategori</string>
 
     <string name="phrase_item_edit">Rediger</string>
-    <string name="phrase_item_speak_secondary">Tal (sekundær)</string>
-    <string name="phrase_item_copy_soundfile">Kopier lydfil</string>
-    <string name="phrase_item_share_soundfile">Del lydfil</string>
-    <string name="phrase_item_move_up">Flyt op</string>
-    <string name="phrase_item_move_down">Flyt ned</string>
-    <string name="phrase_add_cd">Tilføj frase</string>
 
     <string name="ui_settings_title">Indstillinger</string>
     <string name="ui_settings_search">Søg i Indstillinger</string>
@@ -466,14 +411,9 @@
     <string name="ui_settings_accessibility_desc">Berøringstid og feedback</string>
     <string name="ui_settings_general_title">System og data</string>
     <string name="ui_settings_general_desc">Opstart, offline-symboler og enhedsvalg</string>
-    <string name="ui_settings_note_scaling_moved">Bemærk: UI-skalering er flyttet til dialogen Taleindstillinger.</string>
-    <string name="ui_settings_virtual_mic_title">Brug virtuel mikrofon til opkald</string>
-    <string name="ui_settings_virtual_mic_desc">Ruter TTS-lyd til en virtuel enhed, som du kan vælge som mikrofon i Zoom/Meet.</string>
     <string name="ui_settings_analytics_title">Analyse</string>
     <string name="ui_settings_feature_reporting_title">Rapportering af funktionsbrug</string>
     <string name="ui_settings_feature_reporting_desc">Hjælp med at forbedre Wingmate ved at dele anonyme hændelser om funktionsbrug. Ingen frasetekst, nøgler eller filstier rapporteres.</string>
-    <string name="ui_settings_partner_window_title">Partnerdisplay</string>
-    <string name="ui_settings_partner_window_desc">Spejl skrevet tekst til det tilsluttede TD-I13 partnerdisplay.</string>
     <string name="ui_settings_startup_mode_title">Åbn ved opstart</string>
     <string name="ui_settings_startup_mode_desc">Vælg hvilken kommunikationstilstand Wingmate åbner efter opstart.</string>
     <string name="ui_settings_startup_mode_keyboard">Tastatur</string>
@@ -529,7 +469,6 @@
 
     <string name="welcome_title">Velkommen til Wingmate</string>
     <string name="welcome_subtitle">Tillykke med din nye stemme!</string>
-    <string name="welcome_ui_settings">UI-indstillinger</string>
     <string name="welcome_start_mode_title">Hvordan vil du kommunikere?</string>
     <string name="welcome_start_mode_subtitle">Vælg hvad Wingmate skal åbne. Du kan ændre det senere i Indstillinger.</string>
     <string name="welcome_start_mode_keyboard_title">Tastatur og fraser</string>
@@ -561,22 +500,13 @@
     <string name="common_next">Næste</string>
 
     <string name="phrase_screen_toggle_fullscreen_cd">Skift fuldskærm</string>
-    <string name="phrase_screen_menu_cd">Menu</string>
     <string name="phrase_screen_voice_settings">Stemmeindstillinger</string>
-    <string name="phrase_screen_pronunciation_dictionary">Udtaleordbog</string>
-    <string name="phrase_screen_copy_last_soundfile">Kopier sidste lydfil</string>
-    <string name="phrase_screen_share_last_soundfile">Del sidste lydfil</string>
     <string name="phrase_screen_app_settings">App-indstillinger</string>
     <string name="phrase_screen_import_export_data">Importer/eksporter data</string>
-    <string name="phrase_screen_check_updates">Søg efter opdateringer</string>
     <string name="phrase_screen_welcome_screen">Velkomstskærm</string>
-    <string name="phrase_screen_close_board">Luk side</string>
-    <string name="phrase_screen_import_board">Importer OBF/OBZ-side...</string>
-    <string name="phrase_screen_select_board_title">Vælg OBF/OBZ-side</string>
     <string name="phrase_screen_loading">Indlæser...</string>
     <string name="phrase_screen_error">Fejl: %1$s</string>
     <string name="phrase_screen_enter_text_placeholder">Indtast tekst der skal tales</string>
-    <string name="phrase_screen_ssml_controls">SSML-kontroller</string>
     <string name="speech_math_mode">Matematik</string>
     <string name="speech_math_mode_description">Læs matematiske udtryk i almindelig tekst med Azures matematikudtale</string>
     <string name="ui_settings_accessibility_title">Tilgængelighed</string>
@@ -654,11 +584,6 @@
     <string name="category_delete_with_phrases">Slet (med fraser)</string>
     <string name="category_delete_title">Slet kategori</string>
     <string name="category_delete_message">Slet “%1$s” og alle fraser i den?</string>
-    <string name="board_legacy_fallback">Side</string>
-    <string name="board_legacy_erase">Slet</string>
-    <string name="board_legacy_home">Hjem</string>
-    <string name="board_legacy_build_sentence">Tryk på knapper for at bygge en sætning…</string>
-    <string name="board_legacy_speak">Udtal</string>
     <string name="welcome_tour_phrase_hello">Hej</string>
     <string name="welcome_tour_phrase_yes">Ja</string>
     <string name="welcome_tour_phrase_help">Hjælp</string>
@@ -675,7 +600,6 @@
     <string name="google_tts_configured">Google Cloud API-nøgle er konfigureret</string>
     <string name="google_tts_replace_key">Erstat API-nøgle</string>
     <string name="google_tts_clear_key">Slet API-nøgle</string>
-    <string name="google_tts_voice_load_failed">Google-stemmer kunne ikke indlæses. Kontrollér nøglen, internetforbindelsen, faktureringen og adgangen til Cloud Text-to-Speech API.</string>
     <string name="google_setup_title">Opsætning af Google TTS</string>
     <string name="google_setup_welcome_title">Brug din egen Google Cloud-stemme</string>
     <string name="google_setup_welcome_description">Wingmate kan tale med Google Cloud Text-to-Speech via en API-nøgle fra dit eget Google Cloud-projekt.</string>
@@ -710,7 +634,6 @@
     <string name="ui_settings_input_fields">Inputfelter</string>
     <string name="ui_settings_touch_timing">Berøring og timing</string>
     <string name="ui_settings_feedback">Feedback</string>
-    <string name="ui_settings_partner_window_group">Partnervindue</string>
     <string name="fullscreen_close">Luk fuldskærm</string>
     <string name="voice_engine_choose">Vælg talemotor</string>
     <string name="voice_engine_azure_title">🎙️ Azure TTS</string>
@@ -744,59 +667,8 @@
     <string name="voice_settings_recommendation_title">💡 Anbefaling:</string>
     <string name="voice_settings_recommendation">Vælg Azure TTS for den bedste kvalitet og sprogunderstøttelse eller System-TTS til offlinebrug og fortrolighed.</string>
     <string name="voice_settings_keep_current">Behold den aktuelle</string>
-    <string name="ssml_speech_controls">Talekontroller</string>
-    <string name="ssml_engine">Motor</string>
-    <string name="ssml_system_offline">System (offline)</string>
-    <string name="ssml_azure_premium">Azure (premium)</string>
-    <string name="ssml_google_premium">Google Cloud (premium)</string>
-    <string name="ssml_voice">Stemme: %1$s</string>
-    <string name="ssml_no_voice">(ingen)</string>
-    <string name="ssml_tone_speed">Tone og hastighed</string>
-    <string name="ssml_pitch">Tonehøjde</string>
-    <string name="ssml_speed">Hastighed</string>
-    <string name="ssml_apply_settings">Anvend indstillinger</string>
-    <string name="ssml_add_pause">Tilføj pause</string>
-    <string name="ssml_emphasis">Fremhævelse</string>
-    <string name="ssml_emphasis_selected">Fremhæv den valgte tekst med:</string>
-    <string name="ssml_emphasis_next">Fremhæv det næste ord med:</string>
-    <string name="ssml_emphasis_reduced">Svag</string>
-    <string name="ssml_emphasis_moderate">Moderat</string>
-    <string name="ssml_emphasis_strong">Stærk</string>
-    <string name="ssml_read_as">Læs som…</string>
-    <string name="ssml_type_spell_out">Stav</string>
-    <string name="ssml_type_date">Dato</string>
-    <string name="ssml_type_time">Tid</string>
-    <string name="ssml_type_telephone">Telefonnummer</string>
-    <string name="ssml_type_currency">Valuta</string>
-    <string name="ssml_type_number">Tal</string>
-    <string name="ssml_azure_tip">Skift til Azure-motoren for at høre ændringerne i den højeste kvalitet.</string>
     <string name="dictionary_easy_help">Brug velkendte bogstaver og bindestreger til at vise lyden. Du behøver ikke kende IPA.</string>
-    <string name="dictionary_guess_success">En teknisk IPA-udtale blev tilføjet.</string>
     <string name="dictionary_advanced_options">Avancerede fonetiske indstillinger</string>
-    <string name="speech_settings_title">Taleindstillinger</string>
-    <string name="speech_settings_config_unavailable">Konfigurationslageret er ikke tilgængeligt</string>
-    <string name="azure_config_title">Konfiguration af Azure TTS</string>
-    <string name="azure_config_description">Konfigurer Azure Cognitive Services for at bruge neurale stemmer i høj kvalitet.</string>
-    <string name="azure_config_endpoint">Azure-endpoint</string>
     <string name="azure_config_key_placeholder">Din Azure Speech-tjenestenøgle</string>
-    <string name="azure_config_help_title">ℹ️ Sådan henter du Azure-oplysninger:</string>
-    <string name="azure_config_help_steps">1. Gå til Azure Portal (portal.azure.com)\n2. Opret en Speech Services-ressource\n3. Kopiér endpoint-URL og abonnementsnøgle\n4. Indsæt dem i felterne ovenfor</string>
-    <string name="update_dialog_title">Appopdatering tilgængelig</string>
-    <string name="update_version_available">Version %1$s er tilgængelig</string>
-    <string name="update_file">Fil: %1$s</string>
-    <string name="update_size">Størrelse: %1$s</string>
-    <string name="update_release_notes">Udgivelsesnoter:</string>
-    <string name="update_no_release_notes">Ingen udgivelsesnoter tilgængelige.</string>
-    <string name="update_downloading">Downloader opdatering…</string>
-    <string name="update_download_complete">✓ Download fuldført. Klar til installation.</string>
-    <string name="update_installing">Installerer opdatering…</string>
-    <string name="update_failed">❌ Opdateringen mislykkedes. Prøv igen.</string>
-    <string name="update_install">Installer opdatering</string>
-    <string name="update_install_now">Installer nu</string>
-    <string name="update_wait">Vent venligst…</string>
-    <string name="update_later">Senere</string>
-    <string name="update_available">Opdatering tilgængelig</string>
-    <string name="update_version_ready">Version %1$s er klar til installation</string>
     <string name="update_dismiss">Afvis</string>
-    <string name="update_view_details">Vis detaljer</string>
 </resources>
