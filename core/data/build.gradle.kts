@@ -32,15 +32,10 @@ kotlin {
                 implementation(project(":core:domain"))
                 implementation(libs.koin.core)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.8.0")
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.ktor.client.core)
-                implementation(libs.ktor.client.contentNegotiation)
-                implementation(libs.ktor.serialization.json)
                 implementation("io.github.pdvrieze.xmlutil:core:1.0.2.1")
                 implementation(libs.okio)
-                implementation("app.cash.sqldelight:runtime:2.0.2")
-                implementation("app.cash.sqldelight:coroutines-extensions:2.0.2")
             }
         }
 
@@ -48,7 +43,6 @@ kotlin {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
                 implementation("androidx.core:core-ktx:1.19.0")
-                implementation("app.cash.sqldelight:android-driver:2.0.2")
                 implementation("org.apache.commons:commons-compress:1.28.0")
             }
         }
@@ -57,6 +51,8 @@ kotlin {
             dependencies {
                 implementation(kotlin("test"))
                 implementation(libs.ktor.client.mock)
+                implementation(libs.ktor.client.contentNegotiation)
+                implementation(libs.ktor.serialization.json)
             }
         }
 
@@ -67,31 +63,18 @@ kotlin {
             }
         }
 
+        // The JVM target only runs tests; clients created with HttpClient() need an engine there.
+        val jvmTest by getting {
+            dependencies {
+                implementation(libs.ktor.client.okhttp)
+            }
+        }
+
         applyDefaultHierarchyTemplate()
 
         val iosMain by getting {
             dependencies {
                 implementation(libs.ktor.client.darwin)
-                implementation("app.cash.sqldelight:native-driver:2.0.2")
-            }
-        }
-
-        val desktopMain by creating {
-            dependsOn(commonMain)
-            dependencies {
-                implementation("app.cash.sqldelight:native-driver:2.0.2")
-            }
-        }
-        getByName("linuxX64Main").dependsOn(desktopMain)
-        getByName("mingwX64Main").dependsOn(desktopMain)
-        getByName("macosX64Main").dependsOn(desktopMain)
-        getByName("macosArm64Main").dependsOn(desktopMain)
-
-        val jvmMain by getting {
-            dependencies {
-                implementation(libs.ktor.client.okhttp)
-                implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
-                implementation("org.apache.commons:commons-compress:1.28.0")
             }
         }
     }
