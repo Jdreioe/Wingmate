@@ -148,7 +148,3 @@ internal fun createCoreDataModule(): Module = module {
         singleOf(::VoiceUseCase)
         single { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>()) }
 }
-
-// Convenience no-arg for Swift where optional bridging might produce a different symbol name
-@Suppress("unused")
-fun initKoin() = initKoin(null)

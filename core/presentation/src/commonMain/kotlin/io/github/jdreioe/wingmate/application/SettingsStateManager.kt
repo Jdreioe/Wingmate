@@ -64,17 +64,13 @@ class SettingsStateManager(
     }
     
     /**
-     * Update settings and notify all observers immediately
+     * Persist settings and notify all observers immediately. If persisting fails
+     * the exception propagates and the current state is kept.
      */
     suspend fun updateSettings(settings: Settings): Settings {
-        return try {
-            val updatedSettings = settingsRepository.update(settings)
-            _settings.value = updatedSettings
-            updatedSettings
-        } catch (e: Exception) {
-            // If update fails, keep current state
-            throw e
-        }
+        val updatedSettings = settingsRepository.update(settings)
+        _settings.value = updatedSettings
+        return updatedSettings
     }
     
     /**
