@@ -45,27 +45,6 @@ unsafe extern "C" {
     fn wm_restore_backup_json(context: *mut c_void, path: *const c_char) -> *mut c_char;
 }
 
-pub trait Core {
-    fn access(&self, event: &Event, now: i64) -> Result<State, String>;
-    fn editor(&self, value: &serde_json::Value) -> Result<serde_json::Value, String>;
-    fn library(&self) -> Result<Vec<BoardSet>, String>;
-    fn recents(&self) -> Result<Vec<String>, String>;
-    fn import_file(&self, path: &str) -> Result<Activation, String>;
-    fn open(&self, id: &str) -> Result<Activation, String>;
-    fn activate(&self, id: &str) -> Result<Activation, String>;
-    fn back(&self) -> Result<Activation, String>;
-    fn clear(&self) -> Result<Activation, String>;
-    fn hold(&self) -> Result<Activation, String>;
-    fn speak(&self) -> Result<Activation, String>;
-    fn settings(&self) -> Result<Settings, String>;
-    fn update_settings(&self, value: &Settings) -> Result<Settings, String>;
-    fn pronunciations(&self) -> Result<Vec<Pronunciation>, String>;
-    fn add_pronunciation(&self, value: &Pronunciation) -> Result<Vec<Pronunciation>, String>;
-    fn delete_pronunciation(&self, word: &str) -> Result<Vec<Pronunciation>, String>;
-    fn export_backup(&self, path: &str) -> Result<(), String>;
-    fn restore_backup(&self, path: &str) -> Result<(), String>;
-}
-
 pub struct NativeCore {
     context: NonNull<c_void>,
 }
@@ -120,8 +99,8 @@ struct BridgeError {
     error: String,
 }
 
-impl Core for NativeCore {
-    fn access(&self, event: &Event, now: i64) -> Result<State, String> {
+impl NativeCore {
+    pub fn access(&self, event: &Event, now: i64) -> Result<State, String> {
         let context = self.context.as_ptr();
         let input = match event {
             Event::Enter(target) | Event::Exit(target) => target.id(),
@@ -144,61 +123,61 @@ impl Core for NativeCore {
         })
     }
 
-    fn editor(&self, value: &serde_json::Value) -> Result<serde_json::Value, String> {
+    pub fn editor(&self, value: &serde_json::Value) -> Result<serde_json::Value, String> {
         self.input(&value.to_string(), wm_editor_json)
     }
-    fn library(&self) -> Result<Vec<BoardSet>, String> {
+    pub fn library(&self) -> Result<Vec<BoardSet>, String> {
         self.read(wm_library_json)
     }
-    fn recents(&self) -> Result<Vec<String>, String> {
+    pub fn recents(&self) -> Result<Vec<String>, String> {
         self.read(wm_recents_json)
     }
-    fn import_file(&self, path: &str) -> Result<Activation, String> {
+    pub fn import_file(&self, path: &str) -> Result<Activation, String> {
         self.input(path, wm_import_file_json)
     }
-    fn open(&self, id: &str) -> Result<Activation, String> {
+    pub fn open(&self, id: &str) -> Result<Activation, String> {
         self.input(id, wm_open_json)
     }
-    fn activate(&self, id: &str) -> Result<Activation, String> {
+    pub fn activate(&self, id: &str) -> Result<Activation, String> {
         self.input(id, wm_activate_json)
     }
-    fn back(&self) -> Result<Activation, String> {
+    pub fn back(&self) -> Result<Activation, String> {
         self.read(wm_back_json)
     }
-    fn clear(&self) -> Result<Activation, String> {
+    pub fn clear(&self) -> Result<Activation, String> {
         self.read(wm_clear_json)
     }
-    fn hold(&self) -> Result<Activation, String> {
+    pub fn hold(&self) -> Result<Activation, String> {
         self.read(wm_hold_json)
     }
-    fn speak(&self) -> Result<Activation, String> {
+    pub fn speak(&self) -> Result<Activation, String> {
         self.read(wm_speak_json)
     }
-    fn settings(&self) -> Result<Settings, String> {
+    pub fn settings(&self) -> Result<Settings, String> {
         self.read(wm_settings_json)
     }
-    fn update_settings(&self, value: &Settings) -> Result<Settings, String> {
+    pub fn update_settings(&self, value: &Settings) -> Result<Settings, String> {
         self.input(
             &serde_json::to_string(value).map_err(|e| e.to_string())?,
             wm_update_settings_json,
         )
     }
-    fn pronunciations(&self) -> Result<Vec<Pronunciation>, String> {
+    pub fn pronunciations(&self) -> Result<Vec<Pronunciation>, String> {
         self.read(wm_pronunciations_json)
     }
-    fn add_pronunciation(&self, value: &Pronunciation) -> Result<Vec<Pronunciation>, String> {
+    pub fn add_pronunciation(&self, value: &Pronunciation) -> Result<Vec<Pronunciation>, String> {
         self.input(
             &serde_json::to_string(value).map_err(|e| e.to_string())?,
             wm_add_pronunciation_json,
         )
     }
-    fn delete_pronunciation(&self, word: &str) -> Result<Vec<Pronunciation>, String> {
+    pub fn delete_pronunciation(&self, word: &str) -> Result<Vec<Pronunciation>, String> {
         self.input(word, wm_delete_pronunciation_json)
     }
-    fn export_backup(&self, path: &str) -> Result<(), String> {
+    pub fn export_backup(&self, path: &str) -> Result<(), String> {
         self.unit_input(path, wm_export_backup_json)
     }
-    fn restore_backup(&self, path: &str) -> Result<(), String> {
+    pub fn restore_backup(&self, path: &str) -> Result<(), String> {
         self.unit_input(path, wm_restore_backup_json)
     }
 }
@@ -211,7 +190,7 @@ impl Drop for NativeCore {
 
 #[cfg(test)]
 mod tests {
-    use super::{Core, NativeCore};
+    use super::NativeCore;
 
     #[test]
     fn safe_wrapper_calls_embedded_kotlin_core() {
@@ -253,7 +232,7 @@ mod tests {
 
 #[cfg(test)]
 mod access_tests {
-    use super::{Core, NativeCore};
+    use super::NativeCore;
     use crate::access::{Effect, Event, Target};
 
     #[test]

@@ -9,7 +9,7 @@ mod screens;
 mod settings;
 mod speech;
 
-use bridge::{Core, NativeCore};
+use bridge::NativeCore;
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Fill, Task, Theme};
 use models::{Activation, BoardSet, BoardView, Pronunciation, Settings, ThemeChoice};
@@ -99,7 +99,7 @@ struct App {
     access_clock: std::time::Instant,
     editor: Option<editor::Editor>,
     close_after_editor: bool,
-    core: Box<dyn Core>,
+    core: NativeCore,
     route: Route,
     previous_route: Route,
     library: Vec<BoardSet>,
@@ -172,14 +172,13 @@ enum Message {
 impl App {
     fn boot() -> (Self, Task<Message>) {
         let data = data_directory().to_string_lossy().into_owned();
-        let core: Box<dyn Core> =
-            Box::new(NativeCore::new(&data).expect("could not initialize the Kotlin core"));
+        let core = NativeCore::new(&data).expect("could not initialize the Kotlin core");
         let mut app = Self::with_core(core);
         app.gaze_setup.load();
         (app, iced::system::theme().map(Message::SystemTheme))
     }
 
-    fn with_core(core: Box<dyn Core>) -> Self {
+    fn with_core(core: NativeCore) -> Self {
         let mut app = Self {
             gaze: Default::default(),
             gaze_starting: false,
@@ -1071,7 +1070,7 @@ mod access_runner_tests {
         let saved = core
             .editor(&serde_json::json!({"operation":"save"}))
             .unwrap();
-        let mut app = App::with_core(Box::new(core));
+        let mut app = App::with_core(core);
         app.settings.select_key_binding = "F8".into();
         app.save_settings();
         let _ = app.update(Message::OpenBoardSet(saved["id"].as_str().unwrap().into()));
@@ -1118,7 +1117,7 @@ mod native_gaze_tests {
         let saved = core
             .editor(&serde_json::json!({"operation":"save"}))
             .unwrap();
-        let mut app = App::with_core(Box::new(core));
+        let mut app = App::with_core(core);
         app.settings.dwell_to_select_millis = 100;
         app.settings.dwell_rearm_delay_millis = 0;
         app.save_settings();
