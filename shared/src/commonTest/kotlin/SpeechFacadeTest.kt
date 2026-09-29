@@ -85,20 +85,6 @@ class SpeechFacadeTest {
     }
 
     @Test
-    fun updateUseSystemTtsSwitchesEngine() = runBlocking {
-        val settings = InMemorySettingsRepository()
-        val facade = facade(settings = settings)
-
-        facade.updateUseSystemTts(false)
-
-        assertEquals(TtsEngine.AZURE_USER_RESOURCE, settings.get().ttsEngine)
-
-        facade.updateUseSystemTts(true)
-
-        assertEquals(TtsEngine.SYSTEM, settings.get().ttsEngine)
-    }
-
-    @Test
     fun listVoicesOnlyReturnsTheSelectedProvidersCatalog() = runBlocking {
         val settings = InMemorySettingsRepository().apply {
             update(get().copy(ttsEngine = TtsEngine.GOOGLE_CLOUD))
@@ -142,16 +128,13 @@ class SpeechFacadeTest {
     }
 
     @Test
-    fun savingGoogleConfigPersistsRedactedStatusAndSwitchesProvider() = runBlocking {
-        val settings = InMemorySettingsRepository()
+    fun googleConfigStatusIsRedactedAndClearable() = runBlocking {
         val config = InMemoryConfigRepository()
-        val facade = facade(settings = settings, config = config)
+        val facade = facade(config = config)
 
-        facade.saveGoogleSpeechConfig(" google-secret ")
+        facade.saveValidatedGoogleSpeechConfig("google-secret") { listOf(Voice(name = "en-US-Neural2-A")) }
 
-        assertEquals("google-secret", config.getGoogleSpeechConfig()?.apiKey)
         assertTrue(facade.getGoogleSpeechConfig().credentialConfigured)
-        assertEquals(TtsEngine.GOOGLE_CLOUD, settings.get().ttsEngine)
 
         facade.clearGoogleSpeechConfig()
         assertEquals(null, config.getGoogleSpeechConfig())

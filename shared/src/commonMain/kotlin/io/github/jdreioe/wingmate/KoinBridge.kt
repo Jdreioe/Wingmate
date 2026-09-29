@@ -3,16 +3,12 @@ package io.github.jdreioe.wingmate
 import io.github.jdreioe.wingmate.application.SelectionHighlight
 import io.github.jdreioe.wingmate.application.AccessInputController
 import io.github.jdreioe.wingmate.application.AccessInputEffect
-import io.github.jdreioe.wingmate.application.SettingsUseCase
-import io.github.jdreioe.wingmate.di.appModule
 import io.github.jdreioe.wingmate.initKoin
 import io.github.jdreioe.wingmate.domain.PredictionResult
 import io.github.jdreioe.wingmate.domain.TextPredictionService
-import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.TextEditResult
 import io.github.jdreioe.wingmate.domain.TextEditingPolicy
 import io.github.jdreioe.wingmate.domain.TextSpan
-import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import kotlin.time.Clock
@@ -58,19 +54,6 @@ class KoinBridge : KoinComponent {
 
     fun insertPredictedText(text: String, cursor: Int, value: String): TextEditResult =
         TextEditingPolicy.insert(text, cursor, value)
-
-    // --- Sharing helpers ---
-    fun shareAudio(path: String) {
-        try {
-            get<io.github.jdreioe.wingmate.platform.ShareService>().shareAudio(path)
-        } catch (_: Throwable) {}
-    }
-
-    fun copyAudio(path: String) {
-        try {
-            get<io.github.jdreioe.wingmate.platform.AudioClipboard>().copyAudioFile(path)
-        } catch (_: Throwable) {}
-    }
 
     fun accessInputEnter(targetId: String): IosAccessInputResult {
         accessInput.targetEntered(targetId, nowMillis())
@@ -119,11 +102,6 @@ class KoinBridge : KoinComponent {
         selectionHighlight.activate(buttonId, nowMillis())
     }
 
-    /** Clear any active selection highlight. */
-    fun selectionHighlightClear() {
-        selectionHighlight.clear()
-    }
-
     /**
      * The currently highlighted button id for the given duration, or null when the
      * highlight has expired or is disabled by a non-positive [durationMillis].
@@ -133,15 +111,12 @@ class KoinBridge : KoinComponent {
 
     private fun nowMillis(): Long = Clock.System.now().toEpochMilliseconds()
 
-    // Debug helper: return the runtime class name of the bound VoiceRepository
-    fun debugVoiceRepositoryName(): String = try { get<io.github.jdreioe.wingmate.domain.VoiceRepository>()::class.simpleName ?: "unknown" } catch (_: Throwable) { "error" }
-
     companion object {
         private var started: Boolean = false
     fun start() {
             if (started) return
             try {
-                initKoin(appModule)
+                initKoin()
                 started = true
             } catch (_: Throwable) {
                 // Already started elsewhere, or init failed — retry on next call

@@ -11,10 +11,8 @@ import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
-import io.github.jdreioe.wingmate.domain.SoundPlayer
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
-import io.github.jdreioe.wingmate.infrastructure.IosAudioClipboard
 import io.github.jdreioe.wingmate.infrastructure.IosBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.IosBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.IosConfigRepository
@@ -26,10 +24,8 @@ import io.github.jdreioe.wingmate.infrastructure.IosPronunciationDictionaryRepos
 import io.github.jdreioe.wingmate.infrastructure.IosSaidTextRepository
 import io.github.jdreioe.wingmate.infrastructure.IosSettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.IosShareService
-import io.github.jdreioe.wingmate.infrastructure.IosSoundPlayer
 import io.github.jdreioe.wingmate.infrastructure.IosSpeechService
 import io.github.jdreioe.wingmate.infrastructure.IosVoiceRepository
-import io.github.jdreioe.wingmate.infrastructure.IosSystemVoiceProvider
 import io.github.jdreioe.wingmate.infrastructure.IosSecureEditingCredentialStorage
 import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
 import io.github.jdreioe.wingmate.application.BackupMediaAccess
@@ -39,8 +35,6 @@ import io.github.jdreioe.wingmate.application.SettingsFacade
 import io.github.jdreioe.wingmate.application.BoardsFacade
 import io.github.jdreioe.wingmate.application.CommunicationFacade
 import io.github.jdreioe.wingmate.infrastructure.IosBackupMediaAccess
-import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
-import io.github.jdreioe.wingmate.platform.AudioClipboard
 import io.github.jdreioe.wingmate.platform.ShareService
 import io.github.jdreioe.wingmate.platform.FilePicker
 import io.github.jdreioe.wingmate.platform.IosFilePicker
@@ -54,8 +48,9 @@ import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
 
-// Call this from iOS host after the Kotlin framework is initialized to register iOS-specific implementations.
-fun overrideIosSpeechService() {
+// Registers every iOS platform binding (persistence, HTTP, speech, sharing, files), overriding the
+// in-memory defaults from initKoin.
+private fun overrideIosSpeechService() {
     loadKoinModules(
         module(createdAtStart = false) {
             // Ktor client for iOS (Darwin engine)
@@ -74,7 +69,6 @@ fun overrideIosSpeechService() {
             singleOf(::IosSettingsRepository) { bind<SettingsRepository>() }
             singleOf(::IosConfigRepository) { bind<ConfigRepository>() }
             singleOf(::IosVoiceRepository) { bind<VoiceRepository>() }
-            singleOf(::IosSystemVoiceProvider) { bind<SystemVoiceProvider>() }
             singleOf(::IosSaidTextRepository) { bind<SaidTextRepository>() }
             singleOf(::IosBoardRepository) { bind<BoardRepository>() }
             singleOf(::IosBoardSetRepository) { bind<BoardSetRepository>() }
@@ -84,8 +78,6 @@ fun overrideIosSpeechService() {
             // Share service
             singleOf(::IosShareService) { bind<ShareService>() }
             singleOf(::BackupSharingFacade)
-            // Clipboard
-            singleOf(::IosAudioClipboard) { bind<AudioClipboard>() }
             
             // Pronunciation dictionary (persisted)
             singleOf(::IosPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
@@ -93,7 +85,6 @@ fun overrideIosSpeechService() {
             singleOf(::IosSecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
             singleOf(::IosBackupMediaAccess) { bind<BackupMediaAccess>() }
             singleOf(::IosFilePicker) { bind<FilePicker>() }
-            singleOf(::IosSoundPlayer) { bind<SoundPlayer>() }
             // Usage-log destination for RealAacLogger (app documents dir)
             single(named("logDir")) { IosFileStorage.documentsDirectory() }
         }
@@ -101,19 +92,15 @@ fun overrideIosSpeechService() {
 }
 
 // Start Koin including the iOS overrides module so platform bindings are present from startup.
-fun startKoinWithOverrides() {
+private fun startKoinWithOverrides() {
     // Ensure the base module + appModule (which registers PhraseListStore) are started
     KoinBridge.start()
     // Then apply iOS-specific overrides (repositories, Http client, speech service)
     overrideIosSpeechService()
 }
 
-// Simple Swift-friendly wrapper to apply the overrides
+// Swift entry point: IosViewModel.start() calls startKoinWithOverridesBridge(), then Swift resolves facades here.
 class IosDiBridge {
-    fun applyOverrides() = overrideIosSpeechService()
-    // Start Koin including iOS overrides (Swift-friendly)
-    fun start() = startKoinWithOverrides()
-    // Alternative explicit bridge name for Swift binding
     fun startKoinWithOverridesBridge() = startKoinWithOverrides()
     fun backupFacade(): BackupSharingFacade = KoinPlatform.getKoin().get()
     fun speechFacade(): SpeechFacade = KoinPlatform.getKoin().get()

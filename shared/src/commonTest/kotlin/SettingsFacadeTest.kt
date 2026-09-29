@@ -33,12 +33,10 @@ class SettingsFacadeTest {
         facade.updateHoldToSelectMillis(10_000)
         facade.updateDwellToSelectMillis(60_000)
         facade.updateSelectionDebounceMillis(60_000)
-        facade.updateSelectionHighlightMillis(60_000)
 
         assertEquals(2_000, facade.getSettings().holdToSelectMillis)
         assertEquals(5_000, facade.getSettings().dwellToSelectMillis)
         assertEquals(1_000, facade.getSettings().selectionDebounceMillis)
-        assertEquals(5_000, facade.getSettings().selectionHighlightMillis)
     }
 
     @Test
@@ -79,11 +77,10 @@ class SettingsFacadeTest {
     fun startupModeTogglesAndReadsBackAsScreens() = runBlocking {
         val facade = facade()
 
-        assertFalse(facade.startupUsesScreens())
+        assertFalse(facade.iosSettingsFlags().startupUsesScreens)
 
         facade.updateStartupUsesScreens(true)
 
-        assertTrue(facade.startupUsesScreens())
         assertEquals(StartupMode.Screens, facade.getSettings().startupMode)
         assertTrue(facade.iosSettingsFlags().startupUsesScreens)
     }

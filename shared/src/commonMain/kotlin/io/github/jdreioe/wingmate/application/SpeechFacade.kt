@@ -83,45 +83,22 @@ class SpeechFacade(
         }
     }
 
-    suspend fun usesSystemTts(): Boolean = settingsUseCase.get().ttsEngine == TtsEngine.SYSTEM
-
-    suspend fun updateUseSystemTts(enabled: Boolean) {
-        settingsUseCase.update(
-            settingsUseCase.get().copy(ttsEngine = if (enabled) TtsEngine.SYSTEM else TtsEngine.AZURE_USER_RESOURCE),
-        )
-    }
-
-    suspend fun updateTtsEngine(engine: TtsEngine) {
-        settingsUseCase.update(settingsUseCase.get().copy(ttsEngine = engine))
-    }
-
+    /** Select the speech engine by [TtsEngine] name; unknown names fall back to system TTS. */
     suspend fun updateTtsEngineNamed(engine: String) {
-        updateTtsEngine(runCatching { TtsEngine.valueOf(engine) }.getOrDefault(TtsEngine.SYSTEM))
+        val parsed = runCatching { TtsEngine.valueOf(engine) }.getOrDefault(TtsEngine.SYSTEM)
+        settingsUseCase.update(settingsUseCase.get().copy(ttsEngine = parsed))
     }
 
     /** Safe for native UI: deliberately never returns the saved subscription key. */
     suspend fun getSpeechConfig(): SpeechServiceConfigStatus = configRepository.getSpeechConfigStatus()
-
-    suspend fun saveSpeechConfig(config: SpeechServiceConfig) {
-        configRepository.saveSpeechConfig(config)
-    }
 
     suspend fun saveAzureSpeechConfig(endpoint: String, subscriptionKey: String) {
         configRepository.saveSpeechConfig(SpeechServiceConfig(endpoint.trim(), subscriptionKey.trim()))
         settingsUseCase.update(settingsUseCase.get().copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE))
     }
 
-    suspend fun clearSpeechConfig() {
-        configRepository.clearSpeechConfig()
-    }
-
     suspend fun getGoogleSpeechConfig(): GoogleSpeechConfigStatus =
         configRepository.getGoogleSpeechConfigStatus()
-
-    suspend fun saveGoogleSpeechConfig(apiKey: String) {
-        configRepository.saveGoogleSpeechConfig(GoogleSpeechConfig(apiKey.trim()))
-        settingsUseCase.update(settingsUseCase.get().copy(ttsEngine = TtsEngine.GOOGLE_CLOUD))
-    }
 
     /**
      * Securely stores a candidate key only if Google accepts it for voice discovery.
