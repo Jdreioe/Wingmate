@@ -44,7 +44,7 @@ kotlin {
                 api(project(":feature:communication:domain"))
                 api(project(":feature:communication:data"))
                 api(project(":feature:communication:presentation"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
                 implementation(libs.kotlinx.serialization.json)
                 api(libs.koin.core)
                 implementation(libs.ktor.client.core)
@@ -61,7 +61,7 @@ kotlin {
             dependencies {
                 implementation(kotlin("test"))
                 // Fake Main dispatcher for MVIKotlin CoroutineExecutor in tests
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
             }
         }
         val androidMain by getting {

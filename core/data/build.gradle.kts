@@ -31,7 +31,7 @@ kotlin {
             dependencies {
                 implementation(project(":core:domain"))
                 implementation(libs.koin.core)
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.ktor.client.core)
                 implementation("io.github.pdvrieze.xmlutil:core:1.0.2.1")
@@ -42,7 +42,7 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
-                implementation("androidx.core:core-ktx:1.19.0")
+                implementation("androidx.core:core-ktx:1.19.1")
                 implementation("org.apache.commons:commons-compress:1.28.0")
             }
         }
