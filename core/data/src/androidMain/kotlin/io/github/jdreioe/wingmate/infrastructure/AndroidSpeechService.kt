@@ -62,9 +62,9 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 
 /**
- * AndroidSpeechService prefers using Azure TTS when a persisted SpeechServiceConfig exists.
- * It synthesizes to memory, writes an MP3 temp file and plays it with MediaPlayer.
- * Falls back to platform TextToSpeech when no Azure config is available.
+ * Plays cloud speech (Azure or Google) through MediaPlayer and device speech through platform
+ * TextToSpeech. Communication-session requests speak exactly the requested engine and let the
+ * session own fallback and History; the remaining legacy entry points fall back themselves.
  */
 class AndroidSpeechService(
     private val context: Context,
@@ -328,7 +328,11 @@ class AndroidSpeechService(
         return requestId
     }
 
-    private suspend fun <T> executeRequest(requestId: Long, block: suspend () -> T): T = try {
+    private suspend fun <T> executeRequest(
+        requestId: Long,
+        announceFailure: Boolean = true,
+        block: suspend () -> T,
+    ): T = try {
         block()
     } catch (cancelled: CancellationException) {
         if (requestGeneration.get() == requestId) {
@@ -340,8 +344,10 @@ class AndroidSpeechService(
         if (requestGeneration.get() == requestId) {
             stopNativePlayback()
             state = SpeechPlaybackState(requestId, SpeechPlaybackStatus.FAILED, "Speech could not be played")
-            Handler(Looper.getMainLooper()).post {
-                Toast.makeText(context, "Speech could not be played. Please try again.", Toast.LENGTH_LONG).show()
+            if (announceFailure) {
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(context, "Speech could not be played. Please try again.", Toast.LENGTH_LONG).show()
+                }
             }
         }
         throw error
@@ -417,11 +423,13 @@ class AndroidSpeechService(
         pitch: Double?,
         rate: Double?,
         cacheAudio: Boolean,
+        engine: TtsEngine,
     ) {
         val requestId = beginRequest()
-        executeRequest(requestId) {
+        // The session explains failures and falls back itself, so no toast here.
+        executeRequest(requestId, announceFailure = false) {
             val segments = SpeechTextProcessor.processText(text)
-            speakSegmentsInternal(requestId, segments, voice, pitch, rate, cacheAudio, recordInHistory = false)
+            speakSessionSegments(requestId, segments, voice, pitch, rate, cacheAudio, engine)
         }
     }
 
@@ -445,10 +453,11 @@ class AndroidSpeechService(
         pitch: Double?,
         rate: Double?,
         cacheAudio: Boolean,
+        engine: TtsEngine,
     ) {
         val requestId = beginRequest()
-        executeRequest(requestId) {
-            speakSegmentsInternal(requestId, segments, voice, pitch, rate, cacheAudio, recordInHistory = false)
+        executeRequest(requestId, announceFailure = false) {
+            speakSessionSegments(requestId, segments, voice, pitch, rate, cacheAudio, engine)
         }
     }
 
@@ -532,6 +541,11 @@ class AndroidSpeechService(
         pendingSpeechCache.toList().forEach { cacheSpeech(it.text, it.voice, it.pitch, it.rate) }
     }
 
+    /**
+     * Legacy playback for callers outside the Communication session (voice previews and the
+     * iOS-shaped facade): uses the selected engine, falls back to platform TTS on its own, and
+     * records History.
+     */
     private suspend fun speakSegmentsInternal(
         requestId: Long,
         segments: List<SpeechSegment>,
@@ -539,59 +553,109 @@ class AndroidSpeechService(
         pitch: Double?,
         rate: Double?,
         cacheAudio: Boolean,
-        recordInHistory: Boolean = true,
     ) {
-        // Check user preference for TTS engine first
-        val koin = GlobalContext.getOrNull()
-        val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
-        val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
-        
-        // Store current playback context for resume functionality
+        val uiSettings = currentSettings()
+        val engine = uiSettings?.ttsEngine ?: TtsEngine.SYSTEM
+        rememberPlaybackContext(segments, voice, pitch, rate)
+        val combinedText = segments.joinToString("") { it.text }
+
+        if (engine == TtsEngine.SYSTEM) {
+            playSegmentsWithPlatformTts(requestId, segments, voice, pitch, rate)
+            recordHistory(combinedText, voice)
+            return
+        }
+        val played = try {
+            playCloud(requestId, engine, segments, voice, pitch, rate, cacheAudio, uiSettings)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            when ((failure as? CloudSpeechUnavailable)?.reason) {
+                CloudSpeechUnavailable.Reason.NotConfigured -> showConfigWarning()
+                CloudSpeechUnavailable.Reason.Offline -> showOfflineWarning()
+                null -> Unit
+            }
+            if (requestGeneration.get() != requestId) throw CancellationException("Speech request was replaced")
+            speakWithPlatformTts(requestId, combinedText, voice, pitch, rate)
+            recordHistory(combinedText, voice)
+            return
+        }
+        recordHistory(combinedText, played.voice, played.cachedAudioPath)
+    }
+
+    /** Communication-session playback: speaks with exactly [engine] and never falls back or records History. */
+    private suspend fun speakSessionSegments(
+        requestId: Long,
+        segments: List<SpeechSegment>,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        engine: TtsEngine,
+    ) {
+        rememberPlaybackContext(segments, voice, pitch, rate)
+        if (engine == TtsEngine.SYSTEM) {
+            playSegmentsWithPlatformTts(requestId, segments, voice, pitch, rate)
+        } else {
+            playCloud(requestId, engine, segments, voice, pitch, rate, cacheAudio, currentSettings())
+        }
+    }
+
+    private suspend fun currentSettings(): io.github.jdreioe.wingmate.domain.Settings? {
+        val settingsRepo = GlobalContext.getOrNull()?.let {
+            runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull()
+        }
+        return settingsRepo?.let { runCatching { it.get() }.getOrNull() }
+    }
+
+    /** Store current playback context for resume functionality. */
+    private fun rememberPlaybackContext(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
         currentSegments = segments
         currentSegmentIndex = 0
         currentVoice = voice
-        currentPitch = pitch  
+        currentPitch = pitch
         currentRate = rate
         pausedAtSegment = false
         isPlaying = true
         isPaused = false
-        
-        // Combine all segments text for cache lookup and history
+    }
+
+    /** Thrown by [playCloud] when the selected cloud provider cannot be tried at all. */
+    private class CloudSpeechUnavailable(val reason: Reason) : IllegalStateException("Cloud speech unavailable: $reason") {
+        enum class Reason { NotConfigured, Offline }
+    }
+
+    private class CloudPlayback(val voice: Voice, val cachedAudioPath: String?)
+
+    /**
+     * Starts cloud playback for a non-system [engine], reusing cached audio when allowed.
+     * Throws [CloudSpeechUnavailable] or the synthesis failure instead of falling back.
+     */
+    private suspend fun playCloud(
+        requestId: Long,
+        engine: TtsEngine,
+        segments: List<SpeechSegment>,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        uiSettings: io.github.jdreioe.wingmate.domain.Settings?,
+    ): CloudPlayback {
         val combinedText = segments.joinToString("") { it.text }
 
-        // If user prefers system TTS, use it directly
-        val engine = uiSettings?.ttsEngine ?: TtsEngine.SYSTEM
-        if (engine == TtsEngine.SYSTEM) {
-            playSegmentsWithPlatformTts(requestId, segments, voice, pitch, rate)
-            if (recordInHistory) recordHistory(combinedText, voice)
-            return
-        }
-
-        // Try to reuse a cached audio file from history to save API calls (works even offline)
-        if (cacheAudio && maybePlayFromHistoryCache(requestId, combinedText, voice, pitch, rate, uiSettings?.primaryLanguage)) {
-            return
+        // Reuse a cached audio file from history to save API calls (works even offline).
+        if (cacheAudio) {
+            maybePlayFromHistoryCache(requestId, combinedText, voice, pitch, rate, uiSettings?.primaryLanguage)
+                ?.let { return it }
         }
 
         val azureConfig = if (engine == TtsEngine.GOOGLE_CLOUD) null else getConfig()
         val googleConfig = if (engine == TtsEngine.GOOGLE_CLOUD) getGoogleConfig() else null
         if (azureConfig == null && googleConfig == null) {
-            // No credential for the selected provider - keep communication working via system TTS.
-            showConfigWarning()
-            speakWithPlatformTts(requestId, combinedText, voice, pitch, rate)
-            if (recordInHistory) recordHistory(combinedText, voice)
-            return
+            throw CloudSpeechUnavailable(CloudSpeechUnavailable.Reason.NotConfigured)
         }
-        
-        // Check if we're online before attempting cloud TTS
-        if (!isOnline()) {
-            showOfflineWarning()
-            // Fall back to system TTS when offline
-            speakWithPlatformTts(requestId, combinedText, voice, pitch, rate)
-            if (recordInHistory) recordHistory(combinedText, voice)
-            return
-        }
-        
-        withContext(Dispatchers.IO) {
+        if (!isOnline()) throw CloudSpeechUnavailable(CloudSpeechUnavailable.Reason.Offline)
+
+        return withContext(Dispatchers.IO) {
             try {
                 val useDefaultAzureVoice = engine != TtsEngine.GOOGLE_CLOUD && shouldUseDefaultAzureVoice(voice)
                 val v = if (engine == TtsEngine.GOOGLE_CLOUD) {
@@ -606,9 +670,6 @@ class AndroidSpeechService(
                 }
 
                 // Determine effective language similar to desktop implementation
-                val koin = GlobalContext.getOrNull()
-                val settingsRepo = koin?.let { runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull() }
-                val uiSettings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
                 val effectiveLang =
                     v.selectedLanguage.takeIf(String::isNotBlank)
                         ?: uiSettings?.primaryLanguage?.takeIf(String::isNotBlank)
@@ -648,8 +709,7 @@ class AndroidSpeechService(
                 if (cacheAudio && outFile.exists() && outFile.length() > 0) {
                     // Cache hit! reuse the file without calling Azure
                     startPlayback(requestId, outFile, vForSsml)
-                    if (recordInHistory) recordHistory(combinedText, vForSsml, outFile.absolutePath)
-                    return@withContext
+                    return@withContext CloudPlayback(vForSsml, outFile.absolutePath)
                 }
 
                 // Cache Miss - Proceed to Synthesis
@@ -674,10 +734,8 @@ class AndroidSpeechService(
                     AzureTtsClient.synthesize(client, ssml, azureConfig!!)
                 }
 
-                // Persist to an app-private Music directory so history can reference it later
-                
-                // Use a stable hash for the filename to allow aggressive caching and reuse
-                
+                // Persist to an app-private Music directory so history can reference it later.
+                // Use a stable hash for the filename to allow aggressive caching and reuse.
                 // If file already exists and is valid, skip writing (unless 0 bytes)
                 if (!outFile.exists() || outFile.length() == 0L) {
                     FileOutputStream(outFile).use { fos ->
@@ -690,29 +748,16 @@ class AndroidSpeechService(
                 }
 
                 startPlayback(requestId, outFile, vForSsml, deleteAfterPlayback = !cacheAudio)
-                if (recordInHistory) {
-                    recordHistory(combinedText, vForSsml, outFile.absolutePath.takeIf { cacheAudio })
-                }
+                CloudPlayback(vForSsml, outFile.absolutePath.takeIf { cacheAudio })
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (t: Throwable) {
-                if (engine == TtsEngine.GOOGLE_CLOUD) {
-                    OperationalLogger.warn(
-                        operation = "speech.google_synthesis",
-                        outcome = "platform_fallback",
-                        exceptionClass = t.loggingClassName(),
-                    )
-                } else {
-                    OperationalLogger.warn(
-                        operation = "speech.azure_synthesis",
-                        outcome = "platform_fallback",
-                        exceptionClass = t.loggingClassName(),
-                    )
-                }
-                // Fallback to platform TTS on error
-                if (requestGeneration.get() != requestId) throw CancellationException("Speech request was replaced")
-                speakWithPlatformTts(requestId, combinedText, voice, pitch, rate)
-                if (recordInHistory) recordHistory(combinedText, voice)
+                OperationalLogger.warn(
+                    operation = if (engine == TtsEngine.GOOGLE_CLOUD) "speech.google_synthesis" else "speech.azure_synthesis",
+                    outcome = "failed",
+                    exceptionClass = t.loggingClassName(),
+                )
+                throw t
             }
         }
     }
@@ -873,11 +918,11 @@ class AndroidSpeechService(
         pitch: Double?,
         rate: Double?,
         uiPrimaryLanguage: String?
-    ): Boolean {
+    ): CloudPlayback? {
         return runCatching {
             val koin = GlobalContext.getOrNull()
             val saidRepo = koin?.getOrNull<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
-            if (saidRepo == null) return false
+            if (saidRepo == null) return null
 
             val v = effectiveVoice(voice, uiPrimaryLanguage)
             val list = runCatching { withContext(Dispatchers.IO) { saidRepo.list() } }.getOrNull().orEmpty()
@@ -907,11 +952,11 @@ class AndroidSpeechService(
                 .firstOrNull()
 
             val path = candidate?.audioFilePath
-            if (path.isNullOrBlank()) return false
+            if (path.isNullOrBlank()) return null
 
             val file = File(path)
-            if (!file.exists() || file.length() <= 0L) return false
-            if (!file.name.matches(Regex("tts_v2_[0-9a-f]{64}\\.mp3"))) return false
+            if (!file.exists() || file.length() <= 0L) return null
+            if (!file.name.matches(Regex("tts_v2_[0-9a-f]{64}\\.mp3"))) return null
 
             // Play the cached file with MediaPlayer (mirror Azure playback path)
             val player = MediaPlayer()
@@ -947,16 +992,15 @@ class AndroidSpeechService(
                     markPlaybackStarted(text, v, requestId)
                     player.start()
                 }
-                recordHistory(text, v, file.absolutePath)
-                true
+                CloudPlayback(v, file.absolutePath)
             } catch (_: Throwable) {
                 try { player.release() } catch (_: Throwable) {}
                 finishPlayback(requestId)
-                false
+                null
             }
         }.getOrElse { error ->
             if (error is CancellationException) throw error
-            false
+            null
         }
     }
 
