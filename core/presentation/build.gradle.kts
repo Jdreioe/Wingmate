@@ -22,8 +22,6 @@ kotlin {
             dependencies {
                 implementation(project(":core:domain"))
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-                implementation("com.arkivanov.mvikotlin:mvikotlin:3.3.0")
-                implementation("com.arkivanov.mvikotlin:mvikotlin-extensions-coroutines:3.3.0")
             }
         }
     }

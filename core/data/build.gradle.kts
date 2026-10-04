@@ -11,12 +11,20 @@ kotlin {
         namespace = "io.github.jdreioe.wingmate.core.data"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
+
+        withDeviceTestBuilder { sourceSetTreeName = "test" }.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
 
     jvm()
     iosX64()
     iosArm64()
     iosSimulatorArm64()
+    linuxX64()
+    mingwX64()
+    macosX64()
+    macosArm64()
 
     sourceSets {
         val commonMain by getting {
@@ -24,24 +32,18 @@ kotlin {
                 implementation(project(":core:domain"))
                 implementation(libs.koin.core)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.ktor.client.core)
-                implementation(libs.ktor.client.contentNegotiation)
-                implementation(libs.ktor.serialization.json)
-                implementation("io.github.pdvrieze.xmlutil:core:0.91.3")
+                implementation("io.github.pdvrieze.xmlutil:core:1.0.2.1")
                 implementation(libs.okio)
-                implementation("app.cash.sqldelight:runtime:2.0.2")
-                implementation("app.cash.sqldelight:coroutines-extensions:2.0.2")
             }
         }
 
         val androidMain by getting {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
-                implementation("androidx.core:core-ktx:1.13.1")
-                implementation("app.cash.sqldelight:android-driver:2.0.2")
-                implementation("org.apache.commons:commons-compress:1.27.1")
+                implementation("androidx.core:core-ktx:1.19.0")
+                implementation("org.apache.commons:commons-compress:1.28.0")
             }
         }
 
@@ -49,6 +51,22 @@ kotlin {
             dependencies {
                 implementation(kotlin("test"))
                 implementation(libs.ktor.client.mock)
+                implementation(libs.ktor.client.contentNegotiation)
+                implementation(libs.ktor.serialization.json)
+            }
+        }
+
+        val androidDeviceTest by getting {
+            dependencies {
+                implementation(libs.androidx.testExt.junit)
+                implementation("androidx.test:runner:1.7.0")
+            }
+        }
+
+        // The JVM target only runs tests; clients created with HttpClient() need an engine there.
+        val jvmTest by getting {
+            dependencies {
+                implementation(libs.ktor.client.okhttp)
             }
         }
 
@@ -57,15 +75,6 @@ kotlin {
         val iosMain by getting {
             dependencies {
                 implementation(libs.ktor.client.darwin)
-                implementation("app.cash.sqldelight:native-driver:2.0.2")
-            }
-        }
-
-        val jvmMain by getting {
-            dependencies {
-                implementation(libs.ktor.client.okhttp)
-                implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
-                implementation("org.apache.commons:commons-compress:1.27.1")
             }
         }
     }

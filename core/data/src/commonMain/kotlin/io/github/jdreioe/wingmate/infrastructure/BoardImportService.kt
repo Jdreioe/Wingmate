@@ -50,15 +50,6 @@ class BoardImportService(
         return importBoardSetFromPathResult(filePath)
     }
 
-    /** Compatibility wrapper for callers that have not migrated to structured results. */
-    suspend fun importBoardSet(): ObfBoardSet? =
-        (importBoardSetResult() as? BoardImportResult.Success)?.boardSet
-
-    suspend fun importBoards(isModern: Boolean = true): Boolean = importBoardSet() != null
-
-    suspend fun importBoardSetFromPath(filePath: String): ObfBoardSet? =
-        (importBoardSetFromPathResult(filePath) as? BoardImportResult.Success)?.boardSet
-
     suspend fun importBoardSetFromPathResult(filePath: String): BoardImportResult {
         val warnings = mutableListOf<BoardImportWarning>()
         val storedPaths = mutableListOf<String>()

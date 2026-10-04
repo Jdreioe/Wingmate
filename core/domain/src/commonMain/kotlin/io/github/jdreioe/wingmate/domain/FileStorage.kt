@@ -1,5 +1,8 @@
 package io.github.jdreioe.wingmate.domain
 
+/** Raised when app-private storage cannot persist a file. */
+class FileStorageWriteException : Exception("File could not be written")
+
 /**
  * Platform-agnostic interface for reading and writing files to app-private storage.
  */

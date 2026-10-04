@@ -44,7 +44,6 @@ object FeatureUsageEvents {
     const val PHRASE_DELETED = "phrase_deleted"
     const val PHRASE_MOVED = "phrase_moved"
     const val PHRASE_PLAYED = "phrase_played"
-    const val PHRASE_PLAYED_SECONDARY = "phrase_played_secondary"
     const val PHRASE_INSERTED = "phrase_inserted"
 
     const val CATEGORY_ADDED = "category_added"
@@ -78,11 +77,6 @@ object FeatureUsageEvents {
     const val BOARDSET_LOCK_TOGGLED = "boardset_lock_toggled"
     const val BOARDSET_TOUCHED = "boardset_touched"
     const val BOARD_CREATED = "board_created"
-    const val BOARD_CELL_UPSERTED = "board_cell_upserted"
-    const val BOARD_CELL_CLEARED = "board_cell_cleared"
-
-    const val DICTIONARY_ENTRY_ADDED = "dictionary_entry_added"
-    const val DICTIONARY_ENTRY_DELETED = "dictionary_entry_deleted"
 }
 
 fun FeatureUsageReporter.reportEvent(

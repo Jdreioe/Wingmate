@@ -3,7 +3,7 @@ set -euo pipefail
 
 if git grep -nE \
   '(OPEN_SYMBOLS_SECRET|OPENSYMBOLS_SECRET|setOpenSymbolsSecret|setSharedSecret|WINGMATE_AZURE_KEY)' \
-  -- androidApp iosApp linuxApp shared core; then
+  -- androidApp iosApp shared core; then
   echo "Server/developer credentials must not be handled by client code." >&2
   exit 1
 fi

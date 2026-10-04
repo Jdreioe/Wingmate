@@ -43,6 +43,8 @@ data class BoardSettingsOverrides(
     val showSymbols: Boolean? = null,
     val labelAtTop: Boolean? = null,
     val showMessageBar: Boolean? = null,
+    val showSpeakButton: Boolean? = null,
+    val messageBarEditable: Boolean? = null,
     val activationBehavior: BoardActivationBehavior? = null,
     val returnBehavior: BoardReturnBehavior? = null
 ) {
@@ -51,6 +53,8 @@ data class BoardSettingsOverrides(
             showSymbols == null &&
             labelAtTop == null &&
             showMessageBar == null &&
+            showSpeakButton == null &&
+            messageBarEditable == null &&
             activationBehavior == null &&
             returnBehavior == null
 }
@@ -60,6 +64,8 @@ data class ResolvedBoardSettings(
     val showSymbols: Boolean,
     val labelAtTop: Boolean,
     val showMessageBar: Boolean,
+    val showSpeakButton: Boolean,
+    val messageBarEditable: Boolean,
     val activationBehavior: BoardActivationBehavior,
     val returnBehavior: BoardReturnBehavior
 )
@@ -69,6 +75,8 @@ fun resolveBoardSettings(
     appShowSymbols: Boolean,
     appLabelAtTop: Boolean,
     appShowMessageBar: Boolean = true,
+    appShowSpeakButton: Boolean = true,
+    appMessageBarEditable: Boolean = true,
     appActivationBehavior: BoardActivationBehavior = BoardActivationBehavior.SpeakAndAdd,
     appReturnBehavior: BoardReturnBehavior = BoardReturnBehavior.Stay,
     screen: BoardSettingsOverrides = BoardSettingsOverrides(),
@@ -86,6 +94,8 @@ fun resolveBoardSettings(
         showSymbols = showSymbols,
         labelAtTop = page.labelAtTop ?: screen.labelAtTop ?: appLabelAtTop,
         showMessageBar = page.showMessageBar ?: screen.showMessageBar ?: appShowMessageBar,
+        showSpeakButton = page.showSpeakButton ?: screen.showSpeakButton ?: appShowSpeakButton,
+        messageBarEditable = page.messageBarEditable ?: screen.messageBarEditable ?: appMessageBarEditable,
         activationBehavior = page.activationBehavior
             ?: screen.activationBehavior
             ?: appActivationBehavior,

@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.VoiceProvider
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
@@ -8,6 +9,8 @@ import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.plugins.HttpRedirect
+import io.ktor.client.plugins.pluginOrNull
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -38,15 +41,9 @@ object AzureTtsClient {
         config: SpeechServiceConfig,
         audioFormat: AudioFormat = AudioFormat.MP3_24KHZ_160KBPS
     ): ByteArray {
-        // The stored config.endpoint may be either a short region (e.g. "westus")
-        // or a full host/URL. Support both forms:
-        val baseUrl = when {
-            config.endpoint.startsWith("http", ignoreCase = true) -> config.endpoint.trimEnd('/')
-            config.endpoint.contains("tts.speech.microsoft.com", ignoreCase = true) || 
-            config.endpoint.contains("cognitiveservices", ignoreCase = true) -> "https://${config.endpoint.trimEnd('/') }"
-            else -> "https://${config.endpoint}.tts.speech.microsoft.com"
-        }
-        val url = "$baseUrl/cognitiveservices/v1"
+        val endpoint = requireAzureSpeechEndpoint(config.endpoint)
+        requireCredentialSafeClient(client)
+        val url = endpoint.synthesisUrl
 
         OperationalLogger.info("azure_tts.synthesize", "started")
 
@@ -110,13 +107,6 @@ object AzureTtsClient {
                 }
             }
         }
-    }
-    
-    /**
-     * Backward compatibility method with default audio format
-     */
-    suspend fun synthesize(client: HttpClient, ssml: String, config: SpeechServiceConfig): ByteArray {
-        return synthesize(client, ssml, config, AudioFormat.MP3_24KHZ_160KBPS)
     }
 
     /**
@@ -542,105 +532,13 @@ object AzureTtsClient {
 
     private const val MATHML_NAMESPACE = "http://www.w3.org/1998/Math/MathML"
     
-    // ========================================================================
-    // TOKEN-BASED AUTHENTICATION (Secure Backend)
-    // ========================================================================
-    
-    /**
-     * Synthesize speech using a bearer token instead of subscription key.
-     * 
-     * This is the secure method that should be used in production:
-     * 1. Client calls TokenExchangeClient.getToken() to get a short-lived token
-     * 2. This method uses that token to call Azure TTS directly
-     * 3. No subscription key is ever stored on the client device
-     * 
-     * @param client Ktor HTTP client
-     * @param ssml The SSML document to synthesize
-     * @param token Bearer token from TokenExchangeClient
-     * @param region Azure region (e.g., "eastus")
-     * @param audioFormat Desired audio format
-     */
-    suspend fun synthesizeWithToken(
-        client: HttpClient,
-        ssml: String,
-        token: String,
-        region: String,
-        audioFormat: AudioFormat = AudioFormat.MP3_24KHZ_160KBPS
-    ): ByteArray {
-        val url = "https://$region.tts.speech.microsoft.com/cognitiveservices/v1"
-        
-        OperationalLogger.info("azure_tts.token_synthesize", "started")
-        
-        try {
-            val response: HttpResponse = client.post(url) {
-                headers {
-                    // Use Bearer token instead of subscription key
-                    append(HttpHeaders.Authorization, "Bearer $token")
-                    append(HttpHeaders.ContentType, "application/ssml+xml")
-                    append("X-Microsoft-OutputFormat", audioFormat.value)
-                    append(HttpHeaders.UserAgent, "WingmateKMP/2.0")
-                    append(HttpHeaders.Accept, "audio/*")
-                }
-                setBody(ssml)
-            }
-            
-            OperationalLogger.info("azure_tts.token_synthesize", "response_received", statusCode = response.status.value)
-            
-            when {
-                response.status.isSuccess() -> {
-                    val bytes = response.body<ByteArray>()
-                    OperationalLogger.info("azure_tts.token_synthesize", "succeeded", count = bytes.size)
-                    
-                    if (bytes.isEmpty()) {
-                        throw RuntimeException("Azure TTS returned empty audio data")
-                    }
-                    return bytes
-                }
-                response.status.value == 401 -> {
-                    OperationalLogger.warn("azure_tts.token_synthesize", "authentication_failed", statusCode = 401)
-                    throw TokenExpiredException("Azure TTS token expired or invalid")
-                }
-                response.status.value == 429 -> {
-                    OperationalLogger.warn("azure_tts.token_synthesize", "rate_limited", statusCode = 429)
-                    throw RuntimeException("Azure TTS rate limit exceeded. Please try again later.")
-                }
-                else -> {
-                    OperationalLogger.error(
-                        operation = "azure_tts.token_synthesize",
-                        outcome = "failed",
-                        statusCode = response.status.value,
-                    )
-                    throw RuntimeException("Azure TTS failed: ${response.status}")
-                }
-            }
-        } catch (e: TokenExpiredException) {
-            throw e
-        } catch (e: RuntimeException) {
-            throw e
-        } catch (e: Exception) {
-            OperationalLogger.error(
-                operation = "azure_tts.token_synthesize",
-                outcome = "network_failed",
-                exceptionClass = e.loggingClassName(),
-            )
-            throw RuntimeException("Azure TTS network error", e)
-        }
-    }
-
-    
     suspend fun getVoices(
         client: HttpClient, 
         config: SpeechServiceConfig
     ): List<Voice> {
-        // The stored config.endpoint may be either a short region (e.g. "westus")
-        // or a full host/URL. Support both forms:
-        val baseUrl = when {
-            config.endpoint.startsWith("http", ignoreCase = true) -> config.endpoint.trimEnd('/')
-            config.endpoint.contains("tts.speech.microsoft.com", ignoreCase = true) || 
-            config.endpoint.contains("cognitiveservices", ignoreCase = true) -> "https://${config.endpoint.trimEnd('/') }"
-            else -> "https://${config.endpoint}.tts.speech.microsoft.com"
-        }
-        val url = "$baseUrl/cognitiveservices/voices/list"
+        val endpoint = requireAzureSpeechEndpoint(config.endpoint)
+        requireCredentialSafeClient(client)
+        val url = endpoint.voicesUrl
         
         OperationalLogger.info("azure_voice_catalog.fetch", "started")
         
@@ -682,7 +580,8 @@ object AzureTtsClient {
         val Gender: String,
         val Locale: String,
         val LocalName: String? = null,
-        val DisplayName: String? = null
+        val DisplayName: String? = null,
+        val SecondaryLocaleList: List<String> = emptyList(),
     ) {
         fun toDomain(): Voice {
             val display = if (LocalName != null && DisplayName != null) {
@@ -695,17 +594,24 @@ object AzureTtsClient {
                 name = ShortName,
                 displayName = display,
                 primaryLanguage = Locale,
+                supportedLanguages = (listOf(Locale) + SecondaryLocaleList).distinct(),
                 gender = Gender,
+                provider = VoiceProvider.AZURE,
                 // Assume 1.0 default pitch/rate
                 pitch = 1.0, 
                 rate = 1.0
             )
         }
     }
-}
 
-/**
- * Exception thrown when the Azure TTS token has expired.
- * The caller should invalidate the cached token and request a new one.
- */
-class TokenExpiredException(message: String) : Exception(message)
+    /**
+     * Ktor follows GET redirects by default and only strips its standard
+     * Authorization header when the authority changes. Azure's subscription-key
+     * header would otherwise be forwarded to the redirect target.
+     */
+    private fun requireCredentialSafeClient(client: HttpClient) {
+        check(client.pluginOrNull(HttpRedirect) == null) {
+            "Azure credential requests require an HTTP client with redirects disabled"
+        }
+    }
+}

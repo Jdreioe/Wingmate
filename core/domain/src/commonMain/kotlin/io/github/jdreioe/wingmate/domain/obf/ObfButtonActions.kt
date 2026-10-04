@@ -5,13 +5,27 @@ package io.github.jdreioe.wingmate.domain.obf
  */
 sealed class ObfButtonActionEffect {
     data class AppendText(val text: String) : ObfButtonActionEffect()
+    data class WrapSelection(
+        val prefix: String,
+        val suffix: String,
+        val fallback: String = DEFAULT_WRAP_FALLBACK,
+    ) : ObfButtonActionEffect()
     data object Backspace : ObfButtonActionEffect()
     data object Clear : ObfButtonActionEffect()
     data object Speak : ObfButtonActionEffect()
     data object Home : ObfButtonActionEffect()
     data object NativeKeyboard : ObfButtonActionEffect()
     data object Predictions : ObfButtonActionEffect()
+    data object Pause : ObfButtonActionEffect()
+    data object Resume : ObfButtonActionEffect()
+    data object Stop : ObfButtonActionEffect()
+    data object ToggleSecondaryLanguage : ObfButtonActionEffect()
+    data object SwapHeldMessage : ObfButtonActionEffect()
     data class Unsupported(val action: String) : ObfButtonActionEffect()
+
+    companion object {
+        const val DEFAULT_WRAP_FALLBACK = "text"
+    }
 }
 
 /**
@@ -20,12 +34,17 @@ sealed class ObfButtonActionEffect {
  * Supported:
  * - `+…` append the following characters (including spaces after the `+`)
  * - `:space` append a single space
- * - `:backspace` remove the last character of the composed sentence
- * - `:clear` clear the sentence
- * - `:speak` speak the current sentence
+ * - `:wrap=PREFIX|SUFFIX` wrap the current selection in PREFIX/SUFFIX; where no
+ *   selection exists (Message-part surfaces) insert PREFIX + fallback + SUFFIX
+ * - `:backspace` remove the last character of the composed Message
+ * - `:clear` clear the Message
+ * - `:speak` speak the current Message
  * - `:home` navigate to the board set root
  * - `:native-keyboard` open the platform's keyboard-based communication workspace
  * - `:prediction` (or `:predictions`) insert an n-gram word prediction
+ * - `:pause`, `:resume`, and `:stop` control playback
+ * - `:secondary-language` toggles the selected text's language
+ * - `:hold-message` swaps the active and held messages
  */
 fun parseObfButtonAction(raw: String): ObfButtonActionEffect {
     if (raw.isEmpty()) return ObfButtonActionEffect.Unsupported(raw)
@@ -34,6 +53,19 @@ fun parseObfButtonAction(raw: String): ObfButtonActionEffect {
         val payload = raw.removePrefix("+")
         if (payload.isEmpty()) return ObfButtonActionEffect.Unsupported(raw)
         return ObfButtonActionEffect.AppendText(payload)
+    }
+
+    // Wrap payloads may end in meaningful whitespace (e.g. "</emphasis> "),
+    // so match before the colon-command trim.
+    if (raw.startsWith(":wrap=", ignoreCase = true)) {
+        val body = raw.substring(":wrap=".length)
+        val separator = body.indexOf('|')
+        val prefix = separator.takeIf { it > 0 }?.let { body.substring(0, it) }
+        val suffix = separator.takeIf { it != -1 && it < body.lastIndex }?.let { body.substring(it + 1) }
+        if (prefix != null && suffix != null) {
+            return ObfButtonActionEffect.WrapSelection(prefix = prefix, suffix = suffix)
+        }
+        return ObfButtonActionEffect.Unsupported(raw)
     }
 
     val action = raw.trim()
@@ -46,6 +78,11 @@ fun parseObfButtonAction(raw: String): ObfButtonActionEffect {
         action.equals(":native-keyboard", ignoreCase = true) -> ObfButtonActionEffect.NativeKeyboard
         action.equals(":prediction", ignoreCase = true) -> ObfButtonActionEffect.Predictions
         action.equals(":predictions", ignoreCase = true) -> ObfButtonActionEffect.Predictions
+        action.equals(":pause", ignoreCase = true) -> ObfButtonActionEffect.Pause
+        action.equals(":resume", ignoreCase = true) -> ObfButtonActionEffect.Resume
+        action.equals(":stop", ignoreCase = true) -> ObfButtonActionEffect.Stop
+        action.equals(":secondary-language", ignoreCase = true) -> ObfButtonActionEffect.ToggleSecondaryLanguage
+        action.equals(":hold-message", ignoreCase = true) -> ObfButtonActionEffect.SwapHeldMessage
         else -> ObfButtonActionEffect.Unsupported(action)
     }
 }

@@ -1,0 +1,17 @@
+diff --git a/driver/src/libusb_transport.zig b/driver/src/libusb_transport.zig
+--- a/driver/src/libusb_transport.zig
++++ b/driver/src/libusb_transport.zig
+@@ -36,8 +36,11 @@ pub const LibusbTransport = struct {
+             log.err("libusb_init failed", .{});
+             return error.LibusbInit;
+         }
+ 
+-        self.usb_handle = c.libusb_open_device_with_vid_pid(self.usb_ctx, VID, PID);
++        for ([_]u16{ PID, 0x031e }) |product_id| {
++            self.usb_handle = c.libusb_open_device_with_vid_pid(self.usb_ctx, VID, product_id);
++            if (self.usb_handle != null) break;
++        }
+         if (self.usb_handle == null) {
+-            log.err("device {x:0>4}:{x:0>4} not found", .{ VID, PID });
++            log.err("devices {x:0>4}:{x:0>4} or {x:0>4} not found", .{ VID, PID, 0x031e });
+             c.libusb_exit(self.usb_ctx);

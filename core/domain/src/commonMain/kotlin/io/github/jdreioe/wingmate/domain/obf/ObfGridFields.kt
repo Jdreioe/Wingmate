@@ -5,7 +5,7 @@ package io.github.jdreioe.wingmate.domain.obf
  *
  * OBF encodes merged cells by repeating the same button id across the occupied
  * cells of `ObfGrid.order`. This module provides the shared span computation and
- * editing operations that every native client (Android, iOS, Linux) uses so that
+ * editing operations that every native client (Android and iOS) uses so that
  * merging/splitting behaves identically everywhere.
  */
 data class GridFieldSpan(

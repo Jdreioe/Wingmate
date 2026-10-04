@@ -112,12 +112,6 @@ android {
         buildConfig = true
     }
 
-    composeOptions {
-        // Compiler extension version must match the Compose compiler compatible with the project's Kotlin plugin.
-        // If you use a different Compose compiler version in CI/IDE, adjust this value accordingly.
-        kotlinCompilerExtensionVersion = libs.versions.kotlin.get()
-    }
-
     lint {
         disable += "Instantiatable"
     }
@@ -142,6 +136,10 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            // Install development builds alongside the signed release app.
+            applicationIdSuffix = ".dev"
+        }
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
             // Keep a mapping file for Google Play so R8-obfuscated crash reports
@@ -183,10 +181,13 @@ play {
 dependencies {
     implementation(project(":shared"))
 
-    val composeBom = platform("androidx.compose:compose-bom:2025.09.01")
+    val composeBom = platform("androidx.compose:compose-bom:2026.08.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)
     androidTestImplementation(libs.androidx.testExt.junit)
+    // Compose UI Test still brings Espresso 3.5 transitively. That release
+    // reflects on InputManager.getInstance(), which no longer exists on API 36.
+    androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
     // Common AndroidX helpers
@@ -205,17 +206,14 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     // Image loading
-    implementation("io.coil-kt.coil3:coil-compose:3.5.0")
-    implementation("io.coil-kt.coil3:coil-svg:3.5.0")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.5.0")
+    implementation("io.coil-kt.coil3:coil-compose:3.6.0")
+    implementation("io.coil-kt.coil3:coil-svg:3.6.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.0")
 
     // DI
     implementation(libs.koin.core)
-    implementation(libs.koin.android)
     implementation(libs.koin.compose)
 
-    // Ktor engine for ARM API calls
-    implementation(libs.ktor.client.okhttp)
     implementation(libs.kotlinx.serialization.json)
 
     // Dual-screen / WindowManager (API 34+ rear display & window area APIs)
@@ -224,17 +222,9 @@ dependencies {
     // Unit testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
-    testImplementation(libs.kotlinx.serialization.json)
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${libs.versions.kotlinx.coroutines.get()}")
 }
 
 kotlin {
     jvmToolchain(21)
-}
-
-// Utility task to print AGP version in use
-tasks.register("printAgpVersion") {
-    doLast {
-        println("AGP version: " + com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION)
-    }
 }

@@ -8,13 +8,12 @@ import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
 import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
-import io.github.jdreioe.wingmate.application.usecase.MovePhraseUseCase
-import io.github.jdreioe.wingmate.application.usecase.GetAllItemsUseCase
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSpeechCache
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
+import io.github.jdreioe.wingmate.application.TypingScreenUseCase
 import io.github.jdreioe.wingmate.application.ObzExporter
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
@@ -33,10 +32,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.dsl.bind
-import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import kotlinx.serialization.json.Json
 
 val appModule = module {
     singleOf(::DefaultStoreFactory) { bind<StoreFactory>() }
@@ -59,9 +58,10 @@ val appModule = module {
     single<ObfMediaUrlLoader> { KtorObfMediaUrlLoader(getOrNull() ?: HttpClient()) }
     singleOf(::InMemoryBoardRepository) { bind<BoardRepository>() }
     singleOf(::InMemoryBoardSetRepository) { bind<BoardSetRepository>() }
-    single { ObzExporter(getOrNull() ?: kotlinx.serialization.json.Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }) }
+    single { ObzExporter(getOrNull<Json>() ?: kotlinx.serialization.json.Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }) }
     singleOf(::BoardSetSpeechCacheUseCase) { bind<BoardSpeechCache>() }
     singleOf(::BoardSetUseCase)
+    singleOf(::TypingScreenUseCase)
     // Platforms override with a real player; default is a no-op.
     single<SoundPlayer> { NoopSoundPlayer() }
 
@@ -69,8 +69,6 @@ val appModule = module {
     singleOf(::GetPhrasesAndCategoriesUseCase)
     singleOf(::DeletePhraseUseCase)
     singleOf(::UpdatePhraseUseCase)
-    singleOf(::MovePhraseUseCase)
-    singleOf(::GetAllItemsUseCase)
     
     single {
         BoardImportService(
@@ -86,9 +84,11 @@ val appModule = module {
     
     single<AacLogger> { RealAacLogger(get(), getOrNull(named("logDir")), get()) }
 
-    factoryOf(::PhraseListStoreFactory)
+    singleOf(::PhraseListStoreFactory)
 
-    factory {
+    // One store per process: the source of truth iOS observes through
+    // CommunicationFacade.
+    single {
         get<PhraseListStoreFactory>().create()
     }
 }

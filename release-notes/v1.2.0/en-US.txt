@@ -1,0 +1,4 @@
+• Choose whether the message bar shows a speak button, with global, per-Screen, and per-Page options.
+• Connect your own Google Cloud TTS key with guided setup, and filter cloud voices by provider and model.
+• More reliable speech playback, and History is no longer lost if an import fails partway.
+• Stronger privacy protections for optional usage reporting.

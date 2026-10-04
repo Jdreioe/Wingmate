@@ -5,26 +5,47 @@ Kotlin Multiplatform, while its user interfaces are implemented by multiple
 clients. This matrix defines the platform scope used by feature issues and
 acceptance testing.
 
-| Client | UI stack | Communication and settings | Board sets and OBF/OBZ | Feature-parity expectation |
+| Client | UI stack | Typing and settings | Screens and OBF/OBZ | Feature-parity expectation |
 | --- | --- | --- | --- | --- |
 | Android | Jetpack Compose | Supported | Supported | Required for shared features and native Android UX |
 | iOS | SwiftUI with the shared Kotlin bridge | Supported | Supported | Required for shared features; native UI and accessibility work must be included |
-| Linux standalone | Rust (Iced) with the shared Kotlin HTTP bridge | Supported | Supported | Required for shared features and native Linux UX |
+
+Wingmate is rebuilding a cross-platform desktop client (`desktopApp/`, Rust +
+`iced`, Windows + macOS + Linux) on the shared Kotlin core through a
+Kotlin/Native C API; see #268. It is in development and is not
+yet a supported client.
 
 ## Feature acceptance policy
 
 - Domain models, persistence, import/export, and application rules must live in
   shared Kotlin where platform APIs do not require otherwise.
-- Board, symbol, layout, and customization issues are complete only when their
-  shared behavior works in Android, iOS SwiftUI, and Linux Iced.
-- Compose UI behavior is verified on Android; there is no shared or desktop
-  Compose client.
+- Native clients call shared Kotlin application rules through their platform
+  integration; they must not duplicate those rules in native UI code.
+- Experiments may start on one client. A released shared feature must work in
+  Android and iOS or document a deliberate platform exception.
+- Screen, symbol, layout, and customization issues are complete only when their
+  released shared behavior works in Android and iOS SwiftUI.
+- Jetpack Compose UI behavior is verified on Android. The desktop client's
+  native `iced` UI is not part of feature acceptance until it is supported.
 - iOS features must expose the required data and operations through the shared
   bridge and provide equivalent SwiftUI and VoiceOver behavior.
-- The standalone Linux Rust (Iced) client must continue to build and receive a
-  native attribution for shared features, including board features.
-- Platform-specific limitations must be recorded in the implementing issue and
-  release notes; they must not be silently treated as feature parity.
+- Hardware-specific features may remain native when they use a platform adapter
+  and do not complicate the shared communication model.
+- Platform-specific limitations must be recorded in the implementing issue,
+  capability document, and release notes; they must not be silently treated as
+  feature parity.
 
 This document describes product support scope, not a promise that every existing
 feature has already reached full parity.
+
+Linux desktop native gaze is an intentional hardware capability exception:
+fullscreen Screen selection, USB discovery, Access settings, opt-in live
+diagnostics and optional startup of the bundled `tobiifreed` are implemented.
+Android, iOS, macOS and Windows retain their OS input paths. TD-I13 hardware,
+calibration and release AppImage verification remain required before claiming
+production support; see [setup](HEAD_EYE_TRACKING.md).
+
+Linux x86_64 desktop also implements experimental webcam gaze through a local
+EyeTrax runtime. Camera selection, calibration and validation use native UI;
+selection reuses the gaze runner. Real-camera AAC accuracy remains unverified.
+See [webcam setup and evaluation](WEBCAM_GAZE.md).

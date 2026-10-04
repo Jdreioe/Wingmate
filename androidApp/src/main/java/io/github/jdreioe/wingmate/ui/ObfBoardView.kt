@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -19,6 +20,11 @@ import androidx.compose.ui.layout.Layout
 import coil3.compose.AsyncImage
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
@@ -45,6 +51,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.animation.core.animateIntOffsetAsState
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.drag
@@ -68,6 +81,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
@@ -93,18 +107,18 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import io.github.jdreioe.wingmate.domain.AacLogger
 import io.github.jdreioe.wingmate.domain.Base64Decoder
-import io.github.jdreioe.wingmate.domain.SpeechService
-import io.github.jdreioe.wingmate.domain.withLanguageOverride
+import io.github.jdreioe.wingmate.domain.CommunicationAction
+import io.github.jdreioe.wingmate.domain.CommunicationSession
+import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.obf.resolvedBackgroundColor
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import org.koin.compose.koinInject
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
 
 import com.hojmoseit.wingmate.R
@@ -134,10 +148,29 @@ enum class SymbolBarPresentation(val maxTextLines: Int, val maximumViewportFract
     Fullscreen(maxTextLines = 6, maximumViewportFraction = 0.6f)
 }
 
+/**
+ * Launcher-style editing for a grid of single-cell Buttons (the Typing Screen's
+ * Phrase collection). Long-pressing a movable Button lifts it and opens [menu]
+ * on it; dragging without lifting the finger closes the menu, moves the Button
+ * and reflows the others. Screen readers and switch access get Move earlier /
+ * Move later actions instead of the gesture.
+ *
+ * [onMove] receives the moved Button and the Button whose place it takes.
+ * With [gesturesEnabled] false (for example hold-to-select), only the
+ * accessibility actions remain, so a press is never taken over.
+ */
+class BoardReorder(
+    val canMove: (ObfButton) -> Boolean,
+    val onMove: (moved: ObfButton, target: ObfButton) -> Unit,
+    val gesturesEnabled: Boolean,
+    val menu: @Composable (button: ObfButton, dismiss: () -> Unit) -> Unit,
+)
+
 @Composable
 fun ObfBoardView(
     board: ObfBoard,
     onButtonClick: (ObfButton) -> Unit,
+    onButtonLongClick: ((ObfButton) -> Unit)? = null,
     modifier: Modifier = Modifier,
     extractedImages: Map<String, ByteArray> = emptyMap(),
     isEditMode: Boolean = false,
@@ -149,7 +182,11 @@ fun ObfBoardView(
     showDeleteControl: Boolean = true,
     showClearControl: Boolean = true,
     showMessageBar: Boolean = !isEditMode,
-    sentenceText: String = "",
+    // When true (and a Message callback is provided) the message bar accepts
+    // typed text; resolved from BoardSettings.messageBarEditable by callers.
+    messageBarEditable: Boolean = false,
+    onSentenceChanged: ((String) -> Unit)? = null,
+    messageText: String = "",
     symbolBarPresentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
     boardSettings: ResolvedBoardSettings? = null,
     showHiddenButtons: Boolean = false,
@@ -161,7 +198,11 @@ fun ObfBoardView(
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
     onGridHeightFractionChange: ((Float) -> Unit)? = null,
-    homeBoardId: String? = null
+    homeBoardId: String? = null,
+    // When set, grid rows never shrink below this height; the grid scrolls
+    // instead. Used by the Typing Screen's Phrase collection (#248).
+    scrollingMinimumCellHeight: Dp? = null,
+    reorder: BoardReorder? = null,
 ) {
     val settings by rememberReactiveSettings()
     val boardBackground = if (settings.highContrastMode) {
@@ -174,6 +215,8 @@ fun ObfBoardView(
         appShowSymbols = settings.showSymbols,
         appLabelAtTop = settings.labelAtTop,
         appShowMessageBar = settings.boardShowMessageBar,
+        appShowSpeakButton = settings.boardShowSpeakButton,
+        appMessageBarEditable = settings.boardMessageBarEditable,
         appActivationBehavior = settings.boardActivationBehavior,
         appReturnBehavior = settings.boardReturnBehavior
     )
@@ -191,7 +234,7 @@ fun ObfBoardView(
                 Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                     SymbolBar(
                         selectedButtons = selectedButtons,
-                        sentenceText = sentenceText,
+                        messageText = messageText,
                         imagesById = imagesById,
                         extractedImages = extractedImages,
                         onSpeak = onSpeakSentence,
@@ -201,6 +244,8 @@ fun ObfBoardView(
                         showDelete = showDeleteControl,
                         showClear = showClearControl,
                         presentation = symbolBarPresentation,
+                        editable = messageBarEditable && onSentenceChanged != null,
+                        onTextChange = onSentenceChanged,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = symbolBarMaxHeight)
@@ -217,7 +262,8 @@ fun ObfBoardView(
                             effectiveBoardSettings,
                             showHiddenButtons,
                             predictionLabels,
-                            highlightedButtonId
+                            highlightedButtonId,
+                            onButtonLongClick
                         )
                     }
                 }
@@ -234,7 +280,8 @@ fun ObfBoardView(
                     effectiveBoardSettings,
                     showHiddenButtons,
                     predictionLabels,
-                    highlightedButtonId
+                    highlightedButtonId,
+                    onButtonLongClick
                 )
             }
         }
@@ -252,7 +299,7 @@ fun ObfBoardView(
                 if (showMessageBar) {
                     SymbolBar(
                         selectedButtons = selectedButtons,
-                        sentenceText = sentenceText,
+                        messageText = messageText,
                         imagesById = imagesById,
                         extractedImages = extractedImages,
                         onSpeak = onSpeakSentence,
@@ -262,6 +309,8 @@ fun ObfBoardView(
                         showDelete = showDeleteControl,
                         showClear = showClearControl,
                         presentation = symbolBarPresentation,
+                        editable = messageBarEditable && onSentenceChanged != null,
+                        onTextChange = onSentenceChanged,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = symbolBarMaxHeight)
@@ -335,7 +384,10 @@ fun ObfBoardView(
                     ) {
                         mutableFloatStateOf(board.gridHeightFraction ?: defaultHeightFraction)
                     }
-                    val contentHeight = availableGridHeight * previewHeightFraction
+                    val fittedHeight = availableGridHeight * previewHeightFraction
+                    val contentHeight = scrollingMinimumCellHeight
+                        ?.let { maxOf(fittedHeight, it * rows + 8.dp * (rows - 1)) }
+                        ?: fittedHeight
                     Box(modifier = Modifier.fillMaxSize().verticalScroll(pageScrollState)) {
                         Box(
                             modifier = Modifier
@@ -349,6 +401,7 @@ fun ObfBoardView(
                                 items = gridItems,
                                 modifier = gridNavModifier,
                                 onMove = onCellMove,
+                                reorder = reorder,
                                 selectedField = selectedFieldAnchor,
                                 selectedFieldSpans = selectedFieldSpans,
                                 onResizeField = onResizeField,
@@ -369,6 +422,7 @@ fun ObfBoardView(
                                             onCellClick?.invoke(item.row, item.column, button)
                                                 ?: onButtonClick(button)
                                         },
+                                        onLongClick = onButtonLongClick?.let { callback -> { callback(button) } },
                                         isEditMode = isEditMode,
                                         isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
@@ -422,7 +476,7 @@ fun ObfBoardView(
                 if (showMessageBar) {
                     SymbolBar(
                         selectedButtons = selectedButtons,
-                        sentenceText = sentenceText,
+                        messageText = messageText,
                         imagesById = imagesById,
                         extractedImages = extractedImages,
                         onSpeak = onSpeakSentence,
@@ -432,6 +486,8 @@ fun ObfBoardView(
                         showDelete = showDeleteControl,
                         showClear = showClearControl,
                         presentation = symbolBarPresentation,
+                        editable = messageBarEditable && onSentenceChanged != null,
+                        onTextChange = onSentenceChanged,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = symbolBarMaxHeight)
@@ -456,6 +512,7 @@ fun ObfBoardView(
                                             image?.path?.let { path -> extractedImages[path] }
                                         },
                                         onClick = { onButtonClick(button) },
+                                        onLongClick = onButtonLongClick?.let { cb -> ({ cb(button) }) },
                                         isEditMode = isEditMode,
                                         isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
@@ -502,6 +559,7 @@ internal fun SpanningBoardGrid(
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
     focusedCell: Pair<Int, Int>? = null,
+    reorder: BoardReorder? = null,
     content: @Composable (BoardGridItem) -> Unit
 ) {
     var dragSource by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -667,6 +725,111 @@ internal fun SpanningBoardGrid(
             }
         }
 
+    // Launcher-style reordering (see BoardReorder). Movable Buttons in reading
+    // order; while dragging, the others shift one slot toward the gap.
+    val movable = remember(items, reorder) {
+        if (reorder == null) emptyList()
+        else items
+            .filter { it.rowSpan == 1 && it.columnSpan == 1 && it.button?.let(reorder.canMove) == true }
+            .sortedWith(compareBy({ it.row }, { it.column }))
+    }
+    var menuButtonId by remember(items) { mutableStateOf<String?>(null) }
+    var liftedButtonId by remember(items) { mutableStateOf<String?>(null) }
+    var reorderFrom by remember(items) { mutableStateOf<Int?>(null) }
+    var reorderTo by remember(items) { mutableStateOf<Int?>(null) }
+    var reorderOffset by remember(items) { mutableStateOf(Offset.Zero) }
+    var reorderDropped by remember(items) { mutableStateOf(false) }
+    // The new order arrives as new items; if it doesn't (the move was refused or
+    // editing needs unlocking first), settle back after a moment.
+    LaunchedEffect(reorderDropped) {
+        if (reorderDropped) {
+            delay(1500)
+            reorderFrom = null
+            reorderTo = null
+            liftedButtonId = null
+            reorderDropped = false
+        }
+    }
+    val haptics = LocalHapticFeedback.current
+    fun movableIndexAt(position: Offset): Int? {
+        val cell = cellAt(position) ?: return null
+        return movable.indexOfFirst { it.row == cell.first && it.column == cell.second }.takeIf { it >= 0 }
+    }
+    fun slotOffset(fromIndex: Int, toIndex: Int): IntOffset {
+        val cellWidth = (gridSizePx.width - horizontalGap * (columns - 1)).coerceAtLeast(0f) / columns
+        val cellHeight = (gridSizePx.height - verticalGap * (rows - 1)).coerceAtLeast(0f) / rows
+        val from = movable[fromIndex]
+        val to = movable[toIndex]
+        return IntOffset(
+            x = ((to.column - from.column) * (cellWidth + horizontalGap)).roundToInt(),
+            y = ((to.row - from.row) * (cellHeight + verticalGap)).roundToInt(),
+        )
+    }
+    val reorderModifier = if (reorder != null && reorder.gesturesEnabled && movable.isNotEmpty()) {
+        Modifier.pointerInput(movable, reorder) {
+            val slop = viewConfiguration.touchSlop
+            awaitEachGesture {
+                // Watch in the Initial pass so taps and scrolls still reach the
+                // Button and the scroller until the press becomes a long press.
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                val from = movableIndexAt(down.position) ?: return@awaitEachGesture
+                val interrupted = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    while (true) {
+                        val change = awaitPointerEvent(PointerEventPass.Initial).changes
+                            .firstOrNull { it.id == down.id }
+                        if (change == null || !change.pressed ||
+                            (change.position - down.position).getDistance() > slop
+                        ) {
+                            return@withTimeoutOrNull true
+                        }
+                    }
+                    @Suppress("UNREACHABLE_CODE")
+                    true
+                }
+                if (interrupted == true) return@awaitEachGesture
+                val button = movable[from].button ?: return@awaitEachGesture
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                menuButtonId = button.id
+                liftedButtonId = button.id
+                var dragging = false
+                while (true) {
+                    // From here the gesture is ours: consuming it cancels the
+                    // Button's tap and the scroller.
+                    val change = awaitPointerEvent(PointerEventPass.Initial).changes
+                        .firstOrNull { it.id == down.id } ?: break
+                    change.consume()
+                    if (!change.pressed) break
+                    val offset = change.position - down.position
+                    if (!dragging && offset.getDistance() > slop) {
+                        dragging = true
+                        menuButtonId = null
+                        reorderFrom = from
+                        reorderTo = from
+                    }
+                    if (dragging) {
+                        reorderOffset = offset
+                        movableIndexAt(change.position)?.let { reorderTo = it }
+                    }
+                }
+                val to = reorderTo
+                if (dragging && to != null && to != from) {
+                    reorderDropped = true
+                    movable[to].button?.let { target -> reorder.onMove(button, target) }
+                } else {
+                    reorderFrom = null
+                    reorderTo = null
+                    // Stay lifted while the menu is open; dismissing it lowers the Button.
+                    if (dragging) liftedButtonId = null
+                }
+            }
+        }
+    } else {
+        Modifier
+    }
+    val moveEarlierLabel = stringResource(R.string.phrase_move_earlier)
+    val moveLaterLabel = stringResource(R.string.phrase_move_later)
+    val optionsLabel = stringResource(R.string.phrase_item_edit)
+
     val dragModifier = if (onMove != null) {
         Modifier.pointerInput(rows, columns, items, onMove) {
             detectDragGesturesAfterLongPress(
@@ -710,6 +873,7 @@ internal fun SpanningBoardGrid(
             modifier = Modifier
                 .fillMaxSize()
                 .then(dragModifier)
+                .then(reorderModifier)
                 .onSizeChanged { gridSizePx = it },
             content = {
                 items.forEach { item ->
@@ -726,9 +890,70 @@ internal fun SpanningBoardGrid(
                                 focus.second in item.column until item.column + item.columnSpan
                         } == true && item.button != null
                         val ringShape = item.button?.shape?.toShape() ?: squareShape()
+                        val movableIndex = movable.indexOf(item)
+                        val from = reorderFrom
+                        val to = reorderTo
+                        val isDragged = movableIndex >= 0 && movableIndex == from
+                        // Slot this Button shows in while another one is dragged past it.
+                        val displayIndex = when {
+                            movableIndex < 0 || from == null || to == null -> movableIndex
+                            isDragged -> to
+                            from < to && movableIndex in (from + 1)..to -> movableIndex - 1
+                            from > to && movableIndex in to until from -> movableIndex + 1
+                            else -> movableIndex
+                        }
+                        val slotTarget = if (movableIndex >= 0 && displayIndex != movableIndex) {
+                            slotOffset(movableIndex, displayIndex)
+                        } else {
+                            IntOffset.Zero
+                        }
+                        val animatedSlot by animateIntOffsetAsState(slotTarget, label = "reorder-slot")
+                        val isLifted = item.button?.id != null && item.button.id == liftedButtonId
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
+                                .zIndex(if (isLifted) 1f else 0f)
+                                .offset {
+                                    if (isDragged && !reorderDropped) {
+                                        IntOffset(reorderOffset.x.roundToInt(), reorderOffset.y.roundToInt())
+                                    } else {
+                                        animatedSlot
+                                    }
+                                }
+                                .then(
+                                    if (isLifted) {
+                                        Modifier.scale(1.06f).shadow(8.dp, ringShape, clip = false)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .then(
+                                    if (movableIndex >= 0 && reorder != null) {
+                                        val button = item.button!!
+                                        Modifier.semantics {
+                                            customActions = listOfNotNull(
+                                                movable.getOrNull(movableIndex - 1)?.button?.let { previous ->
+                                                    CustomAccessibilityAction(moveEarlierLabel) {
+                                                        reorder.onMove(button, previous)
+                                                        true
+                                                    }
+                                                },
+                                                movable.getOrNull(movableIndex + 1)?.button?.let { next ->
+                                                    CustomAccessibilityAction(moveLaterLabel) {
+                                                        reorder.onMove(button, next)
+                                                        true
+                                                    }
+                                                },
+                                                CustomAccessibilityAction(optionsLabel) {
+                                                    menuButtonId = button.id
+                                                    true
+                                                },
+                                            )
+                                        }
+                                    } else {
+                                        Modifier
+                                    }
+                                )
                                 .then(
                                     if (isSelected) {
                                         Modifier.border(3.dp, selectionColor, ringShape)
@@ -754,6 +979,13 @@ internal fun SpanningBoardGrid(
                                 )
                         ) {
                             content(item)
+                            val menuButton = item.button
+                            if (reorder != null && menuButton != null && menuButton.id == menuButtonId) {
+                                reorder.menu(menuButton) {
+                                    menuButtonId = null
+                                    liftedButtonId = null
+                                }
+                            }
                         }
                     }
             }
@@ -874,7 +1106,7 @@ internal fun SpanningBoardGrid(
 @Composable
 fun SymbolBar(
     selectedButtons: List<Pair<ObfButton, ImageBitmap?>>,
-    sentenceText: String,
+    messageText: String,
     imagesById: Map<String, io.github.jdreioe.wingmate.domain.obf.ObfImage>,
     extractedImages: Map<String, ByteArray>,
     onSpeak: () -> Unit,
@@ -884,7 +1116,11 @@ fun SymbolBar(
     showSpeak: Boolean = true,
     showDelete: Boolean = true,
     showClear: Boolean = true,
-    presentation: SymbolBarPresentation = SymbolBarPresentation.Normal
+    presentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
+    // When enabled (with onTextChange) the Message area becomes an editable
+    // text field sharing the same bar; otherwise it renders read-only.
+    editable: Boolean = false,
+    onTextChange: ((String) -> Unit)? = null
 ) {
     val textScrollState = rememberScrollState()
     val textStyle = when (presentation) {
@@ -914,23 +1150,52 @@ fun SymbolBar(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val canEdit = editable && onTextChange != null
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(max = maximumTextHeight)
-                    .verticalScroll(textScrollState)
-                    .clearAndSetSemantics {
-                        contentDescription = sentenceText
-                    },
+                    .heightIn(max = maximumTextHeight),
                 contentAlignment = Alignment.CenterStart
             ) {
-                Text(
-                    text = sentenceText,
-                    style = textStyle,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                )
+                if (canEdit) {
+                    var fieldValue by remember { mutableStateOf(TextFieldValue(messageText)) }
+                    LaunchedEffect(messageText) {
+                        // External updates (button taps, clear) win; typing echoes back
+                        // identical text so this branch is a no-op while composing.
+                        if (fieldValue.text != messageText) {
+                            fieldValue = TextFieldValue(messageText, selection = TextRange(messageText.length))
+                        }
+                    }
+                    BasicTextField(
+                        value = fieldValue,
+                        onValueChange = { newValue ->
+                            fieldValue = newValue
+                            onTextChange(newValue.text)
+                        },
+                        textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .verticalScroll(textScrollState)
+                            .clearAndSetSemantics {
+                                contentDescription = messageText
+                            },
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(
+                            text = messageText,
+                            style = textStyle,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
 
             if (showSpeak || showDelete || showClear) {
@@ -1019,10 +1284,12 @@ fun ObfButtonItem(
     locale: String? = null,
     boardSettings: ResolvedBoardSettings? = null,
     labelOverride: String? = null,
+    enabled: Boolean = true,
     isSelectionHighlighted: Boolean = false,
-    fieldFontScale: Float = 1f
+    fieldFontScale: Float = 1f,
+    onLongClick: (() -> Unit)? = null
 ) {
-    val speechService: SpeechService = koinInject()
+    val communicationSession: CommunicationSession = koinInject()
     val voiceUseCase: VoiceUseCase = koinInject()
     val aacLogger: AacLogger = koinInject()
     val settings by rememberReactiveSettings()
@@ -1031,17 +1298,30 @@ fun ObfButtonItem(
     val selectionDebouncer = remember(button.id) { SelectionDebouncer() }
     // #118: Edit-mode taps are deliberate field/dialog operations and must never be
     // blocked by the run-mode selection debounce.
-    fun tryActivate(): Boolean =
-        isEditMode || selectionDebouncer.tryActivate(
+    val hapticView = LocalView.current
+    fun tryActivate(): Boolean {
+        if (!enabled) return false
+        if (isEditMode) return true
+        val accepted = selectionDebouncer.tryActivate(
             button.id,
             Clock.System.now().toEpochMilliseconds(),
             settings.selectionDebounceMillis
         )
+        if (!accepted) {
+            // Rejected repeat activation inside the debounce window.
+            hapticView.performAccessHaptic(AccessHaptic.REJECT)
+        } else {
+            hapticView.performAccessHaptic(AccessHaptic.CONFIRM)
+        }
+        return accepted
+    }
     val effectiveBoardSettings = boardSettings ?: resolveBoardSettings(
         appShowLabels = settings.showLabels,
         appShowSymbols = settings.showSymbols,
         appLabelAtTop = settings.labelAtTop,
         appShowMessageBar = settings.boardShowMessageBar,
+        appShowSpeakButton = settings.boardShowSpeakButton,
+        appMessageBarEditable = settings.boardMessageBarEditable,
         appActivationBehavior = settings.boardActivationBehavior,
         appReturnBehavior = settings.boardReturnBehavior
     )
@@ -1057,10 +1337,21 @@ fun ObfButtonItem(
         lineHeight = MaterialTheme.typography.labelMedium.lineHeight * boundedFontScale,
         fontWeight = FontWeight.Bold
     )
-    val scaledLabelSmall = MaterialTheme.typography.labelSmall.copy(
-        fontSize = MaterialTheme.typography.labelSmall.fontSize * boundedFontScale,
-        lineHeight = MaterialTheme.typography.labelSmall.lineHeight * boundedFontScale,
-        fontWeight = FontWeight.Bold
+    val scaledLabelSmall = MaterialTheme.typography.labelLarge.copy(
+        fontSize = MaterialTheme.typography.labelLarge.fontSize * boundedFontScale,
+        lineHeight = MaterialTheme.typography.labelLarge.lineHeight * boundedFontScale,
+        fontWeight = FontWeight.Medium
+    )
+    // Text-only Buttons (most Phrases) read like the #299 prototype: sentence
+    // text top-left, short words centered and larger.
+    val phraseTextStyle = MaterialTheme.typography.bodyLarge.copy(
+        fontSize = MaterialTheme.typography.bodyLarge.fontSize * boundedFontScale,
+        lineHeight = MaterialTheme.typography.bodyLarge.fontSize * boundedFontScale * 1.25f,
+    )
+    val shortWordStyle = MaterialTheme.typography.titleLarge.copy(
+        fontSize = MaterialTheme.typography.titleLarge.fontSize * boundedFontScale,
+        lineHeight = MaterialTheme.typography.titleLarge.lineHeight * boundedFontScale,
+        fontWeight = FontWeight.Medium
     )
     
     // Page links navigate immediately; pulsing the outgoing button makes the
@@ -1078,9 +1369,6 @@ fun ObfButtonItem(
     var isHovered by remember { mutableStateOf(false) }
     var isPointerDown by remember { mutableStateOf(false) }
     
-    // Stable scope for fire-and-forget speech (survives hover changes)
-    val fishingScope = rememberCoroutineScope()
-
     val primaryAction = {
         if (tryActivate()) {
             if (animateSelection) isSelected = true
@@ -1088,18 +1376,20 @@ fun ObfButtonItem(
             onClick()
         }
     }
-    if (!isEditMode) RegisterAccessTarget(accessTargetId, primaryAction)
+    if (!isEditMode && enabled) RegisterAccessTarget(accessTargetId, primaryAction)
     val dwellProgress = if (accessHost?.state?.currentTargetId == accessTargetId) accessHost.state.dwellProgress else 0f
 
     LaunchedEffect(isHovered, settings.auditoryFishingEnabled) {
         val label = displayLabel ?: displayVocalization ?: ""
         if (isHovered && accessHost?.state?.isPaused != true && settings.auditoryFishingEnabled && label.isNotBlank()) {
-            fishingScope.launch {
-                runCatching {
-                    val voice = voiceUseCase.selected().withLanguageOverride(button.locale)
-                    speechService.speak(label, voice, voice?.pitch, rate = 0.8)
-                }
-            }
+            val voice = runCatching { voiceUseCase.selected() }.getOrNull()
+            communicationSession.accept(
+                CommunicationAction.SpeakPart(
+                    part = MessagePart(label, languageTag = button.locale),
+                    voice = voice,
+                    rateOverride = 0.8,
+                )
+            )
         }
     }
 
@@ -1116,7 +1406,7 @@ fun ObfButtonItem(
         highContrastContainer
     } else {
         resolvedBackgroundColor?.let { runCatching { parseHexToColor(it) }.getOrNull() }
-            ?: MaterialTheme.colorScheme.surfaceVariant
+            ?: MaterialTheme.colorScheme.surfaceContainerHigh
     }
     
     val borderColor = if (settings.highContrastMode) {
@@ -1174,8 +1464,9 @@ fun ObfButtonItem(
             .fillMaxSize()
             .padding(if (settings.highContrastMode) 2.dp else 0.dp)
             .scale(scale)
-            .alpha(if (button.hidden && isEditMode) 0.5f else 1f)
+            .alpha(if (!enabled || (button.hidden && isEditMode)) 0.5f else 1f)
             .semantics {
+                if (!enabled) disabled()
                 if (isTemporarilyRevealed) {
                     contentDescription = listOfNotNull(
                         displayLabel,
@@ -1183,7 +1474,8 @@ fun ObfButtonItem(
                     ).joinToString(", ")
                 }
             }
-            .pointerInput(Unit) {
+            .let { baseModifier ->
+                if (!enabled) baseModifier else baseModifier.pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
@@ -1196,10 +1488,14 @@ fun ObfButtonItem(
                     }
                 }
             }
+            }
             .let { baseModifier ->
-                if (settings.holdToSelectMillis > 0 && !isEditMode) {
+                if (!enabled) {
+                    baseModifier
+                } else if (settings.holdToSelectMillis > 0 && !isEditMode) {
                     baseModifier.pointerInput(settings.holdToSelectMillis) {
                         detectTapGestures(
+                            onLongPress = { onLongClick?.invoke() },
                             onPress = {
                                 val completed = withTimeoutOrNull(settings.holdToSelectMillis) {
                                     tryAwaitRelease()
@@ -1214,14 +1510,15 @@ fun ObfButtonItem(
                     }
                 } else {
                     baseModifier.combinedClickable(
-                        onClick = { primaryAction() }
+                        onClick = { primaryAction() },
+                        onLongClick = onLongClick
                     )
                 }
             }
-            .accessTargetFocus(accessTargetId, if (isEditMode) null else accessHost),
+            .accessTargetFocus(accessTargetId, if (isEditMode || !enabled) null else accessHost),
         shape = buttonShape,
         colors = CardDefaults.elevatedCardColors(containerColor = bgColor),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp),
         border = if (borderColor != null || settings.highContrastMode) {
              androidx.compose.foundation.BorderStroke(if (settings.highContrastMode) 3.dp else 2.dp, borderColor ?: highContrastContent)
         } else null,
@@ -1259,7 +1556,23 @@ fun ObfButtonItem(
                 val showLbl = effectiveBoardSettings.showLabels &&
                     !(displayLabel.isNullOrBlank() && displayVocalization.isNullOrBlank())
 
-                if (effectiveBoardSettings.labelAtTop && showImg && showLbl) {
+                if (showLbl && !showImg) {
+                    val labelText = displayLabel ?: displayVocalization ?: ""
+                    val shortWord = labelText.trim().let { it.length <= 12 && ' ' !in it }
+                    Box(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp),
+                        contentAlignment = if (shortWord) Alignment.Center else Alignment.TopStart,
+                    ) {
+                        Text(
+                            text = labelText,
+                            style = if (shortWord) shortWordStyle else phraseTextStyle,
+                            textAlign = if (shortWord) TextAlign.Center else TextAlign.Start,
+                            color = contentColor,
+                            maxLines = if (shortWord) 1 else 3,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                } else if (effectiveBoardSettings.labelAtTop && showImg && showLbl) {
                     val labelText = displayLabel ?: displayVocalization ?: ""
                     Text(
                         text = labelText,
@@ -1314,6 +1627,15 @@ fun ObfButtonItem(
                         )
                     }
                 }
+            }
+            if (button.soundId != null && button.loadBoard == null && !isHomeLink && !isTemporarilyRevealed) {
+                // Marks a Phrase that plays its own recording.
+                Icon(
+                    Icons.Default.Mic,
+                    contentDescription = null,
+                    tint = contentColor.copy(alpha = 0.7f),
+                    modifier = Modifier.align(Alignment.TopEnd).size(16.dp)
+                )
             }
             if (button.loadBoard != null || isHomeLink) {
                 val destinationDescription = if (isHomeLink) {
@@ -1380,7 +1702,8 @@ private fun BoxWithConstraintsScope.RenderAbsoluteButtons(
     boardSettings: ResolvedBoardSettings,
     showHiddenButtons: Boolean,
     predictionLabels: Map<String, String>,
-    highlightedButtonId: String? = null
+    highlightedButtonId: String? = null,
+    onButtonLongClick: ((ObfButton) -> Unit)? = null
 ) {
     val containerWidth = maxWidth
     val containerHeight = maxHeight
@@ -1403,6 +1726,7 @@ private fun BoxWithConstraintsScope.RenderAbsoluteButtons(
                         image?.path?.let { path -> extractedImages[path] }
                     },
                     onClick = { onButtonClick(button) },
+                    onLongClick = onButtonLongClick?.let { cb -> ({ cb(button) }) },
                     isEditMode = isEditMode,
                     isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                     isHomeLink = button.isHomeNavigation(homeBoardId),

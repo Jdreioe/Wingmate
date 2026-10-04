@@ -1,0 +1,31 @@
+name: Gradle dependency submission
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  submit-gradle-dependencies:
+    name: Submit Gradle dependency graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Generate and submit the Gradle dependency graph
+        uses: gradle/actions/dependency-submission@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+          dependency-graph: generate-and-submit
+          # AGP (lint, UTP emulator control) and Kotlin toolchain (swift-export) resolve
+          # build-time-only dependencies in detached configurations, which ignore
+          # resolutionStrategy forces. They never ship in any client artifact, so they are
+          # excluded from the submitted graph instead of being forced or dismissed.
+          dependency-graph-exclude-configurations: 'detachedConfiguration.*'

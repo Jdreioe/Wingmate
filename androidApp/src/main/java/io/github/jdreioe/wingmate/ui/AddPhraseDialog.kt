@@ -46,7 +46,7 @@ fun AddPhraseDialog(
     defaultCategoryId: String? = null,
     initialPhrase: Phrase? = null,
     onSave: (Phrase) -> Unit,
-    onDelete: ((String) -> Unit)? = null
+    onDelete: ((String) -> Unit)? = null,
 ) {
     var text by remember { mutableStateOf(initialPhrase?.text ?: "") }
     var altText by remember { mutableStateOf(initialPhrase?.name ?: "") }
@@ -62,7 +62,6 @@ fun AddPhraseDialog(
     var selectedCategory by remember {
         mutableStateOf(
             categories.firstOrNull { it.id == (initialPhrase?.parentId ?: defaultCategoryId) }
-                ?: categories.firstOrNull()
         )
     }
     val koin = getKoin()

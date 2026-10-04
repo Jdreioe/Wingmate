@@ -23,6 +23,8 @@ import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpoint
+import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpointResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -70,6 +72,8 @@ fun F0SetupScreen(
     fun saveCredentials() {
         when {
             endpoint.isBlank() -> saveError = "endpoint"
+            AzureSpeechEndpoint.parse(endpoint) is AzureSpeechEndpointResult.Invalid ->
+                saveError = "endpoint"
             subscriptionKey.isBlank() -> saveError = "key"
             else -> scope.launch {
                 featureUsageReporter.reportEvent(FeatureUsageEvents.AZURE_F0_CREDENTIALS_SUBMITTED)

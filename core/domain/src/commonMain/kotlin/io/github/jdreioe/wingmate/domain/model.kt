@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.domain
 
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
+import kotlin.jvm.JvmInline
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -43,6 +44,34 @@ data class Phrase(
     val isHidden: Boolean = false
 )
 
+/**
+ * Typed folder-Phrase: a Phrase that acts as a Category (folder). Categories are
+ * persisted in the phrase repository this way rather than as separate CategoryItems.
+ * A Phrase is a folder iff `isGridItem == false` or (`isGridItem == null` and `linkedBoardId != null`).
+ */
+@JvmInline
+value class FolderPhrase(val phrase: Phrase) {
+    val id: String get() = phrase.id
+    val name: String? get() = phrase.text
+}
+
+fun Phrase.isFolderPhrase(): Boolean =
+    isGridItem == false || (isGridItem == null && linkedBoardId != null)
+
+fun Phrase.isGridPhrase(): Boolean =
+    isGridItem == true || (isGridItem == null && linkedBoardId == null)
+
+fun Phrase.toFolderPhrase(): FolderPhrase? =
+    if (isFolderPhrase()) FolderPhrase(this) else null
+
+fun FolderPhrase.toCategoryItem(): CategoryItem =
+    CategoryItem(id = phrase.id, name = phrase.text)
+
+/**
+ * UI view of a folder-Phrase, and the entry type of the `categories` list in older
+ * backups. Categories are no longer persisted as CategoryItem; screens could use
+ * FolderPhrase directly, but the type must stay to read those backups.
+ */
 @Serializable
 data class CategoryItem(
     val id: String,
@@ -62,7 +91,8 @@ enum class StartupMode {
 enum class TtsEngine {
     SYSTEM,
     AZURE_USER_RESOURCE,
-    AZURE_MANAGED
+    AZURE_MANAGED,
+    GOOGLE_CLOUD,
 }
 
 @Serializable
@@ -78,6 +108,8 @@ enum class WordTypeColorScheme {
     Fitzgerald
 }
 
+const val DEFAULT_DWELL_REARM_DELAY_MILLIS: Long = 120L
+
 @Serializable
 data class Settings(
     val language: String = "en-US",
@@ -88,12 +120,8 @@ data class Settings(
     val secondaryLanguage: String = "",
     // TTS engine selection
     val ttsEngine: TtsEngine = TtsEngine.SYSTEM,
-    // Desktop (Linux) only: when true, route TTS audio to a virtual sink whose monitor can be used as a microphone in apps like Zoom
+    // Reserved for a future desktop client: route TTS audio to a virtual microphone.
     val virtualMicEnabled: Boolean = false,
-    // Auto-update settings
-    val autoUpdateEnabled: Boolean = true,
-    val checkUpdateInterval: Long = 24 * 60 * 60 * 1000L, // 24 hours in milliseconds
-    val lastUpdateCheck: Long = 0L,
     // UI scaling settings (multipliers)
     val fontSizeScale: Float = 1.0f,
     val playbackIconScale: Float = 1.0f,
@@ -112,14 +140,6 @@ data class Settings(
     val startupBoardSetId: String? = null,
     // Partner window display (TD-I13 via FTDI FT232H) — desktop only
     val partnerWindowEnabled: Boolean = false,
-    // EVE ROM font index (16-34); 31 = largest standard ROM font
-    val partnerWindowFontSize: Int = 31,
-    // Number of text lines to show (1-4); word-wrapping is done in software
-    val partnerWindowMaxLines: Int = 2,
-    // Show idle face on partner window after 10s of no text input
-    val partnerWindowIdleEnabled: Boolean = true,
-    // On-screen keyboard scale (0.5 = half, 1.0 = normal, 2.0 = double)
-    val oskKeyboardScale: Float = 1.0f,
     // Optional product analytics (Aptabase on Android). Default is opt-out.
     val featureUsageReportingEnabled: Boolean = false,
     // Accessibility settings (OpenAAC)
@@ -128,6 +148,9 @@ data class Settings(
     val labelAtTop: Boolean = false,
     // Global defaults inherited by Screens and then Pages.
     val boardShowMessageBar: Boolean = true,
+    // Show the speak control in the Screens message bar (unless the page has its own speak button).
+    val boardShowSpeakButton: Boolean = true,
+    val boardMessageBarEditable: Boolean = true,
     val boardActivationBehavior: BoardActivationBehavior = BoardActivationBehavior.SpeakAndAdd,
     val boardReturnBehavior: BoardReturnBehavior = BoardReturnBehavior.Stay,
     val holdToSelectMillis: Long = 0,
@@ -137,6 +160,10 @@ data class Settings(
     // author colors always take precedence.
     val wordTypeColorScheme: WordTypeColorScheme = WordTypeColorScheme.None,
     val dwellToSelectMillis: Long = 0,
+    // Tremor filter: after the pointer moves to a different target, the dwell timer
+    // only starts counting once this many ms have passed. Filters accidental dwell
+    // triggers on neighbors while moving between targets (CP tremor). 0 disables.
+    val dwellRearmDelayMillis: Long = DEFAULT_DWELL_REARM_DELAY_MILLIS,
     // Interaction shortcuts use portable tokens such as "Space", "Enter", or "F8".
     // Empty disables the shortcut so ordinary typing is never intercepted by default.
     val selectKeyBinding: String = "",
@@ -168,52 +195,3 @@ data class Settings(
     val scanAutoAdvanceSeconds: Float = 1.2f
 )
 
-@Serializable
-data class AppVersion(
-    val version: String,
-    val major: Int,
-    val minor: Int,
-    val patch: Int
-) {
-    fun isNewerThan(other: AppVersion): Boolean {
-        return when {
-            major > other.major -> true
-            major < other.major -> false
-            minor > other.minor -> true
-            minor < other.minor -> false
-            patch > other.patch -> true
-            else -> false
-        }
-    }
-    
-    companion object {
-        fun parse(versionString: String): AppVersion {
-            val cleanVersion = versionString.removePrefix("v")
-            val parts = cleanVersion.split(".")
-            val major = parts.getOrNull(0)?.toIntOrNull() ?: 0
-            val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
-            val patch = parts.getOrNull(2)?.toIntOrNull() ?: 0
-            return AppVersion(cleanVersion, major, minor, patch)
-        }
-    }
-}
-
-@Serializable
-data class UpdateInfo(
-    val version: AppVersion,
-    val downloadUrl: String,
-    val releaseNotes: String,
-    val publishedAt: String,
-    val assetName: String,
-    val assetSize: Long
-)
-
-enum class UpdateStatus {
-    CHECKING,
-    AVAILABLE,
-    DOWNLOADING,
-    DOWNLOADED,
-    INSTALLING,
-    UP_TO_DATE,
-    ERROR
-}

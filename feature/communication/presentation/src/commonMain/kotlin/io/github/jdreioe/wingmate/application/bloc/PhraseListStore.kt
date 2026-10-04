@@ -2,10 +2,16 @@ package io.github.jdreioe.wingmate.application.bloc
 
 import com.arkivanov.mvikotlin.core.store.Store
 import io.github.jdreioe.wingmate.domain.Phrase
-import io.github.jdreioe.wingmate.domain.CategoryItem
-import io.github.jdreioe.wingmate.domain.Voice
+import kotlinx.coroutines.flow.Flow
 
 interface PhraseListStore : Store<PhraseListStore.Intent, PhraseListStore.State, Nothing> {
+    /**
+     * The store's state as a plain [Flow], so clients observe it without
+     * importing MVIKotlin types. This member intentionally shadows the
+     * MVIKotlin coroutines `states` extension for typed receivers.
+     */
+    val states: Flow<State>
+
     sealed class Intent {
         data object Refresh : Intent()
         data class AddPhrase(
@@ -25,7 +31,6 @@ interface PhraseListStore : Store<PhraseListStore.Intent, PhraseListStore.State,
         val imageUrl: String? = null
     ) : Intent()
     data class UpdatePhraseRecording(val id: String, val recordingPath: String?) : Intent()
-    data class MoveCategory(val fromIndex: Int, val toIndex: Int) : Intent()
     data class MovePhrase(val fromIndex: Int, val toIndex: Int) : Intent()
     }
 

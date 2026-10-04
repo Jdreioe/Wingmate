@@ -2,6 +2,8 @@ package io.github.jdreioe.wingmate.infrastructure
 
 import android.content.Context
 import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.domain.PersistenceError
+import io.github.jdreioe.wingmate.domain.PersistenceException
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -42,22 +44,35 @@ class AndroidBoardRepository(context: Context) : BoardRepository {
         withContext(Dispatchers.IO) {
             mutex.withLock {
                 val encoded = json.encodeToString(ListSerializer(ObfBoard.serializer()), transform(decodeBoards()))
-                check(preferences.edit().putString(BOARDS_KEY, encoded).commit()) {
-                    "Unable to persist boards"
+                if (!preferences.edit().putString(BOARDS_KEY, encoded).commit()) {
+                    throw PersistenceException(PersistenceError.Io)
                 }
             }
         }
     }
 
     private fun decodeBoards(): List<ObfBoard> {
-        val encoded = preferences.getString(BOARDS_KEY, null) ?: return emptyList()
-        return runCatching {
+        val encoded = try {
+            preferences.getString(BOARDS_KEY, null)
+        } catch (error: ClassCastException) {
+            throw PersistenceException(PersistenceError.CorruptOrUnsupported, error)
+        } ?: return emptyList()
+        return try {
             json.decodeFromString(ListSerializer(ObfBoard.serializer()), encoded)
-        }.getOrDefault(emptyList())
+        } catch (error: Exception) {
+            quarantine(encoded)
+            throw PersistenceException(PersistenceError.CorruptOrUnsupported, error)
+        }
+    }
+
+    private fun quarantine(encoded: String) {
+        if (preferences.contains(CORRUPT_BOARDS_KEY)) return
+        preferences.edit().putString(CORRUPT_BOARDS_KEY, encoded).commit()
     }
 
     private companion object {
         const val PREFERENCES_NAME = "wingmate_board_storage"
         const val BOARDS_KEY = "obf_boards_v1"
+        const val CORRUPT_BOARDS_KEY = "obf_boards_v1_corrupt_backup"
     }
 }

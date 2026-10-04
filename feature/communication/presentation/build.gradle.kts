@@ -24,12 +24,16 @@ kotlin {
                 implementation(project(":feature:communication:domain"))
                 implementation(project(":feature:communication:data"))
                 implementation(project(":core:presentation"))
-                implementation(project(":core:design-system"))
-                implementation(libs.koin.core)
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
                 implementation("com.arkivanov.mvikotlin:mvikotlin:3.3.0")
                 implementation("com.arkivanov.mvikotlin:mvikotlin-main:3.3.0")
                 implementation("com.arkivanov.mvikotlin:mvikotlin-extensions-coroutines:3.3.0")
+            }
+        }
+        val commonTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
             }
         }
     }

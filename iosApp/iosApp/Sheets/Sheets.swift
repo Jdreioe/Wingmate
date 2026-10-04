@@ -63,45 +63,6 @@ private func searchOpenSymbolsUsingBridge(
     return ([], result.errorCode)
 }
 
-struct WelcomeScreenIOS: View {
-    @State private var step: Int = 0
-    @State private var showAzureSettings = false
-    @State private var showVoicePicker = false
-    let onContinue: () -> Void
-    let onVoiceSelected: (Shared.Voice) -> Void
-
-    var body: some View {
-        VStack(spacing: 16) {
-            if step == 0 {
-                Spacer()
-                Text("welcome.title").font(.largeTitle).bold()
-                Text("welcome.subtitle")
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
-                Spacer()
-                HStack(spacing: 12) {
-                    Button("welcome.azure_settings") { showAzureSettings = true }
-                    Button("welcome.choose_voice") { showVoicePicker = true }
-                    Button("common.continue") { onContinue() }
-                }
-            }
-        }
-        .padding(24)
-        .background(Color(.systemGroupedBackground))
-        .sheet(isPresented: $showAzureSettings) {
-            AzureSettingsSheet(onClose: { showAzureSettings = false })
-                .presentationDetents([.medium, .large])
-        }
-        .sheet(isPresented: $showVoicePicker) {
-            VoiceSelectionSheet(selected: nil, onClose: { showVoicePicker = false }) { v in
-                onVoiceSelected(v)
-                showVoicePicker = false
-            }
-            .presentationDetents([.medium, .large])
-        }
-    }
-}
-
 struct AddCategorySheet: View {
     @State private var name: String = ""
     let onClose: () -> Void
@@ -536,11 +497,7 @@ struct AddPhraseSheet: View {
     }
 
     private func requestMicPermission(_ cb: @escaping (Bool) -> Void) {
-        if #available(iOS 17.0, *) {
-            AVAudioApplication.requestRecordPermission { granted in cb(granted) }
-        } else {
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in cb(granted) }
-        }
+        AVAudioApplication.requestRecordPermission { granted in cb(granted) }
     }
 
     @MainActor
@@ -1044,11 +1001,7 @@ struct EditPhraseSheet: View {
     }
 
     private func requestMicPermission(_ cb: @escaping (Bool) -> Void) {
-        if #available(iOS 17.0, *) {
-            AVAudioApplication.requestRecordPermission { granted in cb(granted) }
-        } else {
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in cb(granted) }
-        }
+        AVAudioApplication.requestRecordPermission { granted in cb(granted) }
     }
 
     private func searchOpenSymbols() async {
@@ -1131,93 +1084,16 @@ struct EditPhraseSheet: View {
     }
 }
 
-struct AzureSettingsSheet: View {
-    @State private var endpoint: String = ""
-    @State private var key: String = ""
-    @State private var credentialConfigured = false
-    @State private var replacingCredentials = false
-    @State private var loading = true
-    @State private var saving = false
-    @State private var error: String? = nil
-    private let bridge = KoinBridge()
-    let onClose: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("azure.settings.title") {
-                    if credentialConfigured && !replacingCredentials {
-                        Text("azure.credentials.configured")
-                        Button("azure.credentials.replace") {
-                            endpoint = ""
-                            key = ""
-                            replacingCredentials = true
-                        }
-                    } else {
-                        TextField(NSLocalizedString("azure.endpoint.placeholder", comment: ""), text: $endpoint)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled(true)
-                        SecureField(NSLocalizedString("azure.key.placeholder", comment: ""), text: $key)
-                    }
-                }
-                if !credentialConfigured || replacingCredentials {
-                    Section {
-                        Button(saving ? "common.saving" : "common.save") {
-                            Task {
-                                saving = true
-                                defer { saving = false }
-
-                                do {
-                                    let cfg = Shared.SpeechServiceConfig(endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                                         subscriptionKey: key.trimmingCharacters(in: .whitespacesAndNewlines))
-                                    try await bridge.saveSpeechConfig(config: cfg)
-                                    _ = try? await bridge.listVoices()
-                                    credentialConfigured = true
-                                    replacingCredentials = false
-                                    endpoint = ""
-                                    key = ""
-                                } catch {
-                                    self.error = error.localizedDescription
-                                    return
-                                }
-                                onClose()
-                            }
-                        }
-                        .disabled(loading || saving || (endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
-                    }
-                }
-            }
-            .navigationTitle(Text("azure.settings.title"))
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) } }
-            .onAppear {
-                Task {
-                    loading = true
-                    defer { loading = false }
-                    do {
-                        let cfg = try await bridge.getSpeechConfig()
-                        endpoint = cfg.endpoint
-                        key = ""
-                        credentialConfigured = cfg.credentialConfigured
-                        replacingCredentials = false
-                    } catch { self.error = error.localizedDescription }
-                }
-            }
-            .overlay(alignment: .top) { if loading { ProgressView().padding(.top, 8) } }
-            .alert("common.error", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-                Button("common.ok", role: .cancel) { error = nil }
-            } message: { Text(error ?? NSLocalizedString("common.unknown_error", comment: "")) }
-        }
-    }
-}
-
 struct VoiceSelectionSheet: View {
     @State private var voices: [Shared.Voice] = []
     @State private var loading = true
     @State private var error: String? = nil
     @State private var selected: Shared.Voice?
     @State private var query: String = ""
+    @State private var googleModelFilter: String = ""
     @State private var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
-    private let bridge = KoinBridge()
+    @State private var ttsEngine: String = UserDefaults.standard.string(forKey: "tts_engine") ?? "SYSTEM"
+    private let speechFacade = IosDiBridge().speechFacade()
 
     let current: Shared.Voice?
     let onClose: () -> Void
@@ -1256,6 +1132,22 @@ struct VoiceSelectionSheet: View {
                     }
                     .padding(8)
                     .background(Color(.secondarySystemBackground))
+
+                    if ttsEngine == "GOOGLE_CLOUD" {
+                        HStack {
+                            Text("voice.model.label")
+                            Spacer()
+                            Picker("voice.model.label", selection: $googleModelFilter) {
+                                Text("voice.model.all").tag("")
+                                ForEach(availableGoogleModels, id: \.self) { model in
+                                    Text(googleModelLabel(model)).tag(model)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 6)
+                    }
                 }
 
                 Group {
@@ -1305,13 +1197,14 @@ struct VoiceSelectionSheet: View {
                 ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) }
                 if !useSystemTts {
                     ToolbarItemGroup(placement: .topBarTrailing) {
-                        Button { Task { await refreshFromAzure() } } label: { Image(systemName: "arrow.clockwise") }
+                        Button { Task { await refreshFromCloud() } } label: { Image(systemName: "arrow.clockwise") }
                         Button("common.select") { if let v = selected { onSelect(v); onClose() } }
                     }
                 }
             }
             .onAppear { 
                 useSystemTts = UserDefaults.standard.bool(forKey: "use_system_tts")
+                ttsEngine = UserDefaults.standard.string(forKey: "tts_engine") ?? (useSystemTts ? "SYSTEM" : "AZURE_USER_RESOURCE")
                 if !useSystemTts {
                     Task { await loadInitial() } 
                 }
@@ -1321,34 +1214,72 @@ struct VoiceSelectionSheet: View {
 
     private var filteredVoices: [Shared.Voice] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return voices }
         return voices.filter { v in
+            if ttsEngine == "GOOGLE_CLOUD", !googleModelFilter.isEmpty,
+               v.googleModelId != googleModelFilter {
+                return false
+            }
+            guard !q.isEmpty else { return true }
             let name = (v.displayName ?? v.name ?? "").lowercased()
             let locale = (v.primaryLanguage ?? "").lowercased()
             return name.contains(q.lowercased()) || locale.contains(q.lowercased())
         }
     }
 
+    private var availableGoogleModels: [String] {
+        let desiredOrder = [
+            "GEMINI_3_1_FLASH", "GEMINI_2_5_FLASH", "GEMINI_2_5_FLASH_LITE",
+            "GEMINI_2_5_PRO", "CHIRP_3_HD", "STUDIO", "NEURAL2", "WAVENET",
+            "STANDARD", "OTHER"
+        ]
+        let available = Set(voices.compactMap(\.googleModelId))
+        return desiredOrder.filter(available.contains)
+    }
+
+    private func googleModelLabel(_ model: String) -> String {
+        let key: String
+        switch model {
+        case "GEMINI_3_1_FLASH": key = "voice.model.gemini_3_1_flash"
+        case "GEMINI_2_5_FLASH": key = "voice.model.gemini_2_5_flash"
+        case "GEMINI_2_5_FLASH_LITE": key = "voice.model.gemini_2_5_flash_lite"
+        case "GEMINI_2_5_PRO": key = "voice.model.gemini_2_5_pro"
+        case "CHIRP_3_HD": key = "voice.model.chirp_3_hd"
+        case "STUDIO": key = "voice.model.studio"
+        case "NEURAL2": key = "voice.model.neural2"
+        case "WAVENET": key = "voice.model.wavenet"
+        case "STANDARD": key = "voice.model.standard"
+        default: key = "voice.model.other"
+        }
+        return NSLocalizedString(key, comment: "")
+    }
+
     private func loadInitial() async {
         loading = true
         defer { loading = false }
         do {
-            let list = try await bridge.listVoices()
+            let list = try await speechFacade.listVoices()
             voices = list
             if list.isEmpty {
-                let cloud = try await bridge.refreshVoicesFromAzure()
+                let cloud = try await refreshProviderVoices()
                 voices = cloud
             }
         } catch { self.error = error.localizedDescription }
     }
 
-    private func refreshFromAzure() async {
+    private func refreshFromCloud() async {
         loading = true
         defer { loading = false }
         do {
-            let cloud = try await bridge.refreshVoicesFromAzure()
+            let cloud = try await refreshProviderVoices()
             voices = cloud
         } catch { self.error = error.localizedDescription }
+    }
+
+    private func refreshProviderVoices() async throws -> [Shared.Voice] {
+        if ttsEngine == "GOOGLE_CLOUD" {
+            return try await speechFacade.refreshVoicesFromGoogle()
+        }
+        return try await speechFacade.refreshVoicesFromAzure()
     }
 }
 
@@ -1410,53 +1341,5 @@ struct UiSizeSheet: View {
             .navigationTitle(Text("ui_size.title"))
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) } }
         }
-    }
-}
-
-struct ReorderPhrasesSheet: View {
-    let phrases: [Shared.Phrase]
-    let allPhrases: [Shared.Phrase]
-    let onMove: (Int, Int) -> Void
-    let onClose: () -> Void
-
-    @State private var local: [Shared.Phrase] = []
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(local, id: \.id) { p in Text(p.name ?? p.text) }
-                    .onMove(perform: move)
-            }
-            .navigationTitle(Text("reorder.title"))
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("category.close", action: onClose) }
-                ToolbarItem(placement: .topBarTrailing) { EditButton() }
-            }
-            .onAppear { self.local = phrases }
-        }
-    }
-
-    private func move(from source: IndexSet, to destination: Int) {
-        guard let fromLocal = source.first else { return }
-        var toLocal = destination
-        if toLocal > fromLocal { toLocal -= 1 }
-        let movingId = local[fromLocal].id
-        let targetGlobal: Int = {
-            if toLocal >= local.count - 1 {
-                if let lastId = local.last?.id, let lastGlobal = allPhrases.firstIndex(where: { $0.id == lastId }) {
-                    return lastGlobal + 1
-                }
-                return allPhrases.count
-            } else {
-                let targetId = local[toLocal].id
-                return allPhrases.firstIndex(where: { $0.id == targetId }) ?? allPhrases.count
-            }
-        }()
-        guard let fromGlobal = allPhrases.firstIndex(where: { $0.id == movingId }) else { return }
-        var updated = local
-        let item = updated.remove(at: fromLocal)
-        updated.insert(item, at: max(0, min(toLocal, updated.count)))
-        self.local = updated
-        onMove(fromGlobal, targetGlobal)
     }
 }

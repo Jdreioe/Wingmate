@@ -1,8 +1,6 @@
 package io.github.jdreioe.wingmate
 
 import io.github.jdreioe.wingmate.application.PhraseBloc
-import io.github.jdreioe.wingmate.application.SettingsBloc
-import io.github.jdreioe.wingmate.application.VoiceBloc
 import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -10,8 +8,6 @@ import io.github.jdreioe.wingmate.application.CategoryUseCase
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.NoopFeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SettingsStateManager
-import io.github.jdreioe.wingmate.domain.AzureF0Provisioner
-import io.github.jdreioe.wingmate.domain.CategoryRepository
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.UserDataManager
 import io.github.jdreioe.wingmate.application.DefaultEditingAccessStore
@@ -20,8 +16,16 @@ import io.github.jdreioe.wingmate.application.EditingAccessStore
 import io.github.jdreioe.wingmate.application.InMemorySecureEditingCredentialStorage
 import io.github.jdreioe.wingmate.application.SecureEditingCredentialStorage
 import io.github.jdreioe.wingmate.application.BackupMediaAccess
+import io.github.jdreioe.wingmate.application.BackupFacade
+import io.github.jdreioe.wingmate.application.BackupManager
+import io.github.jdreioe.wingmate.application.SpeechFacade
+import io.github.jdreioe.wingmate.application.SettingsFacade
+import io.github.jdreioe.wingmate.application.BoardsFacade
+import io.github.jdreioe.wingmate.application.CommunicationFacade
+import io.github.jdreioe.wingmate.application.QueuedCommunicationSession
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.application.UnavailableBackupMediaAccess
+import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
@@ -29,13 +33,16 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
-import io.github.jdreioe.wingmate.infrastructure.AutoF0FlowUseCase
-import io.github.jdreioe.wingmate.infrastructure.AzureArmClient
+import io.github.jdreioe.wingmate.domain.CommunicationSession
+import io.github.jdreioe.wingmate.domain.CommunicationSessionDataSource
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
+import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
+import io.github.jdreioe.wingmate.infrastructure.GoogleApiRequestHeaders
+import io.github.jdreioe.wingmate.infrastructure.NoGoogleApiRequestHeaders
+import io.github.jdreioe.wingmate.infrastructure.LocalTextPredictionService
 import io.github.jdreioe.wingmate.infrastructure.DictionaryLoader
-import io.github.jdreioe.wingmate.infrastructure.InMemoryAzureF0Provisioner
-import io.github.jdreioe.wingmate.infrastructure.InMemoryCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
+import io.github.jdreioe.wingmate.infrastructure.InMemoryCommunicationSessionDataSource
 import io.github.jdreioe.wingmate.infrastructure.InMemoryPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryPronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemorySaidTextRepository
@@ -47,9 +54,13 @@ import org.koin.core.module.Module
 import org.koin.core.module.dsl.bind
 import org.koin.dsl.module
 import org.koin.core.module.dsl.singleOf
+import org.koin.core.qualifier.named
 
 import io.github.jdreioe.wingmate.di.appModule
-import io.ktor.client.HttpClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.SupervisorJob
 
 @Suppress("unused")
 fun initKoin(extra: Module? = null) {
@@ -65,23 +76,33 @@ fun initKoin(extra: Module? = null) {
 
 internal fun createCoreDataModule(): Module = module {
         singleOf(::InMemoryPhraseRepository) { bind<PhraseRepository>() }
-        singleOf(::InMemoryCategoryRepository) { bind<CategoryRepository>() }
         singleOf(::InMemorySettingsRepository) { bind<SettingsRepository>() }
         singleOf(::InMemoryVoiceRepository) { bind<VoiceRepository>() }
         singleOf(::InMemorySaidTextRepository) { bind<SaidTextRepository>() }
         singleOf(::InMemoryConfigRepository) { bind<ConfigRepository>() }
+        singleOf(::InMemoryCommunicationSessionDataSource) { bind<CommunicationSessionDataSource>() }
         singleOf(::InMemoryPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
-        singleOf(::InMemoryAzureF0Provisioner) { bind<AzureF0Provisioner>() }
-        single { AzureArmClient(HttpClient()) }
-        singleOf(::AutoF0FlowUseCase)
-        singleOf(::NoopSpeechService) { bind<SpeechService>() } // Android overrides this
+        singleOf(::NoopSpeechService) { bind<SpeechService>() } // Overridden per platform (Android, iOS)
         singleOf(::NoopFeatureUsageReporter) { bind<FeatureUsageReporter>() }
         singleOf(::AzureVoiceCatalog)
+        single<GoogleApiRequestHeaders> { NoGoogleApiRequestHeaders }
+        singleOf(::GoogleVoiceCatalog)
         single { DictionaryLoader(getOrNull<io.github.jdreioe.wingmate.domain.FileStorage>()) } // For language dictionary pretraining and caching
+        single<TextPredictionService> {
+            LocalTextPredictionService(
+                languages = get<SettingsStateManager>().settings.map { it.primaryLanguage },
+                historyRepository = get(),
+                loadDictionary = get<DictionaryLoader>()::loadDictionary,
+                scope = get(named("predictionScope")),
+            )
+        }
+        single(named("predictionScope")) {
+            CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        }
         singleOf(::PhraseUseCase)
         singleOf(::CategoryUseCase)
-        singleOf(::SettingsUseCase)
-        singleOf(::UserDataManager)
+        single { SettingsUseCase(get(), getOrNull()) }
+        single { UserDataManager(get(), getOrNull()) }
         singleOf(::InMemorySecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
         // Use explicit constructors here: Koin's constructor-reference DSL attempts
         // to inject Kotlin parameters that have default values (iterations/timeout).
@@ -93,23 +114,37 @@ internal fun createCoreDataModule(): Module = module {
                 boardRepository = get(),
                 boardSetRepository = get(),
                 phraseRepository = get(),
-                categoryRepository = get(),
                 settingsRepository = get(),
                 voiceRepository = get(),
                 saidTextRepository = get(),
+                communicationSessionDataSource = get(),
                 dictionaryRepository = get(),
                 configRepository = get(),
                 filePicker = getOrNull(),
                 mediaAccess = get()
             )
         }
+        single<BackupManager> { get<CompleteBackupManager>() }
+        single { BackupFacade(get(), getOrNull()) }
+        singleOf(::SpeechFacade)
+        singleOf(::SettingsFacade)
+        singleOf(::BoardsFacade)
+        singleOf(::CommunicationFacade)
         singleOf(::SettingsStateManager)
+        single(named("communicationSessionScope")) {
+            CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        }
+        single<CommunicationSession> {
+            val settingsStateManager = get<SettingsStateManager>()
+            QueuedCommunicationSession(
+                dataSource = get(),
+                speechService = get(),
+                saidTextRepository = get(),
+                currentSettings = settingsStateManager::getCurrentSettings,
+                scope = get(named("communicationSessionScope")),
+                predictionService = getOrNull(),
+            )
+        }
         singleOf(::VoiceUseCase)
-        factory { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>(), get<CategoryUseCase>()) }
-        factory { SettingsBloc(get<SettingsUseCase>()) }
-        factory { VoiceBloc(get<VoiceUseCase>()) }
+        single { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>()) }
 }
-
-// Convenience no-arg for Swift where optional bridging might produce a different symbol name
-@Suppress("unused")
-fun initKoin() = initKoin(null)

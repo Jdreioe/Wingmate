@@ -28,6 +28,7 @@ internal fun AzureCredentialEditor(
     subscriptionKey: String,
     onSubscriptionKeyChange: (String) -> Unit,
     onReplaceCredentials: () -> Unit,
+    endpointError: String? = null,
     modifier: Modifier = Modifier,
 ) {
     if (credentialConfigured && !replacingCredentials) {
@@ -60,6 +61,8 @@ internal fun AzureCredentialEditor(
             label = { Text(stringResource(R.string.ui_settings_region_endpoint)) },
             placeholder = { Text(stringResource(R.string.ui_settings_region_example)) },
             modifier = Modifier.fillMaxWidth().then(showKeyboard),
+            isError = endpointError != null,
+            supportingText = endpointError?.let { message -> { Text(message) } },
             singleLine = true
         )
         Spacer(Modifier.height(12.dp))

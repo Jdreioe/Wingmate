@@ -281,7 +281,7 @@ internal fun EditBoardCellDialog(
     initialLanguage: String? = null,
     initialMathMode: Boolean = false,
     initialHidden: Boolean = false,
-    initialShape: ObfButtonShape = ObfButtonShape.Square,
+    initialShape: ObfButtonShape = ObfButtonShape.Rounded,
     initialWordType: WordType? = null,
     isKeyboardBoard: Boolean = false,
     showMathMode: Boolean = true,
@@ -332,7 +332,10 @@ internal fun EditBoardCellDialog(
                 initialInsertedText == initialVocalization.ifBlank { initialLabel }
         )
     }
-    val knownActions = listOf(":spell", ":space", ":backspace", ":clear", ":home", ":speak", ":prediction")
+    val knownActions = listOf(
+        ":spell", ":space", ":backspace", ":clear", ":home", ":speak", ":prediction",
+        ":pause", ":resume", ":stop", ":secondary-language", ":hold-message",
+    )
     var actions by remember {
         mutableStateOf(
             (listOfNotNull(initialAction) + initialActions)

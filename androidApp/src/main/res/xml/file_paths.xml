@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Only the media subtrees that are actually shared outside the app:
+     external/internal audio + recordings, restored backup media, and the
+     dedicated shared/ export dir. Everything else stays un-grantable. -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-files-path name="external_music" path=""/>
-    <files-path name="internal_files" path=""/>
-    <cache-path name="cache" path=""/>
+    <external-files-path name="external_media" path="Music/" />
+    <files-path name="internal_media" path="wingmate/" />
+    <files-path name="restored_media" path="restored-media/" />
+    <cache-path name="cache_media" path="wingmate/" />
+    <cache-path name="shared_export" path="shared/" />
 </paths>

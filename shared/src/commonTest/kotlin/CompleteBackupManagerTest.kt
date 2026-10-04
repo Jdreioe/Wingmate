@@ -1,16 +1,26 @@
 import io.github.jdreioe.wingmate.application.BackupMediaAccess
+import io.github.jdreioe.wingmate.application.BackupFailureKind
 import io.github.jdreioe.wingmate.application.BackupRestoreResult
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
+import io.github.jdreioe.wingmate.application.TypingScreenUseCase
 import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.CommunicationSessionSnapshot
+import io.github.jdreioe.wingmate.domain.CommunicationStorageResult
+import io.github.jdreioe.wingmate.domain.Message
+import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
+import io.github.jdreioe.wingmate.domain.obf.ScreenKind
+import io.github.jdreioe.wingmate.domain.obf.pageElements
+import io.github.jdreioe.wingmate.domain.obf.withPageElements
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
-import io.github.jdreioe.wingmate.infrastructure.InMemoryCategoryRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
+import io.github.jdreioe.wingmate.infrastructure.InMemoryCommunicationSessionDataSource
 import io.github.jdreioe.wingmate.infrastructure.InMemoryPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryPronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemorySaidTextRepository
@@ -34,13 +44,14 @@ class CompleteBackupManagerTest {
         val boards = InMemoryBoardRepository()
         val sets = InMemoryBoardSetRepository()
         val phrases = InMemoryPhraseRepository()
-        val categories = InMemoryCategoryRepository()
         val settings = InMemorySettingsRepository()
         val voices = InMemoryVoiceRepository()
         val history = InMemorySaidTextRepository()
+        val communication = InMemoryCommunicationSessionDataSource()
         val dictionary = InMemoryPronunciationDictionaryRepository()
         val config = InMemoryConfigRepository()
         config.saveSpeechConfig(SpeechServiceConfig("northeurope", "azure-secret"))
+        config.saveGoogleSpeechConfig(GoogleSpeechConfig("google-secret"))
         boards.saveBoard(
             ObfBoard(
                 format = "open-board-0.1",
@@ -57,7 +68,7 @@ class CompleteBackupManagerTest {
             override suspend fun deleteRestored(path: String) = Unit
         }
         val manager = CompleteBackupManager(
-            boards, sets, phrases, categories, settings, voices, history, dictionary, config,
+            boards, sets, phrases, settings, voices, history, communication, dictionary, config,
             filePicker = null,
             mediaAccess = media
         )
@@ -68,6 +79,7 @@ class CompleteBackupManagerTest {
         assertContains(archiveText, "Need water")
         assertContains(archiveText, "audio-content")
         assertFalse(archiveText.contains("azure-secret"))
+        assertFalse(archiveText.contains("google-secret"))
         assertFalse(archiveText.contains("editingAccessCredential"))
     }
 
@@ -88,6 +100,20 @@ class CompleteBackupManagerTest {
         )
         source.phrases.add(Phrase("phrase", "Need water", createdAt = 1, recordingPath = "/recordings/hello.m4a"))
         source.dictionary.add(PronunciationEntry("AAC", "A A C"))
+        source.communication.save(
+            CommunicationSessionSnapshot(
+                activeMessage = Message(
+                    parts = listOf(
+                        MessagePart(
+                            "Need water",
+                            recordingPath = "/recordings/hello.m4a",
+                            source = io.github.jdreioe.wingmate.domain.MessagePartSource.Phrase("phrase"),
+                        )
+                    )
+                ).replaceRange(0, 10, MessagePart("Water")),
+                heldMessage = Message(parts = listOf(MessagePart("Please wait"))),
+            )
+        )
         source.config.saveSpeechConfig(SpeechServiceConfig("westeurope", "restored-key"))
         val exportingMedia = TestMediaAccess(mapOf("/recordings/hello.m4a" to "audio-content".encodeToByteArray()))
         val exported = source.manager(filePicker = null, media = exportingMedia).exportBackup()
@@ -107,7 +133,40 @@ class CompleteBackupManagerTest {
         assertEquals(listOf("AAC"), target.dictionary.getAll().map { it.word })
         assertEquals("audio-content", restoringMedia.restored.single().second.decodeToString())
         assertContains(target.phrases.getAll().single().recordingPath.orEmpty(), "restored/")
+        val restoredSession = target.communication.load()
+        assertIs<CommunicationStorageResult.Success<CommunicationSessionSnapshot>>(restoredSession)
+        assertEquals("Water", restoredSession.value.activeMessage.displayText)
+        assertEquals("Please wait", restoredSession.value.heldMessage?.displayText)
+        assertContains(
+            restoredSession.value.activeMessage.editProvenance.single().originalPart.recordingPath.orEmpty(),
+            "restored/",
+        )
         assertEquals(null, target.config.getSpeechConfig())
+    }
+
+    @Test
+    fun backupRoundTripIncludesTheTypingScreenTemplateWithoutGeneratedVocabulary() = runBlocking {
+        val source = Repositories()
+        val seeded = TypingScreenUseCase(source.sets, source.boards).getOrCreate(columns = 4)
+        val customized = seeded.rootBoard!!.let { board ->
+            board.withPageElements(
+                board.pageElements().mapIndexed { index, element -> element.copy(row = index + 10) }
+            )
+        }
+        source.boards.saveBoard(customized)
+        val exported = source.manager(filePicker = null, media = TestMediaAccess()).exportBackup()
+
+        val target = Repositories()
+        val result = target.manager(
+            MapArchivePicker(readStoredZip(exported)),
+            TestMediaAccess(),
+        ).restoreBackup("typing.wingmate-backup")
+
+        assertIs<BackupRestoreResult.Success>(result)
+        val restoredSet = target.sets.listBoardSets().single()
+        assertEquals(ScreenKind.Typing, restoredSet.kind)
+        assertEquals(customized.pageElements(), target.boards.getBoard(restoredSet.rootBoardId)?.pageElements())
+        assertEquals(customized.buttons.map { it.id }, target.boards.getBoard(restoredSet.rootBoardId)?.buttons?.map { it.id })
     }
 
     @Test
@@ -123,6 +182,8 @@ class CompleteBackupManagerTest {
             .restoreBackup("corrupt.wingmate-backup")
 
         assertIs<BackupRestoreResult.Failure>(result)
+        assertEquals(BackupFailureKind.Validation, result.kind)
+        assertFalse(result.isRetryable)
         assertEquals(listOf("existing"), repositories.boards.listBoards().map { it.id })
     }
 
@@ -130,15 +191,15 @@ class CompleteBackupManagerTest {
         val boards = InMemoryBoardRepository()
         val sets = InMemoryBoardSetRepository()
         val phrases = InMemoryPhraseRepository()
-        val categories = InMemoryCategoryRepository()
         val settings = InMemorySettingsRepository()
         val voices = InMemoryVoiceRepository()
         val history = InMemorySaidTextRepository()
+        val communication = InMemoryCommunicationSessionDataSource()
         val dictionary = InMemoryPronunciationDictionaryRepository()
         val config = InMemoryConfigRepository()
 
         fun manager(filePicker: FilePicker?, media: BackupMediaAccess) = CompleteBackupManager(
-            boards, sets, phrases, categories, settings, voices, history, dictionary, config, filePicker, media
+            boards, sets, phrases, settings, voices, history, communication, dictionary, config, filePicker, media
         )
     }
 

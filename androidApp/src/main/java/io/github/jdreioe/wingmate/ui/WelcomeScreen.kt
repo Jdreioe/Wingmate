@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -28,7 +29,6 @@ import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
-import io.github.jdreioe.wingmate.ui.PlatformBackHandler
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
@@ -40,6 +40,7 @@ import kotlinx.coroutines.withContext
 import androidx.compose.ui.res.stringResource
 import org.koin.compose.getKoin
 
+import com.hojmoseit.wingmate.BuildConfig
 import com.hojmoseit.wingmate.R
 @Composable
 fun WelcomeScreen(
@@ -48,7 +49,7 @@ fun WelcomeScreen(
 ) {
     val koin = getKoin()
     val boardImportService = remember(koin) {
-        if (!isReleaseBuild()) koin.getOrNull<BoardImportService>() else null
+        if (BuildConfig.DEBUG) koin.getOrNull<BoardImportService>() else null
     }
     val enableBoardImport = boardImportService != null
     val featureUsageReporter = remember(koin) {
@@ -61,7 +62,7 @@ fun WelcomeScreen(
     var startupMode by remember { mutableStateOf(StartupMode.Keyboard) }
     var modeTour by remember { mutableStateOf<StartupMode?>(StartupMode.Keyboard) }
     var createScreenOnComplete by remember { mutableStateOf(false) }
-    var voiceSelectorFollowsAzureSetup by remember { mutableStateOf(false) }
+    var voiceSelectorSetupStep by remember { mutableStateOf<Int?>(null) }
     var analyticsEnabled by remember { mutableStateOf(false) }
     var pendingRestorePath by remember { mutableStateOf<String?>(null) }
     var restoreStatus by remember { mutableStateOf<String?>(null) }
@@ -90,16 +91,17 @@ fun WelcomeScreen(
         featureUsageReporter?.reportEvent(FeatureUsageEvents.WELCOME_STEP_VIEWED, "step" to step.toString())
     }
 
-    PlatformBackHandler(enabled = step > 0) {
+    BackHandler(enabled = step > 0) {
         when (step) {
             1 -> if (modeTour != null) modeTour = null else step = 0
             2 -> step = 1
             3 -> step = if (enableBoardImport) 2 else 1
             4 -> step = 3
             5 -> step = 6
-            6 -> step = if (voiceSelectorFollowsAzureSetup) 4 else 3
+            6 -> step = voiceSelectorSetupStep ?: 3
             7 -> step = 6
             8 -> step = 7
+            9 -> step = 3
         }
     }
 
@@ -316,7 +318,7 @@ fun WelcomeScreen(
             // Voice engine selector screen
             VoiceEngineSelectorScreen(
                 onNext = {
-                    voiceSelectorFollowsAzureSetup = false
+                    voiceSelectorSetupStep = null
                     featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to "system")
                     step = 6
                 },
@@ -324,6 +326,10 @@ fun WelcomeScreen(
                 onAzureSelected = {
                     featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to "azure")
                     step = 4
+                },
+                onGoogleSelected = {
+                    featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to "google")
+                    step = 9
                 }
             )
         }
@@ -331,7 +337,7 @@ fun WelcomeScreen(
             // Azure F0 portal-assisted setup flow
             F0SetupScreen(
                 onDone = {
-                    voiceSelectorFollowsAzureSetup = true
+                    voiceSelectorSetupStep = 4
                     step = 6
                 },
                 onBack = { step = 3 }
@@ -351,7 +357,7 @@ fun WelcomeScreen(
         6 -> {
             // Newer searchable voice selector, before language and test-voice steps.
             VoiceSelectionPage(
-                onBack = { step = if (voiceSelectorFollowsAzureSetup) 5 else 3 },
+                onBack = { step = voiceSelectorSetupStep ?: 3 },
                 onVoiceSelected = { step = 5 },
                 modifier = Modifier
                     .fillMaxSize()
@@ -371,6 +377,13 @@ fun WelcomeScreen(
             onEnabledChange = { analyticsEnabled = it },
             onBack = { step = 7 },
             onContinue = { onComplete(startupMode, createScreenOnComplete, analyticsEnabled) }
+        )
+        9 -> GoogleTtsSetupScreen(
+            onDone = {
+                voiceSelectorSetupStep = 9
+                step = 6
+            },
+            onBack = { step = 3 },
         )
     }
 

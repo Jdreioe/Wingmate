@@ -22,7 +22,8 @@ import com.hojmoseit.wingmate.R
 fun VoiceEngineSelectorScreen(
     onNext: () -> Unit, 
     onCancel: () -> Unit,
-    onAzureSelected: () -> Unit = {}
+    onAzureSelected: () -> Unit = {},
+    onGoogleSelected: () -> Unit = {},
 ) {
     val settingsUseCase = koinInject<SettingsUseCase>()
 
@@ -71,12 +72,12 @@ fun VoiceEngineSelectorScreen(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (ttsEngine != TtsEngine.SYSTEM)
+                        containerColor = if (ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED)
                             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
                         else
                             MaterialTheme.colorScheme.surfaceContainer
                     ),
-                    border = if (ttsEngine != TtsEngine.SYSTEM)
+                    border = if (ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED)
                         BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                     else null
                 ) {
@@ -90,7 +91,7 @@ fun VoiceEngineSelectorScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                             )
-                            if (ttsEngine != TtsEngine.SYSTEM) {
+                            if (ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED) {
                                 Spacer(Modifier.width(8.dp))
                                 AssistChip(
                                     onClick = { },
@@ -116,6 +117,61 @@ fun VoiceEngineSelectorScreen(
                             color = MaterialTheme.colorScheme.error
                         )
                         Text(stringResource(R.string.voice_engine_azure_cons), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Google Cloud TTS Card
+                Card(
+                    onClick = { ttsEngine = TtsEngine.GOOGLE_CLOUD },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (ttsEngine == TtsEngine.GOOGLE_CLOUD)
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                        else
+                            MaterialTheme.colorScheme.surfaceContainer
+                    ),
+                    border = if (ttsEngine == TtsEngine.GOOGLE_CLOUD)
+                        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                    else null
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            Text(
+                                stringResource(R.string.voice_engine_google_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                            )
+                            if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
+                                Spacer(Modifier.width(8.dp))
+                                AssistChip(
+                                    onClick = { },
+                                    label = { Text(stringResource(R.string.common_selected), style = MaterialTheme.typography.labelSmall) }
+                                )
+                            }
+                        }
+
+                        Text(
+                            stringResource(R.string.voice_engine_pros),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(stringResource(R.string.voice_engine_google_pros), style = MaterialTheme.typography.bodySmall)
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Text(
+                            stringResource(R.string.voice_engine_cons),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(stringResource(R.string.voice_engine_google_cons), style = MaterialTheme.typography.bodySmall)
                     }
                 }
 
@@ -224,10 +280,10 @@ fun VoiceEngineSelectorScreen(
                                 }
 
                                 // Navigate to appropriate next screen based on selection
-                                if (ttsEngine == TtsEngine.SYSTEM) {
-                                    onNext() // Go directly to voice selection
-                                } else {
-                                    onAzureSelected() // Go to Azure configuration
+                                when (ttsEngine) {
+                                    TtsEngine.SYSTEM -> onNext()
+                                    TtsEngine.GOOGLE_CLOUD -> onGoogleSelected()
+                                    TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> onAzureSelected()
                                 }
                             }
                         },

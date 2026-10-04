@@ -4,7 +4,7 @@ import io.github.jdreioe.wingmate.domain.SpeechPolicy
 
 /**
  * Shared board-session logic used identically by every native client
- * (Android Compose, iOS SwiftUI, Linux). Keeping these here means prediction
+ * (Android Compose and iOS SwiftUI). Keeping these here means prediction
  * insertion, sentence composition, activation/return behavior, and edit-mode
  * cell taps behave the same everywhere.
  */
@@ -42,10 +42,6 @@ fun shouldSpeakBoardSelection(behavior: BoardActivationBehavior): Boolean =
 fun shouldSpeakSelectionImmediately(policy: SpeechPolicy, behavior: BoardActivationBehavior): Boolean =
     policy == SpeechPolicy.Immediate && shouldSpeakBoardSelection(behavior)
 
-/** Convenience for phrase-grid selections, which carry no board-level behavior. */
-fun shouldSpeakPhraseSelection(policy: SpeechPolicy): Boolean =
-    policy == SpeechPolicy.Immediate
-
 /**
  * Resolve the board to show after a selection, given the return behavior and the
  * navigation history. Returns the next board id and the updated stack.
@@ -80,26 +76,6 @@ fun backspaceSentenceSelection(
     val last = texts.last()
     if (last.length <= 1) return texts.dropLast(1)
     return texts.dropLast(1) + last.dropLast(1)
-}
-
-/**
- * Compose the sentence text from the selected buttons, resolving each through the
- * board's `strings` localization table and honoring spelling mode.
- */
-fun buildResolvedSentence(
-    buttons: List<ObfButton>,
-    strings: Map<String, Map<String, String>>,
-    spellingMode: Boolean,
-    primaryLanguage: String
-): String {
-    val tokens = buttons.mapNotNull { button ->
-        resolveObfLocalizedString(
-            strings = strings,
-            locale = primaryLanguage,
-            rawValue = button.vocalization ?: button.label
-        )?.takeIf { it.isNotEmpty() }
-    }
-    return joinSentenceText(tokens, spellingMode)
 }
 
 /**
@@ -390,7 +366,7 @@ fun updateDraftCell(
     linkedBoardId: String?,
     action: String? = null,
     actions: List<String> = emptyList(),
-    shape: ObfButtonShape = ObfButtonShape.Square,
+    shape: ObfButtonShape = ObfButtonShape.Rounded,
     wordType: WordType? = null
 ): BoardSetGraph {
     val board = graph.boardsById[boardId] ?: return graph

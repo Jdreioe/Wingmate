@@ -1,41 +1,45 @@
 package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.Phrase
-import io.github.jdreioe.wingmate.domain.CategoryItem
-import io.github.jdreioe.wingmate.domain.CategoryRepository
-import io.github.jdreioe.wingmate.domain.PhraseRepository
-import io.github.jdreioe.wingmate.domain.Settings
-import io.github.jdreioe.wingmate.domain.SettingsRepository
-import io.github.jdreioe.wingmate.domain.Voice
-import io.github.jdreioe.wingmate.application.PhraseUseCase
-import io.github.jdreioe.wingmate.application.SettingsUseCase
-import io.github.jdreioe.wingmate.application.VoiceUseCase
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 // Simple Bloc-style base
-abstract class Bloc<E, S>(initial: S) {
-    private val scope = CoroutineScope(Dispatchers.Default + Job())
+abstract class Bloc<E, S>(initial: S, dispatcher: CoroutineDispatcher = Dispatchers.Default) {
+    private val scope = CoroutineScope(dispatcher + Job())
+    private val events = Channel<E>(Channel.UNLIMITED)
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<S> = _state.asStateFlow()
 
+    init {
+        // Repository reads and writes must finish in dispatch order, including across suspension.
+        scope.launch {
+            for (event in events) handle(event)
+        }
+    }
+
     protected fun setState(reducer: (S) -> S) {
-        _state.value = reducer(_state.value)
+        _state.update(reducer)
     }
 
     fun dispatch(event: E) {
-        scope.launch { handle(event) }
+        events.trySend(event)
     }
 
     protected abstract suspend fun handle(event: E)
 
     fun close() {
+        events.cancel()
         scope.cancel()
     }
 }
@@ -43,8 +47,6 @@ abstract class Bloc<E, S>(initial: S) {
 // App-specific blocs
 sealed class PhraseEvent {
     data class Add(val phrase: Phrase) : PhraseEvent()
-    // Legacy event kept for binary compatibility; handled through CategoryUseCase.
-    data class AddCategory(val category: io.github.jdreioe.wingmate.domain.CategoryItem) : PhraseEvent()
     data class Edit(val phrase: Phrase) : PhraseEvent()
     data class Delete(val id: String) : PhraseEvent()
     data class Move(val fromIndex: Int, val toIndex: Int) : PhraseEvent()
@@ -60,15 +62,8 @@ data class PhraseState(
 class PhraseBloc(
     private val useCase: PhraseUseCase,
     private val featureUsageReporter: FeatureUsageReporter,
-    private val categoryUseCase: CategoryUseCase
-) : Bloc<PhraseEvent, PhraseState>(PhraseState()) {
-    // Backward-compatible constructor for existing DI setups that pass a repository
-    constructor(repo: PhraseRepository) : this(
-        PhraseUseCase(repo),
-        NoopFeatureUsageReporter(),
-        CategoryUseCase(NoopCategoryRepository(), NoopFeatureUsageReporter())
-    )
-
+    dispatcher: CoroutineDispatcher = Dispatchers.Default,
+) : Bloc<PhraseEvent, PhraseState>(PhraseState(), dispatcher) {
     override suspend fun handle(event: PhraseEvent) {
         when (event) {
             is PhraseEvent.Load -> {
@@ -76,6 +71,8 @@ class PhraseBloc(
                 try {
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -91,16 +88,8 @@ class PhraseBloc(
                     )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
-                } catch (t: Throwable) {
-                    setState { it.copy(loading = false, error = t.message) }
-                }
-            }
-            is PhraseEvent.AddCategory -> {
-                setState { it.copy(loading = true, error = null) }
-                try {
-                    categoryUseCase.add(event.category)
-                    val list = useCase.list()
-                    setState { it.copy(loading = false, items = list) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -116,6 +105,8 @@ class PhraseBloc(
                     )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -130,6 +121,8 @@ class PhraseBloc(
                     )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }
@@ -145,103 +138,8 @@ class PhraseBloc(
                     )
                     val list = useCase.list()
                     setState { it.copy(loading = false, items = list) }
-                } catch (t: Throwable) {
-                    setState { it.copy(loading = false, error = t.message) }
-                }
-            }
-        }
-    }
-}
-
-private class NoopCategoryRepository : CategoryRepository {
-    override suspend fun getAll(): List<CategoryItem> = emptyList()
-    override suspend fun add(category: CategoryItem): CategoryItem = category
-    override suspend fun update(category: CategoryItem): CategoryItem = category
-    override suspend fun delete(id: String) = Unit
-    override suspend fun move(fromIndex: Int, toIndex: Int) = Unit
-}
-
-sealed class SettingsEvent {
-    data class Update(val settings: Settings) : SettingsEvent()
-    data object Load : SettingsEvent()
-}
-
-data class SettingsState(
-    val loading: Boolean = false,
-    val value: Settings? = null,
-    val error: String? = null
-)
-
-class SettingsBloc(private val useCase: SettingsUseCase) : Bloc<SettingsEvent, SettingsState>(SettingsState()) {
-    constructor(repo: SettingsRepository) : this(SettingsUseCase(repo))
-
-    override suspend fun handle(event: SettingsEvent) {
-        when (event) {
-            is SettingsEvent.Load -> {
-                setState { it.copy(loading = true, error = null) }
-                try {
-                    val s = useCase.get()
-                    setState { it.copy(loading = false, value = s) }
-                } catch (t: Throwable) {
-                    setState { it.copy(loading = false, error = t.message) }
-                }
-            }
-            is SettingsEvent.Update -> {
-                setState { it.copy(loading = true, error = null) }
-                try {
-                    val s = useCase.update(event.settings)
-                    setState { it.copy(loading = false, value = s) }
-                } catch (t: Throwable) {
-                    setState { it.copy(loading = false, error = t.message) }
-                }
-            }
-        }
-    }
-}
-
-// Voice Bloc
-sealed class VoiceEvent {
-    data object Load : VoiceEvent()
-    data class Select(val voice: Voice) : VoiceEvent()
-    data object RefreshFromAzure : VoiceEvent()
-}
-
-data class VoiceState(
-    val loading: Boolean = false,
-    val items: List<Voice> = emptyList(),
-    val selected: Voice? = null,
-    val error: String? = null,
-)
-
-class VoiceBloc(
-    private val useCase: VoiceUseCase
-) : Bloc<VoiceEvent, VoiceState>(VoiceState()) {
-
-    override suspend fun handle(event: VoiceEvent) {
-        when (event) {
-            is VoiceEvent.Load -> {
-                setState { it.copy(loading = true, error = null) }
-                try {
-                    val list = useCase.list()
-                    val sel = useCase.selected()
-                    setState { it.copy(loading = false, items = list, selected = sel) }
-                } catch (t: Throwable) {
-                    setState { it.copy(loading = false, error = t.message) }
-                }
-            }
-            is VoiceEvent.Select -> {
-                try {
-                    useCase.select(event.voice)
-                    setState { it.copy(selected = event.voice) }
-                } catch (t: Throwable) {
-                    setState { it.copy(error = t.message) }
-                }
-            }
-            is VoiceEvent.RefreshFromAzure -> {
-                setState { it.copy(loading = true, error = null) }
-                try {
-                    val fromCloud = useCase.refreshFromAzure()
-                    setState { it.copy(loading = false, items = fromCloud) }
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     setState { it.copy(loading = false, error = t.message) }
                 }

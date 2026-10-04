@@ -5,7 +5,6 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -22,21 +21,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.Locale
 
-fun isDesktop(): Boolean = false
-
-fun isReleaseBuild(): Boolean = runCatching {
-	// Resolve app-module BuildConfig at runtime so common UI can detect Android release builds.
-	val buildConfig = Class.forName("com.hojmoseit.wingmate.BuildConfig")
-	val isDebug = buildConfig.getField("DEBUG").getBoolean(null)
-	!isDebug
-}.getOrDefault(true)
-
 fun systemLanguageTag(): String = Locale.getDefault().toLanguageTag()
-
-@Composable
-fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
-    BackHandler(enabled = enabled, onBack = onBack)
-}
 
 @Composable
 fun PlatformBackgroundEffect(onBackground: () -> Unit) {

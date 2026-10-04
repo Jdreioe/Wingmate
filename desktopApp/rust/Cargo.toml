@@ -1,0 +1,49 @@
+[package]
+name = "wingmate-desktop"
+version = "1.2.0"
+edition = "2024"
+description = "Wingmate cross-platform AAC desktop client"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+base64 = "0.22"
+iced = { version = "0.14", features = ["image", "tokio", "advanced"] }
+rfd = "0.17"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(unix)'.dependencies]
+tokio = { version = "1", features = ["net", "io-util", "time", "process"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[package.metadata.packager]
+product-name = "Wingmate"
+identifier = "io.github.jdreioe.wingmate"
+publisher = "Wingmate"
+authors = ["Jonas Dreiøe"]
+homepage = "https://github.com/Jdreioe/Wingmate"
+category = "Medical"
+license-file = "../../LICENSE"
+icons = ["../assets/wingmate.png"]
+long-description = "Wingmate is a free and open-source AAC application for people who cannot rely on speech."
+
+[[package.metadata.packager.binaries]]
+path = "wingmate-desktop"
+main = true
+
+[package.metadata.packager.linux]
+generate-desktop-entry = true
+
+[package.metadata.packager.windows]
+allow-downgrades = false
+
+[package.metadata.packager.appimage.files]
+"../target/gaze-bundle/libusb-1.0.so.0" = "/usr/lib/libusb-1.0.so.0"
+"../target/gaze-bundle/tobiifreed" = "/usr/bin/tobiifreed"
+"../target/gaze-bundle/LICENSE" = "/usr/share/doc/wingmate/tobiifree/LICENSE"
+"../target/gaze-bundle/SOURCE.txt" = "/usr/share/doc/wingmate/tobiifree/SOURCE.txt"
+"../target/gaze-bundle/build-gaze-daemon.sh" = "/usr/share/doc/wingmate/tobiifree/build-gaze-daemon.sh"
+"../target/gaze-bundle/td-i13.patch" = "/usr/share/doc/wingmate/tobiifree/td-i13.patch"
+"../target/gaze-bundle/tobiifree-source.tar.gz" = "/usr/share/doc/wingmate/tobiifree/tobiifree-source.tar.gz"

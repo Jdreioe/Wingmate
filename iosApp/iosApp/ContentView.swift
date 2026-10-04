@@ -265,22 +265,11 @@ struct ContentView: View {
             }
         }
 
-        if #available(iOS 17.0, *) {
-            AVAudioApplication.requestRecordPermission { granted in
-                if granted {
-                    Task { @MainActor in
-                        recordingForPhraseId = phraseId
-                        _ = try? await recorder.startRecording()
-                    }
-                }
-            }
-        } else {
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                if granted {
-                    Task { @MainActor in
-                        recordingForPhraseId = phraseId
-                        _ = try? await recorder.startRecording()
-                    }
+        AVAudioApplication.requestRecordPermission { granted in
+            if granted {
+                Task { @MainActor in
+                    recordingForPhraseId = phraseId
+                    _ = try? await recorder.startRecording()
                 }
             }
         }

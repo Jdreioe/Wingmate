@@ -17,12 +17,17 @@ kotlin {
     iosX64()
     iosArm64()
     iosSimulatorArm64()
+    linuxX64()
+    mingwX64()
+    macosX64()
+    macosArm64()
 
     sourceSets {
         val commonMain by getting {
             dependencies {
+                api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
                 implementation(libs.kotlinx.serialization.json)
-                implementation("io.github.oshai:kotlin-logging:7.0.0")
+                implementation("io.github.oshai:kotlin-logging:8.0.4")
             }
         }
         val commonTest by getting {

@@ -42,6 +42,12 @@ class SettingsModelTest {
     }
 
     @Test
+    fun googleCloudEngineRoundTrips() {
+        val original = Settings(ttsEngine = TtsEngine.GOOGLE_CLOUD)
+        assertEquals(original, json.decodeFromString<Settings>(json.encodeToString(original)))
+    }
+
+    @Test
     fun jsonRoundTripProducesNewFormat() {
         val original = Settings(ttsEngine = TtsEngine.AZURE_USER_RESOURCE)
         val encoded = json.encodeToString(original)
@@ -106,6 +112,7 @@ class SettingsModelTest {
     fun globalBoardDefaultsRoundTrip() {
         val original = Settings(
             boardShowMessageBar = false,
+            boardMessageBarEditable = false,
             boardActivationBehavior = BoardActivationBehavior.SpeakOnly,
             boardReturnBehavior = BoardReturnBehavior.StartPage
         )
@@ -113,6 +120,7 @@ class SettingsModelTest {
         val decoded = json.decodeFromString<Settings>(json.encodeToString(original))
 
         assertEquals(false, decoded.boardShowMessageBar)
+        assertEquals(false, decoded.boardMessageBarEditable)
         assertEquals(BoardActivationBehavior.SpeakOnly, decoded.boardActivationBehavior)
         assertEquals(BoardReturnBehavior.StartPage, decoded.boardReturnBehavior)
     }

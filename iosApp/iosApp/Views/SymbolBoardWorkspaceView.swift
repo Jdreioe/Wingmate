@@ -326,7 +326,7 @@ struct SymbolBoardWorkspaceView: View {
                 set: { if !$0 { deleteTargetSet = nil } }
             )
         ) {
-            Button(NSLocalizedString("common_delete", comment: ""), role: .destructive) {
+            Button(NSLocalizedString("common.delete", comment: ""), role: .destructive) {
                 if let target = deleteTargetSet {
                     Task {
                         if await model.editingIsAuthorized() {
@@ -363,7 +363,7 @@ struct SymbolBoardWorkspaceView: View {
         }
         .alert("boardset.delete_board", isPresented: $showDeleteBoardConfirmation) {
             Button("common.cancel", role: .cancel) {}
-            Button("common_delete", role: .destructive) {
+            Button("common.delete", role: .destructive) {
                 Task { await model.deleteSelectedBoard() }
             }
         } message: {
@@ -676,11 +676,11 @@ struct SymbolBoardWorkspaceView: View {
                                 activeSentenceAnimation = nil
                             }
                         },
-                        onSpeak: {
+                        onSpeak: model.boardSpeakButtonVisible ? {
                             let sentence = boardSentenceText
                             guard !sentence.isEmpty else { return }
                             model.speakBoardSentence(sentence, boardSetId: boardSetId)
-                        },
+                        } : nil,
                         animationNamespace: sentenceAnimationNamespace,
                         animatedTokenId: activeSentenceAnimation?.tokenId
                     )
@@ -695,6 +695,7 @@ struct SymbolBoardWorkspaceView: View {
         .task(id: boardPredictionTaskId) {
             await model.refreshBoardPredictions(context: boardSentenceText)
         }
+        .onDisappear { model.stopBoardPredictions() }
         .fullScreenCover(isPresented: $isFullscreen) {
             VStack(spacing: 12) {
                 HStack {
@@ -705,12 +706,12 @@ struct SymbolBoardWorkspaceView: View {
                                 guard boardSentenceTokens.indices.contains(index) else { return }
                                 boardSentenceTokens.remove(at: index)
                             },
-                            onSpeak: {
-                                let sentence = boardSentenceText
-                                guard !sentence.isEmpty else { return }
-                                model.speakBoardSentence(sentence, boardSetId: boardSetId)
-                            }
-                        )
+                        onSpeak: model.boardSpeakButtonVisible ? {
+                            let sentence = boardSentenceText
+                            guard !sentence.isEmpty else { return }
+                            model.speakBoardSentence(sentence, boardSetId: boardSetId)
+                        } : nil
+                    )
                     }
                     Button("common.done") { isFullscreen = false }
                         .font(.headline)
@@ -1933,8 +1934,7 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private func exportBoardSet(id: String) async {
-        let bridge = KoinBridge()
-        let result = try? await bridge.shareBoardSetAsObz(id: id)
+        let result = try? await IosDiBridge().boardsFacade().shareBoardSetAsObz(id: id)
         let message: String
         if let result, result.success {
             message = result.message

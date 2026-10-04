@@ -63,3 +63,10 @@
 # ── Suppress misc warnings ──────────────────────────────────
 -dontwarn org.slf4j.**
 -dontwarn javax.annotation.**
+
+# ── commons-compress optional codecs ────────────────────────
+# org.apache.commons.compress references zstd-jni and XZ as optional
+# runtime dependencies; Wingmate never uses those codecs, so the
+# missing classes are unreachable and safe to ignore for R8.
+-dontwarn com.github.luben.zstd.**
+-dontwarn org.tukaani.xz.**

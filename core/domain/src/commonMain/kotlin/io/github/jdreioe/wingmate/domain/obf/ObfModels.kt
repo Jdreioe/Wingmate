@@ -180,17 +180,17 @@ data class ObfButton(
     )
 
     /**
-     * The visual shape of this button, falling back to [ObfButtonShape.Square]
-     * when the extension is missing, non-string, or holds an unknown value so
-     * forward-compatible OBF/OBZ imports never crash.
+     * The visual shape of this button, falling back to [ObfButtonShape.Rounded]
+     * (the default look, #299) when the extension is missing, non-string, or
+     * holds an unknown value so forward-compatible OBF/OBZ imports never crash.
      */
     val shape: ObfButtonShape
         get() = ObfButtonShape.entries.firstOrNull {
             it.wireValue == (extensions[OBF_BUTTON_STYLE_EXTENSION] as? JsonPrimitive)?.contentOrNull
-        } ?: ObfButtonShape.Square
+        } ?: ObfButtonShape.Rounded
 
     fun withShape(shape: ObfButtonShape): ObfButton = copy(
-        extensions = if (shape == ObfButtonShape.Square) {
+        extensions = if (shape == ObfButtonShape.Rounded) {
             extensions - OBF_BUTTON_STYLE_EXTENSION
         } else {
             extensions + (OBF_BUTTON_STYLE_EXTENSION to JsonPrimitive(shape.wireValue))

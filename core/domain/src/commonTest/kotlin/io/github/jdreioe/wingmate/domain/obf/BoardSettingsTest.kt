@@ -70,6 +70,71 @@ class BoardSettingsTest {
     }
 
     @Test
+    fun messageBarEditableDefaultsToTrue() {
+        val resolved = resolveBoardSettings(appShowLabels = true, appShowSymbols = true, appLabelAtTop = false)
+        assertTrue(resolved.messageBarEditable)
+    }
+
+    @Test
+    fun messageBarEditablePageOverridesScreenOverridesApp() {
+        val fromApp = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = true,
+            appLabelAtTop = false,
+            appMessageBarEditable = false
+        )
+        assertFalse(fromApp.messageBarEditable)
+
+        val fromScreen = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = true,
+            appLabelAtTop = false,
+            appMessageBarEditable = false,
+            screen = BoardSettingsOverrides(messageBarEditable = true)
+        )
+        assertTrue(fromScreen.messageBarEditable)
+
+        val fromPage = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = true,
+            appLabelAtTop = false,
+            screen = BoardSettingsOverrides(messageBarEditable = false),
+            page = BoardSettingsOverrides(messageBarEditable = true)
+        )
+        assertTrue(fromPage.messageBarEditable)
+    }
+
+    @Test
+    fun speakButtonOverridesPageScreenApp() {
+        val screenOnly = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = true,
+            appLabelAtTop = false,
+            appShowSpeakButton = true,
+            screen = BoardSettingsOverrides(showSpeakButton = false)
+        )
+        assertFalse(screenOnly.showSpeakButton)
+
+        val pageWins = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = true,
+            appLabelAtTop = false,
+            appShowSpeakButton = true,
+            screen = BoardSettingsOverrides(showSpeakButton = false),
+            page = BoardSettingsOverrides(showSpeakButton = true)
+        )
+        assertTrue(pageWins.showSpeakButton)
+
+        val appDefault = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = true,
+            appLabelAtTop = false,
+            appShowSpeakButton = false
+        )
+        assertFalse(appDefault.showSpeakButton)
+    }
+
+    @Test
     fun unusableImportedPresentationStillShowsALabel() {
         val resolved = resolveBoardSettings(
             appShowLabels = true,

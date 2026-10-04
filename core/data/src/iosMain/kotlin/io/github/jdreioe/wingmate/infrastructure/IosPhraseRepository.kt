@@ -2,69 +2,49 @@ package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PhraseRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import platform.Foundation.NSUserDefaults
 import kotlin.random.Random
 import kotlin.time.Clock
 
 class IosPhraseRepository : PhraseRepository {
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
-    private val prefs by lazy { NSUserDefaults.standardUserDefaults() }
-    private val key = "phrases_v1"
+    private val serializer = ListSerializer(Phrase.serializer())
+    private val store = IosPreferencesJsonStore(
+        key = "phrases_v1",
+        encode = { json.encodeToString(serializer, it) },
+        decode = { json.decodeFromString(serializer, it) },
+    )
 
-    private suspend fun loadAll(): MutableList<Phrase> = withContext(Dispatchers.Default) {
-        val text = prefs.stringForKey(key) ?: return@withContext mutableListOf()
-        runCatching { json.decodeFromString(ListSerializer(Phrase.serializer()), text) }
-            .getOrNull()?.toMutableList() ?: mutableListOf()
-    }
-
-    private suspend fun saveAll(list: List<Phrase>) = withContext(Dispatchers.Default) {
-        val text = json.encodeToString(ListSerializer(Phrase.serializer()), list)
-        prefs.setObject(text, forKey = key)
-        prefs.synchronize()
-        Unit
-    }
-
-    override suspend fun getAll(): List<Phrase> = loadAll()
+    override suspend fun getAll(): List<Phrase> = store.read(::emptyList)
 
     override suspend fun add(phrase: Phrase): Phrase {
-        val list = loadAll()
         val p = phrase.copy(
             id = phrase.id.ifBlank { Random.nextInt().toString() },
             createdAt = if (phrase.createdAt == 0L) Clock.System.now().toEpochMilliseconds() else phrase.createdAt
         )
-        list.add(p)
-        saveAll(list)
+        store.update(::emptyList) { it + p }
         return p
     }
 
     override suspend fun update(phrase: Phrase): Phrase {
-        val list = loadAll()
-        val idx = list.indexOfFirst { it.id == phrase.id }
-        if (idx >= 0) {
-            list[idx] = phrase
-            saveAll(list)
+        store.update(::emptyList) { existing ->
+            existing.map { if (it.id == phrase.id) phrase else it }
         }
         return phrase
     }
 
     override suspend fun delete(id: String) {
-        val list = loadAll()
-        val newList = list.filterNot { it.id == id }
-        saveAll(newList)
-        Unit
+        store.update(::emptyList) { it.filterNot { phrase -> phrase.id == id } }
     }
 
     override suspend fun move(fromIndex: Int, toIndex: Int) {
-        val list = loadAll()
-        if (fromIndex < 0 || fromIndex >= list.size) return
-        val item = list.removeAt(fromIndex)
-        val insertIndex = toIndex.coerceIn(0, list.size)
-        list.add(insertIndex, item)
-        saveAll(list)
-        Unit
+        store.update(::emptyList) { existing ->
+            if (fromIndex !in existing.indices) return@update existing
+            existing.toMutableList().apply {
+                val item = removeAt(fromIndex)
+                add(toIndex.coerceIn(0, size), item)
+            }
+        }
     }
 }

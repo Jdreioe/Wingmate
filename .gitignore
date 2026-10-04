@@ -31,26 +31,12 @@ local.properties
 *.keystore
 *.jks
 service-account.json
-androidApp/build/
-androidApp/**/build/
 androidApp/release/
 
-## Desktop/JVM
-desktopApp/build/
-desktopApp/bin/
-
-## Compose
-composeApp/build/
-
-## Shared module
-shared/build/
-
-## Linux App
-linuxApp/build/
-linuxApp/target/
+## Desktop
+desktopApp/target/
 
 ## iOS / Xcode
-iosApp/build/
 iosApp/iosApp.xcodeproj/xcuserdata/
 iosApp/iosApp.xcodeproj/project.xcworkspace/xcuserdata/
 iosApp/**/*.xcuserstate
@@ -89,9 +75,11 @@ iosApp/iosApp 20*/
 **/tmp/
 **/intermediates/
 **/.cxx/
-**/*.properties
+**/local.properties
+**/secrets.properties
 *.hprof
 
 ## Node tooling
 **/node_modules/
 **/.wrangler/
+scripts/adb-wifi-qr.py

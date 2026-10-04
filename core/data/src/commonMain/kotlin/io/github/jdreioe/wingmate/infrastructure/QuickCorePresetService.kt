@@ -7,6 +7,7 @@ import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readAvailable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,8 +39,8 @@ data class QuickCoreDownloadProgress(
 
 /**
  * Downloads only allowlisted Quick Core archives and imports them through the shared OBZ
- * pipeline. Validated downloads are cached on device (like the Linux client) so repeat
- * imports skip the network transfer; cache writes that fail are ignored, not fatal.
+ * pipeline. Validated downloads are cached on device so repeat imports skip the
+ * network transfer; cache writes that fail are ignored, not fatal.
  */
 class QuickCorePresetService(
     private val client: HttpClient,
@@ -71,6 +72,8 @@ class QuickCorePresetService(
                     }
                 }
             }
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Throwable) {
             mutableProgress.value = QuickCoreDownloadProgress("failed")
             BoardImportResult.Failure(

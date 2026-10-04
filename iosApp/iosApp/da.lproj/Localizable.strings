@@ -1,9 +1,5 @@
 /* Base (English) Localizations */
 "app.title" = "Wingmate";
-"welcome.title" = "Velkommen til Wingmate!";
-"welcome.subtitle" = "En AAC-app, der føles hjemmehørende uanset platform.";
-"welcome.azure_settings" = "Azure Indstillinger";
-"welcome.choose_voice" = "Vælg din stemme!";
 "common.continue" = "Færdig";
 
 /* Welcome Flow */
@@ -26,11 +22,15 @@
 "welcome_flow.azure_tts.con1" = "Kræver internet";
 "welcome_flow.azure_tts.con2" = "Kræver konfiguration";
 "welcome_flow.azure_tts.con3" = "Kan koste penge";
+"welcome_flow.google_tts.title" = "Google Cloud Tekst-til-tale";
+"welcome_flow.google_tts.subtitle" = "Naturlige cloudstemmer med din egen API-nøgle";
+"welcome_flow.google_tts.pro1" = "Bredt udvalg af stemmer og sprog";
+"welcome_flow.google_tts.pro2" = "Ensartet kvalitet på tværs af enheder";
+"welcome_flow.google_tts.pro3" = "Dit eget projekt og din egen kvote";
+"welcome_flow.google_tts.con1" = "Kræver internet";
+"welcome_flow.google_tts.con2" = "Kræver opsætning og fakturering i Google Cloud";
+"welcome_flow.google_tts.con3" = "Brug kan koste penge";
 "welcome_flow.voice_setup.title" = "Vælg din stemme";
-"welcome_flow.voice_setup.subtitle" = "Vælg en stemme der lyder rigtig for dig";
-"welcome_flow.voice_test.placeholder" = "Hej, sådan lyder jeg!";
-"welcome_flow.phrases_setup.title" = "Tilføj dine første fraser";
-"welcome_flow.phrases_setup.subtitle" = "Opret nogle fraser du bruger ofte";
 "welcome_flow.get_started" = "Kom i gang";
 "welcome_flow.skip" = "Spring over foreløbig";
 "welcome_flow.next" = "Næste";
@@ -45,6 +45,7 @@
 "welcome_flow.open_settings" = "Åbn iOS Indstillinger";
 "welcome_flow.test_voice" = "Test din stemme";
 "welcome_flow.azure_voices_subtitle" = "Vælg mellem høj-kvalitets Azure stemmer";
+"welcome_flow.google_voices_subtitle" = "Vælg mellem Google Cloud-stemmer";
 "welcome_flow.choose_voice" = "Vælg stemme";
 "welcome_flow.change_voice" = "Skift stemme";
 "welcome_flow.test_text" = "Hej, sådan lyder jeg!";
@@ -54,8 +55,6 @@
 "toolbar.voice" = "Stemme";
 "toolbar.second_language" = "Andet sprog";
 "toolbar.add_category" = "Tilføj kategori";
-"toolbar.ui_size" = "Størrelse på UI";
-"toolbar.welcome_flow" = "Konfigurationsguide";
 "toolbar.settings_panel" = "Indstillingspanel";
 
 "categories.all" = "Alle";
@@ -65,31 +64,23 @@
 "category.save" = "Gem";
 "category.close" = "Luk";
 "category.delete" = "Slet kategori";
-"category.history" = "Historik";
 
 "phrase.new.title" = "Ny frase";
-"phrase.text.placeholder" = "Frase tekst";
 "phrase.edit.title" = "Rediger frase";
-"phrase.display_name.optional" = "Alternativ tekst på frasen";
 "phrase.save" = "Gem";
 "phrase.delete" = "Slet";
 "phrase.add.tile" = "Tilføj";
 
 "debug.content_loaded" = "DEBUG: ContentView loaded";
-"debug.voice" = "Voice";
 
-"azure.settings.title" = "Azure Indstillinger";
 "azure.endpoint.placeholder" = "Region";
 "azure.key.placeholder" = "Abonnomentsnøgle";
-"azure.credentials.configured" = "Azure Speech-legitimationsoplysninger er sikkert konfigureret på denne enhed.";
-"azure.credentials.replace" = "Erstat Azure-legitimationsoplysninger";
 
 "common.error" = "FEJL";
+"common.retry" = "Prøv igen";
+"speech.playback_failed" = "Talen kunne ikke afspilles. Prøv igen.";
 "common.ok" = "OK";
-"common.saving" = "Gemmmer";
 "common.save" = "Gem";
-
-"reorder.title" = "Rearranger fraser";
 
 "voice.search.placeholder" = "Søg efter stemme";
 "common.select" = "Vælg";
@@ -104,12 +95,13 @@
 "ui_size.playback.section" = "Playback";
 "ui_size.playback.icon" = "Ikon størrelse";
 
-"common.name" = "Navn";
 "common.done" = "OK";
 
 "phrase.edit" = "Rediger";
 "phrase.play_tts" = "Afspil";
 "phrase.record" = "Optag";
+"phrase.play_recording" = "Afspil optagelse";
+"phrase.record.replace" = "Erstat optagelse";
 "textfield.mark_secondary_language" = "Markér til andet sprog";
 "phrase.title" = "Titel";
 "phrase.title.placeholder" = "Titel";
@@ -117,11 +109,11 @@
 "common.search" = "Søg";
 "common.clear" = "Ryd";
 "common.stop" = "Stop";
+"common.play" = "Afspil";
+"common.delete" = "Slet";
 
 "phrase.recording" = "Optagelse";
 "phrase.mic_permission_denied" = "Mikrofontilladelse afvist. Aktiver den i Indstillinger.";
-"phrase.alternative_text.optional" = "Alternativ frasetekst (valgfri)";
-"phrase.alternative_text.placeholder" = "Hvad skal siges i stedet";
 
 "phrase.symbol.section" = "Symbol ";
 "phrase.symbol.source" = "Symbolkilde";
@@ -155,13 +147,9 @@
 "debug.voice.none" = "Stemme: (ingen)";
 
 "common.cancel" = "Annuller";
-"common.change" = "Skift...";
-"common.unknown" = "Ukendt";
-"common.unknown_language" = "Ukendt sprog";
 
 "settings.title" = "Indstillinger";
 "settings.tts.title" = "Tekst-til-tale motor";
-"settings.tts.use_system" = "Brug System TTS";
 "settings.tts.system_when_offline" = "Brug System TTS når offline";
 "settings.restart_setup" = "Genstart opsætningsguide";
 
@@ -234,20 +222,15 @@
 
 "welcome_flow.choose_primary_language" = "Vælg primært sprog til denne stemme";
 "welcome_flow.select_language" = "Vælg sprog";
-"welcome_flow.pros" = "Fordele";
-"welcome_flow.cons" = "Ulemper";
-"welcome_flow.preview_text.placeholder" = "Indtast tekst til forhåndsvisning...";
 
 "toolbar.switch_symbol_mode" = "Skift til symbolarbejdsområde";
 "toolbar.switch_phrase_mode" = "Skift til frasearbejdsområde";
 
 "symbol.workspace.title" = "Symbolarbejdsområde";
-"symbol.workspace.subtitle" = "Byg og administrer skærme";
 
 "boardset.create" = "Ny skærm";
 "boardset.creating" = "Opretter skærm…";
 "boardset.create_first" = "Opret din første skærm";
-"boardset.empty" = "Ingen skærme endnu";
 "boardset.default_name" = "Ny skærm";
 "boardset.name" = "Skærmnavn";
 "boardset.name_placeholder" = "Daglig kommunikation";
@@ -256,12 +239,9 @@
 "boardset.columns" = "Kolonner: %d";
 "boardset.board_name" = "Sidenav";
 "boardset.board_name_placeholder" = "Madside";
-"boardset.board_picker" = "Side";
 "boardset.add_board" = "Tilføj side";
-"boardset.save" = "Gem skærm";
 "boardset.lock" = "Lås skærm";
 "boardset.unlock" = "Lås skærm op";
-"boardset.locked_banner" = "Skærmen er låst. Lås op for at redigere.";
 "boardset.untitled_board" = "Side uden titel";
 "boardset.grid_summary" = "%d x %d gitter, %d knapper";
 
@@ -285,8 +265,6 @@
 "boardset.unlock.reason" = "Lås denne skærm op for at redigere symboler og layout.";
 "boardset.unlock.failed" = "Autentificering mislykkedes.";
 
-"boardset.edit" = "Rediger felter";
-"boardset.edit_done" = "Færdig med redigering";
 "boardset.cell.empty" = "Tomt felt";
 "boardset.cell.edit_title" = "Rediger felt";
 "boardset.cell.label" = "Etiket";
@@ -298,10 +276,6 @@
 "boardset.cell.background_picker" = "Baggrundsfarve";
 "boardset.cell.border_enabled" = "Vælg rammens farve";
 "boardset.cell.border_picker" = "Rammens farve";
-"boardset.cell.background_hex" = "Baggrundsfarve (HEX)";
-"boardset.cell.border_hex" = "Rammens farve (HEX)";
-"boardset.cell.clear" = "Ryd felt";
-"boardset.cell.delete" = "Slet felt";
 
 "sentence.box.title" = "Sætningsboks";
 "sentence.box.delete_phrase" = "Slet frase fra sætning";
@@ -329,7 +303,7 @@
 "azure_setup.save_continue" = "Gem og fortsæt";
 "azure_setup.complete.title" = "Sådan!";
 "azure_setup.complete.desc" = "Dine Azure Speech-oplysninger er gemt sikkert på denne enhed.";
-"azure_setup.error.endpoint" = "Indtast Speech-endpointet eller regionen.";
+"azure_setup.error.endpoint" = "Indtast en gyldig Azure Speech-region eller et officielt HTTPS-endpoint.";
 "azure_setup.error.key" = "Indtast en Speech-abonnementsnøgle.";
 "azure_setup.error.save" = "Azure-oplysningerne kunne ikke gemmes: %@";
 
@@ -373,10 +347,9 @@
 "board_sets.status.duplicated" = "Skærm duplikeret.";
 "board_sets.error.delete_failed" = "Skærmen kunne ikke slettes.";
 "board_sets.error.duplicate_failed" = "Skærmen kunne ikke duplikeres.";
+"board_sets.error.load_failed" = "Skærmene kunne ikke indlæses.";
 "board_workspace.editing" = "Redigerer %@";
 "board_workspace.finish" = "Færdig";
-"board_workspace.undo" = "Fortryd";
-"board_workspace.home" = "Hjem";
 "board_workspace.exit_library" = "Skærme";
 
 "settings.search" = "Søg i indstillinger";
@@ -393,6 +366,32 @@
 "settings.category.pronunciation.subtitle" = "Lær Wingmate at udtale navne og ord";
 "settings.speech.engine" = "Talemotor";
 "settings.speech.engine.azure" = "Azure";
+"settings.speech.engine.google" = "Google";
+"settings.speech.google.configure" = "Google Cloud Tekst-til-tale";
+"settings.speech.google.configured" = "API-nøgle konfigureret";
+"settings.speech.google.not_configured" = "Ikke konfigureret";
+"settings.speech.google.api_key" = "Google Cloud API-nøgle";
+"settings.speech.google.help" = "Aktivér Cloud Text-to-Speech, og begræns nøglen til denne API. Nøglen gemmes i enhedens nøglering og medtages ikke i sikkerhedskopier.";
+"settings.speech.google.clear" = "Slet API-nøgle";
+"settings.speech.google.clear_failed" = "Google Cloud API-nøglen kunne ikke slettes.";
+"settings.speech.google.setup.welcome_title" = "Brug din egen Google Cloud-stemme";
+"settings.speech.google.setup.welcome_description" = "Wingmate kan tale med Google Cloud Text-to-Speech via en API-nøgle fra dit eget Google Cloud-projekt.";
+"settings.speech.google.setup.guided" = "Guidet opsætning";
+"settings.speech.google.setup.have_key" = "Jeg har allerede en API-nøgle";
+"settings.speech.google.setup.cloud_title" = "Klargør Google Cloud";
+"settings.speech.google.setup.cloud_steps" = "1. Vælg eller opret et Google Cloud-projekt.\n2. Tilknyt en faktureringskonto.\n3. Aktivér Cloud Text-to-Speech.\n4. Opret en API-nøgle under Legitimationsoplysninger.";
+"settings.speech.google.setup.billing" = "Åbn fakturering";
+"settings.speech.google.setup.enable_api" = "Aktivér Text-to-Speech API";
+"settings.speech.google.setup.create_key" = "Opret en API-nøgle";
+"settings.speech.google.setup.have_created_key" = "Jeg har oprettet nøglen";
+"settings.speech.google.setup.key_title" = "Begræns og tilføj nøglen";
+"settings.speech.google.setup.restrict_api" = "Begræns nøglen til Cloud Text-to-Speech API. Gemini-modeller kræver desuden en autorisationsnøgle, der er knyttet til en tjenestekonto med Vertex AI User. Du kan også anvende begrænsningen til iOS-apps med dette bundle-id:";
+"settings.speech.google.setup.ios_restriction" = "Bundle-id: %@";
+"settings.speech.google.setup.save_validate" = "Gem sikkert og bekræft";
+"settings.speech.google.setup.validation_failed" = "Wingmate kunne ikke bekræfte nøglen. Kontrollér nøgle, forbindelse, fakturering, API-adgang og begrænsninger. Din tidligere opsætning er bevaret.";
+"settings.speech.google.setup.complete_title" = "Google TTS er klar";
+"settings.speech.google.setup.complete_description" = "Nøglen er bekræftet og gemt i enhedens nøglering. Den medtages ikke i sikkerhedskopier.";
+"common.back" = "Tilbage";
 "settings.speech.engine.system" = "System";
 "settings.speech.azure.configure" = "Opsæt Azure Speech";
 "settings.speech.azure.configured" = "Konfigureret";
@@ -433,7 +432,6 @@
 "settings.general.startup_screen" = "Skærm der åbnes";
 "settings.general.screen_library" = "Skærmbibliotek";
 "settings.general.startup.footer" = "Vælg hvilken kommunikationstilstand Wingmate åbner i.";
-"settings.general.privacy" = "Privatliv";
 "settings.general.analytics" = "Rapportering af funktionsbrug";
 "settings.general.analytics.footer" = "Del anonyme hændelser om funktionsbrug. Tekst, nøgler, filstier og skærmindhold rapporteres aldrig.";
 "settings.privacy.local_data" = "Lokale data";
@@ -449,6 +447,7 @@
 "boardset.make_home" = "Brug som startside";
 "boardset.delete_board" = "Slet side";
 "boardset.delete_board.message" = "Vil du slette denne side? Links til den fjernes også.";
+"boardset.error.delete_board_failed" = "Siden kunne ikke slettes.";
 "boardset.background_color" = "Sidebaggrund";
 "boardset.background_custom" = "Brug en brugerdefineret baggrund";
 "boardset.background_footer" = "Slå dette fra for at bruge appens tema.";
@@ -494,7 +493,6 @@
 "boardset.native_keyboard.return" = "Tilbage til tavlen";
 "boardset.quick_core.downloading" = "Downloader og klargør Quick Core…";
 "boardset.cell.insert_text" = "Tekst, som denne tast indsætter";
-"boardset.cell.key_action" = "Særlig handling";
 "boardset.cell.action.none" = "Ingen særlig handling";
 "boardset.cell.action.spell" = "Stav etiketten";
 "boardset.cell.action.space" = "Mellemrum";
@@ -504,3 +502,15 @@
 "boardset.cell.action.speak" = "Læs sætningen op";
 "boardset.cell.action.prediction" = "Ordforslag";
 "playback.fullscreen" = "Vis på fuld skærm";
+"voice.model.label" = "Model";
+"voice.model.all" = "Alle modeller";
+"voice.model.gemini_3_1_flash" = "Gemini 3.1 Flash";
+"voice.model.gemini_2_5_flash" = "Gemini 2.5 Flash";
+"voice.model.gemini_2_5_flash_lite" = "Gemini 2.5 Flash Lite";
+"voice.model.gemini_2_5_pro" = "Gemini 2.5 Pro";
+"voice.model.chirp_3_hd" = "Chirp 3 HD";
+"voice.model.studio" = "Studio";
+"voice.model.neural2" = "Neural2";
+"voice.model.wavenet" = "WaveNet";
+"voice.model.standard" = "Standard";
+"voice.model.other" = "Andre";

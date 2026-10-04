@@ -10,9 +10,10 @@ import kotlinx.serialization.json.Json
 
 class AndroidSqlVoiceRepository(private val context: Context) : VoiceRepository {
     private val helper by lazy { AndroidSqlOpenHelper(context) }
+    private val repositoryDispatcher = Dispatchers.IO.limitedParallelism(1)
     private val json = Json { ignoreUnknownKeys = true }
 
-    override suspend fun getVoices(): List<Voice> = withContext(Dispatchers.IO) {
+    override suspend fun getVoices(): List<Voice> = withContext(repositoryDispatcher) {
         val db = helper.readableDatabase
         val cursor = db.query("voice_catalog", arrayOf("list"), "id = ?", arrayOf("1"), null, null, null)
         cursor.use {
@@ -25,19 +26,19 @@ class AndroidSqlVoiceRepository(private val context: Context) : VoiceRepository 
         }
     }
 
-    override suspend fun saveVoices(list: List<Voice>) = withContext(Dispatchers.IO) {
+    override suspend fun saveVoices(list: List<Voice>) = withContext(repositoryDispatcher) {
         val jsonList = json.encodeToString(ListSerializer(Voice.serializer()), list)
         val db = helper.writableDatabase
         db.execSQL("INSERT OR REPLACE INTO voice_catalog (id, list) VALUES (1, ?)", arrayOf(jsonList))
     }
 
-    override suspend fun saveSelected(voice: Voice) = withContext(Dispatchers.IO) {
+    override suspend fun saveSelected(voice: Voice) = withContext(repositoryDispatcher) {
         val text = json.encodeToString(Voice.serializer(), voice)
         val db = helper.writableDatabase
         db.execSQL("INSERT OR REPLACE INTO voices (id, data) VALUES (1, ?)", arrayOf(text))
     }
 
-    override suspend fun getSelected(): Voice? = withContext(Dispatchers.IO) {
+    override suspend fun getSelected(): Voice? = withContext(repositoryDispatcher) {
         val db = helper.readableDatabase
         val cursor = db.query("voices", arrayOf("data"), "id = ?", arrayOf("1"), null, null, null)
         cursor.use {

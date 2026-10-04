@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,10 +22,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.VerticalAlignTop
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -66,6 +69,8 @@ private enum class BoardSettingPreference {
     ShowSymbols,
     LabelPosition,
     MessageBar,
+    SpeakButton,
+    MessageBarEditable,
     Activation,
     Return
 }
@@ -89,6 +94,8 @@ internal fun BoardSettingsScreen(
     appShowSymbols: Boolean,
     appLabelAtTop: Boolean,
     appShowMessageBar: Boolean,
+    appShowSpeakButton: Boolean,
+    appMessageBarEditable: Boolean,
     appActivationBehavior: BoardActivationBehavior,
     appReturnBehavior: BoardReturnBehavior,
     onCommit: (name: String, settings: BoardSettingsOverrides, backgroundColor: String?) -> Unit,
@@ -106,6 +113,8 @@ internal fun BoardSettingsScreen(
         appShowSymbols = appShowSymbols,
         appLabelAtTop = appLabelAtTop,
         appShowMessageBar = appShowMessageBar,
+        appShowSpeakButton = appShowSpeakButton,
+        appMessageBarEditable = appMessageBarEditable,
         appActivationBehavior = appActivationBehavior,
         appReturnBehavior = appReturnBehavior,
         screen = if (target == BoardSettingsTarget.Page) screenSettings else BoardSettingsOverrides()
@@ -115,6 +124,8 @@ internal fun BoardSettingsScreen(
         appShowSymbols = appShowSymbols,
         appLabelAtTop = appLabelAtTop,
         appShowMessageBar = appShowMessageBar,
+        appShowSpeakButton = appShowSpeakButton,
+        appMessageBarEditable = appMessageBarEditable,
         appActivationBehavior = appActivationBehavior,
         appReturnBehavior = appReturnBehavior,
         screen = if (target == BoardSettingsTarget.Screen) draft else screenSettings,
@@ -130,7 +141,7 @@ internal fun BoardSettingsScreen(
         if (preference != null) preference = null else finish()
     }
 
-    PlatformBackHandler(enabled = true, onBack = ::handleBack)
+    BackHandler(enabled = true, onBack = ::handleBack)
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -343,6 +354,20 @@ private fun BoardSettingsHome(
             )
             SettingsGroupDivider()
             BoardSettingNavRow(
+                title = stringResource(R.string.board_settings_speak_button),
+                subtitle = settingSubtitle(target, BoardSettingPreference.SpeakButton, draft.showSpeakButton, shownHidden(resolved.showSpeakButton), shownHidden(inherited.showSpeakButton)),
+                icon = Icons.Filled.VolumeUp,
+                onClick = { onOpenPreference(BoardSettingPreference.SpeakButton) }
+            )
+            SettingsGroupDivider()
+            BoardSettingNavRow(
+                title = stringResource(R.string.board_settings_message_bar_editable),
+                subtitle = settingSubtitle(target, BoardSettingPreference.MessageBarEditable, draft.messageBarEditable, editableReadOnly(resolved.messageBarEditable), editableReadOnly(inherited.messageBarEditable)),
+                icon = Icons.Filled.Edit,
+                onClick = { onOpenPreference(BoardSettingPreference.MessageBarEditable) }
+            )
+            SettingsGroupDivider()
+            BoardSettingNavRow(
                 title = stringResource(R.string.board_settings_activation),
                 subtitle = settingSubtitle(
                     target,
@@ -531,6 +556,28 @@ private fun choicesFor(
                 onDraftChange(draft.copy(showMessageBar = false))
             }
         )
+        BoardSettingPreference.SpeakButton -> listOf(
+            inheritedChoice(shownHidden(inherited.showSpeakButton), draft.showSpeakButton == null) {
+                onDraftChange(draft.copy(showSpeakButton = null))
+            },
+            BoardSettingChoice(shownHidden(true), draft.showSpeakButton == true) {
+                onDraftChange(draft.copy(showSpeakButton = true))
+            },
+            BoardSettingChoice(shownHidden(false), draft.showSpeakButton == false) {
+                onDraftChange(draft.copy(showSpeakButton = false))
+            }
+        )
+        BoardSettingPreference.MessageBarEditable -> listOf(
+            inheritedChoice(editableReadOnly(inherited.messageBarEditable), draft.messageBarEditable == null) {
+                onDraftChange(draft.copy(messageBarEditable = null))
+            },
+            BoardSettingChoice(editableReadOnly(true), draft.messageBarEditable == true) {
+                onDraftChange(draft.copy(messageBarEditable = true))
+            },
+            BoardSettingChoice(editableReadOnly(false), draft.messageBarEditable == false) {
+                onDraftChange(draft.copy(messageBarEditable = false))
+            }
+        )
         BoardSettingPreference.Activation -> buildList {
             add(
                 inheritedChoice(activationLabel(inherited.activationBehavior), draft.activationBehavior == null) {
@@ -571,6 +618,8 @@ private fun preferenceTitle(preference: BoardSettingPreference): String = string
         BoardSettingPreference.ShowSymbols -> R.string.board_settings_show_symbols
         BoardSettingPreference.LabelPosition -> R.string.board_settings_label_position
         BoardSettingPreference.MessageBar -> R.string.board_settings_message_bar
+        BoardSettingPreference.SpeakButton -> R.string.board_settings_speak_button
+        BoardSettingPreference.MessageBarEditable -> R.string.board_settings_message_bar_editable
         BoardSettingPreference.Activation -> R.string.board_settings_activation
         BoardSettingPreference.Return -> R.string.board_settings_after_selection
     }
@@ -579,6 +628,10 @@ private fun preferenceTitle(preference: BoardSettingPreference): String = string
 @Composable
 private fun shownHidden(value: Boolean): String =
     stringResource(if (value) R.string.board_settings_shown else R.string.board_settings_hidden)
+
+@Composable
+private fun editableReadOnly(value: Boolean): String =
+    stringResource(if (value) R.string.board_settings_editable else R.string.board_settings_read_only)
 
 @Composable
 private fun topBottom(value: Boolean): String =

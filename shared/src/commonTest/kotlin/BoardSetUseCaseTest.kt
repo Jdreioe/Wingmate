@@ -1,4 +1,5 @@
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.NoopFeatureUsageReporter
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
@@ -11,11 +12,19 @@ import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
+import io.github.jdreioe.wingmate.domain.SpeechSegment
+import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -63,6 +72,54 @@ class BoardSetUseCaseTest {
         assertEquals(setOf("home", "food"), loaded.boardsById.keys)
         assertEquals("home", loaded.rootBoard?.id)
         assertEquals("food", loaded.rootBoard?.buttons?.single()?.loadBoard?.id)
+    }
+
+    @Test
+    fun saveDoesNotBlockOnSpeechCaching() = runBlocking {
+        val cache = BoardSetSpeechCacheUseCase(
+            boardSetRepository,
+            boardRepository,
+            object : SettingsRepository {
+                // Cloud engine so the cache pass actually reaches cacheSpeech.
+                override suspend fun get(): Settings = Settings(ttsEngine = io.github.jdreioe.wingmate.domain.TtsEngine.AZURE_MANAGED)
+                override suspend fun update(settings: Settings): Settings = settings
+            },
+            object : VoiceRepository {
+                override suspend fun getVoices(): List<Voice> = emptyList()
+                override suspend fun saveVoices(list: List<Voice>) = Unit
+                override suspend fun saveSelected(voice: Voice) = Unit
+                override suspend fun getSelected(): Voice? = null
+            },
+            object : SpeechService {
+                // Never completes: a save that awaited the TTS cache pass would hang here.
+                override suspend fun cacheSpeech(
+                    text: String,
+                    voice: Voice?,
+                    pitch: Double?,
+                    rate: Double?
+                ): Boolean = awaitCancellation()
+                override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) = Unit
+                override suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) = Unit
+                override suspend fun pause() = Unit
+                override suspend fun stop() = Unit
+                override suspend fun resume() = Unit
+                override fun isPlaying(): Boolean = false
+                override fun isPaused(): Boolean = false
+            }
+        )
+        val blockingUseCase = BoardSetUseCase(
+            boardSetRepository,
+            boardRepository,
+            NoopFeatureUsageReporter(),
+            speechCache = cache
+        )
+
+        // The speech cache pass over every button must not gate persistence.
+        val saved = withTimeoutOrNull(5_000) {
+            blockingUseCase.saveBoardSetGraph(linkedGraph()).getOrThrow()
+        }
+        assertNotNull(saved, "saveBoardSetGraph blocked on the speech cache")
+        delay(1)
     }
 
     @Test

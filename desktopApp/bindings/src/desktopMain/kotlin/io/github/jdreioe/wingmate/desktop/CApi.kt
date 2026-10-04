@@ -1,0 +1,75 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class, kotlin.experimental.ExperimentalNativeApi::class)
+
+package io.github.jdreioe.wingmate.desktop
+
+import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.COpaquePointer
+import kotlinx.cinterop.CPointer
+import kotlinx.cinterop.StableRef
+import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.asStableRef
+import kotlinx.cinterop.get
+import kotlinx.cinterop.nativeHeap
+import kotlinx.cinterop.set
+import kotlinx.cinterop.toKString
+import kotlin.native.CName
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+
+private fun CPointer<ByteVar>?.string(): String = this?.toKString().orEmpty()
+
+private fun ownedCString(value: String): CPointer<ByteVar> {
+    val bytes = value.encodeToByteArray()
+    val result = nativeHeap.allocArray<ByteVar>(bytes.size + 1)
+    bytes.forEachIndexed { index, byte -> result[index] = byte }
+    result[bytes.size] = 0
+    return result
+}
+
+private inline fun call(context: COpaquePointer?, block: DesktopCore.() -> String): CPointer<ByteVar> {
+    val result = runCatching { context!!.asStableRef<DesktopCore>().get().block() }
+        .getOrElse { JsonObject(mapOf("error" to JsonPrimitive(it.message ?: "Desktop core operation failed"))).toString() }
+    return ownedCString(result)
+}
+
+@CName("wm_create")
+fun create(dataDirectory: CPointer<ByteVar>?): COpaquePointer? =
+    runCatching { StableRef.create(DesktopCore(dataDirectory.string())).asCPointer() }.getOrNull()
+
+@CName("wm_destroy")
+fun destroy(context: COpaquePointer?) {
+    context?.asStableRef<DesktopCore>()?.dispose()
+}
+
+@CName("wm_string_free")
+fun stringFree(value: CPointer<ByteVar>?) {
+    if (value != null) nativeHeap.free(value.rawValue)
+}
+
+@CName("wm_library_json") fun library(context: COpaquePointer?) = call(context) { libraryJson() }
+@CName("wm_recents_json") fun recents(context: COpaquePointer?) = call(context) { recentsJson() }
+@CName("wm_import_file_json") fun importFile(context: COpaquePointer?, path: CPointer<ByteVar>?) = call(context) { importFileJson(path.string()) }
+@CName("wm_open_json") fun open(context: COpaquePointer?, id: CPointer<ByteVar>?) = call(context) { openJson(id.string()) }
+@CName("wm_activate_json") fun activate(context: COpaquePointer?, id: CPointer<ByteVar>?) = call(context) { activateJson(id.string()) }
+@CName("wm_back_json") fun back(context: COpaquePointer?) = call(context) { backJson() }
+@CName("wm_clear_json") fun clear(context: COpaquePointer?) = call(context) { clearJson() }
+@CName("wm_hold_json") fun hold(context: COpaquePointer?) = call(context) { holdJson() }
+@CName("wm_speak_json") fun speak(context: COpaquePointer?) = call(context) { speakJson() }
+@CName("wm_settings_json") fun settings(context: COpaquePointer?) = call(context) { settingsJson() }
+@CName("wm_update_settings_json") fun updateSettings(context: COpaquePointer?, value: CPointer<ByteVar>?) = call(context) { updateSettingsJson(value.string()) }
+@CName("wm_pronunciations_json") fun pronunciations(context: COpaquePointer?) = call(context) { pronunciationsJson() }
+@CName("wm_add_pronunciation_json") fun addPronunciation(context: COpaquePointer?, value: CPointer<ByteVar>?) = call(context) { addPronunciationJson(value.string()) }
+@CName("wm_delete_pronunciation_json") fun deletePronunciation(context: COpaquePointer?, word: CPointer<ByteVar>?) = call(context) { deletePronunciationJson(word.string()) }
+@CName("wm_export_backup_json") fun exportBackup(context: COpaquePointer?, path: CPointer<ByteVar>?) = call(context) { exportBackupJson(path.string()) }
+@CName("wm_restore_backup_json") fun restoreBackup(context: COpaquePointer?, path: CPointer<ByteVar>?) = call(context) { restoreBackupJson(path.string()) }
+
+@CName("wm_editor_json") fun editor(context: COpaquePointer?, value: CPointer<ByteVar>?) = call(context) { editorJson(value.string()) }
+
+// Returned strings follow the same ownership rule as the rest of the C API.
+@CName("wm_access_target_entered_json") fun accessTargetEntered(context: COpaquePointer?, target: CPointer<ByteVar>?, nowMillis: Long) = call(context) { accessTargetEnteredJson(target.string(), nowMillis) }
+@CName("wm_access_target_exited_json") fun accessTargetExited(context: COpaquePointer?, target: CPointer<ByteVar>?, nowMillis: Long) = call(context) { accessTargetExitedJson(target.string(), nowMillis) }
+@CName("wm_access_clear_transient_input_json") fun accessClear(context: COpaquePointer?, nowMillis: Long) = call(context) { accessClearJson(nowMillis) }
+@CName("wm_access_tick_json") fun accessTick(context: COpaquePointer?, nowMillis: Long) = call(context) { accessTickJson(nowMillis) }
+@CName("wm_access_set_paused_json") fun accessSetPaused(context: COpaquePointer?, paused: Int, nowMillis: Long) = call(context) { accessSetPausedJson(paused != 0, nowMillis) }
+@CName("wm_access_key_down_json") fun accessKeyDown(context: COpaquePointer?, key: CPointer<ByteVar>?, nowMillis: Long) = call(context) { accessKeyDownJson(key.string(), nowMillis) }
+@CName("wm_access_key_up_json") fun accessKeyUp(context: COpaquePointer?, key: CPointer<ByteVar>?, nowMillis: Long) = call(context) { accessKeyUpJson(key.string(), nowMillis) }

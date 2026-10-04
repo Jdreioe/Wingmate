@@ -1,0 +1,4 @@
+• Vælg om meddelelseslinjen viser en taleknap, med globale valg og valg pr. skærm og side.
+• Tilslut din egen Google Cloud TTS-nøgle med guidet opsætning, og filtrer sky-stemmer efter udbyder og model.
+• Mere pålidelig taleafspilning, og Historik går ikke tabt, hvis en import fejler undervejs.
+• Stærkere beskyttelse af privatlivet ved valgfri brugsstatistik.

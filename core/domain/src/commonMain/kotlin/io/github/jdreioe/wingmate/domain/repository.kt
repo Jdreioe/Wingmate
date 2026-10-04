@@ -1,6 +1,6 @@
 package io.github.jdreioe.wingmate.domain
 
-
+import kotlinx.coroutines.flow.Flow
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 
@@ -36,14 +36,6 @@ interface PhraseRepository {
     suspend fun move(fromIndex: Int, toIndex: Int)
 }
 
-interface CategoryRepository {
-    suspend fun getAll(): List<CategoryItem>
-    suspend fun add(category: CategoryItem): CategoryItem
-    suspend fun update(category: CategoryItem): CategoryItem
-    suspend fun delete(id: String)
-    suspend fun move(fromIndex: Int, toIndex: Int)
-}
-
 interface SettingsRepository {
     suspend fun get(): Settings
     suspend fun update(settings: Settings): Settings
@@ -75,7 +67,30 @@ interface ConfigRepository {
             credentialConfigured = !config?.subscriptionKey.isNullOrBlank()
         )
     }
+
+    /** Internal credential-bearing API. Never expose its result to a UI or platform API. */
+    suspend fun getGoogleSpeechConfig(): GoogleSpeechConfig?
+    suspend fun saveGoogleSpeechConfig(config: GoogleSpeechConfig)
+    suspend fun clearGoogleSpeechConfig()
+    suspend fun getGoogleSpeechConfigStatus(): GoogleSpeechConfigStatus =
+        GoogleSpeechConfigStatus(
+            credentialConfigured = !getGoogleSpeechConfig()?.apiKey.isNullOrBlank(),
+        )
 }
+
+enum class SpeechPlaybackStatus {
+    IDLE,
+    PREPARING,
+    PLAYING,
+    PAUSED,
+    FAILED,
+}
+
+data class SpeechPlaybackState(
+    val requestId: Long = 0,
+    val status: SpeechPlaybackStatus = SpeechPlaybackStatus.IDLE,
+    val error: String? = null,
+)
 
 interface SpeechService {
     suspend fun speak(text: String, voice: Voice? = null, pitch: Double? = null, rate: Double? = null)
@@ -94,6 +109,22 @@ interface SpeechService {
         rate: Double? = null,
         cacheAudio: Boolean = true
     ) = speakSegments(segments, voice, pitch, rate)
+    /** Playback used by the Communication session, which records History after the request succeeds. */
+    suspend fun speakWithoutHistory(
+        text: String,
+        voice: Voice? = null,
+        pitch: Double? = null,
+        rate: Double? = null,
+        cacheAudio: Boolean = true,
+    ) = speakWithCachePolicy(text, voice, pitch, rate, cacheAudio)
+    /** Segmented counterpart to [speakWithoutHistory]. */
+    suspend fun speakSegmentsWithoutHistory(
+        segments: List<SpeechSegment>,
+        voice: Voice? = null,
+        pitch: Double? = null,
+        rate: Double? = null,
+        cacheAudio: Boolean = true,
+    ) = speakSegmentsWithCachePolicy(segments, voice, pitch, rate, cacheAudio)
     /** Synthesize speech into the reusable cache without playing it or adding History. */
     suspend fun cacheSpeech(
         text: String,
@@ -109,21 +140,17 @@ interface SpeechService {
     suspend fun resume()
     fun isPlaying(): Boolean
     fun isPaused(): Boolean
+    fun playbackState(): SpeechPlaybackState = when {
+        isPaused() -> SpeechPlaybackState(status = SpeechPlaybackStatus.PAUSED)
+        isPlaying() -> SpeechPlaybackState(status = SpeechPlaybackStatus.PLAYING)
+        else -> SpeechPlaybackState()
+    }
     suspend fun guessPronunciation(text: String, language: String = "en"): String? = null
 }
 
 /** Application hook used when a voice change requires board audio to be regenerated. */
 interface BoardSpeechCache {
     suspend fun cacheAll()
-}
-
-interface UpdateService {
-    suspend fun checkForUpdates(): UpdateInfo?
-    suspend fun downloadUpdate(updateInfo: UpdateInfo): Result<String>
-    suspend fun installUpdate(downloadPath: String): Result<Unit>
-    fun getCurrentVersion(): AppVersion
-    suspend fun getUpdateStatus(): UpdateStatus
-    suspend fun setUpdateStatus(status: UpdateStatus)
 }
 
 /**
@@ -134,26 +161,12 @@ data class PredictionResult(
     val letters: List<Char> = emptyList()
 )
 
-/**
- * Service for predicting the next word or letter based on user's text history.
- * Uses a lightweight n-gram model trained on previously spoken text.
- */
+/** Local predictions that update when the language or learned vocabulary changes. */
 interface TextPredictionService {
-    /**
-     * Train the model on the user's speech history.
-     */
-    suspend fun train(history: List<SaidText>)
-    
-    /**
-     * Predict the next words and letters given the current input context.
-     * @param context The current text being typed
-     * @param maxWords Maximum number of word predictions to return
-     * @param maxLetters Maximum number of letter predictions to return
-     */
-    suspend fun predict(context: String, maxWords: Int = 5, maxLetters: Int = 5): PredictionResult
-    
-    /**
-     * Check if the model has been trained.
-     */
-    fun isTrained(): Boolean
+    /** Observing starts model loading; callers never need to train or check readiness. */
+    fun predictions(context: String, maxWords: Int = 5, maxLetters: Int = 5):
+        Flow<PredictionResult>
+
+    /** Reload after persisted communication history changes. Does not block speech. */
+    fun refresh()
 }

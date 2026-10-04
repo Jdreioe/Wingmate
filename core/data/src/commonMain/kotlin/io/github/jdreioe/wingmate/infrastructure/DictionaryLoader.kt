@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -14,9 +15,12 @@ class DictionaryLoadException : Exception("Dictionary could not be loaded")
  * Loads language dictionaries from the AOSP dictionaries repository on Codeberg.
  * These are used to pretrain the N-Gram model with common words for a language.
  */
-class DictionaryLoader(private val fileStorage: io.github.jdreioe.wingmate.domain.FileStorage? = null) {
+class DictionaryLoader(
+    private val fileStorage: io.github.jdreioe.wingmate.domain.FileStorage? = null,
+    httpClient: HttpClient? = null,
+) {
     private val httpClient by lazy {
-        HttpClient {
+        httpClient ?: HttpClient {
             followRedirects = true
         }
     }
@@ -42,8 +46,8 @@ class DictionaryLoader(private val fileStorage: io.github.jdreioe.wingmate.domai
             return it 
         }
         
-        // Use NonCancellable to ensure loading finishes even if UI recomposes
-        return withContext(kotlinx.coroutines.NonCancellable) {
+        // Model loading owns its lifetime; language changes must be able to cancel it.
+        return withContext(Dispatchers.Default) {
             // Check disk cache first
             if (fileStorage != null) {
                 val fileName = "$baseName.combined"
@@ -84,8 +88,18 @@ class DictionaryLoader(private val fileStorage: io.github.jdreioe.wingmate.domai
                     // Save to disk cache
                     if (fileStorage != null) {
                         val fileName = "$baseName.combined"
-                        fileStorage.save(fileName, responseText)
-                        OperationalLogger.debug("dictionary.cache", "write_succeeded", count = words.size)
+                        try {
+                            fileStorage.save(fileName, responseText)
+                            OperationalLogger.debug("dictionary.cache", "write_succeeded", count = words.size)
+                        } catch (failure: CancellationException) {
+                            throw failure
+                        } catch (failure: Exception) {
+                            OperationalLogger.warn(
+                                "dictionary.cache",
+                                "write_failed",
+                                exceptionClass = failure.loggingClassName(),
+                            )
+                        }
                     }
                 }
                 words
@@ -170,11 +184,4 @@ class DictionaryLoader(private val fileStorage: io.github.jdreioe.wingmate.domai
         "main_sv", "main_ta", "main_tcy", "main_te", "main_tok", "main_tr", "main_uk", 
         "main_ur", "main_zgh", "main_zgh_ZZ"
     )
-    
-    /**
-     * Checks if a dictionary is available for the given language.
-     */
-    fun isLanguageSupported(languageCode: String): Boolean {
-        return resolveDictionaryBaseName(languageCode) != null
-    }
 }

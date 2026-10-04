@@ -11,8 +11,9 @@ import java.util.UUID
 
 class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepository {
     private val helper by lazy { AndroidSqlOpenHelper(context) }
+    private val repositoryDispatcher = Dispatchers.IO.limitedParallelism(1)
 
-    override suspend fun getAll(): List<Phrase> = withContext(Dispatchers.IO) {
+    override suspend fun getAll(): List<Phrase> = withContext(repositoryDispatcher) {
         val db = helper.readableDatabase
         val cursor = db.query("phrases", null, null, null, null, null, "ordering ASC")
         val list = mutableListOf<Phrase>()
@@ -49,7 +50,7 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
         return@withContext list
     }
 
-    override suspend fun add(phrase: Phrase): Phrase = withContext(Dispatchers.IO) {
+    override suspend fun add(phrase: Phrase): Phrase = withContext(repositoryDispatcher) {
         val db = helper.writableDatabase
         val id = phrase.id.ifBlank { UUID.randomUUID().toString() }
         val createdAt = if (phrase.createdAt == 0L) System.currentTimeMillis() else phrase.createdAt
@@ -86,7 +87,7 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
         )
     }
 
-    override suspend fun update(phrase: Phrase): Phrase = withContext(Dispatchers.IO) {
+    override suspend fun update(phrase: Phrase): Phrase = withContext(repositoryDispatcher) {
         val db = helper.writableDatabase
         val values = ContentValues().apply {
             put("text", phrase.text)
@@ -102,13 +103,13 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
         return@withContext phrase
     }
 
-    override suspend fun delete(id: String) = withContext(Dispatchers.IO) {
+    override suspend fun delete(id: String) = withContext(repositoryDispatcher) {
         val db = helper.writableDatabase
         db.delete("phrases", "id = ?", arrayOf(id))
         Unit
     }
 
-    override suspend fun move(fromIndex: Int, toIndex: Int) = withContext(Dispatchers.IO) {
+    override suspend fun move(fromIndex: Int, toIndex: Int) = withContext(repositoryDispatcher) {
         // Simple ordering swap implementation: read all ids and reorder
         val db = helper.writableDatabase
         val cursor = db.query("phrases", arrayOf("id"), null, null, null, null, "ordering ASC")
