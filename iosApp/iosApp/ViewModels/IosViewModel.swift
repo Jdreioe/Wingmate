@@ -70,7 +70,6 @@ final class IosViewModel: ObservableObject {
     }
     private var store: Shared.PhraseListStore?
     private var disposable: Shared.RxDisposable?
-    private var buttonSoundPlayer: AVAudioPlayer?
 
     @Published var state: Shared.PhraseListStoreState = Shared.PhraseListStoreState(phrases: [], categories: [], selectedCategoryId: nil, isLoading: true, error: nil)
 
@@ -93,7 +92,12 @@ final class IosViewModel: ObservableObject {
     @Published private(set) var playback: Shared.SessionPlayback = .idle
     @Published private(set) var sessionNotice: Shared.SessionNotice? = nil
     @Published private(set) var sessionIsSaving: Bool = false
+    /// False until the saved Message has loaded; edits wait so they cannot replace it.
+    @Published private(set) var messageLoaded: Bool = false
     var hasHeldThought: Bool { heldMessageText != nil }
+    /// How a Screen Button looks in the message bar, by "pageId|buttonId". The Message
+    /// keeps what a Button says; its label and symbol come from the Page it was on.
+    @Published private(set) var screenButtonLooks: [String: (label: String, imageUrl: String?)] = [:]
     @Published var primaryLanguage: String = "en-US"
     @Published var secondaryLanguage: String = "en-US"
     @Published private(set) var secondaryLanguageRanges: [NSRange] = []
@@ -541,12 +545,18 @@ final class IosViewModel: ObservableObject {
         if playback != state.playback { playback = state.playback }
         if sessionNotice != state.notice { sessionNotice = state.notice }
         if sessionIsSaving != state.isSaving { sessionIsSaving = state.isSaving }
+        if messageLoaded != state.isLoaded { messageLoaded = state.isLoaded }
         if textChanged { refreshPredictions(for: text) }
     }
 
     /// Sends one edit to the session and mirrors the result right away, so the text
     /// field never shows a stale Message between an edit and its observation.
     private func editMessage(_ edit: () -> Void) {
+        guard messageLoaded else {
+            // Undo the field's own change; the saved Message is still loading.
+            applySessionState(session.state())
+            return
+        }
         edit()
         applySessionState(session.state())
     }
@@ -562,19 +572,25 @@ final class IosViewModel: ObservableObject {
         // #118: ignore rapid repeated activations of the same target.
         guard acceptActivation(targetId: phrase.id) else { return }
         guard !phrase.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let length = (input as NSString).length
-        let cursor = inputSelectionRange.location == NSNotFound ? length : min(inputSelectionRange.location, length)
-        var newCursor: Int32 = 0
-        editMessage { newCursor = session.insertPhrase(phrase: phrase, cursor: Int32(cursor)) }
-        inputSelectionRange = NSRange(location: Int(newCursor), length: 0)
+        let selection = clampedSelectionRange(inputSelectionRange, maxLength: (input as NSString).length)
+        var newCursor: Int32? = nil
+        editMessage {
+            newCursor = session.insertPhrase(
+                phrase: phrase,
+                start: Int32(selection.location),
+                endExclusive: Int32(selection.location + selection.length)
+            )
+        }
+        if let newCursor { inputSelectionRange = NSRange(location: Int(newCursor), length: 0) }
         // #119: immediate speech policy speaks each inserted phrase as it is composed.
         if speechPolicy == "Immediate" {
             speakPhrase(phrase)
         }
     }
 
-    /// Appends the active Screen Button's text to the Message.
+    /// Appends a Button of the current Page to the Message.
     func appendScreenPart(text: String, buttonId: String) {
+        rememberScreenButtonLooks()
         editMessage {
             session.appendScreenPart(
                 text: text,
@@ -650,11 +666,23 @@ final class IosViewModel: ObservableObject {
         }
     }
 
+    /// Plays a Button's own sound through the session, so Pause and Stop reach it.
     func playBoardButtonSound(_ dataUrl: String) {
-        guard !dataUrl.isEmpty, let url = playableURL(from: dataUrl) else { return }
+        guard !dataUrl.isEmpty, let url = playableURL(from: dataUrl), url.isFileURL else { return }
         AudioSessionHelper.activatePlayback()
-        buttonSoundPlayer = try? AVAudioPlayer(contentsOf: url)
-        buttonSoundPlayer?.play()
+        session.speakRecording(path: url.path, voice: selectedVoice)
+    }
+
+    /// Records how the current Page's Buttons look, for the message bar on other Pages.
+    private func rememberScreenButtonLooks() {
+        guard let pageId = selectedBoardId else { return }
+        var looks = screenButtonLooks
+        for cell in boardCells {
+            let label = (cell.label ?? cell.vocalization ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let imageUrl = cell.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+            looks["\(pageId)|\(cell.buttonId)"] = (label, imageUrl?.isEmpty == false ? imageUrl : nil)
+        }
+        screenButtonLooks = looks
     }
 
     private func playableURL(from dataUrl: String) -> URL? {
@@ -1485,6 +1513,7 @@ final class IosViewModel: ObservableObject {
                     buttonId: field.buttonId
                 )
             }
+            rememberScreenButtonLooks()
         } catch {
             boardCells = []
             boardFieldItems = []

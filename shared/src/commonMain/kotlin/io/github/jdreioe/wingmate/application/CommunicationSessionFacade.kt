@@ -44,6 +44,11 @@ data class NativeCommunicationState(
     val notice: SessionNotice?,
     /** True while the Message is being written, so a storage Retry can be disabled. */
     val isSaving: Boolean,
+    /**
+     * False until the saved Message has loaded. Edits before then would replace the
+     * saved active and held Messages, so the UI holds them back.
+     */
+    val isLoaded: Boolean,
 )
 
 /**
@@ -87,16 +92,17 @@ class CommunicationSessionFacade(
     }
 
     /**
-     * Inserts [phrase] at [cursor] as one Phrase part, so its recording plays when the
-     * Message is spoken. Adds a space on either side where needed and returns the cursor
-     * position after the insertion.
+     * Replaces the selection [start, endExclusive) with [phrase] as one Phrase part, so
+     * its recording plays when the Message is spoken. Adds a space on either side where
+     * needed and returns the cursor position after the insertion.
      */
-    fun insertPhrase(phrase: Phrase, cursor: Int): Int {
+    fun insertPhrase(phrase: Phrase, start: Int, endExclusive: Int): Int {
         val message = session.state.value.activeMessage
         val text = message.displayText
-        val at = cursor.coerceIn(0, text.length)
+        val at = start.coerceIn(0, text.length)
+        val end = endExclusive.coerceIn(at, text.length)
         val before = if (at > 0 && !text[at - 1].isWhitespace()) " " else ""
-        val after = if (at == text.length || !text[at].isWhitespace()) " " else ""
+        val after = if (end == text.length || !text[end].isWhitespace()) " " else ""
         val spoken = phrase.name?.ifBlank { null } ?: phrase.text
         val part = MessagePart(
             displayText = before + phrase.text + after,
@@ -104,7 +110,7 @@ class CommunicationSessionFacade(
             source = MessagePartSource.Phrase(phrase.id),
             recordingPath = phrase.recordingPath,
         )
-        session.accept(CommunicationAction.ReplaceMessage(message.insertPart(at, part)))
+        session.accept(CommunicationAction.ReplaceMessage(message.replaceRange(at, end, part)))
         return at + part.displayText.length
     }
 
@@ -162,6 +168,13 @@ class CommunicationSessionFacade(
         )
     }
 
+    /** Plays a recording on its own (a Button's sound), so Pause and Stop reach it too. */
+    fun speakRecording(path: String, voice: Voice?) {
+        session.accept(
+            CommunicationAction.SpeakPart(MessagePart(displayText = "", recordingPath = path), voice)
+        )
+    }
+
     fun pause() = session.accept(CommunicationAction.Pause)
     fun resume() = session.accept(CommunicationAction.Resume)
     fun stop() = session.accept(CommunicationAction.Stop)
@@ -193,5 +206,6 @@ private fun CommunicationSessionState.toNative(): NativeCommunicationState {
             else -> null
         },
         isSaving = persistenceStatus == CommunicationPersistenceStatus.Saving,
+        isLoaded = isInitialized,
     )
 }

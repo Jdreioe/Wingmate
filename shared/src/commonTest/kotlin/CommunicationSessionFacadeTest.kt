@@ -30,8 +30,8 @@ class CommunicationSessionFacadeTest {
         val hello = Phrase(id = "hello", text = "Hello", recordingPath = "/hello.m4a", createdAt = 0)
         val world = Phrase(id = "world", text = "world", createdAt = 0)
 
-        val afterHello = facade.insertPhrase(hello, cursor = 0)
-        val afterWorld = facade.insertPhrase(world, cursor = afterHello)
+        val afterHello = facade.insertPhrase(hello, start = 0, endExclusive = 0)
+        val afterWorld = facade.insertPhrase(world, start = afterHello, endExclusive = afterHello)
 
         val message = facade.state().activeMessage
         assertEquals("Hello world ", message.displayText)
@@ -39,6 +39,16 @@ class CommunicationSessionFacadeTest {
         val helloPart = message.parts.first()
         assertEquals(MessagePartSource.Phrase("hello"), helloPart.source)
         assertEquals("/hello.m4a", helloPart.recordingPath)
+    }
+
+    @Test
+    fun aPhraseReplacesTheSelectedText() = facadeTest { facade ->
+        facade.editText("I want coffee")
+        val water = Phrase(id = "water", text = "water", createdAt = 0)
+
+        facade.insertPhrase(water, start = 7, endExclusive = 13)
+
+        assertEquals("I want water ", facade.state().activeMessage.displayText)
     }
 
     @Test

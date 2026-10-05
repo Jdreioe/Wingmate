@@ -1467,19 +1467,20 @@ struct SymbolBoardWorkspaceView: View {
         return set.boardIds.filter { $0 != model.selectedBoardId }
     }
 
-    /// The shared Message, as shown in the Screens message bar. Token ids are part
-    /// indices, so deleting a token removes the matching Message part.
+    /// The shared Message, as shown in the Screens message bar: each Button with its
+    /// label and symbol, wherever it came from. Token ids are part indices, so deleting
+    /// a token removes the matching Message part.
     private var boardSentenceTokens: [SentencePhraseToken] {
         model.messageParts.enumerated().map { index, part in
             let text = part.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let buttonId = (part.source as? Shared.MessagePartSourceScreenButton)?.buttonId
-            let imageUrl = buttonId.flatMap { id in model.boardCells.first(where: { $0.buttonId == id })?.imageUrl }
+            let source = part.source as? Shared.MessagePartSourceScreenButton
+            let looks = source.flatMap { model.screenButtonLooks["\($0.pageId)|\($0.buttonId)"] }
             return SentencePhraseToken(
                 id: "part-\(index)",
-                phraseId: buttonId ?? "",
+                phraseId: source?.buttonId ?? "",
                 text: text,
-                title: text,
-                imageUrl: trimmed(imageUrl)
+                title: looks.map { $0.label.isEmpty ? text : $0.label } ?? text,
+                imageUrl: looks?.imageUrl
             )
         }
     }

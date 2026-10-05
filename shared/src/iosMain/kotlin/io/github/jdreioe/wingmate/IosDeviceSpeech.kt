@@ -8,6 +8,9 @@ import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.withContext
 
 /**
@@ -44,9 +47,17 @@ internal class IosSessionSpeechService(
     private val cloud: SpeechService,
     private val device: IosDeviceSpeech,
 ) : SpeechService by cloud {
-    private var deviceIsActive = false
-    private var deviceRequestId = 0L
-    private var deviceState = SpeechPlaybackState()
+    /**
+     * Which voice spoke last and how its device request stands. The session polls
+     * from a worker thread while the device reports on the main thread, so the
+     * snapshot is only ever replaced as a whole.
+     */
+    private data class Route(
+        val deviceIsActive: Boolean = false,
+        val device: SpeechPlaybackState = SpeechPlaybackState(),
+    )
+
+    private val route = MutableStateFlow(Route())
 
     override suspend fun speakWithoutHistory(
         text: String,
@@ -57,7 +68,7 @@ internal class IosSessionSpeechService(
         engine: TtsEngine,
     ) {
         if (engine != TtsEngine.SYSTEM) {
-            deviceIsActive = false
+            route.update { it.copy(deviceIsActive = false) }
             cloud.speakWithoutHistory(text, voice, pitch, rate, cacheAudio, engine)
         } else {
             speakOnDevice(SpeechTextProcessor.processText(text), voice, pitch, rate)
@@ -73,7 +84,7 @@ internal class IosSessionSpeechService(
         engine: TtsEngine,
     ) {
         if (engine != TtsEngine.SYSTEM) {
-            deviceIsActive = false
+            route.update { it.copy(deviceIsActive = false) }
             cloud.speakSegmentsWithoutHistory(segments, voice, pitch, rate, cacheAudio, engine)
         } else {
             // Expand shorthand SSML pauses inside each segment, keeping its language.
@@ -87,7 +98,7 @@ internal class IosSessionSpeechService(
     }
 
     override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean {
-        deviceIsActive = false
+        route.update { it.copy(deviceIsActive = false) }
         return cloud.speakRecordedAudio(audioFilePath, textForHistory, voice)
     }
 
@@ -97,38 +108,39 @@ internal class IosSessionSpeechService(
         pitch: Double?,
         rate: Double?,
     ) = withContext(Dispatchers.Main) {
-        val requestId = ++deviceRequestId
-        deviceIsActive = true
-        deviceState = SpeechPlaybackState(requestId, SpeechPlaybackStatus.PLAYING)
+        val requestId = route.updateAndGet {
+            Route(deviceIsActive = true, device = SpeechPlaybackState(it.device.requestId + 1, SpeechPlaybackStatus.PLAYING))
+        }.device.requestId
         val language = voice?.selectedLanguage?.takeIf(String::isNotBlank)
             ?: voice?.primaryLanguage.orEmpty()
         device.speak(segments, language, rate ?: 1.0, pitch ?: 1.0) { spoken ->
-            if (requestId == deviceRequestId) {
-                deviceState = if (spoken) {
-                    SpeechPlaybackState(requestId, SpeechPlaybackStatus.IDLE)
-                } else {
-                    SpeechPlaybackState(requestId, SpeechPlaybackStatus.FAILED, "Device speech failed")
-                }
+            val status = if (spoken) SpeechPlaybackStatus.IDLE else SpeechPlaybackStatus.FAILED
+            route.update { current ->
+                // A newer request or a Stop makes this request's end irrelevant.
+                if (current.device.requestId != requestId) current
+                else current.copy(device = SpeechPlaybackState(requestId, status, "Device speech failed".takeUnless { spoken }))
             }
         }
     }
 
     override suspend fun pause() {
-        if (!deviceIsActive) return cloud.pause()
+        if (!route.value.deviceIsActive) return cloud.pause()
         withContext(Dispatchers.Main) {
-            if (deviceState.status == SpeechPlaybackStatus.PLAYING) {
+            val current = route.value.device
+            if (current.status == SpeechPlaybackStatus.PLAYING) {
                 device.pause()
-                deviceState = deviceState.copy(status = SpeechPlaybackStatus.PAUSED)
+                route.update { it.withDeviceStatus(current.requestId, SpeechPlaybackStatus.PAUSED) }
             }
         }
     }
 
     override suspend fun resume() {
-        if (!deviceIsActive) return cloud.resume()
+        if (!route.value.deviceIsActive) return cloud.resume()
         withContext(Dispatchers.Main) {
-            if (deviceState.status == SpeechPlaybackStatus.PAUSED) {
+            val current = route.value.device
+            if (current.status == SpeechPlaybackStatus.PAUSED) {
                 device.resume()
-                deviceState = deviceState.copy(status = SpeechPlaybackStatus.PLAYING)
+                route.update { it.withDeviceStatus(current.requestId, SpeechPlaybackStatus.PLAYING) }
             }
         }
     }
@@ -136,19 +148,24 @@ internal class IosSessionSpeechService(
     override suspend fun stop() {
         withContext(Dispatchers.Main) {
             // A newer request id makes the cancelled utterance's callback a no-op.
-            deviceRequestId++
-            deviceState = SpeechPlaybackState(deviceRequestId, SpeechPlaybackStatus.IDLE)
+            route.update { it.copy(device = SpeechPlaybackState(it.device.requestId + 1, SpeechPlaybackStatus.IDLE)) }
             device.stop()
         }
         cloud.stop()
     }
 
-    override fun isPlaying(): Boolean =
-        if (deviceIsActive) deviceState.status == SpeechPlaybackStatus.PLAYING else cloud.isPlaying()
+    override fun isPlaying(): Boolean = route.value.let {
+        if (it.deviceIsActive) it.device.status == SpeechPlaybackStatus.PLAYING else cloud.isPlaying()
+    }
 
-    override fun isPaused(): Boolean =
-        if (deviceIsActive) deviceState.status == SpeechPlaybackStatus.PAUSED else cloud.isPaused()
+    override fun isPaused(): Boolean = route.value.let {
+        if (it.deviceIsActive) it.device.status == SpeechPlaybackStatus.PAUSED else cloud.isPaused()
+    }
 
-    override fun playbackState(): SpeechPlaybackState =
-        if (deviceIsActive) deviceState else cloud.playbackState()
+    override fun playbackState(): SpeechPlaybackState = route.value.let {
+        if (it.deviceIsActive) it.device else cloud.playbackState()
+    }
+
+    private fun Route.withDeviceStatus(requestId: Long, status: SpeechPlaybackStatus): Route =
+        if (device.requestId == requestId) copy(device = device.copy(status = status)) else this
 }
