@@ -2,8 +2,6 @@ import io.github.jdreioe.wingmate.application.NoopFeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.SpeechFacade
 import io.github.jdreioe.wingmate.application.VoiceUseCase
-import io.github.jdreioe.wingmate.domain.SpeechSegment
-import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceProvider
@@ -12,7 +10,6 @@ import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemorySettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryVoiceRepository
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,31 +17,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class SpeechFacadeTest {
-    @Test
-    fun speakAndPlaybackControlsDelegateToSpeechService() = runBlocking {
-        val service = RecordingSpeechService()
-        val facade = facade(speech = service)
-
-        facade.speak("Hello")
-        facade.speakBoardSentence("Goodbye", cacheAudio = true)
-        facade.pause()
-        facade.stop()
-
-        assertEquals(listOf("Hello", "Goodbye"), service.speakCalls)
-        assertEquals(1, service.pauseCalls)
-        assertEquals(1, service.stopCalls)
-    }
-
-    @Test
-    fun processSpeechTextSplitsPauseSegments() = runBlocking {
-        val segments = facade().processSpeechText("Hello there. <pause duration=\"1s\"/> How are you?")
-
-        assertEquals(2, segments.size)
-        assertEquals("Hello there.", segments[0].text)
-        assertEquals(1000L, segments[0].pauseDurationMs)
-        assertEquals("How are you?", segments[1].text)
-    }
-
     @Test
     fun selectingVoiceAlignsPrimaryLanguageWhenItDiffers() = runBlocking {
         val settings = InMemorySettingsRepository()
@@ -172,14 +144,6 @@ class SpeechFacadeTest {
         assertEquals(TtsEngine.SYSTEM, settings.get().ttsEngine)
     }
 
-    @Test
-    fun cancellationFromSpeechServiceIsNotSwallowed() = runBlocking {
-        val facade = facade(speech = CancellingSpeechService())
-
-        assertFailsWith<CancellationException> { facade.speak("Hello") }
-        Unit
-    }
-
     private fun storedConfigHasKey(config: InMemoryConfigRepository): Boolean =
         runBlocking { !config.getSpeechConfig()?.subscriptionKey.isNullOrBlank() }
 
@@ -187,7 +151,6 @@ class SpeechFacadeTest {
         runBlocking { config.getSpeechConfig()?.endpoint.orEmpty() }
 
     private fun facade(
-        speech: SpeechService = RecordingSpeechService(),
         settings: InMemorySettingsRepository = InMemorySettingsRepository(),
         config: InMemoryConfigRepository = InMemoryConfigRepository(),
         voices: InMemoryVoiceRepository = InMemoryVoiceRepository(),
@@ -200,56 +163,9 @@ class SpeechFacadeTest {
             featureUsageReporter = NoopFeatureUsageReporter(),
         )
         return SpeechFacade(
-            speechService = speech,
             voiceUseCase = voiceUseCase,
             settingsUseCase = SettingsUseCase(settings),
             configRepository = config,
         )
-    }
-
-    private class RecordingSpeechService : SpeechService {
-        val speakCalls = mutableListOf<String>()
-        var pauseCalls = 0
-        var stopCalls = 0
-
-        override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) {
-            speakCalls += text
-        }
-
-        override suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
-            speakCalls += segments.joinToString("") { it.text }
-        }
-
-        override suspend fun pause() {
-            pauseCalls += 1
-        }
-
-        override suspend fun stop() {
-            stopCalls += 1
-        }
-
-        override suspend fun resume() = Unit
-
-        override fun isPlaying(): Boolean = false
-
-        override fun isPaused(): Boolean = false
-    }
-
-    private class CancellingSpeechService : SpeechService {
-        override suspend fun speak(text: String, voice: Voice?, pitch: Double?, rate: Double?) =
-            throw CancellationException("cancelled")
-
-        override suspend fun speakSegments(segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) =
-            throw CancellationException("cancelled")
-
-        override suspend fun pause() = throw CancellationException("cancelled")
-
-        override suspend fun stop() = throw CancellationException("cancelled")
-
-        override suspend fun resume() = Unit
-
-        override fun isPlaying(): Boolean = false
-
-        override fun isPaused(): Boolean = false
     }
 }

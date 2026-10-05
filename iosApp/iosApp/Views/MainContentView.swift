@@ -124,71 +124,17 @@ struct MainContentView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
             
-            if model.showOfflineInfoOnce {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top) {
-                        Image(systemName: "info.circle.fill").foregroundStyle(.blue)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("offline.title").bold()
-                            Text("offline.azure_unavailable_hint")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button(action: { model.showOfflineInfoOnce = false }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    Toggle("settings.tts.system_when_offline", isOn: Binding(
-                        get: { model.useSystemTtsWhenOffline },
-                        set: { model.setUseSystemTtsWhenOffline($0) }
-                    ))
-                    .toggleStyle(SwitchToggleStyle(tint: .accentColor))
-                }
-                .padding(12)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color(.secondarySystemBackground)))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(.separator)))
-            }
             if let err = model.state.error {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 4) { Text("common.error"); Text(err) }.foregroundStyle(.red)
                     Button("common.retry") { model.retryPhraseLoad() }
                 }
             }
-            if let speechError = model.speechErrorMessage {
-                HStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                    Text(speechError)
-                        .accessibilityLabel(speechError)
-                    Spacer()
-                    if model.canRetryFailedSpeech {
-                        Button("common.retry") { model.retryFailedSpeech() }
-                            .buttonStyle(.borderedProminent)
-                    }
-                }
-                .padding(12)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.red.opacity(0.1)))
-                .accessibilityElement(children: .contain)
-            }
             if model.state.isLoading { ProgressView().frame(maxWidth: .infinity, alignment: .center) }
 
             #if DEBUG
             predictionBar
             #endif
-
-            if !model.sentencePhrases.isEmpty {
-                SentenceBoxView(
-                    phrases: model.sentencePhrases,
-                    onDelete: { index in
-                        model.removeSentencePhrase(at: index)
-                    }
-                )
-                .accessibilityElement(children: .contain)
-                .accessibilityHidden(hideInputFromScanning)
-            }
 
             // Input field
             MultiLineInput(text: inputBinding,
@@ -204,9 +150,6 @@ struct MainContentView: View {
                            secondaryLanguage: model.secondaryLanguage,
                            secondaryLanguageRanges: model.secondaryLanguageRanges,
                            allowsSecondaryLanguageAction: model.secondaryLanguage != model.primaryLanguage,
-                           onTextEdited: { range, replacement in
-                               model.adjustSecondaryLanguageRangesAfterEdit(range: range, replacementText: replacement)
-                           },
                            onMarkSelectionAsSecondaryLanguage: { range in
                                model.markSelectionAsSecondaryLanguage(range: range)
                            })
@@ -272,28 +215,28 @@ struct MainContentView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text(model.hasHeldThought ? "playback.restore_thought" : "playback.hold_thought"))
                 .accessibilityHint(Text(model.hasHeldThought ? "accessibility.playback.restore_thought_hint" : "accessibility.playback.hold_thought_hint"))
-                Button(action: { model.speak(model.input) }) {
+                Button(action: { model.speakMessage() }) {
                     Image(systemName: "play.circle.fill")
                         .font(.system(size: CGFloat(uiPlayIconSize)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("playback.play"))
                 .accessibilityHint(Text("accessibility.playback.play_hint"))
-                Button(action: { model.pauseTts() }) {
+                Button(action: { model.playback.name == "Paused" ? model.resumeSpeech() : model.pauseSpeech() }) {
                     Image(systemName: "pause.circle")
                         .font(.system(size: CGFloat(uiPlayIconSize)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("playback.pause"))
                 .accessibilityHint(Text("accessibility.playback.pause_hint"))
-                Button(action: { model.stopTts() }) {
+                Button(action: { model.stopSpeech() }) {
                     Image(systemName: "stop.circle")
                         .font(.system(size: CGFloat(uiPlayIconSize)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("playback.stop"))
                 .accessibilityHint(Text("accessibility.playback.stop_hint"))
-                Button(action: { model.deleteText() }) {
+                Button(action: { model.clearMessage() }) {
                     Image(systemName: "trash.circle")
                         .font(.system(size: CGFloat(uiPlayIconSize)))
                 }
@@ -326,11 +269,11 @@ struct MainContentView: View {
                         .textSelection(.enabled)
                 }
                 HStack(spacing: 32) {
-                    Button(action: { model.speak(model.input) }) {
+                    Button(action: { model.speakMessage() }) {
                         Label("playback.play", systemImage: "play.circle.fill")
                     }
                     .disabled(model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    Button(action: { model.stopTts() }) {
+                    Button(action: { model.stopSpeech() }) {
                         Label("playback.stop", systemImage: "stop.circle")
                     }
                 }

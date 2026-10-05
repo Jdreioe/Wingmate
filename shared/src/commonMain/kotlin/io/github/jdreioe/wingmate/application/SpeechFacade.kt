@@ -3,11 +3,8 @@ package io.github.jdreioe.wingmate.application
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfigStatus
-import io.github.jdreioe.wingmate.domain.SpeechSegment
-import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfigStatus
-import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.withPreferredSupportedLanguage
@@ -17,38 +14,18 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
 /**
- * A feature-scoped native boundary around speech playback, voice selection,
- * and Azure speech configuration.
+ * A feature-scoped native boundary around voice selection and cloud speech
+ * configuration. Playback goes through [CommunicationSessionFacade].
  *
  * Keep Koin out of this file: the constructor receives exactly the use cases
  * and services this feature needs. Failures propagate as suspend exceptions
  * (including coroutine cancellation) instead of being swallowed or converted.
  */
 class SpeechFacade(
-    private val speechService: SpeechService,
     private val voiceUseCase: VoiceUseCase,
     private val settingsUseCase: SettingsUseCase,
     private val configRepository: ConfigRepository,
 ) {
-    /** Split text into speech segments honoring shorthand SSML pauses and language tags. */
-    fun processSpeechText(text: String): List<SpeechSegment> = SpeechTextProcessor.processText(text)
-
-    suspend fun speak(text: String) {
-        speechService.speak(text)
-    }
-
-    suspend fun speakBoardSentence(text: String, cacheAudio: Boolean) {
-        speechService.speakWithCachePolicy(text = text, cacheAudio = cacheAudio)
-    }
-
-    suspend fun pause() {
-        speechService.pause()
-    }
-
-    suspend fun stop() {
-        speechService.stop()
-    }
-
     /** Select a voice and align the app's primary language with its language when it changes. */
     suspend fun selectVoiceAndMaybeUpdatePrimary(voice: Voice) {
         val current = settingsUseCase.get()

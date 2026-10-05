@@ -78,7 +78,6 @@
 
 "common.error" = "FEJL";
 "common.retry" = "Prøv igen";
-"speech.playback_failed" = "Talen kunne ikke afspilles. Prøv igen.";
 "common.ok" = "OK";
 "common.save" = "Gem";
 
@@ -150,12 +149,8 @@
 
 "settings.title" = "Indstillinger";
 "settings.tts.title" = "Tekst-til-tale motor";
-"settings.tts.system_when_offline" = "Brug System TTS når offline";
 "settings.restart_setup" = "Genstart opsætningsguide";
 
-"settings.playback.title" = "Afspilning";
-"settings.playback.mix_recorded" = "Bland optagede fraser i sætninger";
-"settings.playback.mix.help" = "Når slået til, indsætter appen lyd fra dine optagede fraser i oplæste sætninger, hvor frasenavnet optræder.";
 
 "settings.scanning.title" = "Scanning";
 "settings.scanning.enable" = "Aktiver scanning";
@@ -181,8 +176,6 @@
 "reorder.banner.done_hint" = "Tryk Færdig når du er done";
 
 "history.empty" = "Ingen historik endnu";
-"offline.title" = "Du er offline";
-"offline.azure_unavailable_hint" = "Azure-stemmer virker ikke offline. Aktivér System TTS for at bruge enhedens tale offline.";
 
 "playback.play" = "Afspil";
 "playback.pause" = "Pause";
@@ -514,3 +507,9 @@
 "voice.model.wavenet" = "WaveNet";
 "voice.model.standard" = "Standard";
 "voice.model.other" = "Andre";
+
+/* Communication session */
+"communication.storage_failed" = "Din besked kunne ikke indlæses eller gemmes. Hold Wingmate åben, og prøv igen.";
+"communication.playback_failed" = "Oplæsningen kunne ikke gennemføres. Din besked er stadig tilgængelig. Prøv at læse den op igen.";
+"communication.speech_fallback" = "Stemmen i skyen var ikke tilgængelig, så enhedens stemme læste op i stedet.";
+"common.dismiss" = "Luk";

@@ -5,6 +5,7 @@ import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
+import io.github.jdreioe.wingmate.domain.CommunicationSessionDataSource
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.PhraseRepository
@@ -15,6 +16,7 @@ import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.IosBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.IosBoardSetRepository
+import io.github.jdreioe.wingmate.infrastructure.IosCommunicationSessionDataSource
 import io.github.jdreioe.wingmate.infrastructure.IosConfigRepository
 import io.github.jdreioe.wingmate.infrastructure.GoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.IosGoogleApiRequestHeaders
@@ -34,6 +36,7 @@ import io.github.jdreioe.wingmate.application.SpeechFacade
 import io.github.jdreioe.wingmate.application.SettingsFacade
 import io.github.jdreioe.wingmate.application.BoardsFacade
 import io.github.jdreioe.wingmate.application.CommunicationFacade
+import io.github.jdreioe.wingmate.application.CommunicationSessionFacade
 import io.github.jdreioe.wingmate.infrastructure.IosBackupMediaAccess
 import io.github.jdreioe.wingmate.platform.ShareService
 import io.github.jdreioe.wingmate.platform.FilePicker
@@ -50,7 +53,7 @@ import org.koin.dsl.module
 
 // Registers every iOS platform binding (persistence, HTTP, speech, sharing, files), overriding the
 // in-memory defaults from initKoin.
-private fun overrideIosSpeechService() {
+private fun overrideIosSpeechService(deviceSpeech: IosDeviceSpeech) {
     loadKoinModules(
         module(createdAtStart = false) {
             // Ktor client for iOS (Darwin engine)
@@ -73,7 +76,22 @@ private fun overrideIosSpeechService() {
             singleOf(::IosBoardRepository) { bind<BoardRepository>() }
             singleOf(::IosBoardSetRepository) { bind<BoardSetRepository>() }
             singleOf(::IosPhraseRepository) { bind<PhraseRepository>() }
-            singleOf(::IosSpeechService) { bind<SpeechService>() }
+            single<CommunicationSessionDataSource> { IosCommunicationSessionDataSource() }
+            // Cloud voices play in Kotlin; the device voice is Swift's AVSpeechSynthesizer.
+            single<SpeechService> {
+                IosSessionSpeechService(
+                    cloud = IosSpeechService(
+                        httpClient = get(),
+                        configRepository = get(),
+                        pronunciationDictionaryRepository = getOrNull(),
+                        saidRepo = getOrNull(),
+                        settingsRepository = getOrNull(),
+                        voiceRepository = getOrNull(),
+                        googleApiRequestHeaders = get(),
+                    ),
+                    device = deviceSpeech,
+                )
+            }
             
             // Share service
             singleOf(::IosShareService) { bind<ShareService>() }
@@ -92,19 +110,20 @@ private fun overrideIosSpeechService() {
 }
 
 // Start Koin including the iOS overrides module so platform bindings are present from startup.
-private fun startKoinWithOverrides() {
+private fun startKoinWithOverrides(deviceSpeech: IosDeviceSpeech) {
     // Ensure the base module + appModule (which registers PhraseListStore) are started
     KoinBridge.start()
     // Then apply iOS-specific overrides (repositories, Http client, speech service)
-    overrideIosSpeechService()
+    overrideIosSpeechService(deviceSpeech)
 }
 
 // Swift entry point: IosViewModel.start() calls startKoinWithOverridesBridge(), then Swift resolves facades here.
 class IosDiBridge {
-    fun startKoinWithOverridesBridge() = startKoinWithOverrides()
+    fun startKoinWithOverridesBridge(deviceSpeech: IosDeviceSpeech) = startKoinWithOverrides(deviceSpeech)
     fun backupFacade(): BackupSharingFacade = KoinPlatform.getKoin().get()
     fun speechFacade(): SpeechFacade = KoinPlatform.getKoin().get()
     fun settingsFacade(): SettingsFacade = KoinPlatform.getKoin().get()
     fun boardsFacade(): BoardsFacade = KoinPlatform.getKoin().get()
     fun communicationFacade(): CommunicationFacade = KoinPlatform.getKoin().get()
+    fun communicationSessionFacade(): CommunicationSessionFacade = KoinPlatform.getKoin().get()
 }

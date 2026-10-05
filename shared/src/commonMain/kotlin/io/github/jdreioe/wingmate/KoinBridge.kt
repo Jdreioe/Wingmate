@@ -27,8 +27,8 @@ data class IosAccessInputResult(
     val dwellProgress: Float,
 )
 
-/** Native callers cancel their observation when the text or visible screen changes. */
-class PredictionSubscription internal constructor(private val scope: CoroutineScope) {
+/** Cancels a native observation. Swift keeps it for as long as it observes. */
+class NativeSubscription internal constructor(private val scope: CoroutineScope) {
     fun cancel() { scope.cancel() }
 }
 
@@ -130,14 +130,14 @@ class KoinBridge : KoinComponent {
         maxWords: Int,
         maxLetters: Int,
         onChange: (PredictionResult) -> Unit,
-    ): PredictionSubscription {
+    ): NativeSubscription {
         val scope = CoroutineScope(Dispatchers.Main)
         scope.launch {
             get<TextPredictionService>()
                 .predictions(context, maxWords, maxLetters)
                 .collect { onChange(it) }
         }
-        return PredictionSubscription(scope)
+        return NativeSubscription(scope)
     }
 
     // --- Pronunciation Dictionary Helpers ---

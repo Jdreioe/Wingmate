@@ -186,7 +186,6 @@ struct SymbolBoardWorkspaceView: View {
     @State private var isSearchingCellSymbols: Bool = false
     @State private var editingSymbolError: String? = nil
     @State private var shouldClearEditingSymbol: Bool = false
-    @State private var boardSentenceTokens: [SentencePhraseToken] = []
     @State private var showNativeKeyboardSheet = false
     @State private var nativeKeyboardDraft = ""
     @State private var activeSentenceAnimation: ActiveSentenceAnimation? = nil
@@ -244,14 +243,7 @@ struct SymbolBoardWorkspaceView: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("boardset.native_keyboard.return") {
-                            boardSentenceTokens = nativeKeyboardDraft.isEmpty ? [] : [
-                                SentencePhraseToken(
-                                    phraseId: "native-keyboard",
-                                    text: nativeKeyboardDraft,
-                                    title: nativeKeyboardDraft,
-                                    imageUrl: nil
-                                )
-                            ]
+                            model.onInputChanged(nativeKeyboardDraft)
                             showNativeKeyboardSheet = false
                         }
                     }
@@ -667,19 +659,13 @@ struct SymbolBoardWorkspaceView: View {
                     SentenceBoxView(
                         phrases: boardSentenceTokens,
                         onDelete: { index in
-                            guard boardSentenceTokens.indices.contains(index) else { return }
-                            let removedTokenId = boardSentenceTokens[index].id
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                boardSentenceTokens.remove(at: index)
+                                model.removeMessagePart(at: index)
                             }
-                            if activeSentenceAnimation?.tokenId == removedTokenId {
-                                activeSentenceAnimation = nil
-                            }
+                            activeSentenceAnimation = nil
                         },
                         onSpeak: model.boardSpeakButtonVisible ? {
-                            let sentence = boardSentenceText
-                            guard !sentence.isEmpty else { return }
-                            model.speakBoardSentence(sentence, boardSetId: boardSetId)
+                            model.speakBoardMessage(boardSetId: boardSetId)
                         } : nil,
                         animationNamespace: sentenceAnimationNamespace,
                         animatedTokenId: activeSentenceAnimation?.tokenId
@@ -702,14 +688,9 @@ struct SymbolBoardWorkspaceView: View {
                     if model.boardMessageBarVisible {
                         SentenceBoxView(
                             phrases: boardSentenceTokens,
-                            onDelete: { index in
-                                guard boardSentenceTokens.indices.contains(index) else { return }
-                                boardSentenceTokens.remove(at: index)
-                            },
+                            onDelete: { index in model.removeMessagePart(at: index) },
                         onSpeak: model.boardSpeakButtonVisible ? {
-                            let sentence = boardSentenceText
-                            guard !sentence.isEmpty else { return }
-                            model.speakBoardSentence(sentence, boardSetId: boardSetId)
+                            model.speakBoardMessage(boardSetId: boardSetId)
                         } : nil
                     )
                     }
@@ -1486,10 +1467,25 @@ struct SymbolBoardWorkspaceView: View {
         return set.boardIds.filter { $0 != model.selectedBoardId }
     }
 
-    private var boardSentenceText: String {
-        let tokens = boardSentenceTokens.map(\.text)
-        return model.boardJoinSentenceText(tokens: tokens, spellingMode: model.selectedBoardUsesSpellingMode)
+    /// The shared Message, as shown in the Screens message bar: each Button with its
+    /// label and symbol, wherever it came from. Token ids are part indices, so deleting
+    /// a token removes the matching Message part.
+    private var boardSentenceTokens: [SentencePhraseToken] {
+        model.messageParts.enumerated().map { index, part in
+            let text = part.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let source = part.source as? Shared.MessagePartSourceScreenButton
+            let looks = source.flatMap { model.screenButtonLooks["\($0.pageId)|\($0.buttonId)"] }
+            return SentencePhraseToken(
+                id: "part-\(index)",
+                phraseId: source?.buttonId ?? "",
+                text: text,
+                title: looks.map { $0.label.isEmpty ? text : $0.label } ?? text,
+                imageUrl: looks?.imageUrl
+            )
+        }
     }
+
+    private var boardSentenceText: String { model.input }
 
     private var boardPredictionTaskId: String {
         let predictors = model.boardCells
@@ -1512,14 +1508,16 @@ struct SymbolBoardWorkspaceView: View {
             let behavior = model.boardActivationBehavior
             let shouldAdd = behavior != "SpeakOnly"
             let shouldSpeak = model.shouldSpeakSelectionImmediately
-            if shouldSpeak, let sound = trimmed(cell.soundDataUrl) {
+            // A Button's own sound replaces its spoken text, so it is said once.
+            let sound = shouldSpeak ? trimmed(cell.soundDataUrl) : nil
+            if let sound {
                 model.playBoardButtonSound(sound)
             }
             if shouldAdd {
                 appendCellToSentenceIfNeeded(cell, sourceCellId: sourceCellId)
             }
             Task {
-                if shouldSpeak {
+                if shouldSpeak && sound == nil {
                     await model.activateSelectedBoardCell(row: row, col: col)
                 }
                 await model.activateBoardSelectionHighlight(buttonId: cell.buttonId)
@@ -1537,11 +1535,10 @@ struct SymbolBoardWorkspaceView: View {
             case ":backspace":
                 backspaceBoardSentence()
             case ":clear":
-                boardSentenceTokens.removeAll()
+                model.clearMessage()
             case ":speak":
-                let sentence = boardSentenceText
-                if !sentence.isEmpty, let boardSetId = model.selectedBoardSetId {
-                    model.speakBoardSentence(sentence, boardSetId: boardSetId)
+                if let boardSetId = model.selectedBoardSetId {
+                    model.speakBoardMessage(boardSetId: boardSetId)
                 }
             case ":home":
                 if let rootId = model.selectedBoardSet?.rootBoardId {
@@ -1581,24 +1578,14 @@ struct SymbolBoardWorkspaceView: View {
         guard let cell else { return }
         if trimmed(cell.linkedBoardId) != nil { return }
 
-        let title = trimmed(textOverride) ?? trimmed(cell.label) ?? trimmed(cell.vocalization)
-        let spokenText = textOverride ?? trimmed(cell.vocalization) ?? trimmed(cell.label)
-        guard let title, let spokenText, !spokenText.isEmpty else { return }
-
-        let tokenId = UUID().uuidString
-        activeSentenceAnimation = ActiveSentenceAnimation(sourceCellId: sourceCellId ?? cell.id, tokenId: tokenId)
+        let text = textOverride ?? trimmed(cell.vocalization) ?? trimmed(cell.label)
+        guard let text, !text.isEmpty else { return }
 
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-            boardSentenceTokens.append(
-                SentencePhraseToken(
-                    id: tokenId,
-                    phraseId: cell.buttonId,
-                    text: spokenText,
-                    title: title,
-                    imageUrl: trimmed(cell.imageUrl)
-                )
-            )
+            model.appendScreenPart(text: text, buttonId: cell.buttonId)
         }
+        let tokenId = "part-\(model.messageParts.count - 1)"
+        activeSentenceAnimation = ActiveSentenceAnimation(sourceCellId: sourceCellId ?? cell.id, tokenId: tokenId)
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 550_000_000)
@@ -1610,18 +1597,7 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private func backspaceBoardSentence() {
-        guard !boardSentenceTokens.isEmpty else { return }
-        let texts = boardSentenceTokens.map { $0.text }
-        let trimmed = model.boardBackspaceSentence(
-            texts: texts,
-            spellingMode: model.selectedBoardUsesSpellingMode
-        )
-        if trimmed.count < texts.count {
-            boardSentenceTokens.removeLast()
-        } else if let lastText = trimmed.last {
-            boardSentenceTokens[boardSentenceTokens.count - 1].text = lastText
-            boardSentenceTokens[boardSentenceTokens.count - 1].title = lastText
-        }
+        model.removeLastMessagePart()
     }
 
     private func predictionInsertion(sentence: String, suggestion: String) -> String {

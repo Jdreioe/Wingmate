@@ -48,8 +48,9 @@ rate; use a pronunciation dictionary; and choose immediate speech or silent
 composition until the complete Message is activated.
 
 Generated speech may be cached locally. Cloud synthesis requires a network for
-uncached text. System text-to-speech provides the offline path supported by the
-operating system. A network failure must not discard the active Message.
+uncached text. If a cloud voice is unavailable or fails, the device voice speaks
+the Message instead and Wingmate shows a notice. A network failure must not
+discard the active Message.
 
 ## Access
 
@@ -113,7 +114,6 @@ has no Typing workspace and no cloud voices. Track it in
 
 ## Current parity limits
 
-The clients do not yet preserve and transfer one active Message consistently
-when switching between Typing and Screens. Editing access coverage, Screen
-unlock behavior, visible templates, and prediction availability also differ.
+Editing access coverage, Screen unlock behavior, visible templates, and
+prediction availability differ between clients.
 These are known gaps, not intentional parity exceptions.
