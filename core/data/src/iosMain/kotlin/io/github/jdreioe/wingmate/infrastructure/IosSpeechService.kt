@@ -117,8 +117,9 @@ class IosSpeechService(
         pitch: Double?,
         rate: Double?,
         cacheAudio: Boolean,
+        engine: TtsEngine,
     ) {
-        speakText(text, voice, pitch, rate, cacheAudio, recordInHistory = false)
+        speakText(text, voice, pitch, rate, cacheAudio, recordInHistory = false, requestedEngine = engine)
     }
 
     private suspend fun speakText(
@@ -128,13 +129,16 @@ class IosSpeechService(
         rate: Double?,
         cacheAudio: Boolean,
         recordInHistory: Boolean,
+        requestedEngine: TtsEngine? = null,
     ) {
         val normalizedText = SpeechTextProcessor.normalizeShorthandSsml(text)
         if (normalizedText.isBlank()) return
         val requestId = beginRequest()
 
         executeRequest(requestId) {
-            val engine = settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE
+            val engine = requestedEngine
+                ?: settingsRepository?.get()?.ttsEngine
+                ?: TtsEngine.AZURE_USER_RESOURCE
             val effectiveVoice = (voice ?: defaultVoice()).forCloudProvider(engine).let { base ->
                 base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
             }
@@ -163,8 +167,9 @@ class IosSpeechService(
         pitch: Double?,
         rate: Double?,
         cacheAudio: Boolean,
+        engine: TtsEngine,
     ) {
-        speakSegmentList(segments, voice, pitch, rate, cacheAudio, recordInHistory = false)
+        speakSegmentList(segments, voice, pitch, rate, cacheAudio, recordInHistory = false, requestedEngine = engine)
     }
 
     private suspend fun speakSegmentList(
@@ -174,12 +179,15 @@ class IosSpeechService(
         rate: Double?,
         cacheAudio: Boolean,
         recordInHistory: Boolean,
+        requestedEngine: TtsEngine? = null,
     ) {
         if (segments.isEmpty()) return
         val requestId = beginRequest()
         executeRequest(requestId) {
             val combinedText = segments.joinToString(separator = "") { it.text }
-            val engine = settingsRepository?.get()?.ttsEngine ?: TtsEngine.AZURE_USER_RESOURCE
+            val engine = requestedEngine
+                ?: settingsRepository?.get()?.ttsEngine
+                ?: TtsEngine.AZURE_USER_RESOURCE
             val effectiveVoice = (voice ?: defaultVoice()).forCloudProvider(engine).let { base ->
                 base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
             }

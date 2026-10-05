@@ -109,13 +109,18 @@ interface SpeechService {
         rate: Double? = null,
         cacheAudio: Boolean = true
     ) = speakSegments(segments, voice, pitch, rate)
-    /** Playback used by the Communication session, which records History after the request succeeds. */
+    /**
+     * Playback used by the Communication session, which owns engine choice, fallback to
+     * [TtsEngine.SYSTEM], and History. Speak with exactly [engine]: a cloud engine that is
+     * unconfigured, offline, or fails must throw rather than fall back on its own.
+     */
     suspend fun speakWithoutHistory(
         text: String,
         voice: Voice? = null,
         pitch: Double? = null,
         rate: Double? = null,
         cacheAudio: Boolean = true,
+        engine: TtsEngine,
     ) = speakWithCachePolicy(text, voice, pitch, rate, cacheAudio)
     /** Segmented counterpart to [speakWithoutHistory]. */
     suspend fun speakSegmentsWithoutHistory(
@@ -124,6 +129,7 @@ interface SpeechService {
         pitch: Double? = null,
         rate: Double? = null,
         cacheAudio: Boolean = true,
+        engine: TtsEngine,
     ) = speakSegmentsWithCachePolicy(segments, voice, pitch, rate, cacheAudio)
     /** Synthesize speech into the reusable cache without playing it or adding History. */
     suspend fun cacheSpeech(

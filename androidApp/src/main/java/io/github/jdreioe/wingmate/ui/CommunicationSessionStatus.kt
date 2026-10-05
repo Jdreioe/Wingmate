@@ -28,17 +28,23 @@ internal fun CommunicationSessionStatus(
 ) {
     val persistenceFailed = state.persistenceStatus == CommunicationPersistenceStatus.Failed ||
         state.lastFailure?.kind == CommunicationFailureKind.Persistence
-    if (!persistenceFailed && state.lastFailure?.kind != CommunicationFailureKind.Playback) return
+    val message = when {
+        persistenceFailed -> R.string.communication_storage_failed
+        state.lastFailure?.kind == CommunicationFailureKind.Playback -> R.string.communication_playback_failed
+        state.lastFailure?.kind == CommunicationFailureKind.SpeechFallback -> R.string.communication_speech_fallback
+        else -> return
+    }
+    // The fallback still spoke the Message, so it is a notice rather than an error.
+    val isNotice = !persistenceFailed && state.lastFailure?.kind == CommunicationFailureKind.SpeechFallback
 
-    Surface(color = MaterialTheme.colorScheme.errorContainer) {
+    Surface(
+        color = if (isNotice) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.errorContainer,
+    ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },
         ) {
-            Text(stringResource(
-                if (persistenceFailed) R.string.communication_storage_failed
-                else R.string.communication_playback_failed,
-            ))
+            Text(stringResource(message))
             Button(
                 enabled = !persistenceFailed || state.persistenceStatus != CommunicationPersistenceStatus.Saving,
                 onClick = {
