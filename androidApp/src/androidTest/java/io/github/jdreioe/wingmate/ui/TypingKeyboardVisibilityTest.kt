@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.ui
 
 import android.graphics.Insets
 import android.os.SystemClock
+import android.provider.Settings
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.view.ViewTreeObserver
@@ -19,6 +20,7 @@ import io.github.jdreioe.wingmate.configureEdgeToEdgeWindow
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -52,6 +54,16 @@ class TypingKeyboardVisibilityTest {
 
     @Test
     fun keyboardRetractionDoesNotDropTheMessageBeforeTheTrayReturns() {
+        // This watches the native keyboard animate frame by frame, so it only means
+        // something where animations run. CI emulators turn them off.
+        assumeTrue(
+            "Needs animations to observe the keyboard retracting",
+            Settings.Global.getFloat(
+                composeRule.activity.contentResolver,
+                Settings.Global.ANIMATOR_DURATION_SCALE,
+                1f,
+            ) > 0f,
+        )
         composeRule.activity.getSharedPreferences("typing-screen-ui", 0).edit()
             .remove("tray-height-dp").commit()
         composeRule.setContent {
