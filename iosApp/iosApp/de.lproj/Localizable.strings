@@ -257,9 +257,7 @@
 "boardset.cell.border_enabled" = "Randfarbe setzen";
 "boardset.cell.border_picker" = "Randfarbe";
 
-"sentence.box.title" = "Satzfeld";
-"sentence.box.delete_phrase" = "Phrase aus Satz loschen";
-"sentence.box.speak" = "Satz sprechen";
+"sentence.box.delete_phrase" = "Aus der Nachricht entfernen";
 
 /* Azure F0 Setup */
 "azure_setup.title" = "Azure TTS Einrichtung";
@@ -477,3 +475,4 @@
 "category.move_left" = "Nach links";
 "category.move_right" = "Nach rechts";
 "accessibility.category.menu_hint" = "Doppeltippen, um diese Kategorie zu verschieben oder zu löschen.";
+"screens.message_bar" = "Nachricht";

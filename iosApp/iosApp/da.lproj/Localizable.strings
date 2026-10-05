@@ -259,9 +259,7 @@
 "boardset.cell.border_enabled" = "Vælg rammens farve";
 "boardset.cell.border_picker" = "Rammens farve";
 
-"sentence.box.title" = "Sætningsboks";
-"sentence.box.delete_phrase" = "Slet frase fra sætning";
-"sentence.box.speak" = "Sig sætning";
+"sentence.box.delete_phrase" = "Fjern fra beskeden";
 
 /* Azure F0 Setup */
 "azure_setup.title" = "Opsætning af Azure TTS";
@@ -516,3 +514,4 @@
 "category.move_left" = "Flyt til venstre";
 "category.move_right" = "Flyt til højre";
 "accessibility.category.menu_hint" = "Dobbelttryk for at flytte eller slette denne kategori.";
+"screens.message_bar" = "Besked";

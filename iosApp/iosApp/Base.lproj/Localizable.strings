@@ -350,9 +350,7 @@
 "boardset.error.cell_update_failed" = "Could not update field.";
 "boardset.error.cell_clear_failed" = "Could not clear field.";
 
-"sentence.box.title" = "Sentence Box";
-"sentence.box.delete_phrase" = "Delete phrase from sentence";
-"sentence.box.speak" = "Speak sentence";
+"sentence.box.delete_phrase" = "Remove from Message";
 
 /* Azure F0 Setup */
 "azure_setup.title" = "Azure Speech Service (Free Tier)";
@@ -540,3 +538,4 @@
 "category.move_left" = "Move left";
 "category.move_right" = "Move right";
 "accessibility.category.menu_hint" = "Double tap to move or delete this category.";
+"screens.message_bar" = "Message";

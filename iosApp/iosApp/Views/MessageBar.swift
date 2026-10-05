@@ -125,3 +125,85 @@ struct HeldMessageRow: View {
         .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
     }
 }
+
+/// The Screens message bar: the Message's Buttons as symbol chips in the same
+/// rounded field as Typing, followed by the same speech control.
+struct ScreensMessageBar: View {
+    @ObservedObject var model: IosViewModel
+    let tokens: [SentencePhraseToken]
+    let showSpeakControl: Bool
+    let onDelete: (Int) -> Void
+    let onSpeak: () -> Void
+    var animationNamespace: Namespace.ID? = nil
+    var animatedTokenId: String? = nil
+    var iconSize: CGFloat = 36
+
+    private var buttonSize: CGFloat { min(max(iconSize * 1.55, 48), 72) }
+    private var speakSize: CGFloat { min(max(iconSize * 1.75, 56), 88) }
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            ScrollViewReader { reader in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(tokens.enumerated()), id: \.element.id) { index, token in
+                            tokenChip(token, index: index)
+                                .id(token.id)
+                        }
+                    }
+                    .padding(8)
+                    .animation(.spring(response: 0.38, dampingFraction: 0.82), value: tokens.map(\.id))
+                }
+                .onChange(of: tokens.count) { _, _ in
+                    // Keep the newest Button in view.
+                    if let last = tokens.last { withAnimation { reader.scrollTo(last.id, anchor: .trailing) } }
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: speakSize, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemFill)))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text("screens.message_bar"))
+
+            if showSpeakControl {
+                SpeechControls(model: model, buttonSize: buttonSize, speakSize: speakSize, onSpeak: onSpeak)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func tokenChip(_ token: SentencePhraseToken, index: Int) -> some View {
+        let chip = HStack(spacing: 6) {
+            if let imageUrl = token.imageUrl, let url = URL(string: imageUrl) {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFit()
+                } placeholder: {
+                    Color.clear
+                }
+                .frame(width: 32, height: 32)
+                .accessibilityHidden(true)
+            }
+            Text(token.title.isEmpty ? " " : token.title)
+                .lineLimit(1)
+            Button { onDelete(index) } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("sentence.box.delete_phrase"))
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, 2)
+        .frame(minHeight: 44)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(.tertiarySystemBackground)))
+
+        if let animationNamespace, animatedTokenId == token.id {
+            chip
+                .matchedGeometryEffect(id: token.id, in: animationNamespace, isSource: false)
+                .zIndex(2)
+        } else {
+            chip.transition(.move(edge: .trailing).combined(with: .opacity))
+        }
+    }
+}
