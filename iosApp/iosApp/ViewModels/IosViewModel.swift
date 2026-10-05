@@ -540,7 +540,10 @@ final class IosViewModel: ObservableObject {
             .filter { $0.languageTag == secondary }
             .map { NSRange(location: Int($0.range.start), length: Int($0.range.length)) }
         if ranges != secondaryLanguageRanges { secondaryLanguageRanges = ranges }
-        if messageParts != state.activeMessage.parts { messageParts = state.activeMessage.parts }
+        if messageParts != state.activeMessage.parts {
+            messageParts = state.activeMessage.parts
+            resolveScreenButtonLooks(for: state.activeMessage.parts + (state.heldMessage?.parts ?? []))
+        }
         if heldMessageText != state.heldMessage?.displayText { heldMessageText = state.heldMessage?.displayText }
         if playback != state.playback { playback = state.playback }
         if sessionNotice != state.notice { sessionNotice = state.notice }
@@ -676,13 +679,41 @@ final class IosViewModel: ObservableObject {
     /// Records how the current Page's Buttons look, for the message bar on other Pages.
     private func rememberScreenButtonLooks() {
         guard let pageId = selectedBoardId else { return }
+        rememberScreenButtonLooks(pageId: pageId, cells: boardCells.map { ($0.buttonId, $0.label, $0.vocalization, $0.imageUrl) })
+    }
+
+    private func rememberScreenButtonLooks(
+        pageId: String,
+        cells: [(buttonId: String, label: String?, vocalization: String?, imageUrl: String?)]
+    ) {
         var looks = screenButtonLooks
-        for cell in boardCells {
+        for cell in cells {
             let label = (cell.label ?? cell.vocalization ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let imageUrl = cell.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
             looks["\(pageId)|\(cell.buttonId)"] = (label, imageUrl?.isEmpty == false ? imageUrl : nil)
         }
         screenButtonLooks = looks
+        lookedUpPageIds.insert(pageId)
+    }
+
+    /// Pages whose Button looks are known or being loaded.
+    private var lookedUpPageIds: Set<String> = []
+
+    /// Loads the looks of Pages a saved or held Message uses but this launch has not shown.
+    private func resolveScreenButtonLooks(for parts: [Shared.MessagePart]) {
+        let pageIds = Set(parts.compactMap { ($0.source as? Shared.MessagePartSourceScreenButton)?.pageId })
+            .subtracting(lookedUpPageIds)
+        guard !pageIds.isEmpty else { return }
+        lookedUpPageIds.formUnion(pageIds)
+        Task {
+            for pageId in pageIds {
+                guard let cells = try? await boardsFacade.listBoardCells(boardId: pageId) else {
+                    lookedUpPageIds.remove(pageId)
+                    continue
+                }
+                rememberScreenButtonLooks(pageId: pageId, cells: cells.map { ($0.buttonId, $0.label, $0.vocalization, $0.imageUrl) })
+            }
+        }
     }
 
     private func playableURL(from dataUrl: String) -> URL? {

@@ -1508,14 +1508,16 @@ struct SymbolBoardWorkspaceView: View {
             let behavior = model.boardActivationBehavior
             let shouldAdd = behavior != "SpeakOnly"
             let shouldSpeak = model.shouldSpeakSelectionImmediately
-            if shouldSpeak, let sound = trimmed(cell.soundDataUrl) {
+            // A Button's own sound replaces its spoken text, so it is said once.
+            let sound = shouldSpeak ? trimmed(cell.soundDataUrl) : nil
+            if let sound {
                 model.playBoardButtonSound(sound)
             }
             if shouldAdd {
                 appendCellToSentenceIfNeeded(cell, sourceCellId: sourceCellId)
             }
             Task {
-                if shouldSpeak {
+                if shouldSpeak && sound == nil {
                     await model.activateSelectedBoardCell(row: row, col: col)
                 }
                 await model.activateBoardSelectionHighlight(buttonId: cell.buttonId)
