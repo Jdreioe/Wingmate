@@ -752,11 +752,12 @@ class AndroidSpeechService(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (t: Throwable) {
-                OperationalLogger.warn(
-                    operation = if (engine == TtsEngine.GOOGLE_CLOUD) "speech.google_synthesis" else "speech.azure_synthesis",
-                    outcome = "failed",
-                    exceptionClass = t.loggingClassName(),
-                )
+                // Literal tags keep the call checkable by SpeechLogPrivacyTest.
+                if (engine == TtsEngine.GOOGLE_CLOUD) {
+                    OperationalLogger.warn("speech.google_synthesis", "failed", exceptionClass = t.loggingClassName())
+                } else {
+                    OperationalLogger.warn("speech.azure_synthesis", "failed", exceptionClass = t.loggingClassName())
+                }
                 throw t
             }
         }
