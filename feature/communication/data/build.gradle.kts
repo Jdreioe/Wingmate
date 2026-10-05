@@ -25,7 +25,7 @@ kotlin {
                 implementation(project(":core:data"))
                 implementation(project(":feature:communication:domain"))
                 implementation(libs.koin.core)
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.contentNegotiation)
