@@ -14,6 +14,9 @@ import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.TextSpan
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.fromTextDiff
+import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
+import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
+import io.github.jdreioe.wingmate.domain.obf.shouldSpeakSelectionImmediately
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,6 +38,12 @@ enum class SessionNotice {
     /** The cloud voice failed, so the device voice spoke instead. Informational. */
     SpeechFallback,
 }
+
+/** Where the cursor goes after a Phrase activation, and whether to speak the Phrase. */
+data class NativePhraseActivation(
+    val cursor: Int,
+    val shouldSpeak: Boolean,
+)
 
 /** Swift's read-only view of the Communication session. */
 data class NativeCommunicationState(
@@ -92,11 +101,22 @@ class CommunicationSessionFacade(
     }
 
     /**
-     * Replaces the selection [start, endExclusive) with [phrase] as one Phrase part, so
-     * its recording plays when the Message is spoken. Adds a space on either side where
-     * needed and returns the cursor position after the insertion.
+     * Activates a Typing Screen Phrase per the Screen's activation behavior and the
+     * speech policy. Adding replaces the selection [start, endExclusive) with it as one
+     * Phrase part, so its recording plays when the Message is spoken, with a space on
+     * either side where needed. Speaking is left to the caller, which knows the voice.
+     * Until the Typing Screen has loaded, [activationBehavior] is null and the Phrase
+     * is only spoken, the Typing Screen's default.
      */
-    fun insertPhrase(phrase: Phrase, start: Int, endExclusive: Int): Int {
+    fun activatePhrase(
+        phrase: Phrase,
+        start: Int,
+        endExclusive: Int,
+        activationBehavior: BoardActivationBehavior?,
+    ): NativePhraseActivation {
+        val behavior = activationBehavior ?: BoardActivationBehavior.SpeakOnly
+        val shouldSpeak = shouldSpeakSelectionImmediately(settings.getCurrentSettings().speechPolicy, behavior)
+        if (!shouldAddBoardSelection(behavior)) return NativePhraseActivation(start, shouldSpeak)
         val message = session.state.value.activeMessage
         val text = message.displayText
         val at = start.coerceIn(0, text.length)
@@ -111,7 +131,7 @@ class CommunicationSessionFacade(
             recordingPath = phrase.recordingPath,
         )
         session.accept(CommunicationAction.ReplaceMessage(message.replaceRange(at, end, part)))
-        return at + part.displayText.length
+        return NativePhraseActivation(at + part.displayText.length, shouldSpeak)
     }
 
     /** Appends a Screen Button's text, separated by a space unless the Page spells. */

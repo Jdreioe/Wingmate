@@ -81,6 +81,7 @@ final class IosViewModel: ObservableObject {
     private lazy var boardsFacade = IosDiBridge().boardsFacade()
     private lazy var communicationFacade = IosDiBridge().communicationFacade()
     private lazy var session = IosDiBridge().communicationSessionFacade()
+    private lazy var typingScreens = IosDiBridge().typingScreenFacade()
     private var sessionSubscription: Shared.NativeSubscription?
 
     // The shared Message (#306). Kotlin's Communication session owns it; these mirror its
@@ -98,6 +99,9 @@ final class IosViewModel: ObservableObject {
     /// How a Screen Button looks in the message bar, by "pageId|buttonId". The Message
     /// keeps what a Button says; its label and symbol come from the Page it was on.
     @Published private(set) var screenButtonLooks: [String: (label: String, imageUrl: String?)] = [:]
+    /// The Typing Screen template that lays out the Typing tray; nil until loaded.
+    @Published private(set) var typingTray: Shared.TypingTray? = nil
+    @Published private(set) var typingTrayFailed: Bool = false
     @Published var primaryLanguage: String = "en-US"
     @Published var secondaryLanguage: String = "en-US"
     @Published private(set) var secondaryLanguageRanges: [NSRange] = []
@@ -122,8 +126,6 @@ final class IosViewModel: ObservableObject {
 
     // History items exposed as phrases for UI rendering
     @Published var historyPhrases: [Shared.Phrase] = []
-    // Special selection for History view
-    let historyCategoryId = "__history__"
 
     // Speech engine preference. The session falls back to the device voice by itself.
     @Published var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
@@ -280,6 +282,7 @@ final class IosViewModel: ObservableObject {
         if result.isSuccess {
             communicationFacade.refreshPhrases()
             try? await session.reloadAfterRestore()
+            await loadTypingTray()
         }
         return result
     }
@@ -380,6 +383,7 @@ final class IosViewModel: ObservableObject {
                 }
             }
         }
+    await loadTypingTray()
     // Preload history once Koin is up
     await loadHistory()
     // Load pronunciations
@@ -511,19 +515,9 @@ final class IosViewModel: ObservableObject {
         store?.accept(intent: Shared.PhraseListStoreIntent.DeletePhrase(phraseId: id))
     }
 
+    /// Selects the Category that Phrases added from the tray go into.
     func selectCategory(id: String?) {
-        // Toggle history mode if the special ID is selected
-        if id == historyCategoryId {
-            // Keep the store's selectedCategoryId nil to avoid filtering real phrases
-            store?.accept(intent: Shared.PhraseListStoreIntent.SelectCategory(categoryId: nil))
-        } else {
-            store?.accept(intent: Shared.PhraseListStoreIntent.SelectCategory(categoryId: id))
-        }
-    }
-
-    var filteredPhrases: [Shared.Phrase] {
-        guard let sel = state.selectedCategoryId, !sel.isEmpty else { return state.phrases }
-        return state.phrases.filter { $0.parentId == sel }
+        store?.accept(intent: Shared.PhraseListStoreIntent.SelectCategory(categoryId: id))
     }
 
     // MARK: - Message (shared Communication session)
@@ -545,7 +539,12 @@ final class IosViewModel: ObservableObject {
             resolveScreenButtonLooks(for: state.activeMessage.parts + (state.heldMessage?.parts ?? []))
         }
         if heldMessageText != state.heldMessage?.displayText { heldMessageText = state.heldMessage?.displayText }
-        if playback != state.playback { playback = state.playback }
+        if playback != state.playback {
+            // A finished Message may have just entered History.
+            let finished = state.playback.name == "Idle"
+            playback = state.playback
+            if finished && historyVisible { Task { await loadHistory() } }
+        }
         if sessionNotice != state.notice { sessionNotice = state.notice }
         if sessionIsSaving != state.isSaving { sessionIsSaving = state.isSaving }
         if messageLoaded != state.isLoaded { messageLoaded = state.isLoaded }
@@ -571,24 +570,97 @@ final class IosViewModel: ObservableObject {
         editMessage { session.editText(newText: newValue) }
     }
 
-    func insertPhraseText(_ phrase: Shared.Phrase) {
+    func loadTypingTray() async {
+        do {
+            typingTray = try await typingScreens.tray()
+            typingTrayFailed = false
+        } catch {
+            typingTrayFailed = true
+        }
+    }
+
+    /// Activates a tray Phrase per the Typing Screen's activation behavior and the
+    /// speech policy (#119): insert at the cursor, speak, or both.
+    func activateTypingPhrase(_ phrase: Shared.Phrase) {
         // #118: ignore rapid repeated activations of the same target.
         guard acceptActivation(targetId: phrase.id) else { return }
         guard !phrase.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let selection = clampedSelectionRange(inputSelectionRange, maxLength: (input as NSString).length)
-        var newCursor: Int32? = nil
+        // Before the Typing Screen loads, the session falls back to speak-only.
+        let behavior = typingTray?.activationBehavior
+        var activation: Shared.NativePhraseActivation?
         editMessage {
-            newCursor = session.insertPhrase(
+            activation = session.activatePhrase(
                 phrase: phrase,
                 start: Int32(selection.location),
-                endExclusive: Int32(selection.location + selection.length)
+                endExclusive: Int32(selection.location + selection.length),
+                activationBehavior: behavior
             )
         }
-        if let newCursor { inputSelectionRange = NSRange(location: Int(newCursor), length: 0) }
-        // #119: immediate speech policy speaks each inserted phrase as it is composed.
-        if speechPolicy == "Immediate" {
-            speakPhrase(phrase)
+        guard let activation else { return }
+        // A speak-only activation leaves the Message and its selection alone.
+        if let behavior, behavior.name != "SpeakOnly" { inputSelectionRange = NSRange(location: Int(activation.cursor), length: 0) }
+        if activation.shouldSpeak { speakPhrase(phrase) }
+    }
+
+    /// Runs one Action-strip effect against the Message and its selection. The
+    /// keyboard effect belongs to the view, which owns the Message field's focus.
+    func performTypingEffect(_ effect: Shared.TypingEffect) {
+        let kind = effect.kind
+        if kind.name == "InsertText" || kind.name == "WrapSelection" || kind.name == "Backspace" {
+            editSelection(effect)
+        } else if kind.name == "Clear" {
+            clearMessage()
+        } else if kind.name == "Speak" {
+            speakMessage()
+        } else if kind.name == "Pause" {
+            pauseSpeech()
+        } else if kind.name == "Resume" {
+            resumeSpeech()
+        } else if kind.name == "Stop" {
+            stopSpeech()
+        } else if kind.name == "SecondaryLanguage" {
+            markSelectionAsSecondaryLanguage(range: inputSelectionRange)
+        } else if kind.name == "HoldMessage" {
+            toggleHoldThatThought()
         }
+    }
+
+    private func editSelection(_ effect: Shared.TypingEffect) {
+        let text = input as NSString
+        let selection = clampedSelectionRange(inputSelectionRange, maxLength: text.length)
+        var range = selection
+        var replacement = ""
+        var cursor = selection.location
+        if effect.kind.name == "InsertText" {
+            replacement = effect.prefix
+            cursor = selection.location + (replacement as NSString).length
+        } else if effect.kind.name == "WrapSelection" {
+            let selected = text.substring(with: selection)
+            replacement = effect.prefix + selected + effect.suffix
+            cursor = selected.isEmpty
+                ? selection.location + (effect.prefix as NSString).length
+                : selection.location + (replacement as NSString).length
+        } else if selection.length == 0 {
+            // Backspace removes the whole character before the cursor, emoji included.
+            guard selection.location > 0 else { return }
+            range = text.rangeOfComposedCharacterSequence(at: selection.location - 1)
+            cursor = range.location
+        }
+        editMessage {
+            session.replaceRange(
+                start: Int32(range.location),
+                endExclusive: Int32(range.location + range.length),
+                replacement: replacement
+            )
+        }
+        inputSelectionRange = NSRange(location: cursor, length: 0)
+    }
+
+    /// Whether the secondary-language action can tag a selection.
+    var hasUsableSecondaryLanguage: Bool {
+        let secondary = secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !secondary.isEmpty && secondary != primaryLanguage
     }
 
     /// Appends a Button of the current Page to the Message.
@@ -1055,8 +1127,10 @@ final class IosViewModel: ObservableObject {
         store?.accept(intent: Shared.PhraseListStoreIntent.UpdatePhrase(id: id, text: text, name: name, imageUrl: normalizedImageUrl))
     }
 
-    func movePhrase(from: Int, to: Int) {
-        store?.accept(intent: Shared.PhraseListStoreIntent.MovePhrase(fromIndex: Int32(from), toIndex: Int32(to)))
+    /// Moves a Phrase or Category to the target's place in the repository order.
+    func movePhrase(_ phraseId: String, onto targetId: String) {
+        guard phraseId != targetId else { return }
+        store?.accept(intent: Shared.PhraseListStoreIntent.MovePhrase(phraseId: phraseId, targetId: targetId))
     }
 
     // MARK: - Add category / phrase

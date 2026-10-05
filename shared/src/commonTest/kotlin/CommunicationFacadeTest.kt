@@ -1,5 +1,6 @@
 import com.arkivanov.mvikotlin.main.store.DefaultStoreFactory
 import io.github.jdreioe.wingmate.application.CommunicationFacade
+import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStoreFactory
 import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
@@ -72,6 +73,48 @@ class CommunicationFacadeTest {
         facade.updatePhraseRecording(phraseId = "p1", recordingPath = "/tmp/new.m4a")
 
         assertEquals("/tmp/new.m4a", awaitRecordingPath(phraseRepo, "p1") { it == "/tmp/new.m4a" })
+    }
+
+    @Test
+    fun movingAPhraseTakesTheTargetsPlaceAcrossCategories() = withFakeMain {
+        val phraseRepo = InMemoryPhraseRepository()
+        phraseRepo.add(Phrase(id = "a", text = "A", createdAt = 1L))
+        phraseRepo.add(Phrase(id = "food", text = "Food", linkedBoardId = "food", isGridItem = false, createdAt = 2L))
+        phraseRepo.add(Phrase(id = "b", text = "B", createdAt = 3L))
+        val store = facade(phraseRepository = phraseRepo).phraseListStore()
+
+        store.accept(PhraseListStore.Intent.MovePhrase(phraseId = "b", targetId = "a"))
+
+        withTimeout(5_000) {
+            while (phraseRepo.getAll().map { it.id } != listOf("b", "a", "food")) delay(10)
+        }
+    }
+
+    @Test
+    fun addedPhrasesKeepTheirVocalizationImageAndRecording() = withFakeMain {
+        val phraseRepo = InMemoryPhraseRepository()
+        val store = facade(phraseRepository = phraseRepo).phraseListStore()
+
+        store.accept(
+            PhraseListStore.Intent.AddPhrase(
+                text = "Hi",
+                name = "Hello there",
+                imageUrl = "/tmp/hi.png",
+                recordingPath = "/tmp/hi.m4a",
+            )
+        )
+
+        val added = withTimeout(5_000) {
+            var phrase = phraseRepo.getAll().firstOrNull()
+            while (phrase == null) {
+                delay(10)
+                phrase = phraseRepo.getAll().firstOrNull()
+            }
+            phrase
+        }
+        assertEquals("Hello there", added.name)
+        assertEquals("/tmp/hi.png", added.imageUrl)
+        assertEquals("/tmp/hi.m4a", added.recordingPath)
     }
 
     /** Store intents process asynchronously; wait until the phrase reaches the expected path. */

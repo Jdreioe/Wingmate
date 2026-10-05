@@ -9,6 +9,7 @@ import io.github.jdreioe.wingmate.domain.CommunicationStorageResult
 import io.github.jdreioe.wingmate.domain.MessagePartSource
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.infrastructure.InMemoryCommunicationSessionDataSource
 import io.github.jdreioe.wingmate.infrastructure.InMemorySaidTextRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemorySettingsRepository
@@ -26,16 +27,17 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class CommunicationSessionFacadeTest {
     @Test
-    fun insertedPhrasesAreSeparatedAndKeepTheirRecording() = facadeTest { facade ->
+    fun addedPhrasesAreSeparatedAndKeepTheirRecording() = facadeTest { facade ->
         val hello = Phrase(id = "hello", text = "Hello", recordingPath = "/hello.m4a", createdAt = 0)
         val world = Phrase(id = "world", text = "world", createdAt = 0)
 
-        val afterHello = facade.insertPhrase(hello, start = 0, endExclusive = 0)
-        val afterWorld = facade.insertPhrase(world, start = afterHello, endExclusive = afterHello)
+        val afterHello = facade.activatePhrase(hello, 0, 0, BoardActivationBehavior.SpeakAndAdd)
+        val afterWorld = facade.activatePhrase(world, afterHello.cursor, afterHello.cursor, BoardActivationBehavior.SpeakAndAdd)
 
         val message = facade.state().activeMessage
         assertEquals("Hello world ", message.displayText)
-        assertEquals(message.displayText.length, afterWorld)
+        assertEquals(message.displayText.length, afterWorld.cursor)
+        assertEquals(true, afterWorld.shouldSpeak)
         val helloPart = message.parts.first()
         assertEquals(MessagePartSource.Phrase("hello"), helloPart.source)
         assertEquals("/hello.m4a", helloPart.recordingPath)
@@ -46,9 +48,19 @@ class CommunicationSessionFacadeTest {
         facade.editText("I want coffee")
         val water = Phrase(id = "water", text = "water", createdAt = 0)
 
-        facade.insertPhrase(water, start = 7, endExclusive = 13)
+        facade.activatePhrase(water, start = 7, endExclusive = 13, BoardActivationBehavior.AddOnly)
 
         assertEquals("I want water ", facade.state().activeMessage.displayText)
+    }
+
+    @Test
+    fun speakOnlyPhrasesLeaveTheMessageAlone() = facadeTest { facade ->
+        val hello = Phrase(id = "hello", text = "Hello", createdAt = 0)
+
+        val activation = facade.activatePhrase(hello, 0, 0, BoardActivationBehavior.SpeakOnly)
+
+        assertEquals("", facade.state().activeMessage.displayText)
+        assertEquals(true, activation.shouldSpeak)
     }
 
     @Test

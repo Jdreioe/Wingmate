@@ -53,14 +53,14 @@ class PhraseListStoreFactory(
         override fun executeIntent(intent: PhraseListStore.Intent, getState: () -> PhraseListStore.State) {
             when (intent) {
                 PhraseListStore.Intent.Refresh -> loadPhrasesAndCategories()
-                is PhraseListStore.Intent.AddPhrase -> addPhrase(intent.text, getState().selectedCategoryId)
+                is PhraseListStore.Intent.AddPhrase -> addPhrase(intent, getState().selectedCategoryId)
                 is PhraseListStore.Intent.AddCategory -> addCategory(intent.name, getState().selectedCategoryId)
                 is PhraseListStore.Intent.SelectCategory -> dispatch(Msg.CategorySelected(intent.categoryId))
                 is PhraseListStore.Intent.DeletePhrase -> deletePhrase(intent.phraseId)
                 is PhraseListStore.Intent.DeleteCategory -> deleteCategory(intent.categoryId)
                 is PhraseListStore.Intent.UpdatePhrase -> updatePhrase(intent.id, intent.text, intent.name, intent.imageUrl)
                 is PhraseListStore.Intent.UpdatePhraseRecording -> updatePhraseRecording(intent.id, intent.recordingPath)
-                is PhraseListStore.Intent.MovePhrase -> movePhrase(intent.fromIndex, intent.toIndex)
+                is PhraseListStore.Intent.MovePhrase -> movePhrase(intent.phraseId, intent.targetId)
             }
         }
 
@@ -79,10 +79,16 @@ class PhraseListStoreFactory(
             }
         }
 
-        private fun addPhrase(text: String, categoryId: String?) {
+        private fun addPhrase(intent: PhraseListStore.Intent.AddPhrase, categoryId: String?) {
             scope.launch {
                 try {
-                    addPhraseUseCase(text, categoryId)
+                    addPhraseUseCase(
+                        text = intent.text,
+                        categoryId = categoryId,
+                        name = intent.name,
+                        imageUrl = intent.imageUrl,
+                        recordingPath = intent.recordingPath,
+                    )
                     loadPhrasesAndCategories()
                 } catch (ce: CancellationException) {
                     throw ce
@@ -178,10 +184,14 @@ class PhraseListStoreFactory(
             }
         }
 
-        private fun movePhrase(fromIndex: Int, toIndex: Int) {
+        private fun movePhrase(phraseId: String, targetId: String) {
             scope.launch {
                 try {
-                    phraseRepository.move(fromIndex, toIndex)
+                    // Indices are into the whole repository, which interleaves Phrases and Categories.
+                    val all = phraseRepository.getAll()
+                    val from = all.indexOfFirst { it.id == phraseId }
+                    val to = all.indexOfFirst { it.id == targetId }
+                    if (from >= 0 && to >= 0 && from != to) phraseRepository.move(from, to)
                     loadPhrasesAndCategories()
                 } catch (ce: CancellationException) {
                     throw ce

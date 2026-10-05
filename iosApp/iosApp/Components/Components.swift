@@ -38,19 +38,27 @@ struct CategoryChip: View {
                 .font(.system(size: fontSize, weight: .medium))
                 .padding(.horizontal, hPadding)
                 .padding(.vertical, vPadding)
+                .frame(minHeight: 44)
                 .background(selected ? Color.accentColor.opacity(0.2) : Color.secondary.opacity(0.12))
                 .foregroundStyle(selected ? Color.accentColor : Color.primary)
                 .clipShape(Capsule())
+                .overlay {
+                    // Selection is not color alone.
+                    if selected { Capsule().stroke(Color.accentColor, lineWidth: 2) }
+                }
         }.buttonStyle(.plain)
     }
 }
 
+/// The Message field: grows with the Message from [minHeight] up to [maxHeight], then scrolls.
 struct MultiLineInput: View {
     @Binding var text: String
     @Binding var selectedRange: NSRange
+    @Binding var isFocused: Bool
     var placeholder: String
     var fontSize: CGFloat
     var minHeight: CGFloat
+    var maxHeight: CGFloat
     var scanEnabled: Bool = false
     var includeInScanArea: Bool = true
     var secondaryLanguage: String
@@ -60,16 +68,20 @@ struct MultiLineInput: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 8).fill(Color(.secondarySystemBackground))
+            // The message-bar look shared with Screens: rounded, translucent, no outline.
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemFill))
             if text.isEmpty {
                 Text(placeholder)
+                    .font(.system(size: fontSize))
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 16)
+                    .accessibilityHidden(true)
             }
             SelectableTextView(
                 text: $text,
                 selectedRange: $selectedRange,
+                isFocused: $isFocused,
                 fontSize: fontSize,
                 secondaryLanguage: secondaryLanguage,
                 secondaryLanguageRanges: secondaryLanguageRanges,
@@ -79,8 +91,10 @@ struct MultiLineInput: View {
                 }
             )
             .padding(6)
+            .accessibilityLabel(Text(placeholder))
         }
-        .frame(height: minHeight)
+        .frame(minHeight: minHeight, maxHeight: max(minHeight, maxHeight))
+        .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .contain)
         .accessibilityHidden(scanEnabled && !includeInScanArea)
     }
@@ -207,6 +221,7 @@ struct SentenceBoxView: View {
 struct SelectableTextView: UIViewRepresentable {
     @Binding var text: String
     @Binding var selectedRange: NSRange
+    @Binding var isFocused: Bool
     let fontSize: CGFloat
     let secondaryLanguage: String
     let secondaryLanguageRanges: [NSRange]
@@ -214,7 +229,14 @@ struct SelectableTextView: UIViewRepresentable {
     let onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)?
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, selectedRange: $selectedRange)
+        Coordinator(text: $text, selectedRange: $selectedRange, isFocused: $isFocused)
+    }
+
+    /// Sizes to the text's height, so the field grows with the Message.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width > 0 else { return nil }
+        let fitting = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        return CGSize(width: width, height: fitting.height)
     }
 
     func makeUIView(context: Context) -> UITextView {
@@ -252,6 +274,13 @@ struct SelectableTextView: UIViewRepresentable {
             menuAwareView.allowsSecondaryLanguageAction = allowsSecondaryLanguageAction
         }
         context.coordinator.isProgrammaticUpdate = false
+        // Focus changes raise or dismiss the keyboard, so apply them after this update.
+        if isFocused != uiView.isFirstResponder {
+            let shouldFocus = isFocused
+            DispatchQueue.main.async {
+                if shouldFocus { uiView.becomeFirstResponder() } else { uiView.resignFirstResponder() }
+            }
+        }
     }
 
     private func applyHighlighting(
@@ -326,13 +355,23 @@ struct SelectableTextView: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         @Binding var text: String
         @Binding var selectedRange: NSRange
+        @Binding var isFocused: Bool
         var isProgrammaticUpdate: Bool = false
         var appliedHighlightRanges: [NSRange] = []
         var appliedFontSize: CGFloat? = nil
 
-        init(text: Binding<String>, selectedRange: Binding<NSRange>) {
+        init(text: Binding<String>, selectedRange: Binding<NSRange>, isFocused: Binding<Bool>) {
             self._text = text
             self._selectedRange = selectedRange
+            self._isFocused = isFocused
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            if !isFocused { isFocused = true }
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            if isFocused { isFocused = false }
         }
 
         func textViewDidChange(_ textView: UITextView) {
@@ -380,71 +419,6 @@ final class MenuAwareTextView: UITextView {
     }
 }
 
-struct CategoriesRowView: View {
-    let state: Shared.PhraseListStoreState
-    let chipFontSize: CGFloat
-    let chipHPadding: CGFloat
-    let chipVPadding: CGFloat
-    let onSelect: (String?) -> Void
-    let onDelete: (String) -> Void
-    let onAddCategory: () -> Void
-    // Optional History chip
-    var showHistoryChip: Bool = false
-    var isHistorySelected: Bool = false
-    var onSelectHistory: (() -> Void)? = nil
-
-    private func priorityForIndex(_ index: Int) -> Double {
-        Double(10_000 - index)
-    }
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                CategoryChip(title: NSLocalizedString("categories.all", comment: ""),
-                             selected: state.selectedCategoryId == nil && !isHistorySelected,
-                             fontSize: chipFontSize,
-                             hPadding: chipHPadding,
-                             vPadding: chipVPadding) { onSelect(nil) }
-                .accessibilitySortPriority(priorityForIndex(0))
-                if showHistoryChip {
-                    CategoryChip(title: NSLocalizedString("categories.history", comment: "History"),
-                                 selected: isHistorySelected,
-                                 fontSize: chipFontSize,
-                                 hPadding: chipHPadding,
-                                 vPadding: chipVPadding) { onSelectHistory?() }
-                    .accessibilitySortPriority(priorityForIndex(1))
-                }
-                let categoryStartIndex = showHistoryChip ? 2 : 1
-                ForEach(Array(state.categories.enumerated()), id: \.element.id) { offset, cat in
-                    CategoryChip(title: cat.name ?? NSLocalizedString("common.no_name", comment: ""),
-                                 selected: state.selectedCategoryId == cat.id,
-                                 fontSize: chipFontSize,
-                                 hPadding: chipHPadding,
-                                 vPadding: chipVPadding) { onSelect(cat.id) }
-                    .accessibilitySortPriority(priorityForIndex(categoryStartIndex + offset))
-                    .contextMenu {
-                        Button(role: .destructive) { onDelete(cat.id) } label: { Label("category.delete", systemImage: "trash") }
-                    }
-                }
-                Button(action: onAddCategory) {
-                    Image(systemName: "plus")
-                        .font(.system(size: max(14, chipFontSize * 0.85), weight: .semibold))
-                        .padding(.horizontal, chipHPadding)
-                        .padding(.vertical, chipVPadding)
-                        .background(Capsule().fill(Color(.secondarySystemBackground)))
-                        .overlay(Capsule().stroke(Color(.separator), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text("toolbar.add_category"))
-                .accessibilitySortPriority(priorityForIndex(categoryStartIndex + state.categories.count))
-            }
-            .padding(.horizontal, 4)
-            .padding(.bottom, 4)
-            .accessibilityElement(children: .contain)
-        }
-    }
-}
-
 struct VoiceRow: View {
     let v: Shared.Voice
     let isSelected: Bool
@@ -463,34 +437,41 @@ struct VoiceRow: View {
     }
 }
 
+/// A Phrase (or History item) in the Typing tray. Tapping activates it per the Typing
+/// Screen; a long press opens Edit, recording, and Delete, and keeps holding to drag it
+/// onto another Phrase's place. VoiceOver gets the same actions, including moves.
 struct PhraseItemView: View {
     @ObservedObject var model: IosViewModel
     let phrase: Shared.Phrase
     let recorder: AudioRecorder
-    @Binding var recordingForPhraseId: String?
+    /// False for History and while hold-to-select owns long presses.
+    let editable: Bool
+    var minHeight: CGFloat = UIDevice.current.userInterfaceIdiom == .pad ? 120 : 88
     let onEdit: () -> Void
     let requestMic: (String) -> Void
     let onDelete: (String) -> Void
-    var wiggle: Bool = false
+    var onMoveEarlier: (() -> Void)? = nil
+    var onMoveLater: (() -> Void)? = nil
+    var onDrop: ((String) -> Void)? = nil
 
     var body: some View {
-    let bgHex = phrase.backgroundColor ?? "#00000000"
-    let useDefaultBg = bgHex == "#00000000"
-    let bgColor = useDefaultBg ? Color(.tertiarySystemBackground) : Color(hex: bgHex)
-    let tileShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-        let title = phrase.name?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let accessibleName = ((title?.isEmpty == false ? title : phrase.text) ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let bgHex = phrase.backgroundColor ?? "#00000000"
+        let useDefaultBg = bgHex == "#00000000"
+        let bgColor = useDefaultBg ? Color(.tertiarySystemBackground) : Color(hex: bgHex)
+        let tileShape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        // VoiceOver reads the visible label; the vocalization is what gets spoken.
+        let accessibleName = phrase.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let accessTargetId = "phrase:\(phrase.id)"
+        let recordingPath = phrase.recordingPath.flatMap { $0.isEmpty ? nil : $0 }
 
-        Button(action: {
+        let tile = Button(action: {
             guard model.holdToSelectMillis <= 0 else { return }
             if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
-            model.insertPhraseText(phrase)
+            model.activateTypingPhrase(phrase)
         }) {
             VStack(alignment: .leading, spacing: 6) {
                 if model.labelAtTop && model.showButtonLabels {
-                    Text(phrase.name ?? phrase.text)
+                    Text(phrase.text)
                         .font(.body)
                         .lineLimit(3)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -517,17 +498,18 @@ struct PhraseItemView: View {
                 }
 
                 if !model.labelAtTop && model.showButtonLabels {
-                    Text(phrase.name ?? phrase.text)
+                    Text(phrase.text)
                         .font(.body)
                         .lineLimit(3)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                // Secondary hint could be added here if needed
             }
             .padding(12)
-            .frame(maxWidth: .infinity, minHeight: UIDevice.current.userInterfaceIdiom == .pad ? 150 : 120)
+            .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
             .background(tileShape.fill(model.highContrastMode ? Color(.systemBackground) : bgColor))
-            .overlay(tileShape.stroke(model.highContrastMode ? Color.primary : Color(.separator), lineWidth: model.highContrastMode ? 2 : 1))
+            .overlay {
+                if model.highContrastMode { tileShape.stroke(Color.primary, lineWidth: 2) }
+            }
             .contentShape(tileShape)
         }
         .buttonStyle(.plain)
@@ -536,10 +518,9 @@ struct PhraseItemView: View {
                 .onEnded { _ in
                     guard model.holdToSelectMillis > 0 else { return }
                     if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
-                    model.insertPhraseText(phrase)
+                    model.activateTypingPhrase(phrase)
                 }
         )
-        .allowsHitTesting(!wiggle)
         .onHover { hovering in
             if hovering {
                 model.accessEnter(accessTargetId)
@@ -548,7 +529,7 @@ struct PhraseItemView: View {
                 model.accessExit(accessTargetId)
             }
         }
-        .onAppear { model.registerAccessTarget(accessTargetId) { model.insertPhraseText(phrase) } }
+        .onAppear { model.registerAccessTarget(accessTargetId) { model.activateTypingPhrase(phrase) } }
         .onDisappear { model.unregisterAccessTarget(accessTargetId) }
         .accessTargetFocus(model: model, targetId: accessTargetId)
         .overlay {
@@ -566,34 +547,47 @@ struct PhraseItemView: View {
             }
         }
         .accessibilityLabel(Text(accessibleName.isEmpty ? NSLocalizedString("common.no_name", comment: "") : accessibleName))
-        .accessibilityHint(Text(wiggle ? "accessibility.phrase.wiggle_hint" : "accessibility.phrase.insert_hint"))
-        .accessibilityAction(named: Text("accessibility.phrase.speak_action")) { model.speak(phrase.text) }
-        .accessibilityAction(named: Text("accessibility.phrase.edit_action")) {
-            if !phrase.id.hasPrefix("history-") {
-                onEdit()
-            }
-        }
-        .accessibilityAction(named: Text("accessibility.phrase.delete_action")) {
-            if !phrase.id.hasPrefix("history-") {
-                onDelete(phrase.id)
-            }
-        }
-        .modifier(WiggleEffect(active: wiggle))
-        .contextMenu {
-            // Hide edit/record/delete for history items
-            let isHistory = phrase.id.hasPrefix("history-")
-            if !isHistory { Button { onEdit() } label: { Label("phrase.edit", systemImage: "pencil") } }
-            Button { model.speak(phrase.text) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
-            // Prefer phrase.recordingPath (works for history pseudo-phrases)
-            if let direct = phrase.recordingPath, !direct.isEmpty {
-                Button { recorder.play(url: URL(fileURLWithPath: direct)) } label: { Label("phrase.play_recording", systemImage: "waveform") }
-            } else if let path = model.recordingPath(for: phrase.id) {
-                Button { recorder.play(url: URL(fileURLWithPath: path)) } label: { Label("phrase.play_recording", systemImage: "waveform") }
-                if !isHistory { Button { requestMic(phrase.id) } label: { Label("phrase.record.replace", systemImage: "mic") } }
-            } else if !isHistory {
-                Button { requestMic(phrase.id) } label: { Label("phrase.record", systemImage: "mic") }
-            }
-            if !isHistory { Button(role: .destructive) { onDelete(phrase.id) } label: { Label("phrase.delete", systemImage: "trash") } }
+        .accessibilityHint(Text("accessibility.phrase.insert_hint"))
+        .accessibilityAction(named: Text("accessibility.phrase.speak_action")) { model.speakPhrase(phrase) }
+
+        if editable {
+            tile
+                .accessibilityAction(named: Text("accessibility.phrase.edit_action")) { onEdit() }
+                .accessibilityAction(named: Text("accessibility.phrase.delete_action")) { onDelete(phrase.id) }
+                .accessibilityActions {
+                    // Offered only where this Phrase can move.
+                    if let onMoveEarlier {
+                        Button("accessibility.reorder.move_earlier", action: onMoveEarlier)
+                    }
+                    if let onMoveLater {
+                        Button("accessibility.reorder.move_later", action: onMoveLater)
+                    }
+                }
+                .contextMenu {
+                    Button { onEdit() } label: { Label("phrase.edit", systemImage: "pencil") }
+                    Button { model.speakPhrase(phrase) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
+                    if let recordingPath {
+                        Button { recorder.play(url: URL(fileURLWithPath: recordingPath)) } label: { Label("phrase.play_recording", systemImage: "waveform") }
+                        Button { requestMic(phrase.id) } label: { Label("phrase.record.replace", systemImage: "mic") }
+                    } else {
+                        Button { requestMic(phrase.id) } label: { Label("phrase.record", systemImage: "mic") }
+                    }
+                    Button(role: .destructive) { onDelete(phrase.id) } label: { Label("phrase.delete", systemImage: "trash") }
+                }
+                .draggable(phrase.id)
+                .dropDestination(for: String.self) { ids, _ in
+                    guard let onDrop, let moved = ids.first, moved != phrase.id else { return false }
+                    onDrop(moved)
+                    return true
+                }
+        } else {
+            tile
+                .contextMenu {
+                    Button { model.speakPhrase(phrase) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
+                    if let recordingPath {
+                        Button { recorder.play(url: URL(fileURLWithPath: recordingPath)) } label: { Label("phrase.play_recording", systemImage: "waveform") }
+                    }
+                }
         }
     }
 }

@@ -5,6 +5,7 @@ import UIKit
 
 struct ContentView: View {
     @StateObject private var model = IosViewModel()
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showVoiceSheet = false
     @State private var showLanguageSheet = false
     @State private var showSecondaryLanguageSheet = false
@@ -21,52 +22,31 @@ struct ContentView: View {
     @State private var recorder = AudioRecorder()
     @State private var recordingForPhraseId: String? = nil
 
-    @State private var wiggleMode = false
-    @State private var gridLocal: [Shared.Phrase] = []
-    @State private var draggingId: String? = nil
-    @State private var draggingOffset: CGSize = .zero
-    @State private var dragStartFrame: CGRect? = nil
-    @State private var itemFrames: [String: CGRect] = [:]
-
     @AppStorage("ui_textFieldHeight") private var uiTextFieldHeight: Double = 72
     @AppStorage("ui_inputFontSize") private var uiInputFontSize: Double = 20
     @AppStorage("ui_chipFontSize") private var uiChipFontSize: Double = 18
     @AppStorage("ui_playIconSize") private var uiPlayIconSize: Double = 36
-
-    private var chipHPadding: CGFloat { CGFloat(max(12, uiChipFontSize * 0.75)) }
-    private var chipVPadding: CGFloat { CGFloat(max(8, uiChipFontSize * 0.45)) }
 
     private var shouldShowWelcomeFlow: Bool {
         showWelcomeFlow || !hasCompletedWelcome
     }
 
     @ViewBuilder
-    private func mainContent(columns: [GridItem]) -> some View {
+    private var mainContent: some View {
         if model.boardModeEnabled {
             SymbolBoardWorkspaceView(model: model)
         } else {
-            MainContentView(
+            TypingWorkspaceView(
                 model: model,
                 recorder: recorder,
-                recordingForPhraseId: $recordingForPhraseId,
                 editingPhrase: $editingPhrase,
                 showAddCategory: $showAddCategory,
                 showAddPhrase: $showAddPhrase,
-                wiggleMode: $wiggleMode,
-                gridLocal: $gridLocal,
-                draggingId: $draggingId,
-                draggingOffset: $draggingOffset,
-                dragStartFrame: $dragStartFrame,
-                itemFrames: $itemFrames,
-                columns: columns,
                 uiInputFontSize: uiInputFontSize,
                 uiTextFieldHeight: uiTextFieldHeight,
                 uiChipFontSize: uiChipFontSize,
-                chipHPadding: chipHPadding,
-                chipVPadding: chipVPadding,
                 uiPlayIconSize: uiPlayIconSize,
-                requestMicAndStart: requestMicAndStart,
-                commitMove: commitMove
+                requestMicAndStart: requestMicAndStart
             )
         }
     }
@@ -119,30 +99,22 @@ struct ContentView: View {
                         )
                     } else {
                         GeometryReader { proxy in
-                            let width = proxy.size.width
                             let isPad = UIDevice.current.userInterfaceIdiom == .pad
-                            let wideThreshold: CGFloat = isPad ? 700 : 900
-                            let currentWideLayout = width > wideThreshold
-                            let minTile: CGFloat = isPad ? 200 : 140
-                            let spacing: CGFloat = isPad ? 12 : 8
-                            let contentWidth = width
-                            let available = max(contentWidth - spacing, minTile)
-                            let adaptiveCount = max(2, Int((available + spacing) / (minTile + spacing)))
-                            let count = min(max(model.preferredGridColumns, 1), adaptiveCount)
-                            let cols = Array(repeating: GridItem(.flexible(), spacing: spacing), count: count)
+                            let currentWideLayout = proxy.size.width > (isPad ? 700 : 900)
 
                             VStack(spacing: 8) {
                                 CommunicationNoticeBanner(model: model)
                                     .padding(.horizontal, currentWideLayout ? 16 : 0)
-                                mainContent(columns: cols)
+                                mainContent
                             }
-                            .frame(width: contentWidth)
+                            .frame(width: proxy.size.width)
                             .padding(currentWideLayout ? 0 : 16)
                         }
                     }
                 }
                 .background(Color(.systemBackground))
                 .navigationTitle(Text(model.boardModeEnabled ? "symbol.workspace.title" : "app.title"))
+                .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     if !shouldShowWelcomeFlow {
                         ToolbarItemGroup(placement: .topBarTrailing) {
@@ -187,6 +159,10 @@ struct ContentView: View {
                     .padding(8)
                 }
                 #endif
+            }
+            // Editing access relocks whenever Wingmate leaves the foreground, in either workspace.
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { model.lockEditingAccess() }
             }
             .onKeyPress(phases: [.down, .up]) { press -> KeyPress.Result in
                 guard !shouldShowWelcomeFlow else { return .ignored }
@@ -276,30 +252,6 @@ struct ContentView: View {
                     _ = try? await recorder.startRecording()
                 }
             }
-        }
-    }
-
-    private func nearestId(to point: CGPoint, excluding: String) -> String? {
-        var best: (String, CGFloat)? = nil
-        for (id, frame) in itemFrames where id != excluding {
-            let center = CGPoint(x: frame.midX, y: frame.midY)
-            let dx = center.x - point.x
-            let dy = center.y - point.y
-            let d2 = dx * dx + dy * dy
-            if best == nil || d2 < best!.1 { best = (id, d2) }
-        }
-        return best?.0
-    }
-
-    private func commitMove(movingId: String, toLocalIndex: Int) {
-        let all = model.state.phrases
-        let localIds = gridLocal.map { $0.id }
-        guard !localIds.isEmpty else { return }
-        let targetId = localIds[min(max(0, toLocalIndex), localIds.count - 1)]
-        guard let fromGlobal = all.firstIndex(where: { $0.id == movingId }) else { return }
-        let toGlobal = all.firstIndex(where: { $0.id == targetId }) ?? fromGlobal
-        if fromGlobal != toGlobal {
-            model.movePhrase(from: fromGlobal, to: toGlobal)
         }
     }
 }

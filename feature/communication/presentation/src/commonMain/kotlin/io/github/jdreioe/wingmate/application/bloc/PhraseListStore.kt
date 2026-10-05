@@ -31,7 +31,8 @@ interface PhraseListStore : Store<PhraseListStore.Intent, PhraseListStore.State,
         val imageUrl: String? = null
     ) : Intent()
     data class UpdatePhraseRecording(val id: String, val recordingPath: String?) : Intent()
-    data class MovePhrase(val fromIndex: Int, val toIndex: Int) : Intent()
+    /** Moves a Phrase or Category to [targetId]'s place in the repository order. */
+    data class MovePhrase(val phraseId: String, val targetId: String) : Intent()
     }
 
     data class State(

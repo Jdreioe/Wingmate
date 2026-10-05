@@ -131,7 +131,6 @@ private enum BoardSetRoute: Equatable {
 
 struct SymbolBoardWorkspaceView: View {
     @ObservedObject var model: IosViewModel
-    @Environment(\.scenePhase) private var scenePhase
     @Namespace private var sentenceAnimationNamespace
 
     @State private var route: BoardSetRoute = .library
@@ -286,9 +285,6 @@ struct SymbolBoardWorkspaceView: View {
                     }
                 }
             }
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase != .active { model.lockEditingAccess() }
         }
         .onChange(of: editingSelectedPhotoItem) { _, newItem in
             guard let newItem else { return }
