@@ -45,6 +45,7 @@ import androidx.compose.runtime.produceState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.AnnotatedString
@@ -473,9 +474,13 @@ fun PhraseScreen(
             // Follow the system keyboard: showing it means typing, and dismissing it
             // (Back or the keyboard's own hide key) brings the tray back. A hardware
             // keyboard never shows one, so the toggle below still sets the surface.
-            // Uses where the keyboard is heading, so the switch happens as its
-            // animation starts rather than after it ends.
-            val isImeVisible = WindowInsets.imeAnimationTarget.getBottom(density) > 0
+            // The visibility flag stays true during native retraction. Follow the
+            // animation's destination then, so the tray returns beneath the closing
+            // keyboard. A settled floating keyboard has zero source and target
+            // heights, so its visibility still comes from the flag.
+            val isImeRetracting = WindowInsets.imeAnimationSource.getBottom(density) > 0 &&
+                WindowInsets.imeAnimationTarget.getBottom(density) == 0
+            val isImeVisible = WindowInsets.isImeVisible && !isImeRetracting
             var wasImeVisible by remember { mutableStateOf(false) }
             // When switching to the keyboard, the tray stays underneath while the
             // keyboard starts (a few hundred ms after it is requested) and slides up
@@ -1422,9 +1427,9 @@ fun PhraseScreen(
 
                     // Space under the Message bar. The app root already pads for the
                     // keyboard (safeDrawingPadding), so this only adds what the tray
-                    // needs beyond the keyboard's current height. The tray opens at the
-                    // keyboard's last height and stays drawn beneath the keyboard while
-                    // it slides in or out, so the Message bar never jumps.
+                    // needs beyond the keyboard's current height. Opening follows the
+                    // keyboard's target height rather than the lingering tray's height.
+                    // Retraction restores the tray's space from the first frame.
                     val navigationBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                     // Limits come from the screen, which stays put while the keyboard
                     // resizes the content area.
@@ -1433,24 +1438,32 @@ fun PhraseScreen(
                     val preferredTrayHeight = draggedTrayHeight ?: keyboardTrayHeight ?: (screenHeight * 0.4f)
                     val trayHeight = (preferredTrayHeight - navigationBarHeight)
                         .coerceIn(minOf(200.dp, maxTrayHeight), maxTrayHeight)
-                    val trayDrawn = inputSurface == TypingInputSurface.Tray || trayLingering
+                    val trayDrawn = inputSurface == TypingInputSurface.Tray || trayLingering || isImeRetracting
                     val imeInsets = WindowInsets.ime
                     val imeTargetInsets = WindowInsets.imeAnimationTarget
+                    val imeSourceInsets = WindowInsets.imeAnimationSource
                     val navigationInsets = WindowInsets.navigationBars
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clipToBounds()
                             // Measured in the layout pass, like the root's keyboard padding,
                             // so both follow the same keyboard frame.
                             .layout { measurable, constraints ->
                                 val navigation = navigationInsets.getBottom(this)
                                 val ime = (imeInsets.getBottom(this) - navigation).coerceAtLeast(0)
                                 val imeTarget = (imeTargetInsets.getBottom(this) - navigation).coerceAtLeast(0)
-                                val height = if (trayDrawn || ime != imeTarget) {
-                                    (trayHeight.roundToPx() - ime).coerceAtLeast(0)
-                                } else {
-                                    0
+                                // Insets reach layout before recomposition, so read the
+                                // direction here too to avoid one frame without tray space.
+                                val retracting = imeTargetInsets.getBottom(this) == 0 &&
+                                    imeSourceInsets.getBottom(this) > 0
+                                val surfaceHeight = when {
+                                    retracting -> trayHeight.roundToPx()
+                                    isImeVisible -> imeTarget
+                                    trayDrawn -> trayHeight.roundToPx()
+                                    else -> 0
                                 }
+                                val height = (surfaceHeight - ime).coerceIn(0, constraints.maxHeight)
                                 val placeable = measurable.measure(
                                     constraints.copy(minHeight = height, maxHeight = height)
                                 )
