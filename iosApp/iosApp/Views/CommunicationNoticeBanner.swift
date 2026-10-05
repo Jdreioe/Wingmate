@@ -8,9 +8,9 @@ struct CommunicationNoticeBanner: View {
 
     var body: some View {
         if let notice = model.sessionNotice {
-            let storageFailed = notice == .storageFailed
+            let storageFailed = notice.name == "StorageFailed"
             // The fallback still spoke the Message, so it is a notice rather than an error.
-            let isError = notice != .speechFallback
+            let isError = notice.name != "SpeechFallback"
             HStack(alignment: .center, spacing: 12) {
                 Image(systemName: isError ? "exclamationmark.triangle.fill" : "info.circle.fill")
                     .foregroundStyle(isError ? Color.red : Color.accentColor)
@@ -41,8 +41,8 @@ struct CommunicationNoticeBanner: View {
     }
 
     private func message(for notice: Shared.SessionNotice) -> String {
-        if notice == .storageFailed { return NSLocalizedString("communication.storage_failed", comment: "") }
-        if notice == .playbackFailed { return NSLocalizedString("communication.playback_failed", comment: "") }
+        if notice.name == "StorageFailed" { return NSLocalizedString("communication.storage_failed", comment: "") }
+        if notice.name == "PlaybackFailed" { return NSLocalizedString("communication.playback_failed", comment: "") }
         return NSLocalizedString("communication.speech_fallback", comment: "")
     }
 }

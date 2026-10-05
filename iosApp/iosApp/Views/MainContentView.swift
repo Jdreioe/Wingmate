@@ -222,7 +222,7 @@ struct MainContentView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("playback.play"))
                 .accessibilityHint(Text("accessibility.playback.play_hint"))
-                Button(action: { model.playback == .paused ? model.resumeSpeech() : model.pauseSpeech() }) {
+                Button(action: { model.playback.name == "Paused" ? model.resumeSpeech() : model.pauseSpeech() }) {
                     Image(systemName: "pause.circle")
                         .font(.system(size: CGFloat(uiPlayIconSize)))
                 }
