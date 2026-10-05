@@ -18,6 +18,7 @@ import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.PredictionResult
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.TextSpan
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -247,6 +248,48 @@ class QueuedCommunicationSessionTest {
     }
 
     @Test
+    fun `failed cloud voice falls back to the device voice and still records history`() = runTest {
+        val history = FakeSaidTextRepository()
+        val speech = RecordingSpeechService(failingEngines = setOf(TtsEngine.AZURE_USER_RESOURCE))
+        val session = session(
+            speechService = speech,
+            saidTextRepository = history,
+            ttsEngine = TtsEngine.AZURE_USER_RESOURCE,
+        )
+        runCurrent()
+        session.accept(CommunicationAction.ReplaceMessage(Message(parts = listOf(MessagePart("hello")))))
+        session.accept(CommunicationAction.SpeakActive(null))
+        runCurrent()
+
+        assertEquals(listOf(TtsEngine.AZURE_USER_RESOURCE, TtsEngine.SYSTEM), speech.engines)
+        assertEquals(listOf("hello"), history.items.map { it.saidText })
+        assertEquals(CommunicationFailureKind.SpeechFallback, session.state.value.lastFailure?.kind)
+        assertEquals("hello", session.state.value.activeMessage.displayText)
+    }
+
+    @Test
+    fun `when cloud and device voices both fail the message stays and nothing enters history`() = runTest {
+        val history = FakeSaidTextRepository()
+        val speech = RecordingSpeechService(
+            failingEngines = setOf(TtsEngine.GOOGLE_CLOUD, TtsEngine.SYSTEM),
+        )
+        val session = session(
+            speechService = speech,
+            saidTextRepository = history,
+            ttsEngine = TtsEngine.GOOGLE_CLOUD,
+        )
+        runCurrent()
+        session.accept(CommunicationAction.ReplaceMessage(Message(parts = listOf(MessagePart("hello")))))
+        session.accept(CommunicationAction.SpeakActive(null))
+        runCurrent()
+
+        assertEquals(listOf(TtsEngine.GOOGLE_CLOUD, TtsEngine.SYSTEM), speech.engines)
+        assertTrue(history.items.isEmpty())
+        assertEquals(CommunicationFailureKind.Playback, session.state.value.lastFailure?.kind)
+        assertEquals("hello", session.state.value.activeMessage.displayText)
+    }
+
+    @Test
     fun `recording-only button joins the speech queue`() = runTest {
         val speech = RecordingSpeechService()
         val session = session(speechService = speech)
@@ -305,11 +348,14 @@ class QueuedCommunicationSessionTest {
         speechService: RecordingSpeechService = RecordingSpeechService(),
         saidTextRepository: FakeSaidTextRepository = FakeSaidTextRepository(),
         predictionService: TextPredictionService? = null,
+        ttsEngine: TtsEngine = TtsEngine.SYSTEM,
     ) = QueuedCommunicationSession(
         dataSource = dataSource,
         speechService = speechService,
         saidTextRepository = saidTextRepository,
-        currentSettings = { Settings(primaryLanguage = "en-US", historyVisible = true) },
+        currentSettings = {
+            Settings(primaryLanguage = "en-US", historyVisible = true, ttsEngine = ttsEngine)
+        },
         scope = backgroundScope,
         predictionService = predictionService,
     )
@@ -354,8 +400,10 @@ private class RecordingSpeechService(
     private val blockFirstRequest: Boolean = false,
     private val failText: String? = null,
     private val cancelCallerOnStop: Boolean = false,
+    private val failingEngines: Set<TtsEngine> = emptySet(),
 ) : SpeechService {
     val spoken = mutableListOf<String>()
+    val engines = mutableListOf<TtsEngine>()
     val recordings = mutableListOf<String>()
     val firstStarted = CompletableDeferred<Unit>()
     val releaseFirst = CompletableDeferred<Unit>()
@@ -380,8 +428,11 @@ private class RecordingSpeechService(
         pitch: Double?,
         rate: Double?,
         cacheAudio: Boolean,
+        engine: TtsEngine,
     ) {
         callerJob = currentCoroutineContext()[Job]
+        engines += engine
+        if (engine in failingEngines) error("$engine failed")
         spoken += text
         requestCount++
         if (requestCount == 1) {
@@ -397,7 +448,8 @@ private class RecordingSpeechService(
         pitch: Double?,
         rate: Double?,
         cacheAudio: Boolean,
-    ) = speakWithoutHistory(segments.joinToString("") { it.text }, voice, pitch, rate, cacheAudio)
+        engine: TtsEngine,
+    ) = speakWithoutHistory(segments.joinToString("") { it.text }, voice, pitch, rate, cacheAudio, engine)
 
     override suspend fun speakRecordedAudio(
         audioFilePath: String,

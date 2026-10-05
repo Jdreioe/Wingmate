@@ -53,17 +53,6 @@ class BoardsFacadeTest {
     }
 
     @Test
-    fun joinAndBackspaceSentenceHonorSpellingMode() = runBlocking {
-        val facade = facade()
-
-        assertEquals("Hello world", facade.boardJoinSentenceText(listOf("Hello", "world"), spellingMode = false))
-        assertEquals("Hello", facade.boardJoinSentenceText(listOf("H", "e", "l", "l", "o"), spellingMode = true))
-        assertEquals(listOf("Hello"), facade.boardBackspaceSentence(listOf("Hello", "world"), spellingMode = false))
-        assertEquals(listOf("H", "e", "l", "l"), facade.boardBackspaceSentence(listOf("H", "e", "l", "l", "o"), spellingMode = true))
-        assertEquals(emptyList<String>(), facade.boardBackspaceSentence(listOf("A"), spellingMode = true))
-    }
-
-    @Test
     fun cellUpsertPersistsButtonAndClearPrunesUnreferencedImage() = runBlocking {
         val facade = facade()
         val boardSet = facade.createBoardSet("Test", rows = 2, columns = 2)

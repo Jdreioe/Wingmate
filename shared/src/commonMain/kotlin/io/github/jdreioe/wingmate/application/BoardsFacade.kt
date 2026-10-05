@@ -13,10 +13,8 @@ import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.WordType
 import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
-import io.github.jdreioe.wingmate.domain.obf.backspaceSentenceSelection
 import io.github.jdreioe.wingmate.domain.obf.fieldItems
 import io.github.jdreioe.wingmate.domain.obf.fieldFontScale
-import io.github.jdreioe.wingmate.domain.obf.joinSentenceText
 import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
@@ -316,17 +314,11 @@ class BoardsFacade(
         return IosBoardReturnResult(boardId = boardId, boardStack = stack)
     }
 
-    fun boardBackspaceSentence(texts: List<String>, spellingMode: Boolean): List<String> =
-        backspaceSentenceSelection(texts, spellingMode)
-
     fun boardButtonIsVisible(hidden: Boolean, isEditMode: Boolean, showHiddenButtons: Boolean): Boolean =
         !hidden || isEditMode || showHiddenButtons
 
     fun boardFieldFontScale(rowSpan: Int, columnSpan: Int): Float =
         fieldFontScale(rowSpan, columnSpan)
-
-    fun boardJoinSentenceText(tokens: List<String>, spellingMode: Boolean): String =
-        joinSentenceText(tokens, spellingMode)
 
     suspend fun upsertBoardCellButton(
         boardId: String, row: Int, col: Int, label: String?, vocalization: String?,

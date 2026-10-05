@@ -56,8 +56,6 @@ struct MultiLineInput: View {
     var secondaryLanguage: String
     var secondaryLanguageRanges: [NSRange]
     var allowsSecondaryLanguageAction: Bool
-    var onTextChanged: ((String) -> Void)? = nil
-    var onTextEdited: ((NSRange, String) -> Void)? = nil
     var onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)? = nil
 
     var body: some View {
@@ -76,8 +74,6 @@ struct MultiLineInput: View {
                 secondaryLanguage: secondaryLanguage,
                 secondaryLanguageRanges: secondaryLanguageRanges,
                 allowsSecondaryLanguageAction: allowsSecondaryLanguageAction,
-                onTextChanged: onTextChanged,
-                onTextEdited: onTextEdited,
                 onMarkSelectionAsSecondaryLanguage: { range in
                     onMarkSelectionAsSecondaryLanguage?(range)
                 }
@@ -215,18 +211,10 @@ struct SelectableTextView: UIViewRepresentable {
     let secondaryLanguage: String
     let secondaryLanguageRanges: [NSRange]
     let allowsSecondaryLanguageAction: Bool
-    let onTextChanged: ((String) -> Void)?
-    let onTextEdited: ((NSRange, String) -> Void)?
     let onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)?
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(
-            text: $text,
-            selectedRange: $selectedRange,
-            onTextChanged: onTextChanged,
-            onTextEdited: onTextEdited,
-            onMarkSelectionAsSecondaryLanguage: onMarkSelectionAsSecondaryLanguage
-        )
+        Coordinator(text: $text, selectedRange: $selectedRange)
     }
 
     func makeUIView(context: Context) -> UITextView {
@@ -338,37 +326,20 @@ struct SelectableTextView: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         @Binding var text: String
         @Binding var selectedRange: NSRange
-        let onTextChanged: ((String) -> Void)?
-        let onTextEdited: ((NSRange, String) -> Void)?
-        let onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)?
         var isProgrammaticUpdate: Bool = false
         var appliedHighlightRanges: [NSRange] = []
         var appliedFontSize: CGFloat? = nil
 
-        init(
-            text: Binding<String>,
-            selectedRange: Binding<NSRange>,
-            onTextChanged: ((String) -> Void)?,
-            onTextEdited: ((NSRange, String) -> Void)?,
-            onMarkSelectionAsSecondaryLanguage: ((NSRange) -> Void)?
-        ) {
+        init(text: Binding<String>, selectedRange: Binding<NSRange>) {
             self._text = text
             self._selectedRange = selectedRange
-            self.onTextChanged = onTextChanged
-            self.onTextEdited = onTextEdited
-            self.onMarkSelectionAsSecondaryLanguage = onMarkSelectionAsSecondaryLanguage
-        }
-
-        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {
-            if isProgrammaticUpdate { return true }
-            onTextEdited?(range, replacement)
-            return true
         }
 
         func textViewDidChange(_ textView: UITextView) {
             if isProgrammaticUpdate { return }
+            // Record the cursor before the text, so the Message mirror keeps it.
+            selectedRange = textView.selectedRange
             text = textView.text ?? ""
-            onTextChanged?(text)
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {

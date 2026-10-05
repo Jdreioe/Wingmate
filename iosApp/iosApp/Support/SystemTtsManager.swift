@@ -2,9 +2,14 @@ import Foundation
 import AVFoundation
 import Shared
 
-final class SystemTtsManager: NSObject, AVSpeechSynthesizerDelegate {
+/// The device voice. Kotlin's Communication session drives it through `IosDeviceSpeech`
+/// whenever the System engine speaks, including when a cloud voice falls back to it.
+final class SystemTtsManager: NSObject, AVSpeechSynthesizerDelegate, IosDeviceSpeech {
     static let shared = SystemTtsManager()
     private let synth = AVSpeechSynthesizer()
+
+    /// The utterances of the request in progress and how to report its end.
+    private var request: (utterances: [AVSpeechUtterance], onFinished: (KotlinBoolean) -> Void)?
 
     private override init() {
         super.init()
@@ -12,137 +17,68 @@ final class SystemTtsManager: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     func speak(
-        _ text: String,
-        language: String?,
-        secondaryLanguage: String? = nil,
-        secondaryLanguageRanges: [NSRange] = []
+        segments: [SpeechSegment],
+        languageTag: String,
+        rate: Double,
+        pitch: Double,
+        onFinished: @escaping (KotlinBoolean) -> Void
     ) {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let utterances = buildUtterances(
-            for: text,
-            primaryLanguage: language,
-            secondaryLanguage: secondaryLanguage,
-            secondaryLanguageRanges: secondaryLanguageRanges
-        )
-        guard !utterances.isEmpty else { return }
+        finishRequest(spoken: false)
+        if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
 
-        speak(utterances)
-    }
-
-    /// Speak text split into segments (from shared SpeechTextProcessor), honoring
-    /// per-segment pause durations and language overrides.
-    func speak(segments: [Shared.SpeechSegment], language: String?) {
         let utterances: [AVSpeechUtterance] = segments.compactMap { segment in
-            let text = segment.text
-            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-            let utterance = makeUtterance(
-                text: text,
-                language: segment.languageTag ?? language
-            )
+            guard !segment.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+            let utterance = AVSpeechUtterance(string: segment.text)
+            utterance.voice = resolveVoice(for: segment.languageTag ?? languageTag)
+            utterance.rate = Float(min(
+                max(Double(AVSpeechUtteranceDefaultSpeechRate) * rate, Double(AVSpeechUtteranceMinimumSpeechRate)),
+                Double(AVSpeechUtteranceMaximumSpeechRate)
+            ))
+            utterance.pitchMultiplier = Float(min(max(pitch, 0.5), 2.0))
             if segment.pauseDurationMs > 0 {
-                utterance.preUtteranceDelay = TimeInterval(segment.pauseDurationMs) / 1_000.0
+                utterance.postUtteranceDelay = TimeInterval(segment.pauseDurationMs) / 1_000.0
             }
             return utterance
         }
-        guard !utterances.isEmpty else { return }
-        speak(utterances)
+        guard !utterances.isEmpty else {
+            onFinished(KotlinBoolean(bool: true))
+            return
+        }
+
+        AudioSessionHelper.activatePlayback()
+        request = (utterances, onFinished)
+        utterances.forEach { synth.speak($0) }
     }
 
-    private func speak(_ utterances: [AVSpeechUtterance]) {
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
-        try? AVAudioSession.sharedInstance().setActive(true, options: [])
+    func pause() {
+        _ = synth.pauseSpeaking(at: .immediate)
+    }
 
-        for utterance in utterances {
-            synth.speak(utterance)
+    func resume() {
+        _ = synth.continueSpeaking()
+    }
+
+    func stop() {
+        finishRequest(spoken: false)
+        synth.stopSpeaking(at: .immediate)
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        if let request, request.utterances.last === utterance {
+            finishRequest(spoken: true)
         }
     }
 
-    private func buildUtterances(
-        for text: String,
-        primaryLanguage: String?,
-        secondaryLanguage: String?,
-        secondaryLanguageRanges: [NSRange]
-    ) -> [AVSpeechUtterance] {
-        let nsText = text as NSString
-        let totalLength = nsText.length
-        guard totalLength > 0 else { return [] }
-
-        let primaryNormalized = primaryLanguage?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let secondaryNormalized = secondaryLanguage?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let supportsSecondary = {
-            guard let sec = secondaryNormalized, !sec.isEmpty else { return false }
-            guard let pri = primaryNormalized, !pri.isEmpty else { return true }
-            return sec.caseInsensitiveCompare(pri) != .orderedSame
-        }()
-
-        if !supportsSecondary || secondaryLanguageRanges.isEmpty {
-            return [makeUtterance(text: text, language: primaryLanguage)]
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        if let request, request.utterances.contains(where: { $0 === utterance }) {
+            finishRequest(spoken: false)
         }
-
-        let validRanges = mergedValidRanges(secondaryLanguageRanges, maxLength: totalLength)
-        if validRanges.isEmpty {
-            return [makeUtterance(text: text, language: primaryLanguage)]
-        }
-
-        var utterances: [AVSpeechUtterance] = []
-        var cursor = 0
-        for range in validRanges {
-            if range.location > cursor {
-                let primaryChunk = nsText.substring(with: NSRange(location: cursor, length: range.location - cursor))
-                if !primaryChunk.isEmpty {
-                    utterances.append(makeUtterance(text: primaryChunk, language: primaryLanguage))
-                }
-            }
-
-            let secondaryChunk = nsText.substring(with: range)
-            if !secondaryChunk.isEmpty {
-                utterances.append(makeUtterance(text: secondaryChunk, language: secondaryLanguage))
-            }
-            cursor = range.location + range.length
-        }
-
-        if cursor < totalLength {
-            let trailing = nsText.substring(from: cursor)
-            if !trailing.isEmpty {
-                utterances.append(makeUtterance(text: trailing, language: primaryLanguage))
-            }
-        }
-
-        return utterances
     }
 
-    private func makeUtterance(text: String, language: String?) -> AVSpeechUtterance {
-        let utterance = AVSpeechUtterance(string: text)
-        if let voice = resolveVoice(for: language) {
-            utterance.voice = voice
-        }
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-        return utterance
-    }
-
-    private func mergedValidRanges(_ ranges: [NSRange], maxLength: Int) -> [NSRange] {
-        let sorted = ranges
-            .filter { $0.location != NSNotFound && $0.length > 0 && $0.location + $0.length <= maxLength }
-            .sorted { $0.location < $1.location }
-
-        guard !sorted.isEmpty else { return [] }
-
-        var merged: [NSRange] = []
-        for range in sorted {
-            if let last = merged.last {
-                let lastEnd = last.location + last.length
-                let rangeEnd = range.location + range.length
-                if range.location <= lastEnd {
-                    merged[merged.count - 1] = NSRange(location: last.location, length: max(lastEnd, rangeEnd) - last.location)
-                } else {
-                    merged.append(range)
-                }
-            } else {
-                merged.append(range)
-            }
-        }
-        return merged
+    private func finishRequest(spoken: Bool) {
+        guard let finished = request else { return }
+        request = nil
+        finished.onFinished(KotlinBoolean(bool: spoken))
     }
 
     private func resolveVoice(for language: String?) -> AVSpeechSynthesisVoice? {
@@ -213,13 +149,5 @@ final class SystemTtsManager: NSObject, AVSpeechSynthesizerDelegate {
     private func languageCodeOnly(from value: String) -> String {
         let normalized = value.replacingOccurrences(of: "_", with: "-").lowercased()
         return normalized.split(separator: "-").first.map(String.init) ?? ""
-    }
-
-    func pause() {
-        _ = synth.pauseSpeaking(at: .immediate)
-    }
-
-    func stop() {
-        synth.stopSpeaking(at: .immediate)
     }
 }
