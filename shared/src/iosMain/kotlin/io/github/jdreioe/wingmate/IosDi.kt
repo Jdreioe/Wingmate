@@ -37,6 +37,7 @@ import io.github.jdreioe.wingmate.application.SettingsFacade
 import io.github.jdreioe.wingmate.application.BoardsFacade
 import io.github.jdreioe.wingmate.application.CommunicationFacade
 import io.github.jdreioe.wingmate.application.CommunicationSessionFacade
+import io.github.jdreioe.wingmate.application.TypingScreenFacade
 import io.github.jdreioe.wingmate.infrastructure.IosBackupMediaAccess
 import io.github.jdreioe.wingmate.platform.ShareService
 import io.github.jdreioe.wingmate.platform.FilePicker
@@ -126,4 +127,5 @@ class IosDiBridge {
     fun boardsFacade(): BoardsFacade = KoinPlatform.getKoin().get()
     fun communicationFacade(): CommunicationFacade = KoinPlatform.getKoin().get()
     fun communicationSessionFacade(): CommunicationSessionFacade = KoinPlatform.getKoin().get()
+    fun typingScreenFacade(): TypingScreenFacade = KoinPlatform.getKoin().get()
 }
