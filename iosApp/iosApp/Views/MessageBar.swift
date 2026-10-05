@@ -122,5 +122,6 @@ struct HeldMessageRow: View {
         .padding(.vertical, 2)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(.secondarySystemFill)))
         .accessibilityElement(children: .contain)
+        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
     }
 }

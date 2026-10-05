@@ -28,27 +28,26 @@ struct TypingTrayView: View {
     @State private var categoryMenu: Shared.Phrase? = nil
     @State private var confirmDeleteCategory: Shared.Phrase? = nil
 
-    private var rows: [[Shared.TypingTrayElement]] {
-        Dictionary(grouping: tray.elements, by: { Int($0.row) })
-            .sorted { $0.key < $1.key }
-            .map { $0.value.sorted { $0.column < $1.column } }
-    }
-
     var body: some View {
-        GeometryReader { proxy in
-            VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    HStack(spacing: 0) {
-                        ForEach(Array(row.enumerated()), id: \.offset) { _, element in
-                            elementView(element)
-                                .frame(width: proxy.size.width * CGFloat(element.columnSpan) / CGFloat(max(1, tray.gridColumns)))
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .frame(maxHeight: row.contains { $0.kind == .phraseCollection } ? .infinity : nil)
-                }
+        TypingTrayLayout(columns: max(1, Int(tray.gridColumns))) {
+            ForEach(Array(tray.elements.enumerated()), id: \.offset) { _, element in
+                elementView(element)
+                    .layoutValue(
+                        key: TrayPlacement.self,
+                        value: TrayPlacement.Value(
+                            row: Int(element.row),
+                            column: Int(element.column),
+                            rowSpan: Int(element.rowSpan),
+                            columnSpan: Int(element.columnSpan),
+                            // Chips and Action Buttons stay full-size touch targets.
+                            minimumHeight: element.kind == .pageNavigation ? 48
+                                : element.kind == .actionStrip ? 64 : 0
+                        )
+                    )
             }
         }
+        .onChange(of: model.historyVisible) { _, _ in leaveHistoryIfUnavailable() }
+        .onChange(of: model.historyPhrases.isEmpty) { _, _ in leaveHistoryIfUnavailable() }
         .confirmationDialog(
             categoryMenu?.text ?? "",
             isPresented: Binding(get: { categoryMenu != nil }, set: { if !$0 { categoryMenu = nil } }),
@@ -78,20 +77,25 @@ struct TypingTrayView: View {
     private func elementView(_ element: Shared.TypingTrayElement) -> some View {
         if element.kind == .pageNavigation {
             pageNavigation(showAdd: element.showAddCategory)
-                .frame(minHeight: 48)
         } else if element.kind == .phraseCollection {
             phraseCollection
-                .frame(maxHeight: .infinity)
         } else {
             VStack(spacing: 0) {
                 Divider()
                 TypingActionStrip(model: model, actions: element.actions, onShowKeyboard: onShowKeyboard)
-                    .frame(height: 64)
             }
+            .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
         }
     }
 
     // MARK: - Page navigation
+
+    private var historyAvailable: Bool { model.historyVisible && !model.historyPhrases.isEmpty }
+
+    /// History can disappear while open (turned off in Settings); fall back to All Phrases.
+    private func leaveHistoryIfUnavailable() {
+        if page == .history && !historyAvailable { selectPage(.all) }
+    }
 
     private func selectPage(_ newPage: TypingPage) {
         page = newPage
@@ -123,7 +127,7 @@ struct TypingTrayView: View {
                     .accessibilityAddTraits(selected ? .isSelected : [])
                     .accessibilityHint(Text(selected ? "accessibility.category.menu_hint" : ""))
                 }
-                if model.historyVisible && !model.historyPhrases.isEmpty {
+                if historyAvailable {
                     CategoryChip(
                         title: NSLocalizedString("categories.history", comment: ""),
                         selected: page == .history,
@@ -169,6 +173,14 @@ struct TypingTrayView: View {
 
     // MARK: - Phrase collection
 
+    /// Orders VoiceOver and switch scanning by the scan-order setting; higher goes first.
+    private func scanPriority(index: Int, count: Int) -> Double {
+        let columns = max(1, Int(tray.phraseColumns))
+        guard model.scanPhraseGridOrder == "column-major" else { return Double(100_000 - index) }
+        let rows = Int(ceil(Double(count) / Double(columns)))
+        return Double(100_000 - ((index % columns) * rows + index / columns))
+    }
+
     private var pagePhrases: [Shared.Phrase] {
         switch page {
         case .all: return model.state.phrases
@@ -208,6 +220,7 @@ struct TypingTrayView: View {
                             requestMutation { model.movePhrase(movedId, onto: phrase.id) }
                         }
                     )
+                    .accessibilitySortPriority(scanPriority(index: index, count: phrases.count))
                 }
                 if !isHistory {
                     Button(action: { requestMutation(onAddPhrase) }) {
@@ -350,6 +363,68 @@ private struct TypingActionButton: View {
         guard enabled else { return }
         for effect in action.effects {
             if effect.kind == .keyboard { onShowKeyboard() } else { model.performTypingEffect(effect) }
+        }
+    }
+}
+
+/// Where a Page element sits on the template's grid.
+private struct TrayPlacement: LayoutValueKey {
+    struct Value {
+        var row = 0
+        var column = 0
+        var rowSpan = 1
+        var columnSpan = 1
+        var minimumHeight: CGFloat = 0
+    }
+
+    static let defaultValue = Value()
+}
+
+/// Places Page elements on the template's grid, as Android does: rows holding Page
+/// navigation or an Action strip keep their minimum height, and rows without one
+/// (the Phrase collection) share the rest of the tray.
+private struct TypingTrayLayout: Layout {
+    let columns: Int
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let placements = subviews.map { $0[TrayPlacement.self] }
+        let rows = max(1, placements.map { $0.row + max(1, $0.rowSpan) }.max() ?? 1)
+        var minimums = Array(repeating: CGFloat(0), count: rows)
+        for placement in placements {
+            let span = max(1, placement.rowSpan)
+            for row in placement.row..<min(placement.row + span, rows) where row >= 0 {
+                minimums[row] = max(minimums[row], placement.minimumHeight / CGFloat(span))
+            }
+        }
+        let heights = Self.rowHeights(minimums: minimums, height: bounds.height)
+        let tops = heights.reduce(into: [CGFloat(0)]) { $0.append($0.last! + $1) }
+        for (subview, placement) in zip(subviews, placements) {
+            let firstRow = min(max(placement.row, 0), rows - 1)
+            let lastRow = min(firstRow + max(1, placement.rowSpan), rows)
+            let firstColumn = min(max(placement.column, 0), columns - 1)
+            let lastColumn = min(firstColumn + max(1, placement.columnSpan), columns)
+            let left = bounds.width * CGFloat(firstColumn) / CGFloat(columns)
+            let right = bounds.width * CGFloat(lastColumn) / CGFloat(columns)
+            subview.place(
+                at: CGPoint(x: bounds.minX + left, y: bounds.minY + tops[firstRow]),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: right - left, height: tops[lastRow] - tops[firstRow])
+            )
+        }
+    }
+
+    /// Rows with a minimum keep exactly that; the others share what is left. With no
+    /// flexible rows, the spare height is spread over all rows.
+    private static func rowHeights(minimums: [CGFloat], height: CGFloat) -> [CGFloat] {
+        let remaining = max(0, height - minimums.reduce(0, +))
+        let flexible = minimums.filter { $0 == 0 }.count
+        return minimums.map { minimum in
+            if flexible == 0 { return minimum + remaining / CGFloat(minimums.count) }
+            return minimum > 0 ? minimum : remaining / CGFloat(flexible)
         }
     }
 }

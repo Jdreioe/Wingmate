@@ -126,8 +126,6 @@ final class IosViewModel: ObservableObject {
 
     // History items exposed as phrases for UI rendering
     @Published var historyPhrases: [Shared.Phrase] = []
-    // Special selection for History view
-    let historyCategoryId = "__history__"
 
     // Speech engine preference. The session falls back to the device voice by itself.
     @Published var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
@@ -517,19 +515,9 @@ final class IosViewModel: ObservableObject {
         store?.accept(intent: Shared.PhraseListStoreIntent.DeletePhrase(phraseId: id))
     }
 
+    /// Selects the Category that Phrases added from the tray go into.
     func selectCategory(id: String?) {
-        // Toggle history mode if the special ID is selected
-        if id == historyCategoryId {
-            // Keep the store's selectedCategoryId nil to avoid filtering real phrases
-            store?.accept(intent: Shared.PhraseListStoreIntent.SelectCategory(categoryId: nil))
-        } else {
-            store?.accept(intent: Shared.PhraseListStoreIntent.SelectCategory(categoryId: id))
-        }
-    }
-
-    var filteredPhrases: [Shared.Phrase] {
-        guard let sel = state.selectedCategoryId, !sel.isEmpty else { return state.phrases }
-        return state.phrases.filter { $0.parentId == sel }
+        store?.accept(intent: Shared.PhraseListStoreIntent.SelectCategory(categoryId: id))
     }
 
     // MARK: - Message (shared Communication session)
@@ -551,7 +539,12 @@ final class IosViewModel: ObservableObject {
             resolveScreenButtonLooks(for: state.activeMessage.parts + (state.heldMessage?.parts ?? []))
         }
         if heldMessageText != state.heldMessage?.displayText { heldMessageText = state.heldMessage?.displayText }
-        if playback != state.playback { playback = state.playback }
+        if playback != state.playback {
+            // A finished Message may have just entered History.
+            let finished = state.playback == .idle
+            playback = state.playback
+            if finished && historyVisible { Task { await loadHistory() } }
+        }
         if sessionNotice != state.notice { sessionNotice = state.notice }
         if sessionIsSaving != state.isSaving { sessionIsSaving = state.isSaving }
         if messageLoaded != state.isLoaded { messageLoaded = state.isLoaded }
@@ -594,7 +587,6 @@ final class IosViewModel: ObservableObject {
         guard !phrase.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let selection = clampedSelectionRange(inputSelectionRange, maxLength: (input as NSString).length)
         let behavior = typingTray?.activationBehavior ?? .speakOnly
-        let textBefore = input
         var activation: Shared.NativePhraseActivation?
         editMessage {
             activation = session.activatePhrase(
@@ -606,7 +598,7 @@ final class IosViewModel: ObservableObject {
         }
         guard let activation else { return }
         // A speak-only activation leaves the Message and its selection alone.
-        if input != textBefore { inputSelectionRange = NSRange(location: Int(activation.cursor), length: 0) }
+        if behavior != .speakOnly { inputSelectionRange = NSRange(location: Int(activation.cursor), length: 0) }
         if activation.shouldSpeak { speakPhrase(phrase) }
     }
 

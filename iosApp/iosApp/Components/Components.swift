@@ -554,8 +554,15 @@ struct PhraseItemView: View {
             tile
                 .accessibilityAction(named: Text("accessibility.phrase.edit_action")) { onEdit() }
                 .accessibilityAction(named: Text("accessibility.phrase.delete_action")) { onDelete(phrase.id) }
-                .accessibilityAction(named: Text("accessibility.reorder.move_earlier")) { onMoveEarlier?() }
-                .accessibilityAction(named: Text("accessibility.reorder.move_later")) { onMoveLater?() }
+                .accessibilityActions {
+                    // Offered only where this Phrase can move.
+                    if let onMoveEarlier {
+                        Button("accessibility.reorder.move_earlier", action: onMoveEarlier)
+                    }
+                    if let onMoveLater {
+                        Button("accessibility.reorder.move_later", action: onMoveLater)
+                    }
+                }
                 .contextMenu {
                     Button { onEdit() } label: { Label("phrase.edit", systemImage: "pencil") }
                     Button { model.speakPhrase(phrase) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
@@ -569,8 +576,8 @@ struct PhraseItemView: View {
                 }
                 .draggable(phrase.id)
                 .dropDestination(for: String.self) { ids, _ in
-                    guard let moved = ids.first, moved != phrase.id else { return false }
-                    onDrop?(moved)
+                    guard let onDrop, let moved = ids.first, moved != phrase.id else { return false }
+                    onDrop(moved)
                     return true
                 }
         } else {

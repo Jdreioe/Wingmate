@@ -5,6 +5,7 @@ import UIKit
 
 struct ContentView: View {
     @StateObject private var model = IosViewModel()
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showVoiceSheet = false
     @State private var showLanguageSheet = false
     @State private var showSecondaryLanguageSheet = false
@@ -158,6 +159,10 @@ struct ContentView: View {
                     .padding(8)
                 }
                 #endif
+            }
+            // Editing access relocks whenever Wingmate leaves the foreground, in either workspace.
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { model.lockEditingAccess() }
             }
             .onKeyPress(phases: [.down, .up]) { press -> KeyPress.Result in
                 guard !shouldShowWelcomeFlow else { return .ignored }

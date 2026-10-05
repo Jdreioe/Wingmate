@@ -100,7 +100,19 @@ struct TypingWorkspaceView: View {
         // The app bar gives way to the Message while the keyboard is up.
         .toolbar(onScreenKeyboard ? .hidden : .visible, for: .navigationBar)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { fullscreenButton }
+            ToolbarItem(placement: .topBarLeading) {
+                fullscreenButton
+                    .accessibilityHidden(model.scanningEnabled && !model.scanTopBarEnabled)
+            }
+        }
+        .onAppear {
+            // The workspace starts on the Page the Phrase store has selected, so the shown
+            // Page and the Category new Phrases go into agree.
+            if let id = model.state.selectedCategoryId, model.state.categories.contains(where: { $0.id == id }) {
+                page = .category(id)
+            } else {
+                model.selectCategory(id: nil)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
             let height = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height ?? 0
@@ -162,6 +174,7 @@ struct TypingWorkspaceView: View {
                 })
             )
             .frame(height: 56)
+            .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
         } else {
             if onScreenKeyboard && !actionStripActions.isEmpty {
                 TypingActionStrip(
@@ -172,6 +185,7 @@ struct TypingWorkspaceView: View {
                 )
                 .frame(height: 56)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+                .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
             }
             if let held = model.heldMessageText {
                 HeldMessageRow(model: model, heldText: held)
