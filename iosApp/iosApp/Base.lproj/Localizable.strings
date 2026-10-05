@@ -258,32 +258,21 @@
 "settings.privacy.board_cache" = "Screen sentence caching";
 "settings.privacy.board_cache.footer" = "Choose per screen whether complete spoken sentences are cached. Turning this off improves privacy, but replaying a sentence may synthesize it again and use more speech-service tokens.";
 
-"reorder.banner.title" = "Reorder Mode";
-"reorder.banner.subtitle" = "Drag phrases to reorder them";
-"reorder.banner.done_hint" = "Tap Done when finished";
 
 "history.empty" = "No history yet";
 
 "playback.play" = "Play";
 "playback.pause" = "Pause";
 "playback.stop" = "Stop";
-"playback.hold_thought" = "Hold that thought";
-"playback.restore_thought" = "Restore thought";
 
 "accessibility.playback.play_hint" = "Speaks the text in the input field";
-"accessibility.playback.pause_hint" = "Pauses speech playback";
-"accessibility.playback.stop_hint" = "Stops speech playback";
-"accessibility.playback.clear_hint" = "Clears the text in the input field";
-"accessibility.playback.hold_thought_hint" = "Saves the current input and clears the input field.";
 "accessibility.playback.restore_thought_hint" = "Restores the held input and keeps current text on hold.";
 
-"accessibility.phrase.wiggle_hint" = "Double tap to activate. Use accessibility actions to move this phrase.";
-"accessibility.phrase.insert_hint" = "Double tap to insert this phrase into the input field.";
+"accessibility.phrase.insert_hint" = "Double tap to use this phrase.";
 "accessibility.phrase.speak_action" = "Speak phrase";
 "accessibility.phrase.edit_action" = "Edit phrase";
 "accessibility.phrase.delete_action" = "Delete phrase";
 
-"accessibility.reorder.move_hint" = "Double tap to activate. Swipe up or down to move this phrase.";
 "accessibility.reorder.move_earlier" = "Move earlier";
 "accessibility.reorder.move_later" = "Move later";
 
@@ -537,3 +526,17 @@
 "communication.playback_failed" = "Speech could not finish. Your Message is still available; try speaking again.";
 "communication.speech_fallback" = "The cloud voice was unavailable, so your device voice spoke instead.";
 "common.dismiss" = "Dismiss";
+
+/* Typing composer */
+"typing.show_keyboard" = "Show keyboard";
+"typing.show_screen" = "Show Typing Screen";
+"typing.held_message" = "Held: %@";
+"typing.held_message.swap" = "Swap";
+"typing.tray.resize" = "Typing Screen height";
+"typing.tray.unavailable" = "The Typing Screen could not be loaded.";
+"typing.action.unsupported" = "Unsupported action. This button is kept as it is.";
+"typing.action.unavailable" = "Action unavailable right now.";
+"playback.resume" = "Resume";
+"category.move_left" = "Move left";
+"category.move_right" = "Move right";
+"accessibility.category.menu_hint" = "Double tap to move or delete this category.";

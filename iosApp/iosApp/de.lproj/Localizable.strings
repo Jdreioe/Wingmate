@@ -169,32 +169,21 @@
 "settings.ui_size.chip_font" = "Chip-Schrift";
 "settings.ui_size.playback_icon" = "Wiedergabesymbol";
 
-"reorder.banner.title" = "Neuordnungsmodus";
-"reorder.banner.subtitle" = "Phrasen ziehen, um sie neu anzuordnen";
-"reorder.banner.done_hint" = "Tippe auf Fertig, wenn du fertig bist";
 
 "history.empty" = "Noch kein Verlauf";
 
 "playback.play" = "Abspielen";
 "playback.pause" = "Pause";
 "playback.stop" = "Stopp";
-"playback.hold_thought" = "Gedanken merken";
-"playback.restore_thought" = "Gedanken wiederherstellen";
 
 "accessibility.playback.play_hint" = "Spricht den Text im Eingabefeld";
-"accessibility.playback.pause_hint" = "Pausiert die Sprachausgabe";
-"accessibility.playback.stop_hint" = "Stoppt die Sprachausgabe";
-"accessibility.playback.clear_hint" = "Löscht den Text im Eingabefeld";
-"accessibility.playback.hold_thought_hint" = "Merkt sich die aktuelle Eingabe und leert das Eingabefeld.";
 "accessibility.playback.restore_thought_hint" = "Stellt die gemerkte Eingabe wieder her und legt den aktuellen Text zurück.";
 
-"accessibility.phrase.wiggle_hint" = "Doppeltippen zum Aktivieren. Verwende Bedienungshilfen-Aktionen, um diese Phrase zu verschieben.";
-"accessibility.phrase.insert_hint" = "Doppeltippen, um diese Phrase in das Eingabefeld einzufügen.";
+"accessibility.phrase.insert_hint" = "Doppeltippen, um diese Phrase zu verwenden.";
 "accessibility.phrase.speak_action" = "Phrase sprechen";
 "accessibility.phrase.edit_action" = "Phrase bearbeiten";
 "accessibility.phrase.delete_action" = "Phrase löschen";
 
-"accessibility.reorder.move_hint" = "Doppeltippen zum Aktivieren. Nach oben oder unten streichen, um diese Phrase zu verschieben.";
 "accessibility.reorder.move_earlier" = "Früher verschieben";
 "accessibility.reorder.move_later" = "Später verschieben";
 
@@ -474,3 +463,17 @@
 "communication.playback_failed" = "Die Sprachausgabe konnte nicht beendet werden. Deine Nachricht ist noch da; versuche es erneut.";
 "communication.speech_fallback" = "Die Cloud-Stimme war nicht verfügbar, deshalb hat die Gerätestimme gesprochen.";
 "common.dismiss" = "Schließen";
+
+/* Typing composer */
+"typing.show_keyboard" = "Tastatur zeigen";
+"typing.show_screen" = "Schreibbildschirm zeigen";
+"typing.held_message" = "Geparkt: %@";
+"typing.held_message.swap" = "Tauschen";
+"typing.tray.resize" = "Höhe des Schreibbildschirms";
+"typing.tray.unavailable" = "Der Schreibbildschirm konnte nicht geladen werden.";
+"typing.action.unsupported" = "Nicht unterstützte Aktion. Die Taste bleibt unverändert erhalten.";
+"typing.action.unavailable" = "Aktion gerade nicht verfügbar.";
+"playback.resume" = "Fortsetzen";
+"category.move_left" = "Nach links";
+"category.move_right" = "Nach rechts";
+"accessibility.category.menu_hint" = "Doppeltippen, um diese Kategorie zu verschieben oder zu löschen.";

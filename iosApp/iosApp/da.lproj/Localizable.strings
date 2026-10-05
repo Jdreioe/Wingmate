@@ -171,32 +171,21 @@
 "settings.ui_size.chip_font" = "Chip-skrift";
 "settings.ui_size.playback_icon" = "Afspilningsikon";
 
-"reorder.banner.title" = "Omarrangeringstilstand";
-"reorder.banner.subtitle" = "Træk fraser for at omarrangere dem";
-"reorder.banner.done_hint" = "Tryk Færdig når du er done";
 
 "history.empty" = "Ingen historik endnu";
 
 "playback.play" = "Afspil";
 "playback.pause" = "Pause";
 "playback.stop" = "Stop";
-"playback.hold_thought" = "Gem tanken";
-"playback.restore_thought" = "Gendan tanke";
 
 "accessibility.playback.play_hint" = "Oplæser teksten i inputfeltet";
-"accessibility.playback.pause_hint" = "Pauser taleafspilning";
-"accessibility.playback.stop_hint" = "Stopper taleafspilning";
-"accessibility.playback.clear_hint" = "Rydder teksten i inputfeltet";
-"accessibility.playback.hold_thought_hint" = "Gemmer den nuværende input og rydder inputfeltet.";
 "accessibility.playback.restore_thought_hint" = "Gendanner den gemte input og gemmer nuværende tekst som holdt tanke.";
 
-"accessibility.phrase.wiggle_hint" = "Dobbelttryk for at aktivere. Brug tilgængelighedshandlinger til at flytte denne frase.";
-"accessibility.phrase.insert_hint" = "Dobbelttryk for at indsætte denne frase i inputfeltet.";
+"accessibility.phrase.insert_hint" = "Dobbelttryk for at bruge denne frase.";
 "accessibility.phrase.speak_action" = "Sig frase";
 "accessibility.phrase.edit_action" = "Rediger frase";
 "accessibility.phrase.delete_action" = "Slet frase";
 
-"accessibility.reorder.move_hint" = "Dobbelttryk for at aktivere. Stryg op eller ned for at flytte denne frase.";
 "accessibility.reorder.move_earlier" = "Flyt tidligere";
 "accessibility.reorder.move_later" = "Flyt senere";
 
@@ -513,3 +502,17 @@
 "communication.playback_failed" = "Oplæsningen kunne ikke gennemføres. Din besked er stadig tilgængelig. Prøv at læse den op igen.";
 "communication.speech_fallback" = "Stemmen i skyen var ikke tilgængelig, så enhedens stemme læste op i stedet.";
 "common.dismiss" = "Luk";
+
+/* Typing composer */
+"typing.show_keyboard" = "Vis tastatur";
+"typing.show_screen" = "Vis skriveskærm";
+"typing.held_message" = "Parkeret: %@";
+"typing.held_message.swap" = "Byt";
+"typing.tray.resize" = "Skriveskærmens højde";
+"typing.tray.unavailable" = "Skriveskærmen kunne ikke indlæses.";
+"typing.action.unsupported" = "Handlingen understøttes ikke. Knappen bevares, som den er.";
+"typing.action.unavailable" = "Handlingen er ikke tilgængelig lige nu.";
+"playback.resume" = "Fortsæt";
+"category.move_left" = "Flyt til venstre";
+"category.move_right" = "Flyt til højre";
+"accessibility.category.menu_hint" = "Dobbelttryk for at flytte eller slette denne kategori.";
