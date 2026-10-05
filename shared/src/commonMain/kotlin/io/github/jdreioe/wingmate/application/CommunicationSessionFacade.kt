@@ -105,15 +105,18 @@ class CommunicationSessionFacade(
      * speech policy. Adding replaces the selection [start, endExclusive) with it as one
      * Phrase part, so its recording plays when the Message is spoken, with a space on
      * either side where needed. Speaking is left to the caller, which knows the voice.
+     * Until the Typing Screen has loaded, [activationBehavior] is null and the Phrase
+     * is only spoken, the Typing Screen's default.
      */
     fun activatePhrase(
         phrase: Phrase,
         start: Int,
         endExclusive: Int,
-        activationBehavior: BoardActivationBehavior,
+        activationBehavior: BoardActivationBehavior?,
     ): NativePhraseActivation {
-        val shouldSpeak = shouldSpeakSelectionImmediately(settings.getCurrentSettings().speechPolicy, activationBehavior)
-        if (!shouldAddBoardSelection(activationBehavior)) return NativePhraseActivation(start, shouldSpeak)
+        val behavior = activationBehavior ?: BoardActivationBehavior.SpeakOnly
+        val shouldSpeak = shouldSpeakSelectionImmediately(settings.getCurrentSettings().speechPolicy, behavior)
+        if (!shouldAddBoardSelection(behavior)) return NativePhraseActivation(start, shouldSpeak)
         val message = session.state.value.activeMessage
         val text = message.displayText
         val at = start.coerceIn(0, text.length)

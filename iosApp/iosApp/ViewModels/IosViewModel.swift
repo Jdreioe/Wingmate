@@ -541,7 +541,7 @@ final class IosViewModel: ObservableObject {
         if heldMessageText != state.heldMessage?.displayText { heldMessageText = state.heldMessage?.displayText }
         if playback != state.playback {
             // A finished Message may have just entered History.
-            let finished = state.playback == .idle
+            let finished = state.playback.name == "Idle"
             playback = state.playback
             if finished && historyVisible { Task { await loadHistory() } }
         }
@@ -586,7 +586,8 @@ final class IosViewModel: ObservableObject {
         guard acceptActivation(targetId: phrase.id) else { return }
         guard !phrase.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let selection = clampedSelectionRange(inputSelectionRange, maxLength: (input as NSString).length)
-        let behavior = typingTray?.activationBehavior ?? .speakOnly
+        // Before the Typing Screen loads, the session falls back to speak-only.
+        let behavior = typingTray?.activationBehavior
         var activation: Shared.NativePhraseActivation?
         editMessage {
             activation = session.activatePhrase(
@@ -598,7 +599,7 @@ final class IosViewModel: ObservableObject {
         }
         guard let activation else { return }
         // A speak-only activation leaves the Message and its selection alone.
-        if behavior != .speakOnly { inputSelectionRange = NSRange(location: Int(activation.cursor), length: 0) }
+        if let behavior, behavior.name != "SpeakOnly" { inputSelectionRange = NSRange(location: Int(activation.cursor), length: 0) }
         if activation.shouldSpeak { speakPhrase(phrase) }
     }
 
@@ -606,21 +607,21 @@ final class IosViewModel: ObservableObject {
     /// keyboard effect belongs to the view, which owns the Message field's focus.
     func performTypingEffect(_ effect: Shared.TypingEffect) {
         let kind = effect.kind
-        if kind == .insertText || kind == .wrapSelection || kind == .backspace {
+        if kind.name == "InsertText" || kind.name == "WrapSelection" || kind.name == "Backspace" {
             editSelection(effect)
-        } else if kind == .clear {
+        } else if kind.name == "Clear" {
             clearMessage()
-        } else if kind == .speak {
+        } else if kind.name == "Speak" {
             speakMessage()
-        } else if kind == .pause {
+        } else if kind.name == "Pause" {
             pauseSpeech()
-        } else if kind == .resume {
+        } else if kind.name == "Resume" {
             resumeSpeech()
-        } else if kind == .stop {
+        } else if kind.name == "Stop" {
             stopSpeech()
-        } else if kind == .secondaryLanguage {
+        } else if kind.name == "SecondaryLanguage" {
             markSelectionAsSecondaryLanguage(range: inputSelectionRange)
-        } else if kind == .holdMessage {
+        } else if kind.name == "HoldMessage" {
             toggleHoldThatThought()
         }
     }
@@ -631,10 +632,10 @@ final class IosViewModel: ObservableObject {
         var range = selection
         var replacement = ""
         var cursor = selection.location
-        if effect.kind == .insertText {
+        if effect.kind.name == "InsertText" {
             replacement = effect.prefix
             cursor = selection.location + (replacement as NSString).length
-        } else if effect.kind == .wrapSelection {
+        } else if effect.kind.name == "WrapSelection" {
             let selected = text.substring(with: selection)
             replacement = effect.prefix + selected + effect.suffix
             cursor = selected.isEmpty

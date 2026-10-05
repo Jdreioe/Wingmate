@@ -40,8 +40,8 @@ struct TypingTrayView: View {
                             rowSpan: Int(element.rowSpan),
                             columnSpan: Int(element.columnSpan),
                             // Chips and Action Buttons stay full-size touch targets.
-                            minimumHeight: element.kind == .pageNavigation ? 48
-                                : element.kind == .actionStrip ? 64 : 0
+                            minimumHeight: element.kind.name == "PageNavigation" ? 48
+                                : element.kind.name == "ActionStrip" ? 64 : 0
                         )
                     )
             }
@@ -75,9 +75,9 @@ struct TypingTrayView: View {
 
     @ViewBuilder
     private func elementView(_ element: Shared.TypingTrayElement) -> some View {
-        if element.kind == .pageNavigation {
+        if element.kind.name == "PageNavigation" {
             pageNavigation(showAdd: element.showAddCategory)
-        } else if element.kind == .phraseCollection {
+        } else if element.kind.name == "PhraseCollection" {
             phraseCollection
         } else {
             VStack(spacing: 0) {
@@ -281,43 +281,44 @@ private struct TypingActionButton: View {
     }
 
     private var isSsml: Bool {
-        !action.effects.isEmpty && action.effects.allSatisfy { $0.kind == .insertText || $0.kind == .wrapSelection }
+        !action.effects.isEmpty && action.effects.allSatisfy { $0.kind.name == "InsertText" || $0.kind.name == "WrapSelection" }
     }
 
     private var unsupported: Bool {
-        action.effects.contains { $0.kind == .unsupported }
+        action.effects.contains { $0.kind.name == "Unsupported" }
     }
 
     private var enabled: Bool {
         guard !action.effects.isEmpty, !unsupported else { return false }
         return action.effects.allSatisfy { effect in
             let kind = effect.kind
-            if kind == .pause { return model.playback == .playing || model.playback == .preparing }
-            if kind == .resume { return model.playback == .paused }
-            if kind == .stop { return model.playback != .idle }
-            if kind == .secondaryLanguage { return model.hasUsableSecondaryLanguage }
+            if kind.name == "Pause" { return model.playback.name == "Playing" || model.playback.name == "Preparing" }
+            if kind.name == "Resume" { return model.playback.name == "Paused" }
+            if kind.name == "Stop" { return model.playback.name != "Idle" }
+            if kind.name == "SecondaryLanguage" { return model.hasUsableSecondaryLanguage }
             return true
         }
     }
 
     private var label: String {
-        if single == .secondaryLanguage, !model.secondaryLanguage.isEmpty {
+        if single?.name == "SecondaryLanguage", !model.secondaryLanguage.isEmpty {
             return (model.secondaryLanguage.split(separator: "-").first.map(String.init) ?? model.secondaryLanguage).uppercased()
         }
         return action.label
     }
 
     private var icon: String? {
-        guard let single else { return nil }
-        if single == .holdMessage { return "bookmark.fill" }
-        if single == .secondaryLanguage { return "character.bubble" }
-        if single == .pause { return "pause.fill" }
-        if single == .resume || single == .speak { return "play.fill" }
-        if single == .stop { return "stop.fill" }
-        if single == .backspace { return "delete.left" }
-        if single == .clear { return "xmark" }
-        if single == .keyboard { return "keyboard" }
-        return nil
+        switch single?.name {
+        case "HoldMessage": return "bookmark.fill"
+        case "SecondaryLanguage": return "character.bubble"
+        case "Pause": return "pause.fill"
+        case "Resume", "Speak": return "play.fill"
+        case "Stop": return "stop.fill"
+        case "Backspace": return "delete.left"
+        case "Clear": return "xmark"
+        case "Keyboard": return "keyboard"
+        default: return nil
+        }
     }
 
     var body: some View {
@@ -337,7 +338,7 @@ private struct TypingActionButton: View {
                 if isSsml {
                     shape.stroke(Color(.separator), lineWidth: 1)
                 } else {
-                    shape.fill(single == .secondaryLanguage ? Color.accentColor.opacity(0.2) : Color(.secondarySystemFill))
+                    shape.fill(single?.name == "SecondaryLanguage" ? Color.accentColor.opacity(0.2) : Color(.secondarySystemFill))
                 }
             }
             .contentShape(shape)
@@ -362,7 +363,7 @@ private struct TypingActionButton: View {
     private func perform() {
         guard enabled else { return }
         for effect in action.effects {
-            if effect.kind == .keyboard { onShowKeyboard() } else { model.performTypingEffect(effect) }
+            if effect.kind.name == "Keyboard" { onShowKeyboard() } else { model.performTypingEffect(effect) }
         }
     }
 }

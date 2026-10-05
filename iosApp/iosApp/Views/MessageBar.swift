@@ -12,8 +12,8 @@ struct SpeechControls: View {
     let onSpeak: () -> Void
 
     var body: some View {
-        let paused = model.playback == .paused
-        let playing = model.playback == .playing || model.playback == .preparing
+        let paused = model.playback.name == "Paused"
+        let playing = model.playback.name == "Playing" || model.playback.name == "Preparing"
         HStack(alignment: .bottom, spacing: 8) {
             if paused || playing {
                 Button(action: model.stopSpeech) {

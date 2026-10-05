@@ -49,7 +49,7 @@ struct TypingWorkspaceView: View {
 
     private var actionStripActions: [Shared.TypingTrayAction] {
         (model.typingTray?.elements ?? [])
-            .filter { $0.kind == .actionStrip }
+            .filter { $0.kind.name == "ActionStrip" }
             .flatMap { $0.actions }
     }
 
