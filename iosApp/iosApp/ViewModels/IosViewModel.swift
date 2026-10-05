@@ -54,9 +54,6 @@ struct SentencePhraseToken: Identifiable, Equatable {    var id: String = UUID()
 
 @MainActor
 final class IosViewModel: ObservableObject {
-    private enum PendingSpeechRetry {
-        case text(String)
-    }
     private final class StoreObserver: NSObject, Shared.RxObserver {
         private let onNextState: (Shared.PhraseListStoreState) -> Void
         private let onCompleteState: () -> Void
@@ -73,35 +70,7 @@ final class IosViewModel: ObservableObject {
     }
     private var store: Shared.PhraseListStore?
     private var disposable: Shared.RxDisposable?
-    private let hybrid = HybridSpeechPlayer()
-    private lazy var azureSequencer: AzureHybridSequencer = {
-        AzureHybridSequencer(
-            speak: { [weak self] text in
-                guard let self = self else { return }
-                do {
-                    try await self.speechFacade.speak(text: text)
-                } catch {
-                    self.setSpeechFailure(retry: .text(text))
-                }
-            },
-            pause: { [weak self] in
-                guard let self = self else { return }
-                do {
-                    try await self.speechFacade.pause()
-                } catch {
-                    self.setSpeechFailure()
-                }
-            },
-            stop: { [weak self] in
-                guard let self = self else { return }
-                do {
-                    try await self.speechFacade.stop()
-                } catch {
-                    self.setSpeechFailure()
-                }
-            }
-        )
-    }()
+    private var buttonSoundPlayer: AVAudioPlayer?
 
     @Published var state: Shared.PhraseListStoreState = Shared.PhraseListStoreState(phrases: [], categories: [], selectedCategoryId: nil, isLoading: true, error: nil)
 
@@ -112,25 +81,34 @@ final class IosViewModel: ObservableObject {
     private lazy var settingsFacade = IosDiBridge().settingsFacade()
     private lazy var boardsFacade = IosDiBridge().boardsFacade()
     private lazy var communicationFacade = IosDiBridge().communicationFacade()
+    private lazy var session = IosDiBridge().communicationSessionFacade()
+    private var sessionSubscription: Shared.NativeSubscription?
 
-    // UI state
-    @Published var input: String = ""
+    // The shared Message (#306). Kotlin's Communication session owns it; these mirror its
+    // state, and every edit goes through the session so Typing and Screens see one Message.
+    @Published private(set) var input: String = ""
     var inputSelectionRange: NSRange = NSRange(location: 0, length: 0)
-    @Published private(set) var hasHeldThought: Bool = false
+    @Published private(set) var messageParts: [Shared.MessagePart] = []
+    @Published private(set) var heldMessageText: String? = nil
+    @Published private(set) var playback: Shared.SessionPlayback = .idle
+    @Published private(set) var sessionNotice: Shared.SessionNotice? = nil
+    @Published private(set) var sessionIsSaving: Bool = false
+    var hasHeldThought: Bool { heldMessageText != nil }
     @Published var primaryLanguage: String = "en-US"
     @Published var secondaryLanguage: String = "en-US"
-    @Published var secondaryLanguageRanges: [NSRange] = []
+    @Published private(set) var secondaryLanguageRanges: [NSRange] = []
     @Published var selectedVoice: Shared.Voice? = nil
     @Published var availableLanguages: [String] = []
     // Predictions
     #if DEBUG
     @Published var predictions: Shared.PredictionResult = Shared.PredictionResult(words: [], letters: [])
     private var predictionJob: Task<Void, Never>? = nil
-    private var predictionSubscription: Shared.PredictionSubscription?
+    private var predictionSubscription: Shared.NativeSubscription?
     #endif
-    private var boardPredictionSubscription: Shared.PredictionSubscription?
+    private var boardPredictionSubscription: Shared.NativeSubscription?
 
     deinit {
+        sessionSubscription?.cancel()
         boardPredictionSubscription?.cancel()
         #if DEBUG
         predictionJob?.cancel()
@@ -143,14 +121,9 @@ final class IosViewModel: ObservableObject {
     // Special selection for History view
     let historyCategoryId = "__history__"
 
-    // Offline handling and System TTS fallback
-    @Published var showOfflineInfoOnce: Bool = false
-    // System TTS preference 
+    // Speech engine preference. The session falls back to the device voice by itself.
     @Published var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
     @Published var ttsEngine: String = UserDefaults.standard.string(forKey: "tts_engine") ?? "SYSTEM"
-    @Published var useSystemTtsWhenOffline: Bool = UserDefaults.standard.bool(forKey: "use_system_tts_when_offline")
-    // Mix recorded phrases inside sentences
-    @Published var mixRecordedPhrasesInSentences: Bool = UserDefaults.standard.bool(forKey: "mix_recorded_phrases")
     // Accessibility scanning configuration (persisted in shared Settings)
     @Published var scanningEnabled: Bool = false
     @Published var scanPlaybackAreaEnabled: Bool = true
@@ -186,13 +159,8 @@ final class IosViewModel: ObservableObject {
     @Published var usageLoggingEnabled: Bool = false
     @Published var featureUsageReportingEnabled: Bool = false
     @Published var historyVisible: Bool = true
-    @Published private(set) var speechErrorMessage: String? = nil
-    private var pendingSpeechRetry: PendingSpeechRetry? = nil
-    var canRetryFailedSpeech: Bool { pendingSpeechRetry != nil }
     @Published var startupUsesScreens: Bool = false
     @Published var startupBoardSetId: String? = nil
-    private var hasShownOfflineBanner: Bool = UserDefaults.standard.bool(forKey: "offline_banner_shown")
-    private var isOnline: Bool = true
 
     // Pronunciation Dictionary
     @Published var pronunciations: [Shared.PronunciationEntry] = []
@@ -200,7 +168,6 @@ final class IosViewModel: ObservableObject {
     // Azure availability (subscription configured)
     @Published var azureConfigured: Bool = false
     @Published var googleConfigured: Bool = false
-    var cloudConfigured: Bool { ttsEngine == "GOOGLE_CLOUD" ? googleConfigured : azureConfigured }
 
     // Symbol-first boardset mode
     @Published var boardModeEnabled: Bool = false
@@ -218,7 +185,6 @@ final class IosViewModel: ObservableObject {
     @Published var boardPredictionsByButtonId: [String: String] = [:]
     @Published var boardNamesById: [String: String] = [:]
     @Published var boardStatusMessage: String? = nil
-    @Published var sentencePhrases: [SentencePhraseToken] = []
     @Published var editingAccessEnabled: Bool = false
     @Published var editingAccessUnlocked: Bool = true
     @Published var editingAccessSupported: Bool = true
@@ -243,16 +209,6 @@ final class IosViewModel: ObservableObject {
     var boardSpeakButtonVisible: Bool { resolvedBoardShowSpeakButton ?? boardShowSpeakButton }
     var boardActivationBehavior: String { resolvedBoardActivationBehavior ?? "SpeakAndAdd" }
     var boardReturnBehavior: String { resolvedBoardReturnBehavior ?? "Stay" }
-
-    private var isApplyingSentencePhraseInput: Bool = false
-
-    private struct InputSnapshot {
-        let text: String
-        let selection: NSRange
-        let secondaryRanges: [NSRange]
-    }
-
-    private var heldThoughtSnapshot: InputSnapshot? = nil
 
     var selectedBoardSet: BoardSetInfo? {
         guard let id = selectedBoardSetId else { return nil }
@@ -319,6 +275,7 @@ final class IosViewModel: ObservableObject {
         let result = try await backupFacade.restoreBackup(path: path)
         if result.isSuccess {
             communicationFacade.refreshPhrases()
+            try? await session.reloadAfterRestore()
         }
         return result
     }
@@ -386,7 +343,11 @@ final class IosViewModel: ObservableObject {
     }
 
     func start() async {
-        await MainActor.run { IosDiBridge().startKoinWithOverridesBridge() }
+        await MainActor.run { IosDiBridge().startKoinWithOverridesBridge(deviceSpeech: SystemTtsManager.shared) }
+        sessionSubscription?.cancel()
+        sessionSubscription = session.observe { [weak self] state in
+            self?.applySessionState(state)
+        }
         self.store = communicationFacade.phraseListStore()
         let observer = StoreObserver(onNext: { [weak self] newState in self?.state = newState }, onComplete: { [weak self] in
             self?.disposable = nil
@@ -407,18 +368,12 @@ final class IosViewModel: ObservableObject {
         // Start connectivity monitoring
         ConnectivityMonitor.shared.onChange { [weak self] online in
             guard let self = self else { return }
-            self.isOnline = online
             self.boardsFacade.updateBoardSetSpeechCacheOnline(online: online)
             if online {
                 Task {
                     try? await self.boardsFacade.cacheAllBoardSetFields()
                     try? await self.boardsFacade.retryBoardSetSpeechCaching()
                 }
-            }
-            if !online && !self.hasShownOfflineBanner {
-                self.showOfflineInfoOnce = true
-                self.hasShownOfflineBanner = true
-                UserDefaults.standard.set(true, forKey: "offline_banner_shown")
             }
         }
     // Preload history once Koin is up
@@ -567,216 +522,139 @@ final class IosViewModel: ObservableObject {
         return state.phrases.filter { $0.parentId == sel }
     }
 
+    // MARK: - Message (shared Communication session)
+
+    /// Mirrors the session. Runs for every change, including ones made by Kotlin
+    /// (speech progress, restore) and by the other workspace.
+    private func applySessionState(_ state: Shared.NativeCommunicationState) {
+        let text = state.activeMessage.displayText
+        let textChanged = input != text
+        if textChanged { input = text }
+        inputSelectionRange = clampedSelectionRange(inputSelectionRange, maxLength: (text as NSString).length)
+        let secondary = secondaryLanguage
+        let ranges = state.activeMessage.languageSpans
+            .filter { $0.languageTag == secondary }
+            .map { NSRange(location: Int($0.range.start), length: Int($0.range.length)) }
+        if ranges != secondaryLanguageRanges { secondaryLanguageRanges = ranges }
+        if messageParts != state.activeMessage.parts { messageParts = state.activeMessage.parts }
+        if heldMessageText != state.heldMessage?.displayText { heldMessageText = state.heldMessage?.displayText }
+        if playback != state.playback { playback = state.playback }
+        if sessionNotice != state.notice { sessionNotice = state.notice }
+        if sessionIsSaving != state.isSaving { sessionIsSaving = state.isSaving }
+        if textChanged { refreshPredictions(for: text) }
+    }
+
+    /// Sends one edit to the session and mirrors the result right away, so the text
+    /// field never shows a stale Message between an edit and its observation.
+    private func editMessage(_ edit: () -> Void) {
+        edit()
+        applySessionState(session.state())
+    }
+
+    /// Applies the Message field's new text. Untouched Phrase and Button parts keep
+    /// their recordings and sources.
+    func onInputChanged(_ newValue: String) {
+        guard newValue != input else { return }
+        editMessage { session.editText(newText: newValue) }
+    }
+
     func insertPhraseText(_ phrase: Shared.Phrase) {
         // #118: ignore rapid repeated activations of the same target.
         guard acceptActivation(targetId: phrase.id) else { return }
-        let t = phrase.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
-        let nsInput = input as NSString
-        let inputLength = nsInput.length
-
-        var range = inputSelectionRange
-        if range.location == NSNotFound {
-            range = NSRange(location: inputLength, length: 0)
-        }
-
-        let safeLocation = min(max(0, range.location), inputLength)
-        let safeLength = min(max(0, range.length), max(0, inputLength - safeLocation))
-        let safeRange = NSRange(location: safeLocation, length: safeLength)
-
-        var prefix = ""
-        if safeLocation > 0 {
-            let previousChar = nsInput.substring(with: NSRange(location: safeLocation - 1, length: 1))
-            if previousChar.rangeOfCharacter(from: .whitespacesAndNewlines) == nil {
-                prefix = " "
-            }
-        }
-
-        let insertion = prefix + t + " "
-
-        input = nsInput.replacingCharacters(in: safeRange, with: insertion)
-        let insertionLength = (insertion as NSString).length
-        inputSelectionRange = NSRange(location: safeLocation + insertionLength, length: 0)
-
-        let title = (phrase.name?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? t
-        let imageUrl = phrase.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
-        sentencePhrases.append(
-            SentencePhraseToken(
-                phraseId: phrase.id,
-                text: t,
-                title: title,
-                imageUrl: (imageUrl?.isEmpty == false) ? imageUrl : nil
-            )
-        )
-
-        isApplyingSentencePhraseInput = true
-        onInputChanged(input)
-        isApplyingSentencePhraseInput = false
+        guard !phrase.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let length = (input as NSString).length
+        let cursor = inputSelectionRange.location == NSNotFound ? length : min(inputSelectionRange.location, length)
+        var newCursor: Int32 = 0
+        editMessage { newCursor = session.insertPhrase(phrase: phrase, cursor: Int32(cursor)) }
+        inputSelectionRange = NSRange(location: Int(newCursor), length: 0)
         // #119: immediate speech policy speaks each inserted phrase as it is composed.
         if speechPolicy == "Immediate" {
-            speak(title)
+            speakPhrase(phrase)
         }
     }
 
-    func removeSentencePhrase(at index: Int) {
-        guard sentencePhrases.indices.contains(index) else { return }
-        sentencePhrases.remove(at: index)
-
-        let rebuilt = sentencePhrases.map { $0.text }.joined(separator: " ")
-        input = rebuilt.isEmpty ? "" : rebuilt + " "
-        inputSelectionRange = NSRange(location: (input as NSString).length, length: 0)
-        secondaryLanguageRanges = []
-
-        isApplyingSentencePhraseInput = true
-        onInputChanged(input)
-        isApplyingSentencePhraseInput = false
-    }
-
-    func deleteText() {
-        input = ""
-        inputSelectionRange = NSRange(location: 0, length: 0)
-        sentencePhrases = []
-        onInputChanged(input)
-    }
-
-    func toggleHoldThatThought() {
-        let current = makeCurrentInputSnapshot()
-
-        if let held = heldThoughtSnapshot {
-            heldThoughtSnapshot = current
-            applyInputSnapshot(held)
-        } else {
-            heldThoughtSnapshot = current
-            input = ""
-            inputSelectionRange = NSRange(location: 0, length: 0)
-            secondaryLanguageRanges = []
-            onInputChanged(input)
-        }
-
-        hasHeldThought = heldThoughtSnapshot != nil
-    }
-    func speak(_ text: String) {
-        let plain = text
-        guard !plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        AudioSessionHelper.activatePlayback()
-
-        // Only convert hidden ranges for the live input text and Azure path.
-        let t = (text == input) ? textWithSecondaryLanguageMarkup(from: plain) : plain
-
-        // Hybrid mixing: splice recorded phrase audio into sentence
-        if mixRecordedPhrasesInSentences {
-            let segments = buildHybridSegments(for: plain)
-            if !segments.isEmpty {
-                // Decide engine for TTS segments: Azure vs local
-                let shouldUseAzure = cloudConfigured && isOnline || (cloudConfigured && !useSystemTtsWhenOffline)
-                if !useSystemTts && shouldUseAzure {
-                    let azSegments: [AzureHybridSequencer.Segment] = segments.map { seg in
-                        switch seg {
-                        case .audio(let url): return .audio(url)
-                        case .tts(let s): return .tts(s)
-                        }
-                    }
-                    azureSequencer.play(segments: azSegments)
-                } else {
-                    hybrid.play(segments: segments, language: primaryLanguage)
-                }
-                return
-            }
-        }
-
-        let isInputText = (text == input)
-
-        // If user prefers system TTS, use it directly
-        if useSystemTts {
-            speakSystemText(plain, isInputText: isInputText)
-            return
-        }
-        
-        // If the selected cloud provider is not configured, keep communication working on-device.
-        if !cloudConfigured {
-            speakSystemText(plain, isInputText: isInputText)
-            return
-        }
-        // Otherwise, allow offline fallback when enabled
-        if !isOnline && useSystemTtsWhenOffline {
-            speakSystemText(plain, isInputText: isInputText)
-            return
-        }
-        Task {
-            do {
-                try await speechFacade.speak(text: t)
-                clearSpeechFailure()
-            } catch {
-                guard !Task.isCancelled else { return }
-                speakSystemText(plain, isInputText: isInputText)
-                clearSpeechFailure()
-            }
-        }
-    }
-
-    /// Speak on-device, honoring shorthand SSML (pauses + language tags) via shared
-    /// SpeechTextProcessor when no secondary-language splitting is required.
-    private func speakSystemText(_ text: String, isInputText: Bool) {
-        if !isInputText || secondaryLanguageRanges.isEmpty {
-            let segments = speechFacade.processSpeechText(text: text)
-            SystemTtsManager.shared.speak(segments: segments, language: primaryLanguage)
-        } else {
-            SystemTtsManager.shared.speak(
-                text,
-                language: primaryLanguage,
-                secondaryLanguage: secondaryLanguage,
-                secondaryLanguageRanges: secondaryLanguageRanges
+    /// Appends the active Screen Button's text to the Message.
+    func appendScreenPart(text: String, buttonId: String) {
+        editMessage {
+            session.appendScreenPart(
+                text: text,
+                screenId: selectedBoardSetId ?? "",
+                pageId: selectedBoardId ?? "",
+                buttonId: buttonId,
+                spellingMode: selectedBoardUsesSpellingMode
             )
         }
     }
 
-    func speakBoardSentence(_ text: String, boardSetId: String) {
-        let cacheAudio = boardSets.first(where: { $0.id == boardSetId })?.cacheWholeSentences ?? true
+    func removeLastMessagePart() {
+        editMessage { session.removeLastPart(spellingMode: selectedBoardUsesSpellingMode) }
+    }
+
+    /// Removes one part, e.g. a Button tapped by mistake in the Screens message bar.
+    func removeMessagePart(at index: Int) {
+        guard messageParts.indices.contains(index) else { return }
+        let start = messageParts[..<index].reduce(0) { $0 + ($1.displayText as NSString).length }
+        let length = (messageParts[index].displayText as NSString).length
+        editMessage {
+            session.replaceRange(start: Int32(start), endExclusive: Int32(start + length), replacement: "")
+        }
+    }
+
+    func clearMessage() {
+        editMessage { session.clear() }
+        inputSelectionRange = NSRange(location: 0, length: 0)
+    }
+
+    /// Holds the Message, or swaps it with the held one.
+    func toggleHoldThatThought() {
+        editMessage { session.swapHeldMessage() }
+        inputSelectionRange = NSRange(location: (input as NSString).length, length: 0)
+    }
+
+    /// Speaks the whole Message. The session records it in History once spoken.
+    func speakMessage(cacheAudio: Bool = true) {
+        AudioSessionHelper.activatePlayback()
+        session.speak(voice: selectedVoice, cacheAudio: cacheAudio)
+    }
+
+    /// Speaks the Message from a Screen, honoring the Screen's sentence caching.
+    func speakBoardMessage(boardSetId: String) {
+        speakMessage(cacheAudio: boardSets.first(where: { $0.id == boardSetId })?.cacheWholeSentences ?? true)
+    }
+
+    /// Speaks text on its own (previews, single Buttons) without changing the Message or History.
+    func speak(_ text: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         AudioSessionHelper.activatePlayback()
-        if useSystemTts || !cloudConfigured || (!isOnline && useSystemTtsWhenOffline) {
-            let segments = speechFacade.processSpeechText(text: text)
-            SystemTtsManager.shared.speak(segments: segments, language: primaryLanguage)
-            return
-        }
-        Task {
-            do {
-                try await speechFacade.speakBoardSentence(text: text, cacheAudio: cacheAudio)
-                clearSpeechFailure()
-            } catch {
-                guard !Task.isCancelled else { return }
-                let segments = speechFacade.processSpeechText(text: text)
-                SystemTtsManager.shared.speak(segments: segments, language: primaryLanguage)
-                clearSpeechFailure()
-            }
-        }
+        session.speakText(text: text, voice: selectedVoice)
     }
 
-    private func setSpeechFailure(retry: PendingSpeechRetry? = nil) {
-        pendingSpeechRetry = retry
-        speechErrorMessage = NSLocalizedString("speech.playback_failed", comment: "")
+    /// Speaks a Phrase on its own, playing its recording when it has one.
+    func speakPhrase(_ phrase: Shared.Phrase) {
+        AudioSessionHelper.activatePlayback()
+        session.speakPhrase(phrase: phrase, voice: selectedVoice)
     }
 
-    private func clearSpeechFailure() {
-        speechErrorMessage = nil
-        pendingSpeechRetry = nil
-    }
+    func pauseSpeech() { session.pause() }
+    func resumeSpeech() { session.resume() }
+    func stopSpeech() { session.stop() }
+    func dismissSessionNotice() { session.dismissNotice() }
+    func retrySessionStorage() { session.retryStorage() }
 
-    func retryFailedSpeech() {
-        guard let retry = pendingSpeechRetry else { return }
-        clearSpeechFailure()
-        switch retry {
-        case .text(let text):
-            speak(text)
+    func markSelectionAsSecondaryLanguage(range: NSRange) {
+        let locale = secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !locale.isEmpty, locale != primaryLanguage,
+              range.location != NSNotFound, range.length > 0 else { return }
+        editMessage {
+            session.toggleSecondaryLanguage(start: Int32(range.location), endExclusive: Int32(range.location + range.length))
         }
     }
 
     func playBoardButtonSound(_ dataUrl: String) {
-        guard !dataUrl.isEmpty else { return }
+        guard !dataUrl.isEmpty, let url = playableURL(from: dataUrl) else { return }
         AudioSessionHelper.activatePlayback()
-        if let url = playableURL(from: dataUrl) {
-            hybrid.play(segments: [.audio(url)], language: primaryLanguage)
-        }
+        buttonSoundPlayer = try? AVAudioPlayer(contentsOf: url)
+        buttonSoundPlayer?.play()
     }
 
     private func playableURL(from dataUrl: String) -> URL? {
@@ -796,37 +674,6 @@ final class IosViewModel: ObservableObject {
         return URL(string: dataUrl)
     }
 
-    private func textWithSecondaryLanguageMarkup(from plainText: String) -> String {
-        let locale = secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !locale.isEmpty,
-              locale != primaryLanguage,
-              !secondaryLanguageRanges.isEmpty else {
-            return plainText
-        }
-
-        let ns = plainText as NSString
-        let validRanges = secondaryLanguageRanges
-            .filter { $0.location != NSNotFound && $0.length > 0 && $0.location + $0.length <= ns.length }
-            .sorted { $0.location < $1.location }
-
-        guard !validRanges.isEmpty else { return plainText }
-
-        var cursor = 0
-        var out = ""
-        for range in validRanges {
-            if range.location > cursor {
-                out += ns.substring(with: NSRange(location: cursor, length: range.location - cursor))
-            }
-            let selected = ns.substring(with: range)
-            out += "<lang xml:lang=\"\(locale)\">\(selected)</lang>"
-            cursor = range.location + range.length
-        }
-        if cursor < ns.length {
-            out += ns.substring(from: cursor)
-        }
-        return out
-    }
-
     // MARK: - History
     func loadHistory() async {
         guard historyVisible else {
@@ -840,124 +687,12 @@ final class IosViewModel: ObservableObject {
             await MainActor.run { self.historyPhrases = [] }
         }
     }
-    // Build mixed segments: recorded audio when a phrase name/text matches; TTS for the rest
-    private func buildHybridSegments(for text: String) -> [HybridSpeechPlayer.Segment] {
-        // Prepare lookup: map name/text -> recording path if exists
-        let phrases = filteredPhrases // use currently visible scope; could also use state.phrases
-        var dictionary: [(pattern: NSRegularExpression, id: String, path: String)] = []
-        for p in phrases {
-            let key = (p.name?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? p.text
-            guard !key.isEmpty, let path = recordingPath(for: p.id), !path.isEmpty else { continue }
-            // Word-boundary, case-insensitive
-            let pattern = "\\b" + NSRegularExpression.escapedPattern(for: key) + "\\b"
-            if let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
-                dictionary.append((re, p.id, path))
-            }
-        }
-        guard !dictionary.isEmpty else { return [] }
-
-        // Find non-overlapping matches preferring longer keys first
-        let ns = text as NSString
-        var matches: [(range: NSRange, path: String)] = []
-        for (re, _, path) in dictionary.sorted(by: { $0.pattern.pattern.count > $1.pattern.pattern.count }) {
-            let found = re.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
-            for m in found {
-                // Skip overlaps
-                if matches.contains(where: { NSIntersectionRange($0.range, m.range).length > 0 }) { continue }
-                matches.append((m.range, path))
-            }
-        }
-        guard !matches.isEmpty else { return [] }
-
-        // Sort by location and build segments
-        matches.sort { $0.range.location < $1.range.location }
-        var segs: [HybridSpeechPlayer.Segment] = []
-        var cursor = 0
-        for m in matches {
-            if m.range.location > cursor {
-                let start = cursor
-                let end = m.range.location
-                let chunk = ns.substring(with: NSRange(location: start, length: end - start))
-                if !chunk.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    segs.append(.tts(chunk))
-                }
-            }
-            segs.append(.audio(URL(fileURLWithPath: m.path)))
-            cursor = m.range.location + m.range.length
-        }
-        if cursor < ns.length {
-            let chunk = ns.substring(from: cursor)
-            if !chunk.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                segs.append(.tts(chunk))
-            }
-        }
-        return segs
-    }
-
-    func pauseTts() {
-        if azureSequencer.isRunning {
-            azureSequencer.pause()
-            return
-        }
-        if hybrid.isPlaying {
-            hybrid.pause()
-            return
-        }
-        if useSystemTts || !cloudConfigured {
-            SystemTtsManager.shared.pause()
-        } else if !isOnline && useSystemTtsWhenOffline {
-            SystemTtsManager.shared.pause()
-        } else {
-            Task {
-                do {
-                    try await speechFacade.pause()
-                } catch {
-                    setSpeechFailure()
-                }
-            }
-        }
-    }
-
-    func stopTts() {
-        if azureSequencer.isRunning {
-            azureSequencer.stop()
-            return
-        }
-        if hybrid.isPlaying {
-            hybrid.stop()
-            return
-        }
-        if useSystemTts || !cloudConfigured {
-            SystemTtsManager.shared.stop()
-        } else if !isOnline && useSystemTtsWhenOffline {
-            SystemTtsManager.shared.stop()
-        } else {
-            Task {
-                do {
-                    try await speechFacade.stop()
-                } catch {
-                    setSpeechFailure()
-                }
-            }
-        }
-    }
-
     func setTtsEngine(_ engine: String) {
         ttsEngine = engine
         useSystemTts = engine == "SYSTEM"
         UserDefaults.standard.set(engine, forKey: "tts_engine")
         UserDefaults.standard.set(useSystemTts, forKey: "use_system_tts")
         Task { try? await speechFacade.updateTtsEngineNamed(engine: engine) }
-    }
-
-    func setUseSystemTtsWhenOffline(_ enabled: Bool) {
-        self.useSystemTtsWhenOffline = enabled
-        UserDefaults.standard.set(enabled, forKey: "use_system_tts_when_offline")
-    }
-
-    func setMixRecordedPhrases(_ enabled: Bool) {
-        self.mixRecordedPhrasesInSentences = enabled
-        UserDefaults.standard.set(enabled, forKey: "mix_recorded_phrases")
     }
 
     func setScanningEnabled(_ enabled: Bool) {
@@ -1221,9 +956,6 @@ final class IosViewModel: ObservableObject {
         Task {
             _ = try? await speechFacade.updateSelectedVoiceLanguage(lang: lang)
             self.primaryLanguage = lang
-            if lang == self.secondaryLanguage {
-                self.secondaryLanguageRanges = []
-            }
             refreshVoiceAndLanguages()
         }
     }
@@ -1232,78 +964,9 @@ final class IosViewModel: ObservableObject {
         Task {
             _ = try? await settingsFacade.updateSecondaryLanguage(lang: lang)
             self.secondaryLanguage = lang
-            if lang == self.primaryLanguage {
-                self.secondaryLanguageRanges = []
-            }
+            // Highlight the spans tagged with the new secondary language.
+            self.applySessionState(self.session.state())
         }
-    }
-
-    func markSelectionAsSecondaryLanguage(range: NSRange) {
-        let locale = secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !locale.isEmpty, locale != primaryLanguage else { return }
-
-        let currentText = input as NSString
-        guard range.location != NSNotFound,
-              range.length > 0,
-              range.location + range.length <= currentText.length else { return }
-
-        secondaryLanguageRanges = ranges(from: bridge.addTextSpan(
-            spans: textSpans(from: secondaryLanguageRanges),
-            span: Shared.TextSpan(start: Int32(range.location), endExclusive: Int32(range.location + range.length)),
-            textLength: Int32(currentText.length)
-        ))
-    }
-
-    func adjustSecondaryLanguageRangesAfterEdit(range: NSRange, replacementText: String) {
-        guard !secondaryLanguageRanges.isEmpty else { return }
-        let currentLength = (input as NSString).length
-        let replacementLength = (replacementText as NSString).length
-        secondaryLanguageRanges = ranges(from: bridge.adjustTextSpansForReplacement(
-            textLength: Int32(currentLength),
-            edit: Shared.TextSpan(start: Int32(range.location), endExclusive: Int32(range.location + range.length)),
-            replacementLength: Int32(replacementLength),
-            spans: textSpans(from: secondaryLanguageRanges)
-        ))
-    }
-
-    private func mergeRanges(_ inputRanges: [NSRange], maxLength: Int) -> [NSRange] {
-        ranges(from: bridge.mergeTextSpans(
-            spans: textSpans(from: inputRanges),
-            textLength: Int32(maxLength)
-        ))
-    }
-
-    private func textSpans(from ranges: [NSRange]) -> [Shared.TextSpan] {
-        ranges.compactMap { range in
-            guard range.location != NSNotFound else { return nil }
-            return Shared.TextSpan(
-                start: Int32(range.location),
-                endExclusive: Int32(range.location + range.length)
-            )
-        }
-    }
-
-    private func ranges(from spans: [Shared.TextSpan]) -> [NSRange] {
-        spans.map { span in
-            let start = Int(span.start)
-            return NSRange(location: start, length: max(0, Int(span.endExclusive) - start))
-        }
-    }
-
-    private func makeCurrentInputSnapshot() -> InputSnapshot {
-        let length = (input as NSString).length
-        let selection = clampedSelectionRange(inputSelectionRange, maxLength: length)
-        let secondary = mergeRanges(secondaryLanguageRanges, maxLength: length)
-        return InputSnapshot(text: input, selection: selection, secondaryRanges: secondary)
-    }
-
-    private func applyInputSnapshot(_ snapshot: InputSnapshot) {
-        input = snapshot.text
-        onInputChanged(snapshot.text)
-
-        let length = (snapshot.text as NSString).length
-        inputSelectionRange = clampedSelectionRange(snapshot.selection, maxLength: length)
-        secondaryLanguageRanges = mergeRanges(snapshot.secondaryRanges, maxLength: length)
     }
 
     private func clampedSelectionRange(_ range: NSRange, maxLength: Int) -> NSRange {
@@ -1357,25 +1020,12 @@ final class IosViewModel: ObservableObject {
     }
     
     // MARK: - Prediction
-    func onInputChanged(_ newValue: String, preserveSecondaryRanges: Bool = false) {
-        input = newValue
-
-        if !isApplyingSentencePhraseInput && !sentencePhrases.isEmpty {
-            let normalizedInput = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            let normalizedSentence = sentencePhrases
-                .map { $0.text }
-                .joined(separator: " ")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if normalizedInput != normalizedSentence {
-                sentencePhrases = []
-            }
-        }
-
+    private func refreshPredictions(for text: String) {
         #if DEBUG
         predictionJob?.cancel()
         predictionSubscription?.cancel()
         predictionSubscription = nil
-        if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             predictions = Shared.PredictionResult(words: [], letters: [])
             return
         }
@@ -1383,9 +1033,9 @@ final class IosViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 250_000_000)
             guard !Task.isCancelled, let self else { return }
             self.predictionSubscription = self.bridge.observePredictions(
-                context: newValue, maxWords: 5, maxLetters: 5
+                context: text, maxWords: 5, maxLetters: 5
             ) { [weak self] result in
-                guard let self, self.input == newValue else { return }
+                guard let self, self.input == text else { return }
                 self.predictions = result
             }
         }
@@ -1399,9 +1049,8 @@ final class IosViewModel: ObservableObject {
             cursor: Int32(inputSelectionRange.location),
             suggestion: word
         )
-        input = result.text
+        onInputChanged(result.text)
         inputSelectionRange = NSRange(location: Int(result.cursor), length: 0)
-        onInputChanged(input)
     }
     
     func applyLetterPrediction(_ char: String) {
@@ -1410,9 +1059,8 @@ final class IosViewModel: ObservableObject {
             cursor: Int32(inputSelectionRange.location),
             value: char
         )
-        input = result.text
+        onInputChanged(result.text)
         inputSelectionRange = NSRange(location: Int(result.cursor), length: 0)
-        onInputChanged(input)
     }
     #endif
 
@@ -1729,20 +1377,12 @@ final class IosViewModel: ObservableObject {
         boardsFacade.nGramPredictionInsertion(sentence: sentence, suggestion: suggestion)
     }
 
-    func boardBackspaceSentence(texts: [String], spellingMode: Bool) -> [String] {
-        boardsFacade.boardBackspaceSentence(texts: texts, spellingMode: spellingMode)
-    }
-
     func boardButtonIsVisible(hidden: Bool, isEditMode: Bool, showHiddenButtons: Bool) -> Bool {
         boardsFacade.boardButtonIsVisible(hidden: hidden, isEditMode: isEditMode, showHiddenButtons: showHiddenButtons)
     }
 
     func boardFieldFontScale(rowSpan: Int, columnSpan: Int) -> CGFloat {
         CGFloat(boardsFacade.boardFieldFontScale(rowSpan: Int32(rowSpan), columnSpan: Int32(columnSpan)))
-    }
-
-    func boardJoinSentenceText(tokens: [String], spellingMode: Bool) -> String {
-        boardsFacade.boardJoinSentenceText(tokens: tokens, spellingMode: spellingMode)
     }
 
     func loadSelectedBoard() async {

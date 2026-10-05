@@ -557,7 +557,7 @@ struct WelcomeFlow: View {
                 title: NSLocalizedString("welcome_flow.test_voice", comment: ""),
                 previewText: $previewText,
                 onSpeak: { model.speak(previewText) },
-                onStop: { model.stopTts() }
+                onStop: { model.stopSpeech() }
             )
         }
     }

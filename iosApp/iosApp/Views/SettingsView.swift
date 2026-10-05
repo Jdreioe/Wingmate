@@ -212,12 +212,6 @@ private struct SpeechSettingsView: View {
                 }
                 .pickerStyle(.segmented)
 
-                Toggle("settings.tts.system_when_offline", isOn: Binding(
-                    get: { model.useSystemTtsWhenOffline },
-                    set: { model.setUseSystemTtsWhenOffline($0) }
-                ))
-                .disabled(model.useSystemTts)
-
                 if model.ttsEngine == "AZURE_USER_RESOURCE" || model.ttsEngine == "AZURE_MANAGED" {
                     Button {
                         showAzureSetup = true
@@ -262,17 +256,6 @@ private struct SpeechSettingsView: View {
                         ForEach(languages.filter { $0 != model.primaryLanguage }, id: \.self) { Text($0).tag($0) }
                     }
                 }
-            }
-
-            Section {
-                Toggle("settings.playback.mix_recorded", isOn: Binding(
-                    get: { model.mixRecordedPhrasesInSentences },
-                    set: { model.setMixRecordedPhrases($0) }
-                ))
-            } header: {
-                Text("settings.playback.title")
-            } footer: {
-                Text("settings.playback.mix.help")
             }
         }
         .navigationTitle(Text("settings.category.speech"))

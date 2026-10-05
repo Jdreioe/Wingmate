@@ -19,6 +19,7 @@ import io.github.jdreioe.wingmate.application.BackupMediaAccess
 import io.github.jdreioe.wingmate.application.BackupFacade
 import io.github.jdreioe.wingmate.application.BackupManager
 import io.github.jdreioe.wingmate.application.SpeechFacade
+import io.github.jdreioe.wingmate.application.CommunicationSessionFacade
 import io.github.jdreioe.wingmate.application.SettingsFacade
 import io.github.jdreioe.wingmate.application.BoardsFacade
 import io.github.jdreioe.wingmate.application.CommunicationFacade
@@ -130,6 +131,7 @@ internal fun createCoreDataModule(): Module = module {
         singleOf(::SettingsFacade)
         singleOf(::BoardsFacade)
         singleOf(::CommunicationFacade)
+        singleOf(::CommunicationSessionFacade)
         singleOf(::SettingsStateManager)
         single(named("communicationSessionScope")) {
             CoroutineScope(SupervisorJob() + Dispatchers.Default)

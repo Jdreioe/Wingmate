@@ -131,9 +131,13 @@ struct ContentView: View {
                             let count = min(max(model.preferredGridColumns, 1), adaptiveCount)
                             let cols = Array(repeating: GridItem(.flexible(), spacing: spacing), count: count)
 
-                            mainContent(columns: cols)
-                                .frame(width: contentWidth)
-                                .padding(currentWideLayout ? 0 : 16)
+                            VStack(spacing: 8) {
+                                CommunicationNoticeBanner(model: model)
+                                    .padding(.horizontal, currentWideLayout ? 16 : 0)
+                                mainContent(columns: cols)
+                            }
+                            .frame(width: contentWidth)
+                            .padding(currentWideLayout ? 0 : 16)
                         }
                     }
                 }

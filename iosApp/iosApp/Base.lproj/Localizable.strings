@@ -65,7 +65,6 @@
 "azure.key.placeholder" = "Subscription Key";
 "common.error" = "Error";
 "common.retry" = "Retry";
-"speech.playback_failed" = "Speech could not be played. Please try again.";
 "common.ok" = "OK";
 "common.save" = "Save";
 
@@ -149,12 +148,8 @@
 
 "settings.title" = "Settings";
 "settings.tts.title" = "Text-to-Speech Engine";
-"settings.tts.system_when_offline" = "Use System TTS when offline";
 "settings.restart_setup" = "Restart Setup Guide";
 
-"settings.playback.title" = "Playback";
-"settings.playback.mix_recorded" = "Mix recorded phrases in sentences";
-"settings.playback.mix.help" = "When on, the app will splice your recorded phrase audio into spoken sentences where the phrase name appears.";
 
 "settings.scanning.title" = "Scanning";
 "settings.scanning.enable" = "Enable scanning";
@@ -268,8 +263,6 @@
 "reorder.banner.done_hint" = "Tap Done when finished";
 
 "history.empty" = "No history yet";
-"offline.title" = "You are offline";
-"offline.azure_unavailable_hint" = "Azure voices won't work offline. Enable System TTS to use on-device speech while offline.";
 
 "playback.play" = "Play";
 "playback.pause" = "Pause";
@@ -538,3 +531,9 @@
 "voice.model.wavenet" = "WaveNet";
 "voice.model.standard" = "Standard";
 "voice.model.other" = "Other";
+
+/* Communication session */
+"communication.storage_failed" = "Your Message could not be loaded or saved. Keep Wingmate open and retry.";
+"communication.playback_failed" = "Speech could not finish. Your Message is still available; try speaking again.";
+"communication.speech_fallback" = "The cloud voice was unavailable, so your device voice spoke instead.";
+"common.dismiss" = "Dismiss";
