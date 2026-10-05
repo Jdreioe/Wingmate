@@ -650,19 +650,19 @@ struct SymbolBoardWorkspaceView: View {
                     .padding(.horizontal)
                 }
 
-                // Sentence Box in Run mode
+                // Message bar in Run mode, in the same dialect as Typing.
                 if mode == .run && model.boardMessageBarVisible {
-                    SentenceBoxView(
-                        phrases: boardSentenceTokens,
+                    ScreensMessageBar(
+                        model: model,
+                        tokens: boardSentenceTokens,
+                        showSpeakControl: model.boardSpeakButtonVisible,
                         onDelete: { index in
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                                 model.removeMessagePart(at: index)
                             }
                             activeSentenceAnimation = nil
                         },
-                        onSpeak: model.boardSpeakButtonVisible ? {
-                            model.speakBoardMessage(boardSetId: boardSetId)
-                        } : nil,
+                        onSpeak: { model.speakBoardMessage(boardSetId: boardSetId) },
                         animationNamespace: sentenceAnimationNamespace,
                         animatedTokenId: activeSentenceAnimation?.tokenId
                     )
@@ -680,15 +680,15 @@ struct SymbolBoardWorkspaceView: View {
         .onDisappear { model.stopBoardPredictions() }
         .fullScreenCover(isPresented: $isFullscreen) {
             VStack(spacing: 12) {
-                HStack {
+                HStack(alignment: .bottom) {
                     if model.boardMessageBarVisible {
-                        SentenceBoxView(
-                            phrases: boardSentenceTokens,
+                        ScreensMessageBar(
+                            model: model,
+                            tokens: boardSentenceTokens,
+                            showSpeakControl: model.boardSpeakButtonVisible,
                             onDelete: { index in model.removeMessagePart(at: index) },
-                        onSpeak: model.boardSpeakButtonVisible ? {
-                            model.speakBoardMessage(boardSetId: boardSetId)
-                        } : nil
-                    )
+                            onSpeak: { model.speakBoardMessage(boardSetId: boardSetId) }
+                        )
                     }
                     Button("common.done") { isFullscreen = false }
                         .font(.headline)
@@ -968,7 +968,8 @@ struct SymbolBoardWorkspaceView: View {
 
     private func boardCellCornerRadius(_ cell: BoardCellInfo?, width: CGFloat, height: CGFloat) -> CGFloat {
         switch cell?.shape {
-        case "rounded", "speech", "thought": return 10
+        // Rounded is the default shape (Android 945427e9), at 16pt like Typing tiles.
+        case "rounded", "speech", "thought": return 16
         case "pill": return min(width, height) / 2
         default: return 0
         }
