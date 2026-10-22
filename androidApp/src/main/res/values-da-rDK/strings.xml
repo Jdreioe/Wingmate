@@ -206,6 +206,15 @@
     <string name="board_settings_return_stay">Bliv på denne side</string>
     <string name="board_settings_return_previous">Gå tilbage til forrige side</string>
     <string name="board_settings_return_start">Gå til startsiden</string>
+    <string name="board_settings_background_image">Baggrundsbillede</string>
+    <string name="board_settings_background_image_none">Intet</string>
+    <string name="board_settings_background_image_set">Billede valgt</string>
+    <string name="board_settings_background_image_new">Nyt billede valgt</string>
+    <string name="board_settings_background_image_choose">Vælg billede</string>
+    <string name="board_settings_background_image_remove">Fjern baggrundsbillede</string>
+    <string name="board_settings_background_image_fill">Fyld siden</string>
+    <string name="board_settings_background_image_fit">Hele billedet</string>
+    <string name="board_settings_background_image_failed">Baggrundsbilledet kunne ikke tilføjes. Vælg et PNG- eller JPEG-billede.</string>
     <string name="board_settings_reset_screen">Nulstil skærmindstillinger</string>
     <string name="board_settings_reset_page">Nulstil sidetilpasninger</string>
     <string name="board_cell_opens_board">Åbner siden: %1$s</string>

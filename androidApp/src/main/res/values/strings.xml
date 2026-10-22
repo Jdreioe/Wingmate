@@ -206,6 +206,15 @@
     <string name="board_settings_return_stay">Stay on this Page</string>
     <string name="board_settings_return_previous">Return to previous Page</string>
     <string name="board_settings_return_start">Return to start Page</string>
+    <string name="board_settings_background_image">Background image</string>
+    <string name="board_settings_background_image_none">None</string>
+    <string name="board_settings_background_image_set">Image set</string>
+    <string name="board_settings_background_image_new">New image chosen</string>
+    <string name="board_settings_background_image_choose">Choose image</string>
+    <string name="board_settings_background_image_remove">Remove background image</string>
+    <string name="board_settings_background_image_fill">Fill page</string>
+    <string name="board_settings_background_image_fit">Whole image</string>
+    <string name="board_settings_background_image_failed">The background image could not be added. Choose a PNG or JPEG picture.</string>
     <string name="board_settings_reset_screen">Reset Screen settings</string>
     <string name="board_settings_reset_page">Reset Page overrides</string>
     <string name="board_cell_opens_board">Opens page: %1$s</string>

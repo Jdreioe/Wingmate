@@ -19,7 +19,8 @@ import com.hojmoseit.wingmate.R
 internal fun ImageSourcePickerDialog(
     onDismiss: () -> Unit,
     onPhoto: (String) -> Unit,
-    onSymbol: () -> Unit,
+    /** Null hides the symbol search, for places where only a picture fits. */
+    onSymbol: (() -> Unit)?,
     onRecord: (() -> Unit)? = null
 ) {
     val koin = getKoin()
@@ -42,7 +43,9 @@ internal fun ImageSourcePickerDialog(
                         }
                     }
                 ) { Text(stringResource(R.string.phrase_pick_file)) }
-                TextButton(onClick = onSymbol) { Text(stringResource(R.string.phrase_open_symbols)) }
+                if (onSymbol != null) {
+                    TextButton(onClick = onSymbol) { Text(stringResource(R.string.phrase_open_symbols)) }
+                }
                 if (onRecord != null) {
                     TextButton(onClick = onRecord) { Text(stringResource(R.string.phrase_record_button)) }
                 }

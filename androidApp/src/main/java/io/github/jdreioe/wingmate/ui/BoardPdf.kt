@@ -1,7 +1,6 @@
 package io.github.jdreioe.wingmate.ui
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
@@ -43,7 +42,7 @@ internal suspend fun renderBoardPdf(
     try {
         for (page in pages) {
             val images = page.cells.mapNotNull { cell ->
-                cell.image?.let { image -> loadImage(image)?.let(::decodeScaled)?.let { cell to it } }
+                cell.image?.let { image -> loadImage(image)?.decodeSampledBitmap(MAX_IMAGE_PIXELS)?.let { cell to it } }
             }.toMap()
             val sheet = document.startPage(PdfDocument.PageInfo.Builder(SHEET_WIDTH, SHEET_HEIGHT, page.number).create())
             drawPage(sheet.canvas, page, pages.size, images, opensLabel)
@@ -54,14 +53,6 @@ internal suspend fun renderBoardPdf(
     } finally {
         document.close()
     }
-}
-
-private fun decodeScaled(bytes: ByteArray): Bitmap? {
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-    var sample = 1
-    while (bounds.outWidth / (sample * 2) >= MAX_IMAGE_PIXELS || bounds.outHeight / (sample * 2) >= MAX_IMAGE_PIXELS) sample *= 2
-    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
 }
 
 private fun drawPage(
