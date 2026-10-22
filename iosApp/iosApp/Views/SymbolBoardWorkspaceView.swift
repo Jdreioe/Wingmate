@@ -1766,12 +1766,7 @@ struct SymbolBoardWorkspaceView: View {
         }
 
         // Cancellation ends the search without an error.
-        guard let result = try? await IosDiBridge().symbolSearchFacade().search(
-            query: trimmed,
-            locale: Locale.current.identifier,
-            symbolPackage: editingSymbolPackage.rawValue,
-            prioritizeArasaac: false
-        ) else {
+        guard let result = await model.searchSymbols(query: trimmed, symbolPackage: editingSymbolPackage.rawValue) else {
             await MainActor.run { isSearchingCellSymbols = false }
             return
         }

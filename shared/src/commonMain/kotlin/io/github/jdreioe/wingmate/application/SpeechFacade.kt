@@ -70,10 +70,14 @@ class SpeechFacade(
         }
     }
 
-    /** Select the speech engine by [TtsEngine] name; unknown names fall back to system TTS. */
+    /**
+     * Select the speech engine by [TtsEngine] name. Fails with
+     * [NativeFailureKind.Validation] for an unknown name and keeps the current engine.
+     */
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateTtsEngineNamed(engine: String) = nativeCall {
-        val parsed = runCatching { TtsEngine.valueOf(engine) }.getOrDefault(TtsEngine.SYSTEM)
+        val parsed = TtsEngine.entries.firstOrNull { it.name == engine }
+            ?: throw NativeFailure(NativeFailureKind.Validation)
         settingsUseCase.update(settingsUseCase.get().copy(ttsEngine = parsed))
         Unit
     }

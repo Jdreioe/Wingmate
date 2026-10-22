@@ -28,17 +28,13 @@ private enum PhraseSymbolSource: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-/// Searches through the shared symbol search. Cancellation returns no results and no error.
+/// Searches with `IosViewModel.searchSymbols`. Cancellation returns no results and no error.
 private func searchSymbols(
     _ query: String,
-    packageFilter: SymbolPackageFilter
+    packageFilter: SymbolPackageFilter,
+    using symbolSearch: SymbolSearch
 ) async -> (results: [OpenSymbolsSymbolResult], errorCode: String?) {
-    guard let result = try? await IosDiBridge().symbolSearchFacade().search(
-        query: query,
-        locale: Locale.current.identifier,
-        symbolPackage: packageFilter.rawValue,
-        prioritizeArasaac: false
-    ) else {
+    guard let result = await symbolSearch(query, packageFilter.rawValue) else {
         return ([], nil)
     }
     if result.isSuccess {
@@ -50,9 +46,13 @@ private func searchSymbols(
     return ([], symbolSearchErrorCode(result.status))
 }
 
+/// A symbol search by query and package wire value; nil when cancelled.
+typealias SymbolSearch = (_ query: String, _ symbolPackage: String) async -> Shared.SymbolSearchResult?
+
 /// The Localizable.strings suffix for a failed symbol search.
 func symbolSearchErrorCode(_ status: Shared.SymbolSearchStatus) -> String {
-    status == .notConfigured ? "missing_proxy" : "search_failed"
+    // Kotlin/Native lowercases a PascalCase enum entry whole: NotConfigured -> notconfigured.
+    status == .notconfigured ? "missing_proxy" : "search_failed"
 }
 
 struct AddCategorySheet: View {
@@ -131,6 +131,7 @@ struct AddPhraseSheet: View {
     let recorder: AudioRecorder?
     // (phraseId, path)
     let saveRecordingPath: ((String, String?) -> Void)?
+    let symbolSearch: SymbolSearch
     let onSave: (String, String?, String?, String?) -> Void
 
     var body: some View {
@@ -511,7 +512,7 @@ struct AddPhraseSheet: View {
             symbolResults = []
         }
 
-        let (results, errorCode) = await searchSymbols(trimmed, packageFilter: symbolPackage)
+        let (results, errorCode) = await searchSymbols(trimmed, packageFilter: symbolPackage, using: symbolSearch)
 
         await MainActor.run {
             if let errorCode {
@@ -586,6 +587,7 @@ struct EditPhraseSheet: View {
     let recorder: AudioRecorder?
     // (phraseId, path)
     let saveRecordingPath: ((String, String?) -> Void)?
+    let symbolSearch: SymbolSearch
     @State private var text: String = ""
     @State private var name: String = ""
     @State private var symbolSource: PhraseSymbolSource = .openSymbols
@@ -1006,7 +1008,7 @@ struct EditPhraseSheet: View {
             symbolResults = []
         }
 
-        let (results, errorCode) = await searchSymbols(trimmed, packageFilter: symbolPackage)
+        let (results, errorCode) = await searchSymbols(trimmed, packageFilter: symbolPackage, using: symbolSearch)
 
         await MainActor.run {
             if let errorCode {

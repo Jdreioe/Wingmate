@@ -83,6 +83,29 @@ class SpeechFacadeTest {
     }
 
     @Test
+    fun updatingEngineByNameSelectsKnownEngine() = runBlocking {
+        val settings = InMemorySettingsRepository()
+        val facade = facade(settings = settings)
+
+        facade.updateTtsEngineNamed("GOOGLE_CLOUD")
+
+        assertEquals(TtsEngine.GOOGLE_CLOUD, settings.get().ttsEngine)
+    }
+
+    @Test
+    fun updatingEngineWithUnknownNameFailsValidationAndKeepsEngine() = runBlocking {
+        val settings = InMemorySettingsRepository().apply {
+            update(get().copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE))
+        }
+        val facade = facade(settings = settings)
+
+        val failure = assertFailsWith<NativeFailure> { facade.updateTtsEngineNamed("google_cloud") }
+
+        assertEquals(NativeFailureKind.Validation, failure.kind)
+        assertEquals(TtsEngine.AZURE_USER_RESOURCE, settings.get().ttsEngine)
+    }
+
+    @Test
     fun savingAzureSpeechConfigPersistsEndpointAndSwitchesToAzureEngine() = runBlocking {
         val settings = InMemorySettingsRepository()
         val config = InMemoryConfigRepository()

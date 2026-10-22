@@ -23,7 +23,7 @@ enum class NativeFailureKind {
 }
 
 /**
- * The only error the Boards, Settings, and Speech facades throw, besides
+ * The typed error thrown by native feature facades, besides
  * coroutine cancellation. Swift finds it as `NSError.userInfo["KotlinException"]`
  * and can switch on [kind]. Its message is the kind alone and it keeps no cause,
  * so phrases, keys, and paths never reach native error text.

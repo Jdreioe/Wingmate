@@ -83,6 +83,7 @@ final class IosViewModel: ObservableObject {
     private lazy var typingScreens = IosDiBridge().typingScreenFacade()
     private lazy var predictionFacade = IosDiBridge().predictionFacade()
     private lazy var pronunciationFacade = IosDiBridge().pronunciationFacade()
+    private lazy var symbolSearchFacade = IosDiBridge().symbolSearchFacade()
     // Shared access and highlight policies; Swift only supplies events and the clock.
     private let accessInput = AccessInputController()
     private let selectionHighlight = SelectionHighlight()
@@ -1259,6 +1260,19 @@ final class IosViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Symbol search
+    /// Searches the shared symbol catalogue; ranking and package rules stay in shared code.
+    /// `symbolPackage` is a package wire value (`all`, `opensymbols`, `mulberry`, `arasaac`).
+    /// Returns nil when the search is cancelled.
+    func searchSymbols(query: String, symbolPackage: String) async -> Shared.SymbolSearchResult? {
+        try? await symbolSearchFacade.search(
+            query: query,
+            locale: Locale.current.identifier,
+            symbolPackage: symbolPackage,
+            prioritizeArasaac: false
+        )
+    }
+
     // MARK: - Boardsets (Symbol-First)
     private func boardSetInfo(from set: Shared.ObfBoardSet) -> BoardSetInfo {
         BoardSetInfo(
@@ -1959,7 +1973,7 @@ final class IosViewModel: ObservableObject {
     /// Shows why a Screen edit failed. A Screen or Page that no longer exists reloads the list instead.
     private func reportBoardFailure(_ error: Error, messageKey: String) async {
         if error.isNativeCancellation { return }
-        if error.nativeFailure?.kind == NativeFailureKind.notFound {
+        if error.nativeFailure?.kind == NativeFailureKind.notfound {
             await loadBoardSets()
             boardStatusMessage = NSLocalizedString("boardset.error.not_found", comment: "")
             return

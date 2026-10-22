@@ -67,7 +67,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                 .presentationCornerRadius(20)
             }
             .sheet(isPresented: $showAddPhrase) {
-                AddPhraseSheet(onClose: { showAddPhrase = false }, recorder: recorder, saveRecordingPath: saveRecordingPath) { text, alternativeText, imageUrl, recordingPath in
+                AddPhraseSheet(onClose: { showAddPhrase = false }, recorder: recorder, saveRecordingPath: saveRecordingPath, symbolSearch: { await model.searchSymbols(query: $0, symbolPackage: $1) }) { text, alternativeText, imageUrl, recordingPath in
                     model.addPhrase(text: text, alternativeText: alternativeText, imageUrl: imageUrl, recordingPath: recordingPath)
                     showAddPhrase = false
                 }
@@ -118,7 +118,8 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                             editingPhrase = nil
                         },
                         recorder: recorder,
-                        saveRecordingPath: saveRecordingPath
+                        saveRecordingPath: saveRecordingPath,
+                        symbolSearch: { await model.searchSymbols(query: $0, symbolPackage: $1) }
                     )
                     .presentationDetents([.height(450), .medium, .large])
                     .presentationDragIndicator(.visible)
