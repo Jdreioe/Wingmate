@@ -6,6 +6,9 @@ import io.github.jdreioe.wingmate.application.NativeFailure
 import io.github.jdreioe.wingmate.application.NativeFailureKind
 import io.github.jdreioe.wingmate.application.NoopFeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SettingsUseCase
+import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.backgroundImage
+import io.github.jdreioe.wingmate.domain.obf.withBackgroundImage
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemorySettingsRepository
@@ -76,6 +79,25 @@ class BoardsFacadeTest {
         assertNotNull(cleared)
         assertTrue(cleared.buttons.isEmpty())
         assertTrue(cleared.images.isEmpty())
+    }
+
+    @Test
+    fun clearingACellKeepsThePageBackgroundImage() = runBlocking {
+        val boards = InMemoryBoardRepository()
+        val facade = facade(boards = boards)
+        val boardId = facade.createBoardSet("Test", rows = 1, columns = 1).rootBoardId
+        facade.upsertBoardCellButton(
+            boardId = boardId, row = 0, col = 0, label = "Hello", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = "https://example.com/hello.png", clearImage = false,
+            actions = emptyList(), wordType = null,
+        )
+        boards.saveBoard(boards.getBoard(boardId)!!.withBackgroundImage(ObfImage(id = "bg", path = "bg.png")))
+
+        val cleared = facade.clearBoardCellButton(boardId, row = 0, col = 0)
+
+        assertEquals(listOf("bg"), cleared.images.map { it.id })
+        assertEquals("bg", cleared.backgroundImage?.imageId)
     }
 
     @Test
@@ -183,9 +205,9 @@ class BoardsFacadeTest {
     private fun facade(
         settings: InMemorySettingsRepository = InMemorySettingsRepository(),
         share: ShareService = RecordingShareService(),
+        boards: InMemoryBoardRepository = InMemoryBoardRepository(),
     ): BoardsFacade {
         val boardSets = InMemoryBoardSetRepository()
-        val boards = InMemoryBoardRepository()
         val boardSetUseCase = BoardSetUseCase(boardSets, boards, NoopFeatureUsageReporter())
         val speechCache = BoardSetSpeechCacheUseCase(
             boardSetRepository = boardSets,

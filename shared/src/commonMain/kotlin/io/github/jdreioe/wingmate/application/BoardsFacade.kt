@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.obf.usedImageIds
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
@@ -446,7 +447,7 @@ class BoardsFacade(
         val order = grid.order.mapIndexed { r, columns ->
             columns.mapIndexed { c, id -> if (r == row && c == col) buttonId else id }
         }
-        val usedImageIds = buttons.mapNotNull { it.imageId }.toSet()
+        val usedImageIds = board.usedImageIds(buttons)
         board.copy(
             buttons = buttons,
             images = images.filter { it.id in usedImageIds },
@@ -468,7 +469,7 @@ class BoardsFacade(
         }
         val stillUsed = order.flatten().toSet()
         val buttons = board.buttons.filter { it.id != removedId || it.id in stillUsed }
-        val usedImages = buttons.mapNotNull { it.imageId }.toSet()
+        val usedImages = board.usedImageIds(buttons)
         board.copy(buttons = buttons, images = board.images.filter { it.id in usedImages }, grid = grid.copy(order = order))
             .also { boardRepository.saveBoard(it) }
     }

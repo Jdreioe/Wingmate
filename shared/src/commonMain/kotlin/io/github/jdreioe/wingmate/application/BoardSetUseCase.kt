@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate.application
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.FileStorage
+import io.github.jdreioe.wingmate.domain.obf.usedImageIds
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
@@ -322,7 +323,7 @@ class BoardSetUseCase(
         }
         val retainedIds = order.flatten().filterNotNull().toSet()
         val buttons = board.buttons.filter { it.id in retainedIds }
-        val imageIds = buttons.mapNotNull { it.imageId }.toSet()
+        val imageIds = board.usedImageIds(buttons)
         val updated = board.copy(
             grid = ObfGrid(safeRows, safeColumns, order),
             buttons = buttons,
