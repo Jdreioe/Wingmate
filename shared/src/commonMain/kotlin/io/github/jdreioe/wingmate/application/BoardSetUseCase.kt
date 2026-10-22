@@ -12,6 +12,8 @@ import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.domain.obf.requireValid
 import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_SETTINGS_EXTENSION
 import io.github.jdreioe.wingmate.domain.obf.encodeBoardSettings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 import kotlin.time.Clock
 
@@ -369,16 +371,19 @@ class BoardSetUseCase(
         if (graph.boards.isEmpty()) {
             return ObzExportResult.Failure(ObzExportErrorCode.ROOT_NOT_FOUND, "Board set '$boardSetId' has no boards")
         }
-        return obzExporter.exportResult(
-            boards = graph.boards,
-            rootBoardId = boardSet.rootBoardId,
-            loadMedia = { path -> fileStorage?.loadBytes(path) },
-            manifestExtensions = if (boardSet.screenSettings.isEmpty) {
-                emptyMap()
-            } else {
-                mapOf(OBF_SCREEN_SETTINGS_EXTENSION to encodeBoardSettings(boardSet.screenSettings))
-            }
-        )
+        // Packaging media into the ZIP is heavy; keep it off the caller's (often main) thread.
+        return withContext(Dispatchers.Default) {
+            obzExporter.exportResult(
+                boards = graph.boards,
+                rootBoardId = boardSet.rootBoardId,
+                loadMedia = { path -> fileStorage?.loadBytes(path) },
+                manifestExtensions = if (boardSet.screenSettings.isEmpty) {
+                    emptyMap()
+                } else {
+                    mapOf(OBF_SCREEN_SETTINGS_EXTENSION to encodeBoardSettings(boardSet.screenSettings))
+                }
+            )
+        }
     }
 
     private fun generateId(prefix: String): String {
