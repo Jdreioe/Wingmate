@@ -7,6 +7,7 @@ import io.github.jdreioe.wingmate.application.NativeFailureKind
 import io.github.jdreioe.wingmate.application.SettingsFacade
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.domain.AacLogger
+import io.github.jdreioe.wingmate.domain.PointerEmphasisStyle
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SpeechPolicy
@@ -46,17 +47,36 @@ class SettingsFacadeTest {
     }
 
     @Test
-    fun invalidEnumNamesFallBackToSafeDefaults() = runBlocking {
+    fun invalidEnumNamesAreRejectedAndKeepSavedSettings() = runBlocking {
+        val facade = facade()
+        facade.updateWordTypeColorScheme(WordTypeColorScheme.Fitzgerald.name)
+        facade.updateSpeechPolicy(SpeechPolicy.SentenceOnly.name)
+        facade.updatePointerEmphasis(PointerEmphasisStyle.Ring.name, scale = 2f)
+
+        val failures = listOf(
+            assertFailsWith<NativeFailure> { facade.updateWordTypeColorScheme("not-a-scheme") },
+            assertFailsWith<NativeFailure> { facade.updateSpeechPolicy("not-a-policy") },
+            assertFailsWith<NativeFailure> { facade.updatePointerEmphasis("not-a-style", scale = 3f) },
+        )
+
+        assertEquals(List(3) { NativeFailureKind.Validation }, failures.map { it.kind })
+        val settings = facade.getSettings()
+        assertEquals(WordTypeColorScheme.Fitzgerald, settings.wordTypeColorScheme)
+        assertEquals(SpeechPolicy.SentenceOnly, settings.speechPolicy)
+        assertEquals(PointerEmphasisStyle.Ring, settings.pointerEmphasisStyle)
+        assertEquals(2f, settings.pointerEmphasisScale)
+    }
+
+    @Test
+    fun validPointerEmphasisIsAppliedWithScaleClamped() = runBlocking {
         val facade = facade()
 
-        facade.updateWordTypeColorScheme("not-a-scheme")
-        facade.updateSpeechPolicy("not-a-policy")
-        facade.updatePointerEmphasis("not-a-style", scale = 9f)
+        facade.updatePointerEmphasis(PointerEmphasisStyle.Outline.name, scale = 9f)
+        assertEquals(PointerEmphasisStyle.Outline, facade.getSettings().pointerEmphasisStyle)
+        assertEquals(3f, facade.getSettings().pointerEmphasisScale)
 
-        val settings = facade.getSettings()
-        assertEquals(WordTypeColorScheme.None, settings.wordTypeColorScheme)
-        assertEquals(SpeechPolicy.Immediate, settings.speechPolicy)
-        assertEquals(3f, settings.pointerEmphasisScale)
+        facade.updatePointerEmphasis(PointerEmphasisStyle.Ring.name, scale = 0f)
+        assertEquals(1f, facade.getSettings().pointerEmphasisScale)
     }
 
     @Test

@@ -71,8 +71,7 @@ class SettingsFacade(
     suspend fun updateHighContrastMode(enabled: Boolean) = updateSettings { it.copy(highContrastMode = enabled) }
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateWordTypeColorScheme(scheme: String) = updateSettings {
-        it.copy(wordTypeColorScheme = runCatching { WordTypeColorScheme.valueOf(scheme) }
-            .getOrDefault(WordTypeColorScheme.None))
+        it.copy(wordTypeColorScheme = enumNamed<WordTypeColorScheme>(scheme))
     }
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateHoldToSelectMillis(millis: Long) = updateSettings { it.copy(holdToSelectMillis = millis.coerceIn(0, 2_000)) }
@@ -85,7 +84,7 @@ class SettingsFacade(
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updatePointerEmphasis(style: String, scale: Float) = updateSettings {
         it.copy(
-            pointerEmphasisStyle = runCatching { PointerEmphasisStyle.valueOf(style) }.getOrDefault(PointerEmphasisStyle.System),
+            pointerEmphasisStyle = enumNamed<PointerEmphasisStyle>(style),
             pointerEmphasisScale = scale.coerceIn(1f, 3f),
         )
     }
@@ -97,17 +96,17 @@ class SettingsFacade(
     suspend fun updateAuditoryFishingEnabled(enabled: Boolean) = updateSettings { it.copy(auditoryFishingEnabled = enabled) }
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateSpeechPolicy(policy: String) = updateSettings {
-        it.copy(speechPolicy = runCatching { SpeechPolicy.valueOf(policy) }.getOrDefault(SpeechPolicy.Immediate))
+        it.copy(speechPolicy = enumNamed<SpeechPolicy>(policy))
     }
 
     /**
      * Whether a single selection should speak immediately, given the global
      * speech policy and the resolved board activation behavior. Sentence-only
-     * never speaks during composition.
+     * never speaks during composition; an unknown policy name reads as Immediate.
      */
     fun speechPolicySpeaksSelection(policy: String, behavior: String): Boolean =
         shouldSpeakSelectionImmediately(
-            policy = runCatching { SpeechPolicy.valueOf(policy) }.getOrDefault(SpeechPolicy.Immediate),
+            policy = SpeechPolicy.entries.find { it.name == policy } ?: SpeechPolicy.Immediate,
             behavior = behavior.toBoardActivationBehavior(),
         )
 
@@ -175,6 +174,13 @@ class SettingsFacade(
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun recoverEditingAccess() = nativeCall { editingAccess.recover() }
 }
+
+/**
+ * The [E] entry named [name]. An unknown name fails with [NativeFailureKind.Validation]
+ * so an enum setting update leaves the saved value unchanged.
+ */
+private inline fun <reified E : Enum<E>> enumNamed(name: String): E =
+    enumValues<E>().firstOrNull { it.name == name } ?: throw NativeFailure(NativeFailureKind.Validation)
 
 private fun String.toBoardActivationBehavior(): BoardActivationBehavior =
     when (this) {
