@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,23 +49,25 @@ fun AddPhraseDialog(
     initialPhrase: Phrase? = null,
     onSave: (Phrase) -> Unit,
     onDelete: ((String) -> Unit)? = null,
+    isEditing: Boolean = initialPhrase != null,
+    saving: Boolean = false,
+    saveFailed: Boolean = false,
 ) {
-    var text by remember { mutableStateOf(initialPhrase?.text ?: "") }
-    var altText by remember { mutableStateOf(initialPhrase?.name ?: "") }
-    var imageUrl by remember { mutableStateOf(initialPhrase?.imageUrl ?: "") }
-    var recordingPath by remember { mutableStateOf(initialPhrase?.recordingPath.orEmpty()) }
+    var text by rememberSaveable(initialPhrase?.id) { mutableStateOf(initialPhrase?.text ?: "") }
+    var altText by rememberSaveable(initialPhrase?.id) { mutableStateOf(initialPhrase?.name ?: "") }
+    var imageUrl by rememberSaveable(initialPhrase?.id) { mutableStateOf(initialPhrase?.imageUrl ?: "") }
+    var recordingPath by rememberSaveable(initialPhrase?.id) { mutableStateOf(initialPhrase?.recordingPath.orEmpty()) }
     var recordingInProgress by remember { mutableStateOf(false) }
     var recordingError by remember { mutableStateOf<String?>(null) }
-    var selectedColor by remember { mutableStateOf(initialPhrase?.backgroundColor?.let { parseHexToColor(it) } ?: Color.Blue) }
-    var useColor by remember { mutableStateOf(initialPhrase?.backgroundColor != null) }
-    var isHidden by remember { mutableStateOf(initialPhrase?.isHidden ?: false) }
-    var hue by remember { mutableStateOf(0f) }
-    var value by remember { mutableStateOf(1f) }
-    var selectedCategory by remember {
-        mutableStateOf(
-            categories.firstOrNull { it.id == (initialPhrase?.parentId ?: defaultCategoryId) }
-        )
-    }
+    var selectedColor by rememberSaveable(initialPhrase?.id, stateSaver = Saver<Color, Int>(save = { it.toArgb() }, restore = { Color(it) })) { mutableStateOf(initialPhrase?.backgroundColor?.let { parseHexToColor(it) } ?: Color.Blue) }
+    var useColor by rememberSaveable(initialPhrase?.id) { mutableStateOf(initialPhrase?.backgroundColor != null) }
+    var isHidden by rememberSaveable(initialPhrase?.id) { mutableStateOf(initialPhrase?.isHidden ?: false) }
+    var hue by rememberSaveable(initialPhrase?.id) { mutableStateOf(0f) }
+    var value by rememberSaveable(initialPhrase?.id) { mutableStateOf(1f) }
+    var selectedCategoryId by rememberSaveable(initialPhrase?.id) { mutableStateOf(initialPhrase?.parentId ?: defaultCategoryId) }
+    val selectedCategory = categories.firstOrNull { it.id == selectedCategoryId }
+    val draftId = rememberSaveable(initialPhrase?.id) { initialPhrase?.id ?: java.util.UUID.randomUUID().toString() }
+
     val koin = getKoin()
     val imageCacher = remember(koin) {
         koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.ImageCacher>()
@@ -124,10 +128,10 @@ fun AddPhraseDialog(
     }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!saving) onDismiss() },
         title = {
             Text(
-                if (initialPhrase == null) {
+                if (!isEditing) {
                     stringResource(R.string.phrase_add_title)
                 } else {
                     stringResource(R.string.phrase_edit_title)
@@ -137,6 +141,9 @@ fun AddPhraseDialog(
         text = {
             val scrollState = rememberScrollState()
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(scrollState)) {
+                if (saveFailed) {
+                    Text(stringResource(R.string.typing_screen_save_failed), color = MaterialTheme.colorScheme.error)
+                }
                 val showKeyboard = Modifier.showKeyboardOnFocus()
                 OutlinedTextField(
                     value = altText,
@@ -460,7 +467,7 @@ fun AddPhraseDialog(
                                 DropdownMenuItem(
                                     text = { Text(cat.name ?: stringResource(R.string.common_no_name)) },
                                     onClick = {
-                                        selectedCategory = cat
+                                        selectedCategoryId = cat.id
                                         expanded = false
                                     }
                                 )
@@ -472,7 +479,7 @@ fun AddPhraseDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
+            TextButton(enabled = !saving, onClick = {
                 scope.launch {
                     recordingError = null
 
@@ -514,7 +521,7 @@ fun AddPhraseDialog(
                         )
                     } else {
                         Phrase(
-                            id = java.util.UUID.randomUUID().toString(),
+                            id = draftId,
                             text = finalLabel,
                             name = finalVocalization,
                             backgroundColor = hex,
@@ -526,7 +533,6 @@ fun AddPhraseDialog(
                         )
                     }
                     onSave(phrase)
-                    onDismiss()
                 }
             }) {
                 Text(stringResource(R.string.common_save))
@@ -534,19 +540,18 @@ fun AddPhraseDialog(
         },
         dismissButton = {
             Row {
-                if (initialPhrase != null && onDelete != null) {
-                    TextButton(onClick = {
+                if (isEditing && initialPhrase != null && onDelete != null) {
+                    TextButton(enabled = !saving, onClick = {
                         scope.launch {
                             if (recordingInProgress) {
                                 runCatching { recordingService?.stopRecording() }
                                 recordingInProgress = false
                             }
                             onDelete(initialPhrase.id)
-                            onDismiss()
                         }
                     }) { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error) }
                 }
-                TextButton(onClick = {
+                TextButton(enabled = !saving, onClick = {
                     scope.launch {
                         if (recordingInProgress) {
                             runCatching { recordingService?.stopRecording() }

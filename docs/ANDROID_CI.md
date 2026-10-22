@@ -13,6 +13,19 @@ cold runner, with warm-cache runs generally faster. The Play workflow repeats
 this read-only, secret-free gate in a separate job before installing Infisical
 or running `publishReleaseBundle` with injected release credentials.
 
+## Presentation boundaries
+
+`PhraseScreenViewModelTest` checks Typing actions, navigation, failed edits,
+unlock decisions, recreation, predictions, and undo using a real shared
+communication session with fake storage and speech. `PhraseScreenContentTest`
+and `ObfBoardContentTest` render supplied state without Koin. They cover
+Message controls, vocabulary actions, keyboard and switch activation, focus,
+resize accessibility actions, and empty or failed content.
+
+The app root owns speech and persistence failure feedback. The presentation
+layers keep the shared communication session authoritative and never clear its
+Message as a side effect of loading or editing vocabulary.
+
 ## Manual accessibility verification
 
 Instrumentation protects keyboard/switch activation and Rest mode at the input

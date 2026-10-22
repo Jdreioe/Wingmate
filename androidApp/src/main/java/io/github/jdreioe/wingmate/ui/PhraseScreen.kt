@@ -12,7 +12,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.background
@@ -38,7 +37,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -61,55 +60,33 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.*
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
-import io.github.jdreioe.wingmate.application.FeatureUsageReporter
-import io.github.jdreioe.wingmate.application.reportEvent
-import io.github.jdreioe.wingmate.application.PhraseBloc
-import io.github.jdreioe.wingmate.application.PhraseEvent
-import io.github.jdreioe.wingmate.application.VoiceUseCase
-import io.github.jdreioe.wingmate.application.TypingScreenUseCase
-import io.github.jdreioe.wingmate.application.CategoryUseCase
 import io.github.jdreioe.wingmate.application.EditingAccessController
-import io.github.jdreioe.wingmate.domain.CategoryItem
-import io.github.jdreioe.wingmate.domain.CommunicationAction
 import io.github.jdreioe.wingmate.domain.CommunicationPlaybackStatus
-import io.github.jdreioe.wingmate.domain.CommunicationSession
 import io.github.jdreioe.wingmate.domain.Message
-import io.github.jdreioe.wingmate.domain.MessagePart
-import io.github.jdreioe.wingmate.domain.MessagePartSource
 import io.github.jdreioe.wingmate.domain.Phrase
-import io.github.jdreioe.wingmate.domain.activatePhrase
-import io.github.jdreioe.wingmate.domain.fromTextDiff
-import io.github.jdreioe.wingmate.domain.isGridPhrase
-import io.github.jdreioe.wingmate.domain.phraseSubtree
-import io.github.jdreioe.wingmate.domain.PredictionResult
-import io.github.jdreioe.wingmate.domain.TextEditingPolicy
 import io.github.jdreioe.wingmate.domain.TextPredictionService
-import io.github.jdreioe.wingmate.domain.TextSpan
 import io.github.jdreioe.wingmate.domain.TtsEngine
-import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
-import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import androidx.compose.ui.res.stringResource
 import org.koin.compose.getKoin
-import org.koin.compose.koinInject
 
 import com.hojmoseit.wingmate.BuildConfig
 import com.hojmoseit.wingmate.R
-/** Input surface under the Message bar. They take turns; only one is ever shown. */
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import io.github.jdreioe.wingmate.domain.Settings
+
+/** Input surface under the Message bar. Geometry and IME lifecycle belong to Compose. */
 private enum class TypingInputSurface { Keyboard, Tray }
 
 internal fun supportsMathMode(ttsEngine: TtsEngine): Boolean =
     ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED
 
-@OptIn(
-    ExperimentalMaterial3Api::class,
-    ExperimentalFoundationApi::class,
-    ExperimentalComposeUiApi::class,
-    ExperimentalLayoutApi::class,
-)
 @Composable
 fun PhraseScreen(
     onBackToWelcome: (() -> Unit)? = null,
@@ -117,353 +94,148 @@ fun PhraseScreen(
     onEditTypingScreen: (() -> Unit)? = null,
 ) {
     val koin = getKoin()
-    val phraseScreenScope = rememberCoroutineScope()
-    val context = LocalContext.current
-    val density = LocalDensity.current
-    val typingTrayPreferences = remember(context) {
-        context.getSharedPreferences("typing-screen-ui", android.content.Context.MODE_PRIVATE)
-    }
-    // Tray height, per client and outside the Screen graph (#248): the last
-    // keyboard height, so switching surfaces doesn't move the Message bar.
-    // Includes the navigation bar.
-    var keyboardTrayHeight by remember {
-        mutableStateOf(
-            typingTrayPreferences.getFloat("keyboard-height-dp", Float.NaN).takeUnless { it.isNaN() }?.dp
+    val operations = remember(koin) {
+        DefaultPhraseScreenOperations(
+            bloc = koin.get(), session = koin.get(), settingsManager = koin.get(),
+            typing = koin.get(), category = koin.get(), deletePhraseUseCase = koin.get(), phraseUseCase = koin.get(),
+            saidRepository = koin.get(), voices = koin.get(), editingAccess = koin.getOrNull(),
+            prediction = if (BuildConfig.DEBUG) koin.getOrNull<TextPredictionService>() else null,
+            reporter = koin.get(),
         )
     }
-    val bloc = koinInject<PhraseBloc>()
-    val featureUsageReporter = koinInject<FeatureUsageReporter>()
-    val state by bloc.state.collectAsStateWithLifecycle()
-
-    // Ensure initial list loads on first composition
-    LaunchedEffect(bloc) {
-        bloc.dispatch(PhraseEvent.Load)
+    val factory = remember(operations) {
+        viewModelFactory { initializer { PhraseScreenViewModel(createSavedStateHandle(), operations) } }
     }
-
-    // Load settings for UI scaling using reactive state manager
-    val settings by rememberReactiveSettings()
-
-    val communicationSession = koinInject<CommunicationSession>()
-    val communicationState by communicationSession.state.collectAsStateWithLifecycle()
-    val saidRepo = koinInject<io.github.jdreioe.wingmate.domain.SaidTextRepository>()
-    val voiceUseCase = koinInject<VoiceUseCase>()
-    val typingScreenUseCase = koinInject<TypingScreenUseCase>()
-    val categoryUseCase = koinInject<CategoryUseCase>()
-    val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
-
-    val predictionsEnabled = BuildConfig.DEBUG
-    val predictionService = remember(koin, predictionsEnabled) {
-        if (predictionsEnabled) koin.getOrNull<TextPredictionService>() else null
-    }
-
-    val phraseRepo = remember(koin) { koin.getOrNull<io.github.jdreioe.wingmate.domain.PhraseRepository>() }
-    var typingTemplateRevision by remember { mutableIntStateOf(0) }
-    var typingTemplateGraph by remember { mutableStateOf<BoardSetGraph?>(null) }
-    var typingTemplateLoadFailed by remember { mutableStateOf(false) }
-    var categoriesLoadedOnce by remember { mutableStateOf(false) }
-    var categoriesLoadFailed by remember { mutableStateOf(false) }
-    LaunchedEffect(settings.gridColumns, typingScreenUseCase, typingTemplateRevision) {
-        runCatching { typingScreenUseCase.getOrCreate(settings.gridColumns) }
-            .onSuccess {
-                typingTemplateGraph = it
-                typingTemplateLoadFailed = false
+    val viewModel: PhraseScreenViewModel = viewModel(factory = factory)
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val showFullscreen by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    val deleted = stringResource(R.string.phrase_deleted)
+    val undo = stringResource(R.string.action_undo)
+    val unavailable = stringResource(R.string.typing_screen_content_unavailable)
+    LaunchedEffect(viewModel, deleted, undo, unavailable) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is PhraseScreenEvent.Deleted -> launch {
+                    var undoRequested = false
+                    try {
+                        undoRequested = snackbar.showSnackbar(deleted, undo, duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed
+                        if (undoRequested) viewModel.onAction(PhraseScreenAction.UndoDelete(event.deletionId))
+                    } finally {
+                        if (!undoRequested) viewModel.onAction(PhraseScreenAction.ForgetDelete(event.deletionId))
+                    }
+                }
+                PhraseScreenEvent.ContentUnavailable -> launch { snackbar.showSnackbar(unavailable) }
             }
-            .onFailure { typingTemplateLoadFailed = true }
+        }
     }
+    LaunchedEffect(state.communication.activeMessage.displayText, showFullscreen) {
+        if (showFullscreen) io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(state.communication.activeMessage.displayText)
+    }
+    val context = LocalContext.current
+    val preferences = remember(context) { context.getSharedPreferences("typing-screen-ui", android.content.Context.MODE_PRIVATE) }
+    var trayHeight by remember { mutableStateOf(preferences.getFloat("keyboard-height-dp", Float.NaN).takeUnless { it.isNaN() }?.dp) }
+    PhraseScreenContent(
+        ui = state, onAction = viewModel::onAction, snackbarHostState = snackbar,
+        boardFeedback = rememberBoardFeedback(),
+        showFullscreen = showFullscreen, keyboardTrayHeight = trayHeight,
+        onKeyboardHeight = { height ->
+            trayHeight = height
+            preferences.edit().putFloat("keyboard-height-dp", height.value).apply()
+        },
+        onToggleFullscreen = {
+            io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(state.input.text)
+            if (showFullscreen) io.github.jdreioe.wingmate.presentation.DisplayWindowBus.close()
+            else io.github.jdreioe.wingmate.presentation.DisplayWindowBus.open()
+            operations.report(FeatureUsageEvents.FULLSCREEN_TOGGLE, "enabled" to (!showFullscreen).toString())
+        },
+        onOpenBoardSetManager = onOpenBoardSetManager?.let { open -> {
+            operations.report(FeatureUsageEvents.SCREEN_VIEW, "screen" to "boardsets")
+            open()
+        } },
+        onEditTypingScreen = onEditTypingScreen,
+    )
+    when (state.dialog) {
+        TypingDialog.Settings -> SettingsScreen(
+            onDismiss = { viewModel.onAction(PhraseScreenAction.DismissDialog) },
+            onSaved = { viewModel.onAction(PhraseScreenAction.DismissDialog) },
+            onBackToWelcome = onBackToWelcome,
+        )
+        TypingDialog.Unlock -> koin.getOrNull<EditingAccessController>()?.let { controller ->
+            EditingAccessDialog(controller, EditingAccessDialogMode.Unlock,
+                onDismiss = { viewModel.onAction(PhraseScreenAction.DismissDialog) },
+                onSuccess = { viewModel.onAction(PhraseScreenAction.Unlocked) })
+        }
+        TypingDialog.AddPhrase, TypingDialog.EditPhrase -> if (state.dialog == TypingDialog.AddPhrase || state.dialogPhrase != null) AddPhraseDialog(
+            onDismiss = { viewModel.onAction(PhraseScreenAction.DismissDialog) },
+            categories = state.categories,
+            initialPhrase = state.dialogPhrase,
+            defaultCategoryId = state.selectedCategory?.id,
+            onSave = { viewModel.onAction(PhraseScreenAction.SavePhrase(it)) },
+            onDelete = { viewModel.onAction(PhraseScreenAction.DeletePhrase(it)) },
+            isEditing = state.dialog == TypingDialog.EditPhrase,
+            saveFailed = state.mutationFailed,
+            saving = state.mutationInProgress,
+        )
+        else -> Unit
+    }
+}
 
-    var showSettingsDialog by remember { mutableStateOf(false) }
-    var showTypingResetConfirmation by remember { mutableStateOf(false) }
-    var showTypingResetUnlock by remember { mutableStateOf(false) }
-    var showTypingMutationUnlock by remember { mutableStateOf(false) }
-    var pendingTypingMutation by remember { mutableStateOf<(() -> Unit)?>(null) }
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class,
+    ExperimentalComposeUiApi::class, ExperimentalLayoutApi::class)
+@Composable
+internal fun PhraseScreenContent(
+    ui: PhraseScreenState,
+    boardFeedback: BoardFeedback = remember { BoardFeedback() },
+    onAction: (PhraseScreenAction) -> Unit,
+    showFullscreen: Boolean = false,
+    keyboardTrayHeight: Dp? = null,
+    onKeyboardHeight: (Dp) -> Unit = {},
+    onToggleFullscreen: () -> Unit = {},
+    onOpenBoardSetManager: (() -> Unit)? = null,
+    onEditTypingScreen: (() -> Unit)? = null,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+) {
+    val density = LocalDensity.current
+    val settings = ui.settings
+    val state = ui.phrases
+    val communicationState = ui.communication
+    val input = ui.input
+    val mathMode = ui.mathMode
+    val secondaryLanguageRanges = ui.secondaryRanges
+    val isSpeechPaused = communicationState.playbackStatus == CommunicationPlaybackStatus.Paused
+    val predictions = ui.predictions
+    val predictionsEnabled = BuildConfig.DEBUG
+    val typingTemplateGraph = ui.template
+    val typingTemplateLoadFailed = ui.templateStatus == TypingLoadStatus.Failed
+    val categoriesLoadFailed = ui.categoryStatus == TypingLoadStatus.Failed
+    val historyItems = ui.history
+    val categories = ui.categories
+    val selectedPage = ui.selectedPage
+    val selectedCategory = ui.selectedCategory
+    val visiblePhrases = remember(state.items, selectedPage, ui.settings.historyVisible) { ui.visiblePhrases }
+    val compactPhrases = remember(state.items, ui.lastPhraseCategoryId) { ui.compactPhrases }
+    val categoryMenu = ui.dialogCategory.takeIf { ui.dialog == TypingDialog.CategoryMenu }
+    val confirmDeleteCategory = ui.dialogCategory.takeIf { ui.dialog == TypingDialog.DeleteCategory }
+    val showAddCategoryDialog = ui.dialog == TypingDialog.AddCategory
     var appBarMenuExpanded by remember { mutableStateOf(false) }
     var typingMenuExpanded by remember { mutableStateOf(false) }
-    val showFullscreen by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsStateWithLifecycle()
-
+    val textFieldFocusRequester = remember { FocusRequester() }
+    var inputSurface by rememberSaveable { mutableStateOf(TypingInputSurface.Tray) }
+    val refocusInput = { if (inputSurface == TypingInputSurface.Keyboard) textFieldFocusRequester.requestFocus() }
+    val toggleFullscreen = onToggleFullscreen
+    val openBoardSets = { onOpenBoardSetManager?.invoke(); Unit }
+    val openSettings = { onAction(PhraseScreenAction.RequestDialog(TypingDialog.Settings)) }
+    val requestTypingScreenReset = { onAction(PhraseScreenAction.RequestDialog(TypingDialog.Reset)) }
+    fun control(effect: ObfButtonActionEffect) { onAction(PhraseScreenAction.Control(effect)); refocusInput() }
+    val playInput = { control(ObfButtonActionEffect.Speak) }
+    val pauseSpeech = { control(ObfButtonActionEffect.Pause) }
+    val stopSpeech = { control(ObfButtonActionEffect.Stop) }
+    val resumeSpeech = { control(ObfButtonActionEffect.Resume) }
+    val toggleThatThought = { control(ObfButtonActionEffect.SwapHeldMessage) }
+    val toggleSecondarySelection: (() -> Unit)? = if (ui.hasSecondaryLanguage) ({ control(ObfButtonActionEffect.ToggleSecondaryLanguage) }) else null
+    val activatePhraseFromTypingScreen: (Phrase) -> Unit = { onAction(PhraseScreenAction.ActivatePhrase(it)) }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        val hasUsableSecondaryLanguage = produceState(
-            initialValue = false,
-            key1 = settings.secondaryLanguage,
-            key2 = settings.primaryLanguage
-        ) {
-            val voice = runCatching { voiceUseCase.selected() }.getOrNull()
-            val supported = voice?.supportedLanguages
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() }
-                ?.distinct()
-                .orEmpty()
-            value = settings.secondaryLanguage.isNotBlank() &&
-                settings.secondaryLanguage != settings.primaryLanguage &&
-                supported.size > 1 &&
-                settings.secondaryLanguage in supported
-        }
-
-            // Derived input: text comes from session, cursor is local UI state (Q3=a, Q8=a)
-            var cursor by remember { mutableStateOf(TextRange(communicationState.activeMessage.displayText.length)) }
-            var mathMode by remember { mutableStateOf(false) }
-            LaunchedEffect(settings.ttsEngine) {
-                if (!supportsMathMode(settings.ttsEngine)) {
-                    mathMode = false
-                }
-            }
-            val secondaryLanguageRanges = communicationState.activeMessage.languageSpans
-                .filter { it.languageTag == settings.secondaryLanguage }
-                .map { TextRange(it.range.start, it.range.endExclusive) }
-            val textFieldFocusRequester = remember { FocusRequester() }
-            // The system keyboard and the Typing Screen tray take turns below the
-            // Message bar (#248, #299). The tray is the resting surface.
-            var inputSurface by remember { mutableStateOf(TypingInputSurface.Tray) }
-            // Returning focus would raise the keyboard, so only do it while typing.
-            val refocusInput = remember(textFieldFocusRequester) {
-                {
-                    if (inputSurface == TypingInputSurface.Keyboard) {
-                        textFieldFocusRequester.requestFocus()
-                    }
-                }
-            }
-            val syncDisplayText = remember(showFullscreen) {
-                { text: String ->
-                    if (showFullscreen) {
-                        io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(text)
-                    }
-                }
-            }
-            LaunchedEffect(communicationState.activeMessage.displayText) {
-                val text = communicationState.activeMessage.displayText
-                if (cursor.start > text.length || cursor.end > text.length) {
-                    cursor = TextRange(text.length)
-                }
-                syncDisplayText(text)
-            }
-            // The keyboard's in-progress word (composition). Gboard needs it back to
-            // replace the word with a suggestion or finish a swipe. It is kept only
-            // while the text is still what the field reported; any other edit
-            // (Phrase, Clear, Swap) drops it.
-            var lastFieldValue by remember { mutableStateOf<TextFieldValue?>(null) }
-            val displayText = communicationState.activeMessage.displayText
-            val input = TextFieldValue(
-                text = displayText,
-                selection = cursor,
-                composition = lastFieldValue?.takeIf { it.text == displayText }?.composition,
-            )
-            var predictions by remember { mutableStateOf(PredictionResult()) }
-
-            val isSpeechPaused = communicationState.playbackStatus == CommunicationPlaybackStatus.Paused
-
-            // selected voice / available languages for language selection
-            val selectedVoiceState = produceState<io.github.jdreioe.wingmate.domain.Voice?>(
-                initialValue = null,
-                voiceUseCase,
-                settings.primaryLanguage,
-                settings.secondaryLanguage,
-                showSettingsDialog,
-            ) {
-                value = runCatching { voiceUseCase.selected() }.getOrNull()
-            }
-            val uiScope = rememberCoroutineScope()
-            val snackbarHostState = remember { SnackbarHostState() }
-            val deletedMessage = stringResource(R.string.phrase_deleted)
-            val undoLabel = stringResource(R.string.action_undo)
-            val typingResetFailedMessage = stringResource(R.string.typing_screen_reset_failed)
-            val typingContentUnavailableMessage = stringResource(R.string.typing_screen_content_unavailable)
-            val requestTypingMutation: ((() -> Unit) -> Unit) = { mutation ->
-                if (
-                    typingTemplateGraph == null ||
-                    typingTemplateLoadFailed ||
-                    !categoriesLoadedOnce ||
-                    categoriesLoadFailed ||
-                    state.error != null
-                ) {
-                    phraseScreenScope.launch {
-                        snackbarHostState.showSnackbar(typingContentUnavailableMessage)
-                    }
-                } else phraseScreenScope.launch {
-                    if (editingAccessController?.requiresUnlock() == true) {
-                        pendingTypingMutation = mutation
-                        showTypingMutationUnlock = true
-                    } else {
-                        mutation()
-                    }
-                }
-            }
-
-            /**
-             * Delete a phrase (and any sub-items) with a snackbar undo. The removed
-             * subtree is captured up front so Undo re-adds the exact same nodes with
-             * their original ids — repositories preserve caller-supplied ids on add.
-             */
-            fun deleteWithUndo(phraseId: String?) {
-                if (phraseId.isNullOrBlank()) return
-                val all = bloc.state.value.items
-                val removed = phraseSubtree(all, phraseId)
-                if (removed.isEmpty()) return
-                bloc.dispatch(PhraseEvent.Delete(phraseId))
-                uiScope.launch {
-                    val result = snackbarHostState.showSnackbar(
-                        message = deletedMessage,
-                        actionLabel = undoLabel,
-                        duration = SnackbarDuration.Short,
-                    )
-                    if (result == SnackbarResult.ActionPerformed) {
-                        // Parent-first order so restored sub-items find their parent id.
-                        removed.forEach { bloc.dispatch(PhraseEvent.Add(it)) }
-                    }
-                }
-            }
-            var historyItems by remember { mutableStateOf<List<io.github.jdreioe.wingmate.domain.SaidText>>(emptyList()) }
-
-            LaunchedEffect(saidRepo) {
-                try {
-                    historyItems = saidRepo.list().filter { it.visibleInHistory }
-                        .sortedByDescending { it.date ?: it.createdAt ?: 0L }
-                } catch (failure: kotlinx.coroutines.CancellationException) {
-                    throw failure
-                } catch (_: Exception) {
-                    // Preserve visible history if a refresh fails.
-                }
-            }
-
-            var observedSpeechRequestId by remember { mutableStateOf<Long?>(null) }
-            LaunchedEffect(communicationState.currentSpeechRequestId, saidRepo) {
-                val currentRequestId = communicationState.currentSpeechRequestId
-                if (currentRequestId != null) {
-                    observedSpeechRequestId = currentRequestId
-                } else if (observedSpeechRequestId != null) {
-                    observedSpeechRequestId = null
-                    runCatching { saidRepo.list() }
-                        .onSuccess { items ->
-                            historyItems = items
-                                .filter { it.visibleInHistory }
-                                .sortedByDescending { it.date ?: it.createdAt ?: 0L }
-                        }
-                }
-            }
-            
-            // input is an immutable projection of the communication session.
-            // Restart on text changes instead of capturing its initial value in a flow.
-            LaunchedEffect(predictionService, input.text) {
-                val service = predictionService ?: return@LaunchedEffect
-                if (input.text.isBlank()) {
-                    predictions = PredictionResult()
-                    return@LaunchedEffect
-                }
-                delay(250)
-                service.predictions(input.text, maxWords = 5, maxLetters = 4)
-                    .collect { predictions = it }
-            }
-
-            val openBoardSets: () -> Unit = {
-                featureUsageReporter.reportEvent(
-                    FeatureUsageEvents.SCREEN_VIEW,
-                    "screen" to "boardsets"
-                )
-                onOpenBoardSetManager?.invoke()
-            }
-            val toggleFullscreen = {
-                io.github.jdreioe.wingmate.presentation.DisplayTextBus.set(input.text)
-                if (showFullscreen) io.github.jdreioe.wingmate.presentation.DisplayWindowBus.close()
-                else io.github.jdreioe.wingmate.presentation.DisplayWindowBus.open()
-                featureUsageReporter.reportEvent(
-                    FeatureUsageEvents.FULLSCREEN_TOGGLE,
-                    "enabled" to (!showFullscreen).toString()
-                )
-            }
-            val openSettings = {
-                showSettingsDialog = true
-                featureUsageReporter.reportEvent(
-                    FeatureUsageEvents.SETTINGS_UPDATED,
-                    "action" to "open_app_settings"
-                )
-            }
-            val requestTypingScreenReset = {
-                phraseScreenScope.launch {
-                    if (editingAccessController?.requiresUnlock() == true) {
-                        showTypingResetUnlock = true
-                    } else {
-                        showTypingResetConfirmation = true
-                    }
-                }
-                Unit
-            }
-
-            // Transport actions shared by the Message bar and Action strip.
-            val playInput: () -> Unit = {
-                if (input.text.isBlank()) {
-                    refocusInput()
-                } else {
-                    featureUsageReporter.reportEvent(
-                        FeatureUsageEvents.PLAYBACK_PLAY,
-                        "source" to "input",
-                        "has_secondary_ranges" to secondaryLanguageRanges.isNotEmpty().toString()
-                    )
-                    communicationSession.accept(
-                        CommunicationAction.SpeakActive(
-                            voice = selectedVoiceState.value?.copy(mathMode = mathMode),
-                        )
-                    )
-                    refocusInput()
-                }
-            }
-            val pauseSpeech: () -> Unit = {
-                featureUsageReporter.reportEvent(
-                    FeatureUsageEvents.PLAYBACK_PAUSE,
-                    "source" to "input"
-                )
-                communicationSession.accept(CommunicationAction.Pause)
-                refocusInput()
-            }
-            val stopSpeech: () -> Unit = {
-                featureUsageReporter.reportEvent(
-                    FeatureUsageEvents.PLAYBACK_STOP,
-                    "source" to "input"
-                )
-                communicationSession.accept(CommunicationAction.Stop)
-                refocusInput()
-            }
-            val resumeSpeech: () -> Unit = {
-                featureUsageReporter.reportEvent(
-                    FeatureUsageEvents.PLAYBACK_RESUME,
-                    "source" to "input"
-                )
-                communicationSession.accept(CommunicationAction.Resume)
-                refocusInput()
-            }
-            // Selection-dependent actions shared by every Message control surface.
-            val toggleSecondarySelection: (() -> Unit)? = if (hasUsableSecondaryLanguage.value) {
-                {
-                    val normalizedSelection = normalizeRange(input.selection, input.text.length)
-                    val selectionHasLength = normalizedSelection.spanLength() > 0
-                    val alreadySecondary = selectionHasLength &&
-                        isRangeFullySecondary(normalizedSelection, secondaryLanguageRanges)
-                    if (!selectionHasLength) {
-                        refocusInput()
-                    } else {
-                        communicationSession.accept(
-                            CommunicationAction.ToggleLanguage(
-                                range = TextSpan(normalizedSelection.start, normalizedSelection.end),
-                                languageTag = settings.secondaryLanguage,
-                            )
-                        )
-                        featureUsageReporter.reportEvent(
-                            FeatureUsageEvents.PLAYBACK_SECONDARY_TOGGLE,
-                            "enabled" to (!alreadySecondary).toString()
-                        )
-                        refocusInput()
-                    }
-                }
-            } else null
-            val toggleThatThought: () -> Unit = {
-                val wasHoldingMessage = communicationState.heldMessage != null
-                communicationSession.accept(CommunicationAction.SwapHeldMessage)
-                // cursor reset; text derives from new snapshot synchronously
-                cursor = TextRange(communicationSession.state.value.activeMessage.displayText.length)
-                featureUsageReporter.reportEvent(
-                    FeatureUsageEvents.PLAYBACK_ON_THAT_THOUGHT,
-                    "action" to if (wasHoldingMessage) "resume" else "pin"
-                )
-                syncDisplayText(communicationSession.state.value.activeMessage.displayText)
-                refocusInput()
-            }
             LaunchedEffect(inputSurface) {
                 AndroidAccessInputBus.restartScan()
             }
@@ -556,7 +328,7 @@ fun PhraseScreen(
                                                         )
                                                     },
                                                     onClick = {
-                                                        mathMode = !mathMode
+                                                        onAction(PhraseScreenAction.MathMode(!mathMode))
                                                         appBarMenuExpanded = false
                                                     }
                                                 )
@@ -620,7 +392,7 @@ fun PhraseScreen(
                                     if (supportsMathMode(settings.ttsEngine)) {
                                         IconToggleButton(
                                             checked = mathMode,
-                                            onCheckedChange = { mathMode = it }
+                                            onCheckedChange = { onAction(PhraseScreenAction.MathMode(it)) }
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Filled.Calculate,
@@ -721,42 +493,26 @@ fun PhraseScreen(
                                     fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                 ),
                             )
-                            Button(onClick = { bloc.dispatch(PhraseEvent.Load) }) {
+                            Button(onClick = { onAction(PhraseScreenAction.RetryLoad) }) {
                                 Text(stringResource(R.string.common_retry))
                             }
                         }
                     }
 
-                    var categories by remember { mutableStateOf<List<CategoryItem>>(emptyList()) }
-                    var categoryLoadRevision by remember { mutableIntStateOf(0) }
-                    val coroutineScope = rememberCoroutineScope()
-
-                    // load initial categories
-                    LaunchedEffect(categoryUseCase, categoryLoadRevision) {
-                        runCatching { categoryUseCase.list() }
-                            .onSuccess {
-                                categories = it
-                                categoriesLoadedOnce = true
-                                categoriesLoadFailed = false
-                            }
-                            .onFailure { categoriesLoadFailed = true }
-                    }
-
                     if (typingTemplateLoadFailed || categoriesLoadFailed) {
-                        RepositoryFailurePanel(
-                            onRetry = {
-                                if (typingTemplateLoadFailed) typingTemplateRevision++
-                                if (categoriesLoadFailed) categoryLoadRevision++
-                            },
-                        )
+                        RepositoryFailurePanel(onRetry = { onAction(PhraseScreenAction.RetryLoad) })
                     }
-
-                    // Category selector with dialog
-                    var selectedPage by remember { mutableStateOf<TypingPageSelection>(TypingPageSelection.AllPhrases) }
-                    val selectedCategory = (selectedPage as? TypingPageSelection.Category)?.category
-                    var showAddCategoryDialog by remember { mutableStateOf(false) }
-                    var confirmDeleteCategory by remember { mutableStateOf<CategoryItem?>(null) }
-
+                    if (ui.historyFailed && ui.isHistory) {
+                        RepositoryFailurePanel(onRetry = { onAction(PhraseScreenAction.RetryHistory) })
+                    }
+                    if (ui.mutationFailed) {
+                        Column {
+                            Text(stringResource(R.string.typing_screen_save_failed), color = MaterialTheme.colorScheme.error)
+                            Button(onClick = { onAction(PhraseScreenAction.RetryMutation) }, enabled = !ui.mutationInProgress) {
+                                Text(stringResource(R.string.common_retry))
+                            }
+                        }
+                    }
                     val secondaryHighlightColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
                     
                     val ssmlRanges = remember(input.text) {
@@ -766,222 +522,33 @@ fun PhraseScreen(
                     }
                     val ssmlHighlightColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
 
-                    // Typing vocabulary shown below the Message bar.
-                    var showEditDialog by remember { mutableStateOf(false) }
-                    var showAddPhraseDialog by remember { mutableStateOf(false) }
-                    var editingPhrase by remember { mutableStateOf<Phrase?>(null) }
-                    // Show only actual phrase items (not category markers), filtered by selected category
-                    val isHistory = settings.historyVisible && selectedPage == TypingPageSelection.History
-                    val selectedCategoryId = selectedCategory?.id
-                    var lastPhraseCategory by remember { mutableStateOf<CategoryItem?>(null) }
-                    LaunchedEffect(selectedCategoryId, isHistory) {
-                        if (!isHistory) lastPhraseCategory = selectedCategory
-                    }
-                    val visiblePhrases by remember(isHistory, historyItems, state.items, selectedCategoryId) {
-                        derivedStateOf {
-                            if (isHistory) {
-                                // Map history items to ephemeral Phrase objects to reuse the grid UI; hide Add tile for this view
-                                historyItems.mapIndexed { idx, s ->
-                                    val stableHistoryId = s.id?.toString() ?: (s.date ?: s.createdAt ?: idx.toLong()).toString()
-                                    Phrase(
-                                        id = "history_$stableHistoryId",
-                                        text = s.saidText ?: "",
-                                        // History cards must represent what was said, not the voice that said it.
-                                        name = null,
-                                        backgroundColor = null,
-                                        parentId = null,
-                                        createdAt = s.date ?: s.createdAt ?: 0L,
-                                        recordingPath = s.audioFilePath
-                                    )
-                                }
-                            } else {
-                                state.items.filter {
-                                    it.isGridPhrase() && (selectedCategoryId == null || it.parentId == selectedCategoryId)
-                                }
-                            }
-                        }
-                    }
-                    val compactPhrases by remember(state.items, lastPhraseCategory?.id) {
-                        derivedStateOf {
-                            val categoryId = lastPhraseCategory?.id
-                            state.items.filter { it.isGridPhrase() && (categoryId == null || it.parentId == categoryId) }
-                        }
-                    }
-                    // #119: unified phrase playback for the grid's explicit play affordance and
-                    // immediate-policy insertion. Plays the recording when present, else TTS.
-                    fun speakPhraseFromGrid(phrase: Phrase) {
-                        val textToSpeak = phrase.name?.ifBlank { null } ?: phrase.text
-                        communicationSession.accept(
-                            CommunicationAction.SpeakPart(
-                                part = MessagePart(
-                                    displayText = phrase.text,
-                                    spokenText = textToSpeak,
-                                    source = io.github.jdreioe.wingmate.domain.MessagePartSource.Phrase(phrase.id),
-                                    recordingPath = phrase.recordingPath,
-                                ),
-                                voice = selectedVoiceState.value,
-                            )
-                        )
-                        featureUsageReporter.reportEvent(
-                            FeatureUsageEvents.PHRASE_PLAYED,
-                            "source" to "grid",
-                            "used_recording" to (phrase.recordingPath != null).toString()
-                        )
-                    }
-                    val playPhraseFromGrid: (Phrase) -> Unit = { phrase ->
-                        // Classic Folder Navigation: if item has a linked board, entering it updates the view
-                        if (phrase.linkedBoardId != null) {
-                            uiScope.launch {
-                                selectedPage = TypingPageSelection.Category(
-                                    io.github.jdreioe.wingmate.domain.CategoryItem(
-                                        id = phrase.id,
-                                        name = phrase.text,
-                                        isFolder = true,
-                                    )
-                                )
-                            }
-                        } else {
-                            speakPhraseFromGrid(phrase)
-                        }
-                    }
-                    val typingActivationBehavior = typingTemplateGraph
-                        ?.boardSet
-                        ?.screenSettings
-                        ?.activationBehavior
-                        ?: BoardActivationBehavior.SpeakOnly
-                    val activatePhraseFromTypingScreen: (Phrase) -> Unit = { phrase ->
-                        val cursorPos = cursor.start.coerceIn(0, input.text.length)
-                        val currentMessage = communicationSession.state.value.activeMessage
-                        val activation = currentMessage.activatePhrase(
-                            phrase = phrase,
-                            cursor = cursorPos,
-                            activationBehavior = typingActivationBehavior,
-                            speechPolicy = settings.speechPolicy,
-                        )
-                        if (activation.message != currentMessage) {
-                            communicationSession.accept(
-                                CommunicationAction.ReplaceMessage(activation.message)
-                            )
-                            cursor = TextRange((cursorPos + phrase.text.length).coerceIn(0, activation.message.displayText.length))
-                            syncDisplayText(activation.message.displayText)
-                            featureUsageReporter.reportEvent(
-                                FeatureUsageEvents.PHRASE_INSERTED,
-                                "source" to if (isHistory) "history" else "typing_screen",
-                            )
-                        }
-                        if (activation.shouldSpeak) {
-                            playPhraseFromGrid(phrase)
-                        }
-                    }
-
-                    fun replaceInputText(newText: String, cursorPos: Int) {
-                        communicationSession.accept(
-                            Message.fromTextDiff(
-                                currentText = communicationSession.state.value.activeMessage.displayText,
-                                newText = newText,
-                                mathMode = mathMode,
-                            )
-                        )
-                        cursor = TextRange(cursorPos.coerceIn(0, newText.length))
-                        syncDisplayText(newText)
-                    }
-
                     val onTypingAction: (ObfButtonActionEffect) -> Unit = { effect ->
-                        when (effect) {
-                            is ObfButtonActionEffect.AppendText -> {
-                                val selection = normalizeRange(input.selection, input.text.length)
-                                val newText = input.text.replaceRange(selection.start, selection.end, effect.text)
-                                replaceInputText(newText, selection.start + effect.text.length)
-                            }
-                            is ObfButtonActionEffect.WrapSelection -> {
-                                val selection = normalizeRange(input.selection, input.text.length)
-                                val selected = input.text.substring(selection.start, selection.end)
-                                val replacement = effect.prefix + selected + effect.suffix
-                                val newText = input.text.replaceRange(selection.start, selection.end, replacement)
-                                val cursor = if (selected.isEmpty()) {
-                                    selection.start + effect.prefix.length
-                                } else {
-                                    selection.start + replacement.length
-                                }
-                                replaceInputText(newText, cursor)
-                            }
-                            ObfButtonActionEffect.Backspace -> {
-                                val selection = normalizeRange(input.selection, input.text.length)
-                                if (selection.spanLength() > 0) {
-                                    replaceInputText(input.text.removeRange(selection.start, selection.end), selection.start)
-                                } else if (selection.start > 0) {
-                                    replaceInputText(input.text.removeRange(selection.start - 1, selection.start), selection.start - 1)
-                                }
-                            }
-                            ObfButtonActionEffect.Clear -> replaceInputText("", 0)
-                            ObfButtonActionEffect.Speak -> playInput()
-                            ObfButtonActionEffect.Pause -> pauseSpeech()
-                            ObfButtonActionEffect.Resume -> resumeSpeech()
-                            ObfButtonActionEffect.Stop -> stopSpeech()
-                            ObfButtonActionEffect.ToggleSecondaryLanguage -> toggleSecondarySelection?.invoke()
-                            ObfButtonActionEffect.SwapHeldMessage -> toggleThatThought()
-                            ObfButtonActionEffect.NativeKeyboard -> showKeyboard()
-                            ObfButtonActionEffect.Home,
-                            ObfButtonActionEffect.Predictions -> Unit
-                            is ObfButtonActionEffect.Unsupported -> coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Unsupported action")
-                            }
-                        }
+                        if (effect == ObfButtonActionEffect.NativeKeyboard) showKeyboard() else control(effect)
                     }
                     val keyboardHeight = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
                     LaunchedEffect(keyboardHeight) {
                         if (keyboardHeight >= 200.dp) {
                             // Wait for the keyboard animation to settle before storing.
                             delay(300)
-                            keyboardTrayHeight = keyboardHeight
-                            typingTrayPreferences.edit()
-                                .putFloat("keyboard-height-dp", keyboardHeight.value)
-                                .apply()
+                            onKeyboardHeight(keyboardHeight)
                         }
                     }
 
-                    // Refresh history from repo when switching to History
-                    LaunchedEffect(selectedPage) {
-                        if (settings.historyVisible && selectedPage == TypingPageSelection.History) {
-                            try {
-                                val list = saidRepo.list()
-                                historyItems = list.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L }
-                            } catch (_: Throwable) {}
-                        }
-                    }
-
-                    // Category menu (move, delete). Opened by tapping the selected
-                    // Category chip in the tray, behind editing access.
-                    var categoryMenu by remember { mutableStateOf<CategoryItem?>(null) }
                     categoryMenu?.let { menuCategory ->
                         val index = categories.indexOfFirst { it.id == menuCategory.id }
                         val moveCategory: (Int) -> Unit = { target ->
-                            if (index >= 0 && target in categories.indices) {
-                                coroutineScope.launch(Dispatchers.IO) {
-                                    runCatching {
-                                        categoryUseCase.move(index, target)
-                                        categoryUseCase.list()
-                                    }.onSuccess { updated ->
-                                        coroutineScope.launch { categories = updated }
-                                    }.onFailure {
-                                        coroutineScope.launch { categoriesLoadFailed = true }
-                                    }
-                                    // Categories are stored among the Phrases, so moving one
-                                    // shifts Phrase positions too; reload before the next Phrase move.
-                                    bloc.dispatch(PhraseEvent.Load)
-                                }
-                            }
+                            onAction(PhraseScreenAction.MoveCategory(menuCategory.id, target))
                         }
                         val menuTextStyle = MaterialTheme.typography.bodyLarge.copy(
                             fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                         )
-                        ModalBottomSheet(onDismissRequest = { categoryMenu = null }) {
+                        ModalBottomSheet(onDismissRequest = { onAction(PhraseScreenAction.DismissDialog) }) {
                             Column(modifier = Modifier.padding(bottom = 24.dp)) {
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.category_move_left), style = menuTextStyle) },
                                     enabled = index > 0,
                                     onClick = {
-                                        categoryMenu = null
+                                        onAction(PhraseScreenAction.DismissDialog)
                                         moveCategory(index - 1)
                                     },
                                 )
@@ -989,15 +556,15 @@ fun PhraseScreen(
                                     text = { Text(stringResource(R.string.category_move_right), style = menuTextStyle) },
                                     enabled = index in 0 until categories.lastIndex,
                                     onClick = {
-                                        categoryMenu = null
+                                        onAction(PhraseScreenAction.DismissDialog)
                                         moveCategory(index + 1)
                                     },
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.category_delete_with_phrases), style = menuTextStyle) },
                                     onClick = {
-                                        categoryMenu = null
-                                        confirmDeleteCategory = menuCategory
+                                        onAction(PhraseScreenAction.DismissDialog)
+                                        onAction(PhraseScreenAction.RequestDialog(TypingDialog.DeleteCategory, categoryId = menuCategory.id))
                                     },
                                 )
                             }
@@ -1006,9 +573,9 @@ fun PhraseScreen(
 
                     // Add category dialog
                     if (showAddCategoryDialog) {
-                        var categoryName by remember { mutableStateOf("") }
+                        val categoryName = ui.categoryName
                         AlertDialog(
-                            onDismissRequest = { showAddCategoryDialog = false },
+                            onDismissRequest = { onAction(PhraseScreenAction.DismissDialog) },
                             title = { Text(stringResource(R.string.category_add_title), style = MaterialTheme.typography.titleLarge.copy(
                                 fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
                             )) },
@@ -1016,7 +583,9 @@ fun PhraseScreen(
                                 val showKeyboard = Modifier.showKeyboardOnFocus()
                                 OutlinedTextField(
                                     value = categoryName,
-                                    onValueChange = { categoryName = it },
+                                    isError = ui.mutationFailed,
+                                    supportingText = if (ui.mutationFailed) ({ Text(stringResource(R.string.typing_screen_save_failed)) }) else null,
+                                    onValueChange = { onAction(PhraseScreenAction.CategoryName(it)) },
                                     placeholder = { Text(stringResource(R.string.category_name_label), style = MaterialTheme.typography.bodyLarge.copy(
                                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                                     )) },
@@ -1026,31 +595,9 @@ fun PhraseScreen(
                             },
                             confirmButton = {
                                 TextButton(
+                                    enabled = !ui.mutationInProgress && ui.categoryName.isNotBlank(),
                                     onClick = {
-                                        val name = categoryName.trim()
-                                        if (name.isNotBlank() && !categories.any { it.name.equals(name, ignoreCase = true) }) {
-                                            coroutineScope.launch(Dispatchers.IO) {
-                                                runCatching {
-                                                    val added = categoryUseCase.add(
-                                                        CategoryItem(id = "", name = name, selectedLanguage = settings.primaryLanguage)
-                                                    )
-                                                    added to categoryUseCase.list()
-                                                }.onSuccess { (added, updated) ->
-                                                    coroutineScope.launch {
-                                                        categories = updated
-                                                        selectedPage = TypingPageSelection.Category(
-                                                            updated.find { it.id == added.id } ?: added
-                                                        )
-                                                    }
-                                                }.onFailure {
-                                                    coroutineScope.launch { categoriesLoadFailed = true }
-                                                }
-                                                // Categories are stored among the Phrases; keep the Phrase list in step.
-                                                bloc.dispatch(PhraseEvent.Load)
-                                            }
-                                        }
-                                        showAddCategoryDialog = false
-                                        categoryName = ""
+                                        onAction(PhraseScreenAction.SaveCategory)
                                     }
                                 ) {
                                     Text(stringResource(R.string.common_add), style = MaterialTheme.typography.labelLarge.copy(
@@ -1060,8 +607,8 @@ fun PhraseScreen(
                             },
                             dismissButton = {
                                 TextButton(onClick = { 
-                                    showAddCategoryDialog = false
-                                    categoryName = ""
+                                    onAction(PhraseScreenAction.DismissDialog)
+                                    onAction(PhraseScreenAction.CategoryName(""))
                                 }) {
                                     Text(stringResource(R.string.common_cancel), style = MaterialTheme.typography.labelLarge.copy(
                                         fontSize = MaterialTheme.typography.labelLarge.fontSize * settings.fontSizeScale
@@ -1074,78 +621,23 @@ fun PhraseScreen(
                     // Confirm delete category cascade
                     if (confirmDeleteCategory != null) {
                         AlertDialog(
-                            onDismissRequest = { confirmDeleteCategory = null },
+                            onDismissRequest = { onAction(PhraseScreenAction.DismissDialog) },
                             title = { Text(stringResource(R.string.category_delete_title), style = MaterialTheme.typography.titleLarge.copy(
                                 fontSize = MaterialTheme.typography.titleLarge.fontSize * settings.fontSizeScale
                             )) },
-                            text = { Text(stringResource(R.string.category_delete_message, confirmDeleteCategory?.name.orEmpty()), style = MaterialTheme.typography.bodyLarge.copy(
+                            text = { Text(stringResource(R.string.category_delete_message, confirmDeleteCategory.name.orEmpty()), style = MaterialTheme.typography.bodyLarge.copy(
                                 fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                             )) },
                             confirmButton = {
                                 TextButton(onClick = {
-                                    val cat = confirmDeleteCategory
-                                    confirmDeleteCategory = null
-                                    if (cat != null) {
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            // Delete phrases under this category (PhraseRepo)
-                                            val phraseRepository = phraseRepo ?: run {
-                                                coroutineScope.launch { categoriesLoadFailed = true }
-                                                return@launch
-                                            }
-                                            val allPhrases = runCatching {
-                                                phraseRepository.getAll()
-                                            }.getOrElse {
-                                                coroutineScope.launch { categoriesLoadFailed = true }
-                                                return@launch
-                                            }
-                                            val toDelete = allPhrases.filter { it.parentId == cat.id }
-                                            val result = runCatching {
-                                                toDelete.forEach { phraseRepository.delete(it.id) }
-                                                categoryUseCase.delete(cat.id)
-                                                categoryUseCase.list()
-                                            }
-                                            // Reload even after a partial failure so deleted Phrases leave the tray.
-                                            bloc.dispatch(PhraseEvent.Load)
-                                            val updated = result.getOrElse {
-                                                coroutineScope.launch { categoriesLoadFailed = true }
-                                                return@launch
-                                            }
-                                            coroutineScope.launch {
-                                                categories = updated
-                                                if (selectedCategory?.id == cat.id) {
-                                                    selectedPage = TypingPageSelection.AllPhrases
-                                                }
-                                            }
-                                        }
-                                    }
+                                    onAction(PhraseScreenAction.DeleteCategory)
                                 }) { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge.copy(
                                     fontSize = MaterialTheme.typography.labelLarge.fontSize * settings.fontSizeScale
                                 )) }
                             },
-                            dismissButton = { TextButton(onClick = { confirmDeleteCategory = null }) { Text(stringResource(R.string.common_cancel), style = MaterialTheme.typography.labelLarge.copy(
+                            dismissButton = { TextButton(onClick = { onAction(PhraseScreenAction.DismissDialog) }) { Text(stringResource(R.string.common_cancel), style = MaterialTheme.typography.labelLarge.copy(
                                 fontSize = MaterialTheme.typography.labelLarge.fontSize * settings.fontSizeScale
                             )) } }
-                        )
-                    }
-
-                    if (showEditDialog && editingPhrase != null) {
-                        AddPhraseDialog(
-                            onDismiss = { showEditDialog = false; editingPhrase = null },
-                            categories = categories,
-                            initialPhrase = editingPhrase,
-                            onSave = { p -> bloc.dispatch(PhraseEvent.Edit(p)); showEditDialog = false; editingPhrase = null },
-                            onDelete = { id -> deleteWithUndo(id); showEditDialog = false; editingPhrase = null },
-                        )
-                    }
-                    if (showAddPhraseDialog) {
-                        AddPhraseDialog(
-                            onDismiss = { showAddPhraseDialog = false },
-                            categories = categories,
-                            defaultCategoryId = selectedCategory?.id,
-                            onSave = { phrase ->
-                                bloc.dispatch(PhraseEvent.Add(phrase))
-                                showAddPhraseDialog = false
-                            },
                         )
                     }
 
@@ -1199,6 +691,7 @@ fun PhraseScreen(
                     ) {
                         if (typingTemplate != null) {
                             TypingActionRow(
+                                settings = settings, feedback = boardFeedback,
                                 template = typingTemplate,
                                 onAction = onTypingAction,
                                 isActionEnabled = typingActionEnabled,
@@ -1255,12 +748,10 @@ fun PhraseScreen(
                             PredictionBar(
                                 predictions = predictions,
                                 onWordSelected = { word ->
-                                    val updated = completePredictedWord(input, word)
-                                    replaceInputText(updated.text, updated.selection.start)
+                                    onAction(PhraseScreenAction.CompleteWord(word))
                                 },
                                 onLetterSelected = { letter ->
-                                    val updated = insertPredictedText(input, letter.toString())
-                                    replaceInputText(updated.text, updated.selection.start)
+                                    onAction(PhraseScreenAction.InsertPrediction(letter.toString()))
                                 },
                                 fontSizeScale = settings.fontSizeScale,
                                 modifier = Modifier.padding(top = 4.dp),
@@ -1277,12 +768,12 @@ fun PhraseScreen(
                     ) {
                         if (typingTemplate != null) {
                             CompactPhraseRow(
+                                settings = settings, feedback = boardFeedback,
                                 template = typingTemplate,
                                 phrases = compactPhrases,
                                 onPhraseActivated = activatePhraseFromTypingScreen,
                                 onPhraseLongPress = { phrase ->
-                                    editingPhrase = phrase
-                                    requestTypingMutation { showEditDialog = true }
+                                    onAction(PhraseScreenAction.RequestDialog(TypingDialog.EditPhrase, phraseId = phrase.id))
                                 },
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             )
@@ -1292,6 +783,7 @@ fun PhraseScreen(
                     if (oneRowWhileTyping && typingTemplate != null) {
                         val held = communicationState.heldMessage
                         TypingActionRow(
+                                settings = settings, feedback = boardFeedback,
                             template = typingTemplate,
                             onAction = onTypingAction,
                             isActionEnabled = typingActionEnabled,
@@ -1343,16 +835,7 @@ fun PhraseScreen(
                         SecondaryLanguageTextField(
                             value = input,
                             onValueChange = { newValue ->
-                                communicationSession.accept(
-                                    Message.fromTextDiff(
-                                        currentText = communicationSession.state.value.activeMessage.displayText,
-                                        newText = newValue.text,
-                                        mathMode = mathMode,
-                                    )
-                                )
-                                lastFieldValue = newValue
-                                cursor = newValue.selection
-                                syncDisplayText(newValue.text)
+                                onAction(PhraseScreenAction.EditInput(newValue))
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -1477,33 +960,31 @@ fun PhraseScreen(
                                 .height(trayHeight),
                         ) {
                             if (typingTemplate == null) {
-                                RepositoryFailurePanel(onRetry = { typingTemplateRevision++ })
+                                RepositoryFailurePanel(onRetry = { onAction(PhraseScreenAction.RetryLoad) })
                             } else TypingScreenTray(
+                                focusedCell = ui.boardFocusedCell,
+                                onFocusCell = { onAction(PhraseScreenAction.FocusCell(it)) },
+                                settings = settings, feedback = boardFeedback,
                                 template = typingTemplate,
                                 phrases = visiblePhrases,
                                 categories = categories,
                                 selection = selectedPage,
                                 showHistory = settings.historyVisible && historyItems.isNotEmpty(),
                                 history = historyItems,
-                                onSelectionChanged = { selectedPage = it },
+                                onSelectionChanged = { onAction(PhraseScreenAction.SelectPage(it)) },
                                 onOpenCategoryMenu = { category ->
-                                    requestTypingMutation { categoryMenu = category }
+                                    onAction(PhraseScreenAction.RequestDialog(TypingDialog.CategoryMenu, categoryId = category.id))
                                 },
-                                onAddCategory = { requestTypingMutation { showAddCategoryDialog = true } },
-                                onAddPhrase = { requestTypingMutation { showAddPhraseDialog = true } },
+                                onAddCategory = { onAction(PhraseScreenAction.RequestDialog(TypingDialog.AddCategory)) },
+                                onAddPhrase = { onAction(PhraseScreenAction.RequestDialog(TypingDialog.AddPhrase)) },
                                 onPhraseActivated = activatePhraseFromTypingScreen,
                                 onEditPhrase = { phrase ->
-                                    editingPhrase = phrase
-                                    requestTypingMutation { showEditDialog = true }
+                                    onAction(PhraseScreenAction.RequestDialog(TypingDialog.EditPhrase, phraseId = phrase.id))
                                 },
-                                onDeletePhrase = { phrase -> requestTypingMutation { deleteWithUndo(phrase.id) } },
+                                onDeletePhrase = { phrase -> onAction(PhraseScreenAction.DeletePhrase(phrase.id)) },
                                 // Dropping onto a Phrase takes its place in the repository order.
                                 onMovePhrase = { moved, target ->
-                                    val from = state.items.indexOfFirst { it.id == moved.id }
-                                    val to = state.items.indexOfFirst { it.id == target.id }
-                                    if (from >= 0 && to >= 0 && from != to) {
-                                        requestTypingMutation { bloc.dispatch(PhraseEvent.Move(from, to)) }
-                                    }
+                                    onAction(PhraseScreenAction.MovePhrase(moved.id, target.id))
                                 },
                                 onHistoryActivated = { historyItem ->
                                     val historyPhrase = Phrase(
@@ -1515,10 +996,7 @@ fun PhraseScreen(
                                     activatePhraseFromTypingScreen(historyPhrase)
                                 },
                                 onAction = onTypingAction,
-                                vocabularyMutationsEnabled = categoriesLoadedOnce &&
-                                    !categoriesLoadFailed &&
-                                    !typingTemplateLoadFailed &&
-                                    state.error == null,
+                                vocabularyMutationsEnabled = ui.vocabularyReady,
                                 isActionEnabled = typingActionEnabled,
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
                             )
@@ -1530,65 +1008,38 @@ fun PhraseScreen(
                 }
             }
 
-            if (showSettingsDialog) {
-                SettingsScreen(onDismiss = { showSettingsDialog = false }, onSaved = { showSettingsDialog = false }, onBackToWelcome = onBackToWelcome)
-            }
-            if (showTypingResetUnlock && editingAccessController != null) {
-                EditingAccessDialog(
-                    controller = editingAccessController,
-                    mode = EditingAccessDialogMode.Unlock,
-                    onDismiss = { showTypingResetUnlock = false },
-                    onSuccess = {
-                        showTypingResetUnlock = false
-                        showTypingResetConfirmation = true
-                    },
-                )
-            }
-            if (showTypingMutationUnlock && editingAccessController != null) {
-                EditingAccessDialog(
-                    controller = editingAccessController,
-                    mode = EditingAccessDialogMode.Unlock,
-                    onDismiss = {
-                        showTypingMutationUnlock = false
-                        pendingTypingMutation = null
-                    },
-                    onSuccess = {
-                        showTypingMutationUnlock = false
-                        pendingTypingMutation?.invoke()
-                        pendingTypingMutation = null
-                    },
-                )
-            }
-            if (showTypingResetConfirmation) {
+
+            if (ui.dialog == TypingDialog.Reset) {
                 AlertDialog(
-                    onDismissRequest = { showTypingResetConfirmation = false },
+                    onDismissRequest = { onAction(PhraseScreenAction.DismissDialog) },
                     title = { Text(stringResource(R.string.typing_screen_reset)) },
                     text = { Text(stringResource(R.string.typing_screen_reset_description)) },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                showTypingResetConfirmation = false
-                                phraseScreenScope.launch {
-                                    runCatching { typingScreenUseCase.reset(settings.gridColumns) }
-                                        .onSuccess { typingTemplateRevision++ }
-                                        .onFailure {
-                                            snackbarHostState.showSnackbar(
-                                                typingResetFailedMessage
-                                            )
-                                        }
-                                }
-                            },
-                        ) {
-                            Text(stringResource(R.string.typing_screen_reset))
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showTypingResetConfirmation = false }) {
-                            Text(stringResource(R.string.common_cancel))
-                        }
-                    },
+                    confirmButton = { TextButton(enabled = !ui.mutationInProgress, onClick = { onAction(PhraseScreenAction.Reset) }) {
+                        Text(stringResource(R.string.typing_screen_reset))
+                    } },
+                    dismissButton = { TextButton(onClick = { onAction(PhraseScreenAction.DismissDialog) }) { Text(stringResource(R.string.common_cancel)) } },
                 )
             }
+    }
+}
+
+@Preview
+@Composable
+private fun PhraseScreenContentPreview() {
+    AppTheme {
+        PhraseScreenContent(
+            ui = PhraseScreenState(
+                input = TextFieldValue("I would like some water"),
+                phrases = io.github.jdreioe.wingmate.application.PhraseState(items = listOf(
+                    Phrase(id = "water", text = "Water", createdAt = 0),
+                    Phrase(id = "help", text = "Please help", createdAt = 0),
+                )),
+                template = io.github.jdreioe.wingmate.application.TypingScreenProjector.defaultTemplate(4, now = 0),
+                templateStatus = TypingLoadStatus.Ready,
+                categoryStatus = TypingLoadStatus.Ready,
+            ),
+            onAction = {},
+        )
     }
 }
 
@@ -1660,31 +1111,6 @@ private fun SecondaryLanguageTextField(
             )
         }
     }
-}
-
-private fun normalizeRange(range: TextRange, maxLength: Int): TextRange {
-    return TextEditingPolicy.normalize(range.toTextSpan(), maxLength).toTextRange()
-}
-
-private fun TextRange.spanLength(): Int = (end - start).coerceAtLeast(0)
-
-private fun isRangeFullySecondary(selection: TextRange, ranges: List<TextRange>): Boolean {
-    val textLength = maxOf(selection.end, ranges.maxOfOrNull { it.end } ?: 0)
-    return TextEditingPolicy.isFullyCovered(selection.toTextSpan(), ranges.map { it.toTextSpan() }, textLength)
-}
-
-private fun TextRange.toTextSpan(): TextSpan = TextSpan(start, end)
-
-private fun TextSpan.toTextRange(): TextRange = TextRange(start, endExclusive)
-
-private fun completePredictedWord(value: TextFieldValue, suggestion: String): TextFieldValue {
-    val result = TextEditingPolicy.completeWord(value.text, value.selection.start, suggestion)
-    return TextFieldValue(result.text, selection = TextRange(result.cursor))
-}
-
-private fun insertPredictedText(value: TextFieldValue, text: String): TextFieldValue {
-    val result = TextEditingPolicy.insert(value.text, value.selection.start, text)
-    return TextFieldValue(result.text, selection = TextRange(result.cursor))
 }
 
 @Composable

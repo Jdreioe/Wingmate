@@ -61,6 +61,8 @@ internal fun TypingScreenEditor(
     onEditVocabulary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val settings by rememberReactiveSettings()
+    val feedback = rememberBoardFeedback()
     val board = graph.rootBoard ?: return
     val elements = board.pageElements().sortedWith(compareBy({ it.row }, { it.column }))
     var selectedId by remember(board.id) { mutableStateOf<String?>(null) }
@@ -187,7 +189,9 @@ internal fun TypingScreenEditor(
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(buttons, key = ObfButton::id) { button ->
                                     Box(modifier = Modifier.size(width = 112.dp, height = 88.dp)) {
-                                        ObfButtonItem(
+                                        ObfButtonContent(
+                                            settings = settings,
+                                            feedback = feedback,
                                             button = button,
                                             isEditMode = true,
                                             onClick = { editingButton = button },
