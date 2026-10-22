@@ -1,8 +1,11 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasSetTextAction
-import android.view.WindowManager
+import android.view.WindowInsets
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -18,12 +21,15 @@ import org.koin.core.context.GlobalContext
 import org.koin.core.context.loadKoinModules
 import org.koin.core.context.unloadKoinModules
 import org.koin.dsl.module
+import org.junit.Assert.assertFalse
+import kotlinx.coroutines.awaitCancellation
 
 /**
  * Wingmate's own suggestions show while typing without an on-screen keyboard
  * (a hardware keyboard). With Gboard open they stay hidden, because Gboard shows
  * its own (#299), so the window here never shows a soft keyboard.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 class TypingPredictionVisibilityTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
@@ -46,14 +52,21 @@ class TypingPredictionVisibilityTest {
         }
         loadKoinModules(predictionModule)
         try {
-            composeRule.activityRule.scenario.onActivity { activity ->
-                activity.window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+            composeRule.setContent {
+                // Model a hardware keyboard without letting the emulator's IME open.
+                InterceptPlatformTextInput(interceptor = { _, _ -> awaitCancellation() }) {
+                    AppTheme { PhraseScreen() }
+                }
             }
-            composeRule.setContent { AppTheme { PhraseScreen() } }
             val input = composeRule.onNode(hasSetTextAction())
             input.performClick()
             input.performTextClearance()
             input.performTextInput("he")
+            input.assertTextEquals("he")
+            assertFalse(
+                "Hardware-keyboard fixture must keep the IME hidden",
+                composeRule.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime()),
+            )
             waitForSuggestion("hello")
 
             input.performTextClearance()
