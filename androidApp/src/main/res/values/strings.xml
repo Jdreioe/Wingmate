@@ -358,7 +358,6 @@
     <string name="phrase_pick_file">Photo</string>
     <string name="phrase_open_symbols">Symbol</string>
     <string name="phrase_recording_label">Recording</string>
-    <string name="phrase_record_hint">phrase</string>
     <string name="phrase_recording_unavailable">Recording is unavailable on this platform.</string>
     <string name="phrase_recording_start_failed">Could not start recording.</string>
     <string name="phrase_recording_finalize_failed">Could not finalize recording.</string>

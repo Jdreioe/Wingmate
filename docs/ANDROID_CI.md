@@ -22,6 +22,10 @@ and `ObfBoardContentTest` render supplied state without Koin. They cover
 Message controls, vocabulary actions, keyboard and switch activation, focus,
 resize accessibility actions, and empty or failed content.
 
+`PhraseMediaControllerTest` covers recording finalization, cancellation, disposal,
+and safe media failures. `AddPhraseDialogContentTest` exercises the editor form
+with supplied media state and callbacks, without services or Koin.
+
 The app root owns speech and persistence failure feedback. The presentation
 layers keep the shared communication session authoritative and never clear its
 Message as a side effect of loading or editing vocabulary.

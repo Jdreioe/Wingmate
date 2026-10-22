@@ -350,7 +350,6 @@
     <string name="phrase_pick_file">Foto</string>
     <string name="phrase_open_symbols">Symbol</string>
     <string name="phrase_recording_label">Optagelse</string>
-    <string name="phrase_record_hint">frase</string>
     <string name="phrase_recording_unavailable">Optagelse er ikke tilgængelig på denne platform.</string>
     <string name="phrase_recording_start_failed">Kunne ikke starte optagelse.</string>
     <string name="phrase_recording_finalize_failed">Kunne ikke afslutte optagelse.</string>
