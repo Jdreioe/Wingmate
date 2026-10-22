@@ -1090,9 +1090,6 @@ private fun SecondaryLanguageTextField(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
-            if (value.text.isEmpty()) {
-                placeholder?.invoke()
-            }
             val inputModifier = Modifier
                 .fillMaxWidth()
                 .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
@@ -1107,7 +1104,14 @@ private fun SecondaryLanguageTextField(
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 modifier = inputModifier,
                 minLines = minLines,
-                maxLines = maxLines
+                maxLines = maxLines,
+                // The hint sits inside the field so a screen reader names the edit box with it.
+                decorationBox = { innerTextField ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (value.text.isEmpty()) placeholder?.invoke()
+                        innerTextField()
+                    }
+                },
             )
         }
     }
