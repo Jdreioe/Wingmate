@@ -492,18 +492,7 @@ class AndroidSpeechService(
             val dictionary = runCatching {
                 GlobalContext.get().get<io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository>().getAll()
             }.getOrDefault(emptyList())
-            val dictionaryIdentity = dictionary.joinToString("\u001f") { "${it.word}\u001e${it.phoneme}\u001e${it.alphabet}" }
-            val cacheKey = SpeechCacheIdentity.digest(
-                normalizedText,
-                engine.name,
-                voiceForSsml.name,
-                voiceForSsml.primaryLanguage,
-                voiceForSsml.selectedLanguage,
-                pitch?.toString(),
-                rate?.toString(),
-                voiceForSsml.mathMode.toString(),
-                dictionaryIdentity,
-            )
+            val cacheKey = SpeechCacheIdentity.speech(normalizedText, engine, voiceForSsml, pitch, rate, dictionary)
             val root = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
             val directory = File(root, "wingmate/audio").apply { mkdirs() }
             val file = File(directory, "tts_v2_$cacheKey.mp3")
@@ -691,18 +680,7 @@ class AndroidSpeechService(
                 val outDir = File(musicRoot, "wingmate/audio").apply { if (!exists()) mkdirs() }
                 
                 // Calculate hash early to check if file already exists
-                val dictionaryIdentity = dict.joinToString("\u001f") { "${it.word}\u001e${it.phoneme}\u001e${it.alphabet}" }
-                val cacheKey = SpeechCacheIdentity.digest(
-                    combinedText,
-                    engine.name,
-                    vForSsml.name,
-                    vForSsml.primaryLanguage,
-                    vForSsml.selectedLanguage,
-                    pitch?.toString(),
-                    rate?.toString(),
-                    vForSsml.mathMode.toString(),
-                    dictionaryIdentity,
-                )
+                val cacheKey = SpeechCacheIdentity.speech(combinedText, engine, vForSsml, pitch, rate, dict)
                 val fileName = if (cacheAudio) "tts_v2_$cacheKey.mp3" else "tts_session_${System.nanoTime()}.mp3"
                 val outFile = File(outDir, fileName)
 
