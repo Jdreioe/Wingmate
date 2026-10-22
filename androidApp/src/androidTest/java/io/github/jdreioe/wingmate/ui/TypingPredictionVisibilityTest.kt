@@ -6,6 +6,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import android.view.WindowInsets
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.platform.InterceptPlatformTextInput
+import androidx.test.filters.SdkSuppress
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -30,6 +31,7 @@ import kotlinx.coroutines.awaitCancellation
  * its own (#299), so the window here never shows a soft keyboard.
  */
 @OptIn(ExperimentalComposeUiApi::class)
+@SdkSuppress(minSdkVersion = 30)
 class TypingPredictionVisibilityTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
