@@ -238,6 +238,7 @@
 "settings.accessibility.dwell" = "Dwell to Select";
 "settings.accessibility.debounce" = "Selection Debounce";
 "settings.accessibility.feedback" = "Feedback & Logging";
+"settings.accessibility.selection_highlight" = "Selection Highlight";
 "settings.accessibility.selection_sound" = "Selection Sound";
 "settings.accessibility.auditory_fishing" = "Auditory Fishing";
 "settings.speech_policy.title" = "Speech When Selecting";

@@ -158,6 +158,7 @@ internal sealed interface SettingsAction {
     data object PointerEmphasisScaleChangeFinished : SettingsAction
 
     data class HistoryVisibleChanged(val checked: Boolean) : SettingsAction
+    data class LikelyNextPageChanged(val checked: Boolean) : SettingsAction
     data class BoardSetSentenceCachingChanged(val boardSetId: String, val enabled: Boolean) : SettingsAction
     data class UsageLoggingChanged(val checked: Boolean) : SettingsAction
     data class FeatureReportingChanged(val checked: Boolean) : SettingsAction
@@ -549,6 +550,9 @@ internal class SettingsViewModel(
 
             is SettingsAction.HistoryVisibleChanged -> persist {
                 it.copy(historyVisible = action.checked)
+            }
+            is SettingsAction.LikelyNextPageChanged -> persist {
+                it.copy(likelyNextPageEnabled = action.checked)
             }
             is SettingsAction.BoardSetSentenceCachingChanged ->
                 setSentenceCaching(action.boardSetId, action.enabled)

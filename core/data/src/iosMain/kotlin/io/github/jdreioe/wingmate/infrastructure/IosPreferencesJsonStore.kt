@@ -50,6 +50,13 @@ internal class IosPreferencesJsonStore<T>(
         }
     }
 
+    suspend fun remove() = withContext(Dispatchers.Default) {
+        mutex.withLock {
+            defaults.removeObjectForKey(key)
+            if (!synchronize()) throw PersistenceException(PersistenceError.Io)
+        }
+    }
+
     private fun readLocked(): PersistenceRead<T> {
         val raw = defaults.stringForKey(key)
         if (raw == null) {

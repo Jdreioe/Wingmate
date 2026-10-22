@@ -21,3 +21,22 @@ fun phraseSubtree(phrases: List<Phrase>, rootId: String): List<Phrase> {
     }
     return result
 }
+
+/**
+ * Converts the flat Category list from older backups into folder-Phrases.
+ *
+ * Categories without an id, or whose id is already a Phrase in [phrases], are
+ * skipped so a backup that carries both forms restores each folder once.
+ */
+fun legacyCategoryFolders(categories: List<CategoryItem>, phrases: List<Phrase>, createdAt: Long): List<Phrase> {
+    val existing = phrases.mapTo(mutableSetOf()) { it.id }
+    return categories.filter { it.id.isNotBlank() && existing.add(it.id) }.map { category ->
+        Phrase(
+            id = category.id,
+            text = category.name?.trim().orEmpty().ifEmpty { "Category" },
+            linkedBoardId = category.id,
+            isGridItem = false,
+            createdAt = createdAt,
+        )
+    }
+}

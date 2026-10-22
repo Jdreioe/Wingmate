@@ -3,8 +3,6 @@ package io.github.jdreioe.wingmate.ui
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.SavedStateHandle
-import io.github.jdreioe.wingmate.application.PhraseEvent
-import io.github.jdreioe.wingmate.application.PhraseState
 import io.github.jdreioe.wingmate.application.QueuedCommunicationSession
 import io.github.jdreioe.wingmate.application.TypingScreenProjector
 import io.github.jdreioe.wingmate.domain.CategoryItem
@@ -229,6 +227,28 @@ class PhraseScreenViewModelTest {
     }
 
     @Test
+    fun `Likely next Page follows History and closes when the experiment is turned off`() = runTest {
+        val operations = operations(settings = Settings(primaryLanguage = "en-US", likelyNextPageEnabled = true)).apply {
+            historyItems = listOf(
+                SaidText(id = 1, saidText = "Hello", date = 0L),
+                SaidText(id = 2, saidText = "How are you?", date = 60_000L),
+                SaidText(id = 3, saidText = "Hello", date = 6_000_000L),
+            )
+        }
+        val savedState = SavedStateHandle()
+        val viewModel = PhraseScreenViewModel(savedState, operations)
+
+        viewModel.onAction(PhraseScreenAction.SelectPage(TypingPageSelection.LikelyNext))
+        assertEquals(listOf("How are you?"), viewModel.state.value.likelyNext.map { it.saidText })
+        assertTrue(viewModel.state.value.showLikelyNext)
+        assertEquals(TypingPageSelection.LikelyNext, PhraseScreenViewModel(savedState, operations).state.value.selectedPage)
+
+        operations.settings.update { it.copy(likelyNextPageEnabled = false) }
+        assertEquals(TypingPageSelection.AllPhrases, viewModel.state.value.selectedPage)
+        assertFalse(viewModel.state.value.showLikelyNext)
+    }
+
+    @Test
     fun `failed Category load blocks editing until retry without touching the Message`() = runTest {
         val operations = operations().apply { failCategories = true }
         val viewModel = PhraseScreenViewModel(SavedStateHandle(), operations)
@@ -246,6 +266,21 @@ class PhraseScreenViewModelTest {
         assertEquals(TypingLoadStatus.Ready, viewModel.state.value.categoryStatus)
         assertEquals(listOf(food, people), viewModel.state.value.categories)
         assertEquals("Help", operations.message)
+    }
+
+    @Test
+    fun `failed Phrase load blocks editing until retry`() = runTest {
+        val operations = operations().apply { failPhrases = true }
+        val viewModel = PhraseScreenViewModel(SavedStateHandle(), operations)
+        assertEquals(TypingLoadStatus.Failed, viewModel.state.value.phraseStatus)
+        assertFalse(viewModel.state.value.vocabularyReady)
+
+        operations.failPhrases = false
+        viewModel.onAction(PhraseScreenAction.RetryLoad)
+
+        assertEquals(TypingLoadStatus.Ready, viewModel.state.value.phraseStatus)
+        assertEquals(listOf(water, coffee), viewModel.state.value.phrases)
+        assertTrue(viewModel.state.value.vocabularyReady)
     }
 
     // --- Failed writes keep the draft and the Message, then retry ---
@@ -432,15 +467,15 @@ class PhraseScreenViewModelTest {
         viewModel.onAction(PhraseScreenAction.DeletePhrase("water"))
         assertTrue(viewModel.state.value.mutationFailed)
         assertTrue(events.isEmpty())
-        assertTrue(operations.phrases.value.items.contains(water))
+        assertTrue(operations.items.contains(water))
 
         viewModel.onAction(PhraseScreenAction.RetryMutation)
         val deleted = events.filterIsInstance<PhraseScreenEvent.Deleted>().single()
-        assertFalse(operations.phrases.value.items.contains(water))
+        assertFalse(operations.items.contains(water))
 
         viewModel.onAction(PhraseScreenAction.UndoDelete(deleted.deletionId))
         assertEquals(listOf(water to false), operations.saved)
-        assertTrue(operations.phrases.value.items.contains(water))
+        assertTrue(operations.items.contains(water))
     }
 
     @Test
@@ -522,7 +557,7 @@ class PhraseScreenViewModelTest {
             currentSettings = { settings.value },
             scope = scope,
         )
-        override val phrases = MutableStateFlow(PhraseState(items = listOf(water, coffee)))
+        var items = listOf(water, coffee)
         override val communication: StateFlow<CommunicationSessionState> = session.state
 
         val communicated = mutableListOf<CommunicationAction>()
@@ -532,6 +567,7 @@ class PhraseScreenViewModelTest {
 
         var failNextWrites = 0
         var failCategories = false
+        var failPhrases = false
         var locked = false
         var unlockCheck: CompletableDeferred<Unit>? = null
         var templateGate: CompletableDeferred<Unit>? = null
@@ -545,7 +581,10 @@ class PhraseScreenViewModelTest {
             }
         }
 
-        override fun phrase(event: PhraseEvent) = Unit
+        override suspend fun phrases(): List<Phrase> {
+            if (failPhrases) throw IOException("Storage unavailable")
+            return items
+        }
         override fun communicate(action: CommunicationAction) {
             communicated += action
             session.accept(action)
@@ -554,15 +593,13 @@ class PhraseScreenViewModelTest {
         override suspend fun savePhrase(phrase: Phrase, editing: Boolean) {
             write()
             saved += phrase to editing
-            phrases.update { state ->
-                state.copy(items = if (editing) state.items.map { if (it.id == phrase.id) phrase else it } else state.items + phrase)
-            }
+            items = if (editing) items.map { if (it.id == phrase.id) phrase else it } else items + phrase
         }
 
         override suspend fun deletePhrase(id: String) {
             write()
-            val removed = phraseSubtree(phrases.value.items, id).map { it.id }.toSet()
-            phrases.update { state -> state.copy(items = state.items.filterNot { it.id in removed }) }
+            val removed = phraseSubtree(items, id).map { it.id }.toSet()
+            items = items.filterNot { it.id in removed }
         }
 
         override suspend fun movePhrase(from: Int, to: Int) = write()
@@ -593,7 +630,8 @@ class PhraseScreenViewModelTest {
             categoryItems.removeAll { it.id == id }
         }
 
-        override suspend fun history(): List<SaidText> = emptyList()
+        var historyItems = emptyList<SaidText>()
+        override suspend fun history(): List<SaidText> = historyItems
         override suspend fun voice(): Voice? = null
         override suspend fun requiresUnlock(): Boolean {
             unlockCheck?.await()

@@ -14,6 +14,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -25,7 +27,6 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.test.platform.app.InstrumentationRegistry
 import com.hojmoseit.wingmate.R
-import io.github.jdreioe.wingmate.application.PhraseState
 import io.github.jdreioe.wingmate.application.TypingScreenProjector
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.CommunicationAction
@@ -36,6 +37,7 @@ import io.github.jdreioe.wingmate.domain.CommunicationSessionState
 import io.github.jdreioe.wingmate.domain.Message
 import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import org.junit.Assert.assertEquals
@@ -56,7 +58,8 @@ class PhraseScreenContentTest {
         isInitialized = true,
     )
     private val ready = PhraseScreenState(
-        phrases = PhraseState(items = listOf(water)),
+        phrases = listOf(water),
+        phraseStatus = TypingLoadStatus.Ready,
         communication = communication,
         template = TypingScreenProjector.defaultTemplate(columns = 3, now = 1L),
         templateStatus = TypingLoadStatus.Ready,
@@ -149,6 +152,34 @@ class PhraseScreenContentTest {
         composeRule.onNodeWithText("Water").performTouchInput { up() }
 
         assertEquals(listOf<PhraseScreenAction>(PhraseScreenAction.ActivatePhrase(water)), actions)
+    }
+
+    @Test
+    fun likelyNextSuggestionActivatesLikeAHistoryItem() {
+        val suggestion = SaidText(id = 3, saidText = "Thank you", date = 5L)
+        val actions = render(ready.copy(
+            settings = Settings(likelyNextPageEnabled = true),
+            selectedPage = TypingPageSelection.LikelyNext,
+            likelyNext = listOf(suggestion),
+        ))
+
+        composeRule.onNodeWithText(context.getString(R.string.category_likely_next)).assertIsDisplayed()
+        composeRule.onNodeWithText("Thank you").performClick()
+
+        assertEquals(
+            listOf<PhraseScreenAction>(PhraseScreenAction.ActivatePhrase(Phrase(id = "history_3", text = "Thank you", createdAt = 5L))),
+            actions,
+        )
+    }
+
+    @Test
+    fun selectedPhraseIsHighlightedOnlyWhenHighlightingIsOn() {
+        render(ready.copy(settings = Settings(selectionHighlightMillis = 60_000)))
+        composeRule.onAllNodesWithTag("selection-highlight", useUnmergedTree = true).assertCountEquals(0)
+
+        composeRule.onNodeWithText("Water").performClick()
+
+        composeRule.onAllNodesWithTag("selection-highlight", useUnmergedTree = true).assertCountEquals(1)
     }
 
     @Test

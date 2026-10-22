@@ -512,7 +512,6 @@
     <string name="phrase_screen_import_export_data">Importer/eksporter data</string>
     <string name="phrase_screen_welcome_screen">Velkomstskærm</string>
     <string name="phrase_screen_loading">Indlæser...</string>
-    <string name="phrase_screen_error">Fejl: %1$s</string>
     <string name="phrase_screen_enter_text_placeholder">Indtast tekst der skal tales</string>
     <string name="speech_math_mode">Matematik</string>
     <string name="speech_math_mode_description">Læs matematiske udtryk i almindelig tekst med Azures matematikudtale</string>
@@ -577,6 +576,8 @@
     <string name="ui_settings_privacy_desc">Visning af historik, lokale data og rapportering</string>
     <string name="ui_settings_privacy_local_data_title">Lokale data</string>
     <string name="ui_settings_history_visible_title">Vis talehistorik</string>
+    <string name="ui_settings_likely_next_title">Side med sandsynligt næste (eksperimentel)</string>
+    <string name="ui_settings_likely_next_desc">Tilføjer en side på skriveskærmen med beskeder, du ofte siger efter den seneste, udregnet fra din talehistorik på denne enhed.</string>
     <string name="ui_settings_history_visible_desc">Kun tale afspillet, mens dette er slået til, vises i historikken. Skjult tale forbliver gemt lokalt, så lyd kan genbruges.</string>
     <string name="ui_settings_board_cache_title">Sætningscache for skærme</string>
     <string name="ui_settings_board_cache_desc">Vælg for hver skærm, om hele talte sætninger skal gemmes. Deaktivering forbedrer privatlivet, men gentagelse kan kræve ny talesyntese og bruge flere tokens.</string>
@@ -588,6 +589,7 @@
     <string name="common_unknown">Ukendt</string>
     <string name="category_all">Alle</string>
     <string name="category_history">Historik</string>
+    <string name="category_likely_next">Sandsynligt næste</string>
     <string name="category_move_left">Flyt til venstre</string>
     <string name="category_move_right">Flyt til højre</string>
     <string name="category_delete_with_phrases">Slet (med fraser)</string>

@@ -533,6 +533,10 @@ private fun CategoryContent(
                 onHistoryVisibleChange = { checked ->
                     onAction(SettingsAction.HistoryVisibleChanged(checked))
                 },
+                likelyNextPageEnabled = settings.likelyNextPageEnabled,
+                onLikelyNextPageChange = { checked ->
+                    onAction(SettingsAction.LikelyNextPageChanged(checked))
+                },
                 boardSets = state.boardSets,
                 onBoardSetSentenceCachingChange = { boardSet, enabled ->
                     onAction(SettingsAction.BoardSetSentenceCachingChanged(boardSet.id, enabled))
@@ -1624,6 +1628,8 @@ private fun BackupSettingsGroup(
 private fun PrivacySection(
     historyVisible: Boolean,
     onHistoryVisibleChange: (Boolean) -> Unit,
+    likelyNextPageEnabled: Boolean,
+    onLikelyNextPageChange: (Boolean) -> Unit,
     boardSets: List<ObfBoardSet>,
     onBoardSetSentenceCachingChange: (ObfBoardSet, Boolean) -> Unit,
     usageLoggingEnabled: Boolean,
@@ -1638,6 +1644,16 @@ private fun PrivacySection(
             title = stringResource(R.string.ui_settings_history_visible_title),
             description = stringResource(R.string.ui_settings_history_visible_desc)
         )
+        // The experimental Page is built from visible History, so it only applies while History is shown.
+        if (historyVisible) {
+            SettingsGroupDivider()
+            SettingsSwitch(
+                checked = likelyNextPageEnabled,
+                onCheckedChange = onLikelyNextPageChange,
+                title = stringResource(R.string.ui_settings_likely_next_title),
+                description = stringResource(R.string.ui_settings_likely_next_desc)
+            )
+        }
     }
 
 
