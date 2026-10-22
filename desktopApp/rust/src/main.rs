@@ -728,13 +728,13 @@ impl App {
                             self.pronunciation_word.clear();
                             self.pronunciation_replacement.clear();
                         }
-                        Err(error) => self.error = Some(error),
+                        Err(error) => self.report(error),
                     }
                 }
             }
             Message::DeletePronunciation(word) => match self.core.delete_pronunciation(&word) {
                 Ok(value) => self.pronunciations = value,
-                Err(error) => self.error = Some(error),
+                Err(error) => self.report(error),
             },
             Message::ExportBackup => {
                 let result = rfd::FileDialog::new()
@@ -742,7 +742,7 @@ impl App {
                     .save_file()
                     .map(|path| self.core.export_backup(path.to_string_lossy().as_ref()));
                 if let Some(Err(error)) = result {
-                    self.error = Some(error);
+                    self.report(error);
                 }
             }
             Message::RestoreBackup => {
@@ -761,7 +761,7 @@ impl App {
                                 self.settings = value;
                             }
                         }
-                        Err(error) => self.error = Some(error),
+                        Err(error) => self.report(error),
                     }
                 }
             }
@@ -791,7 +791,7 @@ impl App {
             Ok(state) => self.access = state,
             Err(error) => {
                 self.access = access::State::default();
-                self.error = Some(error);
+                self.report(error);
             }
         }
     }
@@ -855,7 +855,7 @@ impl App {
             }
             Err(error) => {
                 self.clear_access();
-                self.error = Some(error);
+                self.report(error);
             }
         }
         Task::none()
@@ -866,7 +866,15 @@ impl App {
         self.refresh_library();
     }
 
-    fn apply(&mut self, result: Result<Activation, String>) -> Task<Message> {
+    /// Shows a core failure in the error banner. Cancellation is the user's
+    /// own choice, so it is not reported.
+    fn report(&mut self, error: bridge::CoreError) {
+        if error.kind != bridge::FailureKind::Cancelled {
+            self.error = Some(error.to_string());
+        }
+    }
+
+    fn apply(&mut self, result: Result<Activation, bridge::CoreError>) -> Task<Message> {
         match result {
             Ok(activation) => {
                 let speech = activation.speech.map(|value| {
@@ -891,7 +899,7 @@ impl App {
                 speech.unwrap_or_else(Task::none)
             }
             Err(error) => {
-                self.error = Some(error);
+                self.report(error);
                 Task::none()
             }
         }
@@ -901,13 +909,13 @@ impl App {
         self.clear_access();
         match self.core.update_settings(&self.settings) {
             Ok(settings) => self.settings = settings,
-            Err(error) => self.error = Some(error),
+            Err(error) => self.report(error),
         }
     }
     fn refresh_library(&mut self) {
         match self.core.library() {
             Ok(value) => self.library = value,
-            Err(error) => self.error = Some(error),
+            Err(error) => self.report(error),
         }
         if let Ok(value) = self.core.recents() {
             self.recents = value;

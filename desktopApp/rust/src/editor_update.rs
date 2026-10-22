@@ -1,5 +1,6 @@
 use crate::{
     App, Message, Route,
+    bridge::CoreError,
     editor::{Editor, Event, View, controls::Action},
 };
 use iced::Task;
@@ -92,7 +93,7 @@ impl App {
                             return self.apply(self.core.open(id));
                         }
                     }
-                    Err(error) => self.error = Some(error),
+                    Err(error) => self.report(error),
                 }
             }
             Event::Discard => {
@@ -115,7 +116,7 @@ impl App {
                     self.refresh_library();
                     self.error = None;
                 }
-                Err(error) => self.error = Some(error),
+                Err(error) => self.report(error),
             },
             Event::KeepEditing => {
                 self.close_after_editor = false;
@@ -136,11 +137,9 @@ impl App {
             self.error = Some("Apply the form changes before another editor action.".into());
             return;
         }
-        match self
-            .core
-            .editor(&command)
-            .and_then(|value| serde_json::from_value::<View>(value).map_err(|e| e.to_string()))
-        {
+        match self.core.editor(&command).and_then(|value| {
+            serde_json::from_value::<View>(value).map_err(|_| CoreError::invalid_response())
+        }) {
             Ok(view) => {
                 if let Some(mut previous) = self.editor.take() {
                     previous.pending.remove(operation);
@@ -171,7 +170,7 @@ impl App {
                 self.route = Route::Editor;
                 self.error = None;
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => self.report(error),
         }
     }
 }

@@ -290,6 +290,14 @@ private enum GoogleTtsSetupStep {
     case success
 }
 
+/// Google refusing the key, being unreachable, or the Keychain failing each need a different next step.
+private func googleSetupFailureKey(_ error: Error) -> String {
+    let kind = error.nativeFailure?.kind
+    if kind == NativeFailureKind.network { return "settings.speech.google.setup.network_failed" }
+    if kind == NativeFailureKind.persistence { return "settings.speech.google.setup.save_failed" }
+    return "settings.speech.google.setup.validation_failed"
+}
+
 struct GoogleTtsSetupView: View {
     @ObservedObject var model: IosViewModel
     let onClose: () -> Void
@@ -382,7 +390,8 @@ struct GoogleTtsSetupView: View {
                                     step = .success
                                     onSaved?()
                                 } catch {
-                                    errorMessage = NSLocalizedString("settings.speech.google.setup.validation_failed", comment: "")
+                                    if error.isNativeCancellation { return }
+                                    errorMessage = NSLocalizedString(googleSetupFailureKey(error), comment: "")
                                 }
                             }
                         }

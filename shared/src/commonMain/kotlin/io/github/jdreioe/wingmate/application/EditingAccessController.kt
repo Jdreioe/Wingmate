@@ -45,7 +45,7 @@ class DefaultEditingAccessStore(
     override suspend fun isEnabled(): Boolean = storage.read() != null
 
     override suspend fun setCode(code: String) {
-        require(code.length in 4..8 && code.all(Char::isDigit)) { "Access code must contain 4 to 8 digits" }
+        require(isValidEditingAccessCode(code)) { "Access code must contain 4 to 8 digits" }
         check(isSupported) { "Secure credential storage is unavailable" }
         val salt = storage.secureRandomBytes(16)
         val verifier = withContext(Dispatchers.Default) {
@@ -77,6 +77,9 @@ class DefaultEditingAccessStore(
 
     override suspend fun clear() = storage.delete()
 }
+
+/** An Editing access code is 4 to 8 digits. */
+internal fun isValidEditingAccessCode(code: String): Boolean = code.length in 4..8 && code.all(Char::isDigit)
 
 data class EditingAccessState(
     val enabled: Boolean = false,

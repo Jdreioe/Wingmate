@@ -24,6 +24,10 @@ import io.github.jdreioe.wingmate.application.TypingScreenFacade
 import io.github.jdreioe.wingmate.application.SettingsFacade
 import io.github.jdreioe.wingmate.application.BoardsFacade
 import io.github.jdreioe.wingmate.application.CommunicationFacade
+import io.github.jdreioe.wingmate.application.PredictionFacade
+import io.github.jdreioe.wingmate.application.PronunciationFacade
+import io.github.jdreioe.wingmate.application.SymbolSearchFacade
+import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import io.github.jdreioe.wingmate.application.QueuedCommunicationSession
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.application.UnavailableBackupMediaAccess
@@ -134,6 +138,9 @@ internal fun createCoreDataModule(): Module = module {
         singleOf(::CommunicationFacade)
         singleOf(::CommunicationSessionFacade)
         singleOf(::TypingScreenFacade)
+        singleOf(::PredictionFacade)
+        singleOf(::PronunciationFacade)
+        single { SymbolSearchFacade(SymbolSearchClient::search) }
         singleOf(::SettingsStateManager)
         single(named("communicationSessionScope")) {
             CoroutineScope(SupervisorJob() + Dispatchers.Default)

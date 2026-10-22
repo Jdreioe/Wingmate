@@ -1,6 +1,9 @@
+import io.github.jdreioe.wingmate.application.BoardSetExportStatus
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.BoardsFacade
+import io.github.jdreioe.wingmate.application.NativeFailure
+import io.github.jdreioe.wingmate.application.NativeFailureKind
 import io.github.jdreioe.wingmate.application.NoopFeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
@@ -18,6 +21,7 @@ import io.ktor.client.HttpClient
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -138,26 +142,42 @@ class BoardsFacadeTest {
     }
 
     @Test
-    fun shareBoardSetAsObzMapsNotFoundCancelledAndSuccess() = runBlocking {
+    fun shareBoardSetAsObzReportsNotFoundShareFailureAndSuccess() = runBlocking {
         val share = RecordingShareService()
         val facade = facade(share = share)
         val boardSet = facade.createBoardSet("MySet", rows = 1, columns = 1)
 
         val notFound = facade.shareBoardSetAsObz("missing")
-        assertEquals(false, notFound.success)
+        assertEquals(BoardSetExportStatus.NotFound, notFound.status)
         assertNull(notFound.fileName)
-        assertTrue(notFound.message.contains("not found"))
 
-        val cancelled = facade.shareBoardSetAsObz(boardSet.id)
-        assertEquals(false, cancelled.success)
-        assertEquals("MySet.obz", cancelled.fileName)
-        assertEquals("Export cancelled", cancelled.message)
+        val unshared = facade.shareBoardSetAsObz(boardSet.id)
+        assertEquals(BoardSetExportStatus.ShareFailure, unshared.status)
+        assertTrue(unshared.isRetryable)
 
         share.shared = true
         val exported = facade.shareBoardSetAsObz(boardSet.id)
-        assertEquals(true, exported.success)
+        assertEquals(BoardSetExportStatus.Success, exported.status)
         assertEquals("MySet.obz", exported.fileName)
-        assertTrue(exported.message.contains("Exported"))
+    }
+
+    @Test
+    fun editsSeparateMissingTargetsFromRefusedChanges() = runBlocking {
+        val facade = facade()
+        val boardSet = facade.createBoardSet("Test", rows = 1, columns = 1)
+
+        suspend fun kindOf(edit: suspend () -> Unit) = assertFailsWith<NativeFailure> { edit() }.kind
+
+        assertEquals(NativeFailureKind.NotFound, kindOf { facade.renameBoardSet("missing", "Name") })
+        assertEquals(NativeFailureKind.NotFound, kindOf { facade.renameBoard(boardSet.id, "missing", "Name") })
+        assertEquals(NativeFailureKind.NotFound, kindOf { facade.importQuickCorePreset("not-a-preset", "Name") })
+        assertEquals(NativeFailureKind.Validation, kindOf { facade.deleteBoard(boardSet.id, boardSet.rootBoardId) })
+        assertEquals(NativeFailureKind.Validation, kindOf { facade.clearBoardCellButton(boardSet.rootBoardId, 3, 3) })
+
+        facade.toggleBoardSetLocked(boardSet.id)
+        val locked = assertFailsWith<NativeFailure> { facade.renameBoardSet(boardSet.id, "Renamed") }
+        assertEquals(NativeFailureKind.Validation, locked.kind)
+        assertEquals(false, locked.isRetryable)
     }
 
     private fun facade(

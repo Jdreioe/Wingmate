@@ -10,6 +10,7 @@
     <string name="typing_screen_reset_description">Erstat skriveskærmens layout og handlingsknapper med de nuværende standarder? Dine sætninger og kategorier bevares.</string>
     <string name="typing_screen_reset_failed">Skriveskærmen kunne ikke nulstilles.</string>
     <string name="typing_screen_content_unavailable">Skriveskærmens indhold er ikke tilgængeligt. Prøv igen, før du redigerer.</string>
+    <string name="typing_screen_save_failed">Ændringen kunne ikke gemmes. Din besked og dine ugemte ændringer er bevaret. Prøv igen.</string>
     <string name="typing_screen_load_failed">Skriveskærmens indhold kunne ikke indlæses.</string>
     <string name="typing_screen_unsupported_action">Handlingen understøttes ikke. Knappen er bevaret og kan redigeres.</string>
     <string name="typing_screen_unavailable_action">Handlingen er ikke tilgængelig lige nu.</string>
@@ -203,6 +204,7 @@
     <string name="board_settings_reset_screen">Nulstil skærmindstillinger</string>
     <string name="board_settings_reset_page">Nulstil sidetilpasninger</string>
     <string name="board_cell_opens_board">Åbner siden: %1$s</string>
+    <string name="board_page_empty">Der er ingen knapper på denne side endnu.</string>
     <string name="board_dialog_new_set">Ny skærm</string>
     <string name="board_dialog_template">Skabelon</string>
     <string name="board_dialog_template_blank">Tom</string>
@@ -348,7 +350,6 @@
     <string name="phrase_pick_file">Foto</string>
     <string name="phrase_open_symbols">Symbol</string>
     <string name="phrase_recording_label">Optagelse</string>
-    <string name="phrase_record_hint">frase</string>
     <string name="phrase_recording_unavailable">Optagelse er ikke tilgængelig på denne platform.</string>
     <string name="phrase_recording_start_failed">Kunne ikke starte optagelse.</string>
     <string name="phrase_recording_finalize_failed">Kunne ikke afslutte optagelse.</string>

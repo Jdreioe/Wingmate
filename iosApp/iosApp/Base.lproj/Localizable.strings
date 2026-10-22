@@ -206,6 +206,8 @@
 "settings.speech.google.setup.ios_restriction" = "Bundle ID: %@";
 "settings.speech.google.setup.save_validate" = "Save securely and verify";
 "settings.speech.google.setup.validation_failed" = "Wingmate could not verify this key. Check the key, connection, billing, API access, and restrictions. Your previous setup was kept.";
+"settings.speech.google.setup.network_failed" = "Wingmate could not reach Google Cloud. Check your connection and try again. Your previous setup was kept.";
+"settings.speech.google.setup.save_failed" = "Wingmate could not store the key on this device. Try again. Your previous setup was kept.";
 "settings.speech.google.setup.complete_title" = "Google TTS is ready";
 "settings.speech.google.setup.complete_description" = "The key was verified and stored in this device's Keychain. It is not included in backups.";
 "common.back" = "Back";
@@ -288,6 +290,8 @@
 "pronunciation.add_title" = "Add Pronunciation";
 "pronunciation.ipa_palette" = "IPA Symbols";
 "pronunciation.delete_last" = "Delete Last";
+"pronunciation.error.load_failed" = "Could not load the pronunciation dictionary. Try again.";
+"pronunciation.error.save_failed" = "Could not save the pronunciation change. Try again.";
 
 "welcome_flow.choose_primary_language" = "Choose primary language for this voice";
 "welcome_flow.select_language" = "Select Language";
@@ -313,6 +317,7 @@
 "boardset.unlock" = "Unlock Screen";
 "boardset.export_obz" = "Export";
 "boardset.export_obz_failed" = "Export failed";
+"boardset.export_obz_done" = "Exported %@";
 "boardset.untitled_board" = "Untitled Page";
 "boardset.grid_summary" = "%d x %d grid, %d buttons";
 
@@ -326,6 +331,8 @@
 "boardset.error.locked" = "This screen is locked.";
 "boardset.error.no_board" = "No page selected.";
 "boardset.error.save_failed" = "Could not save screen.";
+"boardset.error.not_found" = "This screen or page no longer exists.";
+"boardset.error.download_failed" = "Could not download the screen. Check your connection and try again.";
 
 "boardset.unlock.failed_title" = "Unable to Unlock";
 "boardset.unlock.not_available" = "Device authentication is not available.";

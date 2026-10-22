@@ -16,6 +16,9 @@ class DesktopEditorTest {
     }
     private fun DesktopCore.command(value: String) = Json.parseToJsonElement(editorJson(value)).jsonObject
     private fun JsonObject.string(key: String) = getValue(key).jsonPrimitive.content
+    // Inline so the block may call suspending editor commands inside runBlocking.
+    private inline fun assertFailure(kind: DesktopFailureKind, block: () -> Unit) =
+        assertEquals(kind, assertFailsWith<DesktopFailure> { block() }.kind)
 
     @Test fun savePersistsLinkedPagesAndDiscardDoesNotChangeVocabulary() = fixture { core, path ->
         val start = core.command("""{"operation":"new","name":"My Screen","rows":2,"columns":2}""")
@@ -38,9 +41,9 @@ class DesktopEditorTest {
     @Test fun invalidMovesLinksAndSpansLeaveDraftIntact() = fixture { core, _ ->
         core.command("""{"operation":"new","rows":2,"columns":2}""")
         core.command("""{"operation":"button","label":"Hello"}""")
-        assertFailsWith<IllegalArgumentException> { core.command("""{"operation":"button","linkedPage":"missing"}""") }
-        assertFailsWith<IllegalArgumentException> { core.command("""{"operation":"span","rowSpan":3}""") }
-        assertFailsWith<IllegalArgumentException> { core.command("""{"operation":"move","toRow":99}""") }
+        assertFailure(DesktopFailureKind.NotFound) { core.command("""{"operation":"button","linkedPage":"missing"}""") }
+        assertFailure(DesktopFailureKind.Validation) { core.command("""{"operation":"span","rowSpan":3}""") }
+        assertFailure(DesktopFailureKind.Validation) { core.command("""{"operation":"move","toRow":99}""") }
         val moved = core.command("""{"operation":"move","toRow":1,"toColumn":1}""")
         val button = moved.getValue("cells").jsonArray.map { it.jsonObject }.single { it.string("label") == "Hello" }
         assertEquals("1", button.string("row"))
@@ -74,7 +77,7 @@ class DesktopEditorTest {
         )) {
             val store = DesktopStore(path)
             store.restore(store.snapshot().copy(boardSets = listOf(set)))
-            assertFailsWith<IllegalArgumentException> { DesktopCore(path).command("""{"operation":"begin","id":"screen"}""") }
+            assertFailure(DesktopFailureKind.Validation) { DesktopCore(path).command("""{"operation":"begin","id":"screen"}""") }
         }
     }
 
@@ -85,7 +88,10 @@ class DesktopEditorTest {
         core.command("""{"operation":"renameScreen","name":"After"}""")
         val temporary = path.toPath() / "state.json.tmp"
         FileSystem.SYSTEM.createDirectories(temporary)
-        assertFails { core.command("""{"operation":"save"}""") }
+        val failure = Json.parseToJsonElement(desktopReply { core.editorJson("""{"operation":"save"}""") })
+            .jsonObject.getValue("error").jsonObject
+        assertEquals("persistence", failure.string("kind"))
+        assertEquals("true", failure.string("retryable"))
         assertTrue("Before" in core.libraryJson())
         assertTrue("Before" in DesktopCore(path).libraryJson())
         FileSystem.SYSTEM.delete(temporary)
@@ -102,13 +108,13 @@ class DesktopEditorTest {
             editor.command("""{"operation":"begin","id":"$id"}""")
             val set = store.getBoardSet(id)!!
             store.saveBoardSet(set.copy(isLocked = true))
-            assertFailsWith<IllegalArgumentException> { editor.command("""{"operation":"save"}""") }
+            assertFailure(DesktopFailureKind.Validation) { editor.command("""{"operation":"save"}""") }
         }
     }
 
     @Test fun abandoningNewScreenDoesNotPersistIt() = fixture { core, path ->
         core.command("""{"operation":"new"}""")
-        assertFailsWith<IllegalStateException> { core.command("""{"operation":"new"}""") }
+        assertFailure(DesktopFailureKind.Validation) { core.command("""{"operation":"new"}""") }
         core.command("""{"operation":"discard"}""")
         assertEquals("[]", DesktopCore(path).libraryJson())
     }

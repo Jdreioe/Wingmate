@@ -163,9 +163,18 @@ class VoiceUseCase(
         return cachedVoicesWhenEmpty(list)
     }
 
-    suspend fun refreshFromGoogle(): List<Voice> {
-        val list = google.list()
-        // Keep the last working catalog if validation or refresh fails.
+    // Keep the last working catalog if refresh fails.
+    suspend fun refreshFromGoogle(): List<Voice> = cachedVoicesWhenEmpty(saveGoogleCatalog(google.list()))
+
+    /**
+     * Downloads Google's catalog for the saved key without saving it or falling
+     * back to cached voices, so it can verify a key. Failures propagate from
+     * [GoogleVoiceCatalog.load]; save a verified catalog with [saveGoogleCatalog].
+     */
+    suspend fun loadGoogleCatalog(): List<Voice> = google.load()
+
+    /** Stores a downloaded Google catalog; an empty one keeps the cached voices. */
+    suspend fun saveGoogleCatalog(list: List<Voice>): List<Voice> {
         if (list.isNotEmpty()) {
             repo.saveVoices(list)
             persistCatalogMetadataForSelected(list)
@@ -175,7 +184,7 @@ class VoiceUseCase(
             "provider" to "google",
             "count" to list.size.toString(),
         )
-        return cachedVoicesWhenEmpty(list)
+        return list
     }
 
     private suspend fun cachedVoicesWhenEmpty(voices: List<Voice>): List<Voice> =

@@ -1,5 +1,6 @@
 import com.arkivanov.mvikotlin.main.store.DefaultStoreFactory
 import io.github.jdreioe.wingmate.application.CommunicationFacade
+import io.github.jdreioe.wingmate.application.HistoryStatus
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStoreFactory
 import io.github.jdreioe.wingmate.application.usecase.AddPhraseUseCase
@@ -9,6 +10,7 @@ import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.SaidText
+import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryPhraseRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemorySaidTextRepository
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +24,7 @@ import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class CommunicationFacadeTest {
     // PhraseListStore's CoroutineExecutor runs on Dispatchers.Main. Faking Main
@@ -44,13 +47,28 @@ class CommunicationFacadeTest {
         saidRepo.add(SaidText(id = 1, saidText = "Hello", audioFilePath = "/tmp/hello.m4a", createdAt = 1000L))
         saidRepo.add(SaidText(id = 2, saidText = "Hidden", createdAt = 2000L, visibleInHistory = false))
 
-        val history = facade.listHistoryAsPhrases()
+        val result = facade.history()
+        val history = result.phrases
 
+        assertEquals(HistoryStatus.Success, result.status)
         assertEquals(1, history.size)
         assertEquals("history-1", history[0].id)
         assertEquals("Hello", history[0].text)
         assertEquals("/tmp/hello.m4a", history[0].recordingPath)
         assertEquals(1000L, history[0].createdAt)
+    }
+
+    @Test
+    fun unreadableHistoryIsAFailureRatherThanAnEmptyHistory() = withFakeMain {
+        val facade = facade(saidRepo = object : SaidTextRepository by InMemorySaidTextRepository() {
+            override suspend fun list(): List<SaidText> = throw IllegalStateException("database closed")
+        })
+
+        val result = facade.history()
+
+        assertEquals(HistoryStatus.PersistenceFailure, result.status)
+        assertTrue(result.isRetryable)
+        assertTrue(result.phrases.isEmpty())
     }
 
     @Test
@@ -134,7 +152,7 @@ class CommunicationFacadeTest {
     }
 
     private fun facade(
-        saidRepo: io.github.jdreioe.wingmate.domain.SaidTextRepository = InMemorySaidTextRepository(),
+        saidRepo: SaidTextRepository = InMemorySaidTextRepository(),
         phraseRepository: PhraseRepository = InMemoryPhraseRepository(),
     ): CommunicationFacade {
         val phraseRepo = phraseRepository

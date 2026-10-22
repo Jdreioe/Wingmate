@@ -28,39 +28,31 @@ private enum PhraseSymbolSource: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-private func resolveOpenSymbolsProxyUrl() -> String? {
-    let fromInfoRaw = Bundle.main.object(forInfoDictionaryKey: "OPEN_SYMBOLS_PROXY_URL") as? String
-    let fromInfo = fromInfoRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let fromInfo, !fromInfo.isEmpty { return fromInfo }
-
-    let fromEnvRaw = ProcessInfo.processInfo.environment["OPENSYMBOLS_PROXY_URL"]
-    let fromEnv = fromEnvRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let fromEnv, !fromEnv.isEmpty { return fromEnv }
-
-    return nil
-}
-
-private func searchOpenSymbolsUsingBridge(
+/// Searches with `IosViewModel.searchSymbols`. Cancellation returns no results and no error.
+private func searchSymbols(
     _ query: String,
-    packageFilter: SymbolPackageFilter
+    packageFilter: SymbolPackageFilter,
+    using symbolSearch: SymbolSearch
 ) async -> (results: [OpenSymbolsSymbolResult], errorCode: String?) {
-    let bridge = KoinBridge()
-    bridge.setOpenSymbolsProxyUrl(url: resolveOpenSymbolsProxyUrl())
-    guard let result = try? await bridge.openSymbolsSearch(
-        query: query,
-        locale: Locale.current.identifier,
-        symbolPackage: packageFilter.rawValue,
-        prioritizeArasaac: false
-    ) else {
-        return ([], "search_failed")
+    guard let result = await symbolSearch(query, packageFilter.rawValue) else {
+        return ([], nil)
     }
-    if result.errorCode.isEmpty {
+    if result.isSuccess {
         let mapped = result.symbols.map {
-            OpenSymbolsSymbolResult(id: $0.id, name: $0.name ?? "", image_url: $0.imageUrl, source: $0.source)
+            OpenSymbolsSymbolResult(id: $0.id, name: $0.name, image_url: $0.imageUrl, source: $0.source)
         }
         return (mapped, nil)
     }
-    return ([], result.errorCode)
+    return ([], symbolSearchErrorCode(result.status))
+}
+
+/// A symbol search by query and package wire value; nil when cancelled.
+typealias SymbolSearch = (_ query: String, _ symbolPackage: String) async -> Shared.SymbolSearchResult?
+
+/// The Localizable.strings suffix for a failed symbol search.
+func symbolSearchErrorCode(_ status: Shared.SymbolSearchStatus) -> String {
+    // Kotlin/Native lowercases a PascalCase enum entry whole: NotConfigured -> notconfigured.
+    status == .notconfigured ? "missing_proxy" : "search_failed"
 }
 
 struct AddCategorySheet: View {
@@ -139,6 +131,7 @@ struct AddPhraseSheet: View {
     let recorder: AudioRecorder?
     // (phraseId, path)
     let saveRecordingPath: ((String, String?) -> Void)?
+    let symbolSearch: SymbolSearch
     let onSave: (String, String?, String?, String?) -> Void
 
     var body: some View {
@@ -519,7 +512,7 @@ struct AddPhraseSheet: View {
             symbolResults = []
         }
 
-        let (results, errorCode) = await searchOpenSymbolsUsingBridge(trimmed, packageFilter: symbolPackage)
+        let (results, errorCode) = await searchSymbols(trimmed, packageFilter: symbolPackage, using: symbolSearch)
 
         await MainActor.run {
             if let errorCode {
@@ -594,6 +587,7 @@ struct EditPhraseSheet: View {
     let recorder: AudioRecorder?
     // (phraseId, path)
     let saveRecordingPath: ((String, String?) -> Void)?
+    let symbolSearch: SymbolSearch
     @State private var text: String = ""
     @State private var name: String = ""
     @State private var symbolSource: PhraseSymbolSource = .openSymbols
@@ -1014,7 +1008,7 @@ struct EditPhraseSheet: View {
             symbolResults = []
         }
 
-        let (results, errorCode) = await searchOpenSymbolsUsingBridge(trimmed, packageFilter: symbolPackage)
+        let (results, errorCode) = await searchSymbols(trimmed, packageFilter: symbolPackage, using: symbolSearch)
 
         await MainActor.run {
             if let errorCode {

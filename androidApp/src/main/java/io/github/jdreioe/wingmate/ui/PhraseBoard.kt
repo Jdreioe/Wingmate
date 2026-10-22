@@ -46,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.res.stringResource
@@ -64,6 +65,7 @@ import io.github.jdreioe.wingmate.application.TypingScreenPage
 import io.github.jdreioe.wingmate.application.TypingScreenProjector
 import io.github.jdreioe.wingmate.application.typingCategoryPageId
 import io.github.jdreioe.wingmate.domain.CategoryItem
+import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
@@ -94,7 +96,7 @@ private fun SaidText.typingHistoryId(index: Int): String =
 
 /** Full Typing Screen Page rendered inside the OSK-alternate tray. */
 @Composable
-fun TypingScreenTray(
+internal fun TypingScreenTray(
     template: ObfBoard,
     phrases: List<Phrase>,
     categories: List<CategoryItem>,
@@ -114,8 +116,11 @@ fun TypingScreenTray(
     isActionEnabled: (ObfButtonActionEffect) -> Boolean,
     vocabularyMutationsEnabled: Boolean,
     modifier: Modifier = Modifier,
+    settings: Settings,
+    feedback: BoardFeedback = remember { BoardFeedback() },
+    focusedCell: Pair<Int, Int>? = null,
+    onFocusCell: (Pair<Int, Int>?) -> Unit = {},
 ) {
-    val settings by rememberReactiveSettings()
     val page = remember(selection) {
         when (selection) {
             TypingPageSelection.AllPhrases -> TypingScreenPage(TYPING_ALL_PAGE_ID, "All Phrases")
@@ -158,6 +163,46 @@ fun TypingScreenTray(
         history.mapIndexed { index, item -> item.typingHistoryId(index) to item }.toMap()
     }
 
+    val currentPhrasesById by rememberUpdatedState(phrasesById)
+    val currentMovePhrase by rememberUpdatedState(onMovePhrase)
+    val currentEditPhrase by rememberUpdatedState(onEditPhrase)
+    val currentDeletePhrase by rememberUpdatedState(onDeletePhrase)
+    val reorder = remember(selection, vocabularyMutationsEnabled, settings.holdToSelectMillis) {
+        if (selection != TypingPageSelection.History && vocabularyMutationsEnabled) {
+            BoardReorder(
+                canMove = { button -> button.projectedPhraseId()?.let(currentPhrasesById::get) != null },
+                onMove = { moved, target ->
+                    val movedPhrase = moved.projectedPhraseId()?.let(currentPhrasesById::get)
+                    val targetPhrase = target.projectedPhraseId()?.let(currentPhrasesById::get)
+                    if (movedPhrase != null && targetPhrase != null) currentMovePhrase(movedPhrase, targetPhrase)
+                },
+                // Hold-to-select uses long presses to activate; keep those.
+                gesturesEnabled = settings.holdToSelectMillis <= 0,
+                menu = { button, dismiss ->
+                    val phrase = button.projectedPhraseId()?.let(currentPhrasesById::get)
+                    DropdownMenu(expanded = phrase != null, onDismissRequest = dismiss) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.phrase_item_edit)) },
+                            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                            onClick = {
+                                dismiss()
+                                phrase?.let(currentEditPhrase)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.common_delete)) },
+                            leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                            onClick = {
+                                dismiss()
+                                phrase?.let(currentDeletePhrase)
+                            },
+                        )
+                    }
+                },
+            )
+        } else null
+    }
+
     TypingPageElementLayout(
         elements = elements.filter { it.isSupported },
         columns = template.grid?.columns ?: phraseColumns,
@@ -175,7 +220,8 @@ fun TypingScreenTray(
                     modifier = Modifier.fillMaxSize(),
                 )
 
-            is PageElementContent.PhraseCollection -> ObfBoardView(
+            is PageElementContent.PhraseCollection -> ObfBoardContent(
+                    state = ObfBoardUiState(
                     board = board,
                     extractedImages = emptyMap(),
                     showMessageBar = false,
@@ -186,6 +232,11 @@ fun TypingScreenTray(
                     // Fit whole rows to the keyboard-height tray without shrinking
                     // below the Communicator's preferred minimum button size.
                     scrollingMinimumCellHeight = 72.dp * settings.inputFieldScale.coerceIn(0.75f, 2f),
+                    settings = settings,
+                    focusedCell = focusedCell,
+                    ),
+                    feedback = feedback,
+                    onFocusCell = onFocusCell,
                     onButtonClick = { button ->
                         if (button.id == ADD_PHRASE_BUTTON_ID) onAddPhrase()
                         else button.projectedPhraseId()?.let(phrasesById::get)?.let(onPhraseActivated)
@@ -193,39 +244,7 @@ fun TypingScreenTray(
                     },
                     // Long-press for Edit / Delete, keep holding and drag to reorder,
                     // like app icons on the home screen. History is read-only.
-                    reorder = if (selection != TypingPageSelection.History && vocabularyMutationsEnabled) {
-                        BoardReorder(
-                            canMove = { button -> button.projectedPhraseId()?.let(phrasesById::get) != null },
-                            onMove = { moved, target ->
-                                val movedPhrase = moved.projectedPhraseId()?.let(phrasesById::get)
-                                val targetPhrase = target.projectedPhraseId()?.let(phrasesById::get)
-                                if (movedPhrase != null && targetPhrase != null) onMovePhrase(movedPhrase, targetPhrase)
-                            },
-                            // Hold-to-select uses long presses to activate; keep those.
-                            gesturesEnabled = settings.holdToSelectMillis <= 0,
-                            menu = { button, dismiss ->
-                                val phrase = button.projectedPhraseId()?.let(phrasesById::get)
-                                DropdownMenu(expanded = phrase != null, onDismissRequest = dismiss) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.phrase_item_edit)) },
-                                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
-                                        onClick = {
-                                            dismiss()
-                                            phrase?.let(onEditPhrase)
-                                        },
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.common_delete)) },
-                                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                                        onClick = {
-                                            dismiss()
-                                            phrase?.let(onDeletePhrase)
-                                        },
-                                    )
-                                }
-                            },
-                        )
-                    } else null,
+                    reorder = reorder,
                     modifier = Modifier.fillMaxSize(),
                 )
 
@@ -235,6 +254,7 @@ fun TypingScreenTray(
                     Column(Modifier.fillMaxSize()) {
                         HorizontalDivider()
                         TypingActionStrip(
+                            settings = settings, feedback = feedback,
                             buttons = buttons,
                             onAction = onAction,
                             isActionEnabled = isActionEnabled,
@@ -310,12 +330,14 @@ private fun TypingPageNavigation(
  * goes first, for example the Held message's Swap.
  */
 @Composable
-fun TypingActionRow(
+internal fun TypingActionRow(
     template: ObfBoard,
     onAction: (ObfButtonActionEffect) -> Unit,
     isActionEnabled: (ObfButtonActionEffect) -> Boolean,
     modifier: Modifier = Modifier,
     leading: (@Composable () -> Unit)? = null,
+    settings: Settings,
+    feedback: BoardFeedback = remember { BoardFeedback() },
 ) {
     val buttons = remember(template) {
         template.pageElements()
@@ -327,6 +349,7 @@ fun TypingActionRow(
             .mapNotNull { id -> template.buttons.firstOrNull { it.id == id } }
     }
     TypingActionStrip(
+                            settings = settings, feedback = feedback,
         buttons = buttons,
         onAction = onAction,
         isActionEnabled = isActionEnabled,
@@ -342,6 +365,8 @@ private fun TypingActionStrip(
     isActionEnabled: (ObfButtonActionEffect) -> Boolean,
     modifier: Modifier = Modifier,
     leading: (@Composable () -> Unit)? = null,
+    settings: Settings,
+    feedback: BoardFeedback = remember { BoardFeedback() },
 ) {
     val unsupportedDescription = stringResource(R.string.typing_screen_unsupported_action)
     val unavailableDescription = stringResource(R.string.typing_screen_unavailable_action)
@@ -362,6 +387,7 @@ private fun TypingActionStrip(
                 else -> null
             }
             TypingActionButton(
+                            settings = settings, feedback = feedback,
                 button = button,
                 effects = effects,
                 enabled = enabled,
@@ -385,8 +411,9 @@ private fun TypingActionButton(
     enabled: Boolean,
     disabledDescription: String?,
     onClick: () -> Unit,
+    settings: Settings,
+    feedback: BoardFeedback = remember { BoardFeedback() },
 ) {
-    val settings by rememberReactiveSettings()
     val single = effects.singleOrNull()
     val isSsml = effects.isNotEmpty() && effects.all {
         it is ObfButtonActionEffect.AppendText || it is ObfButtonActionEffect.WrapSelection
@@ -592,14 +619,15 @@ private fun PageElementContent.minimumHeight(): Dp = when (this) {
 
 /** Compact presentation retained while the Typing Screen tray is closed. */
 @Composable
-fun CompactPhraseRow(
+internal fun CompactPhraseRow(
     template: ObfBoard,
     phrases: List<Phrase>,
     onPhraseActivated: (Phrase) -> Unit,
     onPhraseLongPress: (Phrase) -> Unit,
     modifier: Modifier = Modifier,
+    settings: Settings,
+    feedback: BoardFeedback = remember { BoardFeedback() },
 ) {
-    val settings by rememberReactiveSettings()
     val board = remember(template, phrases, settings.gridColumns) {
         TypingScreenProjector.projectPhrasePage(
             template,
@@ -617,7 +645,8 @@ fun CompactPhraseRow(
     ) {
         items(projectedButtons, key = ObfButton::id) { button ->
             Box(modifier = Modifier.size(width = 128.dp, height = 80.dp)) {
-                ObfButtonItem(
+                ObfButtonContent(
+                            settings = settings, feedback = feedback,
                     button = button,
                     image = button.imageId?.let { id -> board.images.firstOrNull { it.id == id } },
                     onClick = {

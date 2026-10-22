@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,12 +23,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.atan2
 import kotlin.math.hypot
 import kotlin.math.PI
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.ui.parseHexToColor
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -34,11 +38,32 @@ import androidx.compose.ui.res.stringResource
 import org.koin.compose.getKoin
 import io.github.jdreioe.wingmate.domain.PhraseRecordingService
 import io.github.jdreioe.wingmate.domain.SpeechService
-import io.github.jdreioe.wingmate.ui.MicrophonePermissionState
+import io.github.jdreioe.wingmate.infrastructure.ImageCacher
 import io.github.jdreioe.wingmate.ui.rememberMicrophonePermissionState
 
 import com.hojmoseit.wingmate.R
-@OptIn(ExperimentalMaterial3Api::class)
+
+/** Media requests from [AddPhraseDialogContent]; the dialog root performs them. */
+sealed interface PhraseMediaAction {
+    data object PickImage : PhraseMediaAction
+    data object ClearImage : PhraseMediaAction
+    data object StartRecording : PhraseMediaAction
+    data object StopRecording : PhraseMediaAction
+    data class PlayRecording(val textForHistory: String?) : PhraseMediaAction
+    data object ClearRecording : PhraseMediaAction
+    data object RetryMicrophone : PhraseMediaAction
+    data object OpenMicrophoneSettings : PhraseMediaAction
+}
+
+/** Why recording is blocked after the microphone permission was requested and refused. */
+enum class MicrophoneDenial { Retryable, Permanent }
+
+/**
+ * Stateful phrase editor root. It resolves media services once, owns the
+ * [PhraseMediaController], permission flow, and the service-bearing image pickers, and renders
+ * [AddPhraseDialogContent]. An active recording is finished before [onSave] and stopped
+ * before [onDismiss], [onDelete], or disposal.
+ */
 @Composable
 fun AddPhraseDialog(
     onDismiss: () -> Unit,
@@ -47,87 +72,169 @@ fun AddPhraseDialog(
     initialPhrase: Phrase? = null,
     onSave: (Phrase) -> Unit,
     onDelete: ((String) -> Unit)? = null,
+    isEditing: Boolean = initialPhrase != null,
+    saving: Boolean = false,
+    saveFailed: Boolean = false,
 ) {
-    var text by remember { mutableStateOf(initialPhrase?.text ?: "") }
-    var altText by remember { mutableStateOf(initialPhrase?.name ?: "") }
-    var imageUrl by remember { mutableStateOf(initialPhrase?.imageUrl ?: "") }
-    var recordingPath by remember { mutableStateOf(initialPhrase?.recordingPath.orEmpty()) }
-    var recordingInProgress by remember { mutableStateOf(false) }
-    var recordingError by remember { mutableStateOf<String?>(null) }
-    var selectedColor by remember { mutableStateOf(initialPhrase?.backgroundColor?.let { parseHexToColor(it) } ?: Color.Blue) }
-    var useColor by remember { mutableStateOf(initialPhrase?.backgroundColor != null) }
-    var isHidden by remember { mutableStateOf(initialPhrase?.isHidden ?: false) }
-    var hue by remember { mutableStateOf(0f) }
-    var value by remember { mutableStateOf(1f) }
-    var selectedCategory by remember {
-        mutableStateOf(
-            categories.firstOrNull { it.id == (initialPhrase?.parentId ?: defaultCategoryId) }
-        )
-    }
+    val draftId = rememberSaveable(initialPhrase?.id) { initialPhrase?.id ?: java.util.UUID.randomUUID().toString() }
     val koin = getKoin()
-    val imageCacher = remember(koin) {
-        koin.getOrNull<io.github.jdreioe.wingmate.infrastructure.ImageCacher>()
+    val recordingService = remember(koin) { koin.getOrNull<PhraseRecordingService>() }
+    val speechService = remember(koin) { koin.getOrNull<SpeechService>() }
+    val imageCacher = remember(koin) { koin.getOrNull<ImageCacher>() }
+    val appScope = remember(koin) { koin.get<CoroutineScope>() }
+    fun createMedia(imageUrl: String, recordingPath: String) = PhraseMediaController(
+        recordings = recordingService,
+        speech = speechService,
+        images = imageCacher,
+        releaseScope = appScope,
+        recordingHint = draftId,
+        imageUrl = imageUrl,
+        recordingPath = recordingPath,
+    )
+    val media = rememberSaveable(initialPhrase?.id, saver = PhraseMediaController.saver(::createMedia)) {
+        createMedia(initialPhrase?.imageUrl.orEmpty(), initialPhrase?.recordingPath.orEmpty())
     }
-    val recordingService = remember(koin) {
-        koin.getOrNull<PhraseRecordingService>()
-    }
-    val speechService = remember(koin) {
-        koin.getOrNull<SpeechService>()
-    }
-    val scope = rememberCoroutineScope()
-    val recordingHintFallback = stringResource(R.string.phrase_record_hint)
-    val recordingUnavailable = stringResource(R.string.phrase_recording_unavailable)
-    val recordingStartFailed = stringResource(R.string.phrase_recording_start_failed)
-    val recordingFinalizeFailed = stringResource(R.string.phrase_recording_finalize_failed)
-    val recordingPlayFailed = stringResource(R.string.phrase_recording_play_failed)
-    val micPermissionDeniedText = stringResource(R.string.phrase_mic_permission_denied)
-    val micPermissionSettingsText = stringResource(R.string.phrase_mic_permission_settings)
+    DisposableEffect(media) { onDispose { media.release() } }
+    val mediaState by media.state.collectAsStateWithLifecycle()
 
+    val scope = rememberCoroutineScope()
     val micState = rememberMicrophonePermissionState()
     var waitingForMicPermission by remember { mutableStateOf(false) }
-
-    val startRecording: () -> Unit = {
-        if (micState.isGranted) {
-            scope.launch {
-                recordingError = null
-                val hint = initialPhrase?.id ?: text.ifBlank { altText }.ifBlank { recordingHintFallback }
-                recordingService?.startRecording(hint)
-                    ?.onSuccess { recordingInProgress = true }
-                    ?.onFailure {
-                        recordingInProgress = false
-                        recordingError = it.message ?: recordingStartFailed
-                    }
-            }
-        } else {
-            waitingForMicPermission = true
-            micState.request()
-        }
+    val requestMicrophone: () -> Unit = {
+        waitingForMicPermission = true
+        micState.request()
     }
-
+    val startRecording: () -> Unit = {
+        if (micState.isGranted) scope.launch { media.startRecording() } else requestMicrophone()
+    }
     LaunchedEffect(micState.isGranted, waitingForMicPermission) {
         if (micState.isGranted && waitingForMicPermission) {
             waitingForMicPermission = false
-            recordingError = null
-            val hint = initialPhrase?.id ?: text.ifBlank { altText }.ifBlank { recordingHintFallback }
-            val result = recordingService?.startRecording(hint)
-            if (result == null) {
-                recordingError = recordingUnavailable
-                return@LaunchedEffect
-            }
-            result
-                .onSuccess { recordingInProgress = true }
-                .onFailure {
-                    recordingInProgress = false
-                    recordingError = it.message ?: recordingStartFailed
-                }
+            // Not in this effect's scope: clearing the flag restarts the effect.
+            scope.launch { media.startRecording() }
+        }
+    }
+    val microphoneDenial = when {
+        micState.isGranted || !mediaState.recordingSupported || !micState.hasRequested -> null
+        micState.deniedPermanently -> MicrophoneDenial.Permanent
+        else -> MicrophoneDenial.Retryable
+    }
+
+    fun closeAfterDiscardingRecording(close: () -> Unit) {
+        scope.launch {
+            media.discardRecording()
+            close()
         }
     }
 
+    var showImageSourcePicker by remember { mutableStateOf(false) }
+    var showSymbolSearch by remember { mutableStateOf(false) }
+
+    AddPhraseDialogContent(
+        categories = categories,
+        defaultCategoryId = defaultCategoryId,
+        initialPhrase = initialPhrase,
+        draftId = draftId,
+        isEditing = isEditing,
+        saving = saving,
+        saveFailed = saveFailed,
+        media = mediaState,
+        microphoneDenial = microphoneDenial,
+        onMediaAction = { action ->
+            when (action) {
+                PhraseMediaAction.PickImage -> showImageSourcePicker = true
+                PhraseMediaAction.ClearImage -> media.clearImage()
+                PhraseMediaAction.StartRecording -> startRecording()
+                PhraseMediaAction.StopRecording -> scope.launch { media.finishRecording() }
+                is PhraseMediaAction.PlayRecording -> scope.launch { media.playRecording(action.textForHistory) }
+                PhraseMediaAction.ClearRecording -> media.clearRecording()
+                PhraseMediaAction.RetryMicrophone -> requestMicrophone()
+                PhraseMediaAction.OpenMicrophoneSettings -> micState.openSettings()
+            }
+        },
+        onSave = { phrase ->
+            scope.launch {
+                if (media.finishRecording()) {
+                    onSave(phrase.copy(recordingPath = media.state.value.recordingPath.trim().ifEmpty { null }))
+                }
+            }
+        },
+        onDelete = onDelete?.let { delete -> { id: String -> closeAfterDiscardingRecording { delete(id) } } },
+        onDismiss = { closeAfterDiscardingRecording(onDismiss) },
+    )
+
+    if (showImageSourcePicker) {
+        ImageSourcePickerDialog(
+            onDismiss = { showImageSourcePicker = false },
+            onPhoto = { pickedImage ->
+                media.setImage(pickedImage)
+                showImageSourcePicker = false
+            },
+            onSymbol = {
+                showImageSourcePicker = false
+                showSymbolSearch = true
+            },
+            onRecord = if (mediaState.recordingSupported) {
+                {
+                    showImageSourcePicker = false
+                    startRecording()
+                }
+            } else null
+        )
+    }
+
+    if (showSymbolSearch) {
+        OpenSymbolsSearchDialog(
+            onDismiss = { showSymbolSearch = false },
+            onSelect = { url ->
+                showSymbolSearch = false
+                scope.launch { media.selectSymbol(url) }
+            }
+        )
+    }
+}
+
+/**
+ * Stateless-about-services phrase form. Transient field edits stay in saveable composition
+ * state; image and recording come from [media], and media requests go through [onMediaAction].
+ * [onSave] receives the draft built from the current fields.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun AddPhraseDialogContent(
+    categories: List<CategoryItem>,
+    defaultCategoryId: String?,
+    initialPhrase: Phrase?,
+    draftId: String,
+    isEditing: Boolean,
+    saving: Boolean,
+    saveFailed: Boolean,
+    media: PhraseMediaState,
+    microphoneDenial: MicrophoneDenial?,
+    onMediaAction: (PhraseMediaAction) -> Unit,
+    onSave: (Phrase) -> Unit,
+    onDelete: ((String) -> Unit)?,
+    onDismiss: () -> Unit,
+) {
+    var text by rememberSaveable(initialPhrase?.id) { mutableStateOf(initialPhrase?.text ?: "") }
+    var altText by rememberSaveable(initialPhrase?.id) { mutableStateOf(initialPhrase?.name ?: "") }
+    var selectedColor by rememberSaveable(initialPhrase?.id, stateSaver = Saver<Color, Int>(save = { it.toArgb() }, restore = { Color(it) })) { mutableStateOf(initialPhrase?.backgroundColor?.let { parseHexToColor(it) } ?: Color.Blue) }
+    var useColor by rememberSaveable(initialPhrase?.id) { mutableStateOf(initialPhrase?.backgroundColor != null) }
+    var isHidden by rememberSaveable(initialPhrase?.id) { mutableStateOf(initialPhrase?.isHidden ?: false) }
+    var selectedCategoryId by rememberSaveable(initialPhrase?.id) { mutableStateOf(initialPhrase?.parentId ?: defaultCategoryId) }
+    val selectedCategory = categories.firstOrNull { it.id == selectedCategoryId }
+    val imageUrl = media.imageUrl
+    val recordingPath = media.recordingPath
+    val recordingStatus = media.recordingStatus
+    // The recorder is mid-transition; saving now could drop or orphan the recording.
+    val recordingSettling = recordingStatus == PhraseRecordingStatus.Starting ||
+        recordingStatus == PhraseRecordingStatus.Stopping
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!saving) onDismiss() },
         title = {
             Text(
-                if (initialPhrase == null) {
+                if (!isEditing) {
                     stringResource(R.string.phrase_add_title)
                 } else {
                     stringResource(R.string.phrase_edit_title)
@@ -137,6 +244,9 @@ fun AddPhraseDialog(
         text = {
             val scrollState = rememberScrollState()
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(scrollState)) {
+                if (saveFailed) {
+                    Text(stringResource(R.string.typing_screen_save_failed), color = MaterialTheme.colorScheme.error)
+                }
                 val showKeyboard = Modifier.showKeyboardOnFocus()
                 OutlinedTextField(
                     value = altText,
@@ -152,15 +262,12 @@ fun AddPhraseDialog(
                     modifier = Modifier.fillMaxWidth().then(showKeyboard)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 // Image selection
-                var showSymbolSearch by remember { mutableStateOf(false) }
-                var showImageSourcePicker by remember { mutableStateOf(false) }
-                
                 Column {
                     Text(stringResource(R.string.phrase_image_label), style = MaterialTheme.typography.labelMedium)
                     Spacer(modifier = Modifier.height(4.dp))
-                    
+
                     if (imageUrl.isNotBlank()) {
                          Row(verticalAlignment = Alignment.CenterVertically) {
                             // Preview could go here, but for now just the URL/Path text
@@ -170,57 +277,19 @@ fun AddPhraseDialog(
                                 modifier = Modifier.weight(1f).padding(end = 8.dp),
                                 maxLines = 1
                             )
-                            IconButton(onClick = { imageUrl = "" }) {
+                            IconButton(onClick = { onMediaAction(PhraseMediaAction.ClearImage) }) {
                                 Icon(Icons.Filled.Close, stringResource(R.string.phrase_clear_image_cd))
                             }
                         }
                     }
-                    
-                    OutlinedButton(onClick = { showImageSourcePicker = true }) {
+
+                    OutlinedButton(onClick = { onMediaAction(PhraseMediaAction.PickImage) }) {
                         Text(stringResource(R.string.phrase_image_label))
                     }
                 }
-
-                if (showImageSourcePicker) {
-                    ImageSourcePickerDialog(
-                        onDismiss = { showImageSourcePicker = false },
-                        onPhoto = { pickedImage ->
-                            imageUrl = pickedImage
-                            showImageSourcePicker = false
-                        },
-                        onSymbol = {
-                            showImageSourcePicker = false
-                            showSymbolSearch = true
-                        },
-                        onRecord = if (recordingService?.isSupported == true) {
-                            {
-                                showImageSourcePicker = false
-                                startRecording()
-                            }
-                        } else null
-                    )
-                }
-                
-                if (showSymbolSearch) {
-                    OpenSymbolsSearchDialog(
-                        onDismiss = { showSymbolSearch = false },
-                        onSelect = { url ->
-                            showSymbolSearch = false
-                            // Cache the image if cacher is available
-                            if (imageCacher != null) {
-                                scope.launch {
-                                    val cachedPath = imageCacher.getCachedImagePath(url)
-                                    imageUrl = cachedPath
-                                }
-                            } else {
-                                imageUrl = url
-                            }
-                        }
-                    )
-                }
                 Spacer(modifier = Modifier.height(8.dp))
 
-                val canRecord = recordingService?.isSupported == true
+                val canRecord = media.recordingSupported
                 if (canRecord || recordingPath.isNotBlank()) {
                     Column {
                         Text(stringResource(R.string.phrase_recording_label), style = MaterialTheme.typography.labelMedium)
@@ -236,8 +305,8 @@ fun AddPhraseDialog(
                         }
 
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (canRecord && !recordingInProgress) {
-                                OutlinedButton(onClick = startRecording) {
+                            if (canRecord && recordingStatus == PhraseRecordingStatus.Idle) {
+                                OutlinedButton(onClick = { onMediaAction(PhraseMediaAction.StartRecording) }) {
                                     Text(
                                         if (recordingPath.isBlank()) {
                                             stringResource(R.string.phrase_record_button)
@@ -248,20 +317,10 @@ fun AddPhraseDialog(
                                 }
                             }
 
-                            if (canRecord && recordingInProgress) {
+                            if (canRecord && recordingStatus != PhraseRecordingStatus.Idle) {
                                 OutlinedButton(
-                                    onClick = {
-                                        scope.launch {
-                                            recordingError = null
-                                            val result = recordingService.stopRecording()
-                                            recordingInProgress = false
-                                            result
-                                                .onSuccess { path -> recordingPath = path }
-                                                .onFailure {
-                                                    recordingError = it.message ?: recordingFinalizeFailed
-                                                }
-                                        }
-                                    }
+                                    enabled = recordingStatus == PhraseRecordingStatus.Recording,
+                                    onClick = { onMediaAction(PhraseMediaAction.StopRecording) }
                                 ) {
                                     Text(stringResource(R.string.phrase_stop_button))
                                 }
@@ -270,33 +329,23 @@ fun AddPhraseDialog(
                             if (recordingPath.isNotBlank()) {
                                 OutlinedButton(
                                     onClick = {
-                                        scope.launch {
-                                            recordingError = null
-                                            val played = runCatching {
-                                                speechService?.speakRecordedAudio(
-                                                    audioFilePath = recordingPath,
-                                                    textForHistory = altText.trim().ifBlank { text.trim() }
-                                                )
-                                            }.getOrNull() == true
-                                            if (!played) {
-                                                recordingError = recordingPlayFailed
-                                            }
-                                        }
+                                        onMediaAction(
+                                            PhraseMediaAction.PlayRecording(
+                                                textForHistory = altText.trim().ifBlank { text.trim() }
+                                            )
+                                        )
                                     }
                                 ) {
                                     Text(stringResource(R.string.phrase_play_button))
                                 }
 
-                                OutlinedButton(onClick = {
-                                    recordingPath = ""
-                                    recordingError = null
-                                }) {
+                                OutlinedButton(onClick = { onMediaAction(PhraseMediaAction.ClearRecording) }) {
                                     Text(stringResource(R.string.phrase_clear_button))
                                 }
                             }
                         }
 
-                        if (recordingInProgress) {
+                        if (recordingStatus == PhraseRecordingStatus.Recording) {
                             Text(
                                 text = stringResource(R.string.phrase_recording_in_progress),
                                 style = MaterialTheme.typography.bodySmall,
@@ -304,32 +353,28 @@ fun AddPhraseDialog(
                             )
                         }
 
-                        recordingError?.let { message ->
+                        media.error?.let { error ->
                             Text(
-                                text = message,
+                                text = stringResource(error.messageRes()),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
                         }
 
-                        if (!micState.isGranted && canRecord && micState.hasRequested) {
+                        if (canRecord && microphoneDenial != null) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = micPermissionDeniedText,
+                                text = stringResource(R.string.phrase_mic_permission_denied),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                if (micState.deniedPermanently) {
-                                    OutlinedButton(onClick = { micState.openSettings() }) {
-                                        Text(micPermissionSettingsText)
+                                when (microphoneDenial) {
+                                    MicrophoneDenial.Permanent -> OutlinedButton(onClick = { onMediaAction(PhraseMediaAction.OpenMicrophoneSettings) }) {
+                                        Text(stringResource(R.string.phrase_mic_permission_settings))
                                     }
-                                } else {
-                                    OutlinedButton(onClick = {
-                                        waitingForMicPermission = true
-                                        micState.request()
-                                    }) {
+                                    MicrophoneDenial.Retryable -> OutlinedButton(onClick = { onMediaAction(PhraseMediaAction.RetryMicrophone) }) {
                                         Text(stringResource(R.string.common_retry))
                                     }
                                 }
@@ -338,7 +383,6 @@ fun AddPhraseDialog(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                 }
-
                 // Color preview + nested color picker dialog trigger
                 var showColorDialog by remember { mutableStateOf(false) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -460,7 +504,7 @@ fun AddPhraseDialog(
                                 DropdownMenuItem(
                                     text = { Text(cat.name ?: stringResource(R.string.common_no_name)) },
                                     onClick = {
-                                        selectedCategory = cat
+                                        selectedCategoryId = cat.id
                                         expanded = false
                                     }
                                 )
@@ -472,93 +516,63 @@ fun AddPhraseDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                scope.launch {
-                    recordingError = null
+            TextButton(enabled = !saving && !recordingSettling, onClick = {
+                // Normalize to six-digit RRGGBB hex string (lowercase) or null when disabled
+                val hex = if (useColor) String.format("%06X", (selectedColor.toArgb() and 0xFFFFFF)).lowercase() else null
 
-                    var finalRecordingPath: String? = recordingPath.trim().ifEmpty { null }
-                    if (recordingInProgress) {
-                        val stopResult = recordingService?.stopRecording()
-                        recordingInProgress = false
-                        if (stopResult == null) {
-                            recordingError = recordingUnavailable
-                            return@launch
-                        }
-                        stopResult
-                            .onSuccess { path ->
-                                finalRecordingPath = path
-                                recordingPath = path
-                            }
-                            .onFailure {
-                                recordingError = it.message ?: recordingFinalizeFailed
-                                return@launch
-                            }
-                    }
+                val finalVocalization = altText.trim().ifEmpty { null }
+                // If Label (text) is empty, default to Vocalization (altText/finalVocalization) if available
+                val finalLabel = text.trim().ifEmpty { finalVocalization ?: "" }
+                val finalRecordingPath = recordingPath.trim().ifEmpty { null }
 
-                    // Normalize to six-digit RRGGBB hex string (lowercase) or null when disabled
-                    val hex = if (useColor) String.format("%06X", (selectedColor.toArgb() and 0xFFFFFF)).lowercase() else null
-
-                    val finalVocalization = altText.trim().ifEmpty { null }
-                    // If Label (text) is empty, default to Vocalization (altText/finalVocalization) if available
-                    val finalLabel = text.trim().ifEmpty { finalVocalization ?: "" }
-
-                    val phrase = if (initialPhrase != null) {
-                        initialPhrase.copy(
-                            text = finalLabel,
-                            name = finalVocalization,
-                            backgroundColor = hex,
-                            imageUrl = imageUrl.trim().ifEmpty { null },
-                            parentId = selectedCategory?.id,
-                            recordingPath = finalRecordingPath,
-                            isHidden = isHidden
-                        )
-                    } else {
-                        Phrase(
-                            id = java.util.UUID.randomUUID().toString(),
-                            text = finalLabel,
-                            name = finalVocalization,
-                            backgroundColor = hex,
-                            imageUrl = imageUrl.trim().ifEmpty { null },
-                            parentId = selectedCategory?.id,
-                            createdAt = System.currentTimeMillis(),
-                            recordingPath = finalRecordingPath,
-                            isHidden = isHidden
-                        )
-                    }
-                    onSave(phrase)
-                    onDismiss()
+                val phrase = if (initialPhrase != null) {
+                    initialPhrase.copy(
+                        text = finalLabel,
+                        name = finalVocalization,
+                        backgroundColor = hex,
+                        imageUrl = imageUrl.trim().ifEmpty { null },
+                        parentId = selectedCategory?.id,
+                        recordingPath = finalRecordingPath,
+                        isHidden = isHidden
+                    )
+                } else {
+                    Phrase(
+                        id = draftId,
+                        text = finalLabel,
+                        name = finalVocalization,
+                        backgroundColor = hex,
+                        imageUrl = imageUrl.trim().ifEmpty { null },
+                        parentId = selectedCategory?.id,
+                        createdAt = System.currentTimeMillis(),
+                        recordingPath = finalRecordingPath,
+                        isHidden = isHidden
+                    )
                 }
+                onSave(phrase)
             }) {
                 Text(stringResource(R.string.common_save))
             }
         },
         dismissButton = {
             Row {
-                if (initialPhrase != null && onDelete != null) {
-                    TextButton(onClick = {
-                        scope.launch {
-                            if (recordingInProgress) {
-                                runCatching { recordingService?.stopRecording() }
-                                recordingInProgress = false
-                            }
-                            onDelete(initialPhrase.id)
-                            onDismiss()
-                        }
-                    }) { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error) }
-                }
-                TextButton(onClick = {
-                    scope.launch {
-                        if (recordingInProgress) {
-                            runCatching { recordingService?.stopRecording() }
-                            recordingInProgress = false
-                        }
-                        onDismiss()
+                if (isEditing && initialPhrase != null && onDelete != null) {
+                    TextButton(enabled = !saving, onClick = { onDelete(initialPhrase.id) }) {
+                        Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error)
                     }
-                }) { Text(stringResource(R.string.common_cancel)) }
+                }
+                TextButton(enabled = !saving, onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
             }
         }
     )
 }
+
+private fun PhraseMediaError.messageRes(): Int = when (this) {
+    PhraseMediaError.RecordingUnavailable -> R.string.phrase_recording_unavailable
+    PhraseMediaError.StartFailed -> R.string.phrase_recording_start_failed
+    PhraseMediaError.FinalizeFailed -> R.string.phrase_recording_finalize_failed
+    PhraseMediaError.PlaybackFailed -> R.string.phrase_recording_play_failed
+}
+
 
 @Composable
 fun ColorWheel(hue: Float, value: Float, onHueChange: (Float) -> Unit, modifier: Modifier = Modifier) {

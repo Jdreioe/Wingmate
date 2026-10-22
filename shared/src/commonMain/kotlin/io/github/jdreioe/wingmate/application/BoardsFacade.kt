@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
@@ -22,15 +23,34 @@ import io.github.jdreioe.wingmate.domain.obf.resolvedBackgroundColor
 import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.withWordType
 import io.github.jdreioe.wingmate.domain.obf.wordType
+import io.github.jdreioe.wingmate.infrastructure.BoardImportErrorCode
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
+import io.github.jdreioe.wingmate.infrastructure.QuickCorePreset
 import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
 import io.github.jdreioe.wingmate.platform.ShareService
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.cancellation.CancellationException
 
-data class IosBoardSetExportResult(
-    val success: Boolean,
+enum class BoardSetExportStatus {
+    /** The share sheet opened with the exported file. */
+    Success,
+    NotFound,
+
+    /** The Screen could not be packaged, for example because media is missing. */
+    ExportFailure,
+
+    /** The file was exported but the share sheet could not open; retrying may help. */
+    ShareFailure,
+}
+
+data class BoardSetExportResult(
+    val status: BoardSetExportStatus,
     val fileName: String? = null,
-    val message: String = "",
-)
+) {
+    val isSuccess: Boolean get() = status == BoardSetExportStatus.Success
+    val isRetryable: Boolean get() = status == BoardSetExportStatus.ShareFailure
+}
 
 data class IosResolvedBoardSettings(
     val showLabels: Boolean,
@@ -93,8 +113,11 @@ data class IosQuickCoreProgress(
  * shared board-session logic used by Android and iOS.
  *
  * Keep Koin out of this file: the constructor receives exactly the use cases
- * and services this feature needs. Failures propagate as suspend exceptions
- * (including coroutine cancellation) instead of being swallowed or converted.
+ * and services this feature needs. Suspend members throw only [NativeFailure]
+ * or coroutine cancellation. Edits fail with [NativeFailureKind.NotFound] when
+ * the Screen or Page is gone and [NativeFailureKind.Validation] when
+ * [BoardSetUseCase] rejects them, for example because the Screen is locked.
+ * Reads of a missing Page return nothing instead.
  */
 class BoardsFacade(
     private val boardSetUseCase: BoardSetUseCase,
@@ -105,87 +128,162 @@ class BoardsFacade(
     private val shareService: ShareService,
 ) {
     // --- BoardSet helpers ---
-    suspend fun listBoardSets(): List<ObfBoardSet> = boardSetUseCase.listBoardSets()
-    suspend fun deleteBoardSet(id: String) = boardSetUseCase.deleteBoardSet(id)
-    suspend fun duplicateBoardSet(id: String): ObfBoardSet? = boardSetUseCase.duplicateBoardSet(id)
-    suspend fun toggleBoardSetLocked(id: String): ObfBoardSet? = boardSetUseCase.toggleLocked(id)
-    suspend fun updateBoardSetSentenceCaching(id: String, enabled: Boolean): ObfBoardSet? =
-        boardSetUseCase.setSentenceCaching(id, enabled)
-    suspend fun cacheAllBoardSetFields() = boardSetSpeechCache.cacheAll()
-    suspend fun retryBoardSetSpeechCaching() = boardSetSpeechCache.retryPending()
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun listBoardSets(): List<ObfBoardSet> = nativeCall { boardSetUseCase.listBoardSets() }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun deleteBoardSet(id: String) = nativeCall {
+        requireBoardSet(id)
+        boardSetUseCase.deleteBoardSet(id)
+    }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun duplicateBoardSet(id: String): ObfBoardSet = nativeCall {
+        requireBoardSet(id)
+        boardSetUseCase.duplicateBoardSet(id).orRejected()
+    }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun toggleBoardSetLocked(id: String): ObfBoardSet = nativeCall {
+        requireBoardSet(id)
+        boardSetUseCase.toggleLocked(id).orRejected()
+    }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun updateBoardSetSentenceCaching(id: String, enabled: Boolean): ObfBoardSet = nativeCall {
+        boardSetUseCase.setSentenceCaching(id, enabled) ?: throw NativeFailure(NativeFailureKind.NotFound)
+    }
+
+    /** Cache warming synthesizes with the cloud voice, so its failures are network failures. */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun cacheAllBoardSetFields() = nativeCall(NativeFailureKind.Network) { boardSetSpeechCache.cacheAll() }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun retryBoardSetSpeechCaching() =
+        nativeCall(NativeFailureKind.Network) { boardSetSpeechCache.retryPending() }
     fun updateBoardSetSpeechCacheOnline(online: Boolean) = boardSetSpeechCache.setOnline(online)
-    suspend fun touchBoardSet(id: String): ObfBoardSet? = boardSetUseCase.touchBoardSet(id)
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun touchBoardSet(id: String): ObfBoardSet = nativeCall {
+        boardSetUseCase.touchBoardSet(id) ?: throw NativeFailure(NativeFailureKind.NotFound)
+    }
+    @Throws(NativeFailure::class, CancellationException::class)
     suspend fun createBoardSet(name: String, rows: Int, columns: Int): ObfBoardSet =
-        boardSetUseCase.createBoardSet(name, rows, columns)
-    suspend fun createKeyboardBoardSet(name: String, preset: String): ObfBoardSet =
+        nativeCall { boardSetUseCase.createBoardSet(name, rows, columns) }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun createKeyboardBoardSet(name: String, preset: String): ObfBoardSet = nativeCall {
         boardSetUseCase.createKeyboardBoardSet(
             name,
             if (preset.equals("alphabetical", ignoreCase = true)) KeyboardPreset.Alphabetical else KeyboardPreset.Qwerty,
         )
-    suspend fun importQuickCorePreset(slug: String, name: String): ObfBoardSet? {
-        val imported = quickCorePresetService.importPreset(slug) as? BoardImportResult.Success
-            ?: return null
-        return boardSetUseCase.renameBoardSet(imported.boardSet.id, name.trim()) ?: imported.boardSet
+    }
+
+    /**
+     * Downloads and imports a Quick Core Screen named [name]. Fails with
+     * [NativeFailureKind.Cancelled] when the import was cancelled,
+     * [NativeFailureKind.NotFound] for an unknown preset,
+     * [NativeFailureKind.Network] when the download fails, and
+     * [NativeFailureKind.Validation] when the archive is not a usable Screen.
+     */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun importQuickCorePreset(slug: String, name: String): ObfBoardSet = nativeCall {
+        if (QuickCorePreset.fromSlug(slug) == null) throw NativeFailure(NativeFailureKind.NotFound)
+        when (val imported = quickCorePresetService.importPreset(slug)) {
+            is BoardImportResult.Success ->
+                boardSetUseCase.renameBoardSet(imported.boardSet.id, name.trim()) ?: imported.boardSet
+            BoardImportResult.Cancelled -> {
+                // The importer reports its own coroutine's cancellation as Cancelled; keep that cancellation.
+                currentCoroutineContext().ensureActive()
+                throw NativeFailure(NativeFailureKind.Cancelled)
+            }
+            is BoardImportResult.Failure -> throw NativeFailure(imported.code.toQuickCoreFailureKind())
+        }
     }
     fun quickCoreProgress(): IosQuickCoreProgress {
         val progress = quickCorePresetService.progress.value
         return IosQuickCoreProgress(progress.stage, progress.downloadedBytes, progress.totalBytes, progress.fraction)
     }
-    suspend fun createBoard(boardSetId: String, name: String, rows: Int, columns: Int): ObfBoard? =
-        boardSetUseCase.createBoard(boardSetId, name, rows, columns)
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun createBoard(boardSetId: String, name: String, rows: Int, columns: Int): ObfBoard = nativeCall {
+        requireBoardSet(boardSetId)
+        boardSetUseCase.createBoard(boardSetId, name, rows, columns).orRejected()
+    }
+    @Throws(NativeFailure::class, CancellationException::class)
     suspend fun createKeyboardBoard(
         boardSetId: String,
         name: String,
         rows: Int,
         columns: Int,
         layout: String,
-    ): ObfBoard? = boardSetUseCase.createBoard(
-        boardSetId,
-        name,
-        rows,
-        columns,
-        ObfKeyboardLayout.entries.firstOrNull { it.wireValue == layout } ?: ObfKeyboardLayout.Qwerty,
-    )
-    suspend fun renameBoardSet(boardSetId: String, name: String): ObfBoardSet? =
-        boardSetUseCase.renameBoardSet(boardSetId, name)
-    suspend fun renameBoard(boardSetId: String, boardId: String, name: String): ObfBoard? =
-        boardSetUseCase.renameBoard(boardSetId, boardId, name)
-    suspend fun resizeBoard(boardSetId: String, boardId: String, rows: Int, columns: Int): ObfBoard? =
-        boardSetUseCase.resizeBoard(boardSetId, boardId, rows, columns)
-    suspend fun setRootBoard(boardSetId: String, boardId: String): ObfBoardSet? =
-        boardSetUseCase.setRootBoard(boardSetId, boardId)
-    suspend fun deleteBoard(boardSetId: String, boardId: String): ObfBoardSet? =
-        boardSetUseCase.deleteBoard(boardSetId, boardId)
+    ): ObfBoard = nativeCall {
+        requireBoardSet(boardSetId)
+        boardSetUseCase.createBoard(
+            boardSetId,
+            name,
+            rows,
+            columns,
+            ObfKeyboardLayout.entries.firstOrNull { it.wireValue == layout } ?: ObfKeyboardLayout.Qwerty,
+        ).orRejected()
+    }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun renameBoardSet(boardSetId: String, name: String): ObfBoardSet = nativeCall {
+        requireBoardSet(boardSetId)
+        boardSetUseCase.renameBoardSet(boardSetId, name).orRejected()
+    }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun renameBoard(boardSetId: String, boardId: String, name: String): ObfBoard = nativeCall {
+        requireBoardInSet(boardSetId, boardId)
+        boardSetUseCase.renameBoard(boardSetId, boardId, name).orRejected()
+    }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun resizeBoard(boardSetId: String, boardId: String, rows: Int, columns: Int): ObfBoard = nativeCall {
+        requireBoardInSet(boardSetId, boardId)
+        boardSetUseCase.resizeBoard(boardSetId, boardId, rows, columns).orRejected()
+    }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun setRootBoard(boardSetId: String, boardId: String): ObfBoardSet = nativeCall {
+        requireBoardInSet(boardSetId, boardId)
+        boardSetUseCase.setRootBoard(boardSetId, boardId).orRejected()
+    }
 
-    suspend fun shareBoardSetAsObz(id: String): IosBoardSetExportResult {
+    /** Fails with [NativeFailureKind.Validation] for a locked Screen, its start Page, or its last Page. */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun deleteBoard(boardSetId: String, boardId: String): ObfBoardSet = nativeCall {
+        requireBoardInSet(boardSetId, boardId)
+        boardSetUseCase.deleteBoard(boardSetId, boardId).orRejected()
+    }
+
+    /** Export problems are [BoardSetExportStatus]es; only storage failures throw. */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun shareBoardSetAsObz(id: String): BoardSetExportResult = nativeCall {
         val boardSet = boardSetUseCase.getBoardSet(id)
-            ?: return IosBoardSetExportResult(success = false, fileName = null, message = "Board set not found")
-        return when (val export = boardSetUseCase.exportBoardSetAsObzResult(id)) {
+            ?: return@nativeCall BoardSetExportResult(BoardSetExportStatus.NotFound)
+        when (val export = boardSetUseCase.exportBoardSetAsObzResult(id)) {
             is ObzExportResult.Success -> {
                 val fileName = "${boardSet.name}.obz"
-                val shared = runCatching { shareService.shareFile(fileName, export.bytes) }
-                    .getOrDefault(false)
-                if (shared) {
-                    IosBoardSetExportResult(success = true, fileName = fileName, message = "Exported $fileName")
-                } else {
-                    IosBoardSetExportResult(success = false, fileName = fileName, message = "Export cancelled")
+                val shared = try {
+                    shareService.shareFile(fileName, export.bytes)
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (_: Exception) {
+                    false
                 }
+                BoardSetExportResult(
+                    if (shared) BoardSetExportStatus.Success else BoardSetExportStatus.ShareFailure,
+                    fileName,
+                )
             }
             is ObzExportResult.Failure -> {
-                val resources = export.resources.takeIf { it.isNotEmpty() }?.joinToString(prefix = ": ")
-                IosBoardSetExportResult(success = false, fileName = null, message = "Export failed: ${export.context}$resources")
+                OperationalLogger.warn("boards.export_obz", "failed", count = export.resources.size)
+                BoardSetExportResult(BoardSetExportStatus.ExportFailure)
             }
         }
     }
 
     // --- Swift-friendly board helpers ---
-    suspend fun getBoard(id: String): ObfBoard? = boardRepository.getBoard(id)
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun getBoard(id: String): ObfBoard? = nativeCall { boardRepository.getBoard(id) }
 
     /**
      * Resolve the effective board settings for the given board id, applying app-level
      * defaults, then screen overrides, then page overrides (shared with Android).
      */
-    suspend fun resolveBoardSettings(boardId: String): IosResolvedBoardSettings {
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun resolveBoardSettings(boardId: String): IosResolvedBoardSettings = nativeCall {
         val settings = settingsUseCase.get()
         val board = boardRepository.getBoard(boardId)
         val screenOverrides = boardSetUseCase.listBoardSets()
@@ -204,7 +302,7 @@ class BoardsFacade(
             screen = screenOverrides,
             page = pageOverrides,
         )
-        return IosResolvedBoardSettings(
+        IosResolvedBoardSettings(
             showLabels = resolved.showLabels,
             showSymbols = resolved.showSymbols,
             labelAtTop = resolved.labelAtTop,
@@ -220,19 +318,15 @@ class BoardsFacade(
 
     fun boardUsesSpellingMode(board: ObfBoard): Boolean = board.spellingMode
 
-    suspend fun saveBoard(board: ObfBoard): Boolean = runCatching {
-        boardRepository.saveBoard(board)
-        true
-    }.getOrDefault(false)
-
-    suspend fun listBoardCells(boardId: String): List<IosBoardCell> {
-        val board = boardRepository.getBoard(boardId) ?: return emptyList()
-        val grid = board.grid ?: return emptyList()
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun listBoardCells(boardId: String): List<IosBoardCell> = nativeCall {
+        val board = boardRepository.getBoard(boardId) ?: return@nativeCall emptyList()
+        val grid = board.grid ?: return@nativeCall emptyList()
         val buttons = board.buttons.associateBy { it.id }
         val images = board.images.associateBy { it.id }
         val settings = settingsUseCase.get()
         val locale = settings.primaryLanguage
-        return grid.order.flatMapIndexed { row, columns ->
+        grid.order.flatMapIndexed { row, columns ->
             columns.mapIndexedNotNull { col, buttonId ->
                 val id = buttonId ?: return@mapIndexedNotNull null
                 val button = buttons[id] ?: return@mapIndexedNotNull null
@@ -262,10 +356,11 @@ class BoardsFacade(
     }
 
     // --- Grid span / merge operations (shared with Android via core/domain) ---
-    suspend fun listBoardFieldItems(boardId: String): List<IosBoardFieldItem> {
-        val board = boardRepository.getBoard(boardId) ?: return emptyList()
-        val grid = board.grid ?: return emptyList()
-        return grid.fieldItems().map { field ->
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun listBoardFieldItems(boardId: String): List<IosBoardFieldItem> = nativeCall {
+        val board = boardRepository.getBoard(boardId) ?: return@nativeCall emptyList()
+        val grid = board.grid ?: return@nativeCall emptyList()
+        grid.fieldItems().map { field ->
             IosBoardFieldItem(
                 row = field.row,
                 column = field.column,
@@ -276,26 +371,27 @@ class BoardsFacade(
         }
     }
 
-    suspend fun availableFieldSpans(boardId: String, row: Int, col: Int): List<IosGridFieldSpan> {
-        val board = boardRepository.getBoard(boardId) ?: return emptyList()
-        val grid = board.grid ?: return emptyList()
-        return grid.availableFieldSpansAt(row, col).map { span ->
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun availableFieldSpans(boardId: String, row: Int, col: Int): List<IosGridFieldSpan> = nativeCall {
+        val board = boardRepository.getBoard(boardId) ?: return@nativeCall emptyList()
+        val grid = board.grid ?: return@nativeCall emptyList()
+        grid.availableFieldSpansAt(row, col).map { span ->
             IosGridFieldSpan(rows = span.rows, columns = span.columns)
         }
     }
 
     /**
-     * Grow/shrink the field at [row], [col] to [rowSpan] x [columnSpan]. Returns
-     * true on success (persisted via the repository).
+     * Grow/shrink the field at [row], [col] to [rowSpan] x [columnSpan]. Fails with
+     * [NativeFailureKind.Validation] when there is no Button there or the span
+     * does not fit; a span that is already set changes nothing.
      */
-    suspend fun resizeBoardField(boardId: String, row: Int, col: Int, rowSpan: Int, columnSpan: Int): Boolean {
-        val board = boardRepository.getBoard(boardId) ?: return false
-        val grid = board.grid ?: return false
-        val buttonId = grid.order.getOrNull(row)?.getOrNull(col) ?: return false
-        val resized = grid.withFieldSpan(row, col, buttonId, rowSpan, columnSpan) ?: return false
-        if (resized == grid) return false
-        boardRepository.saveBoard(board.copy(grid = resized))
-        return true
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun resizeBoardField(boardId: String, row: Int, col: Int, rowSpan: Int, columnSpan: Int) = nativeCall {
+        val board = requireBoard(boardId)
+        val grid = board.grid.orRejected()
+        val buttonId = grid.order.getOrNull(row)?.getOrNull(col).orRejected()
+        val resized = grid.withFieldSpan(row, col, buttonId, rowSpan, columnSpan).orRejected()
+        if (resized != grid) boardRepository.saveBoard(board.copy(grid = resized))
     }
 
     // --- Shared board-session logic ---
@@ -320,14 +416,15 @@ class BoardsFacade(
     fun boardFieldFontScale(rowSpan: Int, columnSpan: Int): Float =
         fieldFontScale(rowSpan, columnSpan)
 
+    /** Fails with [NativeFailureKind.Validation] when [row], [col] is outside the Page's grid. */
+    @Throws(NativeFailure::class, CancellationException::class)
     suspend fun upsertBoardCellButton(
         boardId: String, row: Int, col: Int, label: String?, vocalization: String?,
         backgroundColor: String?, borderColor: String?, linkedBoardId: String?,
         imageUrl: String?, clearImage: Boolean, actions: List<String>, wordType: String?,
-    ): ObfBoard? {
-        val board = boardRepository.getBoard(boardId) ?: return null
-        val grid = board.grid ?: return null
-        if (row !in 0 until grid.rows || col !in 0 until grid.columns) return null
+    ): ObfBoard = nativeCall {
+        val board = requireBoard(boardId)
+        val grid = board.cellGrid(row, col)
         val existingId = grid.order[row][col]
         val existing = board.buttons.firstOrNull { it.id == existingId }
         val buttonId = existingId ?: "btn-${kotlin.random.Random.nextLong().toString().replace('-', '0')}"
@@ -350,7 +447,7 @@ class BoardsFacade(
             columns.mapIndexed { c, id -> if (r == row && c == col) buttonId else id }
         }
         val usedImageIds = buttons.mapNotNull { it.imageId }.toSet()
-        return board.copy(
+        board.copy(
             buttons = buttons,
             images = images.filter { it.id in usedImageIds },
             grid = grid.copy(order = order),
@@ -360,10 +457,11 @@ class BoardsFacade(
         }
     }
 
-    suspend fun clearBoardCellButton(boardId: String, row: Int, col: Int): ObfBoard? {
-        val board = boardRepository.getBoard(boardId) ?: return null
-        val grid = board.grid ?: return null
-        if (row !in 0 until grid.rows || col !in 0 until grid.columns) return null
+    /** Fails with [NativeFailureKind.Validation] when [row], [col] is outside the Page's grid. */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun clearBoardCellButton(boardId: String, row: Int, col: Int): ObfBoard = nativeCall {
+        val board = requireBoard(boardId)
+        val grid = board.cellGrid(row, col)
         val removedId = grid.order[row][col]
         val order = grid.order.mapIndexed { r, columns ->
             columns.mapIndexed { c, id -> if (r == row && c == col) null else id }
@@ -371,21 +469,55 @@ class BoardsFacade(
         val stillUsed = order.flatten().toSet()
         val buttons = board.buttons.filter { it.id != removedId || it.id in stillUsed }
         val usedImages = buttons.mapNotNull { it.imageId }.toSet()
-        return board.copy(buttons = buttons, images = board.images.filter { it.id in usedImages }, grid = grid.copy(order = order))
+        board.copy(buttons = buttons, images = board.images.filter { it.id in usedImages }, grid = grid.copy(order = order))
             .also { boardRepository.saveBoard(it) }
     }
 
+    @Throws(NativeFailure::class, CancellationException::class)
     suspend fun setBoardBackgroundColor(
         boardSetId: String,
         boardId: String,
         backgroundColor: String?,
-    ): ObfBoard? = runCatching {
-        val board = boardRepository.getBoard(boardId) ?: return@runCatching null
-        val updated = board.copy(backgroundColor = backgroundColor?.trim()?.takeIf(String::isNotEmpty))
-        boardRepository.saveBoard(updated)
-        boardSetUseCase.touchBoardSet(boardSetId)
-        updated
-    }.getOrNull()
+    ): ObfBoard = nativeCall {
+        requireBoardInSet(boardSetId, boardId)
+        requireBoard(boardId)
+            .copy(backgroundColor = backgroundColor?.trim()?.takeIf(String::isNotEmpty))
+            .also {
+                boardRepository.saveBoard(it)
+                boardSetUseCase.touchBoardSet(boardSetId)
+            }
+    }
+
+    private suspend fun requireBoardSet(id: String): ObfBoardSet =
+        boardSetUseCase.getBoardSet(id) ?: throw NativeFailure(NativeFailureKind.NotFound)
+
+    private suspend fun requireBoardInSet(boardSetId: String, boardId: String) {
+        if (boardId !in requireBoardSet(boardSetId).boardIds) throw NativeFailure(NativeFailureKind.NotFound)
+    }
+
+    private suspend fun requireBoard(id: String): ObfBoard =
+        boardRepository.getBoard(id) ?: throw NativeFailure(NativeFailureKind.NotFound)
+}
+
+/** The Page's grid when [row], [col] lies inside it. */
+private fun ObfBoard.cellGrid(row: Int, col: Int): ObfGrid {
+    val grid = this.grid.orRejected()
+    if (row !in 0 until grid.rows || col !in 0 until grid.columns) throw NativeFailure(NativeFailureKind.Validation)
+    return grid
+}
+
+/** A null from a shared rule that refused the change. Check existence first so null only means refusal. */
+private fun <T : Any> T?.orRejected(): T = this ?: throw NativeFailure(NativeFailureKind.Validation)
+
+/**
+ * For Quick Core, [BoardImportErrorCode.FILE_UNREADABLE] mostly means the download
+ * failed or came back empty, so retrying is the useful response. Every other
+ * code describes an archive Wingmate refuses to import.
+ */
+private fun BoardImportErrorCode.toQuickCoreFailureKind(): NativeFailureKind = when (this) {
+    BoardImportErrorCode.FILE_UNREADABLE -> NativeFailureKind.Network
+    BoardImportErrorCode.PERSISTENCE_FAILED -> NativeFailureKind.Persistence
+    else -> NativeFailureKind.Validation
 }
 
 private fun String.toBoardReturnBehavior(): BoardReturnBehavior =

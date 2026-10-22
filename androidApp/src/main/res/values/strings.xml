@@ -10,6 +10,7 @@
     <string name="typing_screen_reset_description">Replace the Typing Screen layout and action buttons with the current defaults? Your phrases and categories will be kept.</string>
     <string name="typing_screen_reset_failed">Could not reset the Typing Screen.</string>
     <string name="typing_screen_content_unavailable">Typing Screen content is unavailable. Retry before editing.</string>
+    <string name="typing_screen_save_failed">The change could not be saved. Your message and unsaved edits are kept. Try again.</string>
     <string name="typing_screen_load_failed">Could not load Typing Screen content.</string>
     <string name="typing_screen_unsupported_action">Unsupported action. This button is preserved and can be edited.</string>
     <string name="typing_screen_unavailable_action">Action unavailable right now.</string>
@@ -203,6 +204,7 @@
     <string name="board_settings_reset_screen">Reset Screen settings</string>
     <string name="board_settings_reset_page">Reset Page overrides</string>
     <string name="board_cell_opens_board">Opens page: %1$s</string>
+    <string name="board_page_empty">There are no buttons on this page yet.</string>
     <string name="board_dialog_new_set">New screen</string>
     <string name="board_dialog_template">Template</string>
     <string name="board_dialog_template_blank">Blank</string>
@@ -356,7 +358,6 @@
     <string name="phrase_pick_file">Photo</string>
     <string name="phrase_open_symbols">Symbol</string>
     <string name="phrase_recording_label">Recording</string>
-    <string name="phrase_record_hint">phrase</string>
     <string name="phrase_recording_unavailable">Recording is unavailable on this platform.</string>
     <string name="phrase_recording_start_failed">Could not start recording.</string>
     <string name="phrase_recording_finalize_failed">Could not finalize recording.</string>

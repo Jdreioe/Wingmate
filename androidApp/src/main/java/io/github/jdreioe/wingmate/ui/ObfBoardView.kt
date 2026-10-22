@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
+import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfMediaSource
 import io.github.jdreioe.wingmate.domain.obf.obfImageSources
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
@@ -118,6 +120,10 @@ import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.obf.resolvedBackgroundColor
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import org.koin.compose.koinInject
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.tooling.preview.Preview
+import io.github.jdreioe.wingmate.domain.Settings
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import androidx.compose.ui.res.stringResource
 
@@ -166,6 +172,76 @@ class BoardReorder(
     val menu: @Composable (button: ObfButton, dismiss: () -> Unit) -> Unit,
 )
 
+/**
+ * Everything [ObfBoardContent] needs to draw a Page. Callers own these values;
+ * the renderer only keeps pointer, animation, and layout mechanics locally.
+ * Not annotated as stable: [extractedImages] holds mutable byte arrays, and
+ * strong skipping already compares the remaining values by instance.
+ */
+internal data class ObfBoardUiState(
+    val board: ObfBoard,
+    val extractedImages: Map<String, ByteArray> = emptyMap(),
+    val isEditMode: Boolean = false,
+    val selectedButtons: List<Pair<ObfButton, ImageBitmap?>> = emptyList(),
+    val showSpeakControl: Boolean = true,
+    val showDeleteControl: Boolean = true,
+    val showClearControl: Boolean = true,
+    val showMessageBar: Boolean = !isEditMode,
+    val messageBarEditable: Boolean = false,
+    val messageText: String = "",
+    val symbolBarPresentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
+    val boardSettings: ResolvedBoardSettings? = null,
+    val showHiddenButtons: Boolean = false,
+    val predictionLabels: Map<String, String> = emptyMap(),
+    val highlightedButtonId: String? = null,
+    val selectedFieldAnchor: Pair<Int, Int>? = null,
+    val selectedFieldSpans: List<GridFieldSpan> = emptyList(),
+    val homeBoardId: String? = null,
+    val scrollingMinimumCellHeight: Dp? = null,
+    val settings: Settings = Settings(),
+    val focusedCell: Pair<Int, Int>? = null,
+)
+
+/** Platform services are resolved once at the root, never by individual Buttons. */
+@Composable
+internal fun rememberBoardFeedback(): BoardFeedback {
+    val session: CommunicationSession = koinInject()
+    val voices: VoiceUseCase = koinInject()
+    val logger: AacLogger = koinInject()
+    return remember(session, voices, logger) {
+        BoardFeedback(
+            onActivated = { button, label -> logger.logButtonClick(label, phraseId = button.id) },
+            onAuditoryCue = { button, label ->
+                // An unavailable voice falls back to the default instead of silencing the cue.
+                val voice = try {
+                    voices.selected()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                }
+                session.accept(
+                    CommunicationAction.SpeakPart(
+                        part = MessagePart(label, languageTag = button.locale),
+                        voice = voice,
+                        rateOverride = 0.8,
+                    )
+                )
+            },
+        )
+    }
+}
+
+/**
+ * Side effects a Button triggers besides its click callback: activation logging
+ * and the auditory-fishing cue spoken while a pointer hovers. The default does
+ * nothing, which keeps previews and Compose tests free of platform services.
+ */
+internal class BoardFeedback(
+    val onActivated: (ObfButton, String) -> Unit = { _, _ -> },
+    val onAuditoryCue: suspend (ObfButton, String) -> Unit = { _, _ -> },
+)
+
 @Composable
 fun ObfBoardView(
     board: ObfBoard,
@@ -205,6 +281,91 @@ fun ObfBoardView(
     reorder: BoardReorder? = null,
 ) {
     val settings by rememberReactiveSettings()
+    val feedback = rememberBoardFeedback()
+    var focusRow by rememberSaveable(board.id) { mutableStateOf<Int?>(null) }
+    var focusColumn by rememberSaveable(board.id) { mutableStateOf<Int?>(null) }
+    ObfBoardContent(
+        state = ObfBoardUiState(
+            board = board,
+            extractedImages = extractedImages,
+            isEditMode = isEditMode,
+            selectedButtons = selectedButtons,
+            showSpeakControl = showSpeakControl,
+            showDeleteControl = showDeleteControl,
+            showClearControl = showClearControl,
+            showMessageBar = showMessageBar,
+            messageBarEditable = messageBarEditable,
+            messageText = messageText,
+            symbolBarPresentation = symbolBarPresentation,
+            boardSettings = boardSettings,
+            showHiddenButtons = showHiddenButtons,
+            predictionLabels = predictionLabels,
+            highlightedButtonId = highlightedButtonId,
+            selectedFieldAnchor = selectedFieldAnchor,
+            selectedFieldSpans = selectedFieldSpans,
+            homeBoardId = homeBoardId,
+            scrollingMinimumCellHeight = scrollingMinimumCellHeight,
+            settings = settings,
+            focusedCell = focusRow?.let { row -> focusColumn?.let { column -> row to column } },
+        ),
+        onButtonClick = onButtonClick,
+        onButtonLongClick = onButtonLongClick,
+        onSpeakSentence = onSpeakSentence,
+        onDeleteLast = onDeleteLast,
+        onClearSentence = onClearSentence,
+        onSentenceChanged = onSentenceChanged,
+        onCellClick = onCellClick,
+        onCellMove = onCellMove,
+        onResizeField = onResizeField,
+        onGridHeightFractionChange = onGridHeightFractionChange,
+        modifier = modifier,
+        reorder = reorder,
+        feedback = feedback,
+        onFocusCell = { cell -> focusRow = cell?.first; focusColumn = cell?.second },
+    )
+}
+
+/** Supplied-state renderer. Only pointer, animation, and layout mechanics are local. */
+@Composable
+internal fun ObfBoardContent(
+    state: ObfBoardUiState,
+    onButtonClick: (ObfButton) -> Unit,
+    onButtonLongClick: ((ObfButton) -> Unit)? = null,
+    onSpeakSentence: () -> Unit = {},
+    onDeleteLast: () -> Unit = {},
+    onClearSentence: () -> Unit = {},
+    onSentenceChanged: ((String) -> Unit)? = null,
+    onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
+    onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
+    onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
+    onGridHeightFractionChange: ((Float) -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    reorder: BoardReorder? = null,
+    feedback: BoardFeedback = remember { BoardFeedback() },
+    onFocusCell: (Pair<Int, Int>?) -> Unit = {},
+) {
+    val board = state.board
+    val extractedImages = state.extractedImages
+    val isEditMode = state.isEditMode
+    val selectedButtons = state.selectedButtons
+    val showSpeakControl = state.showSpeakControl
+    val showDeleteControl = state.showDeleteControl
+    val showClearControl = state.showClearControl
+    val showMessageBar = state.showMessageBar
+    val messageBarEditable = state.messageBarEditable
+    val messageText = state.messageText
+    val symbolBarPresentation = state.symbolBarPresentation
+    val boardSettings = state.boardSettings
+    val showHiddenButtons = state.showHiddenButtons
+    val predictionLabels = state.predictionLabels
+    val highlightedButtonId = state.highlightedButtonId
+    val selectedFieldAnchor = state.selectedFieldAnchor
+    val selectedFieldSpans = state.selectedFieldSpans
+    val homeBoardId = state.homeBoardId
+    val scrollingMinimumCellHeight = state.scrollingMinimumCellHeight
+    val settings = state.settings
+    val focusedCell = state.focusedCell
+
     val boardBackground = if (settings.highContrastMode) {
         MaterialTheme.colorScheme.background
     } else {
@@ -226,30 +387,61 @@ fun ObfBoardView(
     // If grid is defined, use it. Otherwise, just listing buttons (fallback)
     val grid = board.grid
     val buttonsById = remember(board) { board.buttons.associateBy { it.id } }
+    // Edit mode always offers empty cells to fill, so only run mode can be empty.
+    val isEmptyPage = remember(board, isEditMode, showHiddenButtons) {
+        !isEditMode && !board.hasVisibleButton(showHiddenButtons)
+    }
+    // The Message bar is the same in every layout; only its placement differs.
+    val messageBar: @Composable (Modifier) -> Unit = { barModifier ->
+        SymbolBar(
+            selectedButtons = selectedButtons,
+            messageText = messageText,
+            imagesById = imagesById,
+            extractedImages = extractedImages,
+            onSpeak = onSpeakSentence,
+            onDelete = onDeleteLast,
+            onClear = onClearSentence,
+            showSpeak = showSpeakControl,
+            showDelete = showDeleteControl,
+            showClear = showClearControl,
+            presentation = symbolBarPresentation,
+            editable = messageBarEditable && onSentenceChanged != null,
+            onTextChange = onSentenceChanged,
+            modifier = barModifier,
+        )
+    }
 
-    if (isAbsoluteLayout) {
+    if (isEmptyPage) {
+        // A Page with no usable Buttons (empty, or a grid that only references
+        // missing Buttons) explains itself and keeps the Message usable.
+        BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground)) {
+            val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
+            Column(
+                modifier = Modifier.fillMaxSize().padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (showMessageBar) {
+                    messageBar(Modifier.fillMaxWidth().heightIn(max = symbolBarMaxHeight))
+                }
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth().testTag("board-empty"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.board_page_empty),
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(24.dp)
+                    )
+                }
+            }
+        }
+    } else if (isAbsoluteLayout) {
         if (showMessageBar) {
             BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground)) {
                 val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
                 Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                    SymbolBar(
-                        selectedButtons = selectedButtons,
-                        messageText = messageText,
-                        imagesById = imagesById,
-                        extractedImages = extractedImages,
-                        onSpeak = onSpeakSentence,
-                        onDelete = onDeleteLast,
-                        onClear = onClearSentence,
-                        showSpeak = showSpeakControl,
-                        showDelete = showDeleteControl,
-                        showClear = showClearControl,
-                        presentation = symbolBarPresentation,
-                        editable = messageBarEditable && onSentenceChanged != null,
-                        onTextChange = onSentenceChanged,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = symbolBarMaxHeight)
-                    )
+                    messageBar(Modifier.fillMaxWidth().heightIn(max = symbolBarMaxHeight))
                     Spacer(modifier = Modifier.height(8.dp))
                     BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         RenderAbsoluteButtons(
@@ -263,7 +455,7 @@ fun ObfBoardView(
                             showHiddenButtons,
                             predictionLabels,
                             highlightedButtonId,
-                            onButtonLongClick
+                            onButtonLongClick, settings, feedback
                         )
                     }
                 }
@@ -281,7 +473,7 @@ fun ObfBoardView(
                     showHiddenButtons,
                     predictionLabels,
                     highlightedButtonId,
-                    onButtonLongClick
+                    onButtonLongClick, settings, feedback
                 )
             }
         }
@@ -297,31 +489,13 @@ fun ObfBoardView(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (showMessageBar) {
-                    SymbolBar(
-                        selectedButtons = selectedButtons,
-                        messageText = messageText,
-                        imagesById = imagesById,
-                        extractedImages = extractedImages,
-                        onSpeak = onSpeakSentence,
-                        onDelete = onDeleteLast,
-                        onClear = onClearSentence,
-                        showSpeak = showSpeakControl,
-                        showDelete = showDeleteControl,
-                        showClear = showClearControl,
-                        presentation = symbolBarPresentation,
-                        editable = messageBarEditable && onSentenceChanged != null,
-                        onTextChange = onSentenceChanged,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = symbolBarMaxHeight)
-                    )
+                    messageBar(Modifier.fillMaxWidth().heightIn(max = symbolBarMaxHeight))
                 }
 
                 val gridItems = remember(grid, buttonsById) {
                     buildBoardGridItems(grid, buttonsById)
                 }
                 val pageScrollState = rememberScrollState()
-                var focusedCell by remember(board.id) { mutableStateOf<Pair<Int, Int>?>(null) }
                 val isVisible: (ObfButton) -> Boolean = {
                     isBoardButtonVisible(it, isEditMode, showHiddenButtons)
                 }
@@ -344,19 +518,19 @@ fun ObfBoardView(
                             if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                             when (event.key) {
                                 Key.DirectionLeft -> {
-                                    focusedCell = stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, 0, -1); true
+                                    onFocusCell(stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, 0, -1)); true
                                 }
                                 Key.DirectionRight -> {
-                                    focusedCell = stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, 0, 1); true
+                                    onFocusCell(stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, 0, 1)); true
                                 }
                                 Key.DirectionUp -> {
-                                    focusedCell = stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, -1, 0); true
+                                    onFocusCell(stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, -1, 0)); true
                                 }
                                 Key.DirectionDown -> {
-                                    focusedCell = stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, 1, 0); true
+                                    onFocusCell(stepFocusableBoardCell(grid, buttonsById, isVisible, focusedCell, 1, 0)); true
                                 }
                                 Key.MoveHome -> {
-                                    focusedCell = firstFocusableBoardCell(grid, buttonsById, isVisible); true
+                                    onFocusCell(firstFocusableBoardCell(grid, buttonsById, isVisible)); true
                                 }
                                 Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar -> {
                                     activateFocused(); true
@@ -421,7 +595,9 @@ fun ObfBoardView(
                             Box(modifier = Modifier.fillMaxSize()) {
                                 if (button != null && isVisible) {
                                     val image = button.imageId?.let { imagesById[it] }
-                                    ObfButtonItem(
+                                    ObfButtonContent(
+                                        settings = settings,
+                                        feedback = feedback,
                                         button = button,
                                         image = image,
                                         extractedImageBytes = button.imageId?.let {
@@ -483,24 +659,7 @@ fun ObfBoardView(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (showMessageBar) {
-                    SymbolBar(
-                        selectedButtons = selectedButtons,
-                        messageText = messageText,
-                        imagesById = imagesById,
-                        extractedImages = extractedImages,
-                        onSpeak = onSpeakSentence,
-                        onDelete = onDeleteLast,
-                        onClear = onClearSentence,
-                        showSpeak = showSpeakControl,
-                        showDelete = showDeleteControl,
-                        showClear = showClearControl,
-                        presentation = symbolBarPresentation,
-                        editable = messageBarEditable && onSentenceChanged != null,
-                        onTextChange = onSentenceChanged,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = symbolBarMaxHeight)
-                    )
+                    messageBar(Modifier.fillMaxWidth().heightIn(max = symbolBarMaxHeight))
                 }
                 Column(
                     modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -514,7 +673,9 @@ fun ObfBoardView(
                             rowButtons.forEach { button ->
                                 val image = button.imageId?.let { imagesById[it] }
                                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                    ObfButtonItem(
+                                    ObfButtonContent(
+                                        settings = settings,
+                                        feedback = feedback,
                                         button = button,
                                         image = image,
                                         extractedImageBytes = button.imageId?.let {
@@ -543,6 +704,45 @@ fun ObfBoardView(
             }
         }
     }
+
+@Preview(showBackground = true, widthDp = 600, heightDp = 400)
+@Composable
+private fun ObfBoardContentPreview() {
+    val buttons = listOf(
+        ObfButton(id = "yes", label = "Yes"),
+        ObfButton(id = "no", label = "No"),
+        ObfButton(id = "help", label = "I need help"),
+        ObfButton(id = "food", label = "Food", loadBoard = ObfLoadBoard(id = "food", name = "Food")),
+    )
+    AppTheme {
+        ObfBoardContent(
+            state = ObfBoardUiState(
+                board = ObfBoard(
+                    format = "open-board-0.1",
+                    id = "preview",
+                    buttons = buttons,
+                    grid = ObfGrid(2, 2, listOf(listOf("yes", "no"), listOf("help", "food"))),
+                ),
+                messageText = "I need help",
+                focusedCell = 1 to 0,
+            ),
+            onButtonClick = {},
+        )
+    }
+}
+
+/** Whether run mode renders at least one Button; a grid only renders Buttons its order places. */
+private fun ObfBoard.hasVisibleButton(showHiddenButtons: Boolean): Boolean {
+    val visibleIds = buttons
+        .filter { isBoardButtonVisible(it, isEditMode = false, showHiddenButtons = showHiddenButtons) }
+        .mapTo(HashSet()) { it.id }
+    val grid = grid
+    return if (grid == null || isAbsoluteLayout) {
+        visibleIds.isNotEmpty()
+    } else {
+        grid.fieldItems().any { it.buttonId in visibleIds }
+    }
+}
 
 internal fun buildBoardGridItems(
     grid: io.github.jdreioe.wingmate.domain.obf.ObfGrid,
@@ -1281,7 +1481,7 @@ private fun GridHeightResizeHandle(
 }
 
 @Composable
-fun ObfButtonItem(
+internal fun ObfButtonContent(
     button: ObfButton,
     image: ObfImage? = null,
     extractedImageBytes: ByteArray? = null,
@@ -1296,12 +1496,10 @@ fun ObfButtonItem(
     enabled: Boolean = true,
     isSelectionHighlighted: Boolean = false,
     fieldFontScale: Float = 1f,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    settings: Settings,
+    feedback: BoardFeedback = remember { BoardFeedback() },
 ) {
-    val communicationSession: CommunicationSession = koinInject()
-    val voiceUseCase: VoiceUseCase = koinInject()
-    val aacLogger: AacLogger = koinInject()
-    val settings by rememberReactiveSettings()
     // #118: per-target activation debounce. Each button instance maps to a single target,
     // so a per-item guard enforces the per-target rules without shared state.
     val selectionDebouncer = remember(button.id) { SelectionDebouncer() }
@@ -1381,7 +1579,7 @@ fun ObfButtonItem(
     val primaryAction = {
         if (tryActivate()) {
             if (animateSelection) isSelected = true
-            aacLogger.logButtonClick(displayLabel ?: "", phraseId = button.id)
+            feedback.onActivated(button, displayLabel.orEmpty())
             onClick()
         }
     }
@@ -1391,14 +1589,7 @@ fun ObfButtonItem(
     LaunchedEffect(isHovered, settings.auditoryFishingEnabled) {
         val label = displayLabel ?: displayVocalization ?: ""
         if (isHovered && accessHost?.state?.isPaused != true && settings.auditoryFishingEnabled && label.isNotBlank()) {
-            val voice = runCatching { voiceUseCase.selected() }.getOrNull()
-            communicationSession.accept(
-                CommunicationAction.SpeakPart(
-                    part = MessagePart(label, languageTag = button.locale),
-                    voice = voice,
-                    rateOverride = 0.8,
-                )
-            )
+            feedback.onAuditoryCue(button, label)
         }
     }
 
@@ -1712,7 +1903,9 @@ private fun BoxWithConstraintsScope.RenderAbsoluteButtons(
     showHiddenButtons: Boolean,
     predictionLabels: Map<String, String>,
     highlightedButtonId: String? = null,
-    onButtonLongClick: ((ObfButton) -> Unit)? = null
+    onButtonLongClick: ((ObfButton) -> Unit)? = null,
+    settings: Settings,
+    feedback: BoardFeedback,
 ) {
     val containerWidth = maxWidth
     val containerHeight = maxHeight
@@ -1728,7 +1921,9 @@ private fun BoxWithConstraintsScope.RenderAbsoluteButtons(
                     .offset(x = left.dp, y = top.dp)
                     .size(width = w.dp, height = h.dp)
             ) {
-                ObfButtonItem(
+                ObfButtonContent(
+                    settings = settings,
+                    feedback = feedback,
                     button = button,
                     image = image,
                     extractedImageBytes = button.imageId?.let {

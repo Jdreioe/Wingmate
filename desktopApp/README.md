@@ -63,9 +63,12 @@ dictionary, and create or restore a backup.
 ## Architecture
 
 - `bindings/` compiles the shared Kotlin graph plus a stable C ABI into
-  `libwingmate_core.a`.
+  `libwingmate_core.a`. Every `wm_*_json` call answers `{"ok": value}` or
+  `{"error": {"kind", "message", "retryable"}}`, where `kind` is `cancelled`,
+  `validation`, `notFound`, `persistence`, or `unexpected` and `message` is a
+  fixed sentence that never contains user content.
 - `rust/src/bridge/` is the only unsafe Rust module. It owns the Kotlin handle,
-  copies returned strings, and exposes typed results.
+  copies returned strings, and exposes typed results and `CoreError`s.
 - `rust/src/screens/`, `settings/`, `message_bar.rs`, and `speech/` contain only
   native presentation and operating-system adapters.
 - `rust/src/access.rs` names dwell and Select targets and draws their feedback;
