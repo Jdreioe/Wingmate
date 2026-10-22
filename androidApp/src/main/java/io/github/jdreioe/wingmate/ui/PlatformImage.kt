@@ -5,8 +5,9 @@ import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 
-fun ByteArray.toComposeImageBitmap(): ImageBitmap =
-    BitmapFactory.decodeByteArray(this, 0, size).asImageBitmap()
+/** Decodes image bytes, or returns null when they are not a supported image. */
+fun ByteArray.toComposeImageBitmap(): ImageBitmap? =
+    BitmapFactory.decodeByteArray(this, 0, size)?.asImageBitmap()
 
 /**
  * Decodes image bytes no larger than about [maxPixels] on their longest side, so a

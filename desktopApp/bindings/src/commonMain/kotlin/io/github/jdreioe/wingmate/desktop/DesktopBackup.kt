@@ -8,6 +8,7 @@ import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.legacyCategoryFolders
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
@@ -31,6 +32,7 @@ private data class BackupPayload(
     val boards: List<ObfBoard>,
     val boardSets: List<ObfBoardSet>,
     val phrases: List<Phrase>,
+    /** Only read from older backups; Categories now travel as folder-Phrases in [phrases]. */
     val categories: List<CategoryItem> = emptyList(),
     val settings: Settings,
     val voices: List<Voice>,
@@ -85,7 +87,7 @@ internal class DesktopBackup(
             ) },
             boardSets = snapshot.boardSets,
             phrases = snapshot.phrases.map { it.copy(recordingPath = archived(it.recordingPath), imageUrl = localUrl(it.imageUrl)) },
-            categories = snapshot.categories, settings = snapshot.settings, voices = snapshot.voices,
+            settings = snapshot.settings, voices = snapshot.voices,
             selectedVoice = snapshot.selectedVoice,
             history = snapshot.history.map { it.copy(audioFilePath = archived(it.audioFilePath)) },
             dictionary = snapshot.pronunciations,
@@ -160,7 +162,8 @@ internal class DesktopBackup(
             )
             store.restore(DesktopSnapshot(
                 boards = payload.boards, boardSets = payload.boardSets, settings = payload.settings,
-                pronunciations = payload.dictionary, phrases = payload.phrases, categories = payload.categories,
+                pronunciations = payload.dictionary,
+                phrases = payload.phrases + legacyCategoryFolders(payload.categories, payload.phrases, Clock.System.now().toEpochMilliseconds()),
                 voices = payload.voices, selectedVoice = payload.selectedVoice, history = payload.history,
                 communicationSession = payload.communicationSession,
                 // Recent files describe this installation, not the backup.

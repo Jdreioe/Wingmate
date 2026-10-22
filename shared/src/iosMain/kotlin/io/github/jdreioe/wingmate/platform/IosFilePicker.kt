@@ -9,6 +9,8 @@ import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.usePinned
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import platform.Foundation.NSData
 import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
@@ -23,23 +25,26 @@ import platform.zlib.inflateEnd
 import platform.zlib.inflateInit2
 import platform.zlib.z_stream
 
-/** Native iOS archive access. SwiftUI owns document selection and passes the selected path. */
+/**
+ * Native iOS archive access. SwiftUI owns document selection and passes the selected path.
+ * File reads, ZIP parsing and inflation run on [Dispatchers.Default] so large backups do not freeze the UI.
+ */
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 class IosFilePicker : FilePicker {
     override suspend fun pickFile(title: String, extensions: List<String>): String? = null
 
-    override suspend fun readFileAsText(path: String): String? {
-        val data = NSData.dataWithContentsOfFile(path.removePrefix("file://")) ?: return null
-        return NSString.create(data, NSUTF8StringEncoding)?.toString()
+    override suspend fun readFileAsText(path: String): String? = withContext(Dispatchers.Default) {
+        val data = NSData.dataWithContentsOfFile(path.removePrefix("file://")) ?: return@withContext null
+        NSString.create(data, NSUTF8StringEncoding)?.toString()
     }
 
-    override suspend fun openArchive(path: String): ArchiveReader? {
-        val data = NSData.dataWithContentsOfFile(path.removePrefix("file://")) ?: return null
-        return IosStoredZipArchiveReader(data.toByteArray())
+    override suspend fun openArchive(path: String): ArchiveReader? = withContext(Dispatchers.Default) {
+        val data = NSData.dataWithContentsOfFile(path.removePrefix("file://")) ?: return@withContext null
+        IosStoredZipArchiveReader(data.toByteArray())
     }
 
     override suspend fun openArchiveBytes(content: ByteArray): ArchiveReader =
-        IosStoredZipArchiveReader(content)
+        withContext(Dispatchers.Default) { IosStoredZipArchiveReader(content) }
 
     private fun NSData.toByteArray(): ByteArray = ByteArray(length.toInt()).also { result ->
         if (result.isNotEmpty()) result.usePinned { memcpy(it.addressOf(0), bytes, length) }
@@ -60,16 +65,18 @@ private class IosStoredZipArchiveReader(bytes: ByteArray) : ArchiveReader {
         if (match.entry.uncompressedSize > maxBytes) {
             throw ArchiveReadException(ArchiveReadError.ENTRY_TOO_LARGE, "Archive entry exceeds its size limit: $name")
         }
-        val content = when (match.compression) {
-            0 -> data.copyOfRange(match.offset, match.offset + match.entry.compressedSize.toInt())
-            8 -> inflateRaw(
-                data.copyOfRange(match.offset, match.offset + match.entry.compressedSize.toInt()),
-                match.entry.uncompressedSize.toInt()
-            )
-            else -> throw ArchiveReadException(
-                ArchiveReadError.MALFORMED_ARCHIVE,
-                "Unsupported ZIP compression method for $name"
-            )
+        val content = withContext(Dispatchers.Default) {
+            when (match.compression) {
+                0 -> data.copyOfRange(match.offset, match.offset + match.entry.compressedSize.toInt())
+                8 -> inflateRaw(
+                    data.copyOfRange(match.offset, match.offset + match.entry.compressedSize.toInt()),
+                    match.entry.uncompressedSize.toInt()
+                )
+                else -> throw ArchiveReadException(
+                    ArchiveReadError.MALFORMED_ARCHIVE,
+                    "Unsupported ZIP compression method for $name"
+                )
+            }
         }
         var offset = 0
         var remaining = content.size

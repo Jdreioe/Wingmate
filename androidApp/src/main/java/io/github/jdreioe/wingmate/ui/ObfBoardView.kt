@@ -1663,9 +1663,7 @@ internal fun ObfButtonContent(
                     val base64 = source.value.substringAfter("base64,", source.value)
                     Base64Decoder.decode(base64).toComposeImageBitmap()
                 }.getOrNull()
-                is ObfMediaSource.Path -> extractedImageBytes?.let { bytes ->
-                    runCatching { bytes.toComposeImageBitmap() }.getOrNull()
-                }
+                is ObfMediaSource.Path -> extractedImageBytes?.toComposeImageBitmap()
                 is ObfMediaSource.Url, is ObfMediaSource.Symbol -> null
             }
         }
@@ -1902,6 +1900,7 @@ internal fun ObfButtonContent(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
+                        .testTag("selection-highlight")
                         .border(4.dp, selectionHighlightColor, RoundedCornerShape(12.dp))
                 )
             }

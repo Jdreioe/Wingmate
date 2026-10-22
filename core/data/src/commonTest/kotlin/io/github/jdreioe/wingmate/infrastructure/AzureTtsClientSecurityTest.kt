@@ -1,6 +1,8 @@
 package io.github.jdreioe.wingmate.infrastructure
 
+import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.Voice
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -14,8 +16,24 @@ import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class AzureTtsClientSecurityTest {
+    @Test
+    fun pronunciationEntriesCannotBreakTheSsmlDocument() {
+        val ssml = AzureTtsClient.generateSsml(
+            "Hello Anna",
+            Voice(name = "en-US-JennyNeural", primaryLanguage = "en-US"),
+            listOf(
+                PronunciationEntry(word = "Hello", phoneme = "he\"l>o", alphabet = "ipa\""),
+                PronunciationEntry(word = "Anna", phoneme = "An<na", alphabet = "text"),
+            ),
+        )
+
+        assertTrue("<phoneme alphabet=\"ipa&quot;\" ph=\"he&quot;l&gt;o\">Hello</phoneme>" in ssml, ssml)
+        assertTrue("<sub alias=\"An&lt;na\">Anna</sub>" in ssml, ssml)
+    }
+
     @Test
     fun invalidEndpointIsRejectedBeforeAnyRequest() = runBlocking {
         var requests = 0

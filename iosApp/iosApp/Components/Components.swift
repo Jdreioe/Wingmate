@@ -415,6 +415,11 @@ struct PhraseItemView: View {
         .onDisappear { model.unregisterAccessTarget(accessTargetId) }
         .accessTargetFocus(model: model, targetId: accessTargetId)
         .overlay {
+            if model.highlightedButtonId == accessTargetId {
+                tileShape.stroke(model.highContrastMode ? Color.white : Color.accentColor, lineWidth: 4)
+            }
+        }
+        .overlay {
             if model.accessTargetId == accessTargetId && model.pointerEmphasisStyle != "System" {
                 tileShape.stroke(Color.accentColor, lineWidth: 3 * model.pointerEmphasisScale)
                     .padding(6 / model.pointerEmphasisScale)

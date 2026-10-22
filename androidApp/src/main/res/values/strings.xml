@@ -439,6 +439,8 @@
     <string name="ui_settings_privacy_desc">History visibility, local data and reporting</string>
     <string name="ui_settings_privacy_local_data_title">Local data</string>
     <string name="ui_settings_history_visible_title">Show speech history</string>
+    <string name="ui_settings_likely_next_title">Likely next page (experimental)</string>
+    <string name="ui_settings_likely_next_desc">Adds a Typing Screen page with messages you often say after the last one, worked out from your speech history on this device.</string>
     <string name="ui_settings_history_visible_desc">Only speech played while this is enabled appears in History. Hidden speech remains cached locally for audio reuse.</string>
     <string name="ui_settings_board_cache_title">Board set sentence caching</string>
     <string name="ui_settings_board_cache_desc">Choose per board set whether complete spoken sentences are cached. Turning this off improves privacy, but replaying a sentence may synthesize it again and use more speech-service tokens.</string>
@@ -542,7 +544,6 @@
     <string name="phrase_screen_import_export_data">Import/Export Data</string>
     <string name="phrase_screen_welcome_screen">Welcome screen</string>
     <string name="phrase_screen_loading">Loading...</string>
-    <string name="phrase_screen_error">Error: %1$s</string>
     <string name="phrase_screen_enter_text_placeholder">Enter text to speak</string>
     <string name="speech_math_mode">Math</string>
     <string name="speech_math_mode_description">Read plain-text mathematical expressions using Azure Math pronunciation</string>
@@ -601,6 +602,7 @@
     <string name="common_unknown">Unknown</string>
     <string name="category_all">All</string>
     <string name="category_history">History</string>
+    <string name="category_likely_next">Likely next</string>
     <string name="category_move_left">Move left</string>
     <string name="category_move_right">Move right</string>
     <string name="category_delete_with_phrases">Delete (with phrases)</string>

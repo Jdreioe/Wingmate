@@ -27,9 +27,16 @@ import kotlinx.serialization.json.Json
 internal enum class TypingDialog { Settings, AddPhrase, EditPhrase, AddCategory, CategoryMenu, DeleteCategory, Reset, Unlock }
 internal enum class TypingLoadStatus { Loading, Ready, Failed }
 
+private const val LIKELY_NEXT_LIMIT = 8
+
+/** History and Likely next are read-only Pages of History entries. */
+private val TypingPageSelection.showsHistory: Boolean
+    get() = this == TypingPageSelection.History || this == TypingPageSelection.LikelyNext
+
 @Stable
 internal data class PhraseScreenState(
-    val phrases: PhraseState = PhraseState(),
+    val phrases: List<Phrase> = emptyList(),
+    val phraseStatus: TypingLoadStatus = TypingLoadStatus.Loading,
     val communication: CommunicationSessionState = CommunicationSessionState(),
     val settings: Settings = Settings(),
     val template: BoardSetGraph? = null,
@@ -37,6 +44,8 @@ internal data class PhraseScreenState(
     val categories: List<CategoryItem> = emptyList(),
     val categoryStatus: TypingLoadStatus = TypingLoadStatus.Loading,
     val history: List<SaidText> = emptyList(),
+    /** Experimental Likely next suggestions, ranked from [history]. */
+    val likelyNext: List<SaidText> = emptyList(),
     val historyFailed: Boolean = false,
     val boardFocusedCell: Pair<Int, Int>? = null,
     val selectedPage: TypingPageSelection = TypingPageSelection.AllPhrases,
@@ -55,15 +64,18 @@ internal data class PhraseScreenState(
 ) {
     val mutationFailed: Boolean get() = failedMutation != null
     val selectedCategory: CategoryItem? get() = (selectedPage as? TypingPageSelection.Category)?.category
-    val dialogPhrase: Phrase? get() = phraseDraft ?: phrases.items.find { it.id == dialogPhraseId }
+    val dialogPhrase: Phrase? get() = phraseDraft ?: phrases.find { it.id == dialogPhraseId }
     val dialogCategory: CategoryItem? get() = categories.find { it.id == dialogCategoryId }
     val isHistory: Boolean get() = settings.historyVisible && selectedPage == TypingPageSelection.History
+    val likelyNextEnabled: Boolean get() = settings.historyVisible && settings.likelyNextPageEnabled
+    val isLikelyNext: Boolean get() = likelyNextEnabled && selectedPage == TypingPageSelection.LikelyNext
+    val showLikelyNext: Boolean get() = likelyNextEnabled && (likelyNext.isNotEmpty() || isLikelyNext)
     val vocabularyReady: Boolean get() = templateStatus == TypingLoadStatus.Ready &&
-        categoryStatus == TypingLoadStatus.Ready && !phrases.loading && phrases.error == null && !mutationInProgress
-    val visiblePhrases: List<Phrase> get() = if (isHistory) emptyList() else phrases.items.filter {
+        categoryStatus == TypingLoadStatus.Ready && phraseStatus == TypingLoadStatus.Ready && !mutationInProgress
+    val visiblePhrases: List<Phrase> get() = if (isHistory || isLikelyNext) emptyList() else phrases.filter {
         it.isGridPhrase() && (selectedCategory == null || it.parentId == selectedCategory?.id)
     }
-    val compactPhrases: List<Phrase> get() = phrases.items.filter {
+    val compactPhrases: List<Phrase> get() = phrases.filter {
         it.isGridPhrase() && (lastPhraseCategoryId == null || it.parentId == lastPhraseCategoryId)
     }
     val secondaryRanges: List<TextRange> get() = communication.activeMessage.languageSpans
@@ -109,11 +121,10 @@ internal sealed interface PhraseScreenEvent {
 
 /** The Android adapter owns I/O; the ViewModel can be exercised without Koin or a device. */
 internal interface PhraseScreenOperations {
-    val phrases: StateFlow<PhraseState>
     val communication: StateFlow<CommunicationSessionState>
     val settings: StateFlow<Settings>
-    fun phrase(event: PhraseEvent)
     fun communicate(action: CommunicationAction)
+    suspend fun phrases(): List<Phrase>
     suspend fun savePhrase(phrase: Phrase, editing: Boolean)
     suspend fun deletePhrase(id: String)
     suspend fun movePhrase(from: Int, to: Int)
@@ -130,7 +141,6 @@ internal interface PhraseScreenOperations {
 }
 
 internal class DefaultPhraseScreenOperations(
-    private val bloc: PhraseBloc,
     private val session: CommunicationSession,
     settingsManager: SettingsStateManager,
     private val typing: TypingScreenUseCase,
@@ -143,11 +153,10 @@ internal class DefaultPhraseScreenOperations(
     private val prediction: TextPredictionService?,
     private val reporter: FeatureUsageReporter,
 ) : PhraseScreenOperations {
-    override val phrases = bloc.state
     override val communication = session.state
     override val settings = settingsManager.settings
-    override fun phrase(event: PhraseEvent) = bloc.dispatch(event)
     override fun communicate(action: CommunicationAction) { session.accept(action) }
+    override suspend fun phrases() = withContext(Dispatchers.IO) { phraseUseCase.list() }
     override suspend fun savePhrase(phrase: Phrase, editing: Boolean) = withContext(Dispatchers.IO) {
         if (editing) phraseUseCase.update(phrase) else phraseUseCase.add(phrase)
         report(if (editing) FeatureUsageEvents.PHRASE_EDITED else FeatureUsageEvents.PHRASE_ADDED,
@@ -217,15 +226,16 @@ internal class PhraseScreenViewModel(
     private var predictionJob: Job? = null
     private var voiceJob: Job? = null
     private var categoryJob: Job? = null
+    private var phraseJob: Job? = null
 
     init {
-        viewModelScope.launch { operations.phrases.collect { phrases -> _state.update { it.copy(phrases = phrases) } } }
         viewModelScope.launch {
             operations.settings.collect { settings ->
                 val previous = state.value.settings
                 if (!supportsMathMode(settings.ttsEngine)) savedState["math"] = false
                 _state.update { it.copy(settings = settings, mathMode = it.mathMode && supportsMathMode(settings.ttsEngine)) }
                 if (!settings.historyVisible && state.value.selectedPage == TypingPageSelection.History) selectPage(TypingPageSelection.AllPhrases)
+                if (!state.value.likelyNextEnabled && state.value.selectedPage == TypingPageSelection.LikelyNext) selectPage(TypingPageSelection.AllPhrases)
                 if (previous.gridColumns != settings.gridColumns || state.value.template == null) loadTemplate()
                 loadVoice()
             }
@@ -253,14 +263,14 @@ internal class PhraseScreenViewModel(
                 previousRequest = communication.currentSpeechRequestId
             }
         }
-        operations.phrase(PhraseEvent.Load)
+        loadPhrases()
         loadCategories()
         loadHistory()
     }
 
     fun onAction(action: PhraseScreenAction) {
         when (action) {
-            PhraseScreenAction.RetryLoad -> { operations.phrase(PhraseEvent.Load); loadTemplate(); loadCategories(); loadVoice() }
+            PhraseScreenAction.RetryLoad -> { loadPhrases(); loadTemplate(); loadCategories(); loadVoice() }
             PhraseScreenAction.RetryHistory -> loadHistory()
             PhraseScreenAction.RetryMutation -> state.value.failedMutation?.let(::onAction)
             is PhraseScreenAction.EditInput -> editInput(action.value)
@@ -336,7 +346,7 @@ internal class PhraseScreenViewModel(
                 }
             }
             is PhraseScreenAction.DeletePhrase -> authorize(action) {
-                val removed = phraseSubtree(state.value.phrases.items, action.id)
+                val removed = phraseSubtree(state.value.phrases, action.id)
                 if (removed.isNotEmpty()) mutate(action) {
                     operations.deletePhrase(action.id)
                     val deletionId = ++nextDeletionId
@@ -346,7 +356,7 @@ internal class PhraseScreenViewModel(
                 }
             }
             is PhraseScreenAction.MovePhrase -> authorize(action) {
-                val items = state.value.phrases.items
+                val items = state.value.phrases
                 val from = items.indexOfFirst { it.id == action.movedId }
                 val to = items.indexOfFirst { it.id == action.targetId }
                 if (from >= 0 && to >= 0 && from != to) mutate(action) { operations.movePhrase(from, to) }
@@ -401,7 +411,12 @@ internal class PhraseScreenViewModel(
             operations.communicate(CommunicationAction.ReplaceMessage(activation.message))
             val text = activation.message.displayText
             _state.update { it.copy(input = TextFieldValue(text, TextRange((cursor + phrase.text.length).coerceAtMost(text.length)))) }
-            operations.report(FeatureUsageEvents.PHRASE_INSERTED, "source" to if (current.isHistory) "history" else "typing_screen")
+            val source = when {
+                current.isHistory -> "history"
+                current.isLikelyNext -> "likely_next"
+                else -> "typing_screen"
+            }
+            operations.report(FeatureUsageEvents.PHRASE_INSERTED, "source" to source)
         }
         if (activation.shouldSpeak) {
             if (phrase.linkedBoardId != null) selectPage(TypingPageSelection.Category(CategoryItem(phrase.id, phrase.text, isFolder = true)))
@@ -466,12 +481,13 @@ internal class PhraseScreenViewModel(
         savedState["pageKind"] = when (page) {
             TypingPageSelection.AllPhrases -> "all"
             TypingPageSelection.History -> "history"
+            TypingPageSelection.LikelyNext -> "likely_next"
             is TypingPageSelection.Category -> "category"
         }
         savedState["categoryPageId"] = (page as? TypingPageSelection.Category)?.category?.id
-        if (page != TypingPageSelection.History) savedState["lastCategory"] = (page as? TypingPageSelection.Category)?.category?.id
-        _state.update { it.copy(selectedPage = page, boardFocusedCell = it.boardFocusedCell.takeIf { _ -> it.selectedPage == page }, lastPhraseCategoryId = if (page == TypingPageSelection.History) it.lastPhraseCategoryId else (page as? TypingPageSelection.Category)?.category?.id) }
-        if (page == TypingPageSelection.History) loadHistory()
+        if (!page.showsHistory) savedState["lastCategory"] = (page as? TypingPageSelection.Category)?.category?.id
+        _state.update { it.copy(selectedPage = page, boardFocusedCell = it.boardFocusedCell.takeIf { _ -> it.selectedPage == page }, lastPhraseCategoryId = if (page.showsHistory) it.lastPhraseCategoryId else (page as? TypingPageSelection.Category)?.category?.id) }
+        if (page.showsHistory) loadHistory()
     }
 
     private fun setDialog(dialog: TypingDialog?, phraseId: String? = state.value.dialogPhraseId, categoryId: String? = state.value.dialogCategoryId) {
@@ -516,10 +532,22 @@ internal class PhraseScreenViewModel(
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { _state.update { it.copy(failedMutation = action) } }
                 finally {
-                    operations.phrase(PhraseEvent.Load)
+                    loadPhrases()
                     _state.update { it.copy(mutationInProgress = false) }
                 }
             }
+        }
+    }
+
+    private fun loadPhrases() {
+        phraseJob?.cancel()
+        phraseJob = viewModelScope.launch {
+            _state.update { it.copy(phraseStatus = TypingLoadStatus.Loading) }
+            try {
+                val phrases = operations.phrases()
+                _state.update { it.copy(phrases = phrases, phraseStatus = TypingLoadStatus.Ready) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { _state.update { it.copy(phraseStatus = TypingLoadStatus.Failed) } }
         }
     }
 
@@ -549,6 +577,7 @@ internal class PhraseScreenViewModel(
         val categories = operations.categories()
         val page = when (savedState.get<String>("pageKind")) {
             "history" -> if (state.value.settings.historyVisible) TypingPageSelection.History else TypingPageSelection.AllPhrases
+            "likely_next" -> if (state.value.likelyNextEnabled) TypingPageSelection.LikelyNext else TypingPageSelection.AllPhrases
             "category" -> categories.find { it.id == savedState.get<String>("categoryPageId") }?.let { TypingPageSelection.Category(it) } ?: TypingPageSelection.AllPhrases
             else -> TypingPageSelection.AllPhrases
         }
@@ -561,7 +590,8 @@ internal class PhraseScreenViewModel(
         historyJob = viewModelScope.launch {
             try {
                 val history = operations.history().filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L }
-                _state.update { it.copy(history = history, historyFailed = false) }
+                val likelyNext = likelyNextMessages(history, LIKELY_NEXT_LIMIT)
+                _state.update { it.copy(history = history, likelyNext = likelyNext, historyFailed = false) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { _state.update { it.copy(historyFailed = true) } }
         }

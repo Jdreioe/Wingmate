@@ -15,37 +15,38 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
 
     override suspend fun getAll(): List<Phrase> = withContext(repositoryDispatcher) {
         val db = helper.readableDatabase
-        val cursor = db.query("phrases", null, null, null, null, null, "ordering ASC")
-        val list = mutableListOf<Phrase>()
-        while (cursor.moveToNext()) {
-            val id = cursor.getString(cursor.getColumnIndexOrThrow("id"))
-            val text = cursor.getString(cursor.getColumnIndexOrThrow("text"))
-            val name = cursor.getString(cursor.getColumnIndexOrThrow("name"))
-            val bg = cursor.getString(cursor.getColumnIndexOrThrow("background_color"))
-            val imageUrlIdx = cursor.getColumnIndex("image_url")
-            val imageUrl = if (imageUrlIdx >= 0) cursor.getString(imageUrlIdx) else null
-            val parentId = cursor.getString(cursor.getColumnIndexOrThrow("parent_id"))
-            val linkedBoardIdx = cursor.getColumnIndex("linked_board_id")
-            val linkedBoardId = if (linkedBoardIdx >= 0) cursor.getString(linkedBoardIdx) else null
-            val createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at"))
-            val recPathIdx = cursor.getColumnIndex("recording_path")
-            val recordingPath = if (recPathIdx >= 0) cursor.getString(recPathIdx) else null
-            val isHiddenIdx = cursor.getColumnIndex("is_hidden")
-            val isHidden = if (isHiddenIdx >= 0) cursor.getInt(isHiddenIdx) == 1 else false
-            list += Phrase(
-                id = id, 
-                text = text, 
-                name = name, 
-                backgroundColor = bg, 
-                imageUrl = imageUrl,
-                parentId = parentId, 
-                linkedBoardId = linkedBoardId,
-                createdAt = createdAt, 
-                recordingPath = recordingPath,
-                isHidden = isHidden
-            )
+        val list = db.query("phrases", null, null, null, null, null, "ordering ASC").use { cursor ->
+            val phrases = mutableListOf<Phrase>()
+            while (cursor.moveToNext()) {
+                val id = cursor.getString(cursor.getColumnIndexOrThrow("id"))
+                val text = cursor.getString(cursor.getColumnIndexOrThrow("text"))
+                val name = cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                val bg = cursor.getString(cursor.getColumnIndexOrThrow("background_color"))
+                val imageUrlIdx = cursor.getColumnIndex("image_url")
+                val imageUrl = if (imageUrlIdx >= 0) cursor.getString(imageUrlIdx) else null
+                val parentId = cursor.getString(cursor.getColumnIndexOrThrow("parent_id"))
+                val linkedBoardIdx = cursor.getColumnIndex("linked_board_id")
+                val linkedBoardId = if (linkedBoardIdx >= 0) cursor.getString(linkedBoardIdx) else null
+                val createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at"))
+                val recPathIdx = cursor.getColumnIndex("recording_path")
+                val recordingPath = if (recPathIdx >= 0) cursor.getString(recPathIdx) else null
+                val isHiddenIdx = cursor.getColumnIndex("is_hidden")
+                val isHidden = if (isHiddenIdx >= 0) cursor.getInt(isHiddenIdx) == 1 else false
+                phrases += Phrase(
+                    id = id, 
+                    text = text, 
+                    name = name, 
+                    backgroundColor = bg, 
+                    imageUrl = imageUrl,
+                    parentId = parentId, 
+                    linkedBoardId = linkedBoardId,
+                    createdAt = createdAt, 
+                    recordingPath = recordingPath,
+                    isHidden = isHidden
+                )
+            }
+            phrases
         }
-        cursor.close()
         OperationalLogger.debug("phrase.load", "succeeded", count = list.size)
         return@withContext list
     }
@@ -55,10 +56,9 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
         val id = phrase.id.ifBlank { UUID.randomUUID().toString() }
         val createdAt = if (phrase.createdAt == 0L) System.currentTimeMillis() else phrase.createdAt
         // compute ordering as max+1
-        val maxCur = db.rawQuery("SELECT COALESCE(MAX(ordering), -1) FROM phrases", null)
-        var ord = -1
-        if (maxCur.moveToFirst()) ord = maxCur.getInt(0)
-        maxCur.close()
+        val ord = db.rawQuery("SELECT COALESCE(MAX(ordering), -1) FROM phrases", null).use { maxCur ->
+            if (maxCur.moveToFirst()) maxCur.getInt(0) else -1
+        }
         val values = ContentValues().apply {
             put("id", id)
             put("text", phrase.text)
@@ -112,10 +112,11 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
     override suspend fun move(fromIndex: Int, toIndex: Int) = withContext(repositoryDispatcher) {
         // Simple ordering swap implementation: read all ids and reorder
         val db = helper.writableDatabase
-        val cursor = db.query("phrases", arrayOf("id"), null, null, null, null, "ordering ASC")
-        val ids = mutableListOf<String>()
-        while (cursor.moveToNext()) ids += cursor.getString(cursor.getColumnIndexOrThrow("id"))
-        cursor.close()
+        val ids = db.query("phrases", arrayOf("id"), null, null, null, null, "ordering ASC").use { cursor ->
+            val found = mutableListOf<String>()
+            while (cursor.moveToNext()) found += cursor.getString(cursor.getColumnIndexOrThrow("id"))
+            found
+        }
         if (fromIndex < 0 || toIndex < 0 || fromIndex >= ids.size || toIndex >= ids.size) return@withContext
         val id = ids.removeAt(fromIndex)
         ids.add(toIndex, id)

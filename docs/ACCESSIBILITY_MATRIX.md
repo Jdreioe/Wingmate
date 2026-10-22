@@ -12,7 +12,7 @@ Legend: **Shipped** · **Partial** (works with gaps) · **Planned** (tracked) ·
 | Select key / switch press | Shipped (Space/Enter/F1–F12 bindings) | Shipped (bindings via settings sync) | Partial (select key acts on hovered communication target) |
 | Rest mode toggle | Shipped (FAB is dwell/focus-reachable; rest key; **hold Select 2 s to resume**) | Partial (rest key + pause bridge; hold-to-resume needs bridge sync) | Partial (Rest/Resume button, rest key, hold Select 2 s; toggle is click/touch only) |
 | Per-target selection debounce (#118) | Shipped (+ reject haptic) | Partial (shared logic available; not wired everywhere) | None |
-| Selection highlight (#120) | Shipped | Partial | None |
+| Selection highlight (#120) | Shipped (Screens and Typing Screen) | Shipped (Screens, Typing tray, Settings > Accessibility) | None |
 | Select on touch-down (#110) | Shipped (Buttons, Typing action strip, Play/Stop; grids stop scrolling) | None | None |
 | Swipe between Pages (#121) | Shipped (opt-in; Screen page order, Run mode) | None | None |
 | Hold-to-select duration | Shipped | Partial | None (setting stored, no runner support) |
