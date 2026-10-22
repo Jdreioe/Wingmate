@@ -394,6 +394,7 @@
 "settings.accessibility.dwell" = "Verweilen zum Auswählen";
 "settings.accessibility.debounce" = "Auswahl-Debounce";
 "settings.accessibility.feedback" = "Feedback & Protokollierung";
+"settings.accessibility.selection_highlight" = "Auswahlhervorhebung";
 "settings.accessibility.selection_sound" = "Auswahlton";
 "settings.accessibility.auditory_fishing" = "Akustische Suche";
 "settings.speech_policy.title" = "Sprache beim Auswählen";
