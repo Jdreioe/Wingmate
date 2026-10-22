@@ -1422,6 +1422,11 @@ private fun BoardSetWorkspaceRoot(
                             }
                         )
                     }
+                    PageSwipeBox(
+                        enabled = settings.swipeBetweenPages && mode == BoardWorkspaceMode.Run,
+                        onSwipe = { step -> workspaceViewModel.onAction(BoardWorkspaceAction.SwipePage(step)) },
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                    ) {
                     ObfBoardView(
                         board = activeBoard,
                         isEditMode = mode == BoardWorkspaceMode.Edit,
@@ -1722,8 +1727,9 @@ private fun BoardSetWorkspaceRoot(
                         onClearSentence = {
                             communicationSession.accept(CommunicationAction.Clear)
                         },
-                        modifier = Modifier.weight(1f).fillMaxWidth()
+                        modifier = Modifier.fillMaxSize()
                     )
+                    }
                     }
                 }
             }

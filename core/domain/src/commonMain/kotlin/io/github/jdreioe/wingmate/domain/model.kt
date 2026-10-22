@@ -157,6 +157,9 @@ data class Settings(
     // #110: communication targets act on first touch instead of on release. Hold-to-select
     // takes precedence; button grids stop scrolling so a touch is never a scroll.
     val selectOnTouchDown: Boolean = false,
+    // #121: swipe sideways to the neighbouring Page in Screen order. Off by default, since a
+    // stray slide would otherwise move the whole interface.
+    val swipeBetweenPages: Boolean = false,
     val gridColumns: Int = 3,
     val highContrastMode: Boolean = false,
     // Automatically color vocabulary buttons by grammatical word type. Explicit
