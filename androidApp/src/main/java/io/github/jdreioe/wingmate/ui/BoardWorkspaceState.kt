@@ -53,6 +53,20 @@ internal data class BoardWorkspaceState(
             copy(selectedBoardId = previous, boardStack = boardStack.dropLast(1))
         } ?: this
 
+    /**
+     * Swipes to the neighbouring Page in Screen order (#121): [step] is +1 for the next Page
+     * and -1 for the previous one. Nothing happens at either end or while editing. The Page
+     * is replaced in place, so Back still returns to where the Communicator came from.
+     */
+    fun swipePage(step: Int): BoardWorkspaceState {
+        val graph = activeGraph ?: return this
+        if (mode != BoardWorkspaceMode.Run) return this
+        val order = graph.boardSet.boardIds.filter { it in graph.boardsById }
+        val index = order.indexOf(selectedBoardId).takeIf { it >= 0 } ?: return this
+        val target = order.getOrNull(index + step) ?: return this
+        return copy(selectedBoardId = target)
+    }
+
     fun goHome(rootBoardId: String): BoardWorkspaceState =
         copy(selectedBoardId = rootBoardId, boardStack = emptyList())
 
@@ -78,6 +92,7 @@ internal sealed interface BoardWorkspaceAction {
     data object RetryLoad : BoardWorkspaceAction
     data class SelectBoard(val boardId: String) : BoardWorkspaceAction
     data class OpenBoard(val boardId: String) : BoardWorkspaceAction
+    data class SwipePage(val step: Int) : BoardWorkspaceAction
     data object BackClicked : BoardWorkspaceAction
     data class GoHome(val rootBoardId: String) : BoardWorkspaceAction
     data class RestorePosition(
@@ -168,6 +183,7 @@ internal class BoardWorkspaceViewModel(
             )
             is BoardWorkspaceAction.SelectBoard -> _state.value.selectBoard(action.boardId)
             is BoardWorkspaceAction.OpenBoard -> _state.value.openBoard(action.boardId)
+            is BoardWorkspaceAction.SwipePage -> _state.value.swipePage(action.step)
             BoardWorkspaceAction.BackClicked -> handleBack()
             is BoardWorkspaceAction.GoHome -> _state.value.goHome(action.rootBoardId)
             is BoardWorkspaceAction.RestorePosition -> _state.value.withPosition(

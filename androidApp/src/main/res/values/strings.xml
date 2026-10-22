@@ -571,6 +571,8 @@
     <string name="ui_settings_label_at_top_title">Put label at top of button</string>
     <string name="ui_settings_select_on_touch_down_title">Select on touch</string>
     <string name="ui_settings_select_on_touch_down_desc">Buttons act as soon as you touch them instead of when you let go. Button grids stop scrolling and show every row. Hold to select, when set, still applies.</string>
+    <string name="ui_settings_swipe_pages_title">Swipe between pages</string>
+    <string name="ui_settings_swipe_pages_desc">On Screens, swipe left or right to go to the next or previous page in the screen\'s page order. Links, Home and Back work as before. Not available with Select on touch.</string>
     <string name="ui_settings_hold_to_select_title">Hold to select (ms)</string>
     <string name="ui_settings_hold_to_select_desc">Prevents accidental taps. Set to 0 to disable.</string>
     <string name="ui_settings_grid_columns_title">Grid columns</string>

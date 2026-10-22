@@ -494,6 +494,8 @@ private fun CategoryContent(
                 onHoldToSelectChangeFinished = { onAction(SettingsAction.HoldToSelectChangeFinished) },
                 selectOnTouchDown = settings.selectOnTouchDown,
                 onSelectOnTouchDownChange = { onAction(SettingsAction.SelectOnTouchDownChanged(it)) },
+                swipeBetweenPages = settings.swipeBetweenPages,
+                onSwipeBetweenPagesChange = { onAction(SettingsAction.SwipeBetweenPagesChanged(it)) },
                 dwellToSelectMillis = settings.dwellToSelectMillis,
                 onDwellToSelectChange = { onAction(SettingsAction.DwellToSelectChanged(it)) },
                 onDwellToSelectChangeFinished = { onAction(SettingsAction.DwellToSelectChangeFinished) },
@@ -1428,6 +1430,8 @@ private fun AccessibilitySection(
     onHoldToSelectChangeFinished: () -> Unit,
     selectOnTouchDown: Boolean,
     onSelectOnTouchDownChange: (Boolean) -> Unit,
+    swipeBetweenPages: Boolean,
+    onSwipeBetweenPagesChange: (Boolean) -> Unit,
     dwellToSelectMillis: Long,
     onDwellToSelectChange: (Long) -> Unit,
     onDwellToSelectChangeFinished: () -> Unit,
@@ -1493,6 +1497,13 @@ private fun AccessibilitySection(
             onCheckedChange = onSelectOnTouchDownChange,
             title = stringResource(R.string.ui_settings_select_on_touch_down_title),
             description = stringResource(R.string.ui_settings_select_on_touch_down_desc)
+        )
+        SettingsGroupDivider()
+        SettingsSwitch(
+            checked = swipeBetweenPages,
+            onCheckedChange = onSwipeBetweenPagesChange,
+            title = stringResource(R.string.ui_settings_swipe_pages_title),
+            description = stringResource(R.string.ui_settings_swipe_pages_desc)
         )
         SettingsGroupDivider()
         SettingsSlider(

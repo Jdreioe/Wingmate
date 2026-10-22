@@ -548,6 +548,8 @@
     <string name="ui_settings_label_at_top_title">Placer tekst øverst på knappen</string>
     <string name="ui_settings_select_on_touch_down_title">Vælg ved berøring</string>
     <string name="ui_settings_select_on_touch_down_desc">Knapper reagerer, så snart du rører dem, i stedet for når du slipper. Knapgitre holder op med at rulle og viser alle rækker. Hold for at vælge gælder stadig, hvis det er slået til.</string>
+    <string name="ui_settings_swipe_pages_title">Stryg mellem sider</string>
+    <string name="ui_settings_swipe_pages_desc">På skærme kan du stryge til venstre eller højre for at gå til næste eller forrige side i skærmens siderækkefølge. Links, Hjem og Tilbage virker som før. Ikke tilgængelig med Vælg ved berøring.</string>
     <string name="ui_settings_hold_to_select_title">Hold for at vælge (ms)</string>
     <string name="ui_settings_hold_to_select_desc">Forhindrer utilsigtede tryk. Sæt til 0 for at deaktivere.</string>
     <string name="ui_settings_grid_columns_title">Gitterkolonner</string>

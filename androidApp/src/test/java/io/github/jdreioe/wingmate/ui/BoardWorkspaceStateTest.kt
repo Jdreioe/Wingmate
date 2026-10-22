@@ -26,6 +26,22 @@ class BoardWorkspaceStateTest {
     }
 
     @Test
+    fun `swiping moves one Page in Screen order, stops at the ends, and keeps Back`() {
+        val pages = listOf("home", "food", "drinks").map { ObfBoard(format = "open-board-0.1", id = it) }
+        val graph = BoardSetGraph(
+            ObfBoardSet(id = "s", name = "S", rootBoardId = "home", boardIds = listOf("home", "food", "drinks"), createdAt = 1, updatedAt = 1),
+            pages,
+        )
+        val onFood = BoardWorkspaceState(savedGraph = graph, selectedBoardId = "food", boardStack = listOf("home"))
+
+        assertEquals("drinks", onFood.swipePage(1).selectedBoardId)
+        assertEquals("home", onFood.swipePage(-1).selectedBoardId)
+        assertEquals(listOf("home"), onFood.swipePage(1).boardStack)
+        assertEquals(onFood.swipePage(1), onFood.swipePage(1).swipePage(1))
+        assertEquals(onFood.copy(mode = BoardWorkspaceMode.Edit), onFood.copy(mode = BoardWorkspaceMode.Edit).swipePage(1))
+    }
+
+    @Test
     fun `selecting a board or going home clears navigation history`() {
         val navigation = BoardWorkspaceState(
             selectedBoardId = "people",
