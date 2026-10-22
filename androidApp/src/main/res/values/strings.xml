@@ -129,6 +129,7 @@
     <string name="backup_restore">Restore backup</string>
     <string name="backup_exported">Backup ready to save</string>
     <string name="backup_restored">Backup restored</string>
+    <string name="backup_restore_unavailable">Backup restore is unavailable on this device.</string>
     <string name="backup_cancelled">Backup cancelled</string>
     <string name="backup_replace_title">Replace current Wingmate data?</string>
     <string name="backup_replace_warning">The archive will be fully validated first. A successful restore replaces current vocabulary and settings; cancel keeps everything unchanged.</string>
@@ -148,6 +149,8 @@
     <string name="board_workspace_finish_title">Finish editing?</string>
     <string name="board_workspace_finish_body">Save your changes before returning to communication mode?</string>
     <string name="board_workspace_save_error">Unable to save changes</string>
+    <string name="board_workspace_export_cancelled">Export cancelled</string>
+    <string name="board_workspace_exported">Exported %1$s</string>
     <string name="board_workspace_export_error">The screen could not be exported. Your current screen was not changed; try again.</string>
     <string name="board_workspace_speak_sentence">Speak sentence</string>
     <string name="board_workspace_delete_last">Delete last word</string>

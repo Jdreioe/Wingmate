@@ -638,6 +638,8 @@ private fun BoardSetWorkspaceRoot(
     val loadErrorMessage = stringResource(R.string.board_workspace_load_error)
     val saveErrorMessage = stringResource(R.string.board_workspace_save_error)
     val exportErrorMessage = stringResource(R.string.board_workspace_export_error)
+    val exportCancelledMessage = stringResource(R.string.board_workspace_export_cancelled)
+    val exportedTemplate = stringResource(R.string.board_workspace_exported, "%NAME%")
     // Placeholder substituted in click handler (stringResource formatting is composition-only).
     val unsupportedActionTemplate = stringResource(R.string.board_workspace_unsupported_action, "%ACTION%")
 
@@ -859,7 +861,7 @@ private fun BoardSetWorkspaceRoot(
     fun exportBoardSet() {
         scope.launch {
             workspaceViewModel.onAction(BoardWorkspaceAction.ExportStarted)
-            var resultMessage = "Export cancelled"
+            var resultMessage = exportCancelledMessage
             try {
                 val graph = activeGraph
                 if (graph == null) {
@@ -872,12 +874,13 @@ private fun BoardSetWorkspaceRoot(
                             if (shareService != null) {
                                 val shared = shareService.shareFile(fileName, obzBytes)
                                 resultMessage = if (shared) {
-                                    "Exported ${graph.boardSet.name}.obz"
+                                    exportedTemplate.replace("%NAME%", fileName)
                                 } else {
-                                    "Export cancelled"
+                                    exportCancelledMessage
                                 }
                             } else {
-                                resultMessage = "Export saved (${obzBytes.size} bytes)"
+                                // Without a share sheet there is nowhere to deliver the file.
+                                resultMessage = exportErrorMessage
                             }
                         }
                         is ObzExportResult.Failure -> resultMessage = exportErrorMessage

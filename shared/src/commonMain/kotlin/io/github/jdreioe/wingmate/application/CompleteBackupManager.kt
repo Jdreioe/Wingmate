@@ -31,11 +31,13 @@ import io.github.jdreioe.wingmate.domain.obf.ZipBuilder
 import io.github.jdreioe.wingmate.platform.FilePicker
 import io.github.jdreioe.wingmate.platform.ArchiveEntry
 import io.github.jdreioe.wingmate.platform.readEntryBytes
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -128,7 +130,13 @@ class CompleteBackupManager(
     private val mutableRestoreRevision = MutableStateFlow(0L)
     val restoreRevision = mutableRestoreRevision.asStateFlow()
 
-    override suspend fun exportBackup(): ByteArray {
+    // Encoding, hashing and ZIP work are heavy for large backups; keep them off the caller's (often main) thread.
+    override suspend fun exportBackup(): ByteArray = withContext(Dispatchers.Default) { buildBackup() }
+
+    override suspend fun restoreBackup(path: String): BackupRestoreResult =
+        withContext(Dispatchers.Default) { restoreFrom(path) }
+
+    private suspend fun buildBackup(): ByteArray {
         val original = snapshot()
         val sourcePaths = linkedMapOf<String, String>()
         fun archivePath(path: String?): String? {
@@ -187,7 +195,7 @@ class CompleteBackupManager(
         return ZipBuilder.build(entries).getOrThrow()
     }
 
-    override suspend fun restoreBackup(path: String): BackupRestoreResult = restoreMutex.withLock {
+    private suspend fun restoreFrom(path: String): BackupRestoreResult = restoreMutex.withLock {
         val picker = filePicker ?: return@withLock BackupRestoreResult.Failure(
             kind = BackupFailureKind.Unavailable,
             message = "File import is unavailable",

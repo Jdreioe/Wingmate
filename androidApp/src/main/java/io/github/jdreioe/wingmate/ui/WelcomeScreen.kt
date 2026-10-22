@@ -76,6 +76,7 @@ fun WelcomeScreen(
     val importInvalid = stringResource(R.string.welcome_import_invalid)
     val importUnexpected = stringResource(R.string.welcome_import_unexpected)
     val backupPickerFailed = stringResource(R.string.backup_picker_failed)
+    val backupRestoreUnavailable = stringResource(R.string.backup_restore_unavailable)
     val scope = rememberCoroutineScope()
 
     fun importFailureMessage(result: BoardImportResult.Failure): String = when (result.code) {
@@ -405,7 +406,7 @@ fun WelcomeScreen(
                                 result.payload.selectedVoice != null
                             )
                             is BackupRestoreResult.Failure -> restoreStatus = result.message
-                            null -> restoreStatus = "Backup restore unavailable"
+                            null -> restoreStatus = backupRestoreUnavailable
                         }
                         isRestoring = false
                     }

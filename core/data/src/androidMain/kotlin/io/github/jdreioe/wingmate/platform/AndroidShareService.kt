@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import java.io.File
 
+/** Shares through the system chooser, which supplies its own localized title. */
 class AndroidShareService(private val context: Context) : ShareService {
     override fun shareAudio(filePath: String): Boolean {
         return runCatching {
@@ -18,7 +19,7 @@ class AndroidShareService(private val context: Context) : ShareService {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            val chooser = Intent.createChooser(intent, "Share audio")
+            val chooser = Intent.createChooser(intent, null)
             chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(chooser)
             true
@@ -31,7 +32,7 @@ class AndroidShareService(private val context: Context) : ShareService {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, text)
             }
-            val chooser = Intent.createChooser(intent, "Share text")
+            val chooser = Intent.createChooser(intent, null)
             chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(chooser)
             true
@@ -51,7 +52,7 @@ class AndroidShareService(private val context: Context) : ShareService {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            val chooser = Intent.createChooser(intent, "Share OBZ")
+            val chooser = Intent.createChooser(intent, null)
             chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(chooser)
             true

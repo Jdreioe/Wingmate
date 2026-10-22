@@ -876,7 +876,7 @@ internal class SettingsViewModel(
             val status = when (val result = operations.restoreBackup(path)) {
                 is BackupRestoreResult.Success -> SettingsMessage.Resource(R.string.backup_restored)
                 is BackupRestoreResult.Failure -> SettingsMessage.Dynamic(result.message)
-                null -> SettingsMessage.Dynamic("Backup restore unavailable")
+                null -> SettingsMessage.Resource(R.string.backup_restore_unavailable)
             }
             _state.update { it.copy(backupWorking = false, backupStatus = status) }
         }

@@ -1808,7 +1808,7 @@ internal fun ObfButtonContent(
                             BoardSymbolImage(
                                 bitmap = imageBitmap,
                                 model = imageModel,
-                                contentDescription = button.label,
+                                contentDescription = displayLabel,
                                 modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp).clip(buttonShape)
                             )
                         }
