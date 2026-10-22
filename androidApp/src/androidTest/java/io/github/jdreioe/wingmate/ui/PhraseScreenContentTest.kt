@@ -24,6 +24,8 @@ import io.github.jdreioe.wingmate.domain.CommunicationSessionState
 import io.github.jdreioe.wingmate.domain.Message
 import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.SaidText
+import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -70,6 +72,24 @@ class PhraseScreenContentTest {
                 PhraseScreenAction.RequestDialog(TypingDialog.AddPhrase),
                 PhraseScreenAction.Control(ObfButtonActionEffect.Speak),
             ),
+            actions,
+        )
+    }
+
+    @Test
+    fun likelyNextSuggestionActivatesLikeAHistoryItem() {
+        val suggestion = SaidText(id = 3, saidText = "Thank you", date = 5L)
+        val actions = render(ready.copy(
+            settings = Settings(likelyNextPageEnabled = true),
+            selectedPage = TypingPageSelection.LikelyNext,
+            likelyNext = listOf(suggestion),
+        ))
+
+        composeRule.onNodeWithText(context.getString(R.string.category_likely_next)).assertIsDisplayed()
+        composeRule.onNodeWithText("Thank you").performClick()
+
+        assertEquals(
+            listOf<PhraseScreenAction>(PhraseScreenAction.ActivatePhrase(Phrase(id = "history_3", text = "Thank you", createdAt = 5L))),
             actions,
         )
     }

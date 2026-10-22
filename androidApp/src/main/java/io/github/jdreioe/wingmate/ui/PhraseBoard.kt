@@ -61,6 +61,7 @@ import io.github.jdreioe.wingmate.application.OBF_PHRASE_ID_EXTENSION
 import io.github.jdreioe.wingmate.application.OBF_HISTORY_ID_EXTENSION
 import io.github.jdreioe.wingmate.application.TYPING_ALL_PAGE_ID
 import io.github.jdreioe.wingmate.application.TYPING_HISTORY_PAGE_ID
+import io.github.jdreioe.wingmate.application.TYPING_LIKELY_NEXT_PAGE_ID
 import io.github.jdreioe.wingmate.application.TypingScreenPage
 import io.github.jdreioe.wingmate.application.TypingScreenProjector
 import io.github.jdreioe.wingmate.application.typingCategoryPageId
@@ -83,6 +84,8 @@ sealed interface TypingPageSelection {
     data object AllPhrases : TypingPageSelection
     data class Category(val category: CategoryItem) : TypingPageSelection
     data object History : TypingPageSelection
+    /** Experimental (#213): Messages likely to follow the last spoken one. */
+    data object LikelyNext : TypingPageSelection
 }
 
 private fun ObfButton.projectedPhraseId(): String? =
@@ -103,6 +106,8 @@ internal fun TypingScreenTray(
     selection: TypingPageSelection,
     showHistory: Boolean,
     history: List<SaidText>,
+    showLikelyNext: Boolean,
+    likelyNext: List<SaidText>,
     onSelectionChanged: (TypingPageSelection) -> Unit,
     onOpenCategoryMenu: (CategoryItem) -> Unit,
     onAddCategory: () -> Unit,
@@ -130,8 +135,12 @@ internal fun TypingScreenTray(
                 categoryId = selection.category.id,
             )
             TypingPageSelection.History -> TypingScreenPage(TYPING_HISTORY_PAGE_ID, "History", isHistory = true)
+            TypingPageSelection.LikelyNext -> TypingScreenPage(TYPING_LIKELY_NEXT_PAGE_ID, "Likely next", isHistory = true)
         }
     }
+    // History and Likely next are read-only Pages of History entries.
+    val readOnly = page.isHistory
+    val pageHistory = if (selection == TypingPageSelection.LikelyNext) likelyNext else history
     val elements = remember(template) {
         template.pageElements().sortedWith(compareBy({ it.row }, { it.column }))
     }
@@ -144,23 +153,23 @@ internal fun TypingScreenTray(
             ?.coerceIn(1, 12)
             ?: settings.gridColumns
     }
-    val projectedBoard = remember(template, page, phrases, history, phraseColumns) {
-        if (selection == TypingPageSelection.History) {
-            TypingScreenProjector.projectHistoryPage(template, page, history, phraseColumns)
+    val projectedBoard = remember(template, page, phrases, pageHistory, phraseColumns) {
+        if (readOnly) {
+            TypingScreenProjector.projectHistoryPage(template, page, pageHistory, phraseColumns)
         } else {
             TypingScreenProjector.projectPhrasePage(template, page, phrases, phraseColumns)
         }
     }
     val addPhraseLabel = stringResource(R.string.phrase_add_title)
     val board = remember(projectedBoard, selection, addPhraseLabel, vocabularyMutationsEnabled) {
-        if (selection == TypingPageSelection.History) projectedBoard
+        if (readOnly) projectedBoard
         else if (vocabularyMutationsEnabled) projectedBoard.withAppendedGridButton(
             ObfButton(id = ADD_PHRASE_BUTTON_ID, label = addPhraseLabel)
         ) else projectedBoard
     }
     val phrasesById = remember(phrases) { phrases.associateBy(Phrase::id) }
-    val historyById = remember(history) {
-        history.mapIndexed { index, item -> item.typingHistoryId(index) to item }.toMap()
+    val historyById = remember(pageHistory) {
+        pageHistory.mapIndexed { index, item -> item.typingHistoryId(index) to item }.toMap()
     }
 
     val currentPhrasesById by rememberUpdatedState(phrasesById)
@@ -168,7 +177,7 @@ internal fun TypingScreenTray(
     val currentEditPhrase by rememberUpdatedState(onEditPhrase)
     val currentDeletePhrase by rememberUpdatedState(onDeletePhrase)
     val reorder = remember(selection, vocabularyMutationsEnabled, settings.holdToSelectMillis) {
-        if (selection != TypingPageSelection.History && vocabularyMutationsEnabled) {
+        if (!readOnly && vocabularyMutationsEnabled) {
             BoardReorder(
                 canMove = { button -> button.projectedPhraseId()?.let(currentPhrasesById::get) != null },
                 onMove = { moved, target ->
@@ -213,6 +222,7 @@ internal fun TypingScreenTray(
                     categories,
                     selection,
                     showHistory,
+                    showLikelyNext,
                     onSelectionChanged,
                     onOpenCategoryMenu,
                     onAddCategory,
@@ -273,6 +283,7 @@ private fun TypingPageNavigation(
     categories: List<CategoryItem>,
     selection: TypingPageSelection,
     showHistory: Boolean,
+    showLikelyNext: Boolean,
     onSelectionChanged: (TypingPageSelection) -> Unit,
     onOpenCategoryMenu: (CategoryItem) -> Unit,
     onAddCategory: () -> Unit,
@@ -310,6 +321,15 @@ private fun TypingPageNavigation(
                     selected = selection == TypingPageSelection.History,
                     onClick = { onSelectionChanged(TypingPageSelection.History) },
                     label = { Text(historyLabel) },
+                )
+            }
+        }
+        if (showLikelyNext) {
+            item("likely-next") {
+                FilterChip(
+                    selected = selection == TypingPageSelection.LikelyNext,
+                    onClick = { onSelectionChanged(TypingPageSelection.LikelyNext) },
+                    label = { Text(stringResource(R.string.category_likely_next)) },
                 )
             }
         }
