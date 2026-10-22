@@ -129,6 +129,7 @@
     <string name="backup_restore">Gendan sikkerhedskopi</string>
     <string name="backup_exported">Sikkerhedskopien er klar til at blive gemt</string>
     <string name="backup_restored">Sikkerhedskopien blev gendannet</string>
+    <string name="backup_restore_unavailable">Gendannelse af sikkerhedskopi er ikke tilgængelig på denne enhed.</string>
     <string name="backup_cancelled">Sikkerhedskopiering annulleret</string>
     <string name="backup_replace_title">Erstat nuværende Wingmate-data?</string>
     <string name="backup_replace_warning">Arkivet valideres først fuldstændigt. En vellykket gendannelse erstatter ordforråd og indstillinger; annullering bevarer alt uændret.</string>
@@ -148,6 +149,8 @@
     <string name="board_workspace_finish_title">Afslut redigering?</string>
     <string name="board_workspace_finish_body">Gem ændringerne, før du vender tilbage til kommunikation?</string>
     <string name="board_workspace_save_error">Ændringerne kunne ikke gemmes</string>
+    <string name="board_workspace_export_cancelled">Eksport annulleret</string>
+    <string name="board_workspace_exported">Eksporterede %1$s</string>
     <string name="board_workspace_export_error">Skærmen kunne ikke eksporteres. Din nuværende skærm blev ikke ændret; prøv igen.</string>
     <string name="board_workspace_speak_sentence">Læs sætningen op</string>
     <string name="board_workspace_delete_last">Slet sidste ord</string>
