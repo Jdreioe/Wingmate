@@ -48,7 +48,7 @@ class AndroidShareService(private val context: Context) : ShareService {
             val authority = context.packageName + ".fileprovider"
             val uri: Uri = FileProvider.getUriForFile(context, authority, file)
             val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "application/zip"
+                type = if (fileName.endsWith(".pdf", ignoreCase = true)) "application/pdf" else "application/zip"
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }

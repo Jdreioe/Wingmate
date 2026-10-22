@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.ImportExport
+import androidx.compose.material.icons.filled.Print
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -120,6 +122,8 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButtonShape
 import io.github.jdreioe.wingmate.domain.obf.wordType
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.obfImageSources
+import io.github.jdreioe.wingmate.domain.obf.printableScreen
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
@@ -640,6 +644,7 @@ private fun BoardSetWorkspaceRoot(
     val exportErrorMessage = stringResource(R.string.board_workspace_export_error)
     val exportCancelledMessage = stringResource(R.string.board_workspace_export_cancelled)
     val exportedTemplate = stringResource(R.string.board_workspace_exported, "%NAME%")
+    val resources = LocalContext.current.resources
     // Placeholder substituted in click handler (stringResource formatting is composition-only).
     val unsupportedActionTemplate = stringResource(R.string.board_workspace_unsupported_action, "%ACTION%")
 
@@ -884,6 +889,36 @@ private fun BoardSetWorkspaceRoot(
                             }
                         }
                         is ObzExportResult.Failure -> resultMessage = exportErrorMessage
+                    }
+                }
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (_: Exception) {
+                resultMessage = exportErrorMessage
+            } finally {
+                workspaceViewModel.onAction(BoardWorkspaceAction.ExportFinished(resultMessage))
+            }
+        }
+    }
+
+    /** Shares the whole Screen as a printable PDF, the fallback for when no device works (#227). */
+    fun printBoardSet() {
+        scope.launch {
+            workspaceViewModel.onAction(BoardWorkspaceAction.ExportStarted)
+            var resultMessage = exportErrorMessage
+            try {
+                val graph = activeGraph
+                if (graph != null && shareService != null) {
+                    val pdf = renderBoardPdf(
+                        pages = printableScreen(graph, settings.primaryLanguage),
+                        loadImage = { image -> loadObfImageBytes(image, fileStorage, mediaUrlLoader) },
+                        opensLabel = { link -> resources.getString(R.string.board_workspace_print_opens, link.title, link.pageNumber) },
+                    )
+                    val fileName = "${graph.boardSet.name}.pdf"
+                    resultMessage = if (shareService.shareFile(fileName, pdf)) {
+                        exportedTemplate.replace("%NAME%", fileName)
+                    } else {
+                        exportCancelledMessage
                     }
                 }
             } catch (failure: CancellationException) {
@@ -1159,6 +1194,15 @@ private fun BoardSetWorkspaceRoot(
                                         onClick = {
                                             appBarMenuExpanded = false
                                             exportBoardSet()
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.board_workspace_print)) },
+                                        leadingIcon = { Icon(Icons.Default.Print, contentDescription = null) },
+                                        enabled = !isExporting,
+                                        onClick = {
+                                            appBarMenuExpanded = false
+                                            printBoardSet()
                                         }
                                     )
                                     if (workspace.selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
@@ -2128,6 +2172,30 @@ internal suspend fun playButtonSound(
         if (bytes != null && bytes.isNotEmpty() && soundPlayer.playBytes(bytes, sound.contentType)) return true
     }
     return false
+}
+
+/** Loads an OBF image's bytes from inline data, app storage, or its URL. Symbols have no bytes. */
+internal suspend fun loadObfImageBytes(
+    image: ObfImage,
+    fileStorage: FileStorage,
+    urlLoader: ObfMediaUrlLoader?,
+): ByteArray? {
+    for (source in obfImageSources(image)) {
+        val bytes = try {
+            when (source) {
+                is ObfMediaSource.Data -> decodeObfDataUri(source.value)
+                is ObfMediaSource.Path -> fileStorage.loadBytes(source.value)
+                is ObfMediaSource.Url -> urlLoader?.load(source.value)
+                is ObfMediaSource.Symbol -> null
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null // Try the next source; a missing image prints as its label.
+        }
+        if (bytes != null && bytes.isNotEmpty()) return bytes
+    }
+    return null
 }
 
 private fun decodeObfDataUri(data: String): ByteArray? {
