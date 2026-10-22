@@ -177,7 +177,7 @@ internal fun TypingScreenTray(
     val currentMovePhrase by rememberUpdatedState(onMovePhrase)
     val currentEditPhrase by rememberUpdatedState(onEditPhrase)
     val currentDeletePhrase by rememberUpdatedState(onDeletePhrase)
-    val reorder = remember(selection, vocabularyMutationsEnabled, settings.holdToSelectMillis) {
+    val reorder = remember(selection, vocabularyMutationsEnabled, settings.holdToSelectMillis, settings.selectOnTouchDown) {
         if (!readOnly && vocabularyMutationsEnabled) {
             BoardReorder(
                 canMove = { button -> button.projectedPhraseId()?.let(currentPhrasesById::get) != null },
@@ -187,7 +187,7 @@ internal fun TypingScreenTray(
                     if (movedPhrase != null && targetPhrase != null) currentMovePhrase(movedPhrase, targetPhrase)
                 },
                 // Hold-to-select uses long presses to activate; keep those.
-                gesturesEnabled = settings.holdToSelectMillis <= 0,
+                gesturesEnabled = settings.holdToSelectMillis <= 0 && !settings.selectOnTouchDown,
                 menu = { button, dismiss ->
                     val phrase = button.projectedPhraseId()?.let(currentPhrasesById::get)
                     DropdownMenu(expanded = phrase != null, onDismissRequest = dismiss) {
@@ -464,6 +464,7 @@ private fun TypingActionButton(
     val modifier = Modifier
         .fillMaxHeight()
         .typingAccessTarget("board:${button.id}", enabled, shape, onClick)
+        .selectOnTouchDown(enabled && settings.selectOnTouchDown, onClick)
         .semantics {
             if (disabledDescription != null) stateDescription = disabledDescription
         }

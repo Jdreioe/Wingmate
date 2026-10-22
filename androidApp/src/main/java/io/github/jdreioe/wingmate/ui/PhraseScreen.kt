@@ -862,18 +862,19 @@ internal fun PhraseScreenContent(
                         if (speechActive) {
                             FilledTonalIconButton(
                                 onClick = stopSpeech,
-                                modifier = Modifier.size(barButtonSize),
+                                modifier = Modifier.size(barButtonSize).selectOnTouchDown(settings.selectOnTouchDown, stopSpeech),
                             ) {
                                 Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.playback_stop))
                             }
                         }
+                        val speakAction = when {
+                            isSpeechPaused -> resumeSpeech
+                            speechPlaying -> pauseSpeech
+                            else -> playInput
+                        }
                         FilledIconButton(
-                            onClick = when {
-                                isSpeechPaused -> resumeSpeech
-                                speechPlaying -> pauseSpeech
-                                else -> playInput
-                            },
-                            modifier = Modifier.size(speakButtonSize),
+                            onClick = speakAction,
+                            modifier = Modifier.size(speakButtonSize).selectOnTouchDown(settings.selectOnTouchDown, speakAction),
                         ) {
                             Icon(
                                 imageVector = when {

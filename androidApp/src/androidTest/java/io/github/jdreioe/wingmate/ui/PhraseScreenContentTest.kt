@@ -21,7 +21,9 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.test.platform.app.InstrumentationRegistry
 import com.hojmoseit.wingmate.R
@@ -122,6 +124,34 @@ class PhraseScreenContentTest {
 
         composeRule.onNode(hasSetTextAction() and hasText(context.getString(R.string.phrase_screen_enter_text_placeholder)))
             .assertIsDisplayed()
+    }
+
+    // --- #110: select on touch-down ---
+
+    @Test
+    fun touchDownSelectsOnceOnTouchEvenIfTheFingerThenMoves() {
+        val actions = render(ready.copy(settings = Settings(selectOnTouchDown = true)))
+
+        composeRule.onNodeWithText("Water").performTouchInput { down(center) }
+        assertEquals(listOf<PhraseScreenAction>(PhraseScreenAction.ActivatePhrase(water)), actions)
+        composeRule.onNodeWithText("Water").performTouchInput { moveBy(Offset(0f, 200f)); up() }
+        composeRule.onNodeWithContentDescription(context.getString(R.string.playback_play)).performTouchInput { down(center); up() }
+
+        assertEquals(
+            listOf(PhraseScreenAction.ActivatePhrase(water), PhraseScreenAction.Control(ObfButtonActionEffect.Speak)),
+            actions,
+        )
+    }
+
+    @Test
+    fun releaseSelectionWaitsForTheFingerToLift() {
+        val actions = render(ready)
+
+        composeRule.onNodeWithText("Water").performTouchInput { down(center) }
+        assertEquals(emptyList<PhraseScreenAction>(), actions)
+        composeRule.onNodeWithText("Water").performTouchInput { up() }
+
+        assertEquals(listOf<PhraseScreenAction>(PhraseScreenAction.ActivatePhrase(water)), actions)
     }
 
     @Test
