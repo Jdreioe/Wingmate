@@ -168,11 +168,13 @@ object AzureTtsClient {
             
             // Regex to match whole word, case insensitive
             val regex = Regex("\\b${Regex.escape(entry.word)}\\b", RegexOption.IGNORE_CASE)
+            // Dictionary values are user input; escape them so a quote or bracket cannot break the tag.
+            val phoneme = escapeXmlText(entry.phoneme)
             result = result.replace(regex) { match ->
                 if (entry.alphabet == "text") {
-                    "<sub alias=\"${entry.phoneme}\">${match.value}</sub>"
+                    "<sub alias=\"$phoneme\">${match.value}</sub>"
                 } else {
-                    "<phoneme alphabet=\"${entry.alphabet}\" ph=\"${entry.phoneme}\">${match.value}</phoneme>"
+                    "<phoneme alphabet=\"${escapeXmlText(entry.alphabet)}\" ph=\"$phoneme\">${match.value}</phoneme>"
                 }
             }
         }

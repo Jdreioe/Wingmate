@@ -30,6 +30,7 @@ const val TYPING_SCREEN_ID = "wingmate:typing"
 const val TYPING_SCREEN_TEMPLATE_PAGE_ID = "typing:template"
 const val TYPING_ALL_PAGE_ID = "typing:all"
 const val TYPING_HISTORY_PAGE_ID = "typing:history"
+const val TYPING_LIKELY_NEXT_PAGE_ID = "typing:likely-next"
 const val OBF_PHRASE_ID_EXTENSION = "ext_wingmate_phrase_id"
 const val OBF_HISTORY_ID_EXTENSION = "ext_wingmate_history_id"
 
@@ -181,7 +182,12 @@ object TypingScreenProjector {
         }
         val projectedBoards = pages.map { page ->
             if (page.isHistory) {
-                projectHistoryPage(templateBoard, page, history.filter { it.visibleInHistory }, columns)
+                projectHistoryPage(
+                    templateBoard,
+                    page,
+                    history.filter { it.visibleInHistory }.sortedByDescending { it.date ?: it.createdAt ?: 0L },
+                    columns,
+                )
             } else {
                 val visible = phrases.filter { page.categoryId == null || it.parentId == page.categoryId }
                 projectPhrasePage(templateBoard, page, visible, columns)
@@ -217,14 +223,14 @@ object TypingScreenProjector {
         )
     }
 
+    /** Projects read-only History entries, in the given order, as a Page of Buttons. */
     fun projectHistoryPage(
         template: ObfBoard,
         page: TypingScreenPage,
-        history: List<SaidText>,
+        items: List<SaidText>,
         columns: Int,
     ): ObfBoard {
         val safeColumns = columns.coerceIn(1, 12)
-        val items = history.sortedByDescending { it.date ?: it.createdAt ?: 0L }
         val buttons = items.mapIndexed { index, item -> historyButton(item, index) }
         val rows = ceil(buttons.size / safeColumns.toDouble()).toInt().coerceAtLeast(1)
         return template.copy(

@@ -1,6 +1,5 @@
 package io.github.jdreioe.wingmate
 
-import io.github.jdreioe.wingmate.application.PhraseBloc
 import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -157,5 +156,4 @@ internal fun createCoreDataModule(): Module = module {
             )
         }
         singleOf(::VoiceUseCase)
-        single { PhraseBloc(get<PhraseUseCase>(), get<FeatureUsageReporter>()) }
 }

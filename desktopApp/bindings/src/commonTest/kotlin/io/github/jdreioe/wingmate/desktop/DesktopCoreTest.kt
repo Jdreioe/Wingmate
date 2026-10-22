@@ -126,6 +126,23 @@ class DesktopCoreTest {
     }
 
     @Test
+    fun categoriesLeftInStoredStateBecomeFolderPhrases() {
+        val root = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "wingmate-categories-${Random.nextLong()}"
+        FileSystem.SYSTEM.createDirectories(root)
+        try {
+            FileSystem.SYSTEM.write(root / "state.json") {
+                writeUtf8("""{"phrases":[{"id":"water","text":"Water","createdAt":1}],"categories":[{"id":"food","name":"Food"}]}""")
+            }
+
+            val phrases = DesktopStore(root.toString()).snapshot().phrases
+            assertEquals(listOf("water", "food"), phrases.map { it.id })
+            assertEquals("food", phrases.last().linkedBoardId)
+        } finally {
+            FileSystem.SYSTEM.deleteRecursively(root, mustExist = false)
+        }
+    }
+
+    @Test
     fun missingFilesAndScreensReplyNotFoundWithoutNamingThem() {
         val root = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "wingmate-missing-${Random.nextLong()}"
         try {

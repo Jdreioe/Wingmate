@@ -186,6 +186,9 @@ data class Settings(
     // Controls whether cached speech history is exposed in the UI. Recording and
     // local cache reuse continue when this is false.
     val historyVisible: Boolean = true,
+    // Experiment (#213): a Typing Screen Page of Messages likely to follow the last
+    // one, derived from History in memory. Shown only while History is visible.
+    val likelyNextPageEnabled: Boolean = false,
     // Switch-scanning configuration used by the native iOS accessibility UI.
     val scanningEnabled: Boolean = false,
     val scanPlaybackAreaEnabled: Boolean = true,
