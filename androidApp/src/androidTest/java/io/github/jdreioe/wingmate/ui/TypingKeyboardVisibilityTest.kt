@@ -31,15 +31,12 @@ class TypingKeyboardVisibilityTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private var previousKeyboardHeight = Float.NaN
-    private var previousTrayHeight = Float.NaN
 
     @Before
     fun rememberKeyboardHeight() {
         composeRule.activityRule.scenario.onActivity { it.configureEdgeToEdgeWindow() }
         previousKeyboardHeight = composeRule.activity.getSharedPreferences("typing-screen-ui", 0)
             .getFloat("keyboard-height-dp", Float.NaN)
-        previousTrayHeight = composeRule.activity.getSharedPreferences("typing-screen-ui", 0)
-            .getFloat("tray-height-dp", Float.NaN)
     }
 
     @After
@@ -47,8 +44,6 @@ class TypingKeyboardVisibilityTest {
         composeRule.activity.getSharedPreferences("typing-screen-ui", 0).edit().apply {
             if (previousKeyboardHeight.isNaN()) remove("keyboard-height-dp")
             else putFloat("keyboard-height-dp", previousKeyboardHeight)
-            if (previousTrayHeight.isNaN()) remove("tray-height-dp")
-            else putFloat("tray-height-dp", previousTrayHeight)
         }.commit()
     }
 
@@ -64,8 +59,6 @@ class TypingKeyboardVisibilityTest {
                 1f,
             ) > 0f,
         )
-        composeRule.activity.getSharedPreferences("typing-screen-ui", 0).edit()
-            .remove("tray-height-dp").commit()
         composeRule.setContent {
             AppTheme {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) { PhraseScreen() }
@@ -118,33 +111,26 @@ class TypingKeyboardVisibilityTest {
 
     @Test
     fun settledKeyboardDoesNotMoveTheMessageWhenTheTrayDelayExpires() {
-        val preferences = composeRule.activity.getSharedPreferences("typing-screen-ui", 0)
-        val previousHeight = preferences.getFloat("tray-height-dp", Float.NaN)
-        preferences.edit().putFloat("tray-height-dp", 450f).commit()
-        try {
-            composeRule.activityRule.scenario.onActivity { activity ->
-                activity.window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
-            }
-            composeRule.setContent {
-                AppTheme {
-                    Box(Modifier.fillMaxSize().safeDrawingPadding()) { PhraseScreen() }
-                }
-            }
-            composeRule.mainClock.autoAdvance = false
-            applyKeyboardInsets(visible = true, bottom = 900)
-            composeRule.mainClock.advanceTimeBy(300)
-            val input = composeRule.onNode(hasSetTextAction())
-            val top = input.fetchSemanticsNode().boundsInRoot.top
-            // The keyboard has settled. A pending tray timeout must not move it again.
-            composeRule.mainClock.advanceTimeBy(800)
-            composeRule.waitForIdle()
-            assertEquals(top, input.fetchSemanticsNode().boundsInRoot.top, 1f)
-        } finally {
-            preferences.edit().apply {
-                if (previousHeight.isNaN()) remove("tray-height-dp")
-                else putFloat("tray-height-dp", previousHeight)
-            }.commit()
+        // A remembered tray height that differs from the keyboard about to open.
+        composeRule.activity.getSharedPreferences("typing-screen-ui", 0).edit()
+            .putFloat("keyboard-height-dp", 450f).commit()
+        composeRule.activityRule.scenario.onActivity { activity ->
+            activity.window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
         }
+        composeRule.setContent {
+            AppTheme {
+                Box(Modifier.fillMaxSize().safeDrawingPadding()) { PhraseScreen() }
+            }
+        }
+        composeRule.mainClock.autoAdvance = false
+        applyKeyboardInsets(visible = true, bottom = 900)
+        composeRule.mainClock.advanceTimeBy(300)
+        val input = composeRule.onNode(hasSetTextAction())
+        val top = input.fetchSemanticsNode().boundsInRoot.top
+        // The keyboard has settled. A pending tray timeout must not move it again.
+        composeRule.mainClock.advanceTimeBy(800)
+        composeRule.waitForIdle()
+        assertEquals(top, input.fetchSemanticsNode().boundsInRoot.top, 1f)
     }
 
     @Test

@@ -11,9 +11,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -126,13 +123,14 @@ fun PhraseScreen(
     val typingTrayPreferences = remember(context) {
         context.getSharedPreferences("typing-screen-ui", android.content.Context.MODE_PRIVATE)
     }
-    // Tray height, per client and outside the Screen graph (#248): a height the
-    // user dragged to wins; otherwise the last keyboard height, so switching
-    // surfaces doesn't move the Message bar. Both include the navigation bar.
-    fun storedHeight(key: String): Dp? =
-        typingTrayPreferences.getFloat(key, Float.NaN).takeUnless { it.isNaN() }?.dp
-    var draggedTrayHeight by remember { mutableStateOf(storedHeight("tray-height-dp")) }
-    var keyboardTrayHeight by remember { mutableStateOf(storedHeight("keyboard-height-dp")) }
+    // Tray height, per client and outside the Screen graph (#248): the last
+    // keyboard height, so switching surfaces doesn't move the Message bar.
+    // Includes the navigation bar.
+    var keyboardTrayHeight by remember {
+        mutableStateOf(
+            typingTrayPreferences.getFloat("keyboard-height-dp", Float.NaN).takeUnless { it.isNaN() }?.dp
+        )
+    }
     val bloc = koinInject<PhraseBloc>()
     val featureUsageReporter = koinInject<FeatureUsageReporter>()
     val state by bloc.state.collectAsStateWithLifecycle()
@@ -1435,7 +1433,7 @@ fun PhraseScreen(
                     // resizes the content area.
                     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
                     val maxTrayHeight = screenHeight * 0.6f
-                    val preferredTrayHeight = draggedTrayHeight ?: keyboardTrayHeight ?: (screenHeight * 0.4f)
+                    val preferredTrayHeight = keyboardTrayHeight ?: (screenHeight * 0.4f)
                     val trayHeight = (preferredTrayHeight - navigationBarHeight)
                         .coerceIn(minOf(200.dp, maxTrayHeight), maxTrayHeight)
                     val trayDrawn = inputSurface == TypingInputSurface.Tray || trayLingering || isImeRetracting
@@ -1478,29 +1476,6 @@ fun PhraseScreen(
                                 .wrapContentHeight(Alignment.Top, unbounded = true)
                                 .height(trayHeight),
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(20.dp)
-                                    .draggable(
-                                        orientation = Orientation.Vertical,
-                                        state = rememberDraggableState { delta ->
-                                            val change = with(density) { (-delta).toDp() }
-                                            draggedTrayHeight = (trayHeight + navigationBarHeight + change)
-                                                .coerceIn(minOf(200.dp, maxTrayHeight), maxTrayHeight + navigationBarHeight)
-                                        },
-                                        onDragStopped = {
-                                            draggedTrayHeight?.let { height ->
-                                                typingTrayPreferences.edit()
-                                                    .putFloat("tray-height-dp", height.value)
-                                                    .apply()
-                                            }
-                                        },
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                HorizontalDivider(modifier = Modifier.width(48.dp))
-                            }
                             if (typingTemplate == null) {
                                 RepositoryFailurePanel(onRetry = { typingTemplateRevision++ })
                             } else TypingScreenTray(
