@@ -42,17 +42,17 @@ internal class DesktopEditor(private val store: DesktopStore) {
         val command = json.decodeFromString<EditorCommand>(value)
         when (command.operation) {
             "begin" -> {
-                check(draft == null) { "Save or discard the current draft first" }
-                val set = store.getBoardSet(command.id) ?: error("Screen not found")
+                valid(draft == null) { "Save or discard the current draft first" }
+                val set = store.getBoardSet(command.id) ?: notFound("Screen not found")
                 requireEditable(set)
-                val graph = BoardSetGraph(set, set.boardIds.map { store.getBoard(it) ?: error("Page not found") })
-                graph.requireValid()
+                val graph = BoardSetGraph(set, set.boardIds.map { store.getBoard(it) ?: notFound("Page not found") })
+                graph.requireValidScreen()
                 original = graph
                 draft = graph
                 pageId = set.rootBoardId
             }
             "new" -> {
-                check(draft == null) { "Save or discard the current draft first" }
+                valid(draft == null) { "Save or discard the current draft first" }
                 dimensions(command.rows, command.columns)
                 val page = newPage("Starting Page", command.rows, command.columns)
                 val now = Clock.System.now().toEpochMilliseconds()
@@ -61,17 +61,17 @@ internal class DesktopEditor(private val store: DesktopStore) {
                 original = null
                 pageId = page.id
             }
-            "discard" -> { draft = null; original = null; return "{\"ok\":true}" }
+            "discard" -> { draft = null; original = null; return "{}" }
             "save" -> {
                 val graph = requireDraft()
                 original?.let {
-                    val current = store.getBoardSet(it.boardSet.id) ?: error("Screen was removed")
+                    val current = store.getBoardSet(it.boardSet.id) ?: notFound("Screen was removed")
                     requireEditable(current)
-                    check(current == it.boardSet && it.boards.all { board -> store.getBoard(board.id) == board }) {
+                    valid(current == it.boardSet && it.boards.all { board -> store.getBoard(board.id) == board }) {
                         "Screen changed since editing began; discard and reopen it"
                     }
                 }
-                graph.requireValid()
+                graph.requireValidScreen()
                 val state = store.snapshot()
                 val ids = graph.boardSet.boardIds.toSet()
                 store.restore(state.copy(
@@ -89,12 +89,12 @@ internal class DesktopEditor(private val store: DesktopStore) {
     }
 
     private fun requireEditable(set: ObfBoardSet) {
-        require(!set.isLocked) { "This Screen is locked" }
-        require(set.kind == ScreenKind.User) { "System Screens cannot be edited here" }
+        valid(!set.isLocked) { "This Screen is locked" }
+        valid(set.kind == ScreenKind.User) { "System Screens cannot be edited here" }
     }
-    private fun requireDraft() = draft ?: error("No editor draft is open")
+    private fun requireDraft() = draft ?: invalid("No editor draft is open")
     private fun dimensions(rows: Int, columns: Int) {
-        require(rows in 1..20 && columns in 1..20) { "Grid dimensions must be between 1 and 20" }
+        valid(rows in 1..20 && columns in 1..20) { "Grid dimensions must be between 1 and 20" }
     }
     private fun newPage(name: String, rows: Int, columns: Int) = ObfBoard(
         format = "open-board-0.1", id = id("page"), name = name,
@@ -104,16 +104,16 @@ internal class DesktopEditor(private val store: DesktopStore) {
 
     private fun edit(c: EditorCommand) {
         val graph = requireDraft()
-        val page = graph.boardsById[pageId] ?: error("Page not found")
-        val grid = page.grid ?: error("Page has no Grid")
+        val page = graph.boardsById[pageId] ?: notFound("Page not found")
+        val grid = page.grid ?: invalid("Page has no Grid")
         val updated = when (c.operation) {
             "page" -> {
-                require(c.id in graph.boardsById) { "Page not found" }
+                if (c.id !in graph.boardsById) notFound("Page not found")
                 pageId = c.id
                 graph
             }
-            "renameScreen" -> { require(c.name.isNotBlank()) { "Enter a Screen name" }; renameDraftBoardSet(graph, c.name) }
-            "renamePage" -> { require(c.name.isNotBlank()) { "Enter a Page name" }; renameDraftBoard(graph, pageId, c.name) }
+            "renameScreen" -> { valid(c.name.isNotBlank()) { "Enter a Screen name" }; renameDraftBoardSet(graph, c.name) }
+            "renamePage" -> { valid(c.name.isNotBlank()) { "Enter a Page name" }; renameDraftBoard(graph, pageId, c.name) }
             "addPage" -> {
                 dimensions(c.rows, c.columns)
                 val added = newPage(c.name.ifBlank { "New Page" }, c.rows, c.columns)
@@ -124,17 +124,17 @@ internal class DesktopEditor(private val store: DesktopStore) {
             "resizeGrid" -> {
                 dimensions(c.rows, c.columns)
                 resizeDraftBoard(graph, pageId, c.rows, c.columns).also {
-                    require(it.boardsById[pageId]?.grid?.let { g -> g.rows == c.rows && g.columns == c.columns } == true) {
+                    valid(it.boardsById[pageId]?.grid?.let { g -> g.rows == c.rows && g.columns == c.columns } == true) {
                         "The Grid cannot shrink over existing Buttons"
                     }
                 }
             }
             "button", "clear", "move", "span" -> {
-                require(c.row in 0 until grid.rows && c.column in 0 until grid.columns) { "Cell is outside the Grid" }
+                valid(c.row in 0 until grid.rows && c.column in 0 until grid.columns) { "Cell is outside the Grid" }
                 val anchor = grid.fieldAnchorAt(c.row, c.column) ?: (c.row to c.column)
                 when (c.operation) {
                     "button" -> {
-                        require(c.linkedPage.isEmpty() || c.linkedPage in graph.boardsById) { "Linked Page not found" }
+                        if (c.linkedPage.isNotEmpty() && c.linkedPage !in graph.boardsById) notFound("Linked Page not found")
                         val existingId = grid.order[anchor.first][anchor.second]
                         val existing = page.buttons.firstOrNull { it.id == existingId }
                         val button = (existing ?: ObfButton(id = id("button"))).copy(
@@ -146,29 +146,29 @@ internal class DesktopEditor(private val store: DesktopStore) {
                         val span = grid.fieldSpanAt(anchor.first, anchor.second)
                         val changed = page.copy(buttons = page.buttons.filterNot { it.id == button.id } + button,
                             grid = grid.withFieldSpan(anchor.first, anchor.second, button.id, span.rows, span.columns)
-                                ?: error("Button does not fit"))
+                                ?: invalid("Button does not fit"))
                         graph.copy(boards = graph.boards.map { if (it.id == pageId) changed else it })
                     }
                     "clear" -> clearDraftCell(graph, pageId, anchor.first, anchor.second)
                     "move" -> moveDraftField(graph, pageId, anchor.first, anchor.second, c.toRow, c.toColumn).also {
-                        require(it != graph || (anchor.first == c.toRow && anchor.second == c.toColumn)) { "Button cannot move to that Cell" }
+                        valid(it != graph || (anchor.first == c.toRow && anchor.second == c.toColumn)) { "Button cannot move to that Cell" }
                     }
                     else -> resizeDraftField(graph, pageId, anchor.first, anchor.second, c.rowSpan, c.columnSpan).also {
                         val span = it.boardsById[pageId]?.grid?.fieldSpanAt(anchor.first, anchor.second)
-                        require(span?.rows == c.rowSpan && span.columns == c.columnSpan) { "Button does not fit that span" }
+                        valid(span?.rows == c.rowSpan && span.columns == c.columnSpan) { "Button does not fit that span" }
                     }
                 }
             }
-            else -> error("Unknown editor operation")
+            else -> invalid("Unknown editor operation")
         }
-        updated.requireValid()
+        updated.requireValidScreen()
         draft = updated
     }
 
     private fun view(): EditorView {
         val graph = requireDraft()
-        val page = graph.boardsById[pageId] ?: error("Page not found")
-        val grid = page.grid ?: error("Page has no Grid")
+        val page = graph.boardsById[pageId] ?: notFound("Page not found")
+        val grid = page.grid ?: invalid("Page has no Grid")
         return EditorView(graph.boardSet.name, pageId, page.name.orEmpty(), graph.boardSet.rootBoardId,
             graph.boards.map { EditorPage(it.id, it.name.orEmpty()) }, grid.rows, grid.columns,
             grid.fieldItems().map { field ->

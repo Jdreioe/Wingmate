@@ -3,6 +3,8 @@ package io.github.jdreioe.wingmate.desktop
 import io.github.jdreioe.wingmate.application.AccessInputController
 import io.github.jdreioe.wingmate.application.AccessInputEffect
 import io.github.jdreioe.wingmate.domain.DEFAULT_DWELL_REARM_DELAY_MILLIS
+import io.github.jdreioe.wingmate.domain.PersistenceError
+import io.github.jdreioe.wingmate.domain.PersistenceException
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechPolicy
@@ -19,6 +21,7 @@ import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.obf.shouldAddBoardSelection
 import io.github.jdreioe.wingmate.domain.obf.shouldSpeakSelectionImmediately
+import io.github.jdreioe.wingmate.infrastructure.BoardImportErrorCode
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
@@ -94,7 +97,11 @@ internal sealed interface DesktopAccessEffect {
     data class PauseChanged(val isPaused: Boolean) : DesktopAccessEffect
 }
 
-/** Internal implementation behind CApi.kt; only its wm_* entry points are exported to Rust. */
+/**
+ * Internal implementation behind CApi.kt; only its wm_* entry points are exported to Rust.
+ * Each `*Json` function returns its success value and reports failure by throwing
+ * [DesktopFailure] (or a persistence exception); [desktopReply] turns both into the reply.
+ */
 internal class DesktopCore(dataDirectory: String) {
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
     private val store = DesktopStore(dataDirectory)
@@ -171,8 +178,13 @@ internal class DesktopCore(dataDirectory: String) {
                 open(result.boardSet.id)
                 activationJson()
             }
-            is BoardImportResult.Cancelled -> errorJson("Import cancelled")
-            is BoardImportResult.Failure -> errorJson(result.context)
+            is BoardImportResult.Cancelled -> throw DesktopFailure(DesktopFailureKind.Cancelled, "Import cancelled")
+            // The import context can name the file, so only its code crosses the boundary.
+            is BoardImportResult.Failure -> throw when (result.code) {
+                BoardImportErrorCode.FILE_UNREADABLE -> DesktopFailure(DesktopFailureKind.NotFound, "The file could not be opened")
+                BoardImportErrorCode.PERSISTENCE_FAILED -> PersistenceException(PersistenceError.Io)
+                else -> DesktopFailure(DesktopFailureKind.Validation, "This file is not a valid Open Board file")
+            }
         }
     }
 
@@ -182,7 +194,7 @@ internal class DesktopCore(dataDirectory: String) {
     }
 
     private suspend fun open(boardSetId: String) {
-        val boardSet = store.getBoardSet(boardSetId) ?: error("Screen not found")
+        val boardSet = store.getBoardSet(boardSetId) ?: notFound("Screen not found")
         activeBoardSetId = boardSet.id
         activeBoardId = boardSet.rootBoardId
         boardStack = emptyList()
@@ -191,9 +203,9 @@ internal class DesktopCore(dataDirectory: String) {
     }
 
     fun activateJson(buttonId: String): String = runBlocking {
-        val set = activeBoardSetId?.let { store.getBoardSet(it) } ?: error("No Screen is open")
-        val board = activeBoardId?.let { store.getBoard(it) } ?: error("Page not found")
-        val button = board.buttons.firstOrNull { it.id == buttonId } ?: error("Button not found")
+        val set = activeBoardSetId?.let { store.getBoardSet(it) } ?: notFound("No Screen is open")
+        val board = activeBoardId?.let { store.getBoard(it) } ?: notFound("Page not found")
+        val button = board.buttons.firstOrNull { it.id == buttonId } ?: notFound("Button not found")
         val settings = store.get()
         val resolved = resolvedSettings(board, set.screenSettings, settings)
         val actions = button.resolvedActions().map { it.lowercase() }
@@ -235,7 +247,7 @@ internal class DesktopCore(dataDirectory: String) {
     fun clearJson(): String = runBlocking { sentence = emptyList(); activationJson() }
     fun holdJson(): String = runBlocking { swapHeldMessage(); activationJson() }
     fun speakJson(): String = runBlocking {
-        val board = activeBoardId?.let { store.getBoard(it) } ?: error("Page not found")
+        val board = activeBoardId?.let { store.getBoard(it) } ?: notFound("Page not found")
         json.encodeToString(DesktopActivation(view(), message(board).takeIf { it.isNotBlank() }?.let { spoken(it) }))
     }
 
@@ -263,16 +275,19 @@ internal class DesktopCore(dataDirectory: String) {
         store.add(json.decodeFromString<PronunciationEntry>(value)); pronunciationsJson()
     }
     fun deletePronunciationJson(word: String): String = runBlocking { store.delete(word); pronunciationsJson() }
-    fun exportBackupJson(path: String): String = runCatching { backup.export(path); "{\"ok\":true}" }.getOrElse(::errorJson)
-    fun restoreBackupJson(path: String): String = runCatching {
+    fun exportBackupJson(path: String): String {
+        backup.export(path)
+        return "null"
+    }
+    fun restoreBackupJson(path: String): String {
         backup.restore(path)
         // The restored snapshot replaces the Screens the open ids came from.
         activeBoardSetId = null
         activeBoardId = null
         boardStack = emptyList()
         sentence = emptyList()
-        "{\"ok\":true}"
-    }.getOrElse(::errorJson)
+        return "null"
+    }
 
     /** System TTS has no SSML, so text aliases are substituted before Rust speaks. */
     private suspend fun spoken(text: String) = applySpokenAliases(text, store.getAll())
@@ -280,9 +295,9 @@ internal class DesktopCore(dataDirectory: String) {
     private suspend fun activationJson() = json.encodeToString(DesktopActivation(view()))
 
     private suspend fun view(): DesktopBoardView {
-        val set = activeBoardSetId?.let { store.getBoardSet(it) } ?: error("No Screen is open")
-        val board = activeBoardId?.let { store.getBoard(it) } ?: error("Page not found")
-        val grid = board.grid ?: error("Page has no grid")
+        val set = activeBoardSetId?.let { store.getBoardSet(it) } ?: notFound("No Screen is open")
+        val board = activeBoardId?.let { store.getBoard(it) } ?: notFound("Page not found")
+        val grid = board.grid ?: invalid("Page has no grid")
         val settings = store.get()
         val resolved = resolvedSettings(board, set.screenSettings, settings)
         val buttons = board.buttons.associateBy { it.id }
@@ -330,7 +345,4 @@ internal class DesktopCore(dataDirectory: String) {
         selectKeyBinding = selectKeyBinding,
         restModeKeyBinding = restModeKeyBinding,
     )
-
-    private fun errorJson(error: Throwable) = errorJson(error.message ?: "Operation failed")
-    private fun errorJson(message: String) = json.encodeToString(mapOf("error" to message))
 }

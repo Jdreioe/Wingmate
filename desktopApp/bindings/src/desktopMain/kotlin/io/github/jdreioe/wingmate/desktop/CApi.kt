@@ -13,8 +13,6 @@ import kotlinx.cinterop.nativeHeap
 import kotlinx.cinterop.set
 import kotlinx.cinterop.toKString
 import kotlin.native.CName
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 
 private fun CPointer<ByteVar>?.string(): String = this?.toKString().orEmpty()
 
@@ -26,11 +24,9 @@ private fun ownedCString(value: String): CPointer<ByteVar> {
     return result
 }
 
-private inline fun call(context: COpaquePointer?, block: DesktopCore.() -> String): CPointer<ByteVar> {
-    val result = runCatching { context!!.asStableRef<DesktopCore>().get().block() }
-        .getOrElse { JsonObject(mapOf("error" to JsonPrimitive(it.message ?: "Desktop core operation failed"))).toString() }
-    return ownedCString(result)
-}
+/** Every wm_*_json call returns a [desktopReply] envelope the caller frees with wm_string_free. */
+private fun call(context: COpaquePointer?, block: DesktopCore.() -> String): CPointer<ByteVar> =
+    ownedCString(desktopReply { requireNotNull(context).asStableRef<DesktopCore>().get().block() })
 
 @CName("wm_create")
 fun create(dataDirectory: CPointer<ByteVar>?): COpaquePointer? =

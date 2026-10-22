@@ -13,10 +13,12 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.domain.obf.ZipBuilder
-import io.github.jdreioe.wingmate.domain.obf.requireValid
+import io.github.jdreioe.wingmate.platform.ArchiveReadException
+import io.github.jdreioe.wingmate.platform.ArchiveReader
 import io.github.jdreioe.wingmate.platform.readEntryBytes
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okio.FileSystem
@@ -96,7 +98,7 @@ internal class DesktopBackup(
         val mediaEntries = sources.map { (archivePath, sourcePath) ->
             val source = sourcePath.removePrefix("file://")
             val bytes = media.loadBytes(source) ?: runCatching { fileSystem.read(source.toPath()) { readByteArray() } }.getOrNull()
-                ?: error("Backup media is missing")
+                ?: notFound("Backup media is missing")
             archivePath to bytes
         }
         val manifest = BackupManifest(
@@ -112,29 +114,28 @@ internal class DesktopBackup(
     }
 
     fun restore(path: String) = runBlocking {
-        val archive = fileAccess.openArchive(path) ?: error("Could not open backup")
+        val archive = fileAccess.openArchive(path) ?: invalid("Could not open backup")
         try {
-            val entries = archive.entries()
-            require(entries.size <= 4_096 && entries.map { it.name }.distinct().size == entries.size) { "Invalid backup entries" }
-            require(entries.all { entry ->
+            val entries = backupRead { archive.entries() }
+            valid(entries.size <= 4_096 && entries.map { it.name }.distinct().size == entries.size) { "Invalid backup entries" }
+            valid(entries.all { entry ->
                 entry.name.isNotBlank() && !entry.name.startsWith('/') && '\\' !in entry.name && '\u0000' !in entry.name &&
                     entry.name.split('/').none { it == ".." } && !entry.isEncrypted && entry.uncompressedSize in 0..MAX_MEDIA
             }) { "Unsafe or oversized backup entry" }
-            require(entries.sumOf { it.uncompressedSize } <= 2L * 1024 * 1024 * 1024) { "Backup is too large" }
-            val manifestBytes = archive.readEntryBytes(MANIFEST_PATH, MAX_JSON)
-            val manifest = json.decodeFromString<BackupManifest>(manifestBytes.decodeToString())
-            require(manifest.format == "wingmate-backup" && manifest.version == 1) { "Unsupported backup" }
+            valid(entries.sumOf { it.uncompressedSize } <= 2L * 1024 * 1024 * 1024) { "Backup is too large" }
+            val manifest = decode<BackupManifest>(archive.entryBytes(MANIFEST_PATH, MAX_JSON))
+            valid(manifest.format == "wingmate-backup" && manifest.version == 1) { "Unsupported backup" }
             val available = entries.mapTo(mutableSetOf()) { it.name }
             val declared = listOf(manifest.payload.path) + manifest.media.map { it.path }
-            require(declared.distinct().size == declared.size && declared.all { it in available }) { "Backup references a missing file" }
-            val payloadBytes = archive.readEntryBytes(manifest.payload.path, MAX_JSON)
-            require(payloadBytes.description(manifest.payload.path) == manifest.payload) { "Backup data checksum does not match" }
-            var payload = json.decodeFromString<BackupPayload>(payloadBytes.decodeToString())
+            valid(declared.distinct().size == declared.size && declared.all { it in available }) { "Backup references a missing file" }
+            val payloadBytes = archive.entryBytes(manifest.payload.path, MAX_JSON)
+            valid(payloadBytes.description(manifest.payload.path) == manifest.payload) { "Backup data checksum does not match" }
+            var payload = decode<BackupPayload>(payloadBytes)
             validatePayload(payload)
             val restored = mutableMapOf<String, String>()
             manifest.media.forEach { file ->
-                val bytes = archive.readEntryBytes(file.path, MAX_MEDIA)
-                require(bytes.description(file.path) == file) { "Backup media checksum does not match" }
+                val bytes = archive.entryBytes(file.path, MAX_MEDIA)
+                valid(bytes.description(file.path) == file) { "Backup media checksum does not match" }
                 val destination = "restored/${file.path.removePrefix("media/")}"
                 media.saveBytes(destination, bytes)
                 restored[file.path] = destination
@@ -168,16 +169,37 @@ internal class DesktopBackup(
         } finally { archive.close() }
     }
 
+    private suspend fun ArchiveReader.entryBytes(name: String, maxBytes: Long) = backupRead { readEntryBytes(name, maxBytes) }
+
+    /**
+     * Wraps reads of the chosen backup file. A failure there means the file is
+     * unusable, so it is a validation failure; writes to Wingmate's own storage
+     * stay outside and remain retryable persistence failures.
+     */
+    private inline fun <T> backupRead(read: () -> T): T = try {
+        read()
+    } catch (_: ArchiveReadException) {
+        invalid("This backup is not valid")
+    } catch (_: okio.IOException) {
+        invalid("This backup is not valid")
+    }
+
+    private inline fun <reified T> decode(bytes: ByteArray): T = try {
+        json.decodeFromString<T>(bytes.decodeToString())
+    } catch (_: SerializationException) {
+        invalid("This backup is not valid")
+    }
+
     private fun ByteArray.description(path: String) = BackupFile(path, size.toLong(), toByteString().sha256().hex())
 
     private fun validatePayload(payload: BackupPayload) {
-        require(payload.boards.map { it.id }.distinct().size == payload.boards.size) { "Duplicate Page IDs" }
-        require(payload.boardSets.map { it.id }.distinct().size == payload.boardSets.size) { "Duplicate Screen IDs" }
+        valid(payload.boards.map { it.id }.distinct().size == payload.boards.size) { "Duplicate Page IDs" }
+        valid(payload.boardSets.map { it.id }.distinct().size == payload.boardSets.size) { "Duplicate Screen IDs" }
         val boards = payload.boards.associateBy { it.id }
         payload.boardSets.forEach { set ->
-            BoardSetGraph(set, set.boardIds.map { requireNotNull(boards[it]) }).requireValid()
+            BoardSetGraph(set, set.boardIds.map { boards[it] ?: invalid("Backup references a missing Page") }).requireValidScreen()
         }
-        require(payload.boardSets.count { it.kind == ScreenKind.Typing } <= 1) { "Duplicate Typing Screen" }
+        valid(payload.boardSets.count { it.kind == ScreenKind.Typing } <= 1) { "Duplicate Typing Screen" }
     }
 
     private companion object {

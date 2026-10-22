@@ -49,65 +49,126 @@ pub struct NativeCore {
     context: NonNull<c_void>,
 }
 
+/// Why a Kotlin core call failed; mirrors `DesktopFailureKind` in the bindings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FailureKind {
+    /// The user stopped the operation; nothing to report.
+    Cancelled,
+    Validation,
+    NotFound,
+    Persistence,
+    Unexpected,
+}
+
+/// A failed core call. `message` is a fixed sentence safe to show and log.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub struct CoreError {
+    pub kind: FailureKind,
+    pub message: String,
+    pub retryable: bool,
+}
+
+impl CoreError {
+    fn new(kind: FailureKind, message: &str) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+            retryable: false,
+        }
+    }
+    /// The core answered with JSON this build does not understand.
+    pub fn invalid_response() -> Self {
+        Self::new(
+            FailureKind::Unexpected,
+            "Wingmate core returned an invalid response",
+        )
+    }
+}
+
+impl std::fmt::Display for CoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)?;
+        if self.retryable {
+            f.write_str(". Try again.")?;
+        }
+        Ok(())
+    }
+}
+
+/// Every `wm_*_json` call answers `{"ok": value}` or `{"error": CoreError}`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum Reply<T> {
+    Ok(T),
+    Error(CoreError),
+}
+
+fn decode_reply<T: DeserializeOwned>(json: &str) -> Result<T, CoreError> {
+    match serde_json::from_str(json) {
+        Ok(Reply::Ok(value)) => Ok(value),
+        Ok(Reply::Error(error)) => Err(error),
+        Err(_) => Err(CoreError::invalid_response()),
+    }
+}
+
+fn c_string(value: &str) -> Result<CString, CoreError> {
+    CString::new(value).map_err(|_| {
+        CoreError::new(
+            FailureKind::Validation,
+            "Text cannot contain a null character",
+        )
+    })
+}
+
+fn encode(value: &impl serde::Serialize) -> Result<String, CoreError> {
+    serde_json::to_string(value)
+        .map_err(|_| CoreError::new(FailureKind::Unexpected, "Could not prepare the request"))
+}
+
 impl NativeCore {
-    pub fn new(data_directory: &str) -> Result<Self, String> {
-        let path =
-            CString::new(data_directory).map_err(|_| "Invalid data directory".to_string())?;
-        let context = unsafe { NonNull::new(wm_create(path.as_ptr())) }
-            .ok_or("Kotlin core initialization failed")?;
+    pub fn new(data_directory: &str) -> Result<Self, CoreError> {
+        let path = c_string(data_directory)?;
+        let context = unsafe { NonNull::new(wm_create(path.as_ptr())) }.ok_or_else(|| {
+            CoreError::new(FailureKind::Unexpected, "Kotlin core initialization failed")
+        })?;
         Ok(Self { context })
     }
     fn read<T: DeserializeOwned>(
         &self,
         call: unsafe extern "C" fn(*mut c_void) -> *mut c_char,
-    ) -> Result<T, String> {
+    ) -> Result<T, CoreError> {
         self.decode(unsafe { call(self.context.as_ptr()) })
     }
     fn input<T: DeserializeOwned>(
         &self,
         input: &str,
         call: unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_char,
-    ) -> Result<T, String> {
-        let input =
-            CString::new(input).map_err(|_| "Input contains a null character".to_string())?;
+    ) -> Result<T, CoreError> {
+        let input = c_string(input)?;
         self.decode(unsafe { call(self.context.as_ptr(), input.as_ptr()) })
     }
-    fn decode<T: DeserializeOwned>(&self, value: *mut c_char) -> Result<T, String> {
-        let value = NonNull::new(value).ok_or("Kotlin core returned no value")?;
+    fn decode<T: DeserializeOwned>(&self, value: *mut c_char) -> Result<T, CoreError> {
+        let value = NonNull::new(value).ok_or_else(|| {
+            CoreError::new(FailureKind::Unexpected, "Kotlin core returned no value")
+        })?;
         let json = unsafe { CStr::from_ptr(value.as_ptr()) }
             .to_string_lossy()
             .into_owned();
         unsafe { wm_string_free(value.as_ptr()) };
-        if let Ok(error) = serde_json::from_str::<BridgeError>(&json) {
-            return Err(error.error);
-        }
-        serde_json::from_str(&json)
-            .map_err(|error| format!("Invalid Kotlin core response: {error}"))
+        decode_reply(&json)
     }
-    fn unit_input(
-        &self,
-        value: &str,
-        call: unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_char,
-    ) -> Result<(), String> {
-        let _: serde_json::Value = self.input(value, call)?;
-        Ok(())
-    }
-}
-
-#[derive(serde::Deserialize)]
-struct BridgeError {
-    error: String,
 }
 
 impl NativeCore {
-    pub fn access(&self, event: &Event, now: i64) -> Result<State, String> {
+    pub fn access(&self, event: &Event, now: i64) -> Result<State, CoreError> {
         let context = self.context.as_ptr();
         let input = match event {
             Event::Enter(target) | Event::Exit(target) => target.id(),
             Event::KeyDown(key) | Event::KeyUp(key) => key.clone(),
             _ => String::new(),
         };
-        let input = CString::new(input).map_err(|_| "Invalid access input".to_string())?;
+        let input = c_string(&input)?;
         self.decode(unsafe {
             match event {
                 Event::Enter(_) => wm_access_target_entered_json(context, input.as_ptr(), now),
@@ -123,62 +184,59 @@ impl NativeCore {
         })
     }
 
-    pub fn editor(&self, value: &serde_json::Value) -> Result<serde_json::Value, String> {
+    pub fn editor(&self, value: &serde_json::Value) -> Result<serde_json::Value, CoreError> {
         self.input(&value.to_string(), wm_editor_json)
     }
-    pub fn library(&self) -> Result<Vec<BoardSet>, String> {
+    pub fn library(&self) -> Result<Vec<BoardSet>, CoreError> {
         self.read(wm_library_json)
     }
-    pub fn recents(&self) -> Result<Vec<String>, String> {
+    pub fn recents(&self) -> Result<Vec<String>, CoreError> {
         self.read(wm_recents_json)
     }
-    pub fn import_file(&self, path: &str) -> Result<Activation, String> {
+    pub fn import_file(&self, path: &str) -> Result<Activation, CoreError> {
         self.input(path, wm_import_file_json)
     }
-    pub fn open(&self, id: &str) -> Result<Activation, String> {
+    pub fn open(&self, id: &str) -> Result<Activation, CoreError> {
         self.input(id, wm_open_json)
     }
-    pub fn activate(&self, id: &str) -> Result<Activation, String> {
+    pub fn activate(&self, id: &str) -> Result<Activation, CoreError> {
         self.input(id, wm_activate_json)
     }
-    pub fn back(&self) -> Result<Activation, String> {
+    pub fn back(&self) -> Result<Activation, CoreError> {
         self.read(wm_back_json)
     }
-    pub fn clear(&self) -> Result<Activation, String> {
+    pub fn clear(&self) -> Result<Activation, CoreError> {
         self.read(wm_clear_json)
     }
-    pub fn hold(&self) -> Result<Activation, String> {
+    pub fn hold(&self) -> Result<Activation, CoreError> {
         self.read(wm_hold_json)
     }
-    pub fn speak(&self) -> Result<Activation, String> {
+    pub fn speak(&self) -> Result<Activation, CoreError> {
         self.read(wm_speak_json)
     }
-    pub fn settings(&self) -> Result<Settings, String> {
+    pub fn settings(&self) -> Result<Settings, CoreError> {
         self.read(wm_settings_json)
     }
-    pub fn update_settings(&self, value: &Settings) -> Result<Settings, String> {
-        self.input(
-            &serde_json::to_string(value).map_err(|e| e.to_string())?,
-            wm_update_settings_json,
-        )
+    pub fn update_settings(&self, value: &Settings) -> Result<Settings, CoreError> {
+        self.input(&encode(value)?, wm_update_settings_json)
     }
-    pub fn pronunciations(&self) -> Result<Vec<Pronunciation>, String> {
+    pub fn pronunciations(&self) -> Result<Vec<Pronunciation>, CoreError> {
         self.read(wm_pronunciations_json)
     }
-    pub fn add_pronunciation(&self, value: &Pronunciation) -> Result<Vec<Pronunciation>, String> {
-        self.input(
-            &serde_json::to_string(value).map_err(|e| e.to_string())?,
-            wm_add_pronunciation_json,
-        )
+    pub fn add_pronunciation(
+        &self,
+        value: &Pronunciation,
+    ) -> Result<Vec<Pronunciation>, CoreError> {
+        self.input(&encode(value)?, wm_add_pronunciation_json)
     }
-    pub fn delete_pronunciation(&self, word: &str) -> Result<Vec<Pronunciation>, String> {
+    pub fn delete_pronunciation(&self, word: &str) -> Result<Vec<Pronunciation>, CoreError> {
         self.input(word, wm_delete_pronunciation_json)
     }
-    pub fn export_backup(&self, path: &str) -> Result<(), String> {
-        self.unit_input(path, wm_export_backup_json)
+    pub fn export_backup(&self, path: &str) -> Result<(), CoreError> {
+        self.input(path, wm_export_backup_json)
     }
-    pub fn restore_backup(&self, path: &str) -> Result<(), String> {
-        self.unit_input(path, wm_restore_backup_json)
+    pub fn restore_backup(&self, path: &str) -> Result<(), CoreError> {
+        self.input(path, wm_restore_backup_json)
     }
 }
 
@@ -190,7 +248,47 @@ impl Drop for NativeCore {
 
 #[cfg(test)]
 mod tests {
-    use super::NativeCore;
+    use super::{CoreError, FailureKind, NativeCore, decode_reply};
+
+    #[test]
+    fn replies_decode_into_values_or_typed_errors() {
+        assert_eq!(
+            decode_reply::<Vec<String>>(r#"{"ok":["a"]}"#),
+            Ok(vec!["a".into()])
+        );
+        assert_eq!(decode_reply::<()>(r#"{"ok":null}"#), Ok(()));
+        let error = decode_reply::<()>(
+            r#"{"error":{"kind":"persistence","message":"Could not save","retryable":true}}"#,
+        )
+        .unwrap_err();
+        assert_eq!(error.kind, FailureKind::Persistence);
+        assert_eq!(error.to_string(), "Could not save. Try again.");
+        // The old string-only shape is no longer a valid reply.
+        let legacy = decode_reply::<()>(r#"{"error":"raw exception text"}"#).unwrap_err();
+        assert_eq!(legacy.kind, FailureKind::Unexpected);
+        assert!(!legacy.message.contains("raw"));
+    }
+
+    #[test]
+    fn failures_keep_their_kind_across_the_real_c_bridge() {
+        let directory = tempfile::tempdir().unwrap();
+        let core = NativeCore::new(directory.path().to_str().unwrap()).unwrap();
+        let kind = |result: Result<_, CoreError>| result.map(|_| ()).unwrap_err().kind;
+        assert_eq!(kind(core.open("missing")), FailureKind::NotFound);
+        assert_eq!(
+            kind(core.import_file("/missing/board.obf")),
+            FailureKind::NotFound
+        );
+        assert_eq!(kind(core.open("nul\0")), FailureKind::Validation);
+        core.export_backup(
+            directory
+                .path()
+                .join("backup.wingmate-backup")
+                .to_str()
+                .unwrap(),
+        )
+        .unwrap();
+    }
 
     #[test]
     fn safe_wrapper_calls_embedded_kotlin_core() {
@@ -210,9 +308,11 @@ mod tests {
         assert!(core.library().unwrap().is_empty());
         core.editor(&serde_json::json!({"operation":"button", "label":"Hello"}))
             .unwrap();
-        assert!(
+        assert_eq!(
             core.editor(&serde_json::json!({"operation":"span", "rowSpan":100}))
-                .is_err()
+                .unwrap_err()
+                .kind,
+            FailureKind::Validation
         );
         let saved = core
             .editor(&serde_json::json!({"operation":"save"}))
