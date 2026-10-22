@@ -435,7 +435,16 @@ fun updateDraftCell(
         rowSpan = existingSpan.rows,
         columnSpan = existingSpan.columns
     ) ?: return graph
-    val updatedBoard = board.copy(buttons = buttons, images = images, sounds = sounds, grid = updatedGrid)
+    // Media the Button stopped using goes too, unless another Button still shares it.
+    val previousImageId = existingButton?.imageId
+    val keptImages = if (previousImageId != null && buttons.none { it.imageId == previousImageId }) {
+        images.filterNot { it.id == previousImageId }
+    } else images
+    val previousSoundId = existingButton?.soundId
+    val keptSounds = if (previousSoundId != null && buttons.none { it.soundId == previousSoundId }) {
+        sounds.filterNot { it.id == previousSoundId }
+    } else sounds
+    val updatedBoard = board.copy(buttons = buttons, images = keptImages, sounds = keptSounds, grid = updatedGrid)
     return graph.copy(boards = graph.boards.map { if (it.id == boardId) updatedBoard else it })
 }
 
