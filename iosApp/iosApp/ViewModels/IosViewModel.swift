@@ -595,6 +595,8 @@ final class IosViewModel: ObservableObject {
         // #118: ignore rapid repeated activations of the same target.
         guard acceptActivation(targetId: phrase.id) else { return }
         guard !phrase.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        // #120: tap, hold and switch selection all land here, so the tile highlight follows each of them.
+        Task { await activateBoardSelectionHighlight(buttonId: "phrase:\(phrase.id)") }
         let selection = clampedSelectionRange(inputSelectionRange, maxLength: (input as NSString).length)
         // Before the Typing Screen loads, the session falls back to speak-only.
         let behavior = typingTray?.activationBehavior
@@ -997,6 +999,11 @@ final class IosViewModel: ObservableObject {
     }
 
     private func nowMillis() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+
+    func setSelectionHighlightMillis(_ value: Double) {
+        selectionHighlightMillis = Int64(min(max(value, 0), 2_000))
+        Task { _ = try? await settingsFacade.updateSelectionHighlightMillis(millis: selectionHighlightMillis) }
+    }
 
     func setSelectionDebounceMillis(_ value: Double) {
         selectionDebounceMillis = min(max(value, 0), 1_000)

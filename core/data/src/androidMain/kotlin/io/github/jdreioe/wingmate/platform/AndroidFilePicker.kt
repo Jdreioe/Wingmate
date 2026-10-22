@@ -18,7 +18,7 @@ import kotlin.coroutines.resumeWithException
 class AndroidFilePicker(private val context: Context) : FilePicker {
 
     private var launcher: ((List<String>) -> Unit)? = null
-    private var activeContinuation: kotlinx.coroutines.CancellableContinuation<String?>? = null
+    private var activeContinuation: kotlinx.coroutines.CancellableContinuation<Uri?>? = null
 
     // Called by MainActivity to register the actual launcher
     fun registerLauncher(launchFunction: (List<String>) -> Unit) {
@@ -29,31 +29,11 @@ class AndroidFilePicker(private val context: Context) : FilePicker {
     fun onFilePicked(uri: Uri?) {
         val cont = activeContinuation
         activeContinuation = null
-        if (cont?.isActive == true) {
-            if (uri == null) {
-                cont.resume(null)
-                return
-            }
-
-            // Take persistable permission for the URI
-            try {
-                val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(uri, flags)
-            } catch (e: Exception) {
-                // Ignore if not supported
-            }
-
-            // For ZIP/OBZ files, ZipFile requires a local file path.
-            // We copy the content to a temporary file in the cache directory.
-            val path = if (uri.scheme == "content") {
-                copyToTempFile(uri)
-            } else {
-                uri.toString()
-            }
-            
-            cont.resume(path)
-        }
+        // Copying happens in pickFile, off the main thread that delivers this result.
+        if (cont?.isActive == true) cont.resume(uri)
     }
+
+    /** Copies [uri] into the cache directory, or returns null if it cannot be read. */
 
     private fun copyToTempFile(uri: Uri): String? {
         return try {
@@ -86,18 +66,38 @@ class AndroidFilePicker(private val context: Context) : FilePicker {
             val tempFile = java.io.File.createTempFile(safePrefix, suffix, context.cacheDir)
             tempFile.deleteOnExit() // Standard attempt to cleanup
 
-            contentResolver.openInputStream(uri)?.use { input ->
-                tempFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
+            val copied = contentResolver.openInputStream(uri)?.use { input ->
+                tempFile.outputStream().use { output -> input.copyTo(output) }
             }
-            tempFile.absolutePath
+            if (copied == null) {
+                tempFile.delete()
+                null
+            } else {
+                tempFile.absolutePath
+            }
         } catch (e: Exception) {
-            uri.toString() // Fallback to URI string if copy fails
+            null
         }
     }
 
-    override suspend fun pickFile(title: String, extensions: List<String>): String? = suspendCancellableCoroutine { cont ->
+    override suspend fun pickFile(title: String, extensions: List<String>): String? {
+        val uri = selectUri(extensions) ?: return null
+        return withContext(Dispatchers.IO) {
+            try {
+                context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (e: Exception) {
+                // Not every provider grants persistable access; the copy below still works.
+            }
+            // ZipFile needs a local path, so content URIs are copied into the cache directory.
+            if (uri.scheme == "content") {
+                copyToTempFile(uri) ?: throw IllegalStateException("The selected file could not be read")
+            } else {
+                uri.toString()
+            }
+        }
+    }
+
+    private suspend fun selectUri(extensions: List<String>): Uri? = suspendCancellableCoroutine { cont ->
         val safeLauncher = launcher
         if (safeLauncher == null) {
             cont.resumeWithException(IllegalStateException("File picker is unavailable"))
@@ -116,8 +116,8 @@ class AndroidFilePicker(private val context: Context) : FilePicker {
         }
     }
 
-    override suspend fun readFileAsText(path: String): String? {
-        return try {
+    override suspend fun readFileAsText(path: String): String? = withContext(Dispatchers.IO) {
+        try {
             if (path.startsWith("/")) {
                 java.io.File(path).readText()
             } else {
@@ -131,13 +131,13 @@ class AndroidFilePicker(private val context: Context) : FilePicker {
         }
     }
 
-    override suspend fun openArchive(path: String): ArchiveReader? {
-        return try {
+    override suspend fun openArchive(path: String): ArchiveReader? = withContext(Dispatchers.IO) {
+        try {
             val file = if (path.startsWith("/")) {
                 java.io.File(path)
             } else {
                 val uri = Uri.parse(path)
-                val tempPath = copyToTempFile(uri) ?: return null
+                val tempPath = copyToTempFile(uri) ?: return@withContext null
                 java.io.File(tempPath)
             }
             

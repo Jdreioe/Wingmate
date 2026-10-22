@@ -6,7 +6,7 @@ import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 
 /**
  * Thin application-layer use cases over the domain repositories, shared by the
- * Android UI, PhraseBloc, and the iOS facades.
+ * Android UI and the iOS facades.
  */
 class PhraseUseCase(private val repo: PhraseRepository) {
     suspend fun list(): List<Phrase> = repo.getAll()

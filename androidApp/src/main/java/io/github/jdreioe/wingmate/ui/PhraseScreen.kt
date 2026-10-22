@@ -96,7 +96,7 @@ fun PhraseScreen(
     val koin = getKoin()
     val operations = remember(koin) {
         DefaultPhraseScreenOperations(
-            bloc = koin.get(), session = koin.get(), settingsManager = koin.get(),
+            session = koin.get(), settingsManager = koin.get(),
             typing = koin.get(), category = koin.get(), deletePhraseUseCase = koin.get(), phraseUseCase = koin.get(),
             saidRepository = koin.get(), voices = koin.get(), editingAccess = koin.getOrNull(),
             prediction = if (BuildConfig.DEBUG) koin.getOrNull<TextPredictionService>() else null,
@@ -198,7 +198,6 @@ internal fun PhraseScreenContent(
 ) {
     val density = LocalDensity.current
     val settings = ui.settings
-    val state = ui.phrases
     val communicationState = ui.communication
     val input = ui.input
     val mathMode = ui.mathMode
@@ -209,12 +208,13 @@ internal fun PhraseScreenContent(
     val typingTemplateGraph = ui.template
     val typingTemplateLoadFailed = ui.templateStatus == TypingLoadStatus.Failed
     val categoriesLoadFailed = ui.categoryStatus == TypingLoadStatus.Failed
+    val phrasesLoadFailed = ui.phraseStatus == TypingLoadStatus.Failed
     val historyItems = ui.history
     val categories = ui.categories
     val selectedPage = ui.selectedPage
     val selectedCategory = ui.selectedCategory
-    val visiblePhrases = remember(state.items, selectedPage, ui.settings.historyVisible) { ui.visiblePhrases }
-    val compactPhrases = remember(state.items, ui.lastPhraseCategoryId) { ui.compactPhrases }
+    val visiblePhrases = remember(ui.phrases, selectedPage, ui.settings.historyVisible) { ui.visiblePhrases }
+    val compactPhrases = remember(ui.phrases, ui.lastPhraseCategoryId) { ui.compactPhrases }
     val categoryMenu = ui.dialogCategory.takeIf { ui.dialog == TypingDialog.CategoryMenu }
     val confirmDeleteCategory = ui.dialogCategory.takeIf { ui.dialog == TypingDialog.DeleteCategory }
     val showAddCategoryDialog = ui.dialog == TypingDialog.AddCategory
@@ -481,28 +481,14 @@ internal fun PhraseScreenContent(
                                 .fillMaxHeight()
                                 .padding(horizontal = 8.dp),
                         ) {
-                    if (state.loading) Text(stringResource(R.string.phrase_screen_loading), style = MaterialTheme.typography.bodyLarge.copy(
+                    if (ui.phraseStatus == TypingLoadStatus.Loading) Text(stringResource(R.string.phrase_screen_loading), style = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
                     ))
-                    state.error?.let {
-                        Column {
-                            Text(
-                                stringResource(R.string.phrase_screen_error, it),
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontSize = MaterialTheme.typography.bodyLarge.fontSize * settings.fontSizeScale
-                                ),
-                            )
-                            Button(onClick = { onAction(PhraseScreenAction.RetryLoad) }) {
-                                Text(stringResource(R.string.common_retry))
-                            }
-                        }
-                    }
 
-                    if (typingTemplateLoadFailed || categoriesLoadFailed) {
+                    if (typingTemplateLoadFailed || categoriesLoadFailed || phrasesLoadFailed) {
                         RepositoryFailurePanel(onRetry = { onAction(PhraseScreenAction.RetryLoad) })
                     }
-                    if (ui.historyFailed && ui.isHistory) {
+                    if (ui.historyFailed && (ui.isHistory || ui.isLikelyNext)) {
                         RepositoryFailurePanel(onRetry = { onAction(PhraseScreenAction.RetryHistory) })
                     }
                     if (ui.mutationFailed) {
@@ -971,6 +957,8 @@ internal fun PhraseScreenContent(
                                 selection = selectedPage,
                                 showHistory = settings.historyVisible && historyItems.isNotEmpty(),
                                 history = historyItems,
+                                showLikelyNext = ui.showLikelyNext,
+                                likelyNext = ui.likelyNext,
                                 onSelectionChanged = { onAction(PhraseScreenAction.SelectPage(it)) },
                                 onOpenCategoryMenu = { category ->
                                     onAction(PhraseScreenAction.RequestDialog(TypingDialog.CategoryMenu, categoryId = category.id))
@@ -1030,10 +1018,11 @@ private fun PhraseScreenContentPreview() {
         PhraseScreenContent(
             ui = PhraseScreenState(
                 input = TextFieldValue("I would like some water"),
-                phrases = io.github.jdreioe.wingmate.application.PhraseState(items = listOf(
+                phrases = listOf(
                     Phrase(id = "water", text = "Water", createdAt = 0),
                     Phrase(id = "help", text = "Please help", createdAt = 0),
-                )),
+                ),
+                phraseStatus = TypingLoadStatus.Ready,
                 template = io.github.jdreioe.wingmate.application.TypingScreenProjector.defaultTemplate(4, now = 0),
                 templateStatus = TypingLoadStatus.Ready,
                 categoryStatus = TypingLoadStatus.Ready,

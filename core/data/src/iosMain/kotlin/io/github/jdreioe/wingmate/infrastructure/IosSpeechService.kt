@@ -49,7 +49,7 @@ class IosSpeechService(
     private val googleApiRequestHeaders: GoogleApiRequestHeaders = NoGoogleApiRequestHeaders,
 ) : SpeechService {
 
-    private val sentenceAudioCache = mutableMapOf<String, ByteArray>()
+    private val sentenceAudioCache = SpeechAudioCache(maxBytes = 32L * 1024 * 1024)
     private val sentenceAudioCacheMutex = Mutex()
     private data class PendingCache(val text: String, val voice: Voice?, val pitch: Double?, val rate: Double?)
     private val pendingSpeechCache = mutableSetOf<PendingCache>()
@@ -143,7 +143,7 @@ class IosSpeechService(
                 base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
             }
             if (engine == TtsEngine.SYSTEM) error("System speech is handled by the iOS host")
-            val cacheKey = "${engine.name}|text|$normalizedText|${effectiveVoice.name}|${effectiveVoice.primaryLanguage}|${effectiveVoice.selectedLanguage}|$pitch|$rate|math=${effectiveVoice.mathMode}"
+            val cacheKey = speechCacheKey(normalizedText, engine, effectiveVoice, pitch, rate)
             val cached = if (cacheAudio) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] } else null
             val audioBytes = cached ?: synthesize(normalizedText, effectiveVoice, engine)
                 ?: error("The selected cloud speech engine is not configured")
@@ -192,7 +192,7 @@ class IosSpeechService(
                 base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
             }
             if (engine == TtsEngine.SYSTEM) error("System speech is handled by the iOS host")
-            val cacheKey = "${engine.name}|segments|${segments.joinToString()}|${effectiveVoice.name}|${effectiveVoice.primaryLanguage}|${effectiveVoice.selectedLanguage}|$pitch|$rate|math=${effectiveVoice.mathMode}"
+            val cacheKey = speechCacheKey(segments.joinToString(), engine, effectiveVoice, pitch, rate)
             val cached = if (cacheAudio) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] } else null
             val audioBytes = cached ?: synthesizeSegments(segments, effectiveVoice, engine)
                 ?: error("The selected cloud speech engine is not configured")
@@ -210,7 +210,7 @@ class IosSpeechService(
         val effectiveVoice = (voice ?: defaultVoice()).forCloudProvider(engine).let { base ->
             base.copy(pitch = pitch ?: base.pitch, rate = rate ?: base.rate)
         }
-        val cacheKey = "${engine.name}|text|$normalizedText|${effectiveVoice.name}|${effectiveVoice.primaryLanguage}|${effectiveVoice.selectedLanguage}|$pitch|$rate|math=${effectiveVoice.mathMode}"
+        val cacheKey = speechCacheKey(normalizedText, engine, effectiveVoice, pitch, rate)
         if (sentenceAudioCacheMutex.withLock { cacheKey in sentenceAudioCache }) return true
 
         val request = PendingCache(normalizedText, voice, pitch, rate)
@@ -281,6 +281,9 @@ class IosSpeechService(
     override fun isPaused(): Boolean = currentPlayer != null && state.status == SpeechPlaybackStatus.PAUSED
 
     override fun playbackState(): SpeechPlaybackState = state
+
+    private suspend fun speechCacheKey(content: String, engine: TtsEngine, voice: Voice, pitch: Double?, rate: Double?): String =
+        SpeechCacheIdentity.speech(content, engine, voice, pitch, rate, pronunciationDictionaryRepository?.getAll().orEmpty())
 
     // Synthesizes with exactly [engine]; the session may have chosen it before settings changed.
     private suspend fun synthesize(text: String, voice: Voice, engine: TtsEngine): ByteArray? = withContext(Dispatchers.Default) {
