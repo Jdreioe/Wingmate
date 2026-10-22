@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -92,6 +94,16 @@ class PhraseScreenContentTest {
             listOf<PhraseScreenAction>(PhraseScreenAction.ActivatePhrase(Phrase(id = "history_3", text = "Thank you", createdAt = 5L))),
             actions,
         )
+    }
+
+    @Test
+    fun selectedPhraseIsHighlightedOnlyWhenHighlightingIsOn() {
+        render(ready.copy(settings = Settings(selectionHighlightMillis = 60_000)))
+        composeRule.onAllNodesWithTag("selection-highlight", useUnmergedTree = true).assertCountEquals(0)
+
+        composeRule.onNodeWithText("Water").performClick()
+
+        composeRule.onAllNodesWithTag("selection-highlight", useUnmergedTree = true).assertCountEquals(1)
     }
 
     @Test

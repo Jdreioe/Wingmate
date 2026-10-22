@@ -168,6 +168,7 @@ internal fun TypingScreenTray(
         ) else projectedBoard
     }
     val phrasesById = remember(phrases) { phrases.associateBy(Phrase::id) }
+    val selectionHighlight = rememberSelectionHighlightState(settings.selectionHighlightMillis)
     val historyById = remember(pageHistory) {
         pageHistory.mapIndexed { index, item -> item.typingHistoryId(index) to item }.toMap()
     }
@@ -244,13 +245,18 @@ internal fun TypingScreenTray(
                     scrollingMinimumCellHeight = 72.dp * settings.inputFieldScale.coerceIn(0.75f, 2f),
                     settings = settings,
                     focusedCell = focusedCell,
+                    highlightedButtonId = selectionHighlight.buttonId,
                     ),
                     feedback = feedback,
                     onFocusCell = onFocusCell,
                     onButtonClick = { button ->
-                        if (button.id == ADD_PHRASE_BUTTON_ID) onAddPhrase()
-                        else button.projectedPhraseId()?.let(phrasesById::get)?.let(onPhraseActivated)
-                            ?: button.projectedHistoryId()?.let(historyById::get)?.let(onHistoryActivated)
+                        if (button.id == ADD_PHRASE_BUTTON_ID) {
+                            onAddPhrase()
+                        } else {
+                            selectionHighlight.select(button.id)
+                            button.projectedPhraseId()?.let(phrasesById::get)?.let(onPhraseActivated)
+                                ?: button.projectedHistoryId()?.let(historyById::get)?.let(onHistoryActivated)
+                        }
                     },
                     // Long-press for Edit / Delete, keep holding and drag to reorder,
                     // like app icons on the home screen. History is read-only.
