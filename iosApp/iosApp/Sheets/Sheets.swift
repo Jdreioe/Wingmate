@@ -28,39 +28,31 @@ private enum PhraseSymbolSource: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-private func resolveOpenSymbolsProxyUrl() -> String? {
-    let fromInfoRaw = Bundle.main.object(forInfoDictionaryKey: "OPEN_SYMBOLS_PROXY_URL") as? String
-    let fromInfo = fromInfoRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let fromInfo, !fromInfo.isEmpty { return fromInfo }
-
-    let fromEnvRaw = ProcessInfo.processInfo.environment["OPENSYMBOLS_PROXY_URL"]
-    let fromEnv = fromEnvRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let fromEnv, !fromEnv.isEmpty { return fromEnv }
-
-    return nil
-}
-
-private func searchOpenSymbolsUsingBridge(
+/// Searches through the shared symbol search. Cancellation returns no results and no error.
+private func searchSymbols(
     _ query: String,
     packageFilter: SymbolPackageFilter
 ) async -> (results: [OpenSymbolsSymbolResult], errorCode: String?) {
-    let bridge = KoinBridge()
-    bridge.setOpenSymbolsProxyUrl(url: resolveOpenSymbolsProxyUrl())
-    guard let result = try? await bridge.openSymbolsSearch(
+    guard let result = try? await IosDiBridge().symbolSearchFacade().search(
         query: query,
         locale: Locale.current.identifier,
         symbolPackage: packageFilter.rawValue,
         prioritizeArasaac: false
     ) else {
-        return ([], "search_failed")
+        return ([], nil)
     }
-    if result.errorCode.isEmpty {
+    if result.isSuccess {
         let mapped = result.symbols.map {
-            OpenSymbolsSymbolResult(id: $0.id, name: $0.name ?? "", image_url: $0.imageUrl, source: $0.source)
+            OpenSymbolsSymbolResult(id: $0.id, name: $0.name, image_url: $0.imageUrl, source: $0.source)
         }
         return (mapped, nil)
     }
-    return ([], result.errorCode)
+    return ([], symbolSearchErrorCode(result.status))
+}
+
+/// The Localizable.strings suffix for a failed symbol search.
+func symbolSearchErrorCode(_ status: Shared.SymbolSearchStatus) -> String {
+    status == .notConfigured ? "missing_proxy" : "search_failed"
 }
 
 struct AddCategorySheet: View {
@@ -519,7 +511,7 @@ struct AddPhraseSheet: View {
             symbolResults = []
         }
 
-        let (results, errorCode) = await searchOpenSymbolsUsingBridge(trimmed, packageFilter: symbolPackage)
+        let (results, errorCode) = await searchSymbols(trimmed, packageFilter: symbolPackage)
 
         await MainActor.run {
             if let errorCode {
@@ -1014,7 +1006,7 @@ struct EditPhraseSheet: View {
             symbolResults = []
         }
 
-        let (results, errorCode) = await searchOpenSymbolsUsingBridge(trimmed, packageFilter: symbolPackage)
+        let (results, errorCode) = await searchSymbols(trimmed, packageFilter: symbolPackage)
 
         await MainActor.run {
             if let errorCode {

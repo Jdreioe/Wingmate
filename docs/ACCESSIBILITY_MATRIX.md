@@ -7,7 +7,7 @@ Legend: **Shipped** · **Partial** (works with gaps) · **Planned** (tracked) ·
 
 | Feature | Android | iOS | Desktop |
 | --- | --- | --- | --- |
-| Dwell-to-select | Shipped (`InteractionInputRoot`, configurable ms) | Shipped (shared `AccessInputController` via KoinBridge) | Partial (Screen buttons and communication controls; shared controller) |
+| Dwell-to-select | Shipped (`InteractionInputRoot`, configurable ms) | Shipped (shared `AccessInputController`, driven by `IosViewModel`) | Partial (Screen buttons and communication controls; shared controller) |
 | Tremor jitter filter (dwell re-arm delay) | Shipped (settings slider) | Partial (controller supports it; Swift does not sync the setting yet) | Partial (shared setting and controller wired) |
 | Select key / switch press | Shipped (Space/Enter/F1–F12 bindings) | Shipped (bindings via settings sync) | Partial (select key acts on hovered communication target) |
 | Rest mode toggle | Shipped (FAB is dwell/focus-reachable; rest key; **hold Select 2 s to resume**) | Partial (rest key + pause bridge; hold-to-resume needs bridge sync) | Partial (Rest/Resume button, rest key, hold Select 2 s; toggle is click/touch only) |

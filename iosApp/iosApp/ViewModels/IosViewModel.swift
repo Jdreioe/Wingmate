@@ -73,8 +73,7 @@ final class IosViewModel: ObservableObject {
 
     @Published var state: Shared.PhraseListStoreState = Shared.PhraseListStoreState(phrases: [], categories: [], selectedCategoryId: nil, isLoading: true, error: nil)
 
-    // Bridge to shared KMP use-cases
-    private let bridge = KoinBridge()
+    // Shared feature facades, resolved from the iOS composition root after start()
     private lazy var backupFacade = IosDiBridge().backupFacade()
     private lazy var speechFacade = IosDiBridge().speechFacade()
     private lazy var settingsFacade = IosDiBridge().settingsFacade()
@@ -82,6 +81,11 @@ final class IosViewModel: ObservableObject {
     private lazy var communicationFacade = IosDiBridge().communicationFacade()
     private lazy var session = IosDiBridge().communicationSessionFacade()
     private lazy var typingScreens = IosDiBridge().typingScreenFacade()
+    private lazy var predictionFacade = IosDiBridge().predictionFacade()
+    private lazy var pronunciationFacade = IosDiBridge().pronunciationFacade()
+    // Shared access and highlight policies; Swift only supplies events and the clock.
+    private let accessInput = AccessInputController()
+    private let selectionHighlight = SelectionHighlight()
     private var sessionSubscription: Shared.NativeSubscription?
 
     // The shared Message (#306). Kotlin's Communication session owns it; these mirror its
@@ -170,6 +174,7 @@ final class IosViewModel: ObservableObject {
 
     // Pronunciation Dictionary
     @Published var pronunciations: [Shared.PronunciationEntry] = []
+    @Published private(set) var pronunciationError: String? = nil
 
     // Azure availability (subscription configured)
     @Published var azureConfigured: Bool = false
@@ -320,15 +325,17 @@ final class IosViewModel: ObservableObject {
 
     func resizeSelectedBoardField(row: Int, col: Int, rows: Int, columns: Int) async {
         guard let boardId = selectedBoardId else { return }
-        let ok = (try? await boardsFacade.resizeBoardField(
-            boardId: boardId,
-            row: Int32(row),
-            col: Int32(col),
-            rowSpan: Int32(rows),
-            columnSpan: Int32(columns)
-        )) ?? false
-        if ok.boolValue {
+        do {
+            try await boardsFacade.resizeBoardField(
+                boardId: boardId,
+                row: Int32(row),
+                col: Int32(col),
+                rowSpan: Int32(rows),
+                columnSpan: Int32(columns)
+            )
             await refreshBoardCells()
+        } catch {
+            await reportBoardFailure(error, messageKey: "boardset.error.cell_update_failed")
         }
     }
 
@@ -350,7 +357,9 @@ final class IosViewModel: ObservableObject {
     }
 
     func start() async {
-        await MainActor.run { IosDiBridge().startKoinWithOverridesBridge(deviceSpeech: SystemTtsManager.shared) }
+        await MainActor.run {
+            IosDiBridge().start(deviceSpeech: SystemTtsManager.shared, openSymbolsProxyUrl: resolveOpenSymbolsProxyUrl())
+        }
         sessionSubscription?.cancel()
         sessionSubscription = session.observe { [weak self] state in
             self?.applySessionState(state)
@@ -811,12 +820,9 @@ final class IosViewModel: ObservableObject {
             historyPhrases = []
             return
         }
-        do {
-            let items = try await communicationFacade.listHistoryAsPhrases()
-            await MainActor.run { self.historyPhrases = items.reversed() }
-        } catch {
-            await MainActor.run { self.historyPhrases = [] }
-        }
+        // On a read failure keep the History already shown; cancellation leaves it as is too.
+        guard let result = try? await communicationFacade.history(), result.isSuccess else { return }
+        await MainActor.run { self.historyPhrases = result.phrases.reversed() }
     }
     func setTtsEngine(_ engine: String) {
         ttsEngine = engine
@@ -939,36 +945,57 @@ final class IosViewModel: ObservableObject {
 
     func unregisterAccessTarget(_ targetId: String) {
         accessActions.removeValue(forKey: targetId)
-        applyAccessResult(bridge.accessInputExit(targetId: targetId))
-        applyAccessResult(bridge.accessInputBlur(targetId: targetId))
+        accessInput.targetExited(targetId: targetId, nowMillis: nowMillis())
+        accessInput.targetBlurred(targetId: targetId, nowMillis: nowMillis())
+        applyAccessInput()
     }
 
-    func accessEnter(_ targetId: String) { applyAccessResult(bridge.accessInputEnter(targetId: targetId)) }
-    func accessExit(_ targetId: String) { applyAccessResult(bridge.accessInputExit(targetId: targetId)) }
-    func accessFocus(_ targetId: String) { applyAccessResult(bridge.accessInputFocus(targetId: targetId)) }
-    func accessBlur(_ targetId: String) { applyAccessResult(bridge.accessInputBlur(targetId: targetId)) }
+    func accessEnter(_ targetId: String) {
+        accessInput.targetEntered(targetId: targetId, nowMillis: nowMillis())
+        applyAccessInput()
+    }
+    func accessExit(_ targetId: String) {
+        accessInput.targetExited(targetId: targetId, nowMillis: nowMillis())
+        applyAccessInput()
+    }
+    func accessFocus(_ targetId: String) {
+        accessInput.targetFocused(targetId: targetId, nowMillis: nowMillis())
+        applyAccessInput()
+    }
+    func accessBlur(_ targetId: String) {
+        accessInput.targetBlurred(targetId: targetId, nowMillis: nowMillis())
+        applyAccessInput()
+    }
 
     func accessKey(_ key: String, isDown: Bool) -> Bool {
         let normalized = key == " " ? "Space" : key
         guard normalized.caseInsensitiveCompare(selectKeyBinding) == .orderedSame ||
                 normalized.caseInsensitiveCompare(restModeKeyBinding) == .orderedSame else { return false }
-        let result = isDown
-            ? bridge.accessInputKeyDown(key: normalized, selectBinding: selectKeyBinding, restBinding: restModeKeyBinding)
-            : bridge.accessInputKeyUp(key: normalized)
-        applyAccessResult(result)
+        let effect = isDown
+            ? accessInput.keyDown(
+                key: normalized, selectBinding: selectKeyBinding, restModeBinding: restModeKeyBinding, nowMillis: nowMillis()
+            )
+            : accessInput.keyUp(key: normalized, nowMillis: nowMillis())
+        applyAccessInput(effect)
         return true
     }
 
-    func tickAccessInput() { applyAccessResult(bridge.accessInputTick(dwellMillis: Int64(dwellToSelectMillis))) }
-    func toggleInputPause() { applyAccessResult(bridge.accessInputTogglePause()) }
-
-    private func applyAccessResult(_ result: IosAccessInputResult) {
-        if inputIsPaused != result.isPaused { inputIsPaused = result.isPaused }
-        if accessTargetId != result.currentTargetId { accessTargetId = result.currentTargetId }
-        let newProgress = Double(result.dwellProgress)
-        if abs(accessDwellProgress - newProgress) > 0.001 { accessDwellProgress = newProgress }
-        if let target = result.activationTargetId { accessActions[target]?() }
+    func tickAccessInput() {
+        applyAccessInput(accessInput.tick(nowMillis: nowMillis(), dwellMillis: Int64(dwellToSelectMillis)))
     }
+    func toggleInputPause() { applyAccessInput(accessInput.togglePaused(nowMillis: nowMillis())) }
+
+    /// Mirrors the shared access state and runs the Button the policy activated, if any.
+    private func applyAccessInput(_ effect: (any AccessInputEffect)? = nil) {
+        let state = accessInput.state
+        if inputIsPaused != state.isPaused { inputIsPaused = state.isPaused }
+        if accessTargetId != state.currentTargetId { accessTargetId = state.currentTargetId }
+        let newProgress = Double(state.dwellProgress)
+        if abs(accessDwellProgress - newProgress) > 0.001 { accessDwellProgress = newProgress }
+        if let activation = effect as? AccessInputEffectActivate { accessActions[activation.targetId]?() }
+    }
+
+    private func nowMillis() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
     func setSelectionDebounceMillis(_ value: Double) {
         selectionDebounceMillis = min(max(value, 0), 1_000)
@@ -1165,11 +1192,12 @@ final class IosViewModel: ObservableObject {
         predictionJob = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 250_000_000)
             guard !Task.isCancelled, let self else { return }
-            self.predictionSubscription = self.bridge.observePredictions(
+            self.predictionSubscription = self.predictionFacade.observe(
                 context: text, maxWords: 5, maxLetters: 5
-            ) { [weak self] result in
+            ) { [weak self] update in
+                // An unavailable update has no suggestions, so stale ones clear; the next edit retries.
                 guard let self, self.input == text else { return }
-                self.predictions = result
+                self.predictions = update.predictions
             }
         }
         #endif
@@ -1177,7 +1205,7 @@ final class IosViewModel: ObservableObject {
 
     #if DEBUG
     func applyWordPrediction(_ word: String) {
-        let result = bridge.completePredictedWord(
+        let result = TextEditingPolicy.shared.completeWord(
             text: input,
             cursor: Int32(inputSelectionRange.location),
             suggestion: word
@@ -1187,7 +1215,7 @@ final class IosViewModel: ObservableObject {
     }
     
     func applyLetterPrediction(_ char: String) {
-        let result = bridge.insertPredictedText(
+        let result = TextEditingPolicy.shared.insert(
             text: input,
             cursor: Int32(inputSelectionRange.location),
             value: char
@@ -1199,25 +1227,35 @@ final class IosViewModel: ObservableObject {
 
     // MARK: - Pronunciations
     func loadPronunciations() async {
-        do {
-            let items = try await bridge.listPronunciations()
-            await MainActor.run { self.pronunciations = items }
-        } catch {
-            await MainActor.run { self.pronunciations = [] }
+        // Cancellation leaves the dictionary and its notice as they were.
+        guard let result = try? await pronunciationFacade.list() else { return }
+        await MainActor.run {
+            // A failed read keeps the entries already shown.
+            if result.isSuccess { self.pronunciations = result.entries }
+            self.pronunciationError = result.isSuccess ? nil : NSLocalizedString("pronunciation.error.load_failed", comment: "")
         }
     }
-    
+
     func addPronunciation(word: String, phoneme: String, alphabet: String) {
         Task {
-            try? await bridge.addPronunciation(word: word, phoneme: phoneme, alphabet: alphabet)
-            await loadPronunciations()
+            guard let result = try? await pronunciationFacade.add(word: word, phoneme: phoneme, alphabet: alphabet) else { return }
+            await applyPronunciationChange(result)
         }
     }
-    
+
     func deletePronunciation(word: String) {
         Task {
-            try? await bridge.deletePronunciation(word: word)
-            await loadPronunciations()
+            guard let result = try? await pronunciationFacade.delete(word: word) else { return }
+            await applyPronunciationChange(result)
+        }
+    }
+
+    private func applyPronunciationChange(_ result: Shared.PronunciationResult) async {
+        await loadPronunciations()
+        if !result.isSuccess {
+            await MainActor.run {
+                self.pronunciationError = NSLocalizedString("pronunciation.error.save_failed", comment: "")
+            }
         }
     }
 
@@ -1387,10 +1425,7 @@ final class IosViewModel: ObservableObject {
             isImportingQuickCore = false
         }
         do {
-            guard let sharedSet = try await boardsFacade.importQuickCorePreset(slug: slug, name: normalizedBoardsetName(name)) else {
-                boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
-                return
-            }
+            let sharedSet = try await boardsFacade.importQuickCorePreset(slug: slug, name: normalizedBoardsetName(name))
             let set = boardSetInfo(from: sharedSet)
             await loadBoardSets()
             selectedBoardSetId = set.id
@@ -1399,7 +1434,13 @@ final class IosViewModel: ObservableObject {
             quickCoreDownloadProgress = 1
             boardStatusMessage = NSLocalizedString("boardset.status.created", comment: "")
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+            if error.isNativeCancellation { return }
+            boardStatusMessage = NSLocalizedString(
+                error.nativeFailure?.kind == NativeFailureKind.network
+                    ? "boardset.error.download_failed"
+                    : "boardset.error.create_failed",
+                comment: ""
+            )
         }
     }
 
@@ -1415,15 +1456,12 @@ final class IosViewModel: ObservableObject {
         let safeColumns = min(max(columns, 1), 12)
 
         do {
-            guard let board = try await boardsFacade.createBoard(
+            let board = try await boardsFacade.createBoard(
                 boardSetId: set.id,
                 name: boardName,
                 rows: Int32(safeRows),
                 columns: Int32(safeColumns)
-            ) else {
-                boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
-                return
-            }
+            )
 
             await loadBoardSets()
             selectedBoardSetId = set.id
@@ -1432,7 +1470,7 @@ final class IosViewModel: ObservableObject {
             await refreshBoardCells()
             boardStatusMessage = NSLocalizedString("boardset.status.board_added", comment: "")
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+            await reportBoardFailure(error, messageKey: "boardset.error.create_failed")
         }
     }
 
@@ -1442,16 +1480,13 @@ final class IosViewModel: ObservableObject {
             return
         }
         do {
-            guard let board = try await boardsFacade.createKeyboardBoard(
+            let board = try await boardsFacade.createKeyboardBoard(
                 boardSetId: set.id,
                 name: normalizedBoardsetName(name),
                 rows: Int32(min(max(rows, 1), 12)),
                 columns: Int32(min(max(columns, 1), 12)),
                 layout: layout
-            ) else {
-                boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
-                return
-            }
+            )
             await loadBoardSets()
             selectedBoardSetId = set.id
             selectedBoardId = board.id
@@ -1460,7 +1495,7 @@ final class IosViewModel: ObservableObject {
             await refreshBoardCells()
             boardStatusMessage = NSLocalizedString("boardset.status.board_added", comment: "")
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
+            await reportBoardFailure(error, messageKey: "boardset.error.create_failed")
         }
     }
 
@@ -1655,7 +1690,7 @@ final class IosViewModel: ObservableObject {
         let normalizedImageUrl = normalizedOptionalText(imageUrl)
 
         do {
-            guard let updatedBoard = try await boardsFacade.upsertBoardCellButton(
+            let updatedBoard = try await boardsFacade.upsertBoardCellButton(
                 boardId: boardId,
                 row: Int32(row),
                 col: Int32(col),
@@ -1668,17 +1703,14 @@ final class IosViewModel: ObservableObject {
                 clearImage: clearImage,
                 actions: actions,
                 wordType: normalizedOptionalText(wordType)
-            ) else {
-                boardStatusMessage = NSLocalizedString("boardset.error.cell_update_failed", comment: "")
-                return
-            }
+            )
 
             selectedBoard = updatedBoard
             await refreshBoardCells()
             if let setId = selectedBoardSetId { _ = try? await boardsFacade.touchBoardSet(id: setId) }
             touchSelectedBoardSet(statusKey: "boardset.status.cell_saved")
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.cell_update_failed", comment: "")
+            await reportBoardFailure(error, messageKey: "boardset.error.cell_update_failed")
         }
     }
 
@@ -1693,21 +1725,18 @@ final class IosViewModel: ObservableObject {
         }
 
         do {
-            guard let updatedBoard = try await boardsFacade.clearBoardCellButton(
+            let updatedBoard = try await boardsFacade.clearBoardCellButton(
                 boardId: boardId,
                 row: Int32(row),
                 col: Int32(col)
-            ) else {
-                boardStatusMessage = NSLocalizedString("boardset.error.cell_clear_failed", comment: "")
-                return
-            }
+            )
 
             selectedBoard = updatedBoard
             await refreshBoardCells()
             if let setId = selectedBoardSetId { _ = try? await boardsFacade.touchBoardSet(id: setId) }
             touchSelectedBoardSet(statusKey: "boardset.status.cell_cleared")
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.cell_clear_failed", comment: "")
+            await reportBoardFailure(error, messageKey: "boardset.error.cell_clear_failed")
         }
     }
 
@@ -1731,14 +1760,14 @@ final class IosViewModel: ObservableObject {
 
     func activateBoardSelectionHighlight(buttonId: String) async {
         guard selectionHighlightMillis > 0 else { return }
-        bridge.selectionHighlightActivate(buttonId: buttonId)
+        selectionHighlight.activate(targetId: buttonId, nowMillis: nowMillis())
         selectionHighlightGeneration += 1
         let generation = selectionHighlightGeneration
         highlightedButtonId = buttonId
         let duration = selectionHighlightMillis
         try? await Task.sleep(nanoseconds: UInt64(duration) * 1_000_000)
         guard generation == selectionHighlightGeneration else { return }
-        let current = bridge.selectionHighlightButtonId(durationMillis: duration)
+        let current = selectionHighlight.highlightedTarget(nowMillis: nowMillis(), durationMillis: duration)
         highlightedButtonId = current
     }
 
@@ -1766,11 +1795,12 @@ final class IosViewModel: ObservableObject {
             .map(\.buttonId)
             .filter { seenIds.insert($0).inserted }
         guard !predictorIds.isEmpty else { return }
-        boardPredictionSubscription = bridge.observePredictions(
+        boardPredictionSubscription = predictionFacade.observe(
             context: context, maxWords: Int32(predictorIds.count), maxLetters: 0
-        ) { [weak self] result in
+        ) { [weak self] update in
+            // Unavailable predictions leave the predictor Buttons empty rather than stale.
             self?.boardPredictionsByButtonId = Dictionary(
-                uniqueKeysWithValues: zip(predictorIds, result.words).map { ($0.0, $0.1) }
+                uniqueKeysWithValues: zip(predictorIds, update.predictions.words).map { ($0.0, $0.1) }
             )
         }
     }
@@ -1789,12 +1819,12 @@ final class IosViewModel: ObservableObject {
         guard let set = selectedBoardSet, canEditSelectedBoardSet else { return }
         let normalized = normalizedBoardsetName(name)
         do {
-            guard let updated = try await boardsFacade.renameBoardSet(boardSetId: set.id, name: normalized) else { return }
+            let updated = try await boardsFacade.renameBoardSet(boardSetId: set.id, name: normalized)
             await loadBoardSets()
             selectedBoardSetId = updated.id
             boardStatusMessage = NSLocalizedString("boardset.status.saved", comment: "")
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
+            await reportBoardFailure(error, messageKey: "boardset.error.save_failed")
         }
     }
 
@@ -1802,61 +1832,61 @@ final class IosViewModel: ObservableObject {
         guard let set = selectedBoardSet, let boardId = selectedBoardId, canEditSelectedBoardSet else { return }
         let normalized = normalizedBoardsetName(name)
         do {
-            guard let board = try await boardsFacade.renameBoard(boardSetId: set.id, boardId: boardId, name: normalized) else { return }
+            let board = try await boardsFacade.renameBoard(boardSetId: set.id, boardId: boardId, name: normalized)
             selectedBoard = board
             boardNamesById[boardId] = normalized
             await loadBoardSets()
             selectedBoardSetId = set.id
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
+            await reportBoardFailure(error, messageKey: "boardset.error.save_failed")
         }
     }
 
     func resizeSelectedBoard(rows: Int, columns: Int) async {
         guard let set = selectedBoardSet, let boardId = selectedBoardId, canEditSelectedBoardSet else { return }
         do {
-            guard let board = try await boardsFacade.resizeBoard(
+            let board = try await boardsFacade.resizeBoard(
                 boardSetId: set.id,
                 boardId: boardId,
                 rows: Int32(min(max(rows, 1), 12)),
                 columns: Int32(min(max(columns, 1), 12))
-            ) else { return }
+            )
             selectedBoard = board
             await refreshBoardCells()
             await loadBoardSets()
             selectedBoardSetId = set.id
             selectedBoardId = boardId
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
+            await reportBoardFailure(error, messageKey: "boardset.error.save_failed")
         }
     }
 
     func setSelectedBoardBackgroundColor(_ color: String?) async {
         guard let set = selectedBoardSet, let boardId = selectedBoardId, canEditSelectedBoardSet else { return }
         do {
-            guard let board = try await boardsFacade.setBoardBackgroundColor(
+            let board = try await boardsFacade.setBoardBackgroundColor(
                 boardSetId: set.id,
                 boardId: boardId,
                 backgroundColor: normalizedOptionalText(color)
-            ) else { return }
+            )
             selectedBoard = board
             await loadBoardSets()
             selectedBoardSetId = set.id
             selectedBoardId = boardId
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
+            await reportBoardFailure(error, messageKey: "boardset.error.save_failed")
         }
     }
 
     func makeSelectedBoardRoot() async {
         guard let set = selectedBoardSet, let boardId = selectedBoardId, boardId != set.rootBoardId else { return }
         do {
-            guard let updated = try await boardsFacade.setRootBoard(boardSetId: set.id, boardId: boardId) else { return }
+            let updated = try await boardsFacade.setRootBoard(boardSetId: set.id, boardId: boardId)
             await loadBoardSets()
             selectedBoardSetId = updated.id
             selectedBoardId = boardId
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
+            await reportBoardFailure(error, messageKey: "boardset.error.save_failed")
         }
     }
 
@@ -1864,13 +1894,13 @@ final class IosViewModel: ObservableObject {
         guard let set = selectedBoardSet, let boardId = selectedBoardId,
               boardId != set.rootBoardId, set.boardIds.count > 1 else { return }
         do {
-            guard let updated = try await boardsFacade.deleteBoard(boardSetId: set.id, boardId: boardId) else { return }
+            let updated = try await boardsFacade.deleteBoard(boardSetId: set.id, boardId: boardId)
             await loadBoardSets()
             selectedBoardSetId = updated.id
             selectedBoardId = updated.rootBoardId
             await loadSelectedBoard()
         } catch {
-            boardStatusMessage = NSLocalizedString("boardset.error.delete_board_failed", comment: "")
+            await reportBoardFailure(error, messageKey: "boardset.error.delete_board_failed")
         }
     }
 
@@ -1885,7 +1915,7 @@ final class IosViewModel: ObservableObject {
                     ? NSLocalizedString("boardset.status.locked", comment: "")
                     : NSLocalizedString("boardset.status.unlocked", comment: "")
             } catch {
-                boardStatusMessage = NSLocalizedString("boardset.error.save_failed", comment: "")
+                await reportBoardFailure(error, messageKey: "boardset.error.save_failed")
             }
         }
     }
@@ -1908,23 +1938,33 @@ final class IosViewModel: ObservableObject {
             }
             boardStatusMessage = NSLocalizedString("board_sets.status.deleted", comment: "")
         } catch {
-            boardStatusMessage = NSLocalizedString("board_sets.error.delete_failed", comment: "")
+            await reportBoardFailure(error, messageKey: "board_sets.error.delete_failed")
         }
     }
 
     func duplicateBoardSet(id: String) async {
         do {
-            if let dup = try await boardsFacade.duplicateBoardSet(id: id) {
-                let info = boardSetInfo(from: dup)
-                await loadBoardSets()
-                selectedBoardSetId = info.id
-                selectedBoardId = info.rootBoardId
-                await loadSelectedBoard()
-                boardStatusMessage = NSLocalizedString("board_sets.status.duplicated", comment: "")
-            }
+            let dup = try await boardsFacade.duplicateBoardSet(id: id)
+            let info = boardSetInfo(from: dup)
+            await loadBoardSets()
+            selectedBoardSetId = info.id
+            selectedBoardId = info.rootBoardId
+            await loadSelectedBoard()
+            boardStatusMessage = NSLocalizedString("board_sets.status.duplicated", comment: "")
         } catch {
-            boardStatusMessage = NSLocalizedString("board_sets.error.duplicate_failed", comment: "")
+            await reportBoardFailure(error, messageKey: "board_sets.error.duplicate_failed")
         }
+    }
+
+    /// Shows why a Screen edit failed. A Screen or Page that no longer exists reloads the list instead.
+    private func reportBoardFailure(_ error: Error, messageKey: String) async {
+        if error.isNativeCancellation { return }
+        if error.nativeFailure?.kind == NativeFailureKind.notFound {
+            await loadBoardSets()
+            boardStatusMessage = NSLocalizedString("boardset.error.not_found", comment: "")
+            return
+        }
+        boardStatusMessage = NSLocalizedString(messageKey, comment: "")
     }
 }
 
@@ -1932,4 +1972,17 @@ private extension Float {
     func clamped(to range: ClosedRange<Float>) -> Float {
         min(max(self, range.lowerBound), range.upperBound)
     }
+}
+
+/// The OpenSymbols proxy from Info.plist, or the environment in development builds.
+private func resolveOpenSymbolsProxyUrl() -> String? {
+    let fromInfoRaw = Bundle.main.object(forInfoDictionaryKey: "OPEN_SYMBOLS_PROXY_URL") as? String
+    let fromInfo = fromInfoRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let fromInfo, !fromInfo.isEmpty { return fromInfo }
+
+    let fromEnvRaw = ProcessInfo.processInfo.environment["OPENSYMBOLS_PROXY_URL"]
+    let fromEnv = fromEnvRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let fromEnv, !fromEnv.isEmpty { return fromEnv }
+
+    return nil
 }

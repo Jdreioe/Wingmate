@@ -20,9 +20,9 @@ class GoogleVoiceCatalog(
         install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; explicitNulls = false }) }
     }
 
+    /** The catalog for the saved key, or empty when there is no key or loading fails. */
     suspend fun list(): List<Voice> = try {
-        val config = configRepo.getGoogleSpeechConfig() ?: return emptyList()
-        GoogleTtsClient.getVoices(client, config, applicationHeaders).toGoogleVoiceCatalog()
+        load()
     } catch (error: CancellationException) {
         throw error
     } catch (error: Throwable) {
@@ -32,5 +32,15 @@ class GoogleVoiceCatalog(
             exceptionClass = error.loggingClassName(),
         )
         emptyList()
+    }
+
+    /**
+     * The catalog for the saved key, empty when there is none. Throws
+     * [GoogleCloudRequestException] when Google refuses the request and other
+     * exceptions when it cannot be reached.
+     */
+    suspend fun load(): List<Voice> {
+        val config = configRepo.getGoogleSpeechConfig() ?: return emptyList()
+        return GoogleTtsClient.getVoices(client, config, applicationHeaders).toGoogleVoiceCatalog()
     }
 }

@@ -6,6 +6,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import io.github.jdreioe.wingmate.domain.obf.PageElementContent
 import io.github.jdreioe.wingmate.domain.obf.pageElements
 import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
+import kotlin.coroutines.cancellation.CancellationException
 
 enum class TypingTrayElementKind { PageNavigation, PhraseCollection, ActionStrip }
 
@@ -79,7 +80,8 @@ class TypingScreenFacade(
     private val settings: SettingsStateManager,
 ) {
     /** Loads the Typing Screen, creating the default template on first use. */
-    suspend fun tray(): TypingTray {
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun tray(): TypingTray = nativeCall {
         val gridColumns = settings.getCurrentSettings().gridColumns
         val graph = typingScreens.getOrCreate(gridColumns)
         val template = requireNotNull(graph.rootBoard) { "The Typing Screen has no template Page" }
@@ -113,7 +115,7 @@ class TypingScreenFacade(
             .filterIsInstance<PageElementContent.PhraseCollection>()
             .firstOrNull()?.configuration?.columns
             ?: gridColumns
-        return TypingTray(
+        TypingTray(
             elements = elements,
             gridColumns = (template.grid?.columns ?: phraseColumns).coerceIn(1, 12),
             phraseColumns = phraseColumns.coerceIn(1, 12),

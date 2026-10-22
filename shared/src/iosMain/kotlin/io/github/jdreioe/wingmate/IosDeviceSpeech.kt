@@ -15,7 +15,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * The device voice, implemented in Swift with AVSpeechSynthesizer and passed to
- * [IosDiBridge.startKoinWithOverridesBridge]. All calls arrive on the main thread.
+ * [IosDiBridge.start]. All calls arrive on the main thread.
  */
 interface IosDeviceSpeech {
     /**

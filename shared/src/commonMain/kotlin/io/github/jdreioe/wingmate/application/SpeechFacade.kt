@@ -10,16 +10,18 @@ import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.withPreferredSupportedLanguage
 import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpoint
 import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpointResult
+import io.github.jdreioe.wingmate.infrastructure.GoogleCloudRequestException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * A feature-scoped native boundary around voice selection and cloud speech
  * configuration. Playback goes through [CommunicationSessionFacade].
  *
  * Keep Koin out of this file: the constructor receives exactly the use cases
- * and services this feature needs. Failures propagate as suspend exceptions
- * (including coroutine cancellation) instead of being swallowed or converted.
+ * and services this feature needs. Suspend members throw only [NativeFailure]
+ * or coroutine cancellation.
  */
 class SpeechFacade(
     private val voiceUseCase: VoiceUseCase,
@@ -27,7 +29,8 @@ class SpeechFacade(
     private val configRepository: ConfigRepository,
 ) {
     /** Select a voice and align the app's primary language with its language when it changes. */
-    suspend fun selectVoiceAndMaybeUpdatePrimary(voice: Voice) {
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun selectVoiceAndMaybeUpdatePrimary(voice: Voice) = nativeCall {
         val current = settingsUseCase.get()
         val selectedVoice = voice.withPreferredSupportedLanguage(current.primaryLanguage)
         voiceUseCase.select(selectedVoice)
@@ -40,16 +43,23 @@ class SpeechFacade(
         }
     }
 
-    suspend fun selectedVoice(): Voice? = voiceUseCase.selected()
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun selectedVoice(): Voice? = nativeCall { voiceUseCase.selected() }
 
-    suspend fun listVoices(): List<Voice> = voiceUseCase.listForEngine(settingsUseCase.get().ttsEngine)
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun listVoices(): List<Voice> = nativeCall { voiceUseCase.listForEngine(settingsUseCase.get().ttsEngine) }
 
-    suspend fun refreshVoicesFromAzure(): List<Voice> = voiceUseCase.refreshFromAzure()
+    /** A failed download keeps and returns the cached catalog, so failures here are storage failures. */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun refreshVoicesFromAzure(): List<Voice> = nativeCall { voiceUseCase.refreshFromAzure() }
 
-    suspend fun refreshVoicesFromGoogle(): List<Voice> = voiceUseCase.refreshFromGoogle()
+    /** A failed download keeps and returns the cached catalog, so failures here are storage failures. */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun refreshVoicesFromGoogle(): List<Voice> = nativeCall { voiceUseCase.refreshFromGoogle() }
 
     /** Update the selected voice's language and align the app's primary language. */
-    suspend fun updateSelectedVoiceLanguage(lang: String) {
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun updateSelectedVoiceLanguage(lang: String) = nativeCall {
         val selected = voiceUseCase.selected()
         if (selected != null && selected.selectedLanguage != lang) {
             voiceUseCase.select(selected.copy(selectedLanguage = lang))
@@ -61,61 +71,101 @@ class SpeechFacade(
     }
 
     /** Select the speech engine by [TtsEngine] name; unknown names fall back to system TTS. */
-    suspend fun updateTtsEngineNamed(engine: String) {
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun updateTtsEngineNamed(engine: String) = nativeCall {
         val parsed = runCatching { TtsEngine.valueOf(engine) }.getOrDefault(TtsEngine.SYSTEM)
         settingsUseCase.update(settingsUseCase.get().copy(ttsEngine = parsed))
+        Unit
     }
 
     /** Safe for native UI: deliberately never returns the saved subscription key. */
-    suspend fun getSpeechConfig(): SpeechServiceConfigStatus = configRepository.getSpeechConfigStatus()
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun getSpeechConfig(): SpeechServiceConfigStatus = nativeCall { configRepository.getSpeechConfigStatus() }
 
-    suspend fun saveAzureSpeechConfig(endpoint: String, subscriptionKey: String) {
+    /**
+     * Stores an Azure resource and switches to it. Fails with
+     * [NativeFailureKind.Validation] when the endpoint is not an Azure Speech
+     * endpoint or the key is blank.
+     */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun saveAzureSpeechConfig(endpoint: String, subscriptionKey: String) = nativeCall {
+        if (!isValidAzureSpeechEndpoint(endpoint) || subscriptionKey.isBlank()) {
+            throw NativeFailure(NativeFailureKind.Validation)
+        }
         configRepository.saveSpeechConfig(SpeechServiceConfig(endpoint.trim(), subscriptionKey.trim()))
         settingsUseCase.update(settingsUseCase.get().copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE))
+        Unit
     }
 
+    @Throws(NativeFailure::class, CancellationException::class)
     suspend fun getGoogleSpeechConfig(): GoogleSpeechConfigStatus =
-        configRepository.getGoogleSpeechConfigStatus()
+        nativeCall { configRepository.getGoogleSpeechConfigStatus() }
 
     /**
      * Securely stores a candidate key only if Google accepts it for voice discovery.
      * A failed replacement restores the previous credential and engine selection.
+     *
+     * Fails with [NativeFailureKind.Validation] for a blank key, a key Google
+     * refuses, or a project without voices; [NativeFailureKind.Network] when
+     * Google cannot be reached or asks to retry; [NativeFailureKind.Persistence]
+     * when the key or engine cannot be stored.
      */
+    @Throws(NativeFailure::class, CancellationException::class)
     suspend fun saveValidatedGoogleSpeechConfig(apiKey: String): List<Voice> =
-        saveValidatedGoogleSpeechConfig(apiKey) { voiceUseCase.refreshFromGoogle() }
+        saveValidatedGoogleSpeechConfig(apiKey) { voiceUseCase.loadGoogleCatalog() }
 
+    /** [downloadVoices] only asks Google; saving the catalog is a separate, local step. */
     internal suspend fun saveValidatedGoogleSpeechConfig(
         apiKey: String,
-        refreshVoices: suspend () -> List<Voice>,
-    ): List<Voice> {
+        downloadVoices: suspend () -> List<Voice>,
+    ): List<Voice> = nativeCall {
         val normalizedKey = apiKey.trim()
-        require(normalizedKey.isNotEmpty()) { "Google Cloud API key is required" }
+        if (normalizedKey.isEmpty()) throw NativeFailure(NativeFailureKind.Validation)
         val previousConfig = configRepository.getGoogleSpeechConfig()
         val previousSettings = settingsUseCase.get()
-        configRepository.saveGoogleSpeechConfig(GoogleSpeechConfig(normalizedKey))
-        return try {
-            val voices = refreshVoices()
-            check(voices.isNotEmpty()) {
-                "Google Cloud could not load voices. Check the API key, billing, restrictions, and network connection."
-            }
+        try {
+            configRepository.saveGoogleSpeechConfig(GoogleSpeechConfig(normalizedKey))
+            val voices = verifiedGoogleVoices(downloadVoices)
+            voiceUseCase.saveGoogleCatalog(voices)
             settingsUseCase.update(previousSettings.copy(ttsEngine = TtsEngine.GOOGLE_CLOUD))
             voices
         } catch (failure: Exception) {
-            withContext(NonCancellable) {
-                if (previousConfig == null) {
-                    configRepository.clearGoogleSpeechConfig()
-                } else {
-                    configRepository.saveGoogleSpeechConfig(previousConfig)
+            try {
+                withContext(NonCancellable) {
+                    if (previousConfig == null) {
+                        configRepository.clearGoogleSpeechConfig()
+                    } else {
+                        configRepository.saveGoogleSpeechConfig(previousConfig)
+                    }
+                    settingsUseCase.update(previousSettings)
                 }
-                settingsUseCase.update(previousSettings)
+            } catch (_: Exception) {
+                // Cancellation wins; otherwise the previous key may not be back, which is a storage failure.
+                if (failure !is CancellationException) throw NativeFailure(NativeFailureKind.Persistence)
             }
             throw failure
         }
     }
 
-    suspend fun clearGoogleSpeechConfig() {
-        configRepository.clearGoogleSpeechConfig()
+    /** Only Google's answer decides validity: a refused key or an empty catalog is not a usable key. */
+    private suspend fun verifiedGoogleVoices(downloadVoices: suspend () -> List<Voice>): List<Voice> {
+        val voices = try {
+            downloadVoices()
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (failure: GoogleCloudRequestException) {
+            throw NativeFailure(
+                if (failure.rejectedCredential) NativeFailureKind.Validation else NativeFailureKind.Network,
+            )
+        } catch (_: Exception) {
+            throw NativeFailure(NativeFailureKind.Network)
+        }
+        if (voices.isEmpty()) throw NativeFailure(NativeFailureKind.Validation)
+        return voices
     }
+
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun clearGoogleSpeechConfig() = nativeCall { configRepository.clearGoogleSpeechConfig() }
 
     fun isValidAzureSpeechEndpoint(endpoint: String): Boolean =
         AzureSpeechEndpoint.parse(endpoint) is AzureSpeechEndpointResult.Valid

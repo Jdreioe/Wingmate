@@ -98,18 +98,6 @@ private enum BoardKeyAction: String, CaseIterable, Identifiable {
     }
 }
 
-private func resolveCellOpenSymbolsProxyUrl() -> String? {
-    let fromInfoRaw = Bundle.main.object(forInfoDictionaryKey: "OPEN_SYMBOLS_PROXY_URL") as? String
-    let fromInfo = fromInfoRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let fromInfo, !fromInfo.isEmpty { return fromInfo }
-
-    let fromEnvRaw = ProcessInfo.processInfo.environment["OPENSYMBOLS_PROXY_URL"]
-    let fromEnv = fromEnvRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let fromEnv, !fromEnv.isEmpty { return fromEnv }
-
-    return nil
-}
-
 private enum BoardWorkspaceMode: Equatable {
     case run
     case edit
@@ -1771,40 +1759,37 @@ struct SymbolBoardWorkspaceView: View {
         let trimmed = editingSymbolQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let bridge = KoinBridge()
-        bridge.setOpenSymbolsProxyUrl(url: resolveCellOpenSymbolsProxyUrl())
-
         await MainActor.run {
             isSearchingCellSymbols = true
             editingSymbolError = nil
             editingSymbolResults = []
         }
 
-        guard let result = try? await bridge.openSymbolsSearch(
+        // Cancellation ends the search without an error.
+        guard let result = try? await IosDiBridge().symbolSearchFacade().search(
             query: trimmed,
             locale: Locale.current.identifier,
             symbolPackage: editingSymbolPackage.rawValue,
             prioritizeArasaac: false
         ) else {
-            await MainActor.run {
-                isSearchingCellSymbols = false
-                editingSymbolError = NSLocalizedString("phrase.symbol.error.search_failed", comment: "")
-            }
+            await MainActor.run { isSearchingCellSymbols = false }
             return
         }
 
         await MainActor.run {
-            if result.errorCode.isEmpty {
+            if result.isSuccess {
                 editingSymbolResults = result.symbols.map {
                     CellOpenSymbolsSymbolResult(
                         id: $0.id,
-                        name: $0.name ?? "",
+                        name: $0.name,
                         image_url: $0.imageUrl,
                         source: $0.source
                     )
                 }
             } else {
-                editingSymbolError = NSLocalizedString("phrase.symbol.error.\(result.errorCode)", comment: "")
+                editingSymbolError = NSLocalizedString(
+                    "phrase.symbol.error.\(symbolSearchErrorCode(result.status))", comment: ""
+                )
             }
             isSearchingCellSymbols = false
         }
@@ -1909,10 +1894,10 @@ struct SymbolBoardWorkspaceView: View {
     private func exportBoardSet(id: String) async {
         let result = try? await IosDiBridge().boardsFacade().shareBoardSetAsObz(id: id)
         let message: String
-        if let result, result.success {
-            message = result.message
+        if let result, result.isSuccess, let fileName = result.fileName {
+            message = String(format: NSLocalizedString("boardset.export_obz_done", comment: ""), fileName)
         } else {
-            message = result?.message ?? NSLocalizedString("boardset.export_obz_failed", comment: "")
+            message = NSLocalizedString("boardset.export_obz_failed", comment: "")
         }
         await MainActor.run {
             model.boardStatusMessage = message

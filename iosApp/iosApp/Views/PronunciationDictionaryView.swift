@@ -9,6 +9,10 @@ struct PronunciationDictionaryView: View {
     
     var body: some View {
         List {
+            if let error = model.pronunciationError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+            }
             if model.pronunciations.isEmpty {
                 Text("pronunciation.empty")
                     .foregroundStyle(.secondary)
@@ -120,7 +124,10 @@ struct AddPronunciationSheet: View {
                         model.addPronunciation(word: word, phoneme: phoneme, alphabet: alphabet)
                         dismiss()
                     }
-                    .disabled(word.isEmpty || phoneme.isEmpty)
+                    .disabled(
+                        word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || phoneme.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
                 }
             }
             .navigationTitle(Text("pronunciation.add_title"))

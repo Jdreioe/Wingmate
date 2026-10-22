@@ -201,6 +201,8 @@
 "pronunciation.add_title" = "Tilføj udtale";
 "pronunciation.ipa_palette" = "IPA-symboler";
 "pronunciation.delete_last" = "Slet sidste";
+"pronunciation.error.load_failed" = "Udtaleordbogen kunne ikke indlæses. Prøv igen.";
+"pronunciation.error.save_failed" = "Ændringen af udtalen kunne ikke gemmes. Prøv igen.";
 
 "welcome_flow.choose_primary_language" = "Vælg primært sprog til denne stemme";
 "welcome_flow.select_language" = "Vælg sprog";
@@ -239,6 +241,8 @@
 "boardset.error.locked" = "Denne skærm er låst.";
 "boardset.error.no_board" = "Ingen side valgt.";
 "boardset.error.save_failed" = "Skærmen kunne ikke gemmes.";
+"boardset.error.not_found" = "Skærmen eller siden findes ikke længere.";
+"boardset.error.download_failed" = "Skærmen kunne ikke downloades. Kontrollér forbindelsen, og prøv igen.";
 "boardset.error.cell_update_failed" = "Feltet kunne ikke opdateres.";
 "boardset.error.cell_clear_failed" = "Feltet kunne ikke ryddes.";
 
@@ -369,6 +373,8 @@
 "settings.speech.google.setup.ios_restriction" = "Bundle-id: %@";
 "settings.speech.google.setup.save_validate" = "Gem sikkert og bekræft";
 "settings.speech.google.setup.validation_failed" = "Wingmate kunne ikke bekræfte nøglen. Kontrollér nøgle, forbindelse, fakturering, API-adgang og begrænsninger. Din tidligere opsætning er bevaret.";
+"settings.speech.google.setup.network_failed" = "Wingmate kunne ikke få forbindelse til Google Cloud. Kontrollér forbindelsen, og prøv igen. Din tidligere opsætning er bevaret.";
+"settings.speech.google.setup.save_failed" = "Wingmate kunne ikke gemme nøglen på enheden. Prøv igen. Din tidligere opsætning er bevaret.";
 "settings.speech.google.setup.complete_title" = "Google TTS er klar";
 "settings.speech.google.setup.complete_description" = "Nøglen er bekræftet og gemt i enhedens nøglering. Den medtages ikke i sikkerhedskopier.";
 "common.back" = "Tilbage";
@@ -481,6 +487,8 @@
 "boardset.cell.action.home" = "Gå til startsiden";
 "boardset.cell.action.speak" = "Læs sætningen op";
 "boardset.cell.action.prediction" = "Ordforslag";
+"boardset.export_obz_failed" = "Eksport mislykkedes";
+"boardset.export_obz_done" = "%@ eksporteret";
 "playback.fullscreen" = "Vis på fuld skærm";
 "voice.model.label" = "Model";
 "voice.model.all" = "Alle modeller";

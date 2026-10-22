@@ -2,16 +2,22 @@ import io.github.jdreioe.wingmate.application.DefaultEditingAccessStore
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.InMemorySecureEditingCredentialStorage
+import io.github.jdreioe.wingmate.application.NativeFailure
+import io.github.jdreioe.wingmate.application.NativeFailureKind
 import io.github.jdreioe.wingmate.application.SettingsFacade
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.domain.AacLogger
+import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SpeechPolicy
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.WordTypeColorScheme
 import io.github.jdreioe.wingmate.infrastructure.InMemorySettingsRepository
 import kotlinx.coroutines.runBlocking
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -100,8 +106,35 @@ class SettingsFacadeTest {
         assertTrue(facade.getSettings().featureUsageReportingEnabled)
     }
 
+    @Test
+    fun storageFailureIsRetryableAndCancellationStaysCancellation() = runBlocking {
+        val broken = facade(settings = FailingSettingsRepository(RuntimeException("phrase: I need my inhaler")))
+        val cancelled = facade(settings = FailingSettingsRepository(CancellationException("left")))
+
+        val failure = assertFailsWith<NativeFailure> { broken.updateShowLabels(false) }
+        assertFailsWith<CancellationException> { cancelled.updateShowLabels(false) }
+
+        assertEquals(NativeFailureKind.Persistence, failure.kind)
+        assertTrue(failure.isRetryable)
+        assertEquals("Persistence", failure.message)
+    }
+
+    @Test
+    fun editingAccessCodeIsRejectedWhenMalformedOrStillLocked() = runBlocking {
+        val facade = facade()
+
+        val malformed = assertFailsWith<NativeFailure> { facade.configureEditingAccess("12a") }
+        facade.configureEditingAccess("1234")
+        facade.lockEditingAccess()
+        val locked = assertFailsWith<NativeFailure> { facade.configureEditingAccess("5678") }
+
+        assertEquals(NativeFailureKind.Validation, malformed.kind)
+        assertEquals(NativeFailureKind.Validation, locked.kind)
+        assertTrue(facade.unlockEditing("1234"))
+    }
+
     private fun facade(
-        settings: InMemorySettingsRepository = InMemorySettingsRepository(),
+        settings: SettingsRepository = InMemorySettingsRepository(),
         logger: AacLogger = RecordingAacLogger(),
         reporter: FeatureUsageReporter = RecordingFeatureUsageReporter(),
     ): SettingsFacade = SettingsFacade(
@@ -112,6 +145,11 @@ class SettingsFacadeTest {
         aacLogger = logger,
         featureUsageReporter = reporter,
     )
+
+    private class FailingSettingsRepository(private val failure: Exception) : SettingsRepository {
+        override suspend fun get(): Settings = throw failure
+        override suspend fun update(settings: Settings): Settings = throw failure
+    }
 
     private class RecordingAacLogger : AacLogger {
         val setEnabledCalls = mutableListOf<Boolean>()

@@ -1,6 +1,5 @@
 package io.github.jdreioe.wingmate.application
 
-import io.github.jdreioe.wingmate.NativeSubscription
 import io.github.jdreioe.wingmate.domain.CommunicationAction
 import io.github.jdreioe.wingmate.domain.CommunicationFailureKind
 import io.github.jdreioe.wingmate.domain.CommunicationPersistenceStatus
@@ -23,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 /** Where speech stands. Flattened for Swift, which cannot see the session's own types. */
 enum class SessionPlayback { Idle, Preparing, Playing, Paused }
@@ -202,7 +202,8 @@ class CommunicationSessionFacade(
     fun retryStorage() = session.accept(CommunicationAction.RetryPersistence)
 
     /** Reloads the Message after a backup restore replaced it on disk. */
-    suspend fun reloadAfterRestore() = session.reloadAfterRestore()
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun reloadAfterRestore() = nativeCall { session.reloadAfterRestore() }
 
     private fun currentText(): String = session.state.value.activeMessage.displayText
 }

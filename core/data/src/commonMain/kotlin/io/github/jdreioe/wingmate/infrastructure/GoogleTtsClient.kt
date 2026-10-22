@@ -170,14 +170,25 @@ object GoogleTtsClient {
         }
     }
 
-    private fun googleFailure(operation: String, status: Int): IllegalStateException =
-        IllegalStateException(
+    private fun googleFailure(operation: String, status: Int): GoogleCloudRequestException =
+        GoogleCloudRequestException(
+            status,
             when (status) {
                 400, 401, 403 -> "Google Cloud could not $operation. Check the API key, project, API access, and required IAM permissions."
                 429 -> "Google Cloud Text-to-Speech quota was exceeded. Try again later."
                 else -> "Google Cloud could not $operation (HTTP $status)."
             },
         )
+}
+
+/** Google answered with an HTTP error. The message is safe to show; it never holds the key. */
+class GoogleCloudRequestException(
+    val statusCode: Int,
+    message: String,
+) : IllegalStateException(message) {
+    /** Google refused the key or its project access, so retrying with the same key won't help. */
+    val rejectedCredential: Boolean
+        get() = statusCode == 400 || statusCode == 401 || statusCode == 403
 }
 
 private fun Voice.googleProviderVoiceName(language: String, model: GoogleVoiceModel?): String? {
