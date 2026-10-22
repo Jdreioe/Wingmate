@@ -118,7 +118,7 @@ class PhraseScreenViewModelTest {
     }
 
     @Test
-    fun `Phrase linked to a board opens it instead of speaking`() = runTest {
+    fun `Phrase linked to a Category opens it instead of speaking`() = runTest {
         val operations = operations(BoardActivationBehavior.SpeakOnly)
         val viewModel = PhraseScreenViewModel(SavedStateHandle(), operations)
         val folder = phrase("drinks", "Drinks").copy(linkedBoardId = "drinks-board")
@@ -304,6 +304,24 @@ class PhraseScreenViewModelTest {
 
         assertEquals(listOf(draft to true), operations.saved)
         assertNull(viewModel.state.value.dialog)
+        assertEquals("Hello", operations.message)
+    }
+
+    @Test
+    fun `dismissing a failed edit discards its retry action`() = runTest {
+        val operations = operations()
+        val viewModel = PhraseScreenViewModel(SavedStateHandle(), operations)
+        viewModel.type("Hello")
+        viewModel.onAction(PhraseScreenAction.RequestDialog(TypingDialog.EditPhrase, phraseId = "water"))
+        operations.failNextWrites = 1
+        viewModel.onAction(PhraseScreenAction.SavePhrase(water.copy(text = "Cold water")))
+        assertTrue(viewModel.state.value.mutationFailed)
+
+        viewModel.onAction(PhraseScreenAction.DismissDialog)
+        viewModel.onAction(PhraseScreenAction.RetryMutation)
+
+        assertNull(viewModel.state.value.failedMutation)
+        assertTrue(operations.saved.isEmpty())
         assertEquals("Hello", operations.message)
     }
 

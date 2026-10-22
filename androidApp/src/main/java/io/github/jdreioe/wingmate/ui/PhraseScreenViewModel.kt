@@ -46,7 +46,6 @@ internal data class PhraseScreenState(
     val phraseDraft: Phrase? = null,
     val dialogCategoryId: String? = null,
     val categoryName: String = "",
-    val mutationFailed: Boolean = false,
     val mutationInProgress: Boolean = false,
     val failedMutation: PhraseScreenAction? = null,
     val input: TextFieldValue = TextFieldValue(),
@@ -54,6 +53,7 @@ internal data class PhraseScreenState(
     val voice: Voice? = null,
     val predictions: PredictionResult = PredictionResult(),
 ) {
+    val mutationFailed: Boolean get() = failedMutation != null
     val selectedCategory: CategoryItem? get() = (selectedPage as? TypingPageSelection.Category)?.category
     val dialogPhrase: Phrase? get() = phraseDraft ?: phrases.items.find { it.id == dialogPhraseId }
     val dialogCategory: CategoryItem? get() = categories.find { it.id == dialogCategoryId }
@@ -480,7 +480,7 @@ internal class PhraseScreenViewModel(
         savedState["dialogCategory"] = categoryId
         if (dialog == null) savedState["phraseDraft"] = null
         _state.update { it.copy(dialog = dialog, dialogPhraseId = phraseId, dialogCategoryId = categoryId,
-            phraseDraft = if (dialog == null) null else it.phraseDraft, mutationFailed = false) }
+            phraseDraft = if (dialog == null) null else it.phraseDraft, failedMutation = null) }
     }
 
     private fun showDialog(action: PhraseScreenAction.RequestDialog) {
@@ -508,13 +508,13 @@ internal class PhraseScreenViewModel(
         }
     }
 
-    private fun mutate(action: PhraseScreenAction? = null, block: suspend () -> Unit) {
+    private fun mutate(action: PhraseScreenAction, block: suspend () -> Unit) {
         viewModelScope.launch {
             mutations.withLock {
-                _state.update { it.copy(mutationInProgress = true, mutationFailed = false, failedMutation = null) }
+                _state.update { it.copy(mutationInProgress = true, failedMutation = null) }
                 try { block() }
                 catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { _state.update { it.copy(mutationFailed = true, failedMutation = action) } }
+                catch (_: Exception) { _state.update { it.copy(failedMutation = action) } }
                 finally {
                     operations.phrase(PhraseEvent.Load)
                     _state.update { it.copy(mutationInProgress = false) }

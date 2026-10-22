@@ -87,7 +87,7 @@ class PhraseScreenContentTest {
 
     @Test
     fun failedEditOffersRetryAndKeepsTheMessage() {
-        val actions = render(ready.copy(mutationFailed = true, failedMutation = PhraseScreenAction.DeletePhrase("water")))
+        val actions = render(ready.copy(failedMutation = PhraseScreenAction.DeletePhrase("water")))
 
         composeRule.onNodeWithText(context.getString(R.string.typing_screen_save_failed)).assertIsDisplayed()
         composeRule.onNodeWithText(message).assertIsDisplayed()
@@ -98,7 +98,7 @@ class PhraseScreenContentTest {
 
     @Test
     fun categoryDraftIsShownAndItsActionsAreRouted() {
-        val actions = render(ready.copy(dialog = TypingDialog.AddCategory, categoryName = "Snacks", mutationFailed = true))
+        val actions = render(ready.copy(dialog = TypingDialog.AddCategory, categoryName = "Snacks", failedMutation = PhraseScreenAction.SaveCategory))
 
         composeRule.onNodeWithText("Snacks").assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.common_add)).performClick()
