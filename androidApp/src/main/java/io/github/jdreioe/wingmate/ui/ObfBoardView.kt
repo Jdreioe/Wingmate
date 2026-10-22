@@ -84,6 +84,10 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
@@ -757,6 +761,12 @@ internal fun buildBoardGridItems(
     )
 }
 
+/**
+ * Screen-reader actions (move, options) for the grid cell being composed. The grid owns
+ * them, but they must sit on the Button's own focusable node for TalkBack to offer them.
+ */
+private val LocalBoardCellActions = compositionLocalOf { emptyList<CustomAccessibilityAction>() }
+
 @Composable
 internal fun SpanningBoardGrid(
     rows: Int,
@@ -1137,33 +1147,6 @@ internal fun SpanningBoardGrid(
                                     }
                                 )
                                 .then(
-                                    if (movableIndex >= 0 && reorder != null) {
-                                        val button = item.button!!
-                                        Modifier.semantics {
-                                            customActions = listOfNotNull(
-                                                movable.getOrNull(movableIndex - 1)?.button?.let { previous ->
-                                                    CustomAccessibilityAction(moveEarlierLabel) {
-                                                        reorder.onMove(button, previous)
-                                                        true
-                                                    }
-                                                },
-                                                movable.getOrNull(movableIndex + 1)?.button?.let { next ->
-                                                    CustomAccessibilityAction(moveLaterLabel) {
-                                                        reorder.onMove(button, next)
-                                                        true
-                                                    }
-                                                },
-                                                CustomAccessibilityAction(optionsLabel) {
-                                                    menuButtonId = button.id
-                                                    true
-                                                },
-                                            )
-                                        }
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                                .then(
                                     if (isSelected) {
                                         Modifier.border(3.dp, selectionColor, ringShape)
                                     } else {
@@ -1187,7 +1170,32 @@ internal fun SpanningBoardGrid(
                                     }
                                 )
                         ) {
-                            content(item)
+                            val cellActions = if (movableIndex >= 0 && reorder != null) {
+                                val button = item.button!!
+                                listOfNotNull(
+                                    movable.getOrNull(movableIndex - 1)?.button?.let { previous ->
+                                        CustomAccessibilityAction(moveEarlierLabel) {
+                                            reorder.onMove(button, previous)
+                                            true
+                                        }
+                                    },
+                                    movable.getOrNull(movableIndex + 1)?.button?.let { next ->
+                                        CustomAccessibilityAction(moveLaterLabel) {
+                                            reorder.onMove(button, next)
+                                            true
+                                        }
+                                    },
+                                    CustomAccessibilityAction(optionsLabel) {
+                                        menuButtonId = button.id
+                                        true
+                                    },
+                                )
+                            } else {
+                                emptyList()
+                            }
+                            CompositionLocalProvider(LocalBoardCellActions provides cellActions) {
+                                content(item)
+                            }
                             val menuButton = item.button
                             if (reorder != null && menuButton != null && menuButton.id == menuButtonId) {
                                 reorder.menu(menuButton) {
@@ -1538,6 +1546,8 @@ internal fun ObfButtonContent(
         ) "" else resolveObfLocalizedString(boardStrings, locale, button.label)
     val displayVocalization = resolveObfLocalizedString(boardStrings, locale, button.vocalization)
     val temporarilyRevealedDescription = stringResource(R.string.board_workspace_temporarily_revealed)
+    val hiddenDescription = stringResource(R.string.board_dialog_hidden)
+    val cellActions = LocalBoardCellActions.current
     val boundedFontScale = fieldFontScale.coerceIn(1f, 2f)
     val scaledLabelMedium = MaterialTheme.typography.labelMedium.copy(
         fontSize = MaterialTheme.typography.labelMedium.fontSize * boundedFontScale,
@@ -1664,13 +1674,12 @@ internal fun ObfButtonContent(
             .scale(scale)
             .alpha(if (!enabled || (button.hidden && isEditMode)) 0.5f else 1f)
             .semantics {
+                role = Role.Button
                 if (!enabled) disabled()
-                if (isTemporarilyRevealed) {
-                    contentDescription = listOfNotNull(
-                        displayLabel,
-                        temporarilyRevealedDescription
-                    ).joinToString(", ")
-                }
+                // The visible label is already read; state only adds what sight alone shows.
+                if (isTemporarilyRevealed) stateDescription = temporarilyRevealedDescription
+                else if (button.hidden && isEditMode) stateDescription = hiddenDescription
+                if (cellActions.isNotEmpty()) customActions = cellActions
             }
             .let { baseModifier ->
                 if (!enabled) baseModifier else baseModifier.pointerInput(Unit) {
@@ -1691,7 +1700,10 @@ internal fun ObfButtonContent(
                 if (!enabled) {
                     baseModifier
                 } else if (settings.holdToSelectMillis > 0 && !isEditMode) {
-                    baseModifier.pointerInput(settings.holdToSelectMillis) {
+                    // A screen reader's double-tap is already deliberate, so it activates without the hold.
+                    baseModifier.semantics(mergeDescendants = true) {
+                        onClick { primaryAction(); true }
+                    }.pointerInput(settings.holdToSelectMillis) {
                         detectTapGestures(
                             onLongPress = { onLongClick?.invoke() },
                             onPress = {
@@ -1791,7 +1803,8 @@ internal fun ObfButtonContent(
                         BoardSymbolImage(
                             bitmap = imageBitmap,
                             model = imageModel,
-                            contentDescription = displayLabel,
+                            // The label above already names the Button.
+                            contentDescription = null,
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp).clip(buttonShape)
                         )
                     }
@@ -1808,7 +1821,8 @@ internal fun ObfButtonContent(
                             BoardSymbolImage(
                                 bitmap = imageBitmap,
                                 model = imageModel,
-                                contentDescription = displayLabel,
+                                // Only symbol-only Buttons need the image to carry their name.
+                                contentDescription = if (showLbl) null else displayLabel,
                                 modifier = Modifier.weight(1f).fillMaxWidth().padding(2.dp).clip(buttonShape)
                             )
                         }

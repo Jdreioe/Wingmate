@@ -4,8 +4,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -76,6 +85,43 @@ class PhraseScreenContentTest {
             ),
             actions,
         )
+    }
+
+    // --- Screen reader: the core speak flow through accessibility actions alone ---
+
+    @Test
+    fun phrasesAndSpeakWorkThroughAccessibilityActionsEvenWithHoldToSelect() {
+        // A screen reader's double-tap is an accessibility click, never a timed hold.
+        val actions = render(ready.copy(settings = Settings(holdToSelectMillis = 800)))
+
+        composeRule.onNodeWithText("Water")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.onNodeWithContentDescription(context.getString(R.string.playback_play))
+            .performSemanticsAction(SemanticsActions.OnClick)
+
+        assertEquals(
+            listOf(PhraseScreenAction.ActivatePhrase(water), PhraseScreenAction.Control(ObfButtonActionEffect.Speak)),
+            actions,
+        )
+    }
+
+    @Test
+    fun phraseOptionsAreOfferedOnThePhraseItself() {
+        render(ready)
+
+        val options = context.getString(R.string.phrase_item_edit)
+        composeRule.onNodeWithText("Water").assert(SemanticsMatcher("offers $options") { node ->
+            node.config.getOrNull(SemanticsActions.CustomActions).orEmpty().any { it.label == options }
+        })
+    }
+
+    @Test
+    fun emptyMessageFieldIsNamedByItsHint() {
+        render(ready.copy(input = TextFieldValue("")))
+
+        composeRule.onNode(hasSetTextAction() and hasText(context.getString(R.string.phrase_screen_enter_text_placeholder)))
+            .assertIsDisplayed()
     }
 
     @Test
