@@ -91,6 +91,8 @@ class SettingsFacade(
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateSelectionDebounceMillis(millis: Long) = updateSettings { it.copy(selectionDebounceMillis = millis.coerceIn(0, 1_000)) }
     @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun updateSelectionHighlightMillis(millis: Long) = updateSettings { it.copy(selectionHighlightMillis = millis.coerceIn(0, 2_000)) }
+    @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateSelectionSoundEnabled(enabled: Boolean) = updateSettings { it.copy(selectionSoundEnabled = enabled) }
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateAuditoryFishingEnabled(enabled: Boolean) = updateSettings { it.copy(auditoryFishingEnabled = enabled) }

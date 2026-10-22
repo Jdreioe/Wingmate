@@ -530,6 +530,13 @@ private struct AccessibilitySettingsView: View {
                 Toggle("settings.accessibility.selection_sound", isOn: Binding(
                     get: { model.selectionSoundEnabled }, set: { model.setSelectionSoundEnabled($0) }
                 ))
+                SettingsSliderRow(
+                    title: "settings.accessibility.selection_highlight",
+                    value: Binding(get: { Double(model.selectionHighlightMillis) }, set: { model.setSelectionHighlightMillis($0) }),
+                    range: 0...2_000,
+                    step: 100,
+                    suffix: " ms"
+                )
                 Picker("settings.speech_policy.title", selection: Binding(
                     get: { model.speechPolicy }, set: { model.setSpeechPolicy($0) }
                 )) {

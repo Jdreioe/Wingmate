@@ -1868,6 +1868,7 @@ internal fun ObfButtonContent(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
+                        .testTag("selection-highlight")
                         .border(4.dp, selectionHighlightColor, RoundedCornerShape(12.dp))
                 )
             }
