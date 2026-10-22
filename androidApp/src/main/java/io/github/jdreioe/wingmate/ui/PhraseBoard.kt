@@ -183,8 +183,8 @@ fun TypingScreenTray(
                     showSpeakControl = false,
                     showDeleteControl = false,
                     showClearControl = false,
-                    // Keep Phrases full-size and scroll, rather than shrinking
-                    // them to fit a tray the height of the keyboard.
+                    // Fit whole rows to the keyboard-height tray without shrinking
+                    // below the Communicator's preferred minimum button size.
                     scrollingMinimumCellHeight = 72.dp * settings.inputFieldScale.coerceIn(0.75f, 2f),
                     onButtonClick = { button ->
                         if (button.id == ADD_PHRASE_BUTTON_ID) onAddPhrase()

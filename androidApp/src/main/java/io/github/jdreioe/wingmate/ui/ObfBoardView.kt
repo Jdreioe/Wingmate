@@ -199,8 +199,8 @@ fun ObfBoardView(
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
     onGridHeightFractionChange: ((Float) -> Unit)? = null,
     homeBoardId: String? = null,
-    // When set, grid rows never shrink below this height; the grid scrolls
-    // instead. Used by the Typing Screen's Phrase collection (#248).
+    // When set, fit whole rows to the viewport while keeping this minimum
+    // height, and scroll any remaining rows. Used by the Phrase collection.
     scrollingMinimumCellHeight: Dp? = null,
     reorder: BoardReorder? = null,
 ) {
@@ -386,7 +386,16 @@ fun ObfBoardView(
                     }
                     val fittedHeight = availableGridHeight * previewHeightFraction
                     val contentHeight = scrollingMinimumCellHeight
-                        ?.let { maxOf(fittedHeight, it * rows + 8.dp * (rows - 1)) }
+                        ?.let { minimumHeight ->
+                            val gap = 8.dp
+                            val visibleRows = ((availableGridHeight + gap) / (minimumHeight + gap))
+                                .toInt().coerceIn(1, rows)
+                            val rowHeight = maxOf(
+                                minimumHeight,
+                                (availableGridHeight - gap * (visibleRows - 1)) / visibleRows,
+                            )
+                            rowHeight * rows + gap * (rows - 1)
+                        }
                         ?: fittedHeight
                     Box(modifier = Modifier.fillMaxSize().verticalScroll(pageScrollState)) {
                         Box(
