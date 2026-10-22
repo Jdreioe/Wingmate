@@ -7,6 +7,7 @@ import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.legacyCategoryFolders
 import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.CommunicationSessionSnapshot
 import io.github.jdreioe.wingmate.domain.Settings
@@ -19,6 +20,7 @@ import kotlinx.serialization.json.Json
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
+import kotlin.time.Clock
 
 @Serializable
 internal data class DesktopSnapshot(
@@ -27,7 +29,6 @@ internal data class DesktopSnapshot(
     val settings: Settings = Settings(),
     val pronunciations: List<PronunciationEntry> = emptyList(),
     val phrases: List<Phrase> = emptyList(),
-    val categories: List<CategoryItem> = emptyList(),
     val voices: List<Voice> = emptyList(),
     val selectedVoice: Voice? = null,
     val history: List<SaidText> = emptyList(),
@@ -39,6 +40,9 @@ internal data class DesktopSnapshot(
      */
     val desktopTheme: String = "system",
 )
+
+@Serializable
+private data class LegacyCategories(val categories: List<CategoryItem> = emptyList())
 
 /** One atomic JSON store for desktop. Domain repositories remain the API used by shared Kotlin. */
 internal class DesktopStore(
@@ -57,7 +61,13 @@ internal class DesktopStore(
 
     private fun loadSnapshot(): DesktopSnapshot = runCatching {
         if (!fileSystem.exists(stateFile)) DesktopSnapshot()
-        else json.decodeFromString<DesktopSnapshot>(fileSystem.read(stateFile) { readUtf8() })
+        else {
+            val text = fileSystem.read(stateFile) { readUtf8() }
+            val snapshot = json.decodeFromString<DesktopSnapshot>(text)
+            // State from an older restore may still hold a flat Category list; it is dropped on the next save.
+            val categories = json.decodeFromString<LegacyCategories>(text).categories
+            snapshot.copy(phrases = snapshot.phrases + legacyCategoryFolders(categories, snapshot.phrases, Clock.System.now().toEpochMilliseconds()))
+        }
     }.getOrDefault(DesktopSnapshot())
 
     private fun persist(snapshot: DesktopSnapshot = state) {

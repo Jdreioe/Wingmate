@@ -14,7 +14,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.test.platform.app.InstrumentationRegistry
 import com.hojmoseit.wingmate.R
-import io.github.jdreioe.wingmate.application.PhraseState
 import io.github.jdreioe.wingmate.application.TypingScreenProjector
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.CommunicationAction
@@ -44,7 +43,8 @@ class PhraseScreenContentTest {
         isInitialized = true,
     )
     private val ready = PhraseScreenState(
-        phrases = PhraseState(items = listOf(water)),
+        phrases = listOf(water),
+        phraseStatus = TypingLoadStatus.Ready,
         communication = communication,
         template = TypingScreenProjector.defaultTemplate(columns = 3, now = 1L),
         templateStatus = TypingLoadStatus.Ready,

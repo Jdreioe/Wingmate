@@ -29,7 +29,8 @@ internal enum class TypingLoadStatus { Loading, Ready, Failed }
 
 @Stable
 internal data class PhraseScreenState(
-    val phrases: PhraseState = PhraseState(),
+    val phrases: List<Phrase> = emptyList(),
+    val phraseStatus: TypingLoadStatus = TypingLoadStatus.Loading,
     val communication: CommunicationSessionState = CommunicationSessionState(),
     val settings: Settings = Settings(),
     val template: BoardSetGraph? = null,
@@ -55,15 +56,15 @@ internal data class PhraseScreenState(
 ) {
     val mutationFailed: Boolean get() = failedMutation != null
     val selectedCategory: CategoryItem? get() = (selectedPage as? TypingPageSelection.Category)?.category
-    val dialogPhrase: Phrase? get() = phraseDraft ?: phrases.items.find { it.id == dialogPhraseId }
+    val dialogPhrase: Phrase? get() = phraseDraft ?: phrases.find { it.id == dialogPhraseId }
     val dialogCategory: CategoryItem? get() = categories.find { it.id == dialogCategoryId }
     val isHistory: Boolean get() = settings.historyVisible && selectedPage == TypingPageSelection.History
     val vocabularyReady: Boolean get() = templateStatus == TypingLoadStatus.Ready &&
-        categoryStatus == TypingLoadStatus.Ready && !phrases.loading && phrases.error == null && !mutationInProgress
-    val visiblePhrases: List<Phrase> get() = if (isHistory) emptyList() else phrases.items.filter {
+        categoryStatus == TypingLoadStatus.Ready && phraseStatus == TypingLoadStatus.Ready && !mutationInProgress
+    val visiblePhrases: List<Phrase> get() = if (isHistory) emptyList() else phrases.filter {
         it.isGridPhrase() && (selectedCategory == null || it.parentId == selectedCategory?.id)
     }
-    val compactPhrases: List<Phrase> get() = phrases.items.filter {
+    val compactPhrases: List<Phrase> get() = phrases.filter {
         it.isGridPhrase() && (lastPhraseCategoryId == null || it.parentId == lastPhraseCategoryId)
     }
     val secondaryRanges: List<TextRange> get() = communication.activeMessage.languageSpans
@@ -109,11 +110,10 @@ internal sealed interface PhraseScreenEvent {
 
 /** The Android adapter owns I/O; the ViewModel can be exercised without Koin or a device. */
 internal interface PhraseScreenOperations {
-    val phrases: StateFlow<PhraseState>
     val communication: StateFlow<CommunicationSessionState>
     val settings: StateFlow<Settings>
-    fun phrase(event: PhraseEvent)
     fun communicate(action: CommunicationAction)
+    suspend fun phrases(): List<Phrase>
     suspend fun savePhrase(phrase: Phrase, editing: Boolean)
     suspend fun deletePhrase(id: String)
     suspend fun movePhrase(from: Int, to: Int)
@@ -130,7 +130,6 @@ internal interface PhraseScreenOperations {
 }
 
 internal class DefaultPhraseScreenOperations(
-    private val bloc: PhraseBloc,
     private val session: CommunicationSession,
     settingsManager: SettingsStateManager,
     private val typing: TypingScreenUseCase,
@@ -143,11 +142,10 @@ internal class DefaultPhraseScreenOperations(
     private val prediction: TextPredictionService?,
     private val reporter: FeatureUsageReporter,
 ) : PhraseScreenOperations {
-    override val phrases = bloc.state
     override val communication = session.state
     override val settings = settingsManager.settings
-    override fun phrase(event: PhraseEvent) = bloc.dispatch(event)
     override fun communicate(action: CommunicationAction) { session.accept(action) }
+    override suspend fun phrases() = withContext(Dispatchers.IO) { phraseUseCase.list() }
     override suspend fun savePhrase(phrase: Phrase, editing: Boolean) = withContext(Dispatchers.IO) {
         if (editing) phraseUseCase.update(phrase) else phraseUseCase.add(phrase)
         report(if (editing) FeatureUsageEvents.PHRASE_EDITED else FeatureUsageEvents.PHRASE_ADDED,
@@ -217,9 +215,9 @@ internal class PhraseScreenViewModel(
     private var predictionJob: Job? = null
     private var voiceJob: Job? = null
     private var categoryJob: Job? = null
+    private var phraseJob: Job? = null
 
     init {
-        viewModelScope.launch { operations.phrases.collect { phrases -> _state.update { it.copy(phrases = phrases) } } }
         viewModelScope.launch {
             operations.settings.collect { settings ->
                 val previous = state.value.settings
@@ -253,14 +251,14 @@ internal class PhraseScreenViewModel(
                 previousRequest = communication.currentSpeechRequestId
             }
         }
-        operations.phrase(PhraseEvent.Load)
+        loadPhrases()
         loadCategories()
         loadHistory()
     }
 
     fun onAction(action: PhraseScreenAction) {
         when (action) {
-            PhraseScreenAction.RetryLoad -> { operations.phrase(PhraseEvent.Load); loadTemplate(); loadCategories(); loadVoice() }
+            PhraseScreenAction.RetryLoad -> { loadPhrases(); loadTemplate(); loadCategories(); loadVoice() }
             PhraseScreenAction.RetryHistory -> loadHistory()
             PhraseScreenAction.RetryMutation -> state.value.failedMutation?.let(::onAction)
             is PhraseScreenAction.EditInput -> editInput(action.value)
@@ -336,7 +334,7 @@ internal class PhraseScreenViewModel(
                 }
             }
             is PhraseScreenAction.DeletePhrase -> authorize(action) {
-                val removed = phraseSubtree(state.value.phrases.items, action.id)
+                val removed = phraseSubtree(state.value.phrases, action.id)
                 if (removed.isNotEmpty()) mutate(action) {
                     operations.deletePhrase(action.id)
                     val deletionId = ++nextDeletionId
@@ -346,7 +344,7 @@ internal class PhraseScreenViewModel(
                 }
             }
             is PhraseScreenAction.MovePhrase -> authorize(action) {
-                val items = state.value.phrases.items
+                val items = state.value.phrases
                 val from = items.indexOfFirst { it.id == action.movedId }
                 val to = items.indexOfFirst { it.id == action.targetId }
                 if (from >= 0 && to >= 0 && from != to) mutate(action) { operations.movePhrase(from, to) }
@@ -516,10 +514,22 @@ internal class PhraseScreenViewModel(
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { _state.update { it.copy(failedMutation = action) } }
                 finally {
-                    operations.phrase(PhraseEvent.Load)
+                    loadPhrases()
                     _state.update { it.copy(mutationInProgress = false) }
                 }
             }
+        }
+    }
+
+    private fun loadPhrases() {
+        phraseJob?.cancel()
+        phraseJob = viewModelScope.launch {
+            _state.update { it.copy(phraseStatus = TypingLoadStatus.Loading) }
+            try {
+                val phrases = operations.phrases()
+                _state.update { it.copy(phrases = phrases, phraseStatus = TypingLoadStatus.Ready) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { _state.update { it.copy(phraseStatus = TypingLoadStatus.Failed) } }
         }
     }
 
