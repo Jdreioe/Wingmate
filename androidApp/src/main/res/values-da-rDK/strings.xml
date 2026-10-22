@@ -151,6 +151,8 @@
     <string name="board_workspace_save_error">Ændringerne kunne ikke gemmes</string>
     <string name="board_workspace_export_cancelled">Eksport annulleret</string>
     <string name="board_workspace_exported">Eksporterede %1$s</string>
+    <string name="board_workspace_print">Udskriv (PDF)</string>
+    <string name="board_workspace_print_opens">→ %1$s (s. %2$d)</string>
     <string name="board_workspace_export_error">Skærmen kunne ikke eksporteres. Din nuværende skærm blev ikke ændret; prøv igen.</string>
     <string name="board_workspace_speak_sentence">Læs sætningen op</string>
     <string name="board_workspace_delete_last">Slet sidste ord</string>

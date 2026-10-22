@@ -22,9 +22,9 @@ Legend: **Shipped** · **Partial** (works with gaps) · **Planned** (tracked) ·
 | Head tracking providers (#125) | Planned | Planned | None (OS pointer only) |
 | Webcam gaze (#276) | OS input only | OS input only | Experimental Linux x86_64: camera selection, calibration, validation and shared dwell; hardware evaluation pending |
 | External gaze-provider boundary (#126) | Planned | Planned | None |
-| Screen-reader operability of core speak flow | Partial — labels/i18n fixes tracked in #225; end-to-end audit: [#227](https://github.com/Jdreioe/Wingmate/issues/227) | Same as Android | None — `iced` draws its own widgets and exposes no platform accessibility tree |
+| Screen-reader operability of core speak flow | Partial — labels/i18n fixes tracked in #225; end-to-end audit: [#228](https://github.com/Jdreioe/Wingmate/issues/228) | Same as Android | None — `iced` draws its own widgets and exposes no platform accessibility tree |
 | Undo for destructive phrase actions | Shipped (snackbar undo incl. sub-items) | None | None (no Phrase editing on desktop yet) |
-| Print/PDF low-tech board fallback | Planned — [#228](https://github.com/Jdreioe/Wingmate/issues/228) | Planned | Planned |
+| Print/PDF low-tech board fallback ([#227](https://github.com/Jdreioe/Wingmate/issues/227)) | Shipped (Screen menu → Print (PDF): one sheet per Page, links name their page) | Planned | Planned |
 
 ## Desktop (recorded 2026-09)
 
