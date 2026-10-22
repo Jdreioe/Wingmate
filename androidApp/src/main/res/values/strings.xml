@@ -528,7 +528,6 @@
     <string name="phrase_screen_import_export_data">Import/Export Data</string>
     <string name="phrase_screen_welcome_screen">Welcome screen</string>
     <string name="phrase_screen_loading">Loading...</string>
-    <string name="phrase_screen_error">Error: %1$s</string>
     <string name="phrase_screen_enter_text_placeholder">Enter text to speak</string>
     <string name="speech_math_mode">Math</string>
     <string name="speech_math_mode_description">Read plain-text mathematical expressions using Azure Math pronunciation</string>

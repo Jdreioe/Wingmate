@@ -507,7 +507,6 @@
     <string name="phrase_screen_import_export_data">Importer/eksporter data</string>
     <string name="phrase_screen_welcome_screen">Velkomstskærm</string>
     <string name="phrase_screen_loading">Indlæser...</string>
-    <string name="phrase_screen_error">Fejl: %1$s</string>
     <string name="phrase_screen_enter_text_placeholder">Indtast tekst der skal tales</string>
     <string name="speech_math_mode">Matematik</string>
     <string name="speech_math_mode_description">Læs matematiske udtryk i almindelig tekst med Azures matematikudtale</string>
