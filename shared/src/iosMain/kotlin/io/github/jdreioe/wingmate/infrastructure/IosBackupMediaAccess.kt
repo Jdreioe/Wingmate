@@ -5,6 +5,8 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import platform.Foundation.NSData
 import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSFileManager
@@ -15,6 +17,7 @@ import platform.Foundation.dataWithContentsOfFile
 import platform.Foundation.writeToFile
 import platform.posix.memcpy
 
+/** Backup media file IO. Runs off the caller's thread so large backups do not freeze the UI. */
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 class IosBackupMediaAccess : BackupMediaAccess {
     private val root: String by lazy {
@@ -22,20 +25,22 @@ class IosBackupMediaAccess : BackupMediaAccess {
         (urls.firstOrNull() as? NSURL)?.path.orEmpty()
     }
 
-    override suspend fun read(path: String): ByteArray? = NSData.dataWithContentsOfFile(path.removePrefix("file://"))?.toByteArray()
+    override suspend fun read(path: String): ByteArray? = withContext(Dispatchers.Default) {
+        NSData.dataWithContentsOfFile(path.removePrefix("file://"))?.toByteArray()
+    }
 
-    override suspend fun restore(archiveName: String, bytes: ByteArray): String {
+    override suspend fun restore(archiveName: String, bytes: ByteArray): String = withContext(Dispatchers.Default) {
         val directory = "$root/restored-media"
         NSFileManager.defaultManager.createDirectoryAtPath(directory, true, null, null)
         val extension = archiveName.substringAfterLast('.', "bin").take(12)
         val path = "$directory/${platform.Foundation.NSUUID.UUID().UUIDString}.$extension"
         val data = bytes.usePinned { NSData.create(bytes = it.addressOf(0), length = bytes.size.toULong()) }
         check(data.writeToFile(path, atomically = true))
-        return path
+        path
     }
 
     override suspend fun deleteRestored(path: String) {
-        NSFileManager.defaultManager.removeItemAtPath(path, error = null)
+        withContext(Dispatchers.Default) { NSFileManager.defaultManager.removeItemAtPath(path, error = null) }
     }
 
     private fun NSData.toByteArray(): ByteArray = ByteArray(length.toInt()).also { result ->
