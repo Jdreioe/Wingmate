@@ -1,0 +1,4 @@
+• New Typing workspace: the keyboard and your Phrases take turns below the Message bar, which stays in place. Phrases fill the tray in whole rows.
+• One button speaks, pauses and resumes, with Stop while speaking. Long-press a Phrase to edit it, or drag it to move it.
+• If a cloud voice fails, the device voice speaks instead.
+• Fixed: Stop could silence speech until restart, System TTS switched back to Azure, and Categories from 1.1.0 went missing.

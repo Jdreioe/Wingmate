@@ -1,0 +1,4 @@
+• Nyt skriveområde: tastaturet og dine fraser skiftes til at stå under beskedlinjen, som bliver på sin plads. Fraserne fylder bakken med hele rækker.
+• Én knap læser op, holder pause og fortsætter, og Stop vises under oplæsning. Hold på en frase for at redigere den, eller træk den for at flytte den.
+• Hvis en cloudstemme fejler, bruges enhedens stemme i stedet.
+• Rettet: Stop kunne gøre appen stum indtil genstart, System TTS skiftede tilbage til Azure, og kategorier fra 1.1.0 forsvandt.
