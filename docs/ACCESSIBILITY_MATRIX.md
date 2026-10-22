@@ -14,6 +14,7 @@ Legend: **Shipped** · **Partial** (works with gaps) · **Planned** (tracked) ·
 | Per-target selection debounce (#118) | Shipped (+ reject haptic) | Partial (shared logic available; not wired everywhere) | None |
 | Selection highlight (#120) | Shipped (Screens and Typing Screen) | Shipped (Screens, Typing tray, Settings > Accessibility) | None |
 | Select on touch-down (#110) | Shipped (Buttons, Typing action strip, Play/Stop; grids stop scrolling) | None | None |
+| Swipe between Pages (#121) | Shipped (opt-in; Screen page order, Run mode) | None | None |
 | Hold-to-select duration | Shipped | Partial | None (setting stored, no runner support) |
 | Auditory fishing (speak on hover) | Shipped | None | None |
 | Haptic feedback | Shipped (confirm/reject/scan-tick events) | None (UIKit haptics not wired) | None |

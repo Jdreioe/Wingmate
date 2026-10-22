@@ -206,6 +206,15 @@
     <string name="board_settings_return_stay">Stay on this Page</string>
     <string name="board_settings_return_previous">Return to previous Page</string>
     <string name="board_settings_return_start">Return to start Page</string>
+    <string name="board_settings_background_image">Background image</string>
+    <string name="board_settings_background_image_none">None</string>
+    <string name="board_settings_background_image_set">Image set</string>
+    <string name="board_settings_background_image_new">New image chosen</string>
+    <string name="board_settings_background_image_choose">Choose image</string>
+    <string name="board_settings_background_image_remove">Remove background image</string>
+    <string name="board_settings_background_image_fill">Fill page</string>
+    <string name="board_settings_background_image_fit">Whole image</string>
+    <string name="board_settings_background_image_failed">The background image could not be added. Choose a PNG or JPEG picture.</string>
     <string name="board_settings_reset_screen">Reset Screen settings</string>
     <string name="board_settings_reset_page">Reset Page overrides</string>
     <string name="board_cell_opens_board">Opens page: %1$s</string>
@@ -562,6 +571,8 @@
     <string name="ui_settings_label_at_top_title">Put label at top of button</string>
     <string name="ui_settings_select_on_touch_down_title">Select on touch</string>
     <string name="ui_settings_select_on_touch_down_desc">Buttons act as soon as you touch them instead of when you let go. Button grids stop scrolling and show every row. Hold to select, when set, still applies.</string>
+    <string name="ui_settings_swipe_pages_title">Swipe between pages</string>
+    <string name="ui_settings_swipe_pages_desc">On Screens, swipe left or right to go to the next or previous page in the screen\'s page order. Links, Home and Back work as before. Not available with Select on touch.</string>
     <string name="ui_settings_hold_to_select_title">Hold to select (ms)</string>
     <string name="ui_settings_hold_to_select_desc">Prevents accidental taps. Set to 0 to disable.</string>
     <string name="ui_settings_grid_columns_title">Grid columns</string>

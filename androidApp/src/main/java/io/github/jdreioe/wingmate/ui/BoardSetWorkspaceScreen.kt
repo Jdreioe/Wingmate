@@ -1,5 +1,8 @@
 package io.github.jdreioe.wingmate.ui
 
+import io.github.jdreioe.wingmate.domain.obf.withBackgroundImage
+import androidx.compose.ui.graphics.asImageBitmap
+import io.github.jdreioe.wingmate.domain.obf.backgroundImage
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -642,6 +645,7 @@ private fun BoardSetWorkspaceRoot(
     val loadErrorMessage = stringResource(R.string.board_workspace_load_error)
     val saveErrorMessage = stringResource(R.string.board_workspace_save_error)
     val exportErrorMessage = stringResource(R.string.board_workspace_export_error)
+    val backgroundImageFailedMessage = stringResource(R.string.board_settings_background_image_failed)
     val exportCancelledMessage = stringResource(R.string.board_workspace_export_cancelled)
     val exportedTemplate = stringResource(R.string.board_workspace_exported, "%NAME%")
     val resources = LocalContext.current.resources
@@ -745,6 +749,17 @@ private fun BoardSetWorkspaceRoot(
 
     val activeGraph = editSession?.draft ?: savedGraph
     val activeBoard = activeGraph?.boardsById?.get(workspace.selectedBoardId)
+    // #103: missing or unreadable media leaves the plain background color.
+    val activeBackgroundImage = activeBoard?.backgroundImage?.let { background ->
+        activeBoard.images.firstOrNull { it.id == background.imageId }
+    }
+    val backgroundBitmap by produceState<ImageBitmap?>(null, activeBackgroundImage) {
+        value = activeBackgroundImage?.let { image ->
+            withContext(Dispatchers.Default) {
+                loadObfImageBytes(image, fileStorage, mediaUrlLoader)?.decodeSampledBitmap(2048)?.asImageBitmap()
+            }
+        }
+    }
     LaunchedEffect(
         communicationState.isInitialized,
         activeGraph?.boardSet?.id,
@@ -979,6 +994,7 @@ private fun BoardSetWorkspaceRoot(
                 activeBoard.name.orEmpty()
             },
             initialBackgroundColor = activeBoard.backgroundColor,
+            initialBackgroundImage = activeBoard.backgroundImage,
             screenSettings = activeGraph.boardSet.screenSettings,
             pageSettings = activeBoard.pageSettingsOverrides(),
             appShowLabels = settings.showLabels,
@@ -989,28 +1005,39 @@ private fun BoardSetWorkspaceRoot(
             appMessageBarEditable = settings.boardMessageBarEditable,
             appActivationBehavior = settings.boardActivationBehavior,
             appReturnBehavior = settings.boardReturnBehavior,
-            onCommit = { name, updatedSettings, updatedBackgroundColor ->
+            onCommit = { name, updatedSettings, updatedBackgroundColor, backgroundEdit ->
                 val session = editSession ?: return@BoardSettingsScreen
-                val updated = if (openSettingsTarget == BoardSettingsTarget.Screen) {
-                    session.draft.copy(
-                        boardSet = session.draft.boardSet.copy(
-                            name = name,
-                            screenSettings = updatedSettings
-                        )
-                    )
-                } else {
-                    session.draft.copy(
-                        boards = session.draft.boards.map { board ->
-                            if (board.id == activeBoard.id) {
-                                board.copy(name = name, backgroundColor = updatedBackgroundColor)
-                                    .withPageSettingsOverrides(updatedSettings)
-                            } else {
-                                board
+                if (openSettingsTarget == BoardSettingsTarget.Screen) {
+                    workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(session.draft.copy(
+                        boardSet = session.draft.boardSet.copy(name = name, screenSettings = updatedSettings)
+                    )))
+                    return@BoardSettingsScreen
+                }
+                val pageId = activeBoard.id
+                scope.launch {
+                    // A picked image is copied into app storage first; if that fails the other changes still apply.
+                    val picked = (backgroundEdit as? BackgroundImageEdit.Picked)?.let { edit ->
+                        storeBackgroundImage(session.draft.boardSet.id, edit.source, fileStorage, mediaUrlLoader)
+                    }
+                    if (backgroundEdit is BackgroundImageEdit.Picked && picked == null) {
+                        workspaceViewModel.onAction(BoardWorkspaceAction.StatusChanged(backgroundImageFailedMessage))
+                    }
+                    val draft = editSession?.draft ?: return@launch
+                    workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(draft.copy(
+                        boards = draft.boards.map { board ->
+                            if (board.id != pageId) return@map board
+                            val edited = board.copy(name = name, backgroundColor = updatedBackgroundColor)
+                                .withPageSettingsOverrides(updatedSettings)
+                            val currentImage = board.backgroundImage?.let { bg -> board.images.firstOrNull { it.id == bg.imageId } }
+                            when (backgroundEdit) {
+                                BackgroundImageEdit.None -> edited.withBackgroundImage(null)
+                                is BackgroundImageEdit.Current -> edited.withBackgroundImage(currentImage, backgroundEdit.fit)
+                                is BackgroundImageEdit.Picked ->
+                                    if (picked != null) edited.withBackgroundImage(picked, backgroundEdit.fit) else edited
                             }
                         }
-                    )
+                    )))
                 }
-                workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(updated))
             },
             onBack = { settingsTarget = null }
         )
@@ -1395,6 +1422,11 @@ private fun BoardSetWorkspaceRoot(
                             }
                         )
                     }
+                    PageSwipeBox(
+                        enabled = settings.swipeBetweenPages && mode == BoardWorkspaceMode.Run,
+                        onSwipe = { step -> workspaceViewModel.onAction(BoardWorkspaceAction.SwipePage(step)) },
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                    ) {
                     ObfBoardView(
                         board = activeBoard,
                         isEditMode = mode == BoardWorkspaceMode.Edit,
@@ -1422,6 +1454,7 @@ private fun BoardSetWorkspaceRoot(
                         showHiddenButtons = showHiddenButtons,
                         selectedButtons = selectedButtons,
                         highlightedButtonId = highlightedButtonId,
+                        backgroundImage = backgroundBitmap,
                         predictionLabels = predictionsById,
                         onButtonClick = { button ->
                             run {
@@ -1694,8 +1727,9 @@ private fun BoardSetWorkspaceRoot(
                         onClearSentence = {
                             communicationSession.accept(CommunicationAction.Clear)
                         },
-                        modifier = Modifier.weight(1f).fillMaxWidth()
+                        modifier = Modifier.fillMaxSize()
                     )
+                    }
                     }
                 }
             }
@@ -2172,6 +2206,33 @@ internal suspend fun playButtonSound(
         if (bytes != null && bytes.isNotEmpty() && soundPlayer.playBytes(bytes, sound.contentType)) return true
     }
     return false
+}
+
+/**
+ * Copies a picked background image into app storage, beside imported Screen media, so it
+ * survives cache clearing, OBZ export and backups. Returns null when it is not a usable picture.
+ */
+internal suspend fun storeBackgroundImage(
+    boardSetId: String,
+    source: String,
+    fileStorage: FileStorage,
+    urlLoader: ObfMediaUrlLoader?,
+): ObfImage? = withContext(Dispatchers.IO) {
+    val bytes = try {
+        if (source.startsWith("http")) urlLoader?.load(source) else java.io.File(source.removePrefix("file://")).readBytes()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        null
+    } ?: return@withContext null
+    // Background images are drawn as bitmaps, so only formats BitmapFactory decodes are accepted.
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    val type = bounds.outMimeType ?: return@withContext null
+    val id = "bg_${java.util.UUID.randomUUID()}"
+    val path = "boardsets/$boardSetId/images/$id.${type.substringAfter('/')}"
+    fileStorage.saveBytes(path, bytes)
+    ObfImage(id = id, contentType = type, path = path, width = bounds.outWidth, height = bounds.outHeight)
 }
 
 /** Loads an OBF image's bytes from inline data, app storage, or its URL. Symbols have no bytes. */

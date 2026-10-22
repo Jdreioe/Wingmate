@@ -1,5 +1,10 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.FilterQuality
+import io.github.jdreioe.wingmate.domain.obf.PageBackgroundFit
+import io.github.jdreioe.wingmate.domain.obf.backgroundImage
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -198,6 +203,8 @@ internal data class ObfBoardUiState(
     val showHiddenButtons: Boolean = false,
     val predictionLabels: Map<String, String> = emptyMap(),
     val highlightedButtonId: String? = null,
+    /** The Page's decoded background image (#103); the caller loads it from [ObfBoard.backgroundImage]. */
+    val backgroundImage: ImageBitmap? = null,
     val selectedFieldAnchor: Pair<Int, Int>? = null,
     val selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     val homeBoardId: String? = null,
@@ -272,6 +279,7 @@ fun ObfBoardView(
     showHiddenButtons: Boolean = false,
     predictionLabels: Map<String, String> = emptyMap(),
     highlightedButtonId: String? = null,
+    backgroundImage: ImageBitmap? = null,
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
     selectedFieldAnchor: Pair<Int, Int>? = null,
@@ -305,6 +313,7 @@ fun ObfBoardView(
             showHiddenButtons = showHiddenButtons,
             predictionLabels = predictionLabels,
             highlightedButtonId = highlightedButtonId,
+            backgroundImage = backgroundImage,
             selectedFieldAnchor = selectedFieldAnchor,
             selectedFieldSpans = selectedFieldSpans,
             homeBoardId = homeBoardId,
@@ -375,6 +384,9 @@ internal fun ObfBoardContent(
     } else {
         parseObfColorOrNull(board.backgroundColor) ?: MaterialTheme.colorScheme.background
     }
+    // High contrast keeps a plain background so Buttons stay legible.
+    val pageBackgroundImage = state.backgroundImage.takeUnless { settings.highContrastMode }
+    val backgroundFit = board.backgroundImage?.fit ?: PageBackgroundFit.Fill
     val effectiveBoardSettings = boardSettings ?: resolveBoardSettings(
         appShowLabels = settings.showLabels,
         appShowSymbols = settings.showSymbols,
@@ -418,7 +430,7 @@ internal fun ObfBoardContent(
     if (isEmptyPage) {
         // A Page with no usable Buttons (empty, or a grid that only references
         // missing Buttons) explains itself and keeps the Message usable.
-        BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground)) {
+        BoxWithConstraints(modifier = modifier.fillMaxSize().pageBackground(boardBackground, pageBackgroundImage, backgroundFit)) {
             val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
             Column(
                 modifier = Modifier.fillMaxSize().padding(8.dp),
@@ -442,7 +454,7 @@ internal fun ObfBoardContent(
         }
     } else if (isAbsoluteLayout) {
         if (showMessageBar) {
-            BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground)) {
+            BoxWithConstraints(modifier = modifier.fillMaxSize().pageBackground(boardBackground, pageBackgroundImage, backgroundFit)) {
                 val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
                 Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                     messageBar(Modifier.fillMaxWidth().heightIn(max = symbolBarMaxHeight))
@@ -465,7 +477,7 @@ internal fun ObfBoardContent(
                 }
             }
         } else {
-            BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground).padding(8.dp)) {
+            BoxWithConstraints(modifier = modifier.fillMaxSize().pageBackground(boardBackground, pageBackgroundImage, backgroundFit).padding(8.dp)) {
                 RenderAbsoluteButtons(
                     board,
                     imagesById,
@@ -486,7 +498,7 @@ internal fun ObfBoardContent(
         val rows = grid.rows.coerceAtLeast(1)
         
         // Use Column/Row for fixed grid that fills the space
-        BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground)) {
+        BoxWithConstraints(modifier = modifier.fillMaxSize().pageBackground(boardBackground, pageBackgroundImage, backgroundFit)) {
             val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
             Column(
                 modifier = Modifier.fillMaxSize().padding(8.dp),
@@ -658,7 +670,7 @@ internal fun ObfBoardContent(
         }
     } else {
         // Fallback: scrollable grid for boards without explicit grid
-        BoxWithConstraints(modifier = modifier.fillMaxSize().background(boardBackground)) {
+        BoxWithConstraints(modifier = modifier.fillMaxSize().pageBackground(boardBackground, pageBackgroundImage, backgroundFit)) {
             val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
             Column(
                 modifier = Modifier.fillMaxSize().padding(4.dp),
@@ -2010,5 +2022,20 @@ private fun SymbolUnavailablePlaceholder(
             maxLines = 3,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+/** Paints the Page background color, then its background image (#103) scaled by [fit] and centered. */
+private fun Modifier.pageBackground(color: Color, image: ImageBitmap?, fit: PageBackgroundFit): Modifier {
+    val colored = background(color)
+    if (image == null || image.width == 0 || image.height == 0) return colored
+    return colored.drawBehind {
+        val scale = when (fit) {
+            PageBackgroundFit.Fill -> maxOf(size.width / image.width, size.height / image.height)
+            PageBackgroundFit.Fit -> minOf(size.width / image.width, size.height / image.height)
+        }
+        val drawn = IntSize((image.width * scale).roundToInt(), (image.height * scale).roundToInt())
+        val offset = IntOffset(((size.width - drawn.width) / 2).roundToInt(), ((size.height - drawn.height) / 2).roundToInt())
+        clipRect { drawImage(image, dstOffset = offset, dstSize = drawn, filterQuality = FilterQuality.Medium) }
     }
 }

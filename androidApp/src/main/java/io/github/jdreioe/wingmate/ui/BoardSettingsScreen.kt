@@ -1,5 +1,9 @@
 package io.github.jdreioe.wingmate.ui
 
+import io.github.jdreioe.wingmate.domain.obf.PageBackgroundFit
+import io.github.jdreioe.wingmate.domain.obf.PageBackgroundImage
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.FilterChip
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
@@ -82,12 +86,29 @@ private data class BoardSettingChoice(
     val select: () -> Unit
 )
 
+/** The Page background image as edited in Page settings (#103). */
+internal sealed interface BackgroundImageEdit {
+    val fit: PageBackgroundFit?
+
+    /** No background image. */
+    data object None : BackgroundImageEdit {
+        override val fit: PageBackgroundFit? = null
+    }
+
+    /** Keep the current image, possibly with a new [fit]. */
+    data class Current(override val fit: PageBackgroundFit) : BackgroundImageEdit
+
+    /** Use the newly picked image at [source], a `file://` path or URL, once it is stored. */
+    data class Picked(val source: String, override val fit: PageBackgroundFit) : BackgroundImageEdit
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BoardSettingsScreen(
     target: BoardSettingsTarget,
     initialName: String,
     initialBackgroundColor: String?,
+    initialBackgroundImage: PageBackgroundImage?,
     screenSettings: BoardSettingsOverrides,
     pageSettings: BoardSettingsOverrides,
     appShowLabels: Boolean,
@@ -98,7 +119,7 @@ internal fun BoardSettingsScreen(
     appMessageBarEditable: Boolean,
     appActivationBehavior: BoardActivationBehavior,
     appReturnBehavior: BoardReturnBehavior,
-    onCommit: (name: String, settings: BoardSettingsOverrides, backgroundColor: String?) -> Unit,
+    onCommit: (name: String, settings: BoardSettingsOverrides, backgroundColor: String?, background: BackgroundImageEdit) -> Unit,
     onBack: () -> Unit
 ) {
     val initialOverrides = if (target == BoardSettingsTarget.Screen) screenSettings else pageSettings
@@ -106,6 +127,10 @@ internal fun BoardSettingsScreen(
     var draft by remember(target, initialOverrides) { mutableStateOf(initialOverrides) }
     var backgroundColor by remember(target, initialBackgroundColor) { mutableStateOf(initialBackgroundColor) }
     var showBackgroundColorPicker by remember(target) { mutableStateOf(false) }
+    var background by remember(target, initialBackgroundImage) {
+        mutableStateOf<BackgroundImageEdit>(initialBackgroundImage?.let { BackgroundImageEdit.Current(it.fit) } ?: BackgroundImageEdit.None)
+    }
+    var showBackgroundImagePicker by remember(target) { mutableStateOf(false) }
     var preference by remember(target) { mutableStateOf<BoardSettingPreference?>(null) }
 
     val inherited = resolveBoardSettings(
@@ -133,7 +158,7 @@ internal fun BoardSettingsScreen(
     )
 
     fun finish() {
-        onCommit(name.trim().ifBlank { initialName }, draft, backgroundColor)
+        onCommit(name.trim().ifBlank { initialName }, draft, backgroundColor, background)
         onBack()
     }
 
@@ -194,10 +219,16 @@ internal fun BoardSettingsScreen(
                     backgroundColor = backgroundColor,
                     onBackgroundColorChange = { backgroundColor = it },
                     onPickBackgroundColor = { showBackgroundColorPicker = true },
+                    background = background,
+                    onBackgroundChange = { background = it },
+                    onPickBackgroundImage = { showBackgroundImagePicker = true },
                     onOpenPreference = { preference = it },
                     onReset = {
                         draft = BoardSettingsOverrides()
-                        if (target == BoardSettingsTarget.Page) backgroundColor = null
+                        if (target == BoardSettingsTarget.Page) {
+                            backgroundColor = null
+                            background = BackgroundImageEdit.None
+                        }
                     }
                 )
             } else {
@@ -211,6 +242,17 @@ internal fun BoardSettingsScreen(
                 )
             }
         }
+    }
+
+    if (showBackgroundImagePicker) {
+        ImageSourcePickerDialog(
+            onDismiss = { showBackgroundImagePicker = false },
+            onPhoto = { source ->
+                background = BackgroundImageEdit.Picked(source, background.fit ?: PageBackgroundFit.Fill)
+                showBackgroundImagePicker = false
+            },
+            onSymbol = null,
+        )
     }
 
     if (showBackgroundColorPicker) {
@@ -239,6 +281,9 @@ private fun BoardSettingsHome(
     backgroundColor: String?,
     onBackgroundColorChange: (String?) -> Unit,
     onPickBackgroundColor: () -> Unit,
+    background: BackgroundImageEdit,
+    onBackgroundChange: (BackgroundImageEdit) -> Unit,
+    onPickBackgroundImage: () -> Unit,
     onOpenPreference: (BoardSettingPreference) -> Unit,
     onReset: () -> Unit
 ) {
@@ -316,6 +361,8 @@ private fun BoardSettingsHome(
                         }
                     }
                 }
+                SettingsGroupDivider()
+                BackgroundImageRow(background, onBackgroundChange, onPickBackgroundImage)
                 SettingsGroupDivider()
             }
             BoardSettingNavRow(
@@ -679,3 +726,61 @@ private fun defaultLabel(
         R.string.board_settings_use_default
     }
 )
+
+/** Choose, replace or remove the Page background image, and how it covers the Page (#103). */
+@Composable
+private fun BackgroundImageRow(
+    background: BackgroundImageEdit,
+    onBackgroundChange: (BackgroundImageEdit) -> Unit,
+    onPick: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Text(stringResource(R.string.board_settings_background_image))
+                Text(
+                    stringResource(
+                        when (background) {
+                            BackgroundImageEdit.None -> R.string.board_settings_background_image_none
+                            is BackgroundImageEdit.Current -> R.string.board_settings_background_image_set
+                            is BackgroundImageEdit.Picked -> R.string.board_settings_background_image_new
+                        }
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            OutlinedButton(onClick = onPick) {
+                Text(stringResource(R.string.board_settings_background_image_choose))
+            }
+            if (background != BackgroundImageEdit.None) {
+                IconButton(onClick = { onBackgroundChange(BackgroundImageEdit.None) }) {
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.board_settings_background_image_remove))
+                }
+            }
+        }
+        val fit = background.fit
+        if (fit != null) {
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    PageBackgroundFit.Fill to R.string.board_settings_background_image_fill,
+                    PageBackgroundFit.Fit to R.string.board_settings_background_image_fit,
+                ).forEach { (option, label) ->
+                    FilterChip(
+                        selected = fit == option,
+                        onClick = {
+                            onBackgroundChange(
+                                when (background) {
+                                    is BackgroundImageEdit.Current -> background.copy(fit = option)
+                                    is BackgroundImageEdit.Picked -> background.copy(fit = option)
+                                    BackgroundImageEdit.None -> background
+                                }
+                            )
+                        },
+                        label = { Text(stringResource(label)) },
+                    )
+                }
+            }
+        }
+    }
+}
