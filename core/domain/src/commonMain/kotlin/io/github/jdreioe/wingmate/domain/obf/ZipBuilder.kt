@@ -55,10 +55,8 @@ object ZipBuilder {
         if (!seenNames.add(name)) throw ZipBuilderError.DuplicateEntryName(name)
     }
 
+    // A ByteArray entry is always under 4 GiB, so only the running offset can outgrow classic ZIP.
     private fun checkOverflow(name: String, dataSize: Int, localOffset: Long) {
-        if (dataSize > 0xFFFFFFFFL) {
-            throw ZipBuilderError.InvalidEntryName(name, "Entry size (${dataSize}B) exceeds 4 GiB limit")
-        }
         if (localOffset + 30L + name.encodeToByteArray().size + dataSize > 0xFFFFFFFFL) {
             throw ZipBuilderError.Zip64Required
         }

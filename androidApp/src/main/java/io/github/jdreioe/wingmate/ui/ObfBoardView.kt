@@ -1639,9 +1639,7 @@ internal fun ObfButtonContent(
                     val base64 = source.value.substringAfter("base64,", source.value)
                     Base64Decoder.decode(base64).toComposeImageBitmap()
                 }.getOrNull()
-                is ObfMediaSource.Path -> extractedImageBytes?.let { bytes ->
-                    runCatching { bytes.toComposeImageBitmap() }.getOrNull()
-                }
+                is ObfMediaSource.Path -> extractedImageBytes?.toComposeImageBitmap()
                 is ObfMediaSource.Url, is ObfMediaSource.Symbol -> null
             }
         }

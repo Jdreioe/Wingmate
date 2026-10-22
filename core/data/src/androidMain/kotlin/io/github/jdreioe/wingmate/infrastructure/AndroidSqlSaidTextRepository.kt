@@ -54,23 +54,24 @@ class AndroidSqlSaidTextRepository(private val context: Context) : SaidTextRepos
 
     override suspend fun list(): List<SaidText> = withContext(repositoryDispatcher) {
         val db = helper.readableDatabase
-        val cursor = db.query("said_texts", null, null, null, null, null, "date DESC")
-        val list = mutableListOf<SaidText>()
-        while (cursor.moveToNext()) {
-            val id = cursor.getInt(cursor.getColumnIndexOrThrow("id"))
-            val date = cursor.getLong(cursor.getColumnIndexOrThrow("date"))
-            val saidText = cursor.getString(cursor.getColumnIndexOrThrow("said_text"))
-            val voiceName = cursor.getString(cursor.getColumnIndexOrThrow("voice_name"))
-            val pitch = cursor.getDouble(cursor.getColumnIndexOrThrow("pitch"))
-            val speed = cursor.getDouble(cursor.getColumnIndexOrThrow("speed"))
-            val audio = cursor.getString(cursor.getColumnIndexOrThrow("audio_file_path"))
-            val createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at"))
-            val position = cursor.getInt(cursor.getColumnIndexOrThrow("position"))
-            val primaryLanguage = cursor.getString(cursor.getColumnIndexOrThrow("primary_language"))
-            val visibleInHistory = cursor.getInt(cursor.getColumnIndexOrThrow("visible_in_history")) != 0
-            list += SaidText(id = id, date = date, saidText = saidText, voiceName = voiceName, pitch = pitch, speed = speed, audioFilePath = audio, createdAt = createdAt, position = position, primaryLanguage = primaryLanguage, visibleInHistory = visibleInHistory)
+        val list = db.query("said_texts", null, null, null, null, null, "date DESC").use { cursor ->
+            val items = mutableListOf<SaidText>()
+            while (cursor.moveToNext()) {
+                val id = cursor.getInt(cursor.getColumnIndexOrThrow("id"))
+                val date = cursor.getLong(cursor.getColumnIndexOrThrow("date"))
+                val saidText = cursor.getString(cursor.getColumnIndexOrThrow("said_text"))
+                val voiceName = cursor.getString(cursor.getColumnIndexOrThrow("voice_name"))
+                val pitch = cursor.getDouble(cursor.getColumnIndexOrThrow("pitch"))
+                val speed = cursor.getDouble(cursor.getColumnIndexOrThrow("speed"))
+                val audio = cursor.getString(cursor.getColumnIndexOrThrow("audio_file_path"))
+                val createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at"))
+                val position = cursor.getInt(cursor.getColumnIndexOrThrow("position"))
+                val primaryLanguage = cursor.getString(cursor.getColumnIndexOrThrow("primary_language"))
+                val visibleInHistory = cursor.getInt(cursor.getColumnIndexOrThrow("visible_in_history")) != 0
+                items += SaidText(id = id, date = date, saidText = saidText, voiceName = voiceName, pitch = pitch, speed = speed, audioFilePath = audio, createdAt = createdAt, position = position, primaryLanguage = primaryLanguage, visibleInHistory = visibleInHistory)
+            }
+            items
         }
-        cursor.close()
         return@withContext list
     }
 
