@@ -6,6 +6,7 @@ import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.FolderPhrase
 import io.github.jdreioe.wingmate.domain.isFolderPhrase
+import io.github.jdreioe.wingmate.domain.legacyCategoryFolders
 import io.github.jdreioe.wingmate.domain.CommunicationSessionDataSource
 import io.github.jdreioe.wingmate.domain.CommunicationSessionSnapshot
 import io.github.jdreioe.wingmate.domain.CommunicationStorageResult
@@ -320,19 +321,8 @@ class CompleteBackupManager(
         boardRepository.saveBoards(payload.boards)
         payload.boardSets.forEach { boardSetRepository.saveBoardSet(it) }
         // Older backups stored Categories as a flat list; restore them as folder-Phrases.
-        val migratedCategories = payload.categories.mapNotNull { cat ->
-            val id = cat.id.ifBlank { return@mapNotNull null }
-            // skip if a phrase with same id already exists (new backup or duplicate)
-            if (payload.phrases.any { it.id == id }) return@mapNotNull null
-            Phrase(
-                id = id,
-                text = cat.name?.trim().orEmpty().ifEmpty { "Category" },
-                linkedBoardId = id,
-                isGridItem = false,
-                createdAt = Clock.System.now().toEpochMilliseconds(),
-            )
-        }
-        val allPhrases = payload.phrases + migratedCategories
+        val allPhrases = payload.phrases +
+            legacyCategoryFolders(payload.categories, payload.phrases, Clock.System.now().toEpochMilliseconds())
         allPhrases.forEach { phraseRepository.add(it) }
         settingsRepository.update(payload.settings)
         voiceRepository.saveVoices(payload.voices)
