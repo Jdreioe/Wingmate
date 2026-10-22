@@ -154,6 +154,9 @@ data class Settings(
     val boardActivationBehavior: BoardActivationBehavior = BoardActivationBehavior.SpeakAndAdd,
     val boardReturnBehavior: BoardReturnBehavior = BoardReturnBehavior.Stay,
     val holdToSelectMillis: Long = 0,
+    // #110: communication targets act on first touch instead of on release. Hold-to-select
+    // takes precedence; button grids stop scrolling so a touch is never a scroll.
+    val selectOnTouchDown: Boolean = false,
     val gridColumns: Int = 3,
     val highContrastMode: Boolean = false,
     // Automatically color vocabulary buttons by grammatical word type. Explicit

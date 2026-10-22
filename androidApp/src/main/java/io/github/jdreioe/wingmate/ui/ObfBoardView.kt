@@ -563,7 +563,9 @@ internal fun ObfBoardContent(
                         mutableFloatStateOf(board.gridHeightFraction ?: defaultHeightFraction)
                     }
                     val fittedHeight = availableGridHeight * previewHeightFraction
+                    // Touch-down selection turns scrolling off, so every row must fit.
                     val contentHeight = scrollingMinimumCellHeight
+                        ?.takeUnless { settings.selectOnTouchDown }
                         ?.let { minimumHeight ->
                             val gap = 8.dp
                             val visibleRows = ((availableGridHeight + gap) / (minimumHeight + gap))
@@ -575,7 +577,7 @@ internal fun ObfBoardContent(
                             rowHeight * rows + gap * (rows - 1)
                         }
                         ?: fittedHeight
-                    Box(modifier = Modifier.fillMaxSize().verticalScroll(pageScrollState)) {
+                    Box(modifier = Modifier.fillMaxSize().verticalScroll(pageScrollState, enabled = !settings.selectOnTouchDown)) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1720,6 +1722,10 @@ internal fun ObfButtonContent(
                             }
                         )
                     }
+                } else if (settings.selectOnTouchDown && !isEditMode) {
+                    baseModifier.semantics(mergeDescendants = true) {
+                        onClick { primaryAction(); true }
+                    }.selectOnTouchDown(enabled = true) { primaryAction() }
                 } else {
                     baseModifier.combinedClickable(
                         onClick = { primaryAction() },

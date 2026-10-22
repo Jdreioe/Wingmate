@@ -13,6 +13,7 @@ Legend: **Shipped** · **Partial** (works with gaps) · **Planned** (tracked) ·
 | Rest mode toggle | Shipped (FAB is dwell/focus-reachable; rest key; **hold Select 2 s to resume**) | Partial (rest key + pause bridge; hold-to-resume needs bridge sync) | Partial (Rest/Resume button, rest key, hold Select 2 s; toggle is click/touch only) |
 | Per-target selection debounce (#118) | Shipped (+ reject haptic) | Partial (shared logic available; not wired everywhere) | None |
 | Selection highlight (#120) | Shipped | Partial | None |
+| Select on touch-down (#110) | Shipped (Buttons, Typing action strip, Play/Stop; grids stop scrolling) | None | None |
 | Hold-to-select duration | Shipped | Partial | None (setting stored, no runner support) |
 | Auditory fishing (speak on hover) | Shipped | None | None |
 | Haptic feedback | Shipped (confirm/reject/scan-tick events) | None (UIKit haptics not wired) | None |
