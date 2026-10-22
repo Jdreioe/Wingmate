@@ -21,7 +21,7 @@ The Communication workspace for free text, predictions, and saved phrases.
 _Avoid_: Keyboard, Phrase screen
 
 **Typing Screen**:
-The persistently customizable, built-in input surface of the Typing workspace that replaces the system keyboard when opened. It uses the shared Screen runtime with an All Phrases Page, one live Page per Category, and an optional History Page; it cannot be deleted or selected as a startup Screen and is not part of normal vocabulary-package export.
+The persistently customizable, built-in input surface of the Typing workspace that replaces the system keyboard when opened. It uses the shared Screen runtime with an All Phrases Page, one live Page per Category, an optional History Page, and an experimental Likely next Page; it cannot be deleted or selected as a startup Screen and is not part of normal vocabulary-package export.
 _Avoid_: Phrase screen, OBZ Screen
 
 **All Phrases Page**:
@@ -51,6 +51,10 @@ _Avoid_: Usage log, Analytics
 **History Page**:
 The optional, read-only Page in the Typing Screen that presents History without treating its Messages as Phrases or a Category.
 _Avoid_: History Category
+
+**Likely next Page**:
+An experimental, read-only Typing Screen Page of Messages often spoken after the last one, ranked in memory from visible History and shown only while History is visible. It stores nothing of its own, so clearing History clears it.
+_Avoid_: Suggestions Category, Predictions Page
 
 **Editing access**:
 Optional device-level protection against accidental or unwanted vocabulary changes in Typing and Screens. It never blocks communication, does not identify a person or assign roles, and may be used by the Communicator or a trusted Supporter.
@@ -85,7 +89,7 @@ A Page element that projects live Phrases into standard runtime Buttons within i
 _Avoid_: Phrase grid, Phrase buttons
 
 **Page navigation**:
-A Page element that presents the Typing Screen's All Phrases, Category, and optional History Pages as a horizontally scrolling row of chips. Category order comes from the Category repository rather than Page layout.
+A Page element that presents the Typing Screen's All Phrases, Category, and optional History and Likely next Pages as a horizontally scrolling row of chips. Category order comes from the Category repository rather than Page layout.
 _Avoid_: Category filter, Category chips
 
 **Action strip**:

@@ -227,6 +227,28 @@ class PhraseScreenViewModelTest {
     }
 
     @Test
+    fun `Likely next Page follows History and closes when the experiment is turned off`() = runTest {
+        val operations = operations(settings = Settings(primaryLanguage = "en-US", likelyNextPageEnabled = true)).apply {
+            historyItems = listOf(
+                SaidText(id = 1, saidText = "Hello", date = 0L),
+                SaidText(id = 2, saidText = "How are you?", date = 60_000L),
+                SaidText(id = 3, saidText = "Hello", date = 6_000_000L),
+            )
+        }
+        val savedState = SavedStateHandle()
+        val viewModel = PhraseScreenViewModel(savedState, operations)
+
+        viewModel.onAction(PhraseScreenAction.SelectPage(TypingPageSelection.LikelyNext))
+        assertEquals(listOf("How are you?"), viewModel.state.value.likelyNext.map { it.saidText })
+        assertTrue(viewModel.state.value.showLikelyNext)
+        assertEquals(TypingPageSelection.LikelyNext, PhraseScreenViewModel(savedState, operations).state.value.selectedPage)
+
+        operations.settings.update { it.copy(likelyNextPageEnabled = false) }
+        assertEquals(TypingPageSelection.AllPhrases, viewModel.state.value.selectedPage)
+        assertFalse(viewModel.state.value.showLikelyNext)
+    }
+
+    @Test
     fun `failed Category load blocks editing until retry without touching the Message`() = runTest {
         val operations = operations().apply { failCategories = true }
         val viewModel = PhraseScreenViewModel(SavedStateHandle(), operations)
@@ -608,7 +630,8 @@ class PhraseScreenViewModelTest {
             categoryItems.removeAll { it.id == id }
         }
 
-        override suspend fun history(): List<SaidText> = emptyList()
+        var historyItems = emptyList<SaidText>()
+        override suspend fun history(): List<SaidText> = historyItems
         override suspend fun voice(): Voice? = null
         override suspend fun requiresUnlock(): Boolean {
             unlockCheck?.await()

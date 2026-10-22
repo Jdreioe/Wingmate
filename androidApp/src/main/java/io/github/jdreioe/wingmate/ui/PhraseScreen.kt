@@ -488,7 +488,7 @@ internal fun PhraseScreenContent(
                     if (typingTemplateLoadFailed || categoriesLoadFailed || phrasesLoadFailed) {
                         RepositoryFailurePanel(onRetry = { onAction(PhraseScreenAction.RetryLoad) })
                     }
-                    if (ui.historyFailed && ui.isHistory) {
+                    if (ui.historyFailed && (ui.isHistory || ui.isLikelyNext)) {
                         RepositoryFailurePanel(onRetry = { onAction(PhraseScreenAction.RetryHistory) })
                     }
                     if (ui.mutationFailed) {
@@ -957,6 +957,8 @@ internal fun PhraseScreenContent(
                                 selection = selectedPage,
                                 showHistory = settings.historyVisible && historyItems.isNotEmpty(),
                                 history = historyItems,
+                                showLikelyNext = ui.showLikelyNext,
+                                likelyNext = ui.likelyNext,
                                 onSelectionChanged = { onAction(PhraseScreenAction.SelectPage(it)) },
                                 onOpenCategoryMenu = { category ->
                                     onAction(PhraseScreenAction.RequestDialog(TypingDialog.CategoryMenu, categoryId = category.id))
