@@ -587,8 +587,8 @@
     <string name="ui_settings_privacy_desc">Visning af historik, lokale data og rapportering</string>
     <string name="ui_settings_privacy_local_data_title">Lokale data</string>
     <string name="ui_settings_history_visible_title">Vis talehistorik</string>
-    <string name="ui_settings_likely_next_title">Side med sandsynligt næste (eksperimentel)</string>
-    <string name="ui_settings_likely_next_desc">Tilføjer en side på skriveskærmen med beskeder, du ofte siger efter den seneste, udregnet fra din talehistorik på denne enhed.</string>
+    <string name="ui_settings_likely_next_title">Sandsynlige næste beskeder (eksperimentel)</string>
+    <string name="ui_settings_likely_next_desc">Foreslår beskeder fra din talehistorik på denne enhed på en side på skriveskærmen og over skrivefunktionerne, mens tastaturet vises.</string>
     <string name="ui_settings_history_visible_desc">Kun tale afspillet, mens dette er slået til, vises i historikken. Skjult tale forbliver gemt lokalt, så lyd kan genbruges.</string>
     <string name="ui_settings_board_cache_title">Sætningscache for skærme</string>
     <string name="ui_settings_board_cache_desc">Vælg for hver skærm, om hele talte sætninger skal gemmes. Deaktivering forbedrer privatlivet, men gentagelse kan kræve ny talesyntese og bruge flere tokens.</string>

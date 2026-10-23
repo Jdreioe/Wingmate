@@ -190,6 +190,8 @@ mod tests {
             gaze_setup: Default::default(),
             access: Default::default(),
             access_clock: std::time::Instant::now(),
+            selection_highlight: None,
+            selection_generation: 0,
             settings: core.settings().unwrap(),
             core,
             editor: None,

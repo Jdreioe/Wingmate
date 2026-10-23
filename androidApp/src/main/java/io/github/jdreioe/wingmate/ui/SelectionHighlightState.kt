@@ -11,7 +11,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import io.github.jdreioe.wingmate.application.SelectionHighlight
 import kotlinx.coroutines.delay
-import kotlin.time.Clock
+import android.os.SystemClock
 
 /**
  * The Button that was just selected, shown for [durationMillis] (#120). Selecting
@@ -26,27 +26,24 @@ internal class SelectionHighlightState(private val durationMillis: () -> Long) {
         private set
 
     fun select(buttonId: String) {
-        highlight.activate(buttonId, Clock.System.now().toEpochMilliseconds())
-        if (durationMillis() > 0) {
-            this.buttonId = buttonId
-            generation = highlight.generation
-        }
+        highlight.activate(buttonId, SystemClock.uptimeMillis())
+        this.buttonId = buttonId.takeIf { durationMillis() > 0 }
+        generation = highlight.generation
     }
 
-    internal fun expire() {
-        if (highlight.highlightedTarget(Clock.System.now().toEpochMilliseconds(), durationMillis()) != buttonId) buttonId = null
-    }
+    internal fun remainingMillis(): Long = highlight.remainingMillis(SystemClock.uptimeMillis(), durationMillis())
+
+    internal fun expire() { buttonId = null }
 }
 
 @Composable
 internal fun rememberSelectionHighlightState(durationMillis: Long): SelectionHighlightState {
     val currentDuration by rememberUpdatedState(durationMillis)
     val state = remember { SelectionHighlightState { currentDuration } }
-    LaunchedEffect(state.generation) {
-        if (state.buttonId != null) {
-            delay(currentDuration)
-            state.expire()
-        }
+    LaunchedEffect(state.generation, durationMillis) {
+        // Replacing this effect cancels the old timer before it can clear a newer selection.
+        if (state.buttonId != null) delay(state.remainingMillis())
+        state.expire()
     }
     return state
 }

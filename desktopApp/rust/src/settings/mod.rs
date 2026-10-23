@@ -287,6 +287,8 @@ fn field<'a>(
 
 fn access(settings: &Settings) -> Element<'_, Message> {
     column![
+        field(format!("Selection highlight: {} ms (0 turns it off)", settings.selection_highlight_millis),
+            slider(0..=2000_u32, settings.selection_highlight_millis as u32, Message::SelectionHighlightChanged).step(100_u32)),
         text("Dwell selects communication buttons while the pointer rests on them. Zero turns dwell off. Use your operating system's eye or head pointer setup to move the pointer."),
         field(format!("Dwell duration: {} ms", settings.dwell_to_select_millis),
             slider(0..=5000_u32, settings.dwell_to_select_millis as u32, Message::DwellChanged).step(100_u32)),

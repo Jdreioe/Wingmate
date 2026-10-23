@@ -38,10 +38,11 @@ class DesktopCoreTest {
         val root = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "wingmate-settings-${Random.nextLong()}"
         try {
             val core = DesktopCore(root.toString())
-            val value = core.updateSettingsJson("""{"theme":"dark","voice":"Ada","speechRate":9,"holdToSelectMillis":9999,"dwellToSelectMillis":9999}""")
+            val value = core.updateSettingsJson("""{"theme":"dark","voice":"Ada","speechRate":9,"holdToSelectMillis":9999,"dwellToSelectMillis":9999,"selectionHighlightMillis":9999}""")
             assertTrue("\"speechRate\":2.0" in value)
             assertTrue("\"holdToSelectMillis\":2000" in value)
             assertTrue("\"dwellToSelectMillis\":5000" in value)
+            assertEquals(2000, Json.decodeFromString<DesktopSettings>(DesktopCore(root.toString()).settingsJson()).selectionHighlightMillis)
         } finally {
             FileSystem.SYSTEM.deleteRecursively(root, mustExist = false)
         }

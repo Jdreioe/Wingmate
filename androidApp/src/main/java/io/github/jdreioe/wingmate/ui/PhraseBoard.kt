@@ -97,6 +97,13 @@ private fun ObfButton.projectedHistoryId(): String? =
 private fun SaidText.typingHistoryId(index: Int): String =
     id?.toString() ?: (date ?: createdAt ?: index.toLong()).toString()
 
+internal fun SaidText.toTypingHistoryPhrase(index: Int = 0) = Phrase(
+    id = "history_${id ?: "row_$index"}",
+    text = saidText.orEmpty(),
+    createdAt = date ?: createdAt ?: 0L,
+    recordingPath = audioFilePath,
+)
+
 /** Full Typing Screen Page rendered inside the OSK-alternate tray. */
 @Composable
 internal fun TypingScreenTray(
@@ -650,8 +657,9 @@ internal fun CompactPhraseRow(
     template: ObfBoard,
     phrases: List<Phrase>,
     onPhraseActivated: (Phrase) -> Unit,
-    onPhraseLongPress: (Phrase) -> Unit,
+    onPhraseLongPress: ((Phrase) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    rowHeight: Dp = 88.dp,
     settings: Settings,
     feedback: BoardFeedback = remember { BoardFeedback() },
 ) {
@@ -665,22 +673,28 @@ internal fun CompactPhraseRow(
     }
     val phrasesById = remember(phrases) { phrases.associateBy(Phrase::id) }
     val projectedButtons = remember(board) { board.buttons.filter { it.projectedPhraseId() != null } }
+    val selectionHighlight = rememberSelectionHighlightState(settings.selectionHighlightMillis)
     LazyRow(
-        modifier = modifier.height(88.dp),
+        modifier = modifier.height(rowHeight),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
     ) {
         items(projectedButtons, key = ObfButton::id) { button ->
-            Box(modifier = Modifier.size(width = 128.dp, height = 80.dp)) {
+            Box(modifier = Modifier.size(width = 128.dp, height = rowHeight - 8.dp)) {
                 ObfButtonContent(
                             settings = settings, feedback = feedback,
                     button = button,
+                    isSelectionHighlighted = selectionHighlight.buttonId == button.id,
                     image = button.imageId?.let { id -> board.images.firstOrNull { it.id == id } },
                     onClick = {
+                        selectionHighlight.select(button.id)
                         button.projectedPhraseId()?.let(phrasesById::get)?.let(onPhraseActivated)
                     },
-                    onLongClick = {
-                        button.projectedPhraseId()?.let(phrasesById::get)?.let(onPhraseLongPress)
+                    onLongClick = onPhraseLongPress?.let { longPress ->
+                        {
+                            button.projectedPhraseId()?.let(phrasesById::get)?.let(longPress)
+                            Unit
+                        }
                     },
                 )
             }
