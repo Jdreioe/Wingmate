@@ -72,6 +72,16 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: ./gradlew :androidApp:connectedDebugAndroidTest --console=plain
+      - name: Upload Android UI test failure reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-ui-test-failure-reports
+          path: |
+            androidApp/build/reports/androidTests/connected/
+            androidApp/build/outputs/androidTest-results/connected/
+          if-no-files-found: ignore
+          retention-days: 7
 
   ios-verification:
     name: iOS verification
