@@ -30,7 +30,11 @@ pub fn library(sets: &[BoardSet]) -> Element<'_, Message> {
         .into()
 }
 
-pub fn runner<'a>(view: &'a BoardView, access_state: &'a access::State) -> Element<'a, Message> {
+pub fn runner<'a>(
+    view: &'a BoardView,
+    access_state: &'a access::State,
+    selection: Option<&'a Target>,
+) -> Element<'a, Message> {
     let mut page = column![
         row![
             access::area(
@@ -75,18 +79,51 @@ pub fn runner<'a>(view: &'a BoardView, access_state: &'a access::State) -> Eleme
                 content = content.push(image(handle).height(Fill));
             }
             content = content.push(text(label).size(22));
+            let target = Target::Cell {
+                board_set: view.board_set_id.clone(),
+                page: view.board_id.clone(),
+                button: cell.id.clone(),
+            };
+            let selected = selection == Some(&target);
             let control = access::area(
                 button(content)
                     .width(bounds.width)
                     .height(bounds.height)
                     .on_press(Message::Activate(cell.id.clone())),
-                Target::Cell {
-                    board_set: view.board_set_id.clone(),
-                    page: view.board_id.clone(),
-                    button: cell.id.clone(),
-                },
+                target,
                 access_state,
             );
+            // Inset black/white rings stay visible on any palette, beside focus and dwell.
+            let control: Element<'_, Message> = if selected {
+                iced::widget::stack![
+                    control,
+                    container(
+                        container(container(Space::new().width(Fill).height(Fill)).style(|_| {
+                            container::Style::default().border(iced::Border {
+                                color: iced::Color::WHITE,
+                                width: 2.0,
+                                radius: 4.0.into(),
+                            })
+                        }))
+                        .padding(2)
+                        .width(Fill)
+                        .height(Fill)
+                        .style(|_| container::Style::default().border(iced::Border {
+                            color: iced::Color::BLACK,
+                            width: 6.0,
+                            radius: 6.0.into(),
+                        }))
+                    )
+                    .padding(8)
+                    .width(Fill)
+                    .height(Fill),
+                ]
+                .width(bounds.width)
+                .height(bounds.height)
+                .into()
+            } else {
+                control
+            };
             grid = grid.push(iced::widget::pin(control).position(bounds.position()));
         }
         grid.into()

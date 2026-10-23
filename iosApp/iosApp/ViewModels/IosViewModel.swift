@@ -200,7 +200,15 @@ final class IosViewModel: ObservableObject {
     @Published var editingAccessEnabled: Bool = false
     @Published var editingAccessUnlocked: Bool = true
     @Published var editingAccessSupported: Bool = true
-    @Published var selectionHighlightMillis: Int64 = 0
+    @Published var selectionHighlightMillis: Int64 = 0 {
+        didSet {
+            if selectionHighlightMillis != oldValue {
+                selectionHighlightGeneration += 1
+                selectionHighlight.clear()
+                highlightedButtonId = nil
+            }
+        }
+    }
     @Published var highlightedButtonId: String? = nil
     private var selectionHighlightGeneration: Int64 = 0
     @Published var boardShowMessageBar: Bool = true
@@ -1781,15 +1789,14 @@ final class IosViewModel: ObservableObject {
 
     func activateBoardSelectionHighlight(buttonId: String) async {
         guard selectionHighlightMillis > 0 else { return }
-        selectionHighlight.activate(targetId: buttonId, nowMillis: nowMillis())
+        selectionHighlight.activate(targetId: buttonId, nowMillis: Int64(ProcessInfo.processInfo.systemUptime * 1000))
         selectionHighlightGeneration += 1
         let generation = selectionHighlightGeneration
         highlightedButtonId = buttonId
         let duration = selectionHighlightMillis
         try? await Task.sleep(nanoseconds: UInt64(duration) * 1_000_000)
         guard generation == selectionHighlightGeneration else { return }
-        let current = selectionHighlight.highlightedTarget(nowMillis: nowMillis(), durationMillis: duration)
-        highlightedButtonId = current
+        highlightedButtonId = nil
     }
 
     // #118: per-target activation debounce. A zero duration disables the guard entirely.

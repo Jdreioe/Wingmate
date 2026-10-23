@@ -665,6 +665,7 @@ internal fun CompactPhraseRow(
     }
     val phrasesById = remember(phrases) { phrases.associateBy(Phrase::id) }
     val projectedButtons = remember(board) { board.buttons.filter { it.projectedPhraseId() != null } }
+    val selectionHighlight = rememberSelectionHighlightState(settings.selectionHighlightMillis)
     LazyRow(
         modifier = modifier.height(88.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -675,8 +676,10 @@ internal fun CompactPhraseRow(
                 ObfButtonContent(
                             settings = settings, feedback = feedback,
                     button = button,
+                    isSelectionHighlighted = selectionHighlight.buttonId == button.id,
                     image = button.imageId?.let { id -> board.images.firstOrNull { it.id == id } },
                     onClick = {
+                        selectionHighlight.select(button.id)
                         button.projectedPhraseId()?.let(phrasesById::get)?.let(onPhraseActivated)
                     },
                     onLongClick = {

@@ -1646,13 +1646,6 @@ internal fun ObfButtonContent(
     }
     val buttonShape = button.shape.toShape()
 
-    // #120: high-contrast outline for the time-bounded selection highlight. Uses a distinct
-    // hue so it stays distinguishable from focus (primary) and the press pulse.
-    val selectionHighlightColor = if (settings.highContrastMode) {
-        highContrastContent
-    } else {
-        MaterialTheme.colorScheme.tertiary
-    }
     
     // Spec priority: data → path → url → symbol (extracted zip bytes count as path).
     val imageSources = remember(image) { obfImageSources(image) }
@@ -1901,8 +1894,11 @@ internal fun ObfButtonContent(
                     modifier = Modifier
                         .matchParentSize()
                         .testTag("selection-highlight")
-                        .border(4.dp, selectionHighlightColor, RoundedCornerShape(12.dp))
-                )
+                        .padding(8.dp)
+                ) {
+                    Box(Modifier.matchParentSize().border(6.dp, Color.Black, buttonShape))
+                    Box(Modifier.matchParentSize().padding(2.dp).border(2.dp, Color.White, buttonShape))
+                }
             }
             if (accessHost?.state?.currentTargetId == accessTargetId &&
                 settings.pointerEmphasisStyle != io.github.jdreioe.wingmate.domain.PointerEmphasisStyle.System

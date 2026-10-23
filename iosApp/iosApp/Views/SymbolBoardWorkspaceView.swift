@@ -946,11 +946,14 @@ struct SymbolBoardWorkspaceView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height))
-                .stroke(isHighlighted
-                    ? (model.highContrastMode ? Color.white : contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.accentColor))
-                    : (model.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator))),
-                    lineWidth: isHighlighted ? 4 : (model.highContrastMode ? 2 : (isLinked ? 1.5 : 1)))
+                .stroke(model.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator)),
+                    lineWidth: model.highContrastMode ? 2 : (isLinked ? 1.5 : 1))
         )
+        .overlay {
+            if isHighlighted {
+                SelectionHighlightOutline(shape: RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height)))
+            }
+        }
         )
     }
 
