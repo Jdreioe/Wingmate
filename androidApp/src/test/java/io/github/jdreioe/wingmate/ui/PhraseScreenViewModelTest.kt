@@ -249,6 +249,50 @@ class PhraseScreenViewModelTest {
     }
 
     @Test
+    fun `Likely next row composes through the existing Phrase behavior and rejects disabled suggestions`() = runTest {
+        val operations = operations(BoardActivationBehavior.AddOnly,
+            Settings(primaryLanguage = "en-US", likelyNextPageEnabled = true)).apply {
+            historyItems = listOf(
+                SaidText(id = 1, saidText = "Hello", date = 0L),
+                SaidText(id = 2, saidText = "How are you?", date = 60_000L),
+                SaidText(id = 3, saidText = "Hello", date = 6_000_000L),
+            )
+        }
+        val viewModel = PhraseScreenViewModel(SavedStateHandle(), operations)
+        viewModel.type("I asked: ")
+        val suggestion = viewModel.state.value.likelyNextRowPhrases.single()
+
+        viewModel.onAction(PhraseScreenAction.ActivateLikelyNext(suggestion))
+
+        assertEquals("I asked: How are you?", operations.message)
+        assertTrue(operations.communicated.none { it is CommunicationAction.SpeakPart })
+        assertTrue(operations.reported.contains("phrase_inserted" to mapOf("source" to "likely_next")))
+        assertEquals(TypingPageSelection.AllPhrases, viewModel.state.value.selectedPage)
+
+        operations.settings.update { it.copy(historyVisible = false) }
+        assertTrue(viewModel.state.value.likelyNextRowPhrases.isEmpty())
+        viewModel.onAction(PhraseScreenAction.ActivateLikelyNext(suggestion))
+        assertEquals("I asked: How are you?", operations.message)
+    }
+
+    @Test
+    fun `Likely next row stays bounded and drops cleared or unavailable History`() = runTest {
+        val items = (1..8).map { SaidText(id = it, saidText = "Message $it") }
+        val state = PhraseScreenState(settings = Settings(likelyNextPageEnabled = true), likelyNext = items)
+        assertEquals(4, state.likelyNextRowPhrases.size)
+        assertTrue(state.copy(historyFailed = true).likelyNextRowPhrases.isEmpty())
+        assertTrue(state.copy(settings = Settings()).likelyNextRowPhrases.isEmpty())
+
+        val operations = operations(settings = Settings(likelyNextPageEnabled = true)).apply { historyItems = items }
+        val viewModel = PhraseScreenViewModel(SavedStateHandle(), operations)
+        assertTrue(viewModel.state.value.likelyNextRowPhrases.isNotEmpty())
+        viewModel.onAction(PhraseScreenAction.RequestDialog(TypingDialog.Settings))
+        operations.historyItems = emptyList()
+        viewModel.onAction(PhraseScreenAction.DismissDialog)
+        assertTrue(viewModel.state.value.likelyNextRowPhrases.isEmpty())
+    }
+
+    @Test
     fun `failed Category load blocks editing until retry without touching the Message`() = runTest {
         val operations = operations().apply { failCategories = true }
         val viewModel = PhraseScreenViewModel(SavedStateHandle(), operations)
@@ -639,6 +683,9 @@ class PhraseScreenViewModelTest {
         }
 
         override fun predictions(text: String) = predictionSource(text)
-        override fun report(name: String, vararg properties: Pair<String, String>) = Unit
+        val reported = mutableListOf<Pair<String, Map<String, String>>>()
+        override fun report(name: String, vararg properties: Pair<String, String>) {
+            reported += name to properties.toMap()
+        }
     }
 }

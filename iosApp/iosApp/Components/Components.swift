@@ -4,6 +4,18 @@ import UIKit
 import Foundation
 import AudioToolbox
 
+struct SelectionHighlightOutline<S: InsettableShape>: View {
+    let shape: S
+
+    var body: some View {
+        shape.strokeBorder(Color.black, lineWidth: 6)
+            .overlay(shape.strokeBorder(Color.white, lineWidth: 2).padding(2))
+            .padding(8)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
 private struct AccessTargetFocusModifier: ViewModifier {
     @ObservedObject var model: IosViewModel
     let targetId: String
@@ -416,7 +428,7 @@ struct PhraseItemView: View {
         .accessTargetFocus(model: model, targetId: accessTargetId)
         .overlay {
             if model.highlightedButtonId == accessTargetId {
-                tileShape.stroke(model.highContrastMode ? Color.white : Color.accentColor, lineWidth: 4)
+                SelectionHighlightOutline(shape: tileShape)
             }
         }
         .overlay {

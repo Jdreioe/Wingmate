@@ -128,17 +128,11 @@ class VoiceUseCase(
     }
     suspend fun select(voice: Voice) {
         repo.saveSelected(voice)
-        val provider = voice.provider
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.VOICE_SELECTED,
             "provider" to when {
-                provider != null -> provider.name.lowercase()
-                voice.name?.contains("Neural2", ignoreCase = true) == true ||
-                    voice.name?.contains("Wavenet", ignoreCase = true) == true ||
-                    voice.name?.contains("Chirp", ignoreCase = true) == true ||
-                    voice.name?.contains("Journey", ignoreCase = true) == true ||
-                    voice.name?.startsWith("google|") == true -> "google"
-                voice.name?.contains("Neural", ignoreCase = true) == true -> "azure"
+                voice.provider != null || voice.resolvedGoogleModel() != null ||
+                    voice.name?.contains("Neural", ignoreCase = true) == true -> voice.resolvedProvider().name.lowercase()
                 else -> "system"
             },
             "primary_language" to voice.primaryLanguage,

@@ -32,8 +32,11 @@ class SelectionHighlight {
      * been cleared, or is disabled by a non-positive [durationMillis].
      */
     fun highlightedTarget(nowMillis: Long, durationMillis: Long): String? {
-        if (durationMillis <= 0) return null
-        val id = buttonId ?: return null
-        return if (nowMillis - activatedAtMillis < durationMillis) id else null
+        return buttonId.takeIf { remainingMillis(nowMillis, durationMillis) > 0 }
     }
+
+    /** Time left from the latest activation, including a changed duration setting. */
+    fun remainingMillis(nowMillis: Long, durationMillis: Long): Long =
+        if (buttonId == null || durationMillis <= 0) 0
+        else (durationMillis - (nowMillis - activatedAtMillis).coerceAtLeast(0)).coerceAtLeast(0)
 }

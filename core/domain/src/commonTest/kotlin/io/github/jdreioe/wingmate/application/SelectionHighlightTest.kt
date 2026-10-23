@@ -7,6 +7,16 @@ import kotlin.test.assertNull
 class SelectionHighlightTest {
 
     @Test
+    fun changedDurationUsesTimeSinceTheLatestSelection() {
+        val highlight = SelectionHighlight()
+        highlight.activate("target", nowMillis = 1000)
+        assertEquals(600L, highlight.remainingMillis(nowMillis = 1400, durationMillis = 1000))
+        assertEquals(100L, highlight.remainingMillis(nowMillis = 1400, durationMillis = 500))
+        assertEquals(0L, highlight.remainingMillis(nowMillis = 1400, durationMillis = 300))
+        assertEquals(0L, highlight.remainingMillis(nowMillis = 1400, durationMillis = 0))
+    }
+
+    @Test
     fun newlyActivatedTarget_isVisibleWithinDuration() {
         val highlight = SelectionHighlight()
         highlight.activate("target-a", nowMillis = 1000L)

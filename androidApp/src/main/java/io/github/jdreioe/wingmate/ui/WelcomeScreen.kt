@@ -77,6 +77,7 @@ fun WelcomeScreen(
     val importUnexpected = stringResource(R.string.welcome_import_unexpected)
     val backupPickerFailed = stringResource(R.string.backup_picker_failed)
     val backupRestoreUnavailable = stringResource(R.string.backup_restore_unavailable)
+    val backupRestoreTitle = stringResource(R.string.backup_restore)
     val scope = rememberCoroutineScope()
 
     fun importFailureMessage(result: BoardImportResult.Failure): String = when (result.code) {
@@ -141,7 +142,7 @@ fun WelcomeScreen(
                                 restoreStatus = null
                                 try {
                                     pendingRestorePath = backupFilePicker?.pickFile(
-                                        title = "Restore Wingmate backup",
+                                        title = backupRestoreTitle,
                                         extensions = listOf("wingmate-backup", "zip")
                                     )
                                 } catch (failure: CancellationException) {

@@ -45,7 +45,7 @@ val appModule = module {
     single<CoroutineScope> { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     
     single {
-        kotlinx.serialization.json.Json {
+        Json {
             prettyPrint = true
             encodeDefaults = true
             ignoreUnknownKeys = true
@@ -58,7 +58,7 @@ val appModule = module {
     single<ObfMediaUrlLoader> { KtorObfMediaUrlLoader(getOrNull() ?: HttpClient()) }
     singleOf(::InMemoryBoardRepository) { bind<BoardRepository>() }
     singleOf(::InMemoryBoardSetRepository) { bind<BoardSetRepository>() }
-    single { ObzExporter(getOrNull<Json>() ?: kotlinx.serialization.json.Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }) }
+    singleOf(::ObzExporter)
     singleOf(::BoardSetSpeechCacheUseCase) { bind<BoardSpeechCache>() }
     singleOf(::BoardSetUseCase)
     singleOf(::TypingScreenUseCase)

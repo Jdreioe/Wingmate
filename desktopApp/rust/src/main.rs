@@ -97,6 +97,8 @@ struct App {
     gaze_setup: gaze::setup::Setup,
     access: access::State,
     access_clock: std::time::Instant,
+    selection_highlight: Option<access::Target>,
+    selection_generation: u64,
     editor: Option<editor::Editor>,
     close_after_editor: bool,
     core: NativeCore,
@@ -138,6 +140,8 @@ enum Message {
     Access(access::Event),
     DwellChanged(u32),
     RearmChanged(u32),
+    SelectionHighlightChanged(u32),
+    SelectionHighlightExpired(u64),
     SelectKeyChanged(String),
     RestKeyChanged(String),
     CloseRequested,
@@ -185,6 +189,8 @@ impl App {
             gaze_setup: Default::default(),
             access: access::State::default(),
             access_clock: std::time::Instant::now(),
+            selection_highlight: None,
+            selection_generation: 0,
             editor: None,
             close_after_editor: false,
             library: core.library().unwrap_or_default(),
@@ -195,6 +201,7 @@ impl App {
                 voice: "default".into(),
                 speech_rate: 1.0,
                 hold_to_select_millis: 0,
+                selection_highlight_millis: 0,
                 dwell_to_select_millis: 0,
                 dwell_rearm_delay_millis: 120,
                 select_key_binding: String::new(),
@@ -272,6 +279,8 @@ impl App {
             self.gaze.stop();
             self.gaze_starting = false;
             self.clear_access();
+            self.selection_highlight = None;
+            self.selection_generation += 1;
         }
         if matches!(
             &message,
@@ -621,6 +630,17 @@ impl App {
                 self.settings.dwell_rearm_delay_millis = value.into();
                 self.save_settings();
             }
+            Message::SelectionHighlightChanged(value) => {
+                self.settings.selection_highlight_millis = value.into();
+                self.selection_highlight = None;
+                self.selection_generation += 1;
+                self.save_settings();
+            }
+            Message::SelectionHighlightExpired(generation) => {
+                if generation == self.selection_generation {
+                    self.selection_highlight = None;
+                }
+            }
             Message::SelectKeyChanged(value) => {
                 self.settings.select_key_binding = value;
                 self.save_settings();
@@ -679,7 +699,33 @@ impl App {
             }
             Message::ImportFile(path) => self.import(&path),
             Message::OpenBoardSet(id) => task = self.apply(self.core.open(&id)),
-            Message::Activate(id) => task = self.apply(self.core.activate(&id)),
+            Message::Activate(id) => {
+                let target = self.board.as_ref().map(|board| access::Target::Cell {
+                    board_set: board.board_set_id.clone(),
+                    page: board.board_id.clone(),
+                    button: id.clone(),
+                });
+                let activation = self.core.activate(&id);
+                let accepted = activation.is_ok();
+                task = self.apply(activation);
+                if accepted && self.settings.selection_highlight_millis > 0 {
+                    self.selection_highlight = target;
+                    self.selection_generation += 1;
+                    let generation = self.selection_generation;
+                    let duration = self.settings.selection_highlight_millis;
+                    task = Task::batch([
+                        task,
+                        Task::perform(
+                            async move {
+                                tokio::time::sleep(std::time::Duration::from_millis(duration))
+                                    .await;
+                                generation
+                            },
+                            Message::SelectionHighlightExpired,
+                        ),
+                    ]);
+                }
+            }
             Message::Back => task = self.apply(self.core.back()),
             Message::Clear => task = self.apply(self.core.clear()),
             Message::Hold => task = self.apply(self.core.hold()),
@@ -958,7 +1004,9 @@ impl App {
             Route::Runner => self
                 .board
                 .as_ref()
-                .map(|board| screens::runner(board, &self.access))
+                .map(|board| {
+                    screens::runner(board, &self.access, self.selection_highlight.as_ref())
+                })
                 .unwrap_or_else(|| text("No Screen open").into()),
             Route::Settings => settings::view(
                 self.settings_section,
@@ -1114,6 +1162,28 @@ mod native_gaze_tests {
     use super::*;
     use gaze::protocol::{Point, Sample};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn selection_feedback_restarts_and_disabling_invalidates_pending_expiry() {
+        let (_directory, mut app, target) = fixture();
+        let access::Target::Cell { button, .. } = &target else {
+            unreachable!()
+        };
+        let _ = app.update(Message::SelectionHighlightChanged(500));
+        let _ = app.update(Message::Activate(button.clone()));
+        let first = app.selection_generation;
+        assert_eq!(app.selection_highlight, Some(target.clone()));
+        let _ = app.update(Message::Activate(button.clone()));
+        let latest = app.selection_generation;
+        let _ = app.update(Message::SelectionHighlightExpired(first));
+        assert_eq!(app.selection_highlight, Some(target.clone()));
+        let _ = app.update(Message::SelectionHighlightExpired(latest));
+        assert_eq!(app.selection_highlight, None);
+        let _ = app.update(Message::Activate(button.clone()));
+        let _ = app.update(Message::SelectionHighlightChanged(0));
+        let _ = app.update(Message::Activate(button.clone()));
+        assert_eq!(app.selection_highlight, None);
+    }
 
     fn fixture() -> (tempfile::TempDir, App, access::Target) {
         let directory = tempfile::tempdir().unwrap();

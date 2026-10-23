@@ -50,6 +50,8 @@ pub struct Settings {
     pub voice: String,
     pub speech_rate: f32,
     pub hold_to_select_millis: u64,
+    #[serde(default)]
+    pub selection_highlight_millis: u64,
     pub dwell_to_select_millis: u64,
     pub dwell_rearm_delay_millis: u64,
     pub select_key_binding: String,
