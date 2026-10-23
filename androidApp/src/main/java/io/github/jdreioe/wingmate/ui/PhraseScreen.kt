@@ -10,6 +10,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -653,6 +654,27 @@ internal fun PhraseScreenContent(
                         android.content.res.Configuration.ORIENTATION_LANDSCAPE
                     val oneRowWhileTyping = isImeVisible && landscape
 
+                    if (isImeVisible && ui.likelyNextRowPhrases.isNotEmpty() && typingTemplate != null) {
+                        Column(Modifier.fillMaxWidth().testTag("likely-next-row")) {
+                            if (!landscape) Text(
+                                stringResource(R.string.category_likely_next),
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(horizontal = 8.dp),
+                            )
+                            CompactPhraseRow(
+                                template = typingTemplate,
+                                phrases = ui.likelyNextRowPhrases,
+                                settings = settings, feedback = boardFeedback,
+                                rowHeight = if (landscape) 56.dp else 88.dp,
+                                onPhraseActivated = { phrase ->
+                                    onAction(PhraseScreenAction.ActivateLikelyNext(phrase))
+                                    refocusInput()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+
                     // The app bar (with the fullscreen display) hides while typing, so the
                     // typing Action row starts with its own fullscreen toggle.
                     val fullscreenLabel = stringResource(R.string.phrase_screen_toggle_fullscreen_cd)
@@ -976,13 +998,7 @@ internal fun PhraseScreenContent(
                                     onAction(PhraseScreenAction.MovePhrase(moved.id, target.id))
                                 },
                                 onHistoryActivated = { historyItem ->
-                                    val historyPhrase = Phrase(
-                                        id = "history_${historyItem.id ?: historyItem.date ?: historyItem.createdAt ?: 0}",
-                                        text = historyItem.saidText.orEmpty(),
-                                        createdAt = historyItem.date ?: historyItem.createdAt ?: 0L,
-                                        recordingPath = historyItem.audioFilePath,
-                                    )
-                                    activatePhraseFromTypingScreen(historyPhrase)
+                                    activatePhraseFromTypingScreen(historyItem.toTypingHistoryPhrase())
                                 },
                                 onAction = onTypingAction,
                                 vocabularyMutationsEnabled = ui.vocabularyReady,

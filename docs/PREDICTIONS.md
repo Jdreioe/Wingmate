@@ -39,7 +39,7 @@ Focused checks:
 ./gradlew :feature:communication:presentation:jvmTest --tests '*QueuedCommunicationSessionTest' --console=plain
 ```
 
-## Likely next Page (experiment, #213)
+## Likely next Messages (experiment, #213)
 
 Separate from word predictions, the Android Typing Screen can show a Likely next
 Page of whole Messages. Settings > Privacy enables it while History is visible.
@@ -48,3 +48,11 @@ followed the last spoken Message within 10 minutes by how often they did, then
 falls back to overall frequency. It never suggests the Message just spoken. The
 ranking reruns whenever the Typing Screen reloads History, including after
 speech, and stores nothing of its own.
+
+While the on-screen keyboard is visible, Typing also shows the first four
+suggestions above its existing controls. This row uses the same experimental
+setting and History, and tapping a suggestion follows the History Page's
+insertion/speech behavior. Suggestions are read-only. The row hides when the
+keyboard closes, History is hidden or unavailable, or there are no suggestions.
+Returning from Settings reloads History so imports, clearing and restores are
+reflected before using the row again.
