@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
 
 /**
  * How selections speak while the user composes, applied as a global access
- * preference across every native client.
+ * preference across every native client. Prepared speech Screens override it
+ * locally to deliver whole paragraphs directly.
  *
  * - [Immediate]: each applicable selection (phrase, board button, recording)
  *   speaks as it is selected.

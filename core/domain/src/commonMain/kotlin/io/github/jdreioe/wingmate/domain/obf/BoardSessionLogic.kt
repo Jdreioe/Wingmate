@@ -34,8 +34,9 @@ fun shouldSpeakBoardSelection(behavior: BoardActivationBehavior): Boolean =
     behavior != BoardActivationBehavior.AddOnly
 
 /**
- * Whether a single selection speaks immediately, honoring the global speech
- * policy. In immediate mode the selection's activation behavior decides; in
+ * Whether a single selection speaks immediately, honoring the effective speech
+ * policy. Screens may override the global preference for prepared speeches.
+ * In immediate mode the selection's activation behavior decides; in
  * sentence-only mode nothing speaks while composing. Applies identically to
  * OBF buttons, recorded sounds, and phrase-grid selections.
  */

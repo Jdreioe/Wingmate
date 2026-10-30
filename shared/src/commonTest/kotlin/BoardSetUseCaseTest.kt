@@ -42,6 +42,24 @@ class BoardSetUseCaseTest {
     )
 
     @Test
+    fun importedSpeechCanBeReopenedAndEditedWithoutChangingItsWords() = runBlocking {
+        val speech = "Hej. Jeg hedder Jonas.\n\n## Afslutning\nTak fordi I lyttede."
+        val created = useCase.importSpeech("Min tale", speech, 2, "Forrige", "Næste")
+        val graph = assertNotNull(useCase.loadBoardSetGraph(created.id))
+        assertEquals(listOf("Hej. Jeg hedder Jonas.", "Tak fordi I lyttede."),
+            graph.boards.flatMap { it.buttons }.mapNotNull { it.vocalization })
+        val page = graph.boards.first()
+        val edited = page.copy(buttons = page.buttons.mapIndexed { index, button ->
+            if (index == 0) button.copy(vocalization = "Hej alle sammen.") else button
+        })
+        useCase.saveBoardSetGraph(graph.copy(boards = listOf(edited) + graph.boards.drop(1))).getOrThrow()
+        assertEquals("Hej alle sammen.", useCase.loadBoardSetGraph(created.id)?.rootBoard?.buttons?.first()?.vocalization)
+        val second = useCase.importSpeech("Min tale", speech, 2, "Forrige", "Næste")
+        assertNotEquals(created.id, second.id)
+        assertEquals(2, useCase.listBoardSets().size)
+    }
+
+    @Test
     fun fieldLanguageOverridesLanguageWithoutChangingTheSelectedVoice() {
         val selected = Voice(
             name = "multilingual-voice",

@@ -113,6 +113,12 @@ Choose **New Screen** in **Settings > Screens**, or **Edit Screen** in an open
 Screen. That settings section also holds the OBF/OBZ importer and the recent
 files list; the Library screen only opens a saved Screen.
 
+Choose **Import speech** in that same section to paste a speech. Blank lines
+separate Buttons, Markdown headings name sections, and the preview lets you
+adjust paragraph breaks and the number of Buttons per Page. **Create Screen**
+saves a normal editable Screen with direct paragraph playback and Previous/Next
+Buttons. Parsing stays local and does not rewrite your words.
+
 The editor keeps a Kotlin draft until **Save Screen**. Save Screen is only
 available once every form change has been applied to the draft; until then the
 header names the buttons still to press. Apply form changes to

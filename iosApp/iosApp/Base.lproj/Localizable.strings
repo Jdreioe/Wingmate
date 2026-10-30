@@ -547,3 +547,17 @@
 "category.move_right" = "Move right";
 "accessibility.category.menu_hint" = "Double tap to move or delete this category.";
 "screens.message_bar" = "Message";
+
+// Speech import
+"speech_import.title" = "Import speech";
+"speech_import.help" = "Paste your speech. A blank line starts a new Button; remove a blank line to merge paragraphs. Markdown headings name Pages and are not spoken. Tap a Button to speak its full paragraph.";
+"speech_import.name" = "Speech name";
+"speech_import.text" = "Speech text";
+"speech_import.count" = "Paragraphs per Page: %d";
+"speech_import.preview" = "Preview · %d Pages";
+"speech_import.fewer" = "Fewer";
+"speech_import.more" = "More";
+"speech_import.create" = "Create Screen";
+"speech_import.error" = "The speech could not be imported. Your text is still here. Try again.";
+"speech_import.previous" = "Previous";
+"speech_import.next" = "Next";

@@ -195,6 +195,7 @@ mod tests {
             settings: core.settings().unwrap(),
             core,
             editor: None,
+            speech_import: None,
             close_after_editor: false,
             route: Route::Library,
             previous_route: Route::Library,

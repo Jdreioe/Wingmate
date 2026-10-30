@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.domain.obf
 
+import io.github.jdreioe.wingmate.domain.SpeechPolicy
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -46,7 +47,9 @@ data class BoardSettingsOverrides(
     val showSpeakButton: Boolean? = null,
     val messageBarEditable: Boolean? = null,
     val activationBehavior: BoardActivationBehavior? = null,
-    val returnBehavior: BoardReturnBehavior? = null
+    val returnBehavior: BoardReturnBehavior? = null,
+    /** Prepared speeches can speak directly without changing the app-wide preference. */
+    val speechPolicy: SpeechPolicy? = null,
 ) {
     val isEmpty: Boolean
         get() = showLabels == null &&
@@ -56,7 +59,8 @@ data class BoardSettingsOverrides(
             showSpeakButton == null &&
             messageBarEditable == null &&
             activationBehavior == null &&
-            returnBehavior == null
+            returnBehavior == null &&
+            speechPolicy == null
 }
 
 data class ResolvedBoardSettings(
@@ -67,7 +71,8 @@ data class ResolvedBoardSettings(
     val showSpeakButton: Boolean,
     val messageBarEditable: Boolean,
     val activationBehavior: BoardActivationBehavior,
-    val returnBehavior: BoardReturnBehavior
+    val returnBehavior: BoardReturnBehavior,
+    val speechPolicy: SpeechPolicy? = null,
 )
 
 fun resolveBoardSettings(
@@ -101,7 +106,8 @@ fun resolveBoardSettings(
             ?: appActivationBehavior,
         returnBehavior = page.returnBehavior
             ?: screen.returnBehavior
-            ?: appReturnBehavior
+            ?: appReturnBehavior,
+        speechPolicy = page.speechPolicy ?: screen.speechPolicy,
     )
 }
 

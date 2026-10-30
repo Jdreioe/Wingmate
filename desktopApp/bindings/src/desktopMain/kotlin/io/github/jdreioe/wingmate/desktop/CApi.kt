@@ -44,6 +44,8 @@ fun stringFree(value: CPointer<ByteVar>?) {
 
 @CName("wm_library_json") fun library(context: COpaquePointer?) = call(context) { libraryJson() }
 @CName("wm_recents_json") fun recents(context: COpaquePointer?) = call(context) { recentsJson() }
+@CName("wm_preview_speech_json") fun previewSpeech(context: COpaquePointer?, value: CPointer<ByteVar>?) = call(context) { previewSpeechJson(value.string()) }
+@CName("wm_import_speech_json") fun importSpeech(context: COpaquePointer?, value: CPointer<ByteVar>?) = call(context) { importSpeechJson(value.string()) }
 @CName("wm_import_file_json") fun importFile(context: COpaquePointer?, path: CPointer<ByteVar>?) = call(context) { importFileJson(path.string()) }
 @CName("wm_open_json") fun open(context: COpaquePointer?, id: CPointer<ByteVar>?) = call(context) { openJson(id.string()) }
 @CName("wm_activate_json") fun activate(context: COpaquePointer?, id: CPointer<ByteVar>?) = call(context) { activateJson(id.string()) }

@@ -12,6 +12,7 @@ import io.github.jdreioe.wingmate.domain.applySpokenAliases
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
+import io.github.jdreioe.wingmate.domain.obf.SpeechScreenImport
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.fieldItems
@@ -29,6 +30,15 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+
+@Serializable
+internal data class SpeechImportRequest(
+    val name: String,
+    val text: String,
+    val paragraphsPerPage: Int = 4,
+    val previousLabel: String = "Previous",
+    val nextLabel: String = "Next",
+)
 
 @Serializable
 internal data class DesktopBoardSet(val id: String, val name: String, val rootBoardId: String)
@@ -172,6 +182,25 @@ internal class DesktopCore(dataDirectory: String) {
 
     fun recentsJson(): String = json.encodeToString(store.recentFiles())
 
+    fun previewSpeechJson(value: String): String {
+        val request = json.decodeFromString<SpeechImportRequest>(value)
+        return json.encodeToString(SpeechScreenImport.preview(request.name, request.text, request.paragraphsPerPage))
+    }
+
+    fun importSpeechJson(value: String): String = runBlocking {
+        val request = json.decodeFromString<SpeechImportRequest>(value)
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val graph = SpeechScreenImport.createGraph(
+            id = "speech-$now-${kotlin.random.Random.nextLong().toULong()}",
+            name = request.name, text = request.text, paragraphsPerPage = request.paragraphsPerPage,
+            previousLabel = request.previousLabel, nextLabel = request.nextLabel, now = now,
+        )
+        val state = store.snapshot()
+        store.restore(state.copy(boards = state.boards + graph.boards, boardSets = state.boardSets + graph.boardSet))
+        open(graph.boardSet.id)
+        activationJson()
+    }
+
     fun importFileJson(path: String): String = runBlocking {
         when (val result = importer.importBoardSetFromPathResult(path)) {
             is BoardImportResult.Success -> {
@@ -228,7 +257,7 @@ internal class DesktopCore(dataDirectory: String) {
             else -> {
                 val text = localizedText(board, button)
                 if (text.isNotBlank() && shouldAddBoardSelection(resolved.activationBehavior)) sentence += text
-                if (text.isNotBlank() && shouldSpeakSelectionImmediately(settings.speechPolicy, resolved.activationBehavior)) speech = text
+                if (text.isNotBlank() && shouldSpeakSelectionImmediately(resolved.speechPolicy ?: settings.speechPolicy, resolved.activationBehavior)) speech = text
                 val (next, stack) = applyBoardReturnBehavior(resolved.returnBehavior, activeBoardId, boardStack, set.rootBoardId)
                 activeBoardId = next
                 boardStack = stack

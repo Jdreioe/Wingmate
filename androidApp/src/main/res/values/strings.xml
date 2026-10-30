@@ -693,4 +693,16 @@
     <string name="voice_settings_keep_current">Keep current</string>
     <string name="azure_config_key_placeholder">Your Azure Speech service key</string>
     <string name="update_dismiss">Dismiss</string>
+    <string name="speech_import_title">Import speech</string>
+    <string name="speech_import_help">Paste your speech. A blank line starts a new Button; remove a blank line to merge paragraphs. Markdown headings name Pages and are not spoken. Tap a Button to speak its full paragraph.</string>
+    <string name="speech_import_name">Speech name</string>
+    <string name="speech_import_text">Speech text</string>
+    <string name="speech_import_count">Paragraphs per Page: %1$d</string>
+    <string name="speech_import_preview">Preview · %1$d Pages</string>
+    <string name="speech_import_fewer">Fewer</string>
+    <string name="speech_import_more">More</string>
+    <string name="speech_import_create">Create Screen</string>
+    <string name="speech_import_error">The speech could not be imported. Your text is still here. Try again.</string>
+    <string name="speech_import_previous">Previous</string>
+    <string name="speech_import_next">Next</string>
 </resources>
