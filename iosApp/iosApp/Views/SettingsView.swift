@@ -527,6 +527,10 @@ private struct AccessibilitySettingsView: View {
             }
 
             Section("settings.accessibility.feedback") {
+                Toggle("settings.accessibility.touch_down", isOn: Binding(get: { model.selectOnTouchDown }, set: { model.setSelectOnTouchDown($0) }))
+                Text("settings.accessibility.touch_down.footer").font(.footnote).foregroundStyle(.secondary)
+                Toggle("settings.accessibility.swipe_pages", isOn: Binding(get: { model.swipeBetweenPages }, set: { model.setSwipeBetweenPages($0) }))
+                Text("settings.accessibility.swipe_pages.footer").font(.footnote).foregroundStyle(.secondary)
                 Toggle("settings.accessibility.selection_sound", isOn: Binding(
                     get: { model.selectionSoundEnabled }, set: { model.setSelectionSoundEnabled($0) }
                 ))
@@ -732,6 +736,9 @@ private struct PrivacySettingsView: View {
                     get: { model.historyVisible },
                     set: { model.setHistoryVisible($0) }
                 ))
+                Toggle("settings.likely_next", isOn: Binding(get: { model.likelyNextPageEnabled }, set: { model.setLikelyNextPageEnabled($0) }))
+                    .disabled(!model.historyVisible)
+                Text("settings.likely_next.footer").font(.footnote).foregroundStyle(.secondary)
             } header: {
                 Text("settings.privacy.local_data")
             } footer: {

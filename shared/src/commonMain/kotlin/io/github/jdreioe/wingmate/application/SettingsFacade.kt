@@ -76,6 +76,12 @@ class SettingsFacade(
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateHoldToSelectMillis(millis: Long) = updateSettings { it.copy(holdToSelectMillis = millis.coerceIn(0, 2_000)) }
     @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun updateSelectOnTouchDown(enabled: Boolean) = updateSettings { it.copy(selectOnTouchDown = enabled) }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun updateSwipeBetweenPages(enabled: Boolean) = updateSettings { it.copy(swipeBetweenPages = enabled) }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun updateLikelyNextPageEnabled(enabled: Boolean) = updateSettings { it.copy(likelyNextPageEnabled = enabled) }
+    @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateDwellToSelectMillis(millis: Long) = updateSettings { it.copy(dwellToSelectMillis = millis.coerceIn(0, 5_000)) }
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateSelectKeyBinding(binding: String) = updateSettings { it.copy(selectKeyBinding = binding) }

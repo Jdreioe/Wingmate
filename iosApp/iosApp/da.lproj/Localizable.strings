@@ -525,6 +525,25 @@
 "accessibility.category.menu_hint" = "Dobbelttryk for at flytte eller slette denne kategori.";
 "screens.message_bar" = "Besked";
 
+// Android feature parity
+"typing.likely_next" = "Sandsynligt næste";
+"settings.likely_next" = "Næste beskeder (eksperimentelt)";
+"settings.likely_next.footer" = "Foreslå beskeder fra synlig lokal historik. Rydning af historik rydder forslagene.";
+"settings.accessibility.touch_down" = "Vælg ved berøring";
+"settings.accessibility.touch_down.footer" = "Vælg én gang ved første berøring. Bevægelse bagefter kan ikke fortryde valget. Hold for at vælge har forrang. Ordforrådsgitre stopper med at rulle, og sidestrygning slås fra.";
+"settings.accessibility.swipe_pages" = "Stryg mellem sider";
+"settings.accessibility.swipe_pages.footer" = "Stryg vandret til nabosiden i skærmens rækkefølge. Første og sidste side går ikke rundt. Hold for at vælge og valg ved berøring deaktiverer sidestrygning.";
+"boardset.background_image" = "Sidens baggrundsbillede";
+"boardset.background_choose" = "Vælg eller erstat billede";
+"boardset.background_fit" = "Tilpas";
+"boardset.background_fill" = "Udfyld";
+"boardset.background_remove" = "Fjern baggrundsbillede";
+"boardset.background_failed" = "Kunne ikke gemme baggrundsbilledet. Prøv igen.";
+"boardset.print_pdf" = "Eksportér skærm som PDF";
+"boardset.print_failed" = "Kunne ikke eksportere PDF. Prøv igen.";
+"boardset.print_link" = "Gå til: %@ (side %d)";
+"boardset.print_preparing" = "Forbereder PDF…";
+
 // Speech import
 "speech_import.title" = "Importér tale";
 "speech_import.help" = "Indsæt din tale. En tom linje starter en ny knap; fjern en tom linje for at samle afsnit. Markdown-overskrifter navngiver sider og læses ikke op. Tryk på en knap for at læse hele afsnittet op.";

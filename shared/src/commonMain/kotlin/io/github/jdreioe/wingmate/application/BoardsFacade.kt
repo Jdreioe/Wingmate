@@ -2,6 +2,11 @@ package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.obf.backgroundImage
+import io.github.jdreioe.wingmate.domain.obf.withBackgroundImage
+import io.github.jdreioe.wingmate.domain.obf.PageBackgroundFit
+import io.github.jdreioe.wingmate.domain.obf.PrintedPage
+import io.github.jdreioe.wingmate.domain.obf.printableScreen
 import io.github.jdreioe.wingmate.domain.obf.usedImageIds
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
@@ -507,6 +512,32 @@ class BoardsFacade(
                 boardRepository.saveBoard(it)
                 boardSetUseCase.touchBoardSet(boardSetId)
             }
+    }
+
+    fun backgroundImageUrl(board: ObfBoard): String? {
+        val image = board.images.firstOrNull { it.id == board.backgroundImage?.imageId } ?: return null
+        return image.dataUrl ?: image.data?.let { "data:${image.contentType ?: "image/png"};base64,$it" } ?: image.url
+    }
+
+    fun backgroundImageFit(board: ObfBoard): String = board.backgroundImage?.fit?.name ?: "Fill"
+
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun setBoardBackgroundImage(boardSetId: String, boardId: String, imageUrl: String?, fit: String): ObfBoard = nativeCall {
+        val set = requireBoardSet(boardSetId)
+        if (set.isLocked) throw NativeFailure(NativeFailureKind.Validation)
+        requireBoardInSet(boardSetId, boardId)
+        val board = requireBoard(boardId)
+        val image = imageUrl?.let { ObfImage(id = board.backgroundImage?.imageId ?: "background-${kotlin.random.Random.nextLong()}", url = it) }
+        board.withBackgroundImage(image, PageBackgroundFit.entries.firstOrNull { it.name == fit } ?: PageBackgroundFit.Fill)
+            .also {
+                boardRepository.saveBoard(it)
+                boardSetUseCase.touchBoardSet(boardSetId)
+            }
+    }
+
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun printedPages(boardSetId: String, locale: String?): List<PrintedPage> = nativeCall {
+        printableScreen(boardSetUseCase.loadBoardSetGraph(boardSetId) ?: throw NativeFailure(NativeFailureKind.NotFound), locale)
     }
 
     private suspend fun requireBoardSet(id: String): ObfBoardSet =

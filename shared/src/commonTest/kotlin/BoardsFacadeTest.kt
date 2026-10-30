@@ -31,6 +31,30 @@ import kotlin.test.assertTrue
 
 class BoardsFacadeTest {
     @Test
+    fun backgroundEditingPreservesVocabularyAndRejectsLockedScreens() = runBlocking {
+        val facade = facade()
+        val set = facade.createBoardSet("Test", rows = 1, columns = 1)
+        facade.upsertBoardCellButton(
+            boardId = set.rootBoardId, row = 0, col = 0, label = "Hello", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = "file:///symbol.png", clearImage = false, actions = emptyList(), wordType = null,
+        )
+        val page = facade.setBoardBackgroundImage(set.id, set.rootBoardId, "file:///background.png", "Fit")
+        assertEquals("file:///background.png", facade.backgroundImageUrl(page))
+        assertEquals("Fit", facade.backgroundImageFit(page))
+        assertEquals(2, page.images.size)
+        val cleared = facade.setBoardBackgroundImage(set.id, set.rootBoardId, null, "Fill")
+        assertEquals(listOf("file:///symbol.png"), cleared.images.map { it.url })
+        assertEquals("Hello", facade.printedPages(set.id, "en").single().cells.single().label)
+        facade.toggleBoardSetLocked(set.id)
+        val error = assertFailsWith<NativeFailure> {
+            facade.setBoardBackgroundImage(set.id, set.rootBoardId, "file:///other.png", "Fill")
+        }
+        assertEquals(NativeFailureKind.Validation, error.kind)
+        assertNull(facade.backgroundImageUrl(facade.getBoard(set.rootBoardId)!!))
+    }
+
+    @Test
     fun speechImportExposesValidationFailuresAndResolvesItsPlaybackSettings() = runBlocking {
         val facade = facade()
         val failure = assertFailsWith<NativeFailure> {

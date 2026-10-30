@@ -22,7 +22,7 @@ struct SpeechControls: View {
                         .frame(width: buttonSize, height: buttonSize)
                         .background(Circle().fill(Color(.secondarySystemFill)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
                 .accessibilityLabel(Text("playback.stop"))
                 .transition(.scale.combined(with: .opacity))
             }
@@ -35,7 +35,7 @@ struct SpeechControls: View {
                     .frame(width: speakSize, height: speakSize)
                     .background(Circle().fill(Color.accentColor))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
             .accessibilityLabel(Text(paused ? "playback.resume" : playing ? "playback.pause" : "playback.play"))
             .accessibilityHint(Text(paused || playing ? "" : "accessibility.playback.play_hint"))
         }
@@ -68,7 +68,7 @@ struct TypingMessageBar: View {
                     .frame(width: buttonSize, height: buttonSize)
                     .background(Circle().fill(Color(.secondarySystemFill)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
             .accessibilityLabel(Text(messageFocused ? "typing.show_screen" : "typing.show_keyboard"))
             .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
 
@@ -114,7 +114,7 @@ struct HeldMessageRow: View {
                 Label("typing.held_message.swap", systemImage: "arrow.left.arrow.right")
                     .frame(minHeight: 44)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
             .accessibilityHint(Text("accessibility.playback.restore_thought_hint"))
         }
         .padding(.leading, 12)
@@ -190,7 +190,7 @@ struct ScreensMessageBar: View {
                     .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
             .accessibilityLabel(Text("sentence.box.delete_phrase"))
         }
         .padding(.leading, 10)

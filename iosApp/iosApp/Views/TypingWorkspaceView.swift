@@ -56,7 +56,7 @@ struct TypingWorkspaceView: View {
     private var pagePhrases: [Shared.Phrase] {
         switch page {
         case .category(let id): return model.state.phrases.filter { $0.parentId == id }
-        case .all, .history: return model.state.phrases
+        case .all, .history, .likelyNext: return model.state.phrases
         }
     }
 
@@ -66,6 +66,9 @@ struct TypingWorkspaceView: View {
                 statusRows
                 // Free space above the Message bar; the bar and its input surface stay at the bottom.
                 Spacer(minLength: 0)
+                if onScreenKeyboard && model.likelyNextAvailable {
+                    likelyNextRow
+                }
                 rowsAboveBar
                 #if DEBUG
                 // Only for a hardware keyboard; the on-screen one brings its own suggestions.
@@ -197,6 +200,24 @@ struct TypingWorkspaceView: View {
         }
     }
 
+    private var likelyNextRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !oneRowWhileTyping { Text("typing.likely_next").font(.caption).foregroundStyle(.secondary) }
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 8) {
+                    ForEach(model.likelyNextPhrases.prefix(4), id: \.id) { phrase in
+                        PhraseItemView(model: model, phrase: phrase, recorder: recorder, editable: false,
+                            minHeight: oneRowWhileTyping ? 48 : 56, onEdit: {}, requestMic: { _ in }, onDelete: { _ in })
+                            .frame(width: 160)
+                    }
+                }
+            }
+            .scrollDisabled(model.selectOnTouchDown)
+            .frame(height: oneRowWhileTyping ? 56 : 88)
+        }
+        .accessibilityHidden(model.scanningEnabled && !model.scanPhraseGridEnabled)
+    }
+
     private var compactPhraseRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 8) {
@@ -205,7 +226,7 @@ struct TypingWorkspaceView: View {
                         model: model,
                         phrase: phrase,
                         recorder: recorder,
-                        editable: model.holdToSelectMillis <= 0,
+                        editable: model.holdToSelectMillis <= 0 && !model.selectOnTouchDown,
                         minHeight: 72,
                         onEdit: { requestMutation { editingPhrase = phrase } },
                         requestMic: { id in requestMutation { requestMicAndStart(id) } },
@@ -216,6 +237,7 @@ struct TypingWorkspaceView: View {
             }
             .padding(.vertical, 4)
         }
+        .scrollDisabled(model.selectOnTouchDown)
         .frame(height: 88)
         .accessibilityHidden(model.scanningEnabled && !model.scanPhraseGridEnabled)
     }

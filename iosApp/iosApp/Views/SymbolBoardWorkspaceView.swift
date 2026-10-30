@@ -121,6 +121,13 @@ struct SymbolBoardWorkspaceView: View {
     @ObservedObject var model: IosViewModel
     @Namespace private var sentenceAnimationNamespace
 
+    @State private var backgroundPhoto: PhotosPickerItem?
+    @State private var showBackgroundEditor = false
+    @State private var importingBackground = false
+    @State private var backgroundFit = "Fill"
+    @State private var pdfUrl: URL?
+    @State private var exportingPdf = false
+    @AccessibilityFocusState private var pageTitleFocused: Bool
     @State private var route: BoardSetRoute = .library
     @State private var hasAppliedStartupDestination = false
     @State private var showCreateBoardsetSheet = false
@@ -195,11 +202,66 @@ struct SymbolBoardWorkspaceView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if exportingPdf { ProgressView("boardset.print_preparing").padding(8) }
+            if let status = model.boardStatusMessage, !status.isEmpty {
+                Text(status).font(.footnote).padding(8).accessibilityAddTraits(.updatesFrequently)
+            }
             switch route {
             case .library:
                 libraryView
             case .workspace(let boardSetId, let mode):
                 workspaceView(boardSetId: boardSetId, mode: mode)
+            }
+        }
+        .sheet(isPresented: $showBackgroundEditor) {
+            NavigationStack {
+                Form {
+                    if let status = model.boardStatusMessage { Text(status).foregroundStyle(.secondary) }
+                    if importingBackground { ProgressView() }
+                    PhotosPicker(selection: $backgroundPhoto, matching: .images) {
+                        Label("boardset.background_choose", systemImage: "photo")
+                    }
+                    Picker("boardset.background_fit", selection: $backgroundFit) {
+                        Text("boardset.background_fill").tag("Fill")
+                        Text("boardset.background_fit").tag("Fit")
+                    }
+                    .onChange(of: backgroundFit) { _, fit in
+                        if let source = model.boardBackgroundImageUrl {
+                            Task { await model.setPageBackground(imageUrl: source, fit: fit) }
+                        }
+                    }
+                    Button("boardset.background_remove", role: .destructive) {
+                        Task { await model.setPageBackground(imageUrl: nil, fit: backgroundFit) }
+                    }.disabled(model.boardBackgroundImageUrl == nil)
+                }
+                .disabled(importingBackground)
+                .navigationTitle("boardset.background_image")
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("common.done") { showBackgroundEditor = false }.disabled(importingBackground) } }
+            }
+            .interactiveDismissDisabled(importingBackground)
+        }
+        .sheet(isPresented: Binding(get: { pdfUrl != nil }, set: { if !$0 { pdfUrl = nil } })) {
+            if let pdfUrl { ScreenPdfShareSheet(url: pdfUrl) }
+        }
+        .onChange(of: backgroundPhoto) { _, item in
+            guard let item, !importingBackground else { return }
+            importingBackground = true
+            Task {
+                defer { importingBackground = false; backgroundPhoto = nil }
+                do {
+                    guard let original = try await item.loadTransferable(type: Data.self), let data = UIImage(data: original)?.pngData() else {
+                        model.boardStatusMessage = NSLocalizedString("boardset.background_failed", comment: "")
+                        return
+                    }
+                    let url = try await Task.detached {
+                        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("WingmateSymbols", isDirectory: true)
+                        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                        let url = directory.appendingPathComponent("\(UUID().uuidString).png")
+                        try data.write(to: url, options: .atomic)
+                        return url
+                    }.value
+                    await model.setPageBackground(imageUrl: url.absoluteString, fit: backgroundFit)
+                } catch { model.boardStatusMessage = NSLocalizedString("boardset.background_failed", comment: "") }
             }
         }
         .task {
@@ -387,14 +449,6 @@ struct SymbolBoardWorkspaceView: View {
                 .frame(minHeight: 44)
                 .padding(.horizontal)
 
-            if let status = model.boardStatusMessage, !status.isEmpty {
-                Text(status)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-            }
-
             if model.boardSets.isEmpty {
                 emptyLibraryState
             } else {
@@ -431,6 +485,7 @@ struct SymbolBoardWorkspaceView: View {
                                 onExport: {
                                     Task { await exportBoardSet(id: set.id) }
                                 },
+                                onPrint: { printScreen(id: set.id) },
                                 onDelete: {
                                     deleteTargetSet = set
                                 }
@@ -509,10 +564,16 @@ struct SymbolBoardWorkspaceView: View {
                     Text(model.selectedBoard?.name ?? NSLocalizedString("boardset.untitled_board", comment: ""))
                         .font(.headline)
                         .fontWeight(.bold)
+                        .accessibilityFocused($pageTitleFocused)
                 }
 
                 Spacer()
 
+                Button { printScreen(id: boardSetId) } label: {
+                    Image(systemName: "printer").frame(minWidth: 44, minHeight: 44)
+                }
+                .disabled(exportingPdf)
+                .accessibilityLabel(Text("boardset.print_pdf"))
                 if mode == .edit {
                     HStack(spacing: 12) {
                         Menu {
@@ -547,6 +608,10 @@ struct SymbolBoardWorkspaceView: View {
                             } label: {
                                 Label("boardset.background_color", systemImage: "paintpalette")
                             }
+                            Button {
+                                backgroundFit = model.boardBackgroundImageFit
+                                showBackgroundEditor = true
+                            } label: { Label("boardset.background_image", systemImage: "photo") }
                             if let set = model.selectedBoardSet,
                                let boardId = model.selectedBoardId,
                                boardId != set.rootBoardId {
@@ -675,10 +740,12 @@ struct SymbolBoardWorkspaceView: View {
             }
 
         }
+        .animation(.easeInOut(duration: 0.2), value: model.selectedBoardId)
         .task(id: boardPredictionTaskId) {
             await model.refreshBoardPredictions(context: boardSentenceText)
         }
         .onDisappear { model.stopBoardPredictions() }
+        .onChange(of: model.selectedBoardId) { _, _ in pageTitleFocused = true }
         .fullScreenCover(isPresented: $isFullscreen) {
             VStack(spacing: 12) {
                 HStack(alignment: .bottom) {
@@ -756,14 +823,25 @@ struct SymbolBoardWorkspaceView: View {
                     .padding(gridInset)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background {
+                    if !model.highContrastMode { PageBackgroundView(source: model.boardBackgroundImageUrl, fit: model.boardBackgroundImageFit) }
+                }
                 .background(
                     model.highContrastMode
                         ? Color(.systemBackground)
                         : colorFromHex(board.backgroundColor, fallback: Color(.secondarySystemBackground))
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .scrollDisabled(model.selectOnTouchDown && !isEditMode)
+                .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
+                    guard !isEditMode, abs(value.translation.width) >= 64,
+                          abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+                    Task { await model.swipePage(by: value.translation.width < 0 ? 1 : -1) }
+                })
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .id(board.id)
+            .transition(.opacity)
         } else {
             ProgressView()
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -802,7 +880,7 @@ struct SymbolBoardWorkspaceView: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown && model.holdToSelectMillis <= 0 && !isEditMode))
             .frame(width: width, height: height)
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: max(0.01, model.holdToSelectMillis / 1_000))
@@ -1966,6 +2044,17 @@ struct SymbolBoardWorkspaceView: View {
         }
     }
 
+    private func printScreen(id: String) {
+        guard !exportingPdf else { return }
+        exportingPdf = true
+        model.boardStatusMessage = nil
+        Task {
+            defer { exportingPdf = false }
+            do { pdfUrl = try await exportScreenPdf(id: id) }
+            catch { model.boardStatusMessage = NSLocalizedString("boardset.print_failed", comment: "") }
+        }
+    }
+
     private func exportBoardSet(id: String) async {
         let result = try? await IosDiBridge().boardsFacade().shareBoardSetAsObz(id: id)
         let message: String
@@ -1988,6 +2077,7 @@ struct BoardSetLibraryCard: View {
     let onDuplicate: () -> Void
     let onToggleLock: () -> Void
     let onExport: () -> Void
+    let onPrint: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -2053,6 +2143,10 @@ struct BoardSetLibraryCard: View {
                 }
                 .buttonStyle(.bordered)
 
+                Button(action: onPrint) {
+                    Image(systemName: "printer").frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel(Text("boardset.print_pdf"))
                 Spacer()
 
                 Button(role: .destructive, action: onDelete) {

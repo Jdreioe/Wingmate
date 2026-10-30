@@ -486,6 +486,25 @@
 "accessibility.category.menu_hint" = "Doppeltippen, um diese Kategorie zu verschieben oder zu löschen.";
 "screens.message_bar" = "Nachricht";
 
+// Android feature parity
+"typing.likely_next" = "Wahrscheinlich als Nächstes";
+"settings.likely_next" = "Nächste Nachrichten (experimentell)";
+"settings.likely_next.footer" = "Nachrichten aus dem sichtbaren lokalen Verlauf vorschlagen. Das Löschen des Verlaufs löscht diese Vorschläge.";
+"settings.accessibility.touch_down" = "Bei Berührung auswählen";
+"settings.accessibility.touch_down.footer" = "Einmal beim ersten Kontakt auswählen. Eine spätere Bewegung kann dies nicht rückgängig machen. Gedrückthalten hat Vorrang. Vokabularraster werden nicht gescrollt und Seitenwischen ist deaktiviert.";
+"settings.accessibility.swipe_pages" = "Zwischen Seiten wischen";
+"settings.accessibility.swipe_pages.footer" = "Horizontal zur Nachbarseite in Bildschirmreihenfolge wischen. Die erste und letzte Seite bilden keinen Umlauf. Gedrückthalten und Auswahl bei Berührung deaktivieren das Wischen.";
+"boardset.background_image" = "Seitenhintergrundbild";
+"boardset.background_choose" = "Bild auswählen oder ersetzen";
+"boardset.background_fit" = "Einpassen";
+"boardset.background_fill" = "Ausfüllen";
+"boardset.background_remove" = "Hintergrundbild entfernen";
+"boardset.background_failed" = "Hintergrundbild konnte nicht gespeichert werden. Bitte erneut versuchen.";
+"boardset.print_pdf" = "Bildschirm als PDF exportieren";
+"boardset.print_failed" = "PDF konnte nicht exportiert werden. Bitte erneut versuchen.";
+"boardset.print_link" = "Gehe zu: %@ (Seite %d)";
+"boardset.print_preparing" = "PDF wird erstellt…";
+
 // Speech import
 "speech_import.title" = "Rede importieren";
 "speech_import.help" = "Füge deinen Redetext ein. Eine Leerzeile beginnt eine neue Schaltfläche; entferne eine Leerzeile, um Absätze zusammenzuführen. Markdown-Überschriften benennen Seiten und werden nicht vorgelesen. Tippe auf eine Schaltfläche, um den vollständigen Absatz vorzulesen.";

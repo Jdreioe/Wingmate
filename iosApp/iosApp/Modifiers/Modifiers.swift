@@ -15,3 +15,45 @@ extension Color {
         self.init(.sRGB, red: Double(r)/255, green: Double(g)/255, blue: Double(b)/255, opacity: Double(a)/255)
     }
 }
+
+/// Touch-down commits once at first contact. Moving afterwards cannot undo speech.
+/// The normal Button activation remains available to VoiceOver and Switch Control.
+struct CommunicationButtonStyle: PrimitiveButtonStyle {
+    var touchDown: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        CommunicationButtonBody(configuration: configuration, touchDown: touchDown)
+    }
+}
+
+private struct CommunicationButtonBody: View {
+    let configuration: PrimitiveButtonStyleConfiguration
+    let touchDown: Bool
+    @Environment(\.isEnabled) private var enabled
+    @GestureState private var contacted = false
+
+    @State private var fired = false
+
+    var body: some View {
+        if touchDown {
+            configuration.label
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .updating($contacted) { _, state, _ in state = true }
+                        .onChanged { _ in
+                            guard enabled, !fired else { return }
+                            fired = true
+                            configuration.trigger()
+                        }
+                        .onEnded { _ in fired = false }
+                )
+                .onChange(of: contacted) { _, down in if !down { fired = false } }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { if enabled { configuration.trigger() } }
+        } else {
+            Button(action: configuration.trigger) { configuration.label }
+                .buttonStyle(.plain)
+        }
+    }
+}

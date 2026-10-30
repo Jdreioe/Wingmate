@@ -41,7 +41,7 @@ Focused checks:
 
 ## Likely next Messages (experiment, #213)
 
-Separate from word predictions, the Android Typing Screen can show a Likely next
+Separate from word predictions, the Android and iOS Typing Screens can show a Likely next
 Page of whole Messages. Settings > Privacy enables it while History is visible.
 `likelyNextMessages` ranks visible History in memory. It ranks Messages that
 followed the last spoken Message within 10 minutes by how often they did, then

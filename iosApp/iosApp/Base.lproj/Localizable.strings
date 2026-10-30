@@ -548,6 +548,25 @@
 "accessibility.category.menu_hint" = "Double tap to move or delete this category.";
 "screens.message_bar" = "Message";
 
+// Android feature parity
+"typing.likely_next" = "Likely next";
+"settings.likely_next" = "Likely next Messages (experimental)";
+"settings.likely_next.footer" = "Suggest Messages from visible local History. Clearing History clears these suggestions.";
+"settings.accessibility.touch_down" = "Select on touch-down";
+"settings.accessibility.touch_down.footer" = "Select once at first contact. Moving afterwards cannot undo it. Hold-to-select takes priority. Vocabulary grids stop scrolling and swipe navigation is disabled.";
+"settings.accessibility.swipe_pages" = "Swipe between Pages";
+"settings.accessibility.swipe_pages.footer" = "Swipe horizontally to an adjacent Page in Screen order. The first and last Pages do not wrap. Hold-to-select and touch-down selection disable swiping.";
+"boardset.background_image" = "Page background image";
+"boardset.background_choose" = "Choose or replace image";
+"boardset.background_fit" = "Fit";
+"boardset.background_fill" = "Fill";
+"boardset.background_remove" = "Remove background image";
+"boardset.background_failed" = "Could not save the background image. Try again.";
+"boardset.print_pdf" = "Export Screen as PDF";
+"boardset.print_failed" = "Could not export the PDF. Try again.";
+"boardset.print_link" = "Go to: %@ (page %d)";
+"boardset.print_preparing" = "Preparing PDF…";
+
 // Speech import
 "speech_import.title" = "Import speech";
 "speech_import.help" = "Paste your speech. A blank line starts a new Button; remove a blank line to merge paragraphs. Markdown headings name Pages and are not spoken. Tap a Button to speak its full paragraph.";
