@@ -7,6 +7,7 @@ import io.github.jdreioe.wingmate.domain.PersistenceError
 import io.github.jdreioe.wingmate.domain.PersistenceException
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.SpeechPolicy
 import io.github.jdreioe.wingmate.domain.applySpokenAliases
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
@@ -320,8 +321,8 @@ internal class DesktopCore(dataDirectory: String) {
         return "null"
     }
 
-    /** System TTS has no SSML, so text aliases are substituted before Rust speaks. */
-    private suspend fun spoken(text: String) = applySpokenAliases(text, store.getAll())
+    /** System TTS has no SSML, so text aliases are substituted and audio tags removed before Rust speaks. */
+    private suspend fun spoken(text: String) = applySpokenAliases(SpeechTextProcessor.stripAudioTags(text), store.getAll())
 
     private suspend fun activationJson() = json.encodeToString(DesktopActivation(view()))
 

@@ -69,6 +69,7 @@ fun VoiceSettingsDialog(
                                 stringResource(
                                     when (ttsEngine) {
                                         TtsEngine.SYSTEM -> R.string.ui_settings_system_tts
+                                        TtsEngine.ELEVENLABS -> R.string.elevenlabs_title
                                         TtsEngine.GOOGLE_CLOUD -> R.string.ui_settings_google_tts
                                         TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> R.string.ui_settings_azure_tts
                                     }
@@ -81,6 +82,7 @@ fun VoiceSettingsDialog(
                             stringResource(
                                 when (ttsEngine) {
                                     TtsEngine.SYSTEM -> R.string.voice_settings_system_description
+                                    TtsEngine.ELEVENLABS -> R.string.elevenlabs_description
                                     TtsEngine.GOOGLE_CLOUD -> R.string.voice_settings_google_description
                                     TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> R.string.voice_settings_azure_description
                                 }
@@ -96,11 +98,13 @@ fun VoiceSettingsDialog(
                 // Voice Settings
                 Text(stringResource(R.string.voice_settings_language, selectedLanguage))
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(stringResource(R.string.voice_settings_pitch, String.format("%.2f", pitch)))
-                Slider(value = pitch.toFloat(), onValueChange = { pitch = it.toDouble() }, valueRange = 0.5f..2.0f)
-                Spacer(modifier = Modifier.height(8.dp))
+                if (ttsEngine != TtsEngine.ELEVENLABS) {
+                    Text(stringResource(R.string.voice_settings_pitch, String.format("%.2f", pitch)))
+                    Slider(value = pitch.toFloat(), onValueChange = { pitch = it.toDouble() }, valueRange = 0.5f..2.0f)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
                 Text(stringResource(R.string.voice_settings_rate, String.format("%.2f", rate)))
-                Slider(value = rate.toFloat(), onValueChange = { rate = it.toDouble() }, valueRange = 0.5f..2.0f)
+                Slider(value = rate.toFloat().coerceIn(if (ttsEngine == TtsEngine.ELEVENLABS) 0.7f..1.2f else 0.5f..2.0f), onValueChange = { rate = it.toDouble() }, valueRange = if (ttsEngine == TtsEngine.ELEVENLABS) 0.7f..1.2f else 0.5f..2.0f)
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 

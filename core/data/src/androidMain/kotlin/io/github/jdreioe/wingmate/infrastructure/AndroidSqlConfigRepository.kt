@@ -5,6 +5,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.ElevenLabsSpeechConfig
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
@@ -17,11 +18,12 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** Stores Azure BYOK configuration as an Android Keystore-backed AES-GCM blob. */
+/** Stores cloud speech credentials as Android Keystore-backed AES-GCM blobs. */
 class AndroidSqlConfigRepository(private val context: Context) : ConfigRepository {
     private val helper by lazy { AndroidSqlOpenHelper(context) }
     private val prefs by lazy { context.getSharedPreferences(SECURE_PREFS, Context.MODE_PRIVATE) }
     private val googlePrefs by lazy { context.getSharedPreferences(GOOGLE_SECURE_PREFS, Context.MODE_PRIVATE) }
+    private val elevenLabsPrefs by lazy { context.getSharedPreferences(ELEVENLABS_SECURE_PREFS, Context.MODE_PRIVATE) }
     private val legacyPrefs by lazy { context.getSharedPreferences("wingmate_prefs", Context.MODE_PRIVATE) }
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -65,6 +67,25 @@ class AndroidSqlConfigRepository(private val context: Context) : ConfigRepositor
             "Could not clear secure Google configuration"
         }
         OperationalLogger.info("google_speech_config.clear", "succeeded", enabled = false)
+    }
+
+    override suspend fun getElevenLabsSpeechConfig(): ElevenLabsSpeechConfig? = withContext(Dispatchers.IO) {
+        readElevenLabsSecure()
+    }
+
+    override suspend fun saveElevenLabsSpeechConfig(config: ElevenLabsSpeechConfig) = withContext(Dispatchers.IO) {
+        val normalized = config.copy(apiKey = config.apiKey.trim())
+        require(normalized.apiKey.isNotEmpty()) { "ElevenLabs API key is required" }
+        writeElevenLabsSecure(normalized)
+        check(readElevenLabsSecure() == normalized) { "Secure ElevenLabs credential write could not be verified" }
+        OperationalLogger.info("elevenlabs_speech_config.save", "succeeded", enabled = true)
+    }
+
+    override suspend fun clearElevenLabsSpeechConfig() = withContext(Dispatchers.IO) {
+        check(elevenLabsPrefs.edit().remove(ELEVENLABS_ENCRYPTED_CONFIG).commit()) {
+            "Could not clear secure ElevenLabs configuration"
+        }
+        OperationalLogger.info("elevenlabs_speech_config.clear", "succeeded", enabled = false)
     }
 
     private fun migrateLegacy(): SpeechServiceConfig? {
@@ -147,6 +168,34 @@ class AndroidSqlConfigRepository(private val context: Context) : ConfigRepositor
         }.getOrThrow()
     }
 
+    private fun writeElevenLabsSecure(config: ElevenLabsSpeechConfig) {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey(ELEVENLABS_KEY_ALIAS))
+        val ciphertext = cipher.doFinal(json.encodeToString(ElevenLabsSpeechConfig.serializer(), config).encodeToByteArray())
+        val value = Base64.encodeToString(cipher.iv + ciphertext, Base64.NO_WRAP)
+        check(elevenLabsPrefs.edit().putString(ELEVENLABS_ENCRYPTED_CONFIG, value).commit()) {
+            "Could not persist secure ElevenLabs configuration"
+        }
+    }
+
+    private fun readElevenLabsSecure(): ElevenLabsSpeechConfig? {
+        val encoded = elevenLabsPrefs.getString(ELEVENLABS_ENCRYPTED_CONFIG, null) ?: return null
+        return runCatching {
+            val bytes = Base64.decode(encoded, Base64.NO_WRAP)
+            require(bytes.size > IV_SIZE)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                getOrCreateKey(ELEVENLABS_KEY_ALIAS),
+                GCMParameterSpec(TAG_BITS, bytes.copyOfRange(0, IV_SIZE)),
+            )
+            val plaintext = cipher.doFinal(bytes.copyOfRange(IV_SIZE, bytes.size)).decodeToString()
+            json.decodeFromString(ElevenLabsSpeechConfig.serializer(), plaintext)
+        }.onFailure {
+            OperationalLogger.warn("elevenlabs_speech_config.secure_read", "failed")
+        }.getOrThrow()
+    }
+
     private fun getOrCreateKey(alias: String): SecretKey {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (keyStore.getKey(alias, null) as? SecretKey)?.let { return it }
@@ -169,8 +218,11 @@ class AndroidSqlConfigRepository(private val context: Context) : ConfigRepositor
         const val LEGACY_ID = "speech_config"
         const val KEY_ALIAS = "wingmate.azure-speech.v1"
         const val GOOGLE_SECURE_PREFS = "wingmate_secure_google"
+        const val ELEVENLABS_SECURE_PREFS = "wingmate_secure_elevenlabs"
         const val GOOGLE_ENCRYPTED_CONFIG = "encrypted_google_speech_config"
+        const val ELEVENLABS_ENCRYPTED_CONFIG = "encrypted_elevenlabs_speech_config"
         const val GOOGLE_KEY_ALIAS = "wingmate.google-speech.v1"
+        const val ELEVENLABS_KEY_ALIAS = "wingmate.elevenlabs-speech.v1"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val IV_SIZE = 12
         const val TAG_BITS = 128

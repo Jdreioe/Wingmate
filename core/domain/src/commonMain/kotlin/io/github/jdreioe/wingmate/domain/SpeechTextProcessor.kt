@@ -63,6 +63,16 @@ object SpeechTextProcessor {
         return normalized
     }
 
+    // A bracketed word such as `[whispers]`; pause shorthand like `[0.5s]` starts with a digit and is kept.
+    private val audioTagRegex = Regex("""\s*\[\p{L}[\p{L} ,'-]*\]""")
+
+    /** Removes ElevenLabs audio tags such as `[whispers]`, which other voices would read aloud. */
+    fun stripAudioTags(text: String): String = audioTagRegex.replace(text, "")
+
+    /** [segments] as [engine] should receive them: only ElevenLabs understands audio tags. */
+    fun segmentsFor(engine: TtsEngine, segments: List<SpeechSegment>): List<SpeechSegment> =
+        if (engine == TtsEngine.ELEVENLABS) segments else segments.map { it.copy(text = stripAudioTags(it.text)) }
+
     private fun resolveLocale(shorthand: String): String? {
         val normalized = shorthand.trim().lowercase()
         if (normalized.isBlank()) return null

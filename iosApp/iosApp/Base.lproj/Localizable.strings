@@ -580,3 +580,12 @@
 "speech_import.error" = "The speech could not be imported. Your text is still here. Try again.";
 "speech_import.previous" = "Previous";
 "speech_import.next" = "Next";
+
+"elevenlabs.setup" = "Set up ElevenLabs";
+"elevenlabs.description" = "Use voices from your ElevenLabs account, including personal voice clones. Requires internet. Text is sent to ElevenLabs and usage counts toward your account allowance.";
+"elevenlabs.help" = "Create an API key in ElevenLabs with Voices read and Text to Speech access, then paste it here. Add library voices or create a personal voice in your ElevenLabs account first.";
+"elevenlabs.key" = "ElevenLabs API key";
+"elevenlabs.configured" = "ElevenLabs key is stored securely on this device.";
+"elevenlabs.error" = "Could not complete the request. Check your connection, API key permissions, and available voices, then retry.";
+"elevenlabs.save" = "Save securely and verify";
+"elevenlabs.clear" = "Remove key";

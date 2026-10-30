@@ -1,4 +1,5 @@
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -82,5 +83,16 @@ class SpeechTextProcessorTest {
         assertEquals("Just plain text", segments[0].text)
         assertEquals(null, segments[0].languageTag)
         assertEquals(0, segments[0].pauseDurationMs)
+    }
+
+    @Test
+    fun audioTagsReachOnlyElevenLabs() {
+        val segments = SpeechTextProcessor.processText("[whispers] Jeg er træt [sighs]. Vent [0.5s] lidt")
+
+        assertEquals(
+            listOf("Jeg er træt. Vent", "lidt"),
+            SpeechTextProcessor.segmentsFor(TtsEngine.AZURE_USER_RESOURCE, segments).map { it.text.trim() },
+        )
+        assertEquals(segments, SpeechTextProcessor.segmentsFor(TtsEngine.ELEVENLABS, segments))
     }
 }

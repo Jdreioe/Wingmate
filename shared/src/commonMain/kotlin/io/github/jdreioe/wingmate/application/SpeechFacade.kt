@@ -1,6 +1,9 @@
 package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.ElevenLabsSpeechConfig
+import io.github.jdreioe.wingmate.domain.ElevenLabsSpeechConfigStatus
+import io.github.jdreioe.wingmate.infrastructure.ElevenLabsRequestException
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfigStatus
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
@@ -56,6 +59,9 @@ class SpeechFacade(
     /** A failed download keeps and returns the cached catalog, so failures here are storage failures. */
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun refreshVoicesFromGoogle(): List<Voice> = nativeCall { voiceUseCase.refreshFromGoogle() }
+
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun refreshVoicesFromElevenLabs(): List<Voice> = nativeCall { voiceUseCase.refreshFromElevenLabs() }
 
     /** Update the selected voice's language and align the app's primary language. */
     @Throws(NativeFailure::class, CancellationException::class)
@@ -170,6 +176,76 @@ class SpeechFacade(
 
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun clearGoogleSpeechConfig() = nativeCall { configRepository.clearGoogleSpeechConfig() }
+
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun getElevenLabsSpeechConfig(): ElevenLabsSpeechConfigStatus =
+        nativeCall { configRepository.getElevenLabsSpeechConfigStatus() }
+
+    /**
+     * Securely stores a candidate key only if ElevenLabs accepts it for voice discovery.
+     * A failed replacement restores the previous credential and engine selection.
+     *
+     * Fails with [NativeFailureKind.Validation] for a blank key, a key ElevenLabs
+     * refuses, or a project without voices; [NativeFailureKind.Network] when
+     * ElevenLabs cannot be reached or asks to retry; [NativeFailureKind.Persistence]
+     * when the key or engine cannot be stored.
+     */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun saveValidatedElevenLabsSpeechConfig(apiKey: String): List<Voice> =
+        saveValidatedElevenLabsSpeechConfig(apiKey) { voiceUseCase.loadElevenLabsCatalog() }
+
+    /** [downloadVoices] only asks ElevenLabs; saving the catalog is a separate, local step. */
+    internal suspend fun saveValidatedElevenLabsSpeechConfig(
+        apiKey: String,
+        downloadVoices: suspend () -> List<Voice>,
+    ): List<Voice> = nativeCall {
+        val normalizedKey = apiKey.trim()
+        if (normalizedKey.isEmpty()) throw NativeFailure(NativeFailureKind.Validation)
+        val previousConfig = configRepository.getElevenLabsSpeechConfig()
+        val previousSettings = settingsUseCase.get()
+        try {
+            configRepository.saveElevenLabsSpeechConfig(ElevenLabsSpeechConfig(normalizedKey))
+            val voices = verifiedElevenLabsVoices(downloadVoices)
+            voiceUseCase.saveElevenLabsCatalog(voices)
+            settingsUseCase.update(previousSettings.copy(ttsEngine = TtsEngine.ELEVENLABS))
+            voices
+        } catch (failure: Exception) {
+            try {
+                withContext(NonCancellable) {
+                    if (previousConfig == null) {
+                        configRepository.clearElevenLabsSpeechConfig()
+                    } else {
+                        configRepository.saveElevenLabsSpeechConfig(previousConfig)
+                    }
+                    settingsUseCase.update(previousSettings)
+                }
+            } catch (_: Exception) {
+                // Cancellation wins; otherwise the previous key may not be back, which is a storage failure.
+                if (failure !is CancellationException) throw NativeFailure(NativeFailureKind.Persistence)
+            }
+            throw failure
+        }
+    }
+
+    /** Only ElevenLabs's answer decides validity: a refused key or an empty catalog is not a usable key. */
+    private suspend fun verifiedElevenLabsVoices(downloadVoices: suspend () -> List<Voice>): List<Voice> {
+        val voices = try {
+            downloadVoices()
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (failure: ElevenLabsRequestException) {
+            throw NativeFailure(
+                if (failure.rejectedCredential) NativeFailureKind.Validation else NativeFailureKind.Network,
+            )
+        } catch (_: Exception) {
+            throw NativeFailure(NativeFailureKind.Network)
+        }
+        if (voices.isEmpty()) throw NativeFailure(NativeFailureKind.Validation)
+        return voices
+    }
+
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun clearElevenLabsSpeechConfig() = nativeCall { configRepository.clearElevenLabsSpeechConfig() }
 
     fun isValidAzureSpeechEndpoint(endpoint: String): Boolean =
         AzureSpeechEndpoint.parse(endpoint) is AzureSpeechEndpointResult.Valid

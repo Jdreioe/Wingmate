@@ -1,0 +1,44 @@
+package io.github.jdreioe.wingmate.infrastructure
+
+import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.Voice
+import io.github.jdreioe.wingmate.domain.loggingClassName
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.json.Json
+
+class ElevenLabsVoiceCatalog(
+    private val configRepo: ConfigRepository,
+) {
+    private val client = HttpClient {
+        followRedirects = false
+        install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; explicitNulls = false }) }
+    }
+
+    /** The catalog for the saved key, or empty when there is no key or loading fails. */
+    suspend fun list(): List<Voice> = try {
+        load()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Throwable) {
+        OperationalLogger.warn(
+            operation = "elevenlabs_voice_catalog.load",
+            outcome = "failed",
+            exceptionClass = error.loggingClassName(),
+        )
+        emptyList()
+    }
+
+    /**
+     * The catalog for the saved key, empty when there is none. Throws
+     * [ElevenLabsRequestException] when ElevenLabs refuses the request and other
+     * exceptions when it cannot be reached.
+     */
+    suspend fun load(): List<Voice> {
+        val config = configRepo.getElevenLabsSpeechConfig() ?: return emptyList()
+        return ElevenLabsTtsClient.getVoices(client, config)
+    }
+}

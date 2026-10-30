@@ -24,6 +24,7 @@ fun VoiceEngineSelectorScreen(
     onCancel: () -> Unit,
     onAzureSelected: () -> Unit = {},
     onGoogleSelected: () -> Unit = {},
+    onElevenLabsSelected: () -> Unit = {},
 ) {
     val settingsUseCase = koinInject<SettingsUseCase>()
 
@@ -121,6 +122,13 @@ fun VoiceEngineSelectorScreen(
                 }
 
                 Spacer(Modifier.height(12.dp))
+
+                FilterChip(
+                    selected = ttsEngine == TtsEngine.ELEVENLABS,
+                    onClick = { ttsEngine = TtsEngine.ELEVENLABS },
+                    label = { Text(stringResource(R.string.elevenlabs_title)) },
+                )
+                Text(stringResource(R.string.elevenlabs_description))
 
                 // Google Cloud TTS Card
                 Card(
@@ -282,6 +290,7 @@ fun VoiceEngineSelectorScreen(
                                 // Navigate to appropriate next screen based on selection
                                 when (ttsEngine) {
                                     TtsEngine.SYSTEM -> onNext()
+                                    TtsEngine.ELEVENLABS -> onElevenLabsSelected()
                                     TtsEngine.GOOGLE_CLOUD -> onGoogleSelected()
                                     TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> onAzureSelected()
                                 }

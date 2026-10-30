@@ -557,3 +557,12 @@
 "speech_import.error" = "Talen kunne ikke importeres. Din tekst er stadig her. Prøv igen.";
 "speech_import.previous" = "Forrige";
 "speech_import.next" = "Næste";
+
+"elevenlabs.setup" = "Opsæt ElevenLabs";
+"elevenlabs.description" = "Brug stemmer fra din ElevenLabs-konto, herunder personlige stemmekloner. Kræver internet. Tekst sendes til ElevenLabs, og forbrug tæller med i din kontos kvote.";
+"elevenlabs.help" = "Opret en API-nøgle hos ElevenLabs med læseadgang til Voices og adgang til Text to Speech, og indsæt den her. Tilføj biblioteksstemmer eller opret en personlig stemme på din ElevenLabs-konto først.";
+"elevenlabs.key" = "ElevenLabs API-nøgle";
+"elevenlabs.configured" = "ElevenLabs-nøglen er gemt sikkert på denne enhed.";
+"elevenlabs.error" = "Kunne ikke fuldføre anmodningen. Kontrollér forbindelsen, nøglens rettigheder og tilgængelige stemmer, og prøv igen.";
+"elevenlabs.save" = "Gem sikkert og bekræft";
+"elevenlabs.clear" = "Fjern nøgle";

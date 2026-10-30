@@ -76,6 +76,15 @@ interface ConfigRepository {
         GoogleSpeechConfigStatus(
             credentialConfigured = !getGoogleSpeechConfig()?.apiKey.isNullOrBlank(),
         )
+
+    /** Internal credential-bearing API. Never expose its result to a UI or platform API. */
+    suspend fun getElevenLabsSpeechConfig(): ElevenLabsSpeechConfig?
+    suspend fun saveElevenLabsSpeechConfig(config: ElevenLabsSpeechConfig)
+    suspend fun clearElevenLabsSpeechConfig()
+    suspend fun getElevenLabsSpeechConfigStatus(): ElevenLabsSpeechConfigStatus =
+        ElevenLabsSpeechConfigStatus(
+            credentialConfigured = !getElevenLabsSpeechConfig()?.apiKey.isNullOrBlank(),
+        )
 }
 
 enum class SpeechPlaybackStatus {

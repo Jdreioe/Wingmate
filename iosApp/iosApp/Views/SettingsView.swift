@@ -178,6 +178,7 @@ private struct SpeechSettingsView: View {
     @State private var showVoicePicker = false
     @State private var showAzureSetup = false
     @State private var showGoogleSetup = false
+    @State private var showElevenLabsSetup = false
 
     private var languages: [String] {
         model.availableLanguages.isEmpty ? [model.primaryLanguage] : model.availableLanguages
@@ -209,8 +210,9 @@ private struct SpeechSettingsView: View {
                     Text("settings.speech.engine.system").tag("SYSTEM")
                     Text("settings.speech.engine.azure").tag("AZURE_USER_RESOURCE")
                     Text("settings.speech.engine.google").tag("GOOGLE_CLOUD")
+                    Text("ElevenLabs").tag("ELEVENLABS")
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
 
                 if model.ttsEngine == "AZURE_USER_RESOURCE" || model.ttsEngine == "AZURE_MANAGED" {
                     Button {
@@ -221,6 +223,9 @@ private struct SpeechSettingsView: View {
                             value: model.azureConfigured ? "settings.speech.azure.configured" : "settings.speech.azure.not_configured"
                         )
                     }
+                }
+                if model.ttsEngine == "ELEVENLABS" {
+                    Button("elevenlabs.setup") { showElevenLabsSetup = true }
                 }
                 if model.ttsEngine == "GOOGLE_CLOUD" {
                     Button { showGoogleSetup = true } label: {
@@ -276,6 +281,9 @@ private struct SpeechSettingsView: View {
                 },
                 onBack: { showAzureSetup = false }
             )
+        }
+        .sheet(isPresented: $showElevenLabsSetup) {
+            ElevenLabsSetupView(model: model, onClose: { showElevenLabsSetup = false })
         }
         .sheet(isPresented: $showGoogleSetup) {
             GoogleTtsSetupView(model: model, onClose: { showGoogleSetup = false })
@@ -851,5 +859,58 @@ private struct SettingsSliderRow: View {
             Slider(value: $value, in: range, step: step)
         }
         .padding(.vertical, 2)
+    }
+}
+
+struct ElevenLabsSetupView: View {
+    @ObservedObject var model: IosViewModel
+    let onClose: () -> Void
+    @State private var apiKey = ""
+    @State private var busy = false
+    @State private var failed = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("elevenlabs.setup") {
+                    Text("elevenlabs.description")
+                    Text("elevenlabs.help")
+                    Link("elevenlabs.key", destination: URL(string: "https://elevenlabs.io/app/settings/api-keys")!)
+                    if model.elevenLabsConfigured { Text("elevenlabs.configured") }
+                    SecureField("elevenlabs.key", text: $apiKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .disabled(busy)
+                    if failed { Text("elevenlabs.error").foregroundStyle(.red) }
+                    if busy { ProgressView() }
+                    Button("elevenlabs.save") {
+                        busy = true; failed = false
+                        Task { @MainActor in
+                            defer { busy = false }
+                            do {
+                                try await model.saveElevenLabsApiKey(apiKey)
+                                apiKey = ""
+                                onClose()
+                            } catch { failed = true }
+                        }
+                    }
+                    .disabled(busy || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    if model.elevenLabsConfigured {
+                        Button("elevenlabs.clear", role: .destructive) {
+                            busy = true; failed = false
+                            Task { @MainActor in
+                                defer { busy = false }
+                                do { try await model.clearElevenLabsApiKey(); apiKey = "" }
+                                catch { failed = true }
+                            }
+                        }.disabled(busy)
+                    }
+                }
+            }
+            .navigationTitle("elevenlabs.setup")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("common.done", action: onClose).disabled(busy) } }
+            .interactiveDismissDisabled(busy)
+            .task { await model.refreshElevenLabsConfiguration() }
+        }
     }
 }

@@ -329,6 +329,7 @@ fun WelcomeScreen(
                     featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to "azure")
                     step = 4
                 },
+                onElevenLabsSelected = { step = 10 },
                 onGoogleSelected = {
                     featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to "google")
                     step = 9
@@ -379,6 +380,10 @@ fun WelcomeScreen(
             onEnabledChange = { analyticsEnabled = it },
             onBack = { step = 7 },
             onContinue = { onComplete(startupMode, createScreenOnComplete, analyticsEnabled) }
+        )
+        10 -> ElevenLabsSetupScreen(
+            onDone = { voiceSelectorSetupStep = 10; step = 6 },
+            onBack = { step = 3 },
         )
         9 -> GoogleTtsSetupScreen(
             onDone = {

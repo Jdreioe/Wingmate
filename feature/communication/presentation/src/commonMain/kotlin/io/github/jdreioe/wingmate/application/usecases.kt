@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.*
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
+import io.github.jdreioe.wingmate.infrastructure.ElevenLabsVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 
 /**
@@ -117,6 +118,7 @@ class VoiceUseCase(
     private val configRepo: ConfigRepository,
     private val featureUsageReporter: FeatureUsageReporter,
     private val boardSetSpeechCache: BoardSpeechCache? = null,
+    private val elevenLabs: ElevenLabsVoiceCatalog = ElevenLabsVoiceCatalog(configRepo),
 ) {
     suspend fun list(): List<Voice> = repo.getVoices()
     suspend fun listForEngine(engine: TtsEngine): List<Voice> = repo.getVoices().forTtsEngine(engine)
@@ -157,6 +159,8 @@ class VoiceUseCase(
         return cachedVoicesWhenEmpty(list)
     }
 
+    suspend fun refreshFromElevenLabs(): List<Voice> = cachedVoicesWhenEmpty(saveElevenLabsCatalog(elevenLabs.list())).forTtsEngine(TtsEngine.ELEVENLABS)
+
     // Keep the last working catalog if refresh fails.
     suspend fun refreshFromGoogle(): List<Voice> = cachedVoicesWhenEmpty(saveGoogleCatalog(google.list()))
 
@@ -176,6 +180,22 @@ class VoiceUseCase(
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.VOICE_REFRESHED,
             "provider" to "google",
+            "count" to list.size.toString(),
+        )
+        return list
+    }
+
+    suspend fun loadElevenLabsCatalog(): List<Voice> = elevenLabs.load()
+
+    /** Stores a downloaded ElevenLabs catalog; an empty one keeps the cached voices. */
+    suspend fun saveElevenLabsCatalog(list: List<Voice>): List<Voice> {
+        if (list.isNotEmpty()) {
+            repo.saveVoices(list)
+            persistCatalogMetadataForSelected(list)
+        }
+        featureUsageReporter.reportEvent(
+            FeatureUsageEvents.VOICE_REFRESHED,
+            "provider" to "elevenlabs",
             "count" to list.size.toString(),
         )
         return list

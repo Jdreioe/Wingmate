@@ -187,6 +187,7 @@ final class IosViewModel: ObservableObject {
     // Azure availability (subscription configured)
     @Published var azureConfigured: Bool = false
     @Published var googleConfigured: Bool = false
+    @Published var elevenLabsConfigured: Bool = false
 
     // Symbol-first boardset mode
     @Published var boardModeEnabled: Bool = false
@@ -398,6 +399,7 @@ final class IosViewModel: ObservableObject {
         // Determine if Azure is configured (endpoint + key)
         await refreshAzureConfiguration()
         await refreshGoogleConfiguration()
+        await refreshElevenLabsConfiguration()
 
         // Start connectivity monitoring
         ConnectivityMonitor.shared.onChange { [weak self] online in
@@ -450,6 +452,26 @@ final class IosViewModel: ObservableObject {
     func clearGoogleApiKey() async throws {
         try await speechFacade.clearGoogleSpeechConfig()
         await refreshGoogleConfiguration()
+    }
+
+    func refreshElevenLabsConfiguration() async {
+        do {
+            let status = try await speechFacade.getElevenLabsSpeechConfig()
+            elevenLabsConfigured = status.credentialConfigured
+        } catch {
+            elevenLabsConfigured = false
+        }
+    }
+
+    func saveElevenLabsApiKey(_ apiKey: String) async throws {
+        _ = try await speechFacade.saveValidatedElevenLabsSpeechConfig(apiKey: apiKey)
+        await refreshElevenLabsConfiguration()
+        setTtsEngine("ELEVENLABS")
+    }
+
+    func clearElevenLabsApiKey() async throws {
+        try await speechFacade.clearElevenLabsSpeechConfig()
+        await refreshElevenLabsConfiguration()
     }
 
     func refreshLanguagePreferences() async {

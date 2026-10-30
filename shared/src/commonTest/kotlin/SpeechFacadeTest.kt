@@ -8,6 +8,7 @@ import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceProvider
 import io.github.jdreioe.wingmate.domain.VoiceRepository
+import io.github.jdreioe.wingmate.domain.ElevenLabsSpeechConfig
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.GoogleCloudRequestException
@@ -173,6 +174,39 @@ class SpeechFacadeTest {
 
         assertEquals(NativeFailureKind.Validation, noVoices.kind)
         assertEquals("working-key", config.getGoogleSpeechConfig()?.apiKey)
+        assertEquals(TtsEngine.SYSTEM, settings.get().ttsEngine)
+    }
+
+    @Test
+    fun validatedElevenLabsSetupStoresKeyAndSwitchesOnlyAfterVoicesLoad() = runBlocking {
+        val settings = InMemorySettingsRepository()
+        val config = InMemoryConfigRepository()
+        val facade = facade(settings = settings, config = config)
+        val voice = Voice(name = "elevenlabs|personal", providerVoiceName = "personal", provider = VoiceProvider.ELEVENLABS, selectedLanguage = "en-US")
+
+        val voices = facade.saveValidatedElevenLabsSpeechConfig(" elevenLabs-secret ") { listOf(voice) }
+
+        assertEquals(listOf(voice), voices)
+        assertEquals("elevenLabs-secret", config.getElevenLabsSpeechConfig()?.apiKey)
+        assertEquals(TtsEngine.ELEVENLABS, settings.get().ttsEngine)
+    }
+
+    @Test
+    fun failedElevenLabsReplacementRestoresCredentialAndEngine() = runBlocking {
+        val settings = InMemorySettingsRepository().apply {
+            update(get().copy(ttsEngine = TtsEngine.SYSTEM))
+        }
+        val config = InMemoryConfigRepository().apply {
+            saveElevenLabsSpeechConfig(ElevenLabsSpeechConfig("working-key"))
+        }
+        val facade = facade(settings = settings, config = config)
+
+        val noVoices = assertFailsWith<NativeFailure> {
+            facade.saveValidatedElevenLabsSpeechConfig("bad-key") { emptyList() }
+        }
+
+        assertEquals(NativeFailureKind.Validation, noVoices.kind)
+        assertEquals("working-key", config.getElevenLabsSpeechConfig()?.apiKey)
         assertEquals(TtsEngine.SYSTEM, settings.get().ttsEngine)
     }
 

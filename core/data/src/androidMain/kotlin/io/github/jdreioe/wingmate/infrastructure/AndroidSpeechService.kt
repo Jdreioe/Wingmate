@@ -26,6 +26,7 @@ import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.VoiceProvider
 import io.github.jdreioe.wingmate.domain.resolvedProvider
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
+import io.github.jdreioe.wingmate.domain.ElevenLabsSpeechConfig
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.SpeechSegment
@@ -477,9 +478,12 @@ class AndroidSpeechService(
         }
 
         val cached = runCatching {
-            val azureConfig = if (engine == TtsEngine.GOOGLE_CLOUD) null else getConfig() ?: return@runCatching false
+            val azureConfig = if (engine == TtsEngine.GOOGLE_CLOUD || engine == TtsEngine.ELEVENLABS) null else (getConfig() ?: return@runCatching false)
             val googleConfig = if (engine == TtsEngine.GOOGLE_CLOUD) getGoogleConfig() ?: return@runCatching false else null
-            val effectiveVoice = if (engine == TtsEngine.GOOGLE_CLOUD) {
+            val elevenLabsConfig = if (engine == TtsEngine.ELEVENLABS) getElevenLabsConfig() ?: return@runCatching false else null
+            val effectiveVoice = if (engine == TtsEngine.ELEVENLABS) {
+                requireNotNull(voice).also { require(it.resolvedProvider() == VoiceProvider.ELEVENLABS) }
+            } else if (engine == TtsEngine.GOOGLE_CLOUD) {
                 normalizeVoiceForGoogle(voice, settings?.primaryLanguage)
             } else {
                 normalizeVoiceForAzure(voice)
@@ -497,8 +501,10 @@ class AndroidSpeechService(
             val directory = File(root, "wingmate/audio").apply { mkdirs() }
             val file = File(directory, "tts_v2_$cacheKey.mp3")
                 if (!file.exists() || file.length() == 0L) {
-                    val segments = SpeechTextProcessor.processText(normalizedText)
-                    val bytes = if (engine == TtsEngine.GOOGLE_CLOUD) {
+                    val segments = SpeechTextProcessor.segmentsFor(engine, SpeechTextProcessor.processText(normalizedText))
+                    val bytes = if (engine == TtsEngine.ELEVENLABS) {
+                        ElevenLabsTtsClient.synthesizeSegments(client, segments, voiceForSsml, elevenLabsConfig!!, rate)
+                    } else if (engine == TtsEngine.GOOGLE_CLOUD) {
                         GoogleTtsClient.synthesizeSegments(
                             client,
                             segments,
@@ -637,17 +643,20 @@ class AndroidSpeechService(
                 ?.let { return it }
         }
 
-        val azureConfig = if (engine == TtsEngine.GOOGLE_CLOUD) null else getConfig()
+        val azureConfig = if (engine == TtsEngine.GOOGLE_CLOUD || engine == TtsEngine.ELEVENLABS) null else getConfig()
         val googleConfig = if (engine == TtsEngine.GOOGLE_CLOUD) getGoogleConfig() else null
-        if (azureConfig == null && googleConfig == null) {
+        val elevenLabsConfig = if (engine == TtsEngine.ELEVENLABS) getElevenLabsConfig() else null
+        if (azureConfig == null && googleConfig == null && elevenLabsConfig == null) {
             throw CloudSpeechUnavailable(CloudSpeechUnavailable.Reason.NotConfigured)
         }
         if (!isOnline()) throw CloudSpeechUnavailable(CloudSpeechUnavailable.Reason.Offline)
 
         return withContext(Dispatchers.IO) {
             try {
-                val useDefaultAzureVoice = engine != TtsEngine.GOOGLE_CLOUD && shouldUseDefaultAzureVoice(voice)
-                val v = if (engine == TtsEngine.GOOGLE_CLOUD) {
+                val useDefaultAzureVoice = engine != TtsEngine.GOOGLE_CLOUD && engine != TtsEngine.ELEVENLABS && shouldUseDefaultAzureVoice(voice)
+                val v = if (engine == TtsEngine.ELEVENLABS) {
+                    requireNotNull(voice).also { require(it.resolvedProvider() == VoiceProvider.ELEVENLABS) }
+                } else if (engine == TtsEngine.GOOGLE_CLOUD) {
                     normalizeVoiceForGoogle(voice, uiSettings?.primaryLanguage)
                 } else {
                     normalizeVoiceForAzure(voice)
@@ -692,10 +701,14 @@ class AndroidSpeechService(
 
                 // Cache Miss - Proceed to Synthesis
                 
-                val bytes = if (engine == TtsEngine.GOOGLE_CLOUD) {
+                // The cache key above keeps the Message's own text; only the request drops audio tags.
+                val spokenSegments = SpeechTextProcessor.segmentsFor(engine, segments)
+                val bytes = if (engine == TtsEngine.ELEVENLABS) {
+                    ElevenLabsTtsClient.synthesizeSegments(client, spokenSegments, vForSsml, elevenLabsConfig!!, rate)
+                } else if (engine == TtsEngine.GOOGLE_CLOUD) {
                     GoogleTtsClient.synthesizeSegments(
                         client,
-                        segments,
+                        spokenSegments,
                         vForSsml,
                         googleConfig!!,
                         pitch,
@@ -704,10 +717,10 @@ class AndroidSpeechService(
                     )
                 } else {
                     // Use segments-based SSML generation if ANY segment has language override OR pause
-                    val ssml = if (segments.any { !it.languageTag.isNullOrBlank() || it.pauseDurationMs > 0 }) {
-                        AzureTtsClient.generateSsml(segments, vForSsml, dict)
+                    val ssml = if (spokenSegments.any { !it.languageTag.isNullOrBlank() || it.pauseDurationMs > 0 }) {
+                        AzureTtsClient.generateSsml(spokenSegments, vForSsml, dict)
                     } else {
-                        AzureTtsClient.generateSsml(combinedText, vForSsml, dict)
+                        AzureTtsClient.generateSsml(spokenSegments.joinToString("") { it.text }, vForSsml, dict)
                     }
                     AzureTtsClient.synthesize(client, ssml, azureConfig!!)
                 }
@@ -731,7 +744,9 @@ class AndroidSpeechService(
                 throw cancelled
             } catch (t: Throwable) {
                 // Literal tags keep the call checkable by SpeechLogPrivacyTest.
-                if (engine == TtsEngine.GOOGLE_CLOUD) {
+                if (engine == TtsEngine.ELEVENLABS) {
+                    OperationalLogger.warn("speech.elevenlabs_synthesis", "failed", exceptionClass = t.loggingClassName())
+                } else if (engine == TtsEngine.GOOGLE_CLOUD) {
                     OperationalLogger.warn("speech.google_synthesis", "failed", exceptionClass = t.loggingClassName())
                 } else {
                     OperationalLogger.warn("speech.azure_synthesis", "failed", exceptionClass = t.loggingClassName())
@@ -985,7 +1000,8 @@ class AndroidSpeechService(
 
 
     private suspend fun speakWithPlatformTts(requestId: Long, text: String, voice: Voice?, pitch: Double?, rate: Double?) {
-        val cleanText = text.replace(Regex("<[^>]+>"), "") // Strip tags for system TTS fallback
+        // System TTS reads markup aloud, so strip SSML and audio tags.
+        val cleanText = SpeechTextProcessor.stripAudioTags(text.replace(Regex("<[^>]+>"), ""))
         withContext(Dispatchers.Main) {
             val parsedVoiceId = AndroidTtsVoiceId.parse(voice?.name)
             val t = ensureTts(parsedVoiceId.enginePackageName)
@@ -1193,7 +1209,8 @@ class AndroidSpeechService(
         speakWithPlatformTts(requestId, text, voice, pitch, rate)
     }
 
-    private suspend fun playSegmentsWithPlatformTts(requestId: Long, segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
+    private suspend fun playSegmentsWithPlatformTts(requestId: Long, messageSegments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
+        val segments = SpeechTextProcessor.segmentsFor(TtsEngine.SYSTEM, messageSegments)
         withContext(Dispatchers.Main) {
             val parsedVoiceId = AndroidTtsVoiceId.parse(voice?.name)
             val t = ensureTts(parsedVoiceId.enginePackageName)
@@ -1348,6 +1365,20 @@ class AndroidSpeechService(
         } ?: return null
         return try {
             withContext(Dispatchers.IO) { repository.getGoogleSpeechConfig() }
+                ?.takeIf { it.apiKey.isNotBlank() }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private suspend fun getElevenLabsConfig(): ElevenLabsSpeechConfig? {
+        val repository = GlobalContext.getOrNull()?.let {
+            runCatching { it.get<io.github.jdreioe.wingmate.domain.ConfigRepository>() }.getOrNull()
+        } ?: return null
+        return try {
+            withContext(Dispatchers.IO) { repository.getElevenLabsSpeechConfig() }
                 ?.takeIf { it.apiKey.isNotBlank() }
         } catch (cancelled: CancellationException) {
             throw cancelled
