@@ -31,6 +31,23 @@ import kotlin.test.assertTrue
 
 class BoardsFacadeTest {
     @Test
+    fun speechImportExposesValidationFailuresAndResolvesItsPlaybackSettings() = runBlocking {
+        val facade = facade()
+        val failure = assertFailsWith<NativeFailure> {
+            facade.importSpeech("My speech", "# Heading only", 4, "Previous", "Next")
+        }
+        assertEquals(NativeFailureKind.Validation, failure.kind)
+        assertTrue(facade.listBoardSets().isEmpty())
+        val sizeFailure = assertFailsWith<NativeFailure> { facade.previewSpeech("Speech", "Hello", 0) }
+        assertEquals(NativeFailureKind.Validation, sizeFailure.kind)
+        val created = facade.importSpeech("My speech", "Hello.\n\nThank you.", 1, "Previous", "Next")
+        val settings = facade.resolveBoardSettings(created.rootBoardId)
+        assertEquals("Immediate", settings.speechPolicy)
+        assertEquals("SpeakOnly", settings.activationBehavior)
+        assertEquals(false, settings.showMessageBar)
+    }
+
+    @Test
     fun boardReturnBehaviorStaysOnCurrentForUnknownBehavior() = runBlocking {
         val facade = facade()
 

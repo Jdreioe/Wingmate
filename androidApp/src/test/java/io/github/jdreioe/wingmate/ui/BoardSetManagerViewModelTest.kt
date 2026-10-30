@@ -174,6 +174,31 @@ class BoardSetManagerViewModelTest {
         assertEquals(BoardSetManagerEvent.NavigateBack, event.await())
     }
 
+    @Test
+    fun `speech import keeps the draft on failure and opens the saved Screen on retry`() = runTest {
+        val operations = FakeBoardSetManagerOperations().apply { speechImportFails = true }
+        val handle = SavedStateHandle()
+        val viewModel = BoardSetManagerViewModel(handle, operations)
+        viewModel.onAction(BoardSetManagerAction.SpeechImportClicked)
+        viewModel.onAction(BoardSetManagerAction.SpeechNameChanged("My speech"))
+        viewModel.onAction(BoardSetManagerAction.SpeechTextChanged("First paragraph.\n\nSecond paragraph."))
+        viewModel.onAction(BoardSetManagerAction.SpeechCountChanged(1))
+        assertEquals(2, viewModel.state.value.speechDraft.pages.size)
+        assertEquals(viewModel.state.value.speechDraft, BoardSetManagerViewModel(handle, operations).state.value.speechDraft)
+        viewModel.onAction(BoardSetManagerAction.SpeechImportSubmitted("Previous", "Next"))
+        assertTrue(viewModel.state.value.speechImportFailed)
+        assertTrue(viewModel.state.value.showSpeechImport)
+        assertFalse(viewModel.state.value.isCreating)
+        assertEquals("First paragraph.\n\nSecond paragraph.", viewModel.state.value.speechDraft.text)
+        assertTrue(operations.boardSets.isEmpty())
+
+        operations.speechImportFails = false
+        viewModel.onAction(BoardSetManagerAction.SpeechImportSubmitted("Previous", "Next"))
+        assertFalse(viewModel.state.value.showSpeechImport)
+        assertEquals("", viewModel.state.value.speechDraft.text)
+        assertEquals(BoardSetManagerRoute.Workspace("speech-1", BoardWorkspaceMode.Run), viewModel.state.value.route)
+    }
+
     private fun boardSet(id: String, name: String) = ObfBoardSet(
         id = id,
         name = name,
@@ -188,6 +213,7 @@ class BoardSetManagerViewModelTest {
         val boardSets = mutableListOf<ObfBoardSet>()
         val deletedIds = mutableListOf<String>()
         val createdNames = mutableListOf<String>()
+        var speechImportFails = false
         var deleteRequiresUnlock = false
         var cacheAllCalls = 0
 
@@ -206,6 +232,10 @@ class BoardSetManagerViewModelTest {
 
         override suspend fun cacheBoardSet(id: String) = Unit
         override suspend fun requiresDeleteUnlock() = deleteRequiresUnlock
+        override suspend fun importSpeech(draft: SpeechImportDraft, previousLabel: String, nextLabel: String): ObfBoardSet {
+            if (speechImportFails) error("Storage unavailable")
+            return boardSet("speech-1", draft.name).also(boardSets::add)
+        }
         override suspend fun importBoardSet(): BoardImportResult = BoardImportResult.Cancelled
         override suspend fun importQuickCore(slug: String): BoardImportResult = BoardImportResult.Cancelled
         override suspend fun renameBoardSet(id: String, name: String) = null

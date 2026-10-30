@@ -11,6 +11,7 @@ import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.domain.obf.SpeechScreenImport
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
@@ -56,6 +57,15 @@ internal data class CreateBoardSetDraft(
     val keyboardPreset: KeyboardPreset = KeyboardPreset.Qwerty,
 )
 
+internal data class SpeechImportDraft(
+    val name: String = "",
+    val text: String = "",
+    val paragraphsPerPage: Int = SpeechScreenImport.DEFAULT_PARAGRAPHS_PER_PAGE,
+) {
+    val pages = SpeechScreenImport.preview(name, text, paragraphsPerPage)
+    val canImport = name.isNotBlank() && pages.isNotEmpty()
+}
+
 @Stable
 internal data class BoardSetManagerState(
     val route: BoardSetManagerRoute = BoardSetManagerRoute.Library,
@@ -63,6 +73,9 @@ internal data class BoardSetManagerState(
     val isLoading: Boolean = true,
     val isCreating: Boolean = false,
     val showCreateDialog: Boolean = false,
+    val showSpeechImport: Boolean = false,
+    val speechDraft: SpeechImportDraft = SpeechImportDraft(),
+    val speechImportFailed: Boolean = false,
     val createDraft: CreateBoardSetDraft = CreateBoardSetDraft(),
     val showSettings: Boolean = false,
     val deleteTargetId: String? = null,
@@ -94,6 +107,12 @@ internal sealed interface BoardSetManagerAction {
         val suggestedName: String? = null,
     ) : BoardSetManagerAction
     data class CreateKeyboardPresetSelected(val preset: KeyboardPreset) : BoardSetManagerAction
+    data object SpeechImportClicked : BoardSetManagerAction
+    data object SpeechImportDismissed : BoardSetManagerAction
+    data class SpeechNameChanged(val name: String) : BoardSetManagerAction
+    data class SpeechTextChanged(val text: String) : BoardSetManagerAction
+    data class SpeechCountChanged(val count: Int) : BoardSetManagerAction
+    data class SpeechImportSubmitted(val previousLabel: String, val nextLabel: String) : BoardSetManagerAction
     data object ImportClicked : BoardSetManagerAction
     data class OpenClicked(val boardSetId: String) : BoardSetManagerAction
     data class EditClicked(val boardSetId: String) : BoardSetManagerAction
@@ -135,6 +154,7 @@ internal interface BoardSetManagerOperations {
     suspend fun cacheAll()
     suspend fun cacheBoardSet(id: String)
     suspend fun requiresDeleteUnlock(): Boolean
+    suspend fun importSpeech(draft: SpeechImportDraft, previousLabel: String, nextLabel: String): ObfBoardSet
     suspend fun importBoardSet(): BoardImportResult
     suspend fun importQuickCore(slug: String): BoardImportResult
     suspend fun renameBoardSet(id: String, name: String): ObfBoardSet?
@@ -189,6 +209,9 @@ internal class DefaultBoardSetManagerOperations(
         rootBoardName: String,
     ) = useCase.createBoardSet(name, rows, columns, rootBoardName)
 
+    override suspend fun importSpeech(draft: SpeechImportDraft, previousLabel: String, nextLabel: String) =
+        useCase.importSpeech(draft.name, draft.text, draft.paragraphsPerPage, previousLabel, nextLabel)
+
     override suspend fun createCalculatorBoardSet(name: String) = useCase.createCalculatorBoardSet(name)
     override suspend fun createKeyboardBoardSet(name: String, preset: KeyboardPreset) =
         useCase.createKeyboardBoardSet(name, preset)
@@ -210,6 +233,12 @@ internal class BoardSetManagerViewModel(
     private val _state = MutableStateFlow(
         BoardSetManagerState(
             route = restoredRoute,
+            showSpeechImport = savedStateHandle[SHOW_SPEECH_IMPORT] ?: false,
+            speechDraft = SpeechImportDraft(
+                name = savedStateHandle[SPEECH_NAME] ?: "",
+                text = savedStateHandle[SPEECH_TEXT] ?: "",
+                paragraphsPerPage = savedStateHandle[SPEECH_COUNT] ?: 4,
+            ),
             showCreateDialog = savedStateHandle[SHOW_CREATE_DIALOG] ?: false,
             createDraft = CreateBoardSetDraft(
                 name = savedStateHandle[CREATE_NAME] ?: "",
@@ -282,6 +311,20 @@ internal class BoardSetManagerViewModel(
             is BoardSetManagerAction.CreateKeyboardPresetSelected -> updateCreateDraft(
                 _state.value.createDraft.copy(keyboardPreset = action.preset)
             )
+            BoardSetManagerAction.SpeechImportClicked -> {
+                savedStateHandle[SHOW_SPEECH_IMPORT] = true
+                _state.update { it.copy(showSpeechImport = true, speechImportFailed = false) }
+            }
+            BoardSetManagerAction.SpeechImportDismissed -> if (!_state.value.isCreating) {
+                savedStateHandle[SHOW_SPEECH_IMPORT] = false
+                _state.update { it.copy(showSpeechImport = false) }
+            }
+            is BoardSetManagerAction.SpeechNameChanged -> updateSpeechDraft(_state.value.speechDraft.copy(name = action.name))
+            is BoardSetManagerAction.SpeechTextChanged -> updateSpeechDraft(_state.value.speechDraft.copy(text = action.text))
+            is BoardSetManagerAction.SpeechCountChanged -> updateSpeechDraft(_state.value.speechDraft.copy(
+                paragraphsPerPage = action.count.coerceIn(1, SpeechScreenImport.MAX_PARAGRAPHS_PER_PAGE),
+            ))
+            is BoardSetManagerAction.SpeechImportSubmitted -> importSpeech(action)
             BoardSetManagerAction.ImportClicked -> importBoardSet()
             is BoardSetManagerAction.OpenClicked -> openWorkspace(action.boardSetId, BoardWorkspaceMode.Run)
             is BoardSetManagerAction.EditClicked -> openWorkspace(action.boardSetId, BoardWorkspaceMode.Edit)
@@ -326,6 +369,38 @@ internal class BoardSetManagerViewModel(
                 .onSuccess { boardSets -> _state.update { it.copy(boardSets = boardSets) } }
                 .onFailure { setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_load_error)) }
             _state.update { it.copy(isLoading = false) }
+        }
+    }
+
+    private fun updateSpeechDraft(draft: SpeechImportDraft) {
+        if (_state.value.isCreating) return
+        savedStateHandle[SPEECH_NAME] = draft.name
+        savedStateHandle[SPEECH_TEXT] = draft.text
+        savedStateHandle[SPEECH_COUNT] = draft.paragraphsPerPage
+        _state.update { it.copy(speechDraft = draft, speechImportFailed = false) }
+    }
+
+    private fun importSpeech(action: BoardSetManagerAction.SpeechImportSubmitted) {
+        val draft = _state.value.speechDraft
+        if (_state.value.isCreating || !draft.canImport) return
+        _state.update { it.copy(isCreating = true, speechImportFailed = false) }
+        viewModelScope.launch {
+            try {
+                val created = operations.importSpeech(draft, action.previousLabel, action.nextLabel)
+                showCreatedBoardSet(created)
+                savedStateHandle[SHOW_SPEECH_IMPORT] = false
+                savedStateHandle[SPEECH_NAME] = ""
+                savedStateHandle[SPEECH_TEXT] = ""
+                savedStateHandle[SPEECH_COUNT] = 4
+                _state.update { it.copy(showSpeechImport = false, speechDraft = SpeechImportDraft()) }
+                openWorkspace(created.id, BoardWorkspaceMode.Run)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _state.update { it.copy(speechImportFailed = true) }
+            } finally {
+                _state.update { it.copy(isCreating = false) }
+            }
         }
     }
 
@@ -535,6 +610,10 @@ internal class BoardSetManagerViewModel(
     private companion object {
         const val ROUTE_BOARD_SET_ID = "board_set_manager.route.board_set_id"
         const val ROUTE_MODE = "board_set_manager.route.mode"
+        const val SHOW_SPEECH_IMPORT = "board_set_manager.speech.show"
+        const val SPEECH_NAME = "board_set_manager.speech.name"
+        const val SPEECH_TEXT = "board_set_manager.speech.text"
+        const val SPEECH_COUNT = "board_set_manager.speech.count"
         const val SHOW_CREATE_DIALOG = "board_set_manager.dialog.create"
         const val CREATE_NAME = "board_set_manager.create.name"
         const val CREATE_ROWS = "board_set_manager.create.rows"

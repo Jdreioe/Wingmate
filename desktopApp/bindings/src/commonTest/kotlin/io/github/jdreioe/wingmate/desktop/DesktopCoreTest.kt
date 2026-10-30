@@ -14,6 +14,41 @@ import kotlin.test.assertTrue
 
 class DesktopCoreTest {
     @Test
+    fun speechImportPreviewsWithoutSavingAndReopensWithWholeParagraphSpeechAndSilentNavigation() {
+        val root = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "wingmate-speech-${Random.nextLong()}"
+        try {
+            kotlinx.coroutines.runBlocking {
+                DesktopStore(root.toString()).update(io.github.jdreioe.wingmate.domain.Settings(
+                    speechPolicy = io.github.jdreioe.wingmate.domain.SpeechPolicy.SentenceOnly,
+                ))
+            }
+            val core = DesktopCore(root.toString())
+            val request = """{"name":"Min tale","text":"Hej. Jeg hedder Jonas.\n\n## Afslutning\nTak fordi I lyttede.","paragraphsPerPage":1,"previousLabel":"Forrige","nextLabel":"Næste"}"""
+            val preview = Json.decodeFromString<List<io.github.jdreioe.wingmate.domain.obf.SpeechImportPage>>(core.previewSpeechJson(request))
+            assertEquals(listOf("Min tale", "Afslutning"), preview.map { it.name })
+            assertEquals("[]", core.libraryJson())
+            val imported = Json.decodeFromString<DesktopActivation>(core.importSpeechJson(request))
+            val paragraph = imported.view.cells.first { it.vocalization.startsWith("Hej.") }
+            val spoken = Json.decodeFromString<DesktopActivation>(core.activateJson(paragraph.id))
+            assertEquals("Hej. Jeg hedder Jonas.", spoken.speech)
+            assertEquals("", spoken.view.message)
+            assertEquals(imported.view.boardId, spoken.view.boardId)
+            val next = spoken.view.cells.first { it.label == "Næste" }
+            val navigated = Json.decodeFromString<DesktopActivation>(core.activateJson(next.id))
+            assertEquals(null, navigated.speech)
+            assertEquals("Afslutning", navigated.view.title)
+            val reopened = DesktopCore(root.toString())
+            val start = Json.decodeFromString<DesktopActivation>(reopened.openJson(imported.view.boardSetId))
+            assertEquals(paragraph.vocalization, start.view.cells.first { it.id == paragraph.id }.vocalization)
+            kotlinx.coroutines.runBlocking {
+                assertEquals(io.github.jdreioe.wingmate.domain.SpeechPolicy.SentenceOnly, DesktopStore(root.toString()).get().speechPolicy)
+            }
+        } finally {
+            FileSystem.SYSTEM.deleteRecursively(root, mustExist = false)
+        }
+    }
+
+    @Test
     fun importedButtonUsesSharedCompositionAndImmediateSpeechRules() {
         val root = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "wingmate-desktop-${Random.nextLong()}"
         val board = root / "hello.obf"

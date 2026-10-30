@@ -8,6 +8,7 @@ mod models;
 mod screens;
 mod settings;
 mod speech;
+mod speech_import;
 
 use bridge::NativeCore;
 use iced::widget::{button, column, container, row, text};
@@ -89,6 +90,7 @@ enum Route {
     Runner,
     Settings,
     Editor,
+    SpeechImport,
 }
 
 struct App {
@@ -100,6 +102,7 @@ struct App {
     selection_highlight: Option<access::Target>,
     selection_generation: u64,
     editor: Option<editor::Editor>,
+    speech_import: Option<speech_import::Draft>,
     close_after_editor: bool,
     core: NativeCore,
     route: Route,
@@ -147,6 +150,7 @@ enum Message {
     CloseRequested,
     Keyboard(iced::keyboard::Event),
     Editor(editor::Event),
+    SpeechImport(speech_import::Event),
     ShowLibrary,
     ChooseBoardFile,
     ImportFile(String),
@@ -192,6 +196,7 @@ impl App {
             selection_highlight: None,
             selection_generation: 0,
             editor: None,
+            speech_import: None,
             close_after_editor: false,
             library: core.library().unwrap_or_default(),
             recents: core.recents().unwrap_or_default(),
@@ -258,6 +263,7 @@ impl App {
             Message::ShowLibrary
                 | Message::OpenSettings
                 | Message::Editor(_)
+                | Message::SpeechImport(speech_import::Event::Open)
                 | Message::CloseRequested
                 | Message::OpenBoardSet(_)
                 | Message::Activate(_)
@@ -273,6 +279,7 @@ impl App {
             Message::ShowLibrary
                 | Message::OpenSettings
                 | Message::Editor(_)
+                | Message::SpeechImport(speech_import::Event::Open)
                 | Message::CloseRequested
                 | Message::WindowUnfocused
         ) {
@@ -289,6 +296,7 @@ impl App {
                 | Message::CloseRequested
                 | Message::ShowLibrary
                 | Message::Editor(_)
+                | Message::SpeechImport(speech_import::Event::Open)
         ) {
             self.gaze_setup.diagnostics = None;
         }
@@ -684,6 +692,47 @@ impl App {
                     }
                 }
             }
+            Message::SpeechImport(event) => {
+                use speech_import::Event;
+                match event {
+                    Event::Open => {
+                        self.speech_import.get_or_insert_with(Default::default);
+                        self.route = Route::SpeechImport;
+                        self.error = None;
+                    }
+                    Event::Close => self.route = Route::Settings,
+                    Event::Import => {
+                        if let Some(draft) = &self.speech_import {
+                            let result = self.core.import_speech(&draft.request());
+                            if result.is_ok() {
+                                self.speech_import = None;
+                                self.refresh_library();
+                            }
+                            task = self.apply(result);
+                        }
+                    }
+                    event => {
+                        if let Some(draft) = &mut self.speech_import {
+                            match event {
+                                Event::Name(name) => draft.name = name,
+                                Event::Text(action) => draft.content.perform(action),
+                                Event::Count(count) => draft.count = count,
+                                _ => {}
+                            }
+                            match self.core.preview_speech(&draft.request()) {
+                                Ok(pages) => {
+                                    draft.pages = pages;
+                                    self.error = None;
+                                }
+                                Err(error) => {
+                                    draft.pages.clear();
+                                    self.error = Some(error.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             Message::Editor(event) => return self.update_editor(event),
             Message::ShowLibrary => {
                 self.route = Route::Library;
@@ -1000,6 +1049,11 @@ impl App {
                 .as_ref()
                 .map(editor::Editor::view)
                 .unwrap_or_else(|| text("No draft open").into()),
+            Route::SpeechImport => self
+                .speech_import
+                .as_ref()
+                .map(speech_import::Draft::view)
+                .unwrap_or_else(|| text("No speech draft open").into()),
             Route::Library => screens::library(&self.library),
             Route::Runner => self
                 .board

@@ -693,4 +693,16 @@
     <string name="dictionary_advanced_options">Avancerede fonetiske indstillinger</string>
     <string name="azure_config_key_placeholder">Din Azure Speech-tjenestenøgle</string>
     <string name="update_dismiss">Afvis</string>
+    <string name="speech_import_title">Importér tale</string>
+    <string name="speech_import_help">Indsæt din tale. En tom linje starter en ny knap; fjern en tom linje for at samle afsnit. Markdown-overskrifter navngiver sider og læses ikke op. Tryk på en knap for at læse hele afsnittet op.</string>
+    <string name="speech_import_name">Talens navn</string>
+    <string name="speech_import_text">Taletekst</string>
+    <string name="speech_import_count">Afsnit pr. side: %1$d</string>
+    <string name="speech_import_preview">Forhåndsvisning · %1$d sider</string>
+    <string name="speech_import_fewer">Færre</string>
+    <string name="speech_import_more">Flere</string>
+    <string name="speech_import_create">Opret skærm</string>
+    <string name="speech_import_error">Talen kunne ikke importeres. Din tekst er stadig her. Prøv igen.</string>
+    <string name="speech_import_previous">Forrige</string>
+    <string name="speech_import_next">Næste</string>
 </resources>

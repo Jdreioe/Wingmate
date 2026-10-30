@@ -24,6 +24,15 @@ A Screen is a named set of linked Pages. Wingmate can create, duplicate, rename,
 lock, edit, import, export, and delete Screens. It reads OBF and OBZ and exports
 Screens as OBZ.
 
+**Import speech** accepts pasted text on Android and iOS from the Screens library,
+and on desktop from Settings > Screens. Blank lines separate paragraphs into
+Buttons; Markdown headings name sections without being spoken. A preview lets
+you edit paragraph breaks and choose 1–8 paragraphs per Page before saving.
+The resulting Screen stays editable, with full-paragraph speech, short labels,
+and Previous/Next navigation. It uses immediate speech without adding to the
+Message or changing the app-wide speech preference. Parsing works locally;
+playback uses the selected speech engine as usual.
+
 Pages support grid resizing, Buttons spanning several Cells, linked navigation,
 hidden Buttons, symbols and personal images, recordings, separate
 vocalizations, colors, shapes, language overrides, and optional Fitzgerald
