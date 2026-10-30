@@ -1,0 +1,3 @@
+• Importér en tale som skærme, du kan redigere.
+• Se forslag til næste besked, mens du bruger tastaturet.
+• Forbedret markering og indstillinger for feedback ved valg.

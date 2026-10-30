@@ -1,0 +1,3 @@
+• Import a speech as editable Screens.
+• See likely next messages while using the keyboard.
+• Improved selection highlighting and feedback settings.
