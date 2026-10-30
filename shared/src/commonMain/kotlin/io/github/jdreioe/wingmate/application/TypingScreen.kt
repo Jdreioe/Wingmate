@@ -122,13 +122,24 @@ object TypingScreenProjector {
             actionButton("typing:ssml:telephone", "Telephone", ":wrap=<say-as interpret-as=\"telephone\">|</say-as>"),
             actionButton("typing:ssml:currency", "Currency", ":wrap=<say-as interpret-as=\"currency\">|</say-as>"),
         )
+        // ElevenLabs audio tags direct delivery; other voices read them aloud.
+        val emotionButtons = listOf(
+            actionButton("typing:tag:whispers", "Whisper", "+ [whispers] "),
+            actionButton("typing:tag:laughs", "Laugh", "+ [laughs] "),
+            actionButton("typing:tag:sighs", "Sigh", "+ [sighs] "),
+            actionButton("typing:tag:happy", "Happy", "+ [happy] "),
+            actionButton("typing:tag:sad", "Sad", "+ [sad] "),
+            actionButton("typing:tag:excited", "Excited", "+ [excited] "),
+            actionButton("typing:tag:angry", "Angry", "+ [angry] "),
+            actionButton("typing:tag:sarcastic", "Sarcastic", "+ [sarcastic] "),
+        )
         // Speak, Pause, Resume and Stop live in the Message bar, so the default
         // strip holds only what the bar lacks (#299). Users can still add them.
         val messageButtons = listOf(
             actionButton("typing:playback:hold", "Hold", ":hold-message"),
             actionButton("typing:playback:secondary", "Language", ":secondary-language"),
         )
-        val buttons = messageButtons + ssmlButtons
+        val buttons = messageButtons + emotionButtons + ssmlButtons
         val elements = listOf(
             PageElement(PAGE_NAVIGATION_ID, PageElementTypes.PageNavigation, 0, 0, columnSpan = safeColumns)
                 .withConfiguration(PageNavigationElementConfig()),
